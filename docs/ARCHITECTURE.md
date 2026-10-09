@@ -21,7 +21,7 @@ Local-first personal finance: **Angular 19** UI, **FastAPI** API, **SQLite** per
 
 Tax document storage was removed. Do not add document vault/BLOB storage back without a fresh product/security decision.
 
-Recurring cashflow (job income, rent/utilities-style fixed expenses, subscriptions) is a budget/plan plane. It can appear in cashflow summaries and planning inputs but does **not** change assets, liabilities, holdings, or net worth.
+Recurring cashflow (job income, rent/utilities-style fixed expenses, subscriptions) is a budget/plan plane. It can appear in cashflow summaries and planning inputs but does **not** change assets, liabilities, holdings, or net worth. Stock grants and manual private valuations stay in the encrypted job record. Dated stock-sale proceeds count as cashflow when sold; stock grant value and unrealized growth appear only in Planning → Compensation and do not affect recurring or retirement income.
 
 ## Request flow
 

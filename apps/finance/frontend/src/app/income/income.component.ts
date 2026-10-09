@@ -12,8 +12,8 @@ import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '../services/confirm.service';
 import { ToastService } from '../services/toast.service';
-import { IncomePayFrequency, JobIncome, JobIncomeCreate } from '../models/transaction.model';
-import { annualBasePayAt, isCurrentJob, jobHistoryError } from '../utils/job-compensation.util';
+import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant } from '../models/transaction.model';
+import { annualBasePayAt, isCurrentJob, jobHistoryError, stockGrantSnapshot, stockSnapshotAt } from '../utils/job-compensation.util';
 import { todayIsoDate } from '../utils/date.util';
 import {
   UiBadgeComponent,
@@ -52,6 +52,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
   @Input() embedded = false;
   @Input() compensationTracking = false;
   isCurrentJob = isCurrentJob;
+  stockSnapshotAt = stockSnapshotAt;
+  stockGrantSnapshot = stockGrantSnapshot;
+  today = todayIsoDate;
   incomes: JobIncome[] = [];
   showModal = false;
   saving = false;
@@ -222,6 +225,8 @@ export class IncomeComponent implements OnInit, OnDestroy {
       end_date: null,
       promotions: [],
       compensation_payments: [],
+      stock_grants: [],
+      stock_valuations: [],
       is_active: true,
       notes: '',
     };
@@ -253,6 +258,8 @@ export class IncomeComponent implements OnInit, OnDestroy {
       end_date: row.end_date || null,
       promotions: (row.promotions || []).map(item => ({ ...item })),
       compensation_payments: (row.compensation_payments || []).map(item => ({ ...item })),
+      stock_grants: (row.stock_grants || []).map(item => ({ ...item, sales: (item.sales || []).map(sale => ({ ...sale })) })),
+      stock_valuations: (row.stock_valuations || []).map(item => ({ ...item })),
       is_active: row.is_active,
       notes: row.notes || '',
     };
@@ -265,6 +272,19 @@ export class IncomeComponent implements OnInit, OnDestroy {
 
   addCompensationPayment(): void {
     this.form.compensation_payments!.push({ date: '', kind: 'bonus', amount: 0, label: '' });
+  }
+
+  addStockGrant(): void {
+    this.form.stock_grants!.push({ date: '', origin: 'equity', label: '', quantity: 0, price_at_grant: 0, sales: [] });
+  }
+
+  addStockValuation(): void {
+    this.form.stock_valuations!.push({ date: '', price_per_share: 0 });
+  }
+
+  addStockSale(grant: JobStockGrant): void {
+    grant.sales = grant.sales || [];
+    grant.sales.push({ date: '', shares: 0, cash_proceeds: 0 });
   }
 
   jobStatus(row: JobIncome): string {
@@ -319,6 +339,20 @@ export class IncomeComponent implements OnInit, OnDestroy {
         .sort((a, b) => a.date.localeCompare(b.date)),
       compensation_payments: [...(this.form.compensation_payments || [])]
         .map(item => ({ ...item, amount: this.roundMoney(item.amount), label: item.label?.trim() || '' }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      stock_grants: [...(this.form.stock_grants || [])]
+        .map(item => ({
+          ...item,
+          label: item.label?.trim() || '',
+          quantity: Number(item.quantity),
+          price_at_grant: Number(item.price_at_grant),
+          sales: [...(item.sales || [])]
+            .map(sale => ({ ...sale, shares: Number(sale.shares), cash_proceeds: this.roundMoney(sale.cash_proceeds) }))
+            .sort((a, b) => a.date.localeCompare(b.date)),
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      stock_valuations: [...(this.form.stock_valuations || [])]
+        .map(item => ({ ...item, price_per_share: Number(item.price_per_share) }))
         .sort((a, b) => a.date.localeCompare(b.date)),
       role_title: this.form.role_title?.trim() || '',
       notes: this.form.notes?.trim() || '',

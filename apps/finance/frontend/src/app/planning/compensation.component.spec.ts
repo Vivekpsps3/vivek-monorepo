@@ -17,14 +17,20 @@ describe('Planning employer compensation', () => {
     promotions: [{ date: '2026-01-11', annual_base_pay: 73050 }],
     compensation_payments: [{ date: '2026-01-31', kind: 'bonus', amount: 500 }],
   } as JobIncome);
+  const priorJob = enrichJobIncome({
+    id: 2, employer: 'Acme', base_pay: 0, pay_frequency: 'annual',
+    effective_date: '2025-01-01', end_date: '2025-12-31', is_active: false,
+  } as JobIncome);
 
   beforeEach(async () => {
-    incomes = new BehaviorSubject([job]);
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-09T12:00:00Z'));
+    incomes = new BehaviorSubject([job, priorJob]);
     finance = jasmine.createSpyObj('FinanceService', ['getJobIncomes', 'updateJobIncome'], { jobIncomes$: incomes.asObservable() });
-    finance.getJobIncomes.and.returnValue(of([job]));
+    finance.getJobIncomes.and.returnValue(of([job, priorJob]));
     finance.updateJobIncome.and.callFake((id, body) => {
       const updated = enrichJobIncome({ ...job, ...body, id });
-      incomes.next([updated]);
+      incomes.next([updated, priorJob]);
       return of(updated);
     });
     await TestBed.configureTestingModule({
@@ -42,11 +48,29 @@ describe('Planning employer compensation', () => {
     fixture.detectChanges();
   });
 
+  afterEach(() => jasmine.clock().uninstall());
+
   const button = (text: string, fixture: ComponentFixture<CompensationComponent>): HTMLButtonElement =>
     Array.from(fixture.nativeElement.querySelectorAll('button')).find((node: any) => node.textContent.trim() === text) as HTMLButtonElement;
 
   const inputByLabel = (text: string): HTMLInputElement =>
     (Array.from(fixture.nativeElement.querySelectorAll('label')).find((node: any) => node.querySelector('span')?.textContent.trim() === text) as HTMLLabelElement).querySelector('input')!;
+
+  const stockInputByLabel = (text: string): HTMLInputElement => {
+    const section = fixture.nativeElement.querySelector('section[aria-labelledby="stock-title"]') as HTMLElement;
+    return (Array.from(section.querySelectorAll('label')).find((node: any) => node.querySelector('span')?.textContent.trim() === text) as HTMLLabelElement).querySelector('input')!;
+  };
+
+  const stockSelectByLabel = (text: string): HTMLSelectElement => {
+    const section = fixture.nativeElement.querySelector('section[aria-labelledby="stock-title"]') as HTMLElement;
+    return (Array.from(section.querySelectorAll('label')).find((node: any) => node.querySelector('span')?.textContent.trim() === text) as HTMLLabelElement).querySelector('select')!;
+  };
+
+  const enter = (input: HTMLInputElement, value: string): void => {
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  };
 
   it('renders the employer breakdown and changes the selected period', () => {
     const metric = fixture.nativeElement.querySelector('ui-card');
@@ -82,5 +106,70 @@ describe('Planning employer compensation', () => {
     expect(finance.updateJobIncome).toHaveBeenCalled();
     expect(fixture.componentInstance.total).toBe(4000);
     expect(fixture.nativeElement.querySelector('ui-card').textContent).toContain('$4,000.00');
+  });
+
+  it('records a stock bonus, valuation, and sale through the rendered editor and updates annual compensation', async () => {
+    button('Edit', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    button('Add valuation', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    button('Add stock grant', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    enter(stockInputByLabel('Valuation date'), '2026-01-31');
+    enter(stockInputByLabel('Private share value'), '200');
+    enter(stockInputByLabel('Grant date'), '2026-01-01');
+    const origin = stockSelectByLabel('Award type');
+    origin.value = 'bonus';
+    origin.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    enter(stockInputByLabel('Label (optional)'), 'Annual bonus');
+    enter(stockInputByLabel('Shares granted'), '200');
+    enter(stockInputByLabel('Price per share at grant'), '100');
+
+    button('Add sale', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    enter(stockInputByLabel('Sale date'), '2026-01-20');
+    enter(stockInputByLabel('Shares sold'), '100');
+    enter(stockInputByLabel('Total cash proceeds'), '15000');
+    await fixture.whenStable();
+    button('Save', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(finance.updateJobIncome).toHaveBeenCalledWith(1, jasmine.objectContaining({
+      stock_grants: [jasmine.objectContaining({
+        date: '2026-01-01', origin: 'bonus', quantity: 200, price_at_grant: 100,
+        sales: [{ date: '2026-01-20', shares: 100, cash_proceeds: 15000 }],
+      })],
+      stock_valuations: [{ date: '2026-01-31', price_per_share: 200 }],
+    }));
+    expect(fixture.componentInstance.total).toBe(38500);
+    expect(fixture.nativeElement.querySelector('app-income').textContent).toContain('100 shares converted to cash on 2026-01-20');
+
+    const year = fixture.nativeElement.querySelector('select[name="compensation_year"]') as HTMLSelectElement;
+    year.value = '2025';
+    year.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.start).toBe('2025-01-01');
+    expect(fixture.componentInstance.end).toBe('2025-12-31');
+    expect(fixture.componentInstance.total).toBe(0);
+
+    year.value = '2026';
+    year.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.start).toBe('2026-01-01');
+    expect(fixture.componentInstance.end).toBe('2026-10-09');
+    expect(fixture.componentInstance.total).toBe(38500);
+    expect(fixture.nativeElement.querySelector('ui-card').textContent).toContain('$38,500.00');
   });
 });

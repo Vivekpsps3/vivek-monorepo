@@ -9,7 +9,7 @@ import {
   Subscription,
   Transaction,
 } from '../models/transaction.model';
-import { annualBasePayAt, jobCompensationBetween } from '../utils/job-compensation.util';
+import { annualBasePayAt, jobCompensationBetween, stockSalesProceedsBetween } from '../utils/job-compensation.util';
 
 export function computeNetWorth(
   assets: Asset[],
@@ -158,9 +158,12 @@ export function computeCashflowSummary(
     else transaction_expenses += Math.abs(amt);
   }
   const daysInRange = Math.max(1, (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1);
-  const planned_income = jobIncomes
+  const scheduledEmploymentIncome = jobIncomes
     .filter(row => row.is_active)
     .reduce((sum, row) => sum + jobCompensationBetween(row, start, end).net, 0);
+  // A recorded share sale is a dated cash event, even when the former job is disabled.
+  const stockSaleIncome = jobIncomes.reduce((sum, row) => sum + stockSalesProceedsBetween(row, start, end), 0);
+  const planned_income = scheduledEmploymentIncome + stockSaleIncome;
   const fixedOccurrences = fixedExpenses
     .filter(row => row.is_active)
     .flatMap(row => occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));

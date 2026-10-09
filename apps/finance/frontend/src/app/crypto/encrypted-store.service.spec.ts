@@ -27,6 +27,11 @@ describe('EncryptedStoreService', () => {
       pay_frequency: 'annual', base_pay: 36525, is_active: true,
       promotions: [{ date: '2026-06-01', annual_base_pay: 73050 }],
       compensation_payments: [{ date: '2026-07-01', kind: 'bonus', amount: 1000 }],
+      stock_grants: [{
+        date: '2026-08-01', origin: 'bonus', label: 'Stock bonus', quantity: 200, price_at_grant: 100,
+        sales: [{ date: '2026-09-01', shares: 100, cash_proceeds: 15000 }],
+      }],
+      stock_valuations: [{ date: '2026-10-01', price_per_share: 200 }],
     });
     await store.updateJobIncome(created.id, { notes: 'History retained' });
     store.clear();
@@ -34,6 +39,11 @@ describe('EncryptedStoreService', () => {
     expect(reloaded.end_date).toBe('2026-12-31');
     expect(reloaded.promotions).toEqual([{ date: '2026-06-01', annual_base_pay: 73050 }]);
     expect(reloaded.compensation_payments).toEqual([{ date: '2026-07-01', kind: 'bonus', amount: 1000 }]);
+    expect(reloaded.stock_grants).toEqual([{
+      date: '2026-08-01', origin: 'bonus', label: 'Stock bonus', quantity: 200, price_at_grant: 100,
+      sales: [{ date: '2026-09-01', shares: 100, cash_proceeds: 15000 }],
+    }]);
+    expect(reloaded.stock_valuations).toEqual([{ date: '2026-10-01', price_per_share: 200 }]);
     expect(reloaded.base_pay).toBe(36525);
     expect(JSON.stringify(records)).not.toContain('Acme');
     expect(records[0].schema_version).toBe(2);

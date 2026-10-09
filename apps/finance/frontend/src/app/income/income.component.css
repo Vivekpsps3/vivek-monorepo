@@ -208,3 +208,12 @@
 
 .history-heading h4 { margin: 0; }
 .history-entry { margin-bottom: var(--space-4); }
+.stock-valuations-heading { margin-top: var(--space-5); }
+.stock-preview {
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+}
+.stock-preview strong { color: var(--text); }

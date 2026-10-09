@@ -1,5 +1,17 @@
 import { JobIncome, JobIncomeCreate } from '../models/transaction.model';
-import { annualBasePayAt, compensationByEmployer, initialAnnualBasePay, isCurrentJob, jobCompensationBetween, jobHistoryError } from './job-compensation.util';
+import {
+  annualBasePayAt,
+  compensationByEmployer,
+  initialAnnualBasePay,
+  isCurrentJob,
+  jobCompensationBetween,
+  jobHistoryError,
+  stockCompensationBetween,
+  stockGrantSnapshot,
+  stockPortfolioValueAt,
+  stockSalesProceedsBetween,
+  stockSnapshotAt,
+} from './job-compensation.util';
 import { computeCashflowSummary, enrichJobIncome } from '../crypto/client-finance';
 
 const job = (overrides: Partial<JobIncome> = {}): JobIncome => ({
@@ -114,5 +126,139 @@ describe('job compensation history', () => {
     expect(check({ compensation_payments: [{ date: '', kind: 'bonus', amount: 1 }] })).toContain('Payment dates');
     expect(check({ compensation_payments: [{ date: '2026-02-01', kind: 'bonus', amount: NaN }] })).toContain('non-negative');
     expect(check({ end_date: '2026-01-10', compensation_payments: [{ date: '2026-02-01', kind: 'bonus', amount: 1 }] })).toBeNull();
+  });
+
+  it('tracks the sample grant as fixed sale proceeds plus the remaining shares at a dated valuation', () => {
+    const row = job({
+      stock_grants: [{
+        date: '2026-01-01', origin: 'bonus', label: 'Bonus paid in stock', quantity: 200, price_at_grant: 100,
+        sales: [{ date: '2026-09-01', shares: 100, cash_proceeds: 15000 }],
+      }],
+      stock_valuations: [{ date: '2026-11-01', price_per_share: 200 }],
+    });
+    expect(stockGrantSnapshot(row.stock_grants![0], row.stock_valuations, '2026-11-01')).toEqual({
+      realizedProceeds: 15000, sharesSold: 100, remainingShares: 100,
+      valuationPrice: 200, valuationDate: '2026-11-01', remainingValue: 20000, totalValue: 35000,
+    });
+    expect(stockPortfolioValueAt(row, '2026-11-01')).toBe(35000);
+    expect(stockCompensationBetween(row, '2026-01-01', '2026-11-01')).toBe(35000);
+  });
+
+  it('attributes grant value to the grant year and only incremental value changes to later years', () => {
+    const row = job({
+      effective_date: '2025-01-01',
+      stock_grants: [{ date: '2025-01-01', origin: 'equity', quantity: 1000, price_at_grant: 100, sales: [] }],
+      stock_valuations: [
+        { date: '2025-12-31', price_per_share: 100 },
+        { date: '2026-12-31', price_per_share: 200 },
+      ],
+    });
+    expect(stockCompensationBetween(row, '2025-01-01', '2025-12-31')).toBe(100000);
+    expect(stockCompensationBetween(row, '2026-01-01', '2026-12-31')).toBe(100000);
+    expect(compensationByEmployer([row], '2026-01-01', '2026-12-31')[0].gross).toBeCloseTo(100000 + jobCompensationBetween(row, '2026-01-01', '2026-12-31').gross);
+  });
+
+  it('counts a $100,000 grant that grows to $200,000 in one year as $200,000 total stock compensation', () => {
+    const row = job({
+      stock_grants: [{ date: '2026-01-01', origin: 'equity', quantity: 1000, price_at_grant: 100 }],
+      stock_valuations: [{ date: '2026-12-31', price_per_share: 200 }],
+    });
+    expect(stockCompensationBetween(row, '2026-01-01', '2026-12-31')).toBe(200000);
+    expect(compensationByEmployer([row], '2026-01-01', '2026-12-31')[0].stock_compensation).toBe(200000);
+  });
+
+  it('ignores future grants, sales, and valuations for historical cutoff snapshots', () => {
+    const row = job({
+      stock_grants: [{
+        date: '2026-01-01', origin: 'equity', quantity: 10, price_at_grant: 100,
+        sales: [{ date: '2026-12-01', shares: 5, cash_proceeds: 900 }],
+      }, { date: '2026-07-01', origin: 'bonus', quantity: 2, price_at_grant: 500 }],
+      stock_valuations: [{ date: '2026-12-01', price_per_share: 300 }],
+    });
+    expect(stockSnapshotAt(row, '2026-06-30')).toEqual({ realizedProceeds: 0, remainingShares: 10, remainingValue: 1000, totalValue: 1000 });
+    expect(stockSnapshotAt(row, '2026-12-01')).toEqual({ realizedProceeds: 900, remainingShares: 7, remainingValue: 2100, totalValue: 3000 });
+    expect(stockGrantSnapshot({ date: '2026-07-01', origin: 'equity', quantity: 1, price_at_grant: 500 }, [{ date: '2026-06-01', price_per_share: 0 }], '2026-07-01').valuationPrice).toBe(500);
+  });
+
+  it('keeps later grants at their own grant price until a later shared valuation', () => {
+    const row = job({
+      stock_grants: [
+        { date: '2026-01-01', origin: 'equity', quantity: 100, price_at_grant: 10 },
+        { date: '2026-06-01', origin: 'bonus', quantity: 1, price_at_grant: 500 },
+      ],
+      stock_valuations: [{ date: '2026-03-01', price_per_share: 20 }],
+    });
+    const value = stockSnapshotAt(row, '2026-06-01');
+    expect(value.remainingValue).toBe(2500);
+    expect(value.totalValue).toBe(2500);
+  });
+
+  it('keeps realized proceeds fixed when later valuations move up or down', () => {
+    const row = job({
+      stock_grants: [{
+        date: '2026-01-01', origin: 'equity', quantity: 100, price_at_grant: 100,
+        sales: [{ date: '2026-02-01', shares: 50, cash_proceeds: 22500 }],
+      }],
+      stock_valuations: [{ date: '2026-03-01', price_per_share: 50 }, { date: '2026-04-01', price_per_share: 0 }],
+    });
+    expect(stockSnapshotAt(row, '2026-03-01').totalValue).toBe(25000);
+    expect(stockSnapshotAt(row, '2026-04-01').totalValue).toBe(22500);
+    expect(stockSalesProceedsBetween(row, '2026-02-01', '2026-02-28')).toBe(22500);
+    expect(stockSnapshotAt(row, '2026-04-01').realizedProceeds).toBe(22500);
+  });
+
+  it('allows multiple same-day sales up to the grant and rejects chronological overselling', () => {
+    const valid: JobIncomeCreate = {
+      ...job(), stock_grants: [{ date: '2026-01-01', origin: 'equity', quantity: 10, price_at_grant: 100,
+        sales: [
+          { date: '2026-02-01', shares: 4, cash_proceeds: 400 },
+          { date: '2026-02-01', shares: 6, cash_proceeds: 600 },
+        ],
+      }],
+      stock_valuations: [{ date: '2026-02-01', price_per_share: 0 }],
+    } as JobIncomeCreate;
+    expect(jobHistoryError(valid)).toBeNull();
+    expect(jobHistoryError({ ...valid, stock_grants: [{ ...valid.stock_grants![0], sales: [
+      { date: '2026-02-01', shares: 6, cash_proceeds: 1 },
+      { date: '2026-03-01', shares: 5, cash_proceeds: 1 },
+    ] }] })).toContain('cannot exceed');
+    expect(jobHistoryError({ ...valid, stock_grants: [{ ...valid.stock_grants![0], quantity: 9 }] })).toContain('cannot exceed');
+    expect(jobHistoryError({ ...valid, stock_grants: [{ ...valid.stock_grants![0], sales: [
+      { date: '2025-12-31', shares: 1, cash_proceeds: 1 },
+    ] }] })).toContain('on or after the grant');
+  });
+
+  it('adds sale cash to dated cashflow, but never adds stock grant value or unrealized growth to recurring income', () => {
+    const row = job({
+      is_active: false,
+      annual_bonus: 0,
+      annual_equity: 0,
+      stock_grants: [{
+        date: '2026-01-01', origin: 'equity', quantity: 100, price_at_grant: 100,
+        sales: [{ date: '2026-02-01', shares: 10, cash_proceeds: 1500 }],
+      }],
+      stock_valuations: [{ date: '2026-03-01', price_per_share: 200 }],
+    });
+    const beforeSale = computeCashflowSummary('2026-01-01', '2026-01-31', [], [row], [], []);
+    const salePeriod = computeCashflowSummary('2026-02-01', '2026-02-28', [], [row], [], []);
+    const afterGrowth = computeCashflowSummary('2026-03-01', '2026-03-31', [], [row], [], []);
+    expect(beforeSale.planned_income).toBe(0);
+    expect(salePeriod.planned_income).toBe(1500);
+    expect(afterGrowth.planned_income).toBe(0);
+    expect(enrichJobIncome(row).annual_gross).toBe(36525);
+  });
+
+  it('allows grants after employment ends and rejects invalid price/quantity values', () => {
+    const check = (changes: Partial<JobIncomeCreate>) => jobHistoryError({ ...job(), ...changes } as JobIncomeCreate);
+    expect(check({ end_date: '2026-01-31', stock_grants: [{ date: '2026-02-01', origin: 'bonus', quantity: 1, price_at_grant: 10 }] })).toBeNull();
+    expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 0, price_at_grant: 10 }] })).toContain('positive');
+    expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: -1 }] })).toContain('non-negative');
+    expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 0 }] })).toContain('positive');
+    expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 10, sales: [{ date: '2026-02-02', shares: 1, cash_proceeds: NaN }] }] })).toContain('non-negative');
+    expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 10, sales: [{ date: '2026-02-02', shares: 1, cash_proceeds: Infinity }] }] })).toContain('non-negative');
+    expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 10, sales: [{ date: '2026-02-02', shares: NaN, cash_proceeds: 1 }] }] })).toContain('positive');
+    expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: NaN }] })).toContain('non-negative');
+    expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: Infinity }] })).toContain('non-negative');
+    expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: 10 }, { date: '2026-02-01', price_per_share: 20 }] })).toContain('one stock valuation');
   });
 });

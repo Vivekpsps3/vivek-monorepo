@@ -92,9 +92,31 @@ HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabi
 Job records retain `effective_date` as the employment start date and add optional
 `end_date`, `promotions` (date, replacement annual base pay, optional role), and
 `compensation_payments` (payment/vesting date, bonus/equity/other kind, gross amount,
-optional label). These fields live inside the existing encrypted `job_incomes`
-payload; no plaintext schema or server API migration is needed. Older records
-with no history retain their prior calculation behavior.
+optional label). Optional `stock_grants` record bonus or equity awards paid in shares
+(grant date, label, quantity, and grant price), with partial sales (date, shares,
+fixed total cash proceeds). A job-level `stock_valuations` list records manual private
+share prices by date. A valuation applies to grants awarded on or before its date; each
+later grant keeps its own grant price until a subsequent valuation.
+These fields live inside the existing encrypted `job_incomes` payload; no plaintext
+schema or server API migration is needed. Older records with no history retain their
+prior calculation behavior.
+
+Private stock valuations are manual, not live quotes. A historical cutoff uses only
+the latest valuation dated on or before that cutoff, with the grant's own price as the
+fallback. A stock snapshot equals fixed cash proceeds from sales through the cutoff
+plus the value of shares still held at that cutoff. For a selected compensation period,
+stock compensation is the ending snapshot less the snapshot from the day before the
+period. This counts grant value and any same-year change in the grant year; later years
+count only the period's gain or loss, avoiding carry-forward double counting. Sale
+proceeds remain fixed when later valuations change. All-history realized proceeds and
+remaining-share value are shown separately from the selected period's stock-compensation
+change.
+
+Recorded stock-sale proceeds count as dated cashflow in the sale period, even when the
+job is disabled. Grant value and unrealized share growth do not enter recurring income,
+retirement income inputs, or planned cashflow. Current annual pay estimates are
+unchanged. Stock grants, sales, and valuations do not update assets, holdings,
+transactions, or net worth.
 
 Current income and Path inputs only include enabled jobs whose start/end dates
 contain today. Scheduled cashflow prorates recurring pay across inclusive job
@@ -105,10 +127,13 @@ an additional withholding estimate.
 
 Planning → Compensation (`/planning?t=compensation`) groups gross compensation
 by employer (trimmed, case insensitive), including inactive/past jobs. Its range
-defaults to all recorded history through today; future ranges are labeled as
-projections. Base, annual bonus/equity/other, and withholding estimates use the
-existing annual-rate / 365.25 convention. Individual payments are additional to
-annual estimates, so users must avoid recording the same amount in both places.
+defaults to all recorded history through today; a calendar-year selector and date
+range are available, and future ranges are labeled as projections. Base, annual
+bonus/equity/other, and withholding estimates use the existing annual-rate / 365.25
+convention. Individual payments are additional to annual estimates, so users must
+avoid recording the same amount in both places. Stock awards appear as separate
+period compensation, with cumulative sale proceeds and the remaining-share snapshot
+shown through the selected end date.
 Starting base pay stays intact when promotions are added. This view can edit the
 same job records as Recurring → Pay and never writes net-worth or ledger data.
 

@@ -101,6 +101,28 @@ export interface JobCompensationPayment {
   label?: string;
 }
 
+export interface JobStockSale {
+  date: string;
+  shares: number;
+  /** Total proceeds are fixed when recorded and never inferred from share valuations. */
+  cash_proceeds: number;
+}
+
+export interface JobStockGrant {
+  date: string;
+  /** A bonus or equity award paid in shares. */
+  origin: 'bonus' | 'equity';
+  label?: string;
+  quantity: number;
+  price_at_grant: number;
+  sales?: JobStockSale[];
+}
+
+export interface JobStockValuation {
+  date: string;
+  price_per_share: number;
+}
+
 export interface JobIncome {
   id: number;
   employer: string;
@@ -120,6 +142,8 @@ export interface JobIncome {
   end_date?: string | null;
   promotions?: JobPromotion[];
   compensation_payments?: JobCompensationPayment[];
+  stock_grants?: JobStockGrant[];
+  stock_valuations?: JobStockValuation[];
   is_active: boolean;
   notes?: string | null;
   pay_periods_per_year: number;
@@ -152,6 +176,8 @@ export interface JobIncomeCreate {
   end_date?: string | null;
   promotions?: JobPromotion[];
   compensation_payments?: JobCompensationPayment[];
+  stock_grants?: JobStockGrant[];
+  stock_valuations?: JobStockValuation[];
   is_active: boolean;
   notes?: string;
 }

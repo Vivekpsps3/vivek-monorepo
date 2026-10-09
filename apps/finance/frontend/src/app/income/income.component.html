@@ -2,7 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="compensationTracking ? 'Compensation history' : 'Pay'"
-    subtitle="Record employment dates, starting pay, promotions, and dated payments. This does not change net worth.">
+    subtitle="Record employment dates, starting pay, cash bonuses, stock grants, and dated pay changes. This does not change net worth.">
     <div uiPageActions class="header-actions">
       <ui-button variant="primary" (clicked)="openAddModal()">Add income</ui-button>
     </div>
@@ -39,7 +39,7 @@
       <div>
         <strong>What to enter first</strong>
         <p>
-          Use the numbers from your offer letter or most recent paystub: starting gross pay, pay frequency, recurring annual bonus/equity, taxes withheld, and deductions such as health insurance, HSA, FSA, 401(k), or commuter benefits.
+          Use the numbers from your offer letter or most recent paystub: starting gross pay, pay frequency, recurring annual bonus/equity, taxes withheld, and deductions such as health insurance, HSA, FSA, 401(k), or commuter benefits. Individual stock awards belong in the dated stock history below.
         </p>
       </div>
       <div title="Pay figures feed Recurring and Planning. They do not change net worth.">
@@ -88,6 +88,21 @@
                 }
                 @for (payment of row.compensation_payments || []; track $index) {
                   <span class="muted block">{{ payment.date }}: {{ payment.label || payment.kind }} · ${{ payment.amount | number: '1.2-2' }}</span>
+                }
+                @for (grant of row.stock_grants || []; track $index) {
+                  @let grantSnapshot = stockGrantSnapshot(grant, row.stock_valuations || [], today());
+                  <span class="muted block">
+                    {{ grant.date }}: {{ grant.label || (grant.origin === 'bonus' ? 'Stock bonus' : 'Equity grant') }} · {{ grant.quantity | number: '1.0-4' }} shares at ${{ grant.price_at_grant | number: '1.2-4' }} grant price
+                    · {{ grantSnapshot.remainingShares | number: '1.0-4' }} remain as of {{ today() }}, marked at ${{ grantSnapshot.valuationPrice | number: '1.2-4' }} from {{ grantSnapshot.valuationDate }}
+                  </span>
+                  @for (sale of grant.sales || []; track $index) {
+                    <span class="muted block">{{ sale.shares | number: '1.0-4' }} shares converted to cash on {{ sale.date }} · ${{ sale.cash_proceeds | number: '1.2-2' }} proceeds</span>
+                  }
+                }
+                @if ((row.stock_grants || []).length) {
+                  <span class="muted block">
+                    Stock at {{ today() }}: ${{ stockSnapshotAt(row, today()).realizedProceeds | number: '1.2-2' }} sale proceeds + ${{ stockSnapshotAt(row, today()).remainingValue | number: '1.2-2' }} remaining shares
+                  </span>
                 }
               </td>
               <td>
@@ -144,7 +159,7 @@
           </label>
         }
 
-        <p class="muted">Annual bonus, equity, and other pay are recurring estimates, prorated over employment. Enter individual dated payments below only for amounts additional to these estimates.</p>
+        <p class="muted">Annual bonus, equity, and other pay are recurring estimates, prorated over employment. Enter individual dated payments or stock awards only when they are additional to these estimates.</p>
         <div class="form-row">
           <label class="form-group">
             <span>Annual bonus</span>
@@ -270,7 +285,7 @@
 
         <section class="compensation-history" aria-labelledby="payments-title">
           <div class="history-heading">
-            <h4 id="payments-title">Dated bonuses, equity, and other pay</h4>
+            <h4 id="payments-title">Dated cash bonuses and payments</h4>
             <ui-button variant="secondary" size="sm" (clicked)="addCompensationPayment()">Add payment</ui-button>
           </div>
           <p class="muted">Enter gross amounts on their payment or vesting dates. These are added once, including payments after a job ends. Annual withholding estimates still apply to recurring pay.</p>
@@ -299,6 +314,101 @@
                 </label>
               </div>
               <ui-button variant="danger" size="sm" (clicked)="form.compensation_payments!.splice(i, 1)">Remove payment {{ i + 1 }}</ui-button>
+            </div>
+          }
+        </section>
+
+        <section class="compensation-history" aria-labelledby="stock-title">
+          <div class="history-heading">
+            <h4 id="stock-title">Stock bonuses and equity grants</h4>
+            <ui-button variant="secondary" size="sm" (clicked)="addStockGrant()">Add stock grant</ui-button>
+          </div>
+          <p class="muted">The grant year includes the award value and any growth. Later years count only gains or losses. Sold shares use recorded proceeds; unsold shares use the latest price entered by that date. Enter each award only once.</p>
+
+          <div class="history-heading stock-valuations-heading">
+            <h4>Private stock valuations</h4>
+            <ui-button variant="secondary" size="sm" (clicked)="addStockValuation()">Add valuation</ui-button>
+          </div>
+          <p class="muted">Each valuation applies to grants on or before its date. A later grant keeps its own grant price until a later valuation is entered.</p>
+          @for (valuation of form.stock_valuations || []; track $index; let i = $index) {
+            <div class="history-entry">
+              <div class="form-row">
+                <label class="form-group">
+                  <span>Valuation date</span>
+                  <input [name]="'stock_valuation_date_' + i" type="date" [min]="form.effective_date" [(ngModel)]="valuation.date" required />
+                </label>
+                <label class="form-group">
+                  <span>Private share value</span>
+                  <input [name]="'stock_valuation_price_' + i" type="number" min="0" step="0.0001" [(ngModel)]="valuation.price_per_share" required />
+                </label>
+              </div>
+              <ui-button variant="danger" size="sm" (clicked)="form.stock_valuations!.splice(i, 1)">Remove valuation {{ i + 1 }}</ui-button>
+            </div>
+          }
+
+          @for (grant of form.stock_grants || []; track $index; let i = $index) {
+            <div class="history-entry stock-grant-entry">
+              <div class="form-row">
+                <label class="form-group">
+                  <span>Grant date</span>
+                  <input [name]="'stock_grant_date_' + i" type="date" [min]="form.effective_date" [(ngModel)]="grant.date" required />
+                </label>
+                <label class="form-group">
+                  <span>Award type</span>
+                  <select [name]="'stock_grant_origin_' + i" [(ngModel)]="grant.origin">
+                    <option value="bonus">Bonus paid in stock</option>
+                    <option value="equity">Equity grant</option>
+                  </select>
+                </label>
+                <label class="form-group">
+                  <span>Label (optional)</span>
+                  <input [name]="'stock_grant_label_' + i" [(ngModel)]="grant.label" placeholder="Annual bonus" />
+                </label>
+              </div>
+              <div class="form-row">
+                <label class="form-group">
+                  <span>Shares granted</span>
+                  <input [name]="'stock_grant_quantity_' + i" type="number" min="0.0001" step="0.0001" [(ngModel)]="grant.quantity" required />
+                </label>
+                <label class="form-group">
+                  <span>Price per share at grant</span>
+                  <input [name]="'stock_grant_price_' + i" type="number" min="0.0001" step="0.0001" [(ngModel)]="grant.price_at_grant" required />
+                </label>
+              </div>
+              @let grantPreview = stockGrantSnapshot(grant, form.stock_valuations || [], today());
+              <p class="stock-preview">
+                Grant value: <strong>${{ (grant.quantity * grant.price_at_grant) | number: '1.2-2' }}</strong>.
+                As of {{ today() }}, {{ grantPreview.remainingShares | number: '1.0-4' }} shares remain. Latest price is
+                <strong>${{ grantPreview.valuationPrice | number: '1.2-4' }}</strong> from {{ grantPreview.valuationDate }}, worth
+                <strong>${{ grantPreview.remainingValue | number: '1.2-2' }}</strong>; recorded sale proceeds are
+                <strong>${{ grantPreview.realizedProceeds | number: '1.2-2' }}</strong>.
+              </p>
+
+              <div class="history-heading">
+                <h4>Partial sales</h4>
+                <ui-button variant="secondary" size="sm" (clicked)="addStockSale(grant)">Add sale</ui-button>
+              </div>
+              <p class="muted">Enter total cash received for each sale. It stays fixed if later share prices change.</p>
+              @for (sale of grant.sales || []; track $index; let si = $index) {
+                <div class="history-entry">
+                  <div class="form-row">
+                    <label class="form-group">
+                      <span>Sale date</span>
+                      <input [name]="'stock_sale_date_' + i + '_' + si" type="date" [min]="grant.date" [(ngModel)]="sale.date" required />
+                    </label>
+                    <label class="form-group">
+                      <span>Shares sold</span>
+                      <input [name]="'stock_sale_shares_' + i + '_' + si" type="number" min="0.0001" step="0.0001" [(ngModel)]="sale.shares" required />
+                    </label>
+                    <label class="form-group">
+                      <span>Total cash proceeds</span>
+                      <input [name]="'stock_sale_proceeds_' + i + '_' + si" type="number" min="0" step="0.01" [(ngModel)]="sale.cash_proceeds" required />
+                    </label>
+                  </div>
+                  <ui-button variant="danger" size="sm" (clicked)="grant.sales!.splice(si, 1)">Remove sale {{ si + 1 }}</ui-button>
+                </div>
+              }
+              <ui-button variant="danger" size="sm" (clicked)="form.stock_grants!.splice(i, 1)">Remove stock grant {{ i + 1 }}</ui-button>
             </div>
           }
         </section>
