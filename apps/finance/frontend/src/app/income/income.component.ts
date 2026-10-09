@@ -13,6 +13,7 @@ import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '../services/confirm.service';
 import { ToastService } from '../services/toast.service';
 import { IncomePayFrequency, JobIncome, JobIncomeCreate } from '../models/transaction.model';
+import { annualBasePayAt, isCurrentJob, jobHistoryError } from '../utils/job-compensation.util';
 import { todayIsoDate } from '../utils/date.util';
 import {
   UiBadgeComponent,
@@ -49,6 +50,8 @@ import {
 })
 export class IncomeComponent implements OnInit, OnDestroy {
   @Input() embedded = false;
+  @Input() compensationTracking = false;
+  isCurrentJob = isCurrentJob;
   incomes: JobIncome[] = [];
   showModal = false;
   saving = false;
@@ -107,19 +110,19 @@ export class IncomeComponent implements OnInit, OnDestroy {
 
   get activeAnnualTotal(): number {
     return this.incomes
-      .filter(row => row.is_active)
+      .filter(row => isCurrentJob(row))
       .reduce((sum, row) => sum + row.annual_gross, 0);
   }
 
   get activeAnnualNet(): number {
     return this.incomes
-      .filter(row => row.is_active)
+      .filter(row => isCurrentJob(row))
       .reduce((sum, row) => sum + row.annual_net, 0);
   }
 
   get activeAnnualAdjustments(): number {
     return this.incomes
-      .filter(row => row.is_active)
+      .filter(row => isCurrentJob(row))
       .reduce((sum, row) => sum + row.annual_taxes + row.annual_deductions, 0);
   }
 
@@ -216,6 +219,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
       taxes_per_period: 0,
       deductions_per_period: 0,
       effective_date: todayIsoDate(),
+      end_date: null,
+      promotions: [],
+      compensation_payments: [],
       is_active: true,
       notes: '',
     };
@@ -244,10 +250,27 @@ export class IncomeComponent implements OnInit, OnDestroy {
       taxes_per_period: row.taxes_per_period,
       deductions_per_period: row.deductions_per_period,
       effective_date: row.effective_date,
+      end_date: row.end_date || null,
+      promotions: (row.promotions || []).map(item => ({ ...item })),
+      compensation_payments: (row.compensation_payments || []).map(item => ({ ...item })),
       is_active: row.is_active,
       notes: row.notes || '',
     };
     this.showModal = true;
+  }
+
+  addPromotion(): void {
+    this.form.promotions!.push({ date: '', annual_base_pay: annualBasePayAt(this.form), role_title: '' });
+  }
+
+  addCompensationPayment(): void {
+    this.form.compensation_payments!.push({ date: '', kind: 'bonus', amount: 0, label: '' });
+  }
+
+  jobStatus(row: JobIncome): string {
+    if (row.end_date && row.end_date < todayIsoDate()) return 'ended';
+    if (!row.is_active) return 'inactive';
+    return row.effective_date > todayIsoDate() ? 'upcoming' : 'active';
   }
 
   applyEstimatedTaxes(): void {
@@ -280,10 +303,23 @@ export class IncomeComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const historyError = jobHistoryError(this.form);
+    if (historyError) {
+      this.toastService.error(historyError);
+      return;
+    }
+    const wasEditing = this.editingId !== null;
     this.saving = true;
     const payload: JobIncomeCreate = {
       ...this.form,
       employer: this.form.employer.trim(),
+      end_date: this.form.end_date || null,
+      promotions: [...(this.form.promotions || [])]
+        .map(item => ({ ...item, annual_base_pay: this.roundMoney(item.annual_base_pay), role_title: item.role_title?.trim() || '' }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      compensation_payments: [...(this.form.compensation_payments || [])]
+        .map(item => ({ ...item, amount: this.roundMoney(item.amount), label: item.label?.trim() || '' }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
       role_title: this.form.role_title?.trim() || '',
       notes: this.form.notes?.trim() || '',
       base_pay: this.roundMoney(this.form.base_pay),
@@ -305,7 +341,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       next: () => {
         this.saving = false;
         this.closeModal();
-        this.toastService.success(this.editingId ? 'Income updated' : 'Income added');
+        this.toastService.success(wasEditing ? 'Income updated' : 'Income added');
         this.cdr.markForCheck();
       },
       error: () => {

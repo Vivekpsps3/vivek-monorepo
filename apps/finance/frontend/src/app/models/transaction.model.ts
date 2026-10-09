@@ -74,6 +74,19 @@ export type IncomePayFrequency =
   | 'weekly'
   | 'hourly';
 
+export interface JobPromotion {
+  date: string;
+  annual_base_pay: number;
+  role_title?: string;
+}
+
+export interface JobCompensationPayment {
+  date: string;
+  kind: 'bonus' | 'equity' | 'other';
+  amount: number;
+  label?: string;
+}
+
 export interface JobIncome {
   id: number;
   employer: string;
@@ -88,7 +101,11 @@ export interface JobIncome {
   annual_deductions: number;
   taxes_per_period: number;
   deductions_per_period: number;
+  /** Employment start date; retains the existing vault field name. */
   effective_date: string;
+  end_date?: string | null;
+  promotions?: JobPromotion[];
+  compensation_payments?: JobCompensationPayment[];
   is_active: boolean;
   notes?: string | null;
   pay_periods_per_year: number;
@@ -116,7 +133,11 @@ export interface JobIncomeCreate {
   annual_deductions: number;
   taxes_per_period: number;
   deductions_per_period: number;
+  /** Employment start date; retains the existing vault field name. */
   effective_date: string;
+  end_date?: string | null;
+  promotions?: JobPromotion[];
+  compensation_payments?: JobCompensationPayment[];
   is_active: boolean;
   notes?: string;
 }

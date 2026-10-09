@@ -22,7 +22,7 @@ Angular 19 standalone app under `apps/finance/frontend/src/app/`.
 | `/have` | Assets, debts, and holdings (`?t=holdings`) |
 | `/spending` | Pay or spend list (`?t=pay`, `?t=spend`) and calendar (`?t=calendar`) |
 | `/recurring` | Pay or spend (`?t=pay`, `?t=spend`) |
-| `/planning` | What-if path, growth, and stocks (`?t=growth`, `?t=stocks`) |
+| `/planning` | What-if path, employer compensation, growth, and stocks (`?t=compensation`, `?t=growth`, `?t=stocks`) |
 | `/admin/users` | Admin user management (admin role only) |
 | `/balance-sheet`, `/portfolio` | Redirect to `/have` |
 | `/transactions`, `/calendar` | Redirect to `/spending` |

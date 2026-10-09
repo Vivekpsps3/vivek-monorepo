@@ -27,7 +27,27 @@ describe('PlanningService', () => {
     service = TestBed.inject(PlanningService);
   });
 
-  it('client Monte Carlo returns the run shape', done => {
+  it('excludes ended, future, and disabled jobs from current planning income', done => {
+    encStore.getNetWorth.and.resolveTo({ total: 0, portfolio: 0, liabilities: 0 } as any);
+    encStore.getJobIncomes.and.resolveTo([
+      { monthly_net: 1000, is_active: true, effective_date: '2000-01-01' },
+      { monthly_net: 2000, is_active: true, effective_date: '2000-01-01', end_date: '2001-01-01' },
+      { monthly_net: 3000, is_active: true, effective_date: '9999-01-01' },
+      { monthly_net: 4000, is_active: false, effective_date: '2000-01-01' },
+    ] as any);
+    encStore.getFixedExpenses.and.resolveTo([]);
+    encStore.getSubscriptions.and.resolveTo([]);
+    encStore.getTransactions.and.resolveTo([]);
+    service.getInputs().subscribe({
+      next: inputs => {
+        expect(inputs.avg_monthly_income).toBe(1000);
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('client Monte Carlo returns the run shape' , done => {
     encStore.getNetWorth.and.resolveTo({
       other_assets: 100_000,
       portfolio: 50_000,

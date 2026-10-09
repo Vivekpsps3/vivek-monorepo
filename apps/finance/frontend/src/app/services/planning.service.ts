@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, from } from 'rxjs';
+import { isCurrentJob } from '../utils/job-compensation.util';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import {
   MC_FAN_PATHS_PERSIST_MAX,
@@ -100,7 +101,7 @@ export class PlanningService {
     const fixed = await this.encStore.getFixedExpenses();
     const subs = await this.encStore.getSubscriptions();
     const txs = await this.encStore.getTransactions();
-    const activeIncomes = incomes.filter(row => row.is_active);
+    const activeIncomes = incomes.filter(row => isCurrentJob(row));
     const activeFixed = fixed.filter(row => row.is_active);
     const activeSubs = subs.filter(row => row.is_active);
     const monthlyIncome = activeIncomes.reduce((s, j) => s + (Number(j.monthly_net) || 0), 0);

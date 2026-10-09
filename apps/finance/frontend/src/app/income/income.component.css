@@ -191,3 +191,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+.compensation-history {
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.history-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.history-heading h4 { margin: 0; }
+.history-entry { margin-bottom: var(--space-4); }

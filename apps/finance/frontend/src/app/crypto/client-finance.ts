@@ -9,6 +9,7 @@ import {
   Subscription,
   Transaction,
 } from '../models/transaction.model';
+import { annualBasePayAt, jobCompensationBetween } from '../utils/job-compensation.util';
 
 export function computeNetWorth(
   assets: Asset[],
@@ -62,17 +63,13 @@ function monthlyAmount(amount: number, frequency: string): number {
 }
 
 export function enrichJobIncome(row: JobIncome): JobIncome {
-  const base = Number(row.base_pay) || 0;
-  const monthly_gross =
-    row.pay_frequency === 'hourly'
-      ? base * (Number(row.hours_per_week) || 40) * 52 / 12
-      : monthlyAmount(base, row.pay_frequency);
+  const annual_base_pay = annualBasePayAt(row);
+  const monthly_gross = annual_base_pay / 12;
   const annual_bonus = Number(row.annual_bonus) || 0;
   const annual_equity = Number(row.annual_equity) || 0;
   const annual_other = Number(row.annual_other) || 0;
   const annual_taxes = Number(row.annual_taxes) || 0;
   const annual_deductions = Number(row.annual_deductions) || 0;
-  const annual_base_pay = monthly_gross * 12;
   const annual_gross = annual_base_pay + annual_bonus + annual_equity + annual_other;
   const annual_net = annual_gross - annual_taxes - annual_deductions;
   const monthly_net = annual_net / 12;
@@ -162,9 +159,8 @@ export function computeCashflowSummary(
   }
   const daysInRange = Math.max(1, (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1);
   const planned_income = jobIncomes
-    .filter(row => row.is_active && row.effective_date <= end)
-    .map(enrichJobIncome)
-    .reduce((sum, row) => sum + (Number(row.annual_net) || 0) * Math.max(0, (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${[start, row.effective_date].sort().at(-1)}T00:00:00Z`)) / 86_400_000 + 1) / 365.25, 0);
+    .filter(row => row.is_active)
+    .reduce((sum, row) => sum + jobCompensationBetween(row, start, end).net, 0);
   const fixedOccurrences = fixedExpenses
     .filter(row => row.is_active)
     .flatMap(row => occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));

@@ -89,6 +89,29 @@ it combines period **transaction** totals with pro-rated/planned job income and 
 fixed-expense/subscription occurrences for the selected range. There is no cashflow-summary
 HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, or net worth.
 
+Job records retain `effective_date` as the employment start date and add optional
+`end_date`, `promotions` (date, replacement annual base pay, optional role), and
+`compensation_payments` (payment/vesting date, bonus/equity/other kind, gross amount,
+optional label). These fields live inside the existing encrypted `job_incomes`
+payload; no plaintext schema or server API migration is needed. Older records
+with no history retain their prior calculation behavior.
+
+Current income and Path inputs only include enabled jobs whose start/end dates
+contain today. Scheduled cashflow prorates recurring pay across inclusive job
+boundaries and applies each promotion from its date. Dated payments count once
+in their selected period, including final payments after employment ends.
+Annual taxes/deductions remain recurring estimates; dated payments do not carry
+an additional withholding estimate.
+
+Planning → Compensation (`/planning?t=compensation`) groups gross compensation
+by employer (trimmed, case insensitive), including inactive/past jobs. Its range
+defaults to all recorded history through today; future ranges are labeled as
+projections. Base, annual bonus/equity/other, and withholding estimates use the
+existing annual-rate / 365.25 convention. Individual payments are additional to
+annual estimates, so users must avoid recording the same amount in both places.
+Starting base pay stays intact when promotions are added. This view can edit the
+same job records as Recurring → Pay and never writes net-worth or ledger data.
+
 Planning reads recurring annual fixed expenses and subscriptions into its input snapshot for
 spending estimates when useful.
 

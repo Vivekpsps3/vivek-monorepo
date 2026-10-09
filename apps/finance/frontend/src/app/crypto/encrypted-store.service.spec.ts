@@ -3,6 +3,42 @@ import { EncryptedStoreService } from './encrypted-store.service';
 import { VaultService } from './vault.service';
 
 describe('EncryptedStoreService', () => {
+  it('preserves employment history inside vault records across updates and reloads', async () => {
+    let records: any[] = [];
+    const payloads = new Map<string, any>();
+    let nextCipher = 0;
+    const vault = {
+      isUnlocked: true,
+      listRecords: () => of(records),
+      decryptPayload: async (cipher: string) => payloads.get(cipher),
+      encryptPayload: async (payload: any) => {
+        const cipher = 'opaque-cipher-' + nextCipher++;
+        payloads.set(cipher, JSON.parse(JSON.stringify(payload)));
+        return cipher;
+      },
+      upsertRecords: (incoming: any[]) => {
+        records = incoming.map(record => ({ ...record, revision: 1, updated_at: '' }));
+        return of(records);
+      },
+    } as unknown as VaultService;
+    const store = new EncryptedStoreService(vault);
+    const created = await store.addJobIncome({
+      employer: 'Acme', effective_date: '2026-01-01', end_date: '2026-12-31',
+      pay_frequency: 'annual', base_pay: 36525, is_active: true,
+      promotions: [{ date: '2026-06-01', annual_base_pay: 73050 }],
+      compensation_payments: [{ date: '2026-07-01', kind: 'bonus', amount: 1000 }],
+    });
+    await store.updateJobIncome(created.id, { notes: 'History retained' });
+    store.clear();
+    const [reloaded] = await store.getJobIncomes();
+    expect(reloaded.end_date).toBe('2026-12-31');
+    expect(reloaded.promotions).toEqual([{ date: '2026-06-01', annual_base_pay: 73050 }]);
+    expect(reloaded.compensation_payments).toEqual([{ date: '2026-07-01', kind: 'bonus', amount: 1000 }]);
+    expect(reloaded.base_pay).toBe(36525);
+    expect(JSON.stringify(records)).not.toContain('Acme');
+    expect(records[0].schema_version).toBe(2);
+  });
+
   it('uses scheduled occurrences rather than monthly rates in encrypted cashflow summaries', async () => {
     const vault = {
       isUnlocked: true,
