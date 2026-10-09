@@ -46,13 +46,13 @@ jobs:
           git -C "$MONOREPO" fetch origin
           git -C "$MONOREPO" checkout -B main "${{ steps.sha.outputs.sha }}"
 
-      - name: Prepare data directories
+      - name: Prepare finance data directories
         run: |
           set -a
           # shellcheck disable=SC1090
           . "$ENV_FILE"
           set +a
-          mkdir -p "$FINANCE_DATA_DIR" "$FINANCE_BACKUP_DIR" "$ME_DATA_DIR"
+          mkdir -p "$FINANCE_DATA_DIR" "$FINANCE_BACKUP_DIR"
 
       - name: Verify Docker access
         run: sudo -n docker compose version
@@ -65,15 +65,11 @@ jobs:
           set +a
           "$MONOREPO/scripts/backup-db.sh"
 
-      - name: Build images
-        run: |
-          make -C "$CONTROL" build STACK=finance-tracker
-          make -C "$CONTROL" build STACK=me-app
+      - name: Build finance image
+        run: make -C "$CONTROL" build STACK=finance-tracker
 
-      - name: Restart stacks
-        run: |
-          make -C "$CONTROL" up STACK=finance-tracker
-          make -C "$CONTROL" up STACK=me-app
+      - name: Restart finance stack
+        run: make -C "$CONTROL" up STACK=finance-tracker
 
       - name: Deploy personal site
         run: make -C "$CONTROL" site-deploy
@@ -88,15 +84,4 @@ jobs:
           done
           sudo -n docker ps --format 'table {{.Names}}\t{{.Status}}'
           sudo -n docker logs finance_tracker-api-1 --tail=100
-          exit 1
-
-      - name: Health check me-app
-        run: |
-          for attempt in {1..30}; do
-            if curl -fsS -o /dev/null "http://127.0.0.1:8090/login"; then
-              exit 0
-            fi
-            sleep 2
-          done
-          sudo -n docker logs me-app --tail=80
           exit 1
