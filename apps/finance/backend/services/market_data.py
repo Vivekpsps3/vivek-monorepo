@@ -4,6 +4,7 @@ import math
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
 from sqlalchemy.orm import Session
@@ -35,7 +36,7 @@ def _finite_float(value: Any) -> Optional[float]:
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if not math.isfinite(number):
         return None
@@ -59,7 +60,7 @@ class MarketDataService:
     """
 
     def __init__(self, ttl_seconds: int = 120):
-        self._memory: Dict[str, Tuple[float, datetime, str]] = {}
+        self._memory: Dict[str, Tuple[float, datetime, str, date]] = {}
         self._ttl = timedelta(seconds=ttl_seconds)
         self._eod_ttl = timedelta(hours=int(os.getenv("EOD_CACHE_HOURS", "24")))
         # Remember symbols that failed to fetch so we don't hammer yfinance on every load
@@ -86,14 +87,19 @@ class MarketDataService:
             return True
         return False
 
-    def _sqlite_get(self, db: Session, symbol: str) -> Optional[Tuple[float, datetime, str]]:
+    def _sqlite_get(
+        self, db: Session, symbol: str
+    ) -> Optional[Tuple[float, datetime, str, date]]:
         row = db.query(TickerQuote).filter(TickerQuote.symbol == symbol).first()
         if not row:
+            return None
+        price = _finite_float(row.close_price)
+        if price is None or price <= 0 or row.quote_date is None:
             return None
         fetched_at = _ensure_utc(row.fetched_at)
         if datetime.now(UTC) - fetched_at > self._eod_ttl:
             return None
-        return row.close_price, fetched_at, row.source or "sqlite_eod"
+        return price, fetched_at, row.source or "sqlite_eod", row.quote_date
 
     def _sqlite_set(
         self, db: Session, symbol: str, close_price: float, quote_date: date, source: str
@@ -174,40 +180,128 @@ class MarketDataService:
             return
         db.flush()
 
+    @staticmethod
+    def _quote_date_from_info(info: dict[str, Any]) -> Optional[date]:
+        timestamp = _finite_float(info.get("regularMarketTime"))
+        if timestamp is None or timestamp <= 0:
+            return None
+        try:
+            quoted_at = datetime.fromtimestamp(timestamp, tz=UTC)
+            if quoted_at > datetime.now(UTC) + timedelta(minutes=5):
+                return None
+            exchange_timezone = info.get("exchangeTimezoneName")
+            if exchange_timezone:
+                quoted_at = quoted_at.astimezone(ZoneInfo(str(exchange_timezone)))
+            return quoted_at.date()
+        except (KeyError, OverflowError, OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _history_close(hist: Any) -> Optional[Tuple[float, date]]:
+        if hist is None:
+            return None
+        try:
+            if getattr(hist, "empty", True):
+                return None
+            rows = hist.iterrows()
+            for idx, row in reversed(list(rows)):
+                close = _finite_float(row.get("Close"))
+                if close is None or close <= 0:
+                    continue
+                if hasattr(idx, "date"):
+                    quote_date = idx.date()
+                else:
+                    quote_date = date.fromisoformat(str(idx)[:10])
+                return close, quote_date
+        except Exception:
+            return None
+        return None
+
     def _fetch_eod(self, symbol: str) -> Tuple[Optional[float], Optional[date], str]:
         started = time.perf_counter()
         try:
             ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="5d")
-            if hist is not None and not hist.empty:
-                close = float(hist["Close"].iloc[-1])
-                idx = hist.index[-1]
-                qd = idx.date() if hasattr(idx, "date") else date.today()
-                logger.info(
-                    "yfinance eod symbol=%s close=%.4f quote_date=%s duration_ms=%.0f",
-                    symbol,
-                    close,
-                    qd,
-                    (time.perf_counter() - started) * 1000,
-                )
-                return close, qd, "live_eod"
-            if hasattr(ticker, "fast_info") and ticker.fast_info.get("lastPrice"):
-                close = float(ticker.fast_info["lastPrice"])
-                logger.info(
-                    "yfinance fast_info symbol=%s close=%.4f duration_ms=%.0f",
-                    symbol,
-                    close,
-                    (time.perf_counter() - started) * 1000,
-                )
-                return close, date.today(), "live"
         except Exception as e:
             logger.info(
-                "yfinance no price symbol=%s duration_ms=%.0f err=%s",
+                "yfinance ticker unavailable symbol=%s duration_ms=%.0f err=%s",
                 symbol,
                 (time.perf_counter() - started) * 1000,
                 str(e)[:200],
             )
+            return None, None, "error"
+
+        info: dict[str, Any] = {}
+        try:
+            info = dict(ticker.info or {})
+        except Exception as exc:
+            logger.info("yfinance quote info unavailable symbol=%s err=%s", symbol, str(exc)[:160])
+
+        # Yahoo's regularMarketPrice excludes extended-hours trade prices.
+        # currentPrice can reflect post-market data, so it is intentionally not
+        # used for portfolio valuation.
+        live_price = None
+        candidate = _finite_float(info.get("regularMarketPrice"))
+        if candidate is not None and candidate > 0:
+            live_price = candidate
+
+        fast_info = None
+        if live_price is None:
+            try:
+                fast_info = ticker.fast_info
+                for key in ("regularMarketPrice", "regular_market_price", "lastPrice", "last_price"):
+                    try:
+                        candidate = _finite_float(fast_info.get(key))
+                    except Exception:
+                        candidate = None
+                    if candidate is not None and candidate > 0:
+                        live_price = candidate
+                        break
+            except Exception as exc:
+                logger.info("yfinance fast quote unavailable symbol=%s err=%s", symbol, str(exc)[:160])
+
+        historical = None
+        try:
+            historical = self._history_close(ticker.history(period="5d"))
+        except Exception as exc:
+            logger.info("yfinance history unavailable symbol=%s err=%s", symbol, str(exc)[:160])
+
+        if live_price is not None:
+            quote_date = self._quote_date_from_info(info)
+            if quote_date is None and historical is not None:
+                quote_date = historical[1]
+            if quote_date is None:
+                quote_date = datetime.now(UTC).date()
+            logger.info(
+                "yfinance live symbol=%s price=%.4f quote_date=%s duration_ms=%.0f",
+                symbol,
+                live_price,
+                quote_date,
+                (time.perf_counter() - started) * 1000,
+            )
+            return live_price, quote_date, "live"
+
+        if historical is not None:
+            close, quote_date = historical
+            logger.info(
+                "yfinance eod symbol=%s close=%.4f quote_date=%s duration_ms=%.0f",
+                symbol,
+                close,
+                quote_date,
+                (time.perf_counter() - started) * 1000,
+            )
+            return close, quote_date, "live_eod"
+
+        logger.info(
+            "yfinance no price symbol=%s duration_ms=%.0f",
+            symbol,
+            (time.perf_counter() - started) * 1000,
+        )
         return None, None, "error"
+
+    def get_price_quote_date(self, symbol: str) -> Optional[date]:
+        """Return the market date belonging to the latest price returned by get_price."""
+        cached = self._memory.get(symbol.upper().strip())
+        return cached[3] if cached else None
 
     def _fetch_research(self, symbol: str, period: str) -> MarketResearchResponse:
         now = datetime.now(UTC)
@@ -349,7 +443,7 @@ class MarketDataService:
             self.invalidate(symbol)
 
         if symbol in self._memory:
-            price, ts, source = self._memory[symbol]
+            price, ts, source, _quote_date = self._memory[symbol]
             if now - _ensure_utc(ts) < self._ttl:
                 return price, source, _ensure_utc(ts)
 
@@ -357,21 +451,30 @@ class MarketDataService:
             if db is not None:
                 sqlite_hit = self._sqlite_get(db, symbol)
                 if sqlite_hit:
-                    price, fetched, source = sqlite_hit
-                    self._memory[symbol] = (price, fetched, source)
+                    price, fetched, source, quote_date = sqlite_hit
+                    self._memory[symbol] = (price, fetched, source, quote_date)
                     return price, source, fetched
 
-        price, quote_date, source = self._fetch_eod(symbol)
-        if price is None or price <= 0 or quote_date is None:
+        try:
+            price, quote_date, source = self._fetch_eod(symbol)
+        except Exception as exc:
+            logger.info("yfinance quote parse failed symbol=%s err=%s", symbol, str(exc)[:160])
+            price, quote_date, source = None, None, "error"
+        normalized_price = _finite_float(price)
+        if (
+            normalized_price is None
+            or normalized_price <= 0
+            or quote_date is None
+        ):
             self._failed[symbol] = now
             return 0.0, "error", None
 
         fetched = now
-        self._memory[symbol] = (price, fetched, source)
+        self._memory[symbol] = (normalized_price, fetched, source, quote_date)
         self._failed.pop(symbol, None)
         if db is not None:
-            self._sqlite_set(db, symbol, price, quote_date, source)
-        return price, source, fetched
+            self._sqlite_set(db, symbol, normalized_price, quote_date, source)
+        return normalized_price, source, fetched
 
     def get_research(
         self,

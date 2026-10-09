@@ -1,8 +1,14 @@
-import { JobIncome, JobIncomeCreate, JobStockGrant, JobStockValuation } from '../models/transaction.model';
+import {
+  JobIncome,
+  JobIncomeCreate,
+  JobStockGrant,
+  JobStockPurchase,
+  JobStockValuation,
+} from '../models/transaction.model';
 import { todayIsoDate } from './date.util';
 
 type JobPay = Pick<JobIncomeCreate, 'pay_frequency' | 'base_pay' | 'hours_per_week' | 'effective_date' | 'end_date' | 'promotions' | 'compensation_payments' | 'annual_bonus' | 'annual_equity' | 'annual_other' | 'annual_taxes' | 'annual_deductions'>;
-type JobStocks = Pick<JobIncomeCreate, 'effective_date' | 'stock_grants' | 'stock_valuations'>;
+type JobStocks = Pick<JobIncomeCreate, 'effective_date' | 'stock_symbol' | 'stock_grants' | 'stock_purchases' | 'stock_valuations'>;
 const DAY_MS = 86_400_000;
 
 export function initialAnnualBasePay(row: JobPay): number {
@@ -43,8 +49,14 @@ export interface StockGrantSnapshot {
   remainingShares: number;
   valuationPrice: number;
   valuationDate: string;
+  hasDatedValuation: boolean;
   remainingValue: number;
   totalValue: number;
+}
+
+export interface StockPurchaseSnapshot extends StockGrantSnapshot {
+  employeeContribution: number;
+  hasMarketPriceAtPurchase: boolean;
 }
 
 export interface StockSnapshot {
@@ -52,6 +64,8 @@ export interface StockSnapshot {
   remainingShares: number;
   remainingValue: number;
   totalValue: number;
+  /** ESPP purchase basis supplied by the employee, not compensation. */
+  employeeContributions: number;
 }
 
 /** Inclusive employment and query dates. Keep the cashflow convention of annual pay / 365.25. */
@@ -87,24 +101,53 @@ export function jobCompensationBetween(row: JobPay, start: string, end: string):
   return totals;
 }
 
-/** Uses the grant price until a manual company valuation on or after the grant date is available. */
+/** Returns the latest usable price through the requested date. Invalid and future prices are ignored. */
+export function latestStockValuationOnOrBefore(
+  valuations: JobStockValuation[] = [],
+  cutoff: string,
+  lotDate = '0000-01-01',
+  stockSymbol?: string | null
+): JobStockValuation | undefined {
+  if (!isValidIsoDate(cutoff)) return undefined;
+  return [...valuations]
+    .filter(item => isValidIsoDate(item.date)
+      && item.date <= cutoff
+      && (item.date >= lotDate || (Boolean(item.symbol) && isValidIsoDate(item.observed_date || '') && item.observed_date! >= lotDate && item.observed_date! <= cutoff))
+      && (!item.symbol || item.symbol.trim().toUpperCase() === (stockSymbol || '').trim().toUpperCase())
+      && Number.isFinite(Number(item.price_per_share))
+      && Number(item.price_per_share) >= 0)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .at(-1);
+}
+
+/** Replaces every same-day mark so one date has exactly one effective price. */
+export function replaceStockValuation(
+  valuations: JobStockValuation[] = [],
+  valuation: JobStockValuation
+): JobStockValuation[] {
+  return [
+    ...valuations.filter(item => item.date !== valuation.date),
+    valuation,
+  ].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Uses grant price until a dated company valuation on or after the award date is available. */
 export function stockGrantSnapshot(
   grant: JobStockGrant,
   valuations: JobStockValuation[] = [],
-  cutoff: string
+  cutoff: string,
+  stockSymbol?: string | null
 ): StockGrantSnapshot {
-  if (!cutoff || cutoff < grant.date) {
-    return { realizedProceeds: 0, sharesSold: 0, remainingShares: 0, valuationPrice: grant.price_at_grant, valuationDate: grant.date, remainingValue: 0, totalValue: 0 };
+  const fallbackPrice = Number(grant.price_at_grant) || 0;
+  if (!isValidIsoDate(cutoff) || !isValidIsoDate(grant.date) || cutoff < grant.date) {
+    return { realizedProceeds: 0, sharesSold: 0, remainingShares: 0, valuationPrice: fallbackPrice, valuationDate: grant.date, hasDatedValuation: false, remainingValue: 0, totalValue: 0 };
   }
-  const latest = [...valuations]
-    .filter(item => item.date >= grant.date && item.date <= cutoff)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .at(-1);
-  const sales = (grant.sales || []).filter(item => item.date <= cutoff);
+  const latest = latestStockValuationOnOrBefore(valuations, cutoff, grant.date, stockSymbol);
+  const sales = (grant.sales || []).filter(item => isValidIsoDate(item.date) && item.date >= grant.date && item.date <= cutoff);
   const sharesSold = sales.reduce((sum, item) => sum + (Number(item.shares) || 0), 0);
   const realizedProceeds = sales.reduce((sum, item) => sum + (Number(item.cash_proceeds) || 0), 0);
   const remainingShares = Math.max(0, (Number(grant.quantity) || 0) - sharesSold);
-  const valuationPrice = Number(latest?.price_per_share ?? grant.price_at_grant) || 0;
+  const valuationPrice = latest ? Number(latest.price_per_share) : fallbackPrice;
   const remainingValue = remainingShares * valuationPrice;
   return {
     realizedProceeds,
@@ -112,25 +155,88 @@ export function stockGrantSnapshot(
     remainingShares,
     valuationPrice,
     valuationDate: latest?.date || grant.date,
+    hasDatedValuation: Boolean(latest),
     remainingValue,
     totalValue: realizedProceeds + remainingValue,
   };
 }
 
+/** Uses the employee's actual ESPP purchase price until a dated company valuation is available. */
+export function stockPurchaseSnapshot(
+  purchase: JobStockPurchase,
+  valuations: JobStockValuation[] = [],
+  cutoff: string,
+  stockSymbol?: string | null
+): StockPurchaseSnapshot {
+  const paidPrice = Number(purchase.price_paid_per_share) || 0;
+  const marketPrice = Number(purchase.market_price_at_purchase);
+  const hasMarketPriceAtPurchase = purchase.market_price_at_purchase != null
+    && Number.isFinite(marketPrice)
+    && marketPrice >= 0;
+  const fallbackPrice = hasMarketPriceAtPurchase ? marketPrice : paidPrice;
+  if (!isValidIsoDate(cutoff) || !isValidIsoDate(purchase.date) || cutoff < purchase.date) {
+    return {
+      realizedProceeds: 0,
+      sharesSold: 0,
+      remainingShares: 0,
+      valuationPrice: fallbackPrice,
+      valuationDate: purchase.date,
+      hasDatedValuation: false,
+      remainingValue: 0,
+      totalValue: 0,
+      employeeContribution: 0,
+      hasMarketPriceAtPurchase,
+    };
+  }
+  const latest = latestStockValuationOnOrBefore(valuations, cutoff, purchase.date, stockSymbol);
+  const sales = (purchase.sales || []).filter(item => isValidIsoDate(item.date) && item.date >= purchase.date && item.date <= cutoff);
+  const sharesSold = sales.reduce((sum, item) => sum + (Number(item.shares) || 0), 0);
+  const realizedProceeds = sales.reduce((sum, item) => sum + (Number(item.cash_proceeds) || 0), 0);
+  const remainingShares = Math.max(0, (Number(purchase.quantity) || 0) - sharesSold);
+  const valuationPrice = latest ? Number(latest.price_per_share) : fallbackPrice;
+  const remainingValue = remainingShares * valuationPrice;
+  return {
+    realizedProceeds,
+    sharesSold,
+    remainingShares,
+    valuationPrice,
+    valuationDate: latest?.date || purchase.date,
+    hasDatedValuation: Boolean(latest),
+    remainingValue,
+    totalValue: realizedProceeds + remainingValue,
+    employeeContribution: (Number(purchase.quantity) || 0) * paidPrice,
+    hasMarketPriceAtPurchase,
+  };
+}
+
 export function stockSnapshotAt(row: JobStocks, cutoff: string): StockSnapshot {
-  const total: StockSnapshot = { realizedProceeds: 0, remainingShares: 0, remainingValue: 0, totalValue: 0 };
+  const total: StockSnapshot = { realizedProceeds: 0, remainingShares: 0, remainingValue: 0, totalValue: 0, employeeContributions: 0 };
   for (const grant of row.stock_grants || []) {
-    const snapshot = stockGrantSnapshot(grant, row.stock_valuations || [], cutoff);
+    const snapshot = stockGrantSnapshot(grant, row.stock_valuations || [], cutoff, row.stock_symbol);
     total.realizedProceeds += snapshot.realizedProceeds;
     total.remainingShares += snapshot.remainingShares;
     total.remainingValue += snapshot.remainingValue;
     total.totalValue += snapshot.totalValue;
+  }
+  for (const purchase of row.stock_purchases || []) {
+    const snapshot = stockPurchaseSnapshot(purchase, row.stock_valuations || [], cutoff, row.stock_symbol);
+    total.realizedProceeds += snapshot.realizedProceeds;
+    total.remainingShares += snapshot.remainingShares;
+    total.remainingValue += snapshot.remainingValue;
+    total.totalValue += snapshot.totalValue;
+    total.employeeContributions += snapshot.employeeContribution;
   }
   return total;
 }
 
 export function stockPortfolioValueAt(row: JobStocks, cutoff: string): number {
   return stockSnapshotAt(row, cutoff).totalValue;
+}
+
+/** Stock compensation excludes employee-funded ESPP contributions; award grants retain their full basis. */
+export function stockCompensationValueAt(row: JobStocks, cutoff: string): number {
+  const snapshot = stockSnapshotAt(row, cutoff);
+  return snapshot.totalValue - snapshot.employeeContributions;
 }
 
 function dayBefore(date: string): string {
@@ -140,15 +246,19 @@ function dayBefore(date: string): string {
 /** Period stock compensation is the change in total economic value, so grant basis is counted once. */
 export function stockCompensationBetween(row: JobStocks, start: string, end: string): number {
   if (!isValidIsoDate(start) || !isValidIsoDate(end) || end < start) return 0;
-  return stockPortfolioValueAt(row, end) - stockPortfolioValueAt(row, dayBefore(start));
+  return stockCompensationValueAt(row, end) - stockCompensationValueAt(row, dayBefore(start));
 }
 
 /** Sale proceeds are cash events; grant value and unrealized gains remain outside cashflow. */
 export function stockSalesProceedsBetween(row: JobStocks, start: string, end: string): number {
   if (!start || !end || end < start) return 0;
-  return (row.stock_grants || []).reduce((total, grant) => total + (grant.sales || [])
+  const grantProceeds = (row.stock_grants || []).reduce((total, grant) => total + (grant.sales || [])
     .filter(sale => sale.date >= start && sale.date <= end)
     .reduce((sum, sale) => sum + (Number(sale.cash_proceeds) || 0), 0), 0);
+  const purchaseProceeds = (row.stock_purchases || []).reduce((total, purchase) => total + (purchase.sales || [])
+    .filter(sale => sale.date >= start && sale.date <= end)
+    .reduce((sum, sale) => sum + (Number(sale.cash_proceeds) || 0), 0), 0);
+  return grantProceeds + purchaseProceeds;
 }
 
 export interface EmployerCompensation extends CompensationTotals {
@@ -161,6 +271,8 @@ export interface EmployerCompensation extends CompensationTotals {
   stockCashProceeds: number;
   /** Remaining grant shares at the selected through-date valuation. */
   stockRemainingValue: number;
+  /** Employee-funded ESPP purchase basis, shown separately from compensation. */
+  stockEmployeeContributions: number;
 }
 
 export function compensationByEmployer(rows: JobIncome[], start: string, end: string): EmployerCompensation[] {
@@ -170,7 +282,7 @@ export function compensationByEmployer(rows: JobIncome[], start: string, end: st
     const key = name.toLocaleLowerCase();
     const total = employers.get(key) || {
       employer: name, jobs: 0, base: 0, bonus: 0, equity: 0, other: 0,
-      gross: 0, net: 0, stock_compensation: 0, stockCashProceeds: 0, stockRemainingValue: 0,
+      gross: 0, net: 0, stock_compensation: 0, stockCashProceeds: 0, stockRemainingValue: 0, stockEmployeeContributions: 0,
     };
     const pay = jobCompensationBetween(row, start, end);
     const stocks = stockSnapshotAt(row, end);
@@ -180,6 +292,7 @@ export function compensationByEmployer(rows: JobIncome[], start: string, end: st
     total.stock_compensation += stockCompensation;
     total.stockCashProceeds += stocks.realizedProceeds;
     total.stockRemainingValue += stocks.remainingValue;
+    total.stockEmployeeContributions += stocks.employeeContributions;
     total.gross += pay.gross + stockCompensation;
     employers.set(key, total);
   }
@@ -195,6 +308,8 @@ export function isValidIsoDate(date: string): boolean {
 export function jobHistoryError(row: JobIncomeCreate): string | null {
   if (!isValidIsoDate(row.effective_date)) return 'A valid start date is required.';
   if (row.end_date && (!isValidIsoDate(row.end_date) || row.end_date < row.effective_date)) return 'End date must be on or after the start date.';
+  const stockSymbol = row.stock_symbol?.trim();
+  if (stockSymbol && !/^[A-Z0-9.\-]{1,10}$/i.test(stockSymbol)) return 'Stock ticker must be 1–10 letters, numbers, dots, or hyphens.';
   const dates = new Set<string>();
   for (const promotion of row.promotions || []) {
     if (!isValidIsoDate(promotion.date) || promotion.date <= row.effective_date || (row.end_date && promotion.date > row.end_date)) return 'Promotion dates must be after the start date and on or before the end date.';
@@ -208,7 +323,24 @@ export function jobHistoryError(row: JobIncomeCreate): string | null {
   }
   const valuationDates = new Set<string>();
   for (const valuation of row.stock_valuations || []) {
-    if (!isValidIsoDate(valuation.date) || valuation.date < row.effective_date) return 'Stock valuation dates must be on or after the job start date.';
+    if (!isValidIsoDate(valuation.date)) return 'Stock valuation dates must be valid calendar dates.';
+    const isTaggedMarketQuote = Boolean(valuation.symbol) && valuation.source !== 'manual';
+    if (isTaggedMarketQuote) {
+      const observedDate = valuation.observed_date || '';
+      if (!/^[A-Z0-9.\-]{1,10}$/i.test(valuation.symbol || '')
+        || !isValidIsoDate(observedDate)
+        || observedDate > todayIsoDate()
+        || valuation.date > observedDate) {
+        return 'Market quote dates and ticker must be valid and cannot be in the future.';
+      }
+      if (valuation.price_as_of != null) {
+        const fetchedAt = Date.parse(valuation.price_as_of);
+        const endOfObservedDate = Date.parse(`${observedDate}T23:59:59.999Z`);
+        if (!Number.isFinite(fetchedAt) || fetchedAt > endOfObservedDate) return 'Market quote fetch time must be valid and no later than its observed date.';
+      }
+    } else if (valuation.date < row.effective_date) {
+      return 'Manual stock valuation dates must be on or after the job start date.';
+    }
     if (valuationDates.has(valuation.date)) return 'Use one stock valuation per date.';
     valuationDates.add(valuation.date);
     if (!Number.isFinite(valuation.price_per_share) || valuation.price_per_share < 0) return 'Stock valuation prices must be non-negative.';
@@ -223,6 +355,18 @@ export function jobHistoryError(row: JobIncomeCreate): string | null {
       if (!Number.isFinite(sale.shares) || sale.shares <= 0 || !Number.isFinite(sale.cash_proceeds) || sale.cash_proceeds < 0) return 'Stock sale shares must be positive and proceeds must be non-negative.';
       soldShares += sale.shares;
       if (soldShares > grant.quantity + 1e-8) return 'Stock sales cannot exceed the grant share quantity.';
+    }
+  }
+  for (const purchase of row.stock_purchases || []) {
+    if (!isValidIsoDate(purchase.date) || purchase.date < row.effective_date) return 'ESPP purchase dates must be on or after the job start date.';
+    if (!Number.isFinite(purchase.quantity) || purchase.quantity <= 0 || !Number.isFinite(purchase.price_paid_per_share) || purchase.price_paid_per_share < 0) return 'ESPP shares must be positive and the employee purchase price must be non-negative.';
+    if (purchase.market_price_at_purchase != null && (!Number.isFinite(purchase.market_price_at_purchase) || purchase.market_price_at_purchase < 0)) return 'ESPP market price at purchase must be non-negative.';
+    let soldShares = 0;
+    for (const sale of [...(purchase.sales || [])].sort((a, b) => a.date.localeCompare(b.date))) {
+      if (!isValidIsoDate(sale.date) || sale.date < purchase.date) return 'ESPP sale dates must be on or after the purchase date.';
+      if (!Number.isFinite(sale.shares) || sale.shares <= 0 || !Number.isFinite(sale.cash_proceeds) || sale.cash_proceeds < 0) return 'ESPP sale shares must be positive and proceeds must be non-negative.';
+      soldShares += sale.shares;
+      if (soldShares > purchase.quantity + 1e-8) return 'ESPP sales cannot exceed the purchased share quantity.';
     }
   }
   return null;

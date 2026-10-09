@@ -6,9 +6,12 @@ import {
   isCurrentJob,
   jobCompensationBetween,
   jobHistoryError,
+  latestStockValuationOnOrBefore,
+  replaceStockValuation,
   stockCompensationBetween,
   stockGrantSnapshot,
   stockPortfolioValueAt,
+  stockPurchaseSnapshot,
   stockSalesProceedsBetween,
   stockSnapshotAt,
 } from './job-compensation.util';
@@ -138,7 +141,7 @@ describe('job compensation history', () => {
     });
     expect(stockGrantSnapshot(row.stock_grants![0], row.stock_valuations, '2026-11-01')).toEqual({
       realizedProceeds: 15000, sharesSold: 100, remainingShares: 100,
-      valuationPrice: 200, valuationDate: '2026-11-01', remainingValue: 20000, totalValue: 35000,
+      valuationPrice: 200, valuationDate: '2026-11-01', hasDatedValuation: true, remainingValue: 20000, totalValue: 35000,
     });
     expect(stockPortfolioValueAt(row, '2026-11-01')).toBe(35000);
     expect(stockCompensationBetween(row, '2026-01-01', '2026-11-01')).toBe(35000);
@@ -175,9 +178,97 @@ describe('job compensation history', () => {
       }, { date: '2026-07-01', origin: 'bonus', quantity: 2, price_at_grant: 500 }],
       stock_valuations: [{ date: '2026-12-01', price_per_share: 300 }],
     });
-    expect(stockSnapshotAt(row, '2026-06-30')).toEqual({ realizedProceeds: 0, remainingShares: 10, remainingValue: 1000, totalValue: 1000 });
-    expect(stockSnapshotAt(row, '2026-12-01')).toEqual({ realizedProceeds: 900, remainingShares: 7, remainingValue: 2100, totalValue: 3000 });
+    expect(stockSnapshotAt(row, '2026-06-30')).toEqual({ realizedProceeds: 0, remainingShares: 10, remainingValue: 1000, totalValue: 1000, employeeContributions: 0 });
+    expect(stockSnapshotAt(row, '2026-12-01')).toEqual({ realizedProceeds: 900, remainingShares: 7, remainingValue: 2100, totalValue: 3000, employeeContributions: 0 });
     expect(stockGrantSnapshot({ date: '2026-07-01', origin: 'equity', quantity: 1, price_at_grant: 500 }, [{ date: '2026-06-01', price_per_share: 0 }], '2026-07-01').valuationPrice).toBe(500);
+  });
+
+  it('subtracts ESPP employee contributions while counting purchase-date market value as compensation', () => {
+    const row = job({
+      stock_symbol: 'MSFT',
+      stock_purchases: [{
+        date: '2026-01-15', quantity: 10, price_paid_per_share: 80, market_price_at_purchase: 100,
+        sales: [{ date: '2026-02-15', shares: 5, cash_proceeds: 550 }],
+      }],
+      stock_valuations: [
+        { date: '2026-01-14', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-01-15' },
+        { date: '2026-02-20', price_per_share: 120, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-02-20' },
+      ],
+    });
+
+    expect(stockSnapshotAt(row, '2026-01-14').totalValue).toBe(0);
+    expect(stockSnapshotAt(row, '2026-01-15')).toEqual({
+      realizedProceeds: 0, remainingShares: 10, remainingValue: 1000, totalValue: 1000, employeeContributions: 800,
+    });
+    expect(stockCompensationBetween(row, '2026-01-15', '2026-01-31')).toBe(200);
+    expect(stockSnapshotAt(row, '2026-02-28')).toEqual({
+      realizedProceeds: 550, remainingShares: 5, remainingValue: 600, totalValue: 1150, employeeContributions: 800,
+    });
+    expect(stockCompensationBetween(row, '2026-02-01', '2026-02-28')).toBe(150);
+    expect(stockSalesProceedsBetween(row, '2026-02-01', '2026-02-28')).toBe(550);
+    expect(computeCashflowSummary('2026-02-15', '2026-02-15', [], [{ ...row, is_active: false }], [], []).planned_income).toBe(550);
+  });
+
+  it('uses legacy ESPP paid basis as valuation fallback and never subtracts grant basis', () => {
+    const row = job({
+      stock_grants: [{ date: '2026-01-01', origin: 'equity', quantity: 10, price_at_grant: 100 }],
+      stock_purchases: [{ date: '2026-01-01', quantity: 10, price_paid_per_share: 80 }],
+    });
+    expect(stockPurchaseSnapshot(row.stock_purchases![0], [], '2026-12-31').valuationPrice).toBe(80);
+    expect(stockCompensationBetween(row, '2026-01-01', '2026-12-31')).toBe(1000);
+    expect(stockSnapshotAt(row, '2026-12-31').employeeContributions).toBe(800);
+  });
+
+  it('uses a quote observed today for a new lot while keeping its actual market date for history', () => {
+    const row = job({
+      stock_symbol: 'MSFT',
+      stock_purchases: [{ date: '2026-10-09', quantity: 10, price_paid_per_share: 80 }],
+      stock_valuations: [{
+        date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
+        price_as_of: '2026-10-09T12:00:00Z', observed_date: '2026-10-09',
+      }],
+    });
+    expect(stockSnapshotAt(row, '2026-10-08').totalValue).toBe(0);
+    expect(stockSnapshotAt(row, '2026-10-09').remainingValue).toBe(1000);
+    expect(stockCompensationBetween(row, '2026-10-09', '2026-10-09')).toBe(200);
+    expect(stockSnapshotAt({ ...row, stock_symbol: 'AAPL' }, '2026-10-09').remainingValue).toBe(800);
+  });
+
+  it('accepts a prior trading-day quote for a job starting today but waits for future lots to be acquired', () => {
+    const quote = {
+      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
+      price_as_of: '2026-10-09T12:00:00Z', observed_date: '2026-10-09',
+    };
+    const startsToday = job({
+      effective_date: '2026-10-09', stock_symbol: 'MSFT',
+      stock_grants: [{ date: '2026-10-09', origin: 'equity', quantity: 10, price_at_grant: 80 }],
+      stock_valuations: [quote],
+    });
+    expect(jobHistoryError(startsToday as JobIncomeCreate)).toBeNull();
+    expect(stockSnapshotAt(startsToday, '2026-10-08').totalValue).toBe(0);
+    expect(stockSnapshotAt(startsToday, '2026-10-09').remainingValue).toBe(1000);
+
+    const startsLater = job({
+      effective_date: '2026-10-20', stock_symbol: 'MSFT',
+      stock_grants: [{ date: '2026-10-20', origin: 'equity', quantity: 10, price_at_grant: 80 }],
+      stock_valuations: [quote],
+    });
+    expect(jobHistoryError(startsLater as JobIncomeCreate)).toBeNull();
+    expect(stockSnapshotAt(startsLater, '2026-10-19').totalValue).toBe(0);
+    expect(stockSnapshotAt(startsLater, '2026-10-20').remainingValue).toBe(800);
+  });
+
+  it('ignores invalid or future marks and replaces same-day values without losing other dates', () => {
+    const marks = [
+      { date: '2026-02-01', price_per_share: 20 },
+      { date: '2026-03-01', price_per_share: Number.NaN },
+      { date: '2026-12-01', price_per_share: 50 },
+      { date: '2026-02-01', price_per_share: 30 },
+    ];
+    const replaced = replaceStockValuation(marks, { date: '2026-02-01', price_per_share: 25, source: 'manual' });
+    expect(replaced.filter(mark => mark.date === '2026-02-01')).toEqual([{ date: '2026-02-01', price_per_share: 25, source: 'manual' }]);
+    expect(latestStockValuationOnOrBefore(replaced, '2026-06-01')?.price_per_share).toBe(25);
+    expect(latestStockValuationOnOrBefore(replaced, '2026-11-30')?.price_per_share).toBe(25);
   });
 
   it('keeps later grants at their own grant price until a later shared valuation', () => {
@@ -205,6 +296,35 @@ describe('job compensation history', () => {
     expect(stockSnapshotAt(row, '2026-04-01').totalValue).toBe(22500);
     expect(stockSalesProceedsBetween(row, '2026-02-01', '2026-02-28')).toBe(22500);
     expect(stockSnapshotAt(row, '2026-04-01').realizedProceeds).toBe(22500);
+  });
+
+  it('keeps the requested 775-share grant and two locked sale proceeds isolated from a later quote', () => {
+    const row = job({
+      stock_symbol: 'MSFT',
+      stock_grants: [{
+        date: '2026-04-24', origin: 'equity', quantity: 775, price_at_grant: 42.40,
+        sales: [
+          { date: '2026-08-07', shares: 25, cash_proceeds: 3249.73 },
+          { date: '2026-08-07', shares: 50, cash_proceeds: 6303.37 },
+        ],
+      }],
+      stock_valuations: [{
+        date: '2026-10-08', price_per_share: 150, source: 'live_eod', symbol: 'MSFT',
+        price_as_of: '2026-10-09T12:00:00Z', observed_date: '2026-10-09',
+      }],
+    });
+
+    const historical = stockSnapshotAt(row, '2026-08-07');
+    expect(historical.remainingShares).toBe(700);
+    expect(historical.remainingValue).toBe(29680);
+    expect(historical.realizedProceeds).toBe(9553.10);
+    expect(historical.totalValue).toBe(39233.10);
+
+    const current = stockSnapshotAt(row, '2026-10-09');
+    expect(current.remainingShares).toBe(700);
+    expect(current.remainingValue).toBe(105000);
+    expect(current.realizedProceeds).toBe(9553.10);
+    expect(current.totalValue).toBe(114553.10);
   });
 
   it('allows multiple same-day sales up to the grant and rejects chronological overselling', () => {
@@ -253,6 +373,21 @@ describe('job compensation history', () => {
     expect(check({ end_date: '2026-01-31', stock_grants: [{ date: '2026-02-01', origin: 'bonus', quantity: 1, price_at_grant: 10 }] })).toBeNull();
     expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 0, price_at_grant: 10 }] })).toContain('positive');
     expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: -1 }] })).toContain('non-negative');
+    expect(check({ effective_date: '2026-10-09', stock_symbol: 'MSFT', stock_valuations: [{
+      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
+      price_as_of: '2026-10-09T12:00:00Z', observed_date: '2026-10-09',
+    }] })).toBeNull();
+    expect(check({ effective_date: '2026-10-15', stock_symbol: 'MSFT', stock_valuations: [{
+      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
+      price_as_of: '2026-10-09T12:00:00Z', observed_date: '2026-10-09',
+    }] })).toBeNull();
+    expect(check({ effective_date: '2026-10-09', stock_valuations: [{ date: '2026-10-08', price_per_share: 100 }] })).toContain('on or after the job start');
+    expect(check({ effective_date: '2026-10-09', stock_symbol: 'MSFT', stock_valuations: [{
+      date: '2026-10-10', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-09',
+    }] })).toContain('cannot be in the future');
+    expect(check({ effective_date: '2026-10-09', stock_symbol: 'MSFT', stock_valuations: [{
+      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-10',
+    }] })).toContain('cannot be in the future');
     expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 0 }] })).toContain('positive');
     expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 10, sales: [{ date: '2026-02-02', shares: 1, cash_proceeds: NaN }] }] })).toContain('non-negative');
     expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 10, sales: [{ date: '2026-02-02', shares: 1, cash_proceeds: Infinity }] }] })).toContain('non-negative');
@@ -260,5 +395,9 @@ describe('job compensation history', () => {
     expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: NaN }] })).toContain('non-negative');
     expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: Infinity }] })).toContain('non-negative');
     expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: 10 }, { date: '2026-02-01', price_per_share: 20 }] })).toContain('one stock valuation');
+    expect(check({ stock_symbol: 'TOO-LONG-TICKER' })).toContain('ticker');
+    expect(check({ stock_purchases: [{ date: '2026-02-01', quantity: 1, price_paid_per_share: 10, market_price_at_purchase: -1 }] })).toContain('market price');
+    expect(check({ stock_purchases: [{ date: '2026-02-01', quantity: 0, price_paid_per_share: 10 }] })).toContain('positive');
+    expect(check({ stock_purchases: [{ date: '2026-02-01', quantity: 1, price_paid_per_share: 10, sales: [{ date: '2026-02-02', shares: 2, cash_proceeds: 1 }] }] })).toContain('cannot exceed');
   });
 });

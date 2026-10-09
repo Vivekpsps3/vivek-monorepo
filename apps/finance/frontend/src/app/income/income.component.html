@@ -2,7 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="compensationTracking ? 'Compensation history' : 'Pay'"
-    subtitle="Record employment dates, starting pay, cash bonuses, stock grants, and dated pay changes. This does not change net worth.">
+    subtitle="Record employment dates, pay, stock awards, employee share purchases, and dated pay changes. This does not change net worth.">
     <div uiPageActions class="header-actions">
       <ui-button variant="primary" (clicked)="openAddModal()">Add income</ui-button>
     </div>
@@ -39,7 +39,7 @@
       <div>
         <strong>What to enter first</strong>
         <p>
-          Use the numbers from your offer letter or most recent paystub: starting gross pay, pay frequency, recurring annual bonus/equity, taxes withheld, and deductions such as health insurance, HSA, FSA, 401(k), or commuter benefits. Individual stock awards belong in the dated stock history below.
+          Use the numbers from your offer letter or most recent paystub: starting gross pay, pay frequency, recurring annual bonus/equity, taxes withheld, and deductions such as health insurance, HSA, FSA, 401(k), or commuter benefits. Stock awards and employee-funded share purchases belong in the dated stock history below.
         </p>
       </div>
       <div title="Pay figures feed Recurring and Planning. They do not change net worth.">
@@ -90,19 +90,76 @@
                   <span class="muted block">{{ payment.date }}: {{ payment.label || payment.kind }} · ${{ payment.amount | number: '1.2-2' }}</span>
                 }
                 @for (grant of row.stock_grants || []; track $index) {
-                  @let grantSnapshot = stockGrantSnapshot(grant, row.stock_valuations || [], today());
+                  @let grantSnapshot = stockGrantSnapshot(grant, row.stock_valuations || [], today(), row.stock_symbol);
                   <span class="muted block">
                     {{ grant.date }}: {{ grant.label || (grant.origin === 'bonus' ? 'Stock bonus' : 'Equity grant') }} · {{ grant.quantity | number: '1.0-4' }} shares at ${{ grant.price_at_grant | number: '1.2-4' }} grant price
-                    · {{ grantSnapshot.remainingShares | number: '1.0-4' }} remain as of {{ today() }}, marked at ${{ grantSnapshot.valuationPrice | number: '1.2-4' }} from {{ grantSnapshot.valuationDate }}
+                    · {{ grantSnapshot.remainingShares | number: '1.0-4' }} remain as of {{ today() }}
+                    @if (grantSnapshot.hasDatedValuation) {
+                      , marked at ${{ grantSnapshot.valuationPrice | number: '1.2-4' }} from {{ grantSnapshot.valuationDate }}
+                    } @else {
+                      , using the grant price until a dated valuation is entered
+                    }
                   </span>
                   @for (sale of grant.sales || []; track $index) {
                     <span class="muted block">{{ sale.shares | number: '1.0-4' }} shares converted to cash on {{ sale.date }} · ${{ sale.cash_proceeds | number: '1.2-2' }} proceeds</span>
+                  }
+                }
+                @for (purchase of row.stock_purchases || []; track $index) {
+                  @let purchaseSnapshot = stockPurchaseSnapshot(purchase, row.stock_valuations || [], today(), row.stock_symbol);
+                  <span class="muted block">
+                    {{ purchase.date }}: {{ purchase.label || 'ESPP purchase' }} · {{ purchase.quantity | number: '1.0-4' }} shares · employee contribution ${{ (purchase.quantity * purchase.price_paid_per_share) | number: '1.2-2' }} at ${{ purchase.price_paid_per_share | number: '1.2-4' }} per share
+                    · {{ purchaseSnapshot.remainingShares | number: '1.0-4' }} remain
+                    @if (purchaseSnapshot.hasDatedValuation) {
+                      , marked at ${{ purchaseSnapshot.valuationPrice | number: '1.2-4' }} from {{ purchaseSnapshot.valuationDate }}
+                    } @else if (purchaseSnapshot.hasMarketPriceAtPurchase) {
+                      , marked at ${{ purchaseSnapshot.valuationPrice | number: '1.2-4' }} purchase-date market price
+                    } @else {
+                      , using the purchase price until a dated valuation is entered
+                    }
+                  </span>
+                  @for (sale of purchase.sales || []; track $index) {
+                    <span class="muted block">{{ sale.shares | number: '1.0-4' }} ESPP shares sold on {{ sale.date }} · ${{ sale.cash_proceeds | number: '1.2-2' }} locked proceeds</span>
                   }
                 }
                 @if ((row.stock_grants || []).length) {
                   <span class="muted block">
                     Stock at {{ today() }}: ${{ stockSnapshotAt(row, today()).realizedProceeds | number: '1.2-2' }} sale proceeds + ${{ stockSnapshotAt(row, today()).remainingValue | number: '1.2-2' }} remaining shares
                   </span>
+                }
+                @if ((row.stock_purchases || []).length) {
+                  <span class="muted block">Employee-funded ESPP purchases through {{ today() }}: ${{ stockSnapshotAt(row, today()).employeeContributions | number: '1.2-2' }} contributions.</span>
+                }
+                @if (row.stock_symbol || (row.stock_grants || []).length || (row.stock_purchases || []).length) {
+                  <section class="stock-quote-controls" [attr.aria-label]="(row.stock_symbol || 'Private') + ' share price controls'">
+                    <div class="stock-quote-controls__heading">
+                      <strong>{{ row.stock_symbol || 'Private share' }} price</strong>
+                      <p role="status" aria-live="polite">{{ row.stock_symbol ? stockQuoteStatus(row) : 'No market ticker configured. Enter a dated price manually.' }}</p>
+                    </div>
+                    <div class="stock-quote-controls__inputs">
+                      <label class="form-group">
+                        <span>Manual price date</span>
+                        <input type="date" [name]="'stock_price_date_' + row.id" [(ngModel)]="stockPriceDraft(row).date" [ngModelOptions]="{standalone: true}" />
+                      </label>
+                      <label class="form-group">
+                        <span>Manual price per share</span>
+                        <input type="number" min="0" step="0.0001" [name]="'stock_price_value_' + row.id" [(ngModel)]="stockPriceDraft(row).price" [ngModelOptions]="{standalone: true}" />
+                      </label>
+                    </div>
+                    <div class="stock-quote-controls__actions">
+                      <ui-button variant="secondary" size="sm" [disabled]="isStockPriceSaving(row.id)" (clicked)="saveStockPrice(row)">
+                        {{ isStockPriceSaving(row.id) ? 'Saving…' : 'Save dated manual price' }}
+                      </ui-button>
+                      @if (row.stock_symbol) {
+                        <ui-button variant="ghost" size="sm" [disabled]="isStockTickerRefreshing(row.stock_symbol)" [ariaLabel]="'Refresh market price for ' + row.stock_symbol" (clicked)="refreshStockTicker(row.stock_symbol)">
+                          {{ isStockTickerRefreshing(row.stock_symbol) ? 'Refreshing…' : 'Refresh market price' }}
+                        </ui-button>
+                      }
+                    </div>
+                    <small>
+                      @if (row.stock_symbol) { Only the ticker is sent for a market quote. }
+                      Dated prices apply to historical snapshots only on or after their market date. Manual prices are available for private or unsupported shares.
+                    </small>
+                  </section>
                 }
               </td>
               <td>
@@ -323,25 +380,36 @@
             <h4 id="stock-title">Stock bonuses and equity grants</h4>
             <ui-button variant="secondary" size="sm" (clicked)="addStockGrant()">Add stock grant</ui-button>
           </div>
-          <p class="muted">The grant year includes the award value and any growth. Later years count only gains or losses. Sold shares use recorded proceeds; unsold shares use the latest price entered by that date. Enter each award only once.</p>
+          <p class="muted">Grant shares use their grant value as compensation in the grant year, with later years counting only gains or losses. ESPP shares are employee-funded: compensation is their economic value less your purchase contributions. Sales keep their recorded cash proceeds fixed. These amounts stay out of recurring pay and net worth.</p>
+
+          <div class="form-row">
+            <label class="form-group">
+              <span>Employer stock ticker (optional)</span>
+              <input name="stock_symbol" maxlength="10" autocapitalize="characters" autocomplete="off" [(ngModel)]="form.stock_symbol" placeholder="MSFT or BRK.B" />
+            </label>
+          </div>
+          <p class="muted">For listed employer stock, enter its ticker to refresh a market quote when this page opens and after you save. Only the ticker is sent to the price provider. Leave it blank for private stock and enter dated prices manually.</p>
 
           <div class="history-heading stock-valuations-heading">
-            <h4>Private stock valuations</h4>
+            <h4>Manual dated share prices</h4>
             <ui-button variant="secondary" size="sm" (clicked)="addStockValuation()">Add valuation</ui-button>
           </div>
-          <p class="muted">Each valuation applies to grants on or before its date. A later grant keeps its own grant price until a later valuation is entered.</p>
+          <p class="muted">Use these for private shares or to replace a market quote manually. A price applies to stock acquired on or before its date. Grant shares fall back to grant price and ESPP shares fall back to employee purchase price until a dated price exists. Later grants and purchases keep their own basis.</p>
           @for (valuation of form.stock_valuations || []; track $index; let i = $index) {
             <div class="history-entry">
               <div class="form-row">
                 <label class="form-group">
                   <span>Valuation date</span>
-                  <input [name]="'stock_valuation_date_' + i" type="date" [min]="form.effective_date" [(ngModel)]="valuation.date" required />
+                  <input [name]="'stock_valuation_date_' + i" type="date" [attr.min]="isMarketStockValuation(valuation) ? null : form.effective_date" [(ngModel)]="valuation.date" required />
                 </label>
                 <label class="form-group">
-                  <span>Private share value</span>
+                  <span>Share price</span>
                   <input [name]="'stock_valuation_price_' + i" type="number" min="0" step="0.0001" [(ngModel)]="valuation.price_per_share" required />
                 </label>
               </div>
+              @if (valuation.source && valuation.source !== 'manual') {
+                <p class="muted">Market quote from {{ valuation.source }}{{ valuation.price_as_of ? ' · checked ' + valuation.price_as_of : '' }}{{ valuation.symbol ? ' · ' + valuation.symbol : '' }}</p>
+              }
               <ui-button variant="danger" size="sm" (clicked)="form.stock_valuations!.splice(i, 1)">Remove valuation {{ i + 1 }}</ui-button>
             </div>
           }
@@ -375,11 +443,15 @@
                   <input [name]="'stock_grant_price_' + i" type="number" min="0.0001" step="0.0001" [(ngModel)]="grant.price_at_grant" required />
                 </label>
               </div>
-              @let grantPreview = stockGrantSnapshot(grant, form.stock_valuations || [], today());
+              @let grantPreview = stockGrantSnapshot(grant, form.stock_valuations || [], today(), form.stock_symbol);
               <p class="stock-preview">
                 Grant value: <strong>${{ (grant.quantity * grant.price_at_grant) | number: '1.2-2' }}</strong>.
-                As of {{ today() }}, {{ grantPreview.remainingShares | number: '1.0-4' }} shares remain. Latest price is
-                <strong>${{ grantPreview.valuationPrice | number: '1.2-4' }}</strong> from {{ grantPreview.valuationDate }}, worth
+                As of {{ today() }}, {{ grantPreview.remainingShares | number: '1.0-4' }} shares remain.
+                @if (grantPreview.hasDatedValuation) {
+                  Latest saved price is <strong>${{ grantPreview.valuationPrice | number: '1.2-4' }}</strong> from {{ grantPreview.valuationDate }}, worth
+                } @else {
+                  No dated price is available, so the grant price of <strong>${{ grantPreview.valuationPrice | number: '1.2-4' }}</strong> is used, worth
+                }
                 <strong>${{ grantPreview.remainingValue | number: '1.2-2' }}</strong>; recorded sale proceeds are
                 <strong>${{ grantPreview.realizedProceeds | number: '1.2-2' }}</strong>.
               </p>
@@ -409,6 +481,79 @@
                 </div>
               }
               <ui-button variant="danger" size="sm" (clicked)="form.stock_grants!.splice(i, 1)">Remove stock grant {{ i + 1 }}</ui-button>
+            </div>
+          }
+
+          <div class="history-heading stock-valuations-heading">
+            <h4>Employee share plan (ESPP) purchases</h4>
+            <ui-button variant="secondary" size="sm" (clicked)="addStockPurchase()">Add ESPP purchase</ui-button>
+          </div>
+          <p class="muted">Record shares and the amount you paid per share. That purchase amount is your funding contribution, so only value above your contributions counts as stock compensation. Sale proceeds stay fixed when later prices change.</p>
+          @for (purchase of form.stock_purchases || []; track $index; let i = $index) {
+            <div class="history-entry stock-grant-entry">
+              <div class="form-row">
+                <label class="form-group">
+                  <span>Purchase date</span>
+                  <input [name]="'stock_purchase_date_' + i" type="date" [min]="form.effective_date" [(ngModel)]="purchase.date" required />
+                </label>
+                <label class="form-group">
+                  <span>Label (optional)</span>
+                  <input [name]="'stock_purchase_label_' + i" [(ngModel)]="purchase.label" placeholder="ESPP, second offering" />
+                </label>
+              </div>
+              <div class="form-row">
+                <label class="form-group">
+                  <span>Shares purchased</span>
+                  <input [name]="'stock_purchase_quantity_' + i" type="number" min="0.0001" step="0.0001" [(ngModel)]="purchase.quantity" required />
+                </label>
+                <label class="form-group">
+                  <span>Your purchase price per share</span>
+                  <input [name]="'stock_purchase_price_' + i" type="number" min="0" step="0.0001" [(ngModel)]="purchase.price_paid_per_share" required />
+                </label>
+                <label class="form-group">
+                  <span>Market price at purchase (optional)</span>
+                  <input [name]="'stock_purchase_market_price_' + i" type="number" min="0" step="0.0001" [(ngModel)]="purchase.market_price_at_purchase" />
+                </label>
+              </div>
+              @let purchasePreview = stockPurchaseSnapshot(purchase, form.stock_valuations || [], today(), form.stock_symbol);
+              <p class="stock-preview">
+                Your contribution: <strong>${{ (purchase.quantity * purchase.price_paid_per_share) | number: '1.2-2' }}</strong>.
+                As of {{ today() }}, {{ purchasePreview.remainingShares | number: '1.0-4' }} shares remain.
+                @if (purchasePreview.hasDatedValuation) {
+                  Latest saved price is <strong>${{ purchasePreview.valuationPrice | number: '1.2-4' }}</strong> from {{ purchasePreview.valuationDate }}, worth
+                } @else if (purchasePreview.hasMarketPriceAtPurchase) {
+                  Purchase-date market price is <strong>${{ purchasePreview.valuationPrice | number: '1.2-4' }}</strong>, worth
+                } @else {
+                  No dated price is available, so your purchase price of <strong>${{ purchasePreview.valuationPrice | number: '1.2-4' }}</strong> is used, worth
+                }
+                <strong>${{ purchasePreview.remainingValue | number: '1.2-2' }}</strong>; recorded sale proceeds are
+                <strong>${{ purchasePreview.realizedProceeds | number: '1.2-2' }}</strong>.
+              </p>
+
+              <div class="history-heading">
+                <h4>Partial sales</h4>
+                <ui-button variant="secondary" size="sm" (clicked)="addStockPurchaseSale(purchase)">Add sale</ui-button>
+              </div>
+              @for (sale of purchase.sales || []; track $index; let si = $index) {
+                <div class="history-entry">
+                  <div class="form-row">
+                    <label class="form-group">
+                      <span>Sale date</span>
+                      <input [name]="'stock_purchase_sale_date_' + i + '_' + si" type="date" [min]="purchase.date" [(ngModel)]="sale.date" required />
+                    </label>
+                    <label class="form-group">
+                      <span>Shares sold</span>
+                      <input [name]="'stock_purchase_sale_shares_' + i + '_' + si" type="number" min="0.0001" step="0.0001" [(ngModel)]="sale.shares" required />
+                    </label>
+                    <label class="form-group">
+                      <span>Total cash proceeds</span>
+                      <input [name]="'stock_purchase_sale_proceeds_' + i + '_' + si" type="number" min="0" step="0.01" [(ngModel)]="sale.cash_proceeds" required />
+                    </label>
+                  </div>
+                  <ui-button variant="danger" size="sm" (clicked)="purchase.sales!.splice(si, 1)">Remove ESPP sale {{ si + 1 }}</ui-button>
+                </div>
+              }
+              <ui-button variant="danger" size="sm" (clicked)="form.stock_purchases!.splice(i, 1)">Remove ESPP purchase {{ i + 1 }}</ui-button>
             </div>
           }
         </section>

@@ -118,9 +118,28 @@ export interface JobStockGrant {
   sales?: JobStockSale[];
 }
 
+/** Employee-funded ESPP purchase. The purchase price is the user's contribution basis. */
+export interface JobStockPurchase {
+  date: string;
+  label?: string;
+  quantity: number;
+  price_paid_per_share: number;
+  /** Optional fair market price on the purchase date; missing legacy values fall back to paid price. */
+  market_price_at_purchase?: number | null;
+  sales?: JobStockSale[];
+}
+
 export interface JobStockValuation {
   date: string;
   price_per_share: number;
+  /** Quote provider for automatic prices; absent or `manual` for user-entered valuations. */
+  source?: string;
+  /** Timestamp when the quote was fetched from the provider, when available. */
+  price_as_of?: string | null;
+  /** Date this price was observed/saved; lets a recent public quote value shares acquired after its market close. */
+  observed_date?: string | null;
+  /** Present for a market quote so prices from a former ticker do not mark current shares. */
+  symbol?: string | null;
 }
 
 export interface JobIncome {
@@ -142,7 +161,10 @@ export interface JobIncome {
   end_date?: string | null;
   promotions?: JobPromotion[];
   compensation_payments?: JobCompensationPayment[];
+  /** Optional public market ticker for employer stock. Only this symbol is sent to quote lookup. */
+  stock_symbol?: string | null;
   stock_grants?: JobStockGrant[];
+  stock_purchases?: JobStockPurchase[];
   stock_valuations?: JobStockValuation[];
   is_active: boolean;
   notes?: string | null;
@@ -176,7 +198,9 @@ export interface JobIncomeCreate {
   end_date?: string | null;
   promotions?: JobPromotion[];
   compensation_payments?: JobCompensationPayment[];
+  stock_symbol?: string | null;
   stock_grants?: JobStockGrant[];
+  stock_purchases?: JobStockPurchase[];
   stock_valuations?: JobStockValuation[];
   is_active: boolean;
   notes?: string;
@@ -409,6 +433,8 @@ export interface MarketPriceQuote {
   price: number;
   price_source: string;
   price_as_of?: string | null;
+  /** Market trading date for the quote, separate from when it was fetched. */
+  quote_date?: string | null;
   valid: boolean;
 }
 

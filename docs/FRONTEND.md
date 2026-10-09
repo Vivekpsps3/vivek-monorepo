@@ -94,7 +94,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 ## Privacy and migration
 
 - Vault finance records are schema-v2 authenticated-record ciphertext. The browser migrates schema-v1 records after login, verifies encrypted replacements, then removes legacy plaintext rows.
-- Manual/imported Portfolio prices stay local. Explicit Portfolio refresh, typed lookup, and Stock Lab research send ticker symbols to the market-data apps/finance/backend/yfinance; no shares, values, account details, or scenario inputs are sent.
+- Manual/imported Portfolio prices stay local. Explicit Portfolio refresh, employer stock price refresh, typed lookup, and Stock Lab research send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
 - Login unwraps a browser-held signing key with the vault passphrase and signs a single-use challenge. Admins issue invitations but cannot reset a user's vault passphrase or recover encrypted data.
 
 ## Home behavior

@@ -60,10 +60,11 @@ the operator controls the code delivered to browsers.
 
 Automated server-side quote lookup conflicts with encrypted holdings if symbols
 are private. Manual/imported prices do not disclose symbols. An explicit
-Portfolio refresh, one-off quote lookup, or Stock Lab research request discloses
+Portfolio refresh, employer stock price refresh, one-off quote lookup, or Stock Lab research request discloses
 only the requested ticker symbols to the public market endpoint and yfinance.
-Shares, values, cost bases, account details, and saved scenario inputs remain
-encrypted; the backend market cache stores only public symbol-level data.
+Shares, values, employee purchase contributions, cost bases, employer titles,
+account details, and saved scenario inputs remain encrypted; the backend market
+cache stores only public symbol-level data.
 
 Longer-term choices if stricter holdings privacy is required:
 
@@ -72,8 +73,8 @@ Longer-term choices if stricter holdings privacy is required:
 3. Fetch quotes directly from the browser, accepting third-party/API-key tradeoffs.
 4. Serve broad public quote datasets so the browser can look up symbols locally.
 
-Do not claim ticker symbols are server-blind when an explicit Portfolio refresh
-or Stock Lab request has sent them to the backend.
+Do not claim ticker symbols are server-blind when a Portfolio refresh, employer
+stock price refresh, or Stock Lab request has sent them to the backend.
 
 ## Local intelligence privacy gate (SEC-001)
 

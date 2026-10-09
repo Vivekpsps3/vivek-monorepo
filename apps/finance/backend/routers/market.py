@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -28,12 +30,13 @@ def get_market_price(
     if not SYMBOL_PATTERN.match(upper):
         raise HTTPException(status_code=400, detail="Invalid symbol format")
     price, source, as_of = market_data.get_price(upper, force_refresh=refresh, db=db)
-    valid = price > 0
+    valid = math.isfinite(price) and price > 0
     return MarketPriceResponse(
         symbol=upper,
         price=round(price, 2) if valid else 0.0,
         price_source=source,
         price_as_of=as_of,
+        quote_date=market_data.get_price_quote_date(upper) if valid else None,
         valid=valid,
     )
 

@@ -8,13 +8,33 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, takeUntil } from 'rxjs';
+import { firstValueFrom, from, Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '../services/confirm.service';
 import { ToastService } from '../services/toast.service';
-import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant } from '../models/transaction.model';
-import { annualBasePayAt, isCurrentJob, jobHistoryError, stockGrantSnapshot, stockSnapshotAt } from '../utils/job-compensation.util';
+import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation, MarketPriceQuote } from '../models/transaction.model';
+import {
+  annualBasePayAt,
+  isCurrentJob,
+  isValidIsoDate,
+  jobHistoryError,
+  latestStockValuationOnOrBefore,
+  replaceStockValuation,
+  stockGrantSnapshot,
+  stockPurchaseSnapshot,
+  stockSnapshotAt,
+} from '../utils/job-compensation.util';
 import { todayIsoDate } from '../utils/date.util';
+
+interface StockPriceDraft {
+  date: string;
+  price: number | string | null;
+}
+
+interface StockQuoteStatus {
+  state: 'loading' | 'updated' | 'stale' | 'unavailable' | 'error';
+  message: string;
+}
 import {
   UiBadgeComponent,
   UiButtonComponent,
@@ -54,8 +74,12 @@ export class IncomeComponent implements OnInit, OnDestroy {
   isCurrentJob = isCurrentJob;
   stockSnapshotAt = stockSnapshotAt;
   stockGrantSnapshot = stockGrantSnapshot;
+  stockPurchaseSnapshot = stockPurchaseSnapshot;
   today = todayIsoDate;
   incomes: JobIncome[] = [];
+  stockPriceDrafts: Record<number, StockPriceDraft> = {};
+  stockQuoteStatuses: Record<string, StockQuoteStatus> = {};
+  private savingStockPriceIds = new Set<number>();
   showModal = false;
   saving = false;
   editingId: number | null = null;
@@ -90,6 +114,12 @@ export class IncomeComponent implements OnInit, OnDestroy {
   ];
 
   private destroy$ = new Subject<void>();
+  private configuredStockSymbols = new Set<string>();
+  private refreshingStockSymbols = new Set<string>();
+  private jobUpdateQueues = new Map<number, Promise<unknown>>();
+  private editBaseStockValuations: JobStockValuation[] = [];
+  private editingJobSnapshot: JobIncome | null = null;
+  private destroyed = false;
 
   constructor(
     private financeService: FinanceService,
@@ -101,12 +131,15 @@ export class IncomeComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.financeService.jobIncomes$.pipe(takeUntil(this.destroy$)).subscribe(rows => {
       this.incomes = rows;
+      this.ensureStockPriceDrafts(rows);
+      this.refreshNewlyConfiguredStockSymbols(rows);
       this.cdr.markForCheck();
     });
     this.financeService.getJobIncomes().pipe(takeUntil(this.destroy$)).subscribe();
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -225,7 +258,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
       end_date: null,
       promotions: [],
       compensation_payments: [],
+      stock_symbol: '',
       stock_grants: [],
+      stock_purchases: [],
       stock_valuations: [],
       is_active: true,
       notes: '',
@@ -234,6 +269,8 @@ export class IncomeComponent implements OnInit, OnDestroy {
 
   openAddModal(): void {
     this.editingId = null;
+    this.editBaseStockValuations = [];
+    this.editingJobSnapshot = null;
     this.form = this.emptyForm();
     this.taxEstimator = { state: 'average', filingStatus: 'single', preTaxDeductionsPerPeriod: 0 };
     this.showModal = true;
@@ -241,6 +278,15 @@ export class IncomeComponent implements OnInit, OnDestroy {
 
   openEditModal(row: JobIncome): void {
     this.editingId = row.id;
+    this.editingJobSnapshot = {
+      ...row,
+      promotions: (row.promotions || []).map(item => ({ ...item })),
+      compensation_payments: (row.compensation_payments || []).map(item => ({ ...item })),
+      stock_grants: (row.stock_grants || []).map(item => ({ ...item, sales: (item.sales || []).map(sale => ({ ...sale })) })),
+      stock_purchases: (row.stock_purchases || []).map(item => ({ ...item, sales: (item.sales || []).map(sale => ({ ...sale })) })),
+      stock_valuations: (row.stock_valuations || []).map(item => ({ ...item })),
+    };
+    this.editBaseStockValuations = (row.stock_valuations || []).map(item => ({ ...item }));
     this.form = {
       employer: row.employer,
       role_title: row.role_title || '',
@@ -258,7 +304,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
       end_date: row.end_date || null,
       promotions: (row.promotions || []).map(item => ({ ...item })),
       compensation_payments: (row.compensation_payments || []).map(item => ({ ...item })),
+      stock_symbol: row.stock_symbol || '',
       stock_grants: (row.stock_grants || []).map(item => ({ ...item, sales: (item.sales || []).map(sale => ({ ...sale })) })),
+      stock_purchases: (row.stock_purchases || []).map(item => ({ ...item, sales: (item.sales || []).map(sale => ({ ...sale })) })),
       stock_valuations: (row.stock_valuations || []).map(item => ({ ...item })),
       is_active: row.is_active,
       notes: row.notes || '',
@@ -278,6 +326,10 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.form.stock_grants!.push({ date: '', origin: 'equity', label: '', quantity: 0, price_at_grant: 0, sales: [] });
   }
 
+  addStockPurchase(): void {
+    this.form.stock_purchases!.push({ date: '', label: '', quantity: 0, price_paid_per_share: 0, market_price_at_purchase: null, sales: [] });
+  }
+
   addStockValuation(): void {
     this.form.stock_valuations!.push({ date: '', price_per_share: 0 });
   }
@@ -285,6 +337,265 @@ export class IncomeComponent implements OnInit, OnDestroy {
   addStockSale(grant: JobStockGrant): void {
     grant.sales = grant.sales || [];
     grant.sales.push({ date: '', shares: 0, cash_proceeds: 0 });
+  }
+
+  addStockPurchaseSale(purchase: JobStockPurchase): void {
+    purchase.sales = purchase.sales || [];
+    purchase.sales.push({ date: '', shares: 0, cash_proceeds: 0 });
+  }
+
+  stockPriceDraft(row: JobIncome): StockPriceDraft {
+    if (!this.stockPriceDrafts[row.id]) this.stockPriceDrafts[row.id] = this.newStockPriceDraft(row);
+    return this.stockPriceDrafts[row.id];
+  }
+
+  latestStockPrice(row: JobIncome, cutoff = todayIsoDate()): JobStockValuation | undefined {
+    return latestStockValuationOnOrBefore(row.stock_valuations || [], cutoff, row.effective_date, row.stock_symbol);
+  }
+
+  isMarketStockValuation(valuation: JobStockValuation): boolean {
+    return Boolean(valuation.symbol) && valuation.source !== 'manual';
+  }
+
+  stockQuoteStatus(row: JobIncome): string {
+    const symbol = this.normalizeStockSymbol(row.stock_symbol || '');
+    const status = symbol ? this.stockQuoteStatuses[symbol] : undefined;
+    const latest = this.latestStockPrice(row);
+    if (status?.state === 'loading') {
+      return latest
+        ? `Refreshing market quote. Last saved price was $${Number(latest.price_per_share).toFixed(4)} on ${latest.date}.`
+        : 'Refreshing market quote. Until a dated price is available, grant and purchase prices are used.';
+    }
+    if (status?.state === 'updated' || status?.state === 'stale' || status?.state === 'unavailable' || status?.state === 'error') {
+      return status.message;
+    }
+    if (latest) {
+      return `Last saved price: $${Number(latest.price_per_share).toFixed(4)} per share on ${latest.date} (${this.priceSourceLabel(latest.source)}).`;
+    }
+    return 'No saved price yet. Grant price and ESPP purchase price are used as the valuation fallback.';
+  }
+
+  saveStockPrice(row: JobIncome): void {
+    if (this.savingStockPriceIds.has(row.id)) return;
+    const draft = this.stockPriceDraft(row);
+    const rawPrice = String(draft.price ?? '').trim();
+    const price = Number(rawPrice);
+    const latest = this.incomes.find(item => item.id === row.id) || row;
+    if (!isValidIsoDate(draft.date) || draft.date < latest.effective_date) {
+      this.toastService.error('Share price date must be valid and on or after the job start date.');
+      return;
+    }
+    if (!rawPrice || !Number.isFinite(price) || price < 0) {
+      this.toastService.error('Enter a non-negative share price.');
+      return;
+    }
+    const valuation: JobStockValuation = { date: draft.date, price_per_share: price, source: 'manual', price_as_of: null };
+    this.savingStockPriceIds.add(row.id);
+    this.cdr.markForCheck();
+    void this.enqueueJobIncomeUpdate(row.id, current => ({
+      stock_valuations: replaceStockValuation(current.stock_valuations || [], valuation),
+    }), row).then(saved => {
+      if (!saved || this.destroyed) return;
+      const symbol = this.normalizeStockSymbol(saved.stock_symbol || row.stock_symbol || '');
+      if (symbol) this.stockQuoteStatuses[symbol] = {
+          state: 'updated',
+          message: `Saved manual price $${price.toFixed(4)} per share for ${draft.date}. Earlier and later dated values remain available for their own snapshots.`,
+      };
+      this.toastService.success('Dated share price saved');
+      this.cdr.markForCheck();
+    }).catch(() => {
+      if (!this.destroyed) {
+        const symbol = this.normalizeStockSymbol(latest.stock_symbol || '');
+        const saved = this.latestStockPrice(latest);
+        if (symbol) this.stockQuoteStatuses[symbol] = {
+          state: 'error',
+          message: saved
+            ? `Manual price could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
+            : 'Manual price could not be saved. Grant and ESPP purchase prices remain the valuation fallback.',
+        };
+        this.toastService.error('Could not save the dated share price.');
+      }
+    }).finally(() => {
+      this.savingStockPriceIds.delete(row.id);
+      if (!this.destroyed) this.cdr.markForCheck();
+    });
+  }
+
+  refreshStockTicker(symbol: string): void {
+    void this.fetchAndSaveStockQuote(symbol);
+  }
+
+  isStockTickerRefreshing(symbol: string): boolean {
+    return this.refreshingStockSymbols.has(this.normalizeStockSymbol(symbol));
+  }
+
+  isStockPriceSaving(rowId: number): boolean {
+    return this.savingStockPriceIds.has(rowId);
+  }
+
+  private ensureStockPriceDrafts(rows: JobIncome[]): void {
+    for (const row of rows) {
+      if (!this.stockPriceDrafts[row.id]) this.stockPriceDrafts[row.id] = this.newStockPriceDraft(row);
+    }
+  }
+
+  private newStockPriceDraft(row: JobIncome): StockPriceDraft {
+    const latest = this.latestStockPrice(row);
+    return { date: todayIsoDate(), price: latest ? String(latest.price_per_share) : '' };
+  }
+
+  private refreshNewlyConfiguredStockSymbols(rows: JobIncome[]): void {
+    const symbols = new Set(rows
+      .map(row => this.normalizeStockSymbol(row.stock_symbol || ''))
+      .filter(symbol => symbol.length > 0));
+    for (const symbol of symbols) {
+      if (!this.configuredStockSymbols.has(symbol)) this.refreshStockTicker(symbol);
+    }
+    this.configuredStockSymbols = symbols;
+  }
+
+  private async fetchAndSaveStockQuote(rawSymbol: string): Promise<void> {
+    const symbol = this.normalizeStockSymbol(rawSymbol);
+    if (this.destroyed || !symbol || this.refreshingStockSymbols.has(symbol)) return;
+    const jobs = this.incomes.filter(row => this.normalizeStockSymbol(row.stock_symbol || '') === symbol);
+    if (!jobs.length) return;
+
+    this.refreshingStockSymbols.add(symbol);
+    this.stockQuoteStatuses[symbol] = { state: 'loading', message: '' };
+    this.cdr.markForCheck();
+    try {
+      // The public market endpoint receives only the user-configured ticker symbol.
+      const quote = await firstValueFrom<MarketPriceQuote, null>(
+        this.financeService.lookupSharePrice(symbol, true).pipe(takeUntil(this.destroy$)),
+        { defaultValue: null }
+      );
+      if (this.destroyed || !quote) return;
+      if (!this.isUsableQuote(quote, symbol)) {
+        this.markQuoteUnavailable(symbol, 'Market quote unavailable or invalid.');
+        return;
+      }
+      const date = this.quoteValuationDate(quote);
+      if (!isValidIsoDate(date) || date > todayIsoDate()) {
+        this.markQuoteUnavailable(symbol, 'Market quote has an invalid or future trading date.');
+        return;
+      }
+      const valuation: JobStockValuation = {
+        date,
+        price_per_share: quote.price,
+        source: quote.price_source || 'market quote',
+        price_as_of: quote.price_as_of || null,
+        observed_date: todayIsoDate(),
+        symbol,
+      };
+      let updatedJobs = 0;
+      for (const row of jobs) {
+        if (this.destroyed) return;
+        const saved = await this.enqueueJobIncomeUpdate(row.id, current => {
+          if (this.normalizeStockSymbol(current.stock_symbol || '') !== symbol) return null;
+          return { stock_valuations: replaceStockValuation(current.stock_valuations || [], valuation) };
+        }, row);
+        if (saved) updatedJobs += 1;
+      }
+      if (this.destroyed) return;
+      if (!updatedJobs) return;
+      this.stockQuoteStatuses[symbol] = {
+        state: 'updated',
+        message: `Market quote $${quote.price.toFixed(4)} per share saved for ${date} (${this.priceSourceLabel(valuation.source)}${quote.price_as_of ? `; fetched ${this.formatQuoteTimestamp(quote.price_as_of)}` : ''}). Historical snapshots use only prices dated on or before their selected date.`,
+      };
+    } catch {
+      if (!this.destroyed) this.markQuoteUnavailable(symbol, 'Market quote refresh failed.');
+    } finally {
+      this.refreshingStockSymbols.delete(symbol);
+      if (!this.destroyed) this.cdr.markForCheck();
+    }
+  }
+
+  private isUsableQuote(quote: MarketPriceQuote, requestedSymbol: string): boolean {
+    return Boolean(quote?.valid)
+      && this.normalizeStockSymbol(quote.symbol || '') === requestedSymbol
+      && Number.isFinite(quote.price)
+      && quote.price >= 0;
+  }
+
+  private quoteValuationDate(quote: MarketPriceQuote): string {
+    if (quote.quote_date != null) return isValidIsoDate(quote.quote_date) ? quote.quote_date : '';
+    const timestamp = quote.price_as_of ? Date.parse(quote.price_as_of) : NaN;
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString().slice(0, 10) : '';
+  }
+
+  private async enqueueJobIncomeUpdate(
+    id: number,
+    buildBody: (latest: JobIncome) => Partial<JobIncomeCreate> | null,
+    fallback?: JobIncome
+  ): Promise<JobIncome | null> {
+    const previous = this.jobUpdateQueues.get(id) || Promise.resolve(null);
+    const pending = previous.catch(() => null).then(async () => {
+      if (this.destroyed) return null;
+      const latest = this.incomes.find(row => row.id === id) || fallback;
+      if (!latest) return null;
+      const body = buildBody(latest);
+      if (!body || this.destroyed) return null;
+      return await firstValueFrom(this.financeService.updateJobIncome(id, body));
+    });
+    this.jobUpdateQueues.set(id, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.jobUpdateQueues.get(id) === pending) this.jobUpdateQueues.delete(id);
+    }
+  }
+
+  private mergeStockValuationEdits(
+    base: JobStockValuation[],
+    edited: JobStockValuation[],
+    latest: JobStockValuation[]
+  ): JobStockValuation[] {
+    const byDate = (items: JobStockValuation[]) => new Map(items.map(item => [item.date, item]));
+    const original = byDate(base);
+    const form = byDate(edited);
+    const current = byDate(latest);
+    const dates = [...new Set([...original.keys(), ...form.keys(), ...current.keys()])].sort();
+    const comparable = (item?: JobStockValuation) => item ? JSON.stringify({
+      date: item.date,
+      price_per_share: Number(item.price_per_share),
+      source: item.source || 'manual',
+      price_as_of: item.price_as_of || null,
+      observed_date: item.observed_date || null,
+      symbol: item.symbol || null,
+    }) : undefined;
+    const merged: JobStockValuation[] = [];
+    for (const date of dates) {
+      const before = original.get(date);
+      const changedInForm = comparable(form.get(date)) !== comparable(before);
+      const chosen = changedInForm ? form.get(date) : current.get(date) || before;
+      if (chosen) merged.push({ ...chosen });
+    }
+    return merged;
+  }
+
+  private markQuoteUnavailable(symbol: string, reason: string): void {
+    const latest = this.incomes
+      .filter(row => this.normalizeStockSymbol(row.stock_symbol || '') === symbol)
+      .map(row => this.latestStockPrice(row))
+      .filter((price): price is JobStockValuation => Boolean(price))
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    this.stockQuoteStatuses[symbol] = latest
+      ? { state: 'stale', message: `${reason} Showing the last saved ${this.priceSourceLabel(latest.source)} price from ${latest.date}; it may be stale.` }
+      : { state: 'unavailable', message: `${reason} No dated price is saved; grant and ESPP purchase prices remain the fallback.` };
+  }
+
+  private normalizeStockSymbol(symbol: string): string {
+    return symbol.trim().toUpperCase();
+  }
+
+  private priceSourceLabel(source?: string | null): string {
+    if (!source || source === 'manual') return 'manual price';
+    return source.replaceAll('_', ' ');
+  }
+
+  private formatQuoteTimestamp(timestamp: string): string {
+    const parsed = new Date(timestamp);
+    return Number.isNaN(parsed.getTime()) ? timestamp : parsed.toLocaleString();
   }
 
   jobStatus(row: JobIncome): string {
@@ -306,6 +617,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
   closeModal(): void {
     this.showModal = false;
     this.editingId = null;
+    this.editingJobSnapshot = null;
     this.form = this.emptyForm();
   }
 
@@ -334,6 +646,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       ...this.form,
       employer: this.form.employer.trim(),
       end_date: this.form.end_date || null,
+      stock_symbol: this.normalizeStockSymbol(this.form.stock_symbol || '') || null,
       promotions: [...(this.form.promotions || [])]
         .map(item => ({ ...item, annual_base_pay: this.roundMoney(item.annual_base_pay), role_title: item.role_title?.trim() || '' }))
         .sort((a, b) => a.date.localeCompare(b.date)),
@@ -351,8 +664,22 @@ export class IncomeComponent implements OnInit, OnDestroy {
             .sort((a, b) => a.date.localeCompare(b.date)),
         }))
         .sort((a, b) => a.date.localeCompare(b.date)),
+      stock_purchases: [...(this.form.stock_purchases || [])]
+        .map(item => ({
+          ...item,
+          label: item.label?.trim() || '',
+          quantity: Number(item.quantity),
+          price_paid_per_share: Number(item.price_paid_per_share),
+          market_price_at_purchase: item.market_price_at_purchase == null || String(item.market_price_at_purchase).trim() === ''
+            ? null
+            : Number(item.market_price_at_purchase),
+          sales: [...(item.sales || [])]
+            .map(sale => ({ ...sale, shares: Number(sale.shares), cash_proceeds: this.roundMoney(sale.cash_proceeds) }))
+            .sort((a, b) => a.date.localeCompare(b.date)),
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
       stock_valuations: [...(this.form.stock_valuations || [])]
-        .map(item => ({ ...item, price_per_share: Number(item.price_per_share) }))
+        .map(item => ({ ...item, source: item.source || 'manual', price_as_of: item.price_as_of || null, price_per_share: Number(item.price_per_share) }))
         .sort((a, b) => a.date.localeCompare(b.date)),
       role_title: this.form.role_title?.trim() || '',
       notes: this.form.notes?.trim() || '',
@@ -366,16 +693,28 @@ export class IncomeComponent implements OnInit, OnDestroy {
       annual_taxes: this.roundMoney((this.form.taxes_per_period || 0) * this.payPeriodsPerYear),
       annual_deductions: this.roundMoney((this.form.deductions_per_period || 0) * this.payPeriodsPerYear),
     };
+    const saveId = this.editingId;
+    const editBaseValuations = this.editBaseStockValuations.map(item => ({ ...item }));
+    const editedValuations = payload.stock_valuations || [];
     const request =
-      this.editingId !== null
-        ? this.financeService.updateJobIncome(this.editingId, payload)
+      saveId !== null
+        ? from(this.enqueueJobIncomeUpdate(saveId, latest => ({
+            ...payload,
+            stock_valuations: this.mergeStockValuationEdits(editBaseValuations, editedValuations, latest.stock_valuations || []),
+          }), this.editingJobSnapshot || undefined))
         : this.financeService.addJobIncome(payload);
 
     request.pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => {
+      next: saved => {
         this.saving = false;
+        if (!saved) {
+          this.toastService.error('This income entry is no longer available to update.');
+          this.cdr.markForCheck();
+          return;
+        }
         this.closeModal();
         this.toastService.success(wasEditing ? 'Income updated' : 'Income added');
+        if (saved?.stock_symbol) this.refreshStockTicker(saved.stock_symbol);
         this.cdr.markForCheck();
       },
       error: () => {

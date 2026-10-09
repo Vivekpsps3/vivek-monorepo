@@ -94,23 +94,35 @@ Job records retain `effective_date` as the employment start date and add optiona
 `compensation_payments` (payment/vesting date, bonus/equity/other kind, gross amount,
 optional label). Optional `stock_grants` record bonus or equity awards paid in shares
 (grant date, label, quantity, and grant price), with partial sales (date, shares,
-fixed total cash proceeds). A job-level `stock_valuations` list records manual private
-share prices by date. A valuation applies to grants awarded on or before its date; each
-later grant keeps its own grant price until a subsequent valuation.
+fixed total cash proceeds). Optional `stock_purchases` record employee-funded ESPP lots
+(purchase date, label, quantity, employee-paid price, optional market price at purchase,
+and partial sales). Employee-paid amounts are funding basis; stock compensation is the
+shares' economic value less those contributions. Existing equity-grant basis remains
+unchanged. A job may have an optional public `stock_symbol`; quote refresh sends only
+that ticker to the public market endpoint. A job-level `stock_valuations` list stores
+dated manual prices and saved market quotes, including quote source and fetch time when
+available. Market date is stored separately from fetch time. A new price replaces the
+same-day price, preserving other dates.
 These fields live inside the existing encrypted `job_incomes` payload; no plaintext
 schema or server API migration is needed. Older records with no history retain their
 prior calculation behavior.
 
-Private stock valuations are manual, not live quotes. A historical cutoff uses only
-the latest valuation dated on or before that cutoff, with the grant's own price as the
-fallback. A stock snapshot equals fixed cash proceeds from sales through the cutoff
-plus the value of shares still held at that cutoff. For a selected compensation period,
-stock compensation is the ending snapshot less the snapshot from the day before the
-period. This counts grant value and any same-year change in the grant year; later years
-count only the period's gain or loss, avoiding carry-forward double counting. Sale
-proceeds remain fixed when later valuations change. All-history realized proceeds and
-remaining-share value are shown separately from the selected period's stock-compensation
-change.
+Valuations can be entered manually for private or unsupported shares, or refreshed from
+a public ticker. A historical cutoff uses only the latest valid price dated on or before
+that cutoff; a market quote fetched after a lot was acquired can mark that lot from its
+observed date. A quote's market date may precede the job start, but the quote is not used
+for a lot until the quote has been observed and that lot has been acquired. A future-dated
+valuation never affects an earlier snapshot. A grant
+falls back to its grant price. An ESPP lot falls back to its market price at purchase
+when present, otherwise to its employee-paid price. A stock snapshot equals fixed cash
+proceeds from sales through the cutoff plus the value of shares still held. ESPP employee
+contributions are subtracted from that economic value when calculating compensation.
+For a selected compensation period, stock compensation is the ending net snapshot less
+the net snapshot from the day before the period. This counts grant value and any same-year
+change in the grant year; later years count only the period's gain or loss, avoiding
+carry-forward double counting. Sale proceeds remain fixed when later valuations change.
+All-history realized proceeds, remaining-share value, and employee ESPP contributions
+are shown separately from the selected period's stock-compensation change.
 
 Recorded stock-sale proceeds count as dated cashflow in the sale period, even when the
 job is disabled. Grant value and unrealized share growth do not enter recurring income,

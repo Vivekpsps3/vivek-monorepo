@@ -25,13 +25,18 @@ describe('EncryptedStoreService', () => {
     const created = await store.addJobIncome({
       employer: 'Acme', effective_date: '2026-01-01', end_date: '2026-12-31',
       pay_frequency: 'annual', base_pay: 36525, is_active: true,
+      stock_symbol: 'MSFT',
       promotions: [{ date: '2026-06-01', annual_base_pay: 73050 }],
       compensation_payments: [{ date: '2026-07-01', kind: 'bonus', amount: 1000 }],
       stock_grants: [{
         date: '2026-08-01', origin: 'bonus', label: 'Stock bonus', quantity: 200, price_at_grant: 100,
         sales: [{ date: '2026-09-01', shares: 100, cash_proceeds: 15000 }],
       }],
-      stock_valuations: [{ date: '2026-10-01', price_per_share: 200 }],
+      stock_purchases: [{
+        date: '2026-09-15', label: 'ESPP', quantity: 10, price_paid_per_share: 80,
+        market_price_at_purchase: 100, sales: [{ date: '2026-10-15', shares: 2, cash_proceeds: 250 }],
+      }],
+      stock_valuations: [{ date: '2026-10-01', price_per_share: 200, source: 'live_eod', symbol: 'MSFT', price_as_of: '2026-10-01T16:00:00Z', observed_date: '2026-10-02' }],
     });
     await store.updateJobIncome(created.id, { notes: 'History retained' });
     store.clear();
@@ -39,11 +44,19 @@ describe('EncryptedStoreService', () => {
     expect(reloaded.end_date).toBe('2026-12-31');
     expect(reloaded.promotions).toEqual([{ date: '2026-06-01', annual_base_pay: 73050 }]);
     expect(reloaded.compensation_payments).toEqual([{ date: '2026-07-01', kind: 'bonus', amount: 1000 }]);
+    expect(reloaded.stock_symbol).toBe('MSFT');
     expect(reloaded.stock_grants).toEqual([{
       date: '2026-08-01', origin: 'bonus', label: 'Stock bonus', quantity: 200, price_at_grant: 100,
       sales: [{ date: '2026-09-01', shares: 100, cash_proceeds: 15000 }],
     }]);
-    expect(reloaded.stock_valuations).toEqual([{ date: '2026-10-01', price_per_share: 200 }]);
+    expect(reloaded.stock_purchases).toEqual([{
+      date: '2026-09-15', label: 'ESPP', quantity: 10, price_paid_per_share: 80,
+      market_price_at_purchase: 100, sales: [{ date: '2026-10-15', shares: 2, cash_proceeds: 250 }],
+    }]);
+    expect(reloaded.stock_valuations).toEqual([{
+      date: '2026-10-01', price_per_share: 200, source: 'live_eod', symbol: 'MSFT',
+      price_as_of: '2026-10-01T16:00:00Z', observed_date: '2026-10-02',
+    }]);
     expect(reloaded.base_pay).toBe(36525);
     expect(JSON.stringify(records)).not.toContain('Acme');
     expect(records[0].schema_version).toBe(2);

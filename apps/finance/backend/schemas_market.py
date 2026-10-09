@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -41,6 +41,7 @@ class MarketPriceResponse(BaseModel):
     price: float
     price_source: str
     price_as_of: datetime | None = None
+    quote_date: date | None = None
     valid: bool
 
 

@@ -1,12 +1,14 @@
 """Unit tests for MarketDataService (no live yfinance)."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
+import pandas as pd
 import pytest
 
 from models import Base, MarketResearchCache, TickerQuote
 from services.market_data import MarketDataService
-from schemas_market import MarketResearchResponse
+from schemas_market import MarketPriceResponse, MarketResearchResponse
+from routers import market as market_router
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -73,6 +75,188 @@ def test_fetch_eod_mocked_returns_price(svc, monkeypatch):
     price, source, _ = svc.get_price("MSFT", force_refresh=True, db=None)
     assert price == 300.0
     assert source == "live_eod"
+
+
+def test_fetch_eod_prefers_regular_market_quote_and_keeps_market_date(svc, monkeypatch):
+    market_time = datetime(2026, 1, 15, 15, 30, tzinfo=UTC)
+
+    class FakeTicker:
+        info = {
+            "regularMarketPrice": 125.25,
+            "regularMarketTime": market_time.timestamp(),
+            "exchangeTimezoneName": "America/New_York",
+        }
+        fast_info = {"last_price": 124.5}
+
+        def history(self, **_kwargs):
+            return pd.DataFrame(
+                {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
+            )
+
+    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+
+    price, quote_date, source = svc._fetch_eod("ACME")
+
+    assert price == 125.25
+    assert quote_date == date(2026, 1, 15)
+    assert source == "live"
+
+
+def test_fetch_eod_invalid_exchange_timezone_uses_history_date(svc, monkeypatch):
+    market_time = datetime(2026, 1, 15, 15, 30, tzinfo=UTC)
+
+    class FakeTicker:
+        info = {
+            "regularMarketPrice": 125.25,
+            "regularMarketTime": market_time.timestamp(),
+            "exchangeTimezoneName": "Unknown/Exchange",
+        }
+        fast_info = {}
+
+        def history(self, **_kwargs):
+            return pd.DataFrame(
+                {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
+            )
+
+    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+
+    price, quote_date, source = svc._fetch_eod("ACME")
+
+    assert price == 125.25
+    assert quote_date == date(2026, 1, 14)
+    assert source == "live"
+
+
+def test_fetch_eod_rejects_future_market_timestamp(svc, monkeypatch):
+    future_time = datetime.now(UTC) + timedelta(days=1)
+
+    class FakeTicker:
+        info = {
+            "regularMarketPrice": 125.25,
+            "regularMarketTime": future_time.timestamp(),
+            "exchangeTimezoneName": "UTC",
+        }
+        fast_info = {}
+
+        def history(self, **_kwargs):
+            return pd.DataFrame(
+                {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
+            )
+
+    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+
+    price, quote_date, source = svc._fetch_eod("ACME")
+
+    assert price == 125.25
+    assert quote_date == date(2026, 1, 14)
+    assert quote_date <= datetime.now(UTC).date()
+    assert source == "live"
+
+
+def test_fetch_eod_ignores_post_market_price_and_falls_back_to_history(svc, monkeypatch):
+    class FakeTicker:
+        info = {"currentPrice": 150.0}
+        fast_info = {"last_price": float("nan")}
+
+        def history(self, **_kwargs):
+            return pd.DataFrame(
+                {"Close": [101.5]}, index=pd.to_datetime(["2026-01-15"])
+            )
+
+    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+
+    price, quote_date, source = svc._fetch_eod("ACME")
+
+    assert price == 101.5
+    assert quote_date == date(2026, 1, 15)
+    assert source == "live_eod"
+
+
+def test_fetch_eod_skips_nonfinite_and_nonpositive_prices(svc, monkeypatch):
+    class FakeTicker:
+        info = {"regularMarketPrice": float("inf")}
+        fast_info = {"last_price": float("nan")}
+
+        def history(self, **_kwargs):
+            return pd.DataFrame(
+                {"Close": [0.0, -2.0, float("inf")]},
+                index=pd.to_datetime(["2026-01-13", "2026-01-14", "2026-01-15"]),
+            )
+
+    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+
+    assert svc._fetch_eod("ACME") == (None, None, "error")
+
+
+def test_market_price_cache_preserves_quote_date_separately_from_fetch_time(svc, monkeypatch):
+    monkeypatch.setattr(svc, "_looks_like_non_ticker", lambda _s: False)
+    quote_day = date(2026, 1, 15)
+    monkeypatch.setattr(svc, "_fetch_eod", lambda _s: (42.5, quote_day, "live"))
+
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(bind=eng)
+    Session = sessionmaker(bind=eng)
+    session = Session()
+    try:
+        price, source, fetched_at = svc.get_price("ACME", force_refresh=True, db=session)
+        row = session.query(TickerQuote).filter(TickerQuote.symbol == "ACME").one()
+
+        assert price == 42.5
+        assert source == "live"
+        assert fetched_at is not None
+        assert row.quote_date == quote_day
+        assert row.fetched_at != datetime.combine(quote_day, datetime.min.time())
+        assert svc.get_price_quote_date("ACME") == quote_day
+
+        cache_reader = MarketDataService(ttl_seconds=3600)
+        monkeypatch.setattr(cache_reader, "_looks_like_non_ticker", lambda _s: False)
+        cached_price, cached_source, cached_fetched_at = cache_reader.get_price(
+            "ACME", db=session
+        )
+        assert (cached_price, cached_source) == (42.5, "live")
+        assert cached_fetched_at is not None
+        assert abs((cached_fetched_at - fetched_at).total_seconds()) < 1
+        assert cache_reader.get_price_quote_date("ACME") == quote_day
+    finally:
+        session.close()
+        eng.dispose()
+
+
+def test_market_price_route_includes_quote_date(monkeypatch):
+    quote_day = date(2026, 1, 15)
+    fetched_at = datetime(2026, 1, 16, 1, 2, tzinfo=UTC)
+
+    class FakeMarketData:
+        def get_price(self, *_args, **_kwargs):
+            return 42.5, "live", fetched_at
+
+        def get_price_quote_date(self, _symbol):
+            return quote_day
+
+    monkeypatch.setattr(market_router, "market_data", FakeMarketData())
+
+    response = market_router.get_market_price("ACME", db=None, _current_user=object())
+
+    assert isinstance(response, MarketPriceResponse)
+    assert response.model_dump(mode="json")["quote_date"] == "2026-01-15"
+    assert response.price_as_of == fetched_at
+
+
+def test_market_price_route_does_not_return_nonfinite_price(monkeypatch):
+    class FakeMarketData:
+        def get_price(self, *_args, **_kwargs):
+            return float("inf"), "live", datetime.now(UTC)
+
+        def get_price_quote_date(self, _symbol):
+            return date.today()
+
+    monkeypatch.setattr(market_router, "market_data", FakeMarketData())
+
+    response = market_router.get_market_price("ACME", db=None, _current_user=object())
+
+    assert response.price == 0.0
+    assert response.valid is False
+    assert response.quote_date is None
 
 
 def test_sqlite_naive_fetched_at_does_not_crash(svc):

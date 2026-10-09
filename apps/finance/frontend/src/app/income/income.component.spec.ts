@@ -21,7 +21,12 @@ describe('IncomeComponent compensation editing', () => {
     finance.updateJobIncome.and.returnValue(of(row));
     toast = jasmine.createSpyObj('ToastService', ['error', 'success']);
     component = new IncomeComponent(finance, {} as ConfirmService, toast, { markForCheck() {} } as ChangeDetectorRef);
+    component.incomes = [row];
   });
+
+  const flushPromises = async (): Promise<void> => {
+    for (let index = 0; index < 6; index += 1) await Promise.resolve();
+  };
 
   it('edits a copy of history, so cancel preserves the saved job', () => {
     component.openEditModal(row);
@@ -32,9 +37,10 @@ describe('IncomeComponent compensation editing', () => {
     expect(row.compensation_payments![0].amount).toBe(500);
   });
 
-  it('saves end dates and histories through the existing encrypted service', () => {
+  it('saves end dates and histories through the existing encrypted service', async () => {
     component.openEditModal(row);
     component.saveIncome();
+    await flushPromises();
     expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.objectContaining({
       end_date: '2026-12-31', promotions: row.promotions, compensation_payments: [jasmine.objectContaining(row.compensation_payments![0])],
     }));
@@ -49,12 +55,13 @@ describe('IncomeComponent compensation editing', () => {
     expect(toast.error).toHaveBeenCalledWith('End date must be on or after the start date.');
   });
 
-  it('opens legacy jobs with empty histories and allows clearing an end date', () => {
+  it('opens legacy jobs with empty histories and allows clearing an end date', async () => {
     component.openEditModal({ ...row, end_date: undefined, promotions: undefined, compensation_payments: undefined });
     expect(component.form.promotions).toEqual([]);
     expect(component.form.compensation_payments).toEqual([]);
     component.form.end_date = '';
     component.saveIncome();
+    await flushPromises();
     expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.objectContaining({ end_date: null }));
   });
 });

@@ -15,7 +15,7 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '..
   imports: [CommonModule, FormsModule, IncomeComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent],
   template: `
     <ui-card title="Total compensation by employer">
-      <p>Gross compensation from your recorded jobs, including past employers. Base pay and recurring annual estimates are prorated by employment dates and promotions; dated payments count once on their dates.</p>
+      <p>Gross compensation from your recorded jobs, including past employers. Base pay and recurring annual estimates are prorated by employment dates and promotions; dated payments count once on their dates. ESPP compensation excludes the money you contributed to buy shares.</p>
       <div class="form-row">
         <label class="form-group">
           <span>Calendar year</span>
@@ -42,7 +42,7 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '..
         <p class="stat-display money">{{ total | currency:'USD':'symbol':'1.2-2' }}</p>
         <p class="muted">{{ start || 'All recorded history' }} → {{ end }}{{ isProjection ? ' · Includes projected pay' : '' }}. Estimated gross compensation; not a payroll ledger.</p>
         <ui-data-table ariaLabel="Total compensation by employer">
-          <thead><tr><th>Employer</th><th>Base pay</th><th>Cash bonuses</th><th>Equity</th><th>Stock comp this range</th><th>Other</th><th>Sale cash through date</th><th>Unsold stock value at date</th><th>Total compensation</th></tr></thead>
+          <thead><tr><th>Employer</th><th>Base pay</th><th>Cash bonuses</th><th>Equity</th><th>Stock comp this range</th><th>Other</th><th>Employee ESPP contributions</th><th>Sale cash through date</th><th>Unsold stock value at date</th><th>Total compensation</th></tr></thead>
           <tbody>
             @for (row of rows; track row.employer) {
               <tr>
@@ -52,6 +52,7 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '..
                 <td class="money">{{ row.equity | currency:'USD':'symbol':'1.2-2' }}</td>
                 <td class="money">{{ row.stock_compensation | currency:'USD':'symbol':'1.2-2' }}</td>
                 <td class="money">{{ row.other | currency:'USD':'symbol':'1.2-2' }}</td>
+                <td class="money">{{ row.stockEmployeeContributions | currency:'USD':'symbol':'1.2-2' }}</td>
                 <td class="money">{{ row.stockCashProceeds | currency:'USD':'symbol':'1.2-2' }}</td>
                 <td class="money">{{ row.stockRemainingValue | currency:'USD':'symbol':'1.2-2' }}</td>
                 <td class="money"><strong>{{ row.gross | currency:'USD':'symbol':'1.2-2' }}</strong></td>
@@ -62,7 +63,7 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '..
       } @else {
         <ui-empty-state message="Add a job below to track compensation by employer." />
       }
-      <p class="muted">Annual pay uses the same daily estimate as cashflow. Enter dated payments only when they are additional to annual estimates. Stock compensation includes grant value and gains in the grant year; later years count only gains or losses. Sold shares use recorded proceeds, while unsold shares use the latest manual price on or before the selected date (or grant price until then). The sale-cash and unsold-share columns show cumulative values through that date. Stock values do not change recurring pay, retirement income, or net worth.</p>
+      <p class="muted">Annual pay uses the same daily estimate as cashflow. Enter dated payments only when they are additional to annual estimates. Equity awards include grant value and gains in the grant year; later years count only gains or losses. ESPP compensation is stock value less employee purchase contributions, which are listed separately. Sold shares use locked proceeds, while unsold shares use the latest valid price on or before the selected date (or grant/purchase price until then). Future-dated prices do not affect earlier snapshots. Stock values do not change recurring pay, retirement income, or net worth.</p>
     </ui-card>
     <app-income [embedded]="true" [compensationTracking]="true" />
   `,
