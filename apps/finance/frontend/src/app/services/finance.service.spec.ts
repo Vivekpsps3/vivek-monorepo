@@ -70,6 +70,31 @@ describe('FinanceService', () => {
     });
   });
 
+  it('previews mixed-bank files and commits their combined selection without plaintext HTTP', done => {
+    encStore.getTransactions.and.resolveTo([]);
+    encStore.addTransaction.and.resolveTo({ id: 1 } as any);
+    const files = [
+      { id: 1, bank_slug: 'capital_one', file: new File(['Transaction Date,Card No.,Description,Category,Debit,Credit\n2026-01-02,1234,Coffee,Food,5.25,'], 'capital.csv') },
+      { id: 2, bank_slug: 'amex', file: new File(['Date,Description,Account #,Amount,Category\n01/02/2026,Lunch,-1001,10.00,Food'], 'amex.csv') },
+    ];
+    service.previewBankImports(files).subscribe({
+      next: previews => {
+        expect(previews.map(entry => entry.preview!.bank)).toEqual(['Capital One', 'American Express']);
+        const rows = previews.flatMap(entry => entry.preview!.rows);
+        service.commitBankImports(rows).subscribe({
+          next: result => {
+            expect(result.inserted).toBe(2);
+            expect(encStore.addTransaction.calls.allArgs().map(args => args[0].account_display)).toEqual(['Capital One ···1234', 'American Express ···1001']);
+            http.expectNone(() => true);
+            done();
+          },
+          error: done.fail,
+        });
+      },
+      error: done.fail,
+    });
+  });
+
   it('refreshes unique ticker symbols with per-symbol failures and reports counts', done => {
     encStore.getHoldings.and.resolveTo([
       { id: 1, symbol: 'aapl', shares: 1, purchase_price: 10, current_price: 10 },

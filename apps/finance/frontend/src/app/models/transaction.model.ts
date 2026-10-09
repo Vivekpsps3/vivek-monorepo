@@ -42,6 +42,20 @@ export interface ImportPreviewResult {
   };
 }
 
+export interface BankImportFile {
+  id: number;
+  bank_slug: string;
+  file: File;
+}
+
+export interface BankImportFilePreview {
+  id: number;
+  bank_slug: string;
+  filename: string;
+  preview: ImportPreviewResult | null;
+  error: string | null;
+}
+
 export interface BankImportOption {
   slug: string;
   name: string;

@@ -26,6 +26,8 @@ import {
   Asset,
   AssetCreate,
   BankImportOption,
+  BankImportFile,
+  BankImportFilePreview,
   CashflowSummary,
   CategoryBulkRenameResult,
   CategoryRenameResult,
@@ -49,6 +51,7 @@ import {
 } from '../models/transaction.model';
 import {
   buildBankImportPreview,
+  buildBankImportPreviews,
   commitBankImportRows,
   listClientBankImports,
 } from '../utils/bank-import.util';
@@ -542,6 +545,20 @@ export class FinanceService {
         return buildBankImportPreview(bankSlug, file.name, content, existing);
       })()
     );
+  }
+
+  previewBankImports(files: BankImportFile[]): Observable<BankImportFilePreview[]> {
+    return from((async () => {
+      const transactions = await this.encStore.getTransactions();
+      const existing = new Set(
+        transactions.map(tx => String((tx as Transaction & { dedupe_key?: string }).dedupe_key || '')).filter(Boolean)
+      );
+      return buildBankImportPreviews(files, existing);
+    })());
+  }
+
+  commitBankImports(rows: ImportPreviewRow[]): Observable<ImportCommitResult> {
+    return from(commitBankImportRows(this.encStore, rows)).pipe(tap(() => this.refreshAfterImport()));
   }
 
   commitBankImport(

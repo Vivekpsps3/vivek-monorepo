@@ -9,12 +9,13 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, Subscription, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import {
   BankImportOption,
   ImportCommitResult,
-  ImportPreviewResult,
+  BankImportFile,
+  BankImportFilePreview,
   ImportPreviewRow,
   Transaction,
   TransactionCreate,
@@ -72,14 +73,15 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   showModal = false;
   showImportModal = false;
   importBanks: BankImportOption[] = [];
-  selectedImportBankSlug = '';
 
   get importBankSelectOptions(): UiSelectOption[] {
-    return this.importBanks.map(b => ({ value: b.slug, label: b.name }));
+    return [{ value: '', label: 'Select bank' }, ...this.importBanks.map(b => ({ value: b.slug, label: b.name }))];
   }
   importStep: 'upload' | 'preview' = 'upload';
-  importFile: File | null = null;
-  importPreview: ImportPreviewResult | null = null;
+  importFiles: BankImportFile[] = [];
+  importPreviews: BankImportFilePreview[] = [];
+  private nextImportFileId = 1;
+  private importPreviewRequest?: Subscription;
   importSelected = new Set<string>();
   importParsing = false;
   importCommitting = false;
@@ -214,12 +216,32 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.importPreviewRequest?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
   }
 
-  get selectedImportBank(): BankImportOption | undefined {
-    return this.importBanks.find(b => b.slug === this.selectedImportBankSlug);
+  importBank(slug: string): BankImportOption | undefined {
+    return this.importBanks.find(bank => bank.slug === slug);
+  }
+
+  get canPreviewImport(): boolean {
+    return this.importFiles.length > 0 && this.importFiles.every(entry => !!this.importBank(entry.bank_slug));
+  }
+
+  get importRows(): ImportPreviewRow[] {
+    return this.importPreviews.flatMap(entry => entry.preview?.rows || []);
+  }
+
+  get importSummary() {
+    return this.importPreviews.reduce((total, entry) => {
+      if (entry.preview) {
+        for (const field of ['total_parsed', 'new', 'duplicate', 'skipped', 'errors'] as const) {
+          total[field] += entry.preview.summary[field] || 0;
+        }
+      }
+      return total;
+    }, { total_parsed: 0, new: 0, duplicate: 0, skipped: 0, errors: 0 });
   }
 
   get summaryMonthLabel(): string {
@@ -303,100 +325,89 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   openImportModal() {
+    if (this.importCommitting) return;
+    this.closeImportModal();
     this.showImportModal = true;
-    this.importStep = 'upload';
-    this.importFile = null;
-    this.importPreview = null;
-    this.importSelected.clear();
     this.cdr.markForCheck();
     this.financeService.getImportBanks().pipe(takeUntil(this.destroy$)).subscribe({
       next: banks => {
         this.importBanks = banks;
-        this.selectedImportBankSlug = banks[0]?.slug ?? '';
         this.cdr.markForCheck();
       },
     });
   }
 
   onImportBankChange() {
-    this.importFile = null;
-    this.importPreview = null;
+    this.importPreviews = [];
     this.importStep = 'upload';
     this.importSelected.clear();
+    this.importError = '';
     this.cdr.markForCheck();
   }
 
   closeImportModal() {
+    if (this.importCommitting) return;
+    this.importPreviewRequest?.unsubscribe();
+    this.importParsing = false;
     this.showImportModal = false;
-    this.importFile = null;
-    this.importPreview = null;
+    this.importStep = 'upload';
+    this.importFiles = [];
+    this.importPreviews = [];
     this.importSelected.clear();
-  }
-
-  onImportFileSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    const bank = this.selectedImportBank;
-    if (bank?.file_extensions?.length) {
-      const ok = bank.file_extensions.some(ext =>
-        file.name.toLowerCase().endsWith(ext.toLowerCase())
-      );
-      if (!ok) {
-        this.toastService.error(`Please choose a file: ${bank.file_extensions.join(', ')}`);
-        return;
-      }
-    }
-    this.importFile = file;
+    this.importError = '';
     this.cdr.markForCheck();
   }
 
-  runImportPreview() {
-    if (!this.importFile) {
-      this.toastService.error('Choose a CSV file first.');
-      return;
+  onImportFileSelected(event: Event) {
+    if (this.importParsing || this.importCommitting) return;
+    const input = event.target as HTMLInputElement;
+    for (const file of Array.from(input.files || [])) {
+      this.importFiles.push({ id: this.nextImportFileId++, bank_slug: '', file });
     }
-    if (!this.selectedImportBankSlug) {
-      this.toastService.error('Select a bank.');
+    input.value = '';
+    this.onImportBankChange();
+  }
+
+  removeImportFile(id: number) {
+    if (this.importParsing || this.importCommitting) return;
+    this.importFiles = this.importFiles.filter(entry => entry.id !== id);
+    this.onImportBankChange();
+  }
+
+  backToImportFiles() {
+    if (this.importCommitting) return;
+    this.onImportBankChange();
+  }
+
+  runImportPreview() {
+    if (this.importParsing || this.importCommitting) return;
+    if (!this.canPreviewImport) {
+      this.toastService.error('Choose CSV files and select a bank for every file.');
       return;
     }
     this.importParsing = true;
     this.importError = '';
-    this.financeService
-      .previewBankImport(this.selectedImportBankSlug, this.importFile)
+    this.importPreviewRequest = this.financeService
+      .previewBankImports(this.importFiles.map(entry => ({ ...entry })))
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: preview => {
+        next: previews => {
           this.importParsing = false;
-          this.importPreview = {
-            ...preview,
-            skipped: preview.skipped ?? [],
-            errors: preview.errors ?? [],
-            summary: {
-              ...preview.summary,
-              skipped: preview.summary.skipped ?? 0,
-              errors: preview.summary.errors ?? 0,
-            },
-          };
+          this.importPreviews = previews;
           this.importStep = 'preview';
-          this.importSelected.clear();
-          for (const row of preview.rows) {
-            if (row.status === 'new') {
-              this.importSelected.add(row.dedupe_key);
-            }
-          }
+          this.importSelected = new Set(this.importRows.filter(row => row.status === 'new').map(row => row.dedupe_key));
           this.cdr.markForCheck();
         },
         error: (err: any) => {
           this.importParsing = false;
-          this.importError = this.importFailureMessage(err, 'Could not parse this CSV. Check the bank selection and file format.');
+          this.importError = this.importFailureMessage(err, 'Could not preview the files. Please try again.');
           this.cdr.markForCheck();
         },
       });
   }
 
   toggleImportRow(row: ImportPreviewRow) {
-    if (row.status !== 'new') return;
+    if (this.importCommitting || row.status !== 'new') return;
     if (this.importSelected.has(row.dedupe_key)) {
       this.importSelected.delete(row.dedupe_key);
     } else {
@@ -406,12 +417,12 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   isImportRowSelected(row: ImportPreviewRow): boolean {
-    return this.importSelected.has(row.dedupe_key);
+    return row.status === 'new' && this.importSelected.has(row.dedupe_key);
   }
 
   selectAllNewImportRows() {
-    if (!this.importPreview) return;
-    for (const row of this.importPreview.rows) {
+    if (this.importCommitting) return;
+    for (const row of this.importRows) {
       if (row.status === 'new') {
         this.importSelected.add(row.dedupe_key);
       }
@@ -420,6 +431,7 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   clearImportSelection() {
+    if (this.importCommitting) return;
     this.importSelected.clear();
     this.cdr.markForCheck();
   }
@@ -429,9 +441,8 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   get selectedImportExpenseTotal(): number {
-    if (!this.importPreview) return 0;
-    return this.importPreview.rows
-      .filter(row => this.importSelected.has(row.dedupe_key))
+    return this.importRows
+      .filter(row => row.status === 'new' && this.importSelected.has(row.dedupe_key))
       .reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
   }
 
@@ -440,8 +451,8 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   commitImport() {
-    if (!this.importPreview || !this.importFile) return;
-    const rows = this.importPreview.rows.filter(r => this.importSelected.has(r.dedupe_key));
+    if (this.importCommitting || this.importParsing) return;
+    const rows = this.importRows.filter(row => row.status === 'new' && this.importSelected.has(row.dedupe_key));
     if (!rows.length) {
       this.toastService.error('Select at least one new transaction to import.');
       return;
@@ -449,18 +460,18 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     this.importCommitting = true;
     this.importError = '';
     this.financeService
-      .commitBankImport(this.selectedImportBankSlug, this.importPreview.filename, rows)
+      .commitBankImports(rows)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res: ImportCommitResult) => {
           this.importCommitting = false;
           this.closeImportModal();
-          this.toastService.success(`Imported ${res.inserted} transaction(s)`);
+          this.toastService.success(`Imported ${res.inserted} transaction(s)${res.skipped ? `; skipped ${res.skipped} duplicate(s)` : ''}`);
           this.cdr.markForCheck();
         },
         error: (err: any) => {
           this.importCommitting = false;
-          this.importError = this.importFailureMessage(err, 'Import failed. Your preview is still open; no selected rows were lost.');
+          this.importError = this.importFailureMessage(err, 'Import failed.') + ' Some rows may already be saved. Retry safely skips those duplicates.';
           this.cdr.markForCheck();
         },
       });

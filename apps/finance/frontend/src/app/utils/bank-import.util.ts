@@ -1,5 +1,7 @@
 import {
   BankImportOption,
+  BankImportFile,
+  BankImportFilePreview,
   ImportCommitResult,
   ImportPreviewResult,
   ImportPreviewRow,
@@ -137,6 +139,32 @@ export async function buildBankImportPreview(
       errors: parsed.errors.length,
     },
   };
+}
+
+/** Preview in file order so overlapping statements share one dedupe set. */
+export async function buildBankImportPreviews(
+  files: BankImportFile[],
+  existingDedupeKeys: Set<string>
+): Promise<BankImportFilePreview[]> {
+  const seen = new Set(existingDedupeKeys);
+  const results: BankImportFilePreview[] = [];
+  for (const entry of files) {
+    const result: BankImportFilePreview = {
+      id: entry.id, bank_slug: entry.bank_slug, filename: entry.file.name, preview: null, error: null,
+    };
+    try {
+      const importer = getImporter(entry.bank_slug);
+      if (!importer.file_extensions.some(ext => entry.file.name.toLowerCase().endsWith(ext.toLowerCase()))) {
+        throw new Error(`Choose a ${importer.file_extensions.join(', ')} file for ${importer.name}.`);
+      }
+      result.preview = await buildBankImportPreview(entry.bank_slug, entry.file.name, await entry.file.text(), seen);
+      for (const row of result.preview.rows) seen.add(row.dedupe_key);
+    } catch (error) {
+      result.error = errorMessage(error);
+    }
+    results.push(result);
+  }
+  return results;
 }
 
 export async function commitBankImportRows(

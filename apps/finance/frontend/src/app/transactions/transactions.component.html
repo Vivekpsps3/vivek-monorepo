@@ -15,7 +15,7 @@
       <p class="section-eyebrow">First import</p>
       <h2 id="import-guide-heading">Bring in card and bank CSVs safely</h2>
       <p>
-        Download CSV activity from your bank, choose the matching importer, preview every row, then import only the new transactions.
+        Download CSV activity from your bank, select a bank for each file, preview every row, then import only the new transactions.
         This ledger is for spending review and cashflow; it never changes your current net worth.
       </p>
     </div>
@@ -253,138 +253,149 @@
 </div>
 
 <ui-dialog [open]="showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeImportModal()">
-    <h3 id="import-modal-title">Import bank statement</h3>
+    <h3 id="import-modal-title">Import bank statements</h3>
 
     @if (importStep === 'upload') {
       <div class="import-instructions">
-        <strong>How to import without surprises</strong>
+        <strong>Import multiple bank CSVs</strong>
         <ol>
-          <li>In your bank website, export posted transactions as CSV. Avoid PDF statements.</li>
-          <li>Select the matching bank here. Supported importers: {{ supportedImporterNames }}.</li>
-          <li>Upload the CSV and use Preview import. Nothing is saved until you confirm selected rows.</li>
-          <li>Review duplicate badges, transfers, card payments, refunds, and account labels before importing.</li>
+          <li>Export posted transactions as CSV from each bank.</li>
+          <li>Choose one or more files, then select the matching bank for each file. Supported banks: {{ supportedImporterNames }}.</li>
+          <li>Preview all files. Nothing is saved until you confirm selected rows.</li>
+          <li>Review duplicates, transfers, card payments, refunds, and account labels before importing.</li>
         </ol>
       </div>
-      <ui-select
-        selectId="import-bank"
-        label="Bank"
-        [(value)]="selectedImportBankSlug"
-        [options]="importBankSelectOptions"
-        (valueChange)="onImportBankChange()"
-      />
-      @if (selectedImportBank) {
-        <p class="import-hint">{{ selectedImportBank.hint }}</p>
-      }
       <div class="form-group">
-        <label for="import-file">CSV file</label>
-        <input id="import-file" type="file" accept=".csv" (change)="onImportFileSelected($event)" />
-        @if (importFile) {
-          <p class="file-name">{{ importFile.name }}</p>
+        <label for="import-file">Add CSV files</label>
+        <input id="import-file" type="file" accept=".csv" multiple [disabled]="importParsing" (change)="onImportFileSelected($event)" />
+      </div>
+      <div class="import-file-list">
+        @for (entry of importFiles; track entry.id) {
+          <div class="import-file-entry">
+            <div class="import-file-heading">
+              <strong class="file-name">{{ entry.file.name }}</strong>
+              <ui-button variant="ghost" size="sm" [disabled]="importParsing" (clicked)="removeImportFile(entry.id)">Remove {{ entry.file.name }}</ui-button>
+            </div>
+            <ui-select
+              [selectId]="'import-bank-' + entry.id"
+              [label]="'Bank for ' + entry.file.name"
+              [(value)]="entry.bank_slug"
+              [options]="importBankSelectOptions"
+              [disabled]="importParsing"
+              (valueChange)="onImportBankChange()" />
+            @if (importBank(entry.bank_slug); as bank) {
+              <p class="import-hint">{{ bank.hint }}</p>
+            }
+          </div>
         }
       </div>
       @if (importError) {
         <p class="import-error" role="alert">{{ importError }}</p>
       }
       <div class="form-actions">
-        <ui-button variant="primary" (clicked)="runImportPreview()" [disabled]="!importFile || importParsing">
-          Preview import
+        <ui-button variant="primary" (clicked)="runImportPreview()" [disabled]="!canPreviewImport || importParsing">
+          {{ importParsing ? 'Preparing previews…' : 'Preview all files' }}
         </ui-button>
         <ui-button variant="secondary" (clicked)="closeImportModal()">Cancel</ui-button>
       </div>
     } @else {
       <p class="import-summary">
-        {{ importPreview?.summary?.new }} new,
-        {{ importPreview?.summary?.duplicate }} duplicate
-        ({{ importPreview?.summary?.total_parsed }} parsed).
-        @if (importPreview && importPreview.summary.skipped) {
-          {{ importPreview.summary.skipped }} skipped.
-        }
-        @if (importPreview && importPreview.summary.errors) {
-          <span class="import-summary-error">{{ importPreview.summary.errors }} need fixing.</span>
-        }
+        {{ importFiles.length }} file(s) · {{ importSummary.new }} new,
+        {{ importSummary.duplicate }} duplicate ({{ importSummary.total_parsed }} parsed).
+        {{ importSummary.skipped }} skipped; {{ importSummary.errors }} row(s) need fixing.
         Selected {{ selectedImportCount }} · ${{ selectedImportExpenseTotal | number: '1.2-2' }}.
       </p>
+      <p class="import-hint">Duplicates include transactions already saved and overlapping rows across these files. Files with errors stay listed below; valid rows can still be imported.</p>
       @if (importError) {
         <p class="import-error" role="alert">{{ importError }}</p>
       }
       <div class="import-preview-actions">
-        <ui-button variant="secondary" size="sm" (clicked)="selectAllNewImportRows()">Select all new</ui-button>
-        <ui-button variant="ghost" size="sm" (clicked)="clearImportSelection()">Clear selection</ui-button>
+        <ui-button variant="secondary" size="sm" [disabled]="importCommitting" (clicked)="selectAllNewImportRows()">Select all new</ui-button>
+        <ui-button variant="ghost" size="sm" [disabled]="importCommitting" (clicked)="clearImportSelection()">Clear selection</ui-button>
       </div>
-      <div class="import-table-scroll">
-        <ui-data-table ariaLabel="Import preview">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Date</th>
-              <th>Account</th>
-              <th>Category</th>
-              <th>Description</th>
-              <th>Amount</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of importPreview?.rows; track row.dedupe_key) {
-              <tr [class.duplicate-row]="row.status === 'duplicate'" (click)="toggleImportRow(row)">
-                <td>
-                  @if (row.status === 'new') {
-                    <input type="checkbox" [checked]="isImportRowSelected(row)" (click)="$event.stopPropagation()" (change)="toggleImportRow(row)" />
+      @for (entry of importPreviews; track entry.id) {
+        <section class="import-file-preview" [attr.aria-label]="entry.filename + ' preview'">
+          <h4>{{ entry.filename }} · {{ importBank(entry.bank_slug)?.name }}</h4>
+          @if (entry.error) {
+            <p class="import-error" role="alert">{{ entry.error }}</p>
+          }
+          @if (entry.preview; as preview) {
+            <p class="import-summary">{{ preview.summary.new }} new · {{ preview.summary.duplicate }} duplicate · {{ preview.summary.skipped }} skipped · {{ preview.summary.errors }} need fixing</p>
+            <div class="import-table-scroll">
+              <ui-data-table ariaLabel="Import preview">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of preview.rows; track $index) {
+                    <tr [class.duplicate-row]="row.status === 'duplicate'" (click)="toggleImportRow(row)">
+                      <td>
+                        @if (row.status === 'new') {
+                          <input type="checkbox" [checked]="isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importCommitting" (change)="toggleImportRow(row)" />
+                        }
+                      </td>
+                      <td>{{ row.date }}</td>
+                      <td>{{ row.account_display }}</td>
+                      <td>{{ row.category }}</td>
+                      <td>{{ row.description }}</td>
+                      <td>${{ row.amount | number: '1.2-2' }}</td>
+                      <td>
+                        <ui-badge [variant]="row.status === 'duplicate' ? 'default' : 'success'">{{ row.status }}</ui-badge>
+                      </td>
+                    </tr>
                   }
-                </td>
-                <td>{{ row.date }}</td>
-                <td>{{ row.account_display }}</td>
-                <td>{{ row.category }}</td>
-                <td>{{ row.description }}</td>
-                <td>${{ row.amount | number: '1.2-2' }}</td>
-                <td>
-                  <ui-badge [variant]="row.status === 'duplicate' ? 'default' : 'success'">{{ row.status }}</ui-badge>
-                </td>
-              </tr>
+                </tbody>
+              </ui-data-table>
+            </div>
+            @if (preview.errors.length || preview.skipped.length) {
+              <div class="import-notes">
+                @if (preview.errors.length) {
+                  <details class="import-notes-block import-notes-block--error" open>
+                    <summary class="import-notes-title">
+                      {{ preview.errors.length }} row(s) could not be parsed
+                    </summary>
+                    <ul class="import-notes-list">
+                      @for (note of preview.errors; track $index) {
+                        <li class="import-note">Line {{ note.line }}: {{ note.reason }}</li>
+                      }
+                    </ul>
+                  </details>
+                }
+                @if (preview.skipped.length) {
+                  <details class="import-notes-block">
+                    <summary class="import-notes-title">
+                      Skipped {{ preview.skipped.length }} row(s)
+                    </summary>
+                    <ul class="import-notes-list">
+                      @for (note of preview.skipped; track $index) {
+                        <li class="import-note">Line {{ note.line }}: {{ note.reason }}</li>
+                      }
+                    </ul>
+                  </details>
+                }
+                <p class="import-notes-hint">
+                  Valid rows can still be imported. Fix flagged rows in the CSV and use Back to re-preview.
+                </p>
+              </div>
             }
-          </tbody>
-        </ui-data-table>
-      </div>
-      @if (importPreview && (importPreview.errors.length || importPreview.skipped.length)) {
-        <div class="import-notes">
-          @if (importPreview.errors.length) {
-            <details class="import-notes-block import-notes-block--error" open>
-              <summary class="import-notes-title">
-                {{ importPreview.errors.length }} row(s) could not be parsed
-              </summary>
-              <ul class="import-notes-list">
-                @for (note of importPreview.errors; track $index) {
-                  <li class="import-note">Line {{ note.line }}: {{ note.reason }}</li>
-                }
-              </ul>
-            </details>
+
           }
-          @if (importPreview.skipped.length) {
-            <details class="import-notes-block">
-              <summary class="import-notes-title">
-                Skipped {{ importPreview.skipped.length }} row(s)
-              </summary>
-              <ul class="import-notes-list">
-                @for (note of importPreview.skipped; track $index) {
-                  <li class="import-note">Line {{ note.line }}: {{ note.reason }}</li>
-                }
-              </ul>
-            </details>
-          }
-          <p class="import-notes-hint">
-            Valid rows can still be imported. Fix flagged rows in the CSV and use Back to re-preview.
-          </p>
-        </div>
+        </section>
       }
       <div class="form-actions">
-        <ui-button variant="secondary" (clicked)="importStep = 'upload'">Back</ui-button>
-        <ui-button
-          variant="primary"
-          (clicked)="commitImport()"
-          [disabled]="importCommitting || importSelected.size === 0">
-          Import {{ importSelected.size }} transaction(s)
+        <ui-button variant="secondary" [disabled]="importCommitting" (clicked)="backToImportFiles()">Back</ui-button>
+        <ui-button variant="primary" (clicked)="commitImport()" [disabled]="importCommitting || importSelected.size === 0">
+          {{ importCommitting ? 'Importing…' : 'Import ' + importSelected.size + ' transaction(s)' }}
         </ui-button>
-        <ui-button variant="secondary" (clicked)="closeImportModal()">Cancel</ui-button>
+        <ui-button variant="secondary" [disabled]="importCommitting" (clicked)="closeImportModal()">Cancel</ui-button>
       </div>
     }
 </ui-dialog>

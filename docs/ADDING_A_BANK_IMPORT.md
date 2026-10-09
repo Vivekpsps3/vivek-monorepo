@@ -9,7 +9,23 @@ Each parser must produce:
 - `dedupe_key` (`bank|account|date|amount|normalized description` SHA-256)
 - `date`, `account_mask`, `description`, `category`, `amount` (positive number for expenses)
 
-The Transactions page calls `FinanceService.previewBankImport()` / `commitBankImport()`, which parse locally and write encrypted records. CSV contents are not sent to the backend.
+The Transactions import dialog accepts multiple CSV files and requires a bank selection
+for each file. Files can be added or removed independently. It calls
+`FinanceService.previewBankImports()` / `commitBankImports()` to parse locally and
+write encrypted records. The single-file service methods remain available for
+existing callers. CSV contents are not sent to the backend.
+
+`buildBankImportPreviews()` processes files in selection order with a shared
+set of existing/seen transaction keys, so overlapping statements are marked as
+duplicates before confirmation. Each file retains its own filename, bank,
+preview rows, skipped-row notes, and errors. A failed file does not block valid
+rows from other files. The UI commits the selected new rows together through
+the encrypted store; account labels come from each file's assigned bank.
+
+Commit rechecks existing keys, making retries safe after a partial save failure.
+The dialog preserves the preview/selection after failure and prevents selection
+changes or dismissal while saving. Returning to file selection clears stale
+previews while retaining files and bank assignments.
 
 | Slug | Notes |
 |------|--------|

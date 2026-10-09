@@ -1,5 +1,6 @@
 import {
   buildBankImportPreview,
+  buildBankImportPreviews,
   commitBankImportRows,
   listClientBankImports,
 } from './bank-import.util';
@@ -129,5 +130,87 @@ describe('bank-import util', () => {
         dedupe_key: preview.rows[0].dedupe_key,
       })
     );
+  });
+});
+
+
+describe('multi-file bank import', () => {
+  const chase = (name: string, rows = '01/02/2026,01/03/2026,Coffee,Food,Sale,-10.00,') => new File([
+    'Transaction Date,Post Date,Description,Category,Type,Amount,Memo\n' + rows,
+  ], name);
+  const amex = new File(['Date,Description,Account #,Amount,Category\n01/02/2026,Coffee,-1001,10.00,Food'], 'amex.csv');
+
+  it('uses each file bank and deduplicates overlapping statements in file order', async () => {
+    const existing = new Set<string>();
+    const results = await buildBankImportPreviews([
+      { id: 1, bank_slug: 'chase', file: chase('january.csv') },
+      { id: 2, bank_slug: 'amex', file: amex },
+      { id: 3, bank_slug: 'chase', file: chase('overlap.csv') },
+    ], existing);
+    expect(results.map(result => result.id)).toEqual([1, 2, 3]);
+    expect(results.map(result => result.preview!.summary.new)).toEqual([1, 1, 0]);
+    expect(results[2].preview!.rows[0].status).toBe('duplicate');
+    expect(results[1].preview!.rows[0].account_display).toBe('American Express ···1001');
+    expect(existing.size).toBe(0);
+    const stored = new Set([results[0].preview!.rows[0].dedupe_key]);
+    const repeated = await buildBankImportPreviews([{ id: 4, bank_slug: 'chase', file: chase('again.csv') }], stored);
+    expect(repeated[0].preview!.summary.duplicate).toBe(1);
+  });
+
+  it('reports file errors without dropping good files, including mismatched banks and unreadable files', async () => {
+    const unreadable = chase('unreadable.csv');
+    spyOn(unreadable, 'text').and.rejectWith(new Error('Cannot read file'));
+    const results = await buildBankImportPreviews([
+      { id: 1, bank_slug: 'chase', file: chase('good.csv') },
+      { id: 2, bank_slug: 'amex', file: chase('wrong-bank.csv') },
+      { id: 3, bank_slug: 'chase', file: new File(['not csv'], 'statement.pdf') },
+      { id: 4, bank_slug: 'chase', file: unreadable },
+      { id: 5, bank_slug: 'amex', file: amex },
+    ], new Set());
+    expect(results[0].preview!.summary.new).toBe(1);
+    expect(results[1].error).toContain('Missing required columns');
+    expect(results[2].error).toContain('.csv');
+    expect(results[3].error).toBe('Cannot read file');
+    expect(results[4].preview!.summary.new).toBe(1);
+    expect(results[1].filename).toBe('wrong-bank.csv');
+  });
+
+  it('keeps row-level errors and skipped rows attached to their source file', async () => {
+    const file = chase('rows.csv', [
+      'bad-date,01/03/2026,Coffee,Food,Sale,-10.00,',
+      '01/02/2026,01/03/2026,Payment,Food,Payment,10.00,',
+      '01/02/2026,01/03/2026,Coffee,Food,Sale,-10.00,',
+    ].join('\n'));
+    const [result] = await buildBankImportPreviews([{ id: 1, bank_slug: 'chase', file }], new Set());
+    expect(result.preview!.errors[0].line).toBe(2);
+    expect(result.preview!.skipped[0].line).toBe(3);
+    expect(result.preview!.summary.new).toBe(1);
+  });
+
+  it('retries a partially failed combined commit without inserting saved rows twice', async () => {
+    const previews = await buildBankImportPreviews([
+      { id: 1, bank_slug: 'chase', file: chase('chase.csv') },
+      { id: 2, bank_slug: 'amex', file: amex },
+    ], new Set());
+    const rows = previews.flatMap(result => result.preview!.rows);
+    const saved: any[] = [];
+    let fail = true;
+    const store = {
+      getTransactions: async () => saved,
+      addTransaction: async (row: any) => {
+        if (saved.length === 1 && fail) throw new Error('Temporary failure');
+        const tx = { ...row, id: saved.length + 1 };
+        saved.push(tx);
+        return tx;
+      },
+    };
+    await expectAsync(commitBankImportRows(store, rows)).toBeRejectedWithError('Temporary failure');
+    expect(saved.length).toBe(1);
+    fail = false;
+    const result = await commitBankImportRows(store, rows);
+    expect(result.inserted).toBe(1);
+    expect(result.skipped).toBe(1);
+    expect(saved.length).toBe(2);
+    expect(new Set(saved.map(row => row.dedupe_key)).size).toBe(2);
   });
 });

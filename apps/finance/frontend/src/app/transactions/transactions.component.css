@@ -381,3 +381,10 @@
     width: 100%;
   }
 }
+
+.import-file-list { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
+.import-file-entry { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-4); }
+.import-file-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.import-file-heading .file-name { overflow-wrap: anywhere; }
+.import-file-preview { border-top: 1px solid var(--border); padding-top: var(--space-4); margin-top: var(--space-4); }
+.import-file-preview h4 { overflow-wrap: anywhere; }
