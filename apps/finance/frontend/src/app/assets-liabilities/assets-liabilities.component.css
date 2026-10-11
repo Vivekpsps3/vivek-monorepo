@@ -63,6 +63,31 @@
   margin-top: 0.25rem;
 }
 
+.balance-review-list {
+  max-height: min(60vh, 34rem);
+  overflow: auto;
+  margin: 1rem 0;
+}
+
+.balance-review-list input[type='number'] {
+  width: 8rem;
+  min-width: 6rem;
+}
+
+.balance-review-list td small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.unchanged-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
 @media (max-width: 720px) {
   .summary-card .summary-grid {
     grid-template-columns: 1fr;

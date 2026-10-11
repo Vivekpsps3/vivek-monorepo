@@ -189,6 +189,92 @@
   min-width: 640px;
 }
 
+.tx-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tx-mobile-list {
+  display: none;
+  min-width: 0;
+}
+
+.tx-mobile-row {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+}
+
+.tx-mobile-row > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  cursor: pointer;
+  list-style: none;
+}
+
+.tx-mobile-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tx-mobile-main {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.tx-mobile-main strong,
+.tx-mobile-main small {
+  overflow-wrap: anywhere;
+}
+
+.tx-mobile-main small {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.tx-mobile-amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.tx-mobile-details {
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-3);
+}
+
+.tx-mobile-details p {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.45fr) minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.tx-mobile-details p strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.tx-mobile-details p span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tx-mobile-details .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 .tx-table-wrap th.sortable button {
   appearance: none;
   background: transparent;
@@ -207,6 +293,15 @@
 .empty-import-copy {
   color: var(--text-secondary);
   font-size: var(--text-sm);
+}
+
+.import-legacy-mapping {
+  margin: 0.75rem 0;
+}
+
+.import-legacy-mapping .import-hint {
+  margin: 0.25rem 0 0 1.5rem;
+  max-width: 48rem;
 }
 
 .import-error {
@@ -335,6 +430,15 @@
 }
 
 @media (max-width: 800px) {
+  .tx-table-wrap {
+    display: none;
+  }
+
+  .tx-mobile-list {
+    display: grid;
+    gap: var(--space-2);
+  }
+
   .month-hero,
   .import-guide-card {
     padding: var(--space-5);

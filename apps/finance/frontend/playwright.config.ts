@@ -12,11 +12,14 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:4200',
     trace: 'on-first-retry',
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : undefined,
   },
   webServer: process.env.E2E_SKIP_WEB_SERVER
     ? undefined
     : {
-        command: 'npm run start',
+        command: 'npm run start -- --prebundle=false --hmr=false --live-reload=false',
         url: 'http://localhost:4200',
         reuseExistingServer: true,
         timeout: 120_000,

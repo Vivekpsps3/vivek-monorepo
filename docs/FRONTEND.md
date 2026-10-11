@@ -20,14 +20,14 @@ Angular 19 standalone app under `apps/finance/frontend/src/app/`.
 | `/vault/unlock` | Unlock encrypted finance vault — auth only, outside shell |
 | `/` | Home — three numbers: what you have, this month, what repeats |
 | `/have` | Assets, debts, and holdings (`?t=holdings`) |
-| `/spending` | Pay or spend list (`?t=pay`, `?t=spend`) and calendar (`?t=calendar`) |
+| `/spending` | Spending Review (`?t=review`), Activity (`?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?t=imports`); legacy `?t=pay` and `?t=spend` deep links redirect to Activity filters |
 | `/recurring` | Pay or spend (`?t=pay`, `?t=spend`) |
-| `/planning` | What-if path, employer compensation, growth, and stocks (`?t=compensation`, `?t=growth`, `?t=stocks`) |
+| `/planning` | Retirement simulation, employer compensation, portfolio projection, and stock research (`?t=compensation`, `?t=growth`, `?t=stocks`) |
 | `/admin/users` | Admin user management (admin role only) |
-| `/balance-sheet`, `/portfolio` | Redirect to `/have` |
-| `/transactions`, `/calendar` | Redirect to `/spending` |
+| `/balance-sheet`, `/portfolio` | Redirect to `/have`, with `/portfolio` opening holdings |
+| `/transactions`, `/calendar` | Redirect to `/spending`, with `/calendar` opening Calendar |
 | `/income`, `/fixed-expenses`, `/subscriptions` | Redirect to `/recurring` |
-| `/investment-insights`, `/stock-lab` | Redirect to `/planning` |
+| `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
 Shell: `MainLayoutComponent` (five hubs, `#main-content`). Admin and account actions live in the account menu. Dev API: `apiUrl: '/api'` + `proxy.conf.js` (`/api/**` → FastAPI).
@@ -99,11 +99,13 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Home behavior
 
-- Home shows three clickable numbers only.
+- Home begins with three clickable metrics, followed by the cross-plane review queue, holdings, and charts.
 - **What you have** is the current net worth total.
-- **This month** is period activity plus recurring cashflow for the current month.
-- **What repeats** is scheduled pay minus bills and subscriptions.
+- **This month** is recorded pay and spend for the current month.
+- **What repeats** shows scheduled pay and spend from recurring rows.
+- The review queue links to due balance/position reviews, statement-coverage gaps, unresolved imports, and upcoming annual renewals.
 - Transactions do not change net worth.
+- Home charts switch between Recorded activity and Scheduled cashflow; they do not present a combined total. Spending categories use purchase/refund effects across the full encrypted ledger, independent of the visible transaction page.
 
 ## Recurring cashflow pages
 
@@ -118,6 +120,20 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 - The import dialog accepts multiple CSVs, with an independent bank selector for every file and previews/errors grouped by filename. It detects duplicates across uploaded files as well as saved records.
 - Preview uses encrypted transaction dedupe keys and commit writes encrypted transaction records through `/api/vault/records/upsert`; bank CSV contents are not sent to legacy `/api/imports/*` routes in normal vault mode.
 - Failed files do not block valid rows in other files. Failed commits retain selection for a retry that rechecks saved keys.
+
+The import flow stages and resumes per-file receipts in the encrypted client store. Each receipt tracks per-file source account identity, remembered confirmed account mappings, selected/completed/unresolved rows, and the user-confirmed account/date interval separately from observed transaction min/max dates. Stable account keys keep same-mask accounts separate; renames use the selected account's explicit ID. Encrypted receipt-row chunks contain at most 100 parsed rows or 160 KB, and vault checkpoints write at most 200 records. If initial staging misses a row chunk, the receipt cannot resume or activate until the original CSV is reattached. Coverage is evidence about dates the user confirms are represented in the import, not proof of statement completeness. Undo removes only receipt-created transactions that still match their imported values; edited rows remain and are reported, and the receipt's coverage is withdrawn. Raw CSV remains browser-local.
+
+## Finance views, valuation, and planning behavior
+
+The `/spending` hub separates **Spending Review**, **Activity**, **Calendar**, and **Imports**. Spending Review compares selected and prior month amounts by category or merchant and opens matching transaction details; for the current month it compares the same elapsed calendar days in the prior month. It also shows confirmed coverage gaps for each selected confirmed account. Activity is the reviewable transaction ledger; Calendar places dated transactions alongside scheduled recurring due dates and marks estimates clearly. Recorded spend is the default. Purchases contribute to spend, refunds reduce it, payments and transfers affect neither spend nor income, and ambiguous credits remain reviewable but excluded from totals. Optional `kind`, merchant, review state, receipt ID, and import-edited metadata support cleanup while the source description remains unchanged. The ledger supports bulk review and category/merchant cleanup. Import receipts show outcomes and confirmed date coverage.
+
+Home cashflow charts offer two distinct views: **Recorded** uses ledger activity, and **Scheduled** uses recurring job, fixed-expense, and subscription schedules. No chart toggle combines observed and scheduled amounts. Category totals apply the same transaction-kind effects across the full ledger rather than a paged transaction-list subset.
+
+Planning's three-completed-month variable-spending suggestion is available only when each selected confirmed account has complete receipt coverage for every day in the full three months and the user selected at least one category. Account coverage intervals are unioned day by day; staged, partial, failed, withdrawn, invalid, and unknown-account receipts do not qualify. The estimate can exclude selected recurring-charge transaction IDs and requires explicit acceptance before it is saved. The accepted profile records the period, account/category selection, exclusions, receipt IDs, acceptance time, and accepted amount. A fully covered period with no eligible spend yields a valid zero estimate.
+
+Manual assets and liabilities have an `as_of_date`; holdings carry position dates and price provenance. Default balance review intervals are 30 days for cash/checking/savings assets, 180 days for other assets, 30 days for liabilities, and 30 days for positions. Users may override review intervals. Market quotes become stale after more than three calendar days; undated or future-dated values have unknown freshness. Review prompts let users confirm or update values without rolling them forward automatically. Fidelity imports accept optional market-value, market-price, and position-date columns, preserve exact reported market value and keep import provenance distinct from later quote dates. Known cost-basis fallback is provisional; unknown basis makes gains unavailable while known market value/price remains usable. Selected-account replacements are previewed, staged, and verified. See [DATA_MODEL.md](./DATA_MODEL.md#fidelity-valuation-provenance).
+
+Fixed-expense schedules use `due_day` where supplied; subscriptions use `next_bill_date`. Calendar and recurring views show upcoming dates as estimates, separate from posted transactions. Planning spending can use recurring schedules, fixed + variable + irregular annual components, or a manual annual total. Its coverage-qualified suggestion requires explicit acceptance; individual recurring charges can be excluded to avoid double counting. Saved profiles and legacy manual totals are preserved. Baseline/scenario annual cashflow events can model purchases or time off and are compared with identical assumptions and a shared random seed. Portfolio projections show the effect of a dollar increase to monthly contributions. Advanced percentage controls display percentage values and store decimal rates. Planning remains speculative and does not change recorded finance data or net worth.
 
 ## Build
 

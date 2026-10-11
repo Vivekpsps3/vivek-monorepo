@@ -3,20 +3,26 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
+  OnChanges,
   OnDestroy,
   OnInit,
+  SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
+import { transactionEffects } from '../crypto/client-finance';
 import {
   BankImportOption,
+  BankAccountRecord,
   ImportCommitResult,
   BankImportFile,
   BankImportFilePreview,
   ImportPreviewRow,
+  ImportReceipt,
+  ImportRowNote,
   Transaction,
   TransactionCreate,
 } from '../models/transaction.model';
@@ -57,13 +63,22 @@ import {
   styleUrl: './transactions.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TransactionsComponent implements OnInit, OnDestroy {
+export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
+  readonly transactionEffects = transactionEffects;
+  readonly reviewOptions: UiSelectOption[] = [
+    { value: 'all', label: 'All review states' },
+    { value: 'unreviewed', label: 'Needs review' },
+    { value: 'reviewed', label: 'Reviewed' },
+  ];
   @Input() embedded = false;
+  @Input() importsOnly = false;
   @Input() typeFilter: 'all' | 'income' | 'expense' = 'all';
   transactions: Transaction[] = [];
   filteredTransactions: Transaction[] = [];
+  allTransactions: Transaction[] = [];
   searchTerm = '';
   categoryFilter = '';
+  reviewFilter: 'all' | 'unreviewed' | 'reviewed' = 'all';
   sortColumn: 'date' | 'category' | 'amount' = 'date';
   sortDirection: 'asc' | 'desc' = 'desc';
 
@@ -73,6 +88,8 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   showModal = false;
   showImportModal = false;
   importBanks: BankImportOption[] = [];
+  bankAccounts: BankAccountRecord[] = [];
+  importReceipts: ImportReceipt[] = [];
 
   get importBankSelectOptions(): UiSelectOption[] {
     return [{ value: '', label: 'Select bank' }, ...this.importBanks.map(b => ({ value: b.slug, label: b.name }))];
@@ -90,6 +107,9 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   loading = false;
   newTx: TransactionCreate = this.emptyTx();
   editingTxId: number | null = null;
+  editingImported = false;
+  activeImportReceiptId: number | null = null;
+  selectedCalendarDate: string | null = null;
 
   monthExpenseTotal = 0;
   monthIncomeTotal = 0;
@@ -97,8 +117,11 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   categoryMergeTo = '';
   categoryMergeSaving = false;
   categoryBulkRows: { fromCategory: string; toCategory: string }[] = [this.emptyBulkRenameRow()];
+  bulkMerchant = '';
+  bulkMerchantCategory = '';
 
-  readonly pageSize = 5000;
+  readonly pageSize = 100;
+  visibleRowCount = this.pageSize;
   loadingMore = false;
   hasMore = true;
   listLoading = false;
@@ -126,6 +149,7 @@ export class TransactionsComponent implements OnInit, OnDestroy {
       category: '',
       amount: 0,
       description: '',
+      reviewed: true,
     };
   }
 
@@ -141,6 +165,14 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     if (month && /^\d{4}-\d{2}$/.test(month)) this.summaryMonth = month;
     const category = q.get('category');
     if (category) this.categoryFilter = category;
+    const calendarDate = q.get('date');
+    if (calendarDate && /^\d{4}-\d{2}-\d{2}$/.test(calendarDate)) {
+      this.selectedCalendarDate = calendarDate;
+      if (q.get('add') === '1') {
+        this.newTx = { ...this.emptyTx(), date: calendarDate };
+        this.showModal = true;
+      }
+    }
     if (this.typeFilter === 'expense') {
       this.sortColumn = 'amount';
       this.sortDirection = 'desc';
@@ -153,11 +185,24 @@ export class TransactionsComponent implements OnInit, OnDestroy {
 
     this.financeService.transactions$.pipe(takeUntil(this.destroy$)).subscribe(data => {
       this.transactions = data;
+      this.financeService.getAllTransactions().pipe(takeUntil(this.destroy$)).subscribe(all => {
+        this.allTransactions = all;
+        this.applyFilterAndSort();
+      });
       this.applyFilterAndSort();
       this.cdr.markForCheck();
     });
 
+    this.refreshImportReceipts();
+
     this.reloadTransactionList();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['typeFilter'] && !changes['typeFilter'].firstChange) {
+      this.visibleRowCount = this.pageSize;
+      this.applyFilterAndSort();
+    }
   }
 
   private syncQueryParams(): void {
@@ -174,45 +219,14 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   private reloadTransactionList(): void {
-    this.listLoading = true;
-    this.hasMore = true;
-    this.cdr.markForCheck();
-    const search = this.searchTerm.trim() || undefined;
-    this.financeService
-      .getTransactions({ search, skip: 0, limit: this.pageSize, append: false })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: rows => {
-          this.listLoading = false;
-          this.hasMore = rows.length >= this.pageSize;
-          this.cdr.markForCheck();
-        },
-        error: () => {
-          this.listLoading = false;
-          this.cdr.markForCheck();
-        },
-      });
+    this.visibleRowCount = this.pageSize;
+    this.applyFilterAndSort();
   }
 
   loadMoreTransactions(): void {
-    if (this.loadingMore || !this.hasMore) return;
-    this.loadingMore = true;
-    const search = this.searchTerm.trim() || undefined;
-    const skip = this.transactions.length;
-    this.financeService
-      .getTransactions({ search, skip, limit: this.pageSize, append: true })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: rows => {
-          this.loadingMore = false;
-          this.hasMore = rows.length >= this.pageSize;
-          this.cdr.markForCheck();
-        },
-        error: () => {
-          this.loadingMore = false;
-          this.cdr.markForCheck();
-        },
-      });
+    if (!this.hasMore) return;
+    this.visibleRowCount += this.pageSize;
+    this.applyFilterAndSort();
   }
 
   ngOnDestroy() {
@@ -226,7 +240,16 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   get canPreviewImport(): boolean {
-    return this.importFiles.length > 0 && this.importFiles.every(entry => !!this.importBank(entry.bank_slug));
+    return this.importFiles.length > 0 && this.importFiles.every(entry =>
+      !!this.importBank(entry.bank_slug) && (!!entry.bank_account_id || !!entry.new_account_label?.trim())
+    );
+  }
+
+  get canSaveImport(): boolean {
+    const confirmedCoverage = this.importFiles.some(file => file.confirm_coverage && !!file.account_key
+      && !!file.coverage_start && !!file.coverage_end && file.coverage_end >= file.coverage_start);
+    const durableDiagnostics = this.importPreviews.some(file => !!file.error || !!file.preview?.errors.length);
+    return this.selectedImportCount > 0 || confirmedCoverage || durableDiagnostics;
   }
 
   get importRows(): ImportPreviewRow[] {
@@ -253,11 +276,16 @@ export class TransactionsComponent implements OnInit, OnDestroy {
 
   get categoryOptions(): string[] {
     const source = this.summaryMonth
-      ? this.transactions.filter(t => t.date.startsWith(`${this.summaryMonth}-`))
-      : this.transactions;
+      ? this.allTransactions.filter(t => t.date.startsWith(`${this.summaryMonth}-`))
+      : this.allTransactions;
     return Array.from(
       new Set(source.map(t => t.category).filter(category => !!category?.trim()))
     ).sort((a, b) => a.localeCompare(b));
+  }
+
+  get merchantOptions(): string[] {
+    return Array.from(new Set(this.allTransactions.map(row => String(row.merchant || '').trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b));
   }
 
   get sortPreset(): string {
@@ -314,24 +342,28 @@ export class TransactionsComponent implements OnInit, OnDestroy {
 
   private computeMonthTotals() {
     const inMonth = this.summaryMonth
-      ? this.transactions.filter(t => t.date.startsWith(`${this.summaryMonth}-`))
-      : this.transactions;
-    this.monthExpenseTotal = inMonth
-      .filter(t => t.type === 'expense')
-      .reduce((s, t) => s + t.amount, 0);
-    this.monthIncomeTotal = inMonth
-      .filter(t => t.type === 'income')
-      .reduce((s, t) => s + t.amount, 0);
+      ? this.allTransactions.filter(t => t.date.startsWith(`${this.summaryMonth}-`))
+      : this.allTransactions;
+    const included = inMonth.filter(t => !['payment', 'transfer', 'ambiguous_credit'].includes(t.kind || ''));
+    this.monthExpenseTotal = included.reduce((sum, t) => sum + transactionEffects(t).spending, 0);
+    this.monthIncomeTotal = included.reduce((sum, t) => sum + transactionEffects(t).income, 0);
   }
 
   openImportModal() {
     if (this.importCommitting) return;
     this.closeImportModal();
+    this.activeImportReceiptId = null;
     this.showImportModal = true;
     this.cdr.markForCheck();
     this.financeService.getImportBanks().pipe(takeUntil(this.destroy$)).subscribe({
       next: banks => {
         this.importBanks = banks;
+        this.cdr.markForCheck();
+      },
+    });
+    this.financeService.getBankAccounts().pipe(takeUntil(this.destroy$)).subscribe({
+      next: accounts => {
+        this.bankAccounts = accounts.filter(account => account.confirmed);
         this.cdr.markForCheck();
       },
     });
@@ -342,7 +374,55 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     this.importStep = 'upload';
     this.importSelected.clear();
     this.importError = '';
+    this.activeImportReceiptId = null;
     this.cdr.markForCheck();
+  }
+
+  onImportBankSelectionChange(entry: BankImportFile, value: string): void {
+    entry.bank_slug = value;
+    entry.bank_account_id = null;
+    entry.account_display = '';
+    entry.new_account_label = '';
+    entry.account_key = undefined;
+    entry.account_mask_override = undefined;
+    entry.map_legacy_account = false;
+    this.onImportBankChange();
+  }
+
+  accountOptionsFor(entry: BankImportFile): BankAccountRecord[] {
+    return this.bankAccounts.filter(account => account.bank_slug === entry.bank_slug);
+  }
+
+  onImportAccountChange(entry: BankImportFile, value: string): void {
+    const accountId = Number(value) || null;
+    entry.bank_account_id = accountId;
+    if (accountId) {
+      const account = this.bankAccounts.find(row => row.id === accountId);
+      entry.account_display = account?.display_name || '';
+      entry.account_key = account?.account_key || `legacy-bank-account:${account!.id}`;
+      entry.account_mask_override = account?.account_mask || '';
+      entry.new_account_label = '';
+      entry.map_legacy_account = false;
+    } else {
+      entry.account_display = '';
+      entry.account_key = undefined;
+      entry.account_mask_override = undefined;
+      entry.new_account_label = '';
+      entry.map_legacy_account = false;
+    }
+    this.onImportBankChange();
+  }
+
+  onNewAccountLabelChange(entry: BankImportFile): void {
+    entry.account_display = entry.new_account_label?.trim() || '';
+    if (entry.account_display && !entry.account_key) entry.account_key = this.createImportAccountKey();
+    if (!entry.account_display) entry.account_key = undefined;
+    this.onImportBankChange();
+  }
+
+  onLegacyAccountMappingChange(entry: BankImportFile, checked: boolean): void {
+    entry.map_legacy_account = checked;
+    this.onImportBankChange();
   }
 
   closeImportModal() {
@@ -362,7 +442,7 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     if (this.importParsing || this.importCommitting) return;
     const input = event.target as HTMLInputElement;
     for (const file of Array.from(input.files || [])) {
-      this.importFiles.push({ id: this.nextImportFileId++, bank_slug: '', file });
+      this.importFiles.push({ id: this.nextImportFileId++, bank_slug: '', file, account_key: undefined });
     }
     input.value = '';
     this.onImportBankChange();
@@ -388,7 +468,13 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     this.importParsing = true;
     this.importError = '';
     this.importPreviewRequest = this.financeService
-      .previewBankImports(this.importFiles.map(entry => ({ ...entry })))
+      .previewBankImports(this.importFiles.map(entry => ({
+        ...entry,
+        account_display: entry.account_display || entry.new_account_label?.trim() || '',
+        account_key: entry.account_key,
+        account_mask_override: entry.account_mask_override,
+        map_legacy_account: entry.map_legacy_account === true,
+      })))
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: previews => {
@@ -407,7 +493,7 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   toggleImportRow(row: ImportPreviewRow) {
-    if (this.importCommitting || row.status !== 'new') return;
+    if (this.importCommitting || row.status === 'duplicate' || row.kind === 'ambiguous_credit') return;
     if (this.importSelected.has(row.dedupe_key)) {
       this.importSelected.delete(row.dedupe_key);
     } else {
@@ -417,13 +503,13 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   isImportRowSelected(row: ImportPreviewRow): boolean {
-    return row.status === 'new' && this.importSelected.has(row.dedupe_key);
+    return row.status !== 'duplicate' && (row.kind === 'ambiguous_credit' || this.importSelected.has(row.dedupe_key));
   }
 
   selectAllNewImportRows() {
     if (this.importCommitting) return;
     for (const row of this.importRows) {
-      if (row.status === 'new') {
+      if (row.status !== 'duplicate' && row.kind !== 'ambiguous_credit') {
         this.importSelected.add(row.dedupe_key);
       }
     }
@@ -437,13 +523,41 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   get selectedImportCount(): number {
-    return this.importSelected.size;
+    return this.importSelected.size
+      + this.importRows.filter(row => row.status !== 'duplicate' && row.kind === 'ambiguous_credit').length
+      + this.legacyMappingCount;
+  }
+
+  get legacyMappingCount(): number {
+    return this.importRows.filter(row => row.status === 'duplicate' && !!row.legacy_dedupe_key).length;
+  }
+
+  get importActionLabel(): string {
+    if (!this.selectedImportCount) return 'Save receipt';
+    if (this.legacyMappingCount && !this.importSelected.size) return `Map ${this.legacyMappingCount} legacy transaction(s)`;
+    if (this.legacyMappingCount) return `Import and map ${this.selectedImportCount} row(s)`;
+    return `Import ${this.selectedImportCount} transaction(s)`;
   }
 
   get selectedImportExpenseTotal(): number {
     return this.importRows
-      .filter(row => row.status === 'new' && this.importSelected.has(row.dedupe_key))
-      .reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+      .filter(row => row.status !== 'duplicate' && this.importSelected.has(row.dedupe_key))
+      .reduce((sum, row) => sum + (row.kind === 'refund' ? -Math.abs(Number(row.amount) || 0) : row.kind === 'purchase' ? Math.abs(Number(row.amount) || 0) : 0), 0);
+  }
+
+  setImportKind(row: ImportPreviewRow, value: string): void {
+    row.kind = value as Transaction['kind'];
+    row.review_reason = row.kind === 'ambiguous_credit' ? 'Credit type is unclear. Classify it after import.' : null;
+    if (row.kind !== 'ambiguous_credit') {
+      this.importSelected.add(row.dedupe_key);
+      (row as ImportPreviewRow & { reviewed?: boolean }).reviewed = true;
+    }
+    this.cdr.markForCheck();
+  }
+
+  useMerchantSuggestion(row: ImportPreviewRow): void {
+    row.merchant = row.merchant_suggestion || null;
+    this.cdr.markForCheck();
   }
 
   get supportedImporterNames(): string {
@@ -452,29 +566,108 @@ export class TransactionsComponent implements OnInit, OnDestroy {
 
   commitImport() {
     if (this.importCommitting || this.importParsing) return;
-    const rows = this.importRows.filter(row => row.status === 'new' && this.importSelected.has(row.dedupe_key));
-    if (!rows.length) {
-      this.toastService.error('Select at least one new transaction to import.');
+    const rows = this.importRows.filter(row =>
+      (row.status !== 'duplicate' && (row.kind === 'ambiguous_credit' || this.importSelected.has(row.dedupe_key)))
+      || (row.status === 'duplicate' && !!row.legacy_dedupe_key)
+    );
+    if (!rows.length && !this.canSaveImport) {
+      this.toastService.error('Select a transaction or confirm statement coverage.');
       return;
     }
     this.importCommitting = true;
     this.importError = '';
     this.financeService
-      .commitBankImports(rows)
+      .commitBankImports(rows, {
+        bank_slugs: Array.from(new Set(this.importFiles.map(file => file.bank_slug))),
+        filenames: this.importFiles.map(file => file.file.name),
+        unresolved: this.importPreviews.flatMap(file => [
+          ...(file.preview?.errors || []).map(note => ({ ...note, filename: file.filename })),
+          ...(file.error ? [{ line: 0, filename: file.filename, reason: file.error }] : []),
+        ]),
+        account_displays: Array.from(new Set(rows.map(row => row.account_display))),
+        resume_receipt_id: this.activeImportReceiptId || undefined,
+        coverage: this.importFiles.filter(file => {
+          const preview = this.importPreviews.find(row => row.id === file.id);
+          return file.confirm_coverage && file.coverage_start && file.coverage_end && !!preview?.preview
+            && !preview.error && !preview.preview.errors.length;
+        }).map(file => ({
+          account_display: file.account_display || file.new_account_label?.trim() || '',
+          account_key: file.account_key,
+          bank_account_id: file.bank_account_id,
+          start_date: file.coverage_start!, end_date: file.coverage_end!, confirmed: true as const,
+        })),
+        confirmed_bank_accounts: this.importPreviews.flatMap(preview => {
+          const file = this.importFiles.find(row => row.id === preview.id);
+          if (!file?.account_key) return [];
+          const display_name = file?.account_display || file?.new_account_label?.trim() || '';
+          const account_mask = file.account_mask_override?.trim() || preview.preview?.rows[0]?.account_mask || '';
+          return [{
+            id: file.bank_account_id || undefined,
+            bank_slug: preview.bank_slug, account_mask,
+            account_key: file.account_key, display_name, confirmed: true,
+          }];
+        }),
+      })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res: ImportCommitResult) => {
           this.importCommitting = false;
+          this.activeImportReceiptId = null;
           this.closeImportModal();
+          this.refreshImportReceipts();
           this.toastService.success(`Imported ${res.inserted} transaction(s)${res.skipped ? `; skipped ${res.skipped} duplicate(s)` : ''}`);
           this.cdr.markForCheck();
         },
         error: (err: any) => {
           this.importCommitting = false;
+          this.activeImportReceiptId = Number(err?.receipt_id || err?.error?.receipt_id) || this.activeImportReceiptId;
           this.importError = this.importFailureMessage(err, 'Import failed.') + ' Some rows may already be saved. Retry safely skips those duplicates.';
           this.cdr.markForCheck();
         },
       });
+  }
+
+  private refreshImportReceipts(): void {
+    this.financeService.getImportReceipts().pipe(takeUntil(this.destroy$)).subscribe({
+      next: rows => { this.importReceipts = rows; this.cdr.markForCheck(); },
+      error: () => { this.importReceipts = []; this.cdr.markForCheck(); },
+    });
+  }
+
+  resumeImport(receipt: ImportReceipt): void {
+    if (receipt.status === 'undoing') {
+      this.financeService.undoBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
+        next: result => {
+          this.toastService.success(`Undo resumed: removed ${result.removed}; kept ${result.edited} edited transaction(s)`);
+          this.refreshImportReceipts();
+        },
+        error: err => this.toastService.error(this.importFailureMessage(err, 'Could not resume undo.')),
+      });
+      return;
+    }
+    this.financeService.resumeBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: result => {
+        this.toastService.success(`Resumed import: ${result.inserted} transaction(s) added`);
+        this.refreshImportReceipts();
+      },
+      error: err => this.toastService.error(this.importFailureMessage(err, 'Could not resume this import.')),
+    });
+  }
+
+  async undoImport(receipt: ImportReceipt): Promise<void> {
+    const ok = await this.confirmService.ask(
+      'Undo this import?',
+      'Remove only import-created transactions that still match their saved values. Edited rows stay in the ledger, and this receipt no longer counts as coverage.',
+      'Undo import', 'Cancel'
+    );
+    if (!ok) return;
+    this.financeService.undoBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: result => {
+        this.toastService.success(`Removed ${result.removed}; kept ${result.edited} edited transaction(s)`);
+        this.refreshImportReceipts();
+      },
+      error: err => this.toastService.error(this.importFailureMessage(err, 'Could not undo this import.')),
+    });
   }
 
   private importFailureMessage(err: any, fallback: string): string {
@@ -482,16 +675,26 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     return typeof detail === 'string' && detail.trim() ? detail : fallback;
   }
 
+  private createImportAccountKey(): string {
+    return `bank-account:${crypto.randomUUID()}`;
+  }
+
   openAddModal() {
     this.editingTxId = null;
-    this.newTx = this.emptyTx();
+    this.editingImported = false;
+    this.newTx = { ...this.emptyTx(), ...(this.selectedCalendarDate ? { date: this.selectedCalendarDate } : {}) };
     this.showModal = true;
   }
 
   applyFilterAndSort() {
-    let result = [...this.transactions];
+    let result = [...(this.allTransactions.length ? this.allTransactions : this.transactions)];
+    const query = this.searchTerm.trim().toLocaleLowerCase();
+    if (query) result = result.filter(row => [row.description, row.category, row.merchant, row.account_display, row.kind]
+      .some(value => String(value || '').toLocaleLowerCase().includes(query)));
     if (this.typeFilter !== 'all') {
-      result = result.filter(row => row.type === this.typeFilter);
+      result = result.filter(row => this.typeFilter === 'income'
+        ? transactionEffects(row).income !== 0
+        : transactionEffects(row).spending !== 0);
     }
     if (this.summaryMonth) {
       result = result.filter(row => row.date.startsWith(`${this.summaryMonth}-`));
@@ -499,6 +702,8 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     if (this.categoryFilter.trim()) {
       result = result.filter(row => row.category === this.categoryFilter.trim());
     }
+    if (this.reviewFilter === 'unreviewed') result = result.filter(row => row.reviewed !== true);
+    if (this.reviewFilter === 'reviewed') result = result.filter(row => row.reviewed === true);
 
     result.sort((a, b) => {
       let valA: string | number;
@@ -518,17 +723,50 @@ export class TransactionsComponent implements OnInit, OnDestroy {
       return 0;
     });
 
-    this.filteredTransactions = result;
+    this.hasMore = result.length > this.visibleRowCount;
+    this.filteredTransactions = result.slice(0, this.visibleRowCount);
     this.computeMonthTotals();
     this.cdr.markForCheck();
   }
 
   onSearchChange() {
+    this.visibleRowCount = this.pageSize;
     this.syncQueryParams();
     this.reloadTransactionList();
   }
 
+  onReviewFilterChange(value: string): void {
+    this.reviewFilter = value as 'all' | 'unreviewed' | 'reviewed';
+    this.visibleRowCount = this.pageSize;
+    this.applyFilterAndSort();
+  }
+
+  markReviewed(tx: Transaction): void {
+    this.financeService.updateTransaction(tx.id, { reviewed: true }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => this.toastService.success('Transaction marked reviewed'),
+      error: () => this.toastService.error('Could not update review status'),
+    });
+  }
+
+  transactionLabel(tx: Transaction): string {
+    return tx.kind || tx.type;
+  }
+
+  transactionAmountPrefix(tx: Transaction): string {
+    const effects = transactionEffects(tx);
+    if (effects.income > 0) return '+';
+    if (effects.spending < 0) return '+';
+    if (effects.spending > 0) return '−';
+    return '';
+  }
+
+  transactionAmountClass(tx: Transaction): string {
+    const effects = transactionEffects(tx);
+    return effects.income > 0 || effects.spending < 0 ? 'positive' : effects.spending > 0 ? 'negative' : '';
+  }
+
   onSummaryMonthChange() {
+    this.visibleRowCount = this.pageSize;
     if (this.categoryFilter && !this.categoryOptions.includes(this.categoryFilter)) {
       this.categoryFilter = '';
     }
@@ -537,6 +775,7 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   onCategoryFilterChange() {
+    this.visibleRowCount = this.pageSize;
     this.syncQueryParams();
     this.applyFilterAndSort();
   }
@@ -640,6 +879,32 @@ export class TransactionsComponent implements OnInit, OnDestroy {
       });
   }
 
+  async bulkCategorizeMerchant(): Promise<void> {
+    const merchant = this.bulkMerchant.trim();
+    const category = this.bulkMerchantCategory.trim();
+    if (!merchant || !category) {
+      this.toastService.error('Choose a merchant and a category.');
+      return;
+    }
+    const ok = await this.confirmService.ask(
+      'Categorize merchant?',
+      `Set every transaction for "${merchant}" to "${category}"?`,
+      'Apply', 'Cancel'
+    );
+    if (!ok) return;
+    this.categoryMergeSaving = true;
+    this.financeService.bulkCategorizeMerchant(merchant, category).pipe(takeUntil(this.destroy$)).subscribe({
+      next: result => {
+        this.categoryMergeSaving = false;
+        this.bulkMerchant = '';
+        this.bulkMerchantCategory = '';
+        this.toastService.success(`Updated ${result.updated} transaction(s)`);
+        this.cdr.markForCheck();
+      },
+      error: () => { this.categoryMergeSaving = false; this.cdr.markForCheck(); },
+    });
+  }
+
   toggleSort(column: 'date' | 'category' | 'amount') {
     if (this.sortColumn === column) {
       this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -656,6 +921,7 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   }
 
   saveTransaction() {
+    if (this.saving) return;
     if (!this.newTx.category?.trim() || this.newTx.amount <= 0) {
       this.toastService.error('Category and a positive amount are required.');
       return;
@@ -676,25 +942,32 @@ export class TransactionsComponent implements OnInit, OnDestroy {
     req.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
+        const wasEditing = this.editingTxId !== null;
         this.closeModal();
         this.toastService.success(
-          this.editingTxId ? 'Transaction updated' : 'Transaction added'
+          wasEditing ? 'Transaction updated' : 'Transaction added'
         );
+        this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
+        this.cdr.markForCheck();
       },
     });
   }
 
   editTransaction(tx: Transaction) {
     this.editingTxId = tx.id;
+    this.editingImported = tx.source === 'import';
     this.newTx = {
       date: tx.date,
       type: tx.type,
       category: tx.category,
       amount: tx.amount,
       description: tx.description || '',
+      merchant: tx.merchant || null,
+      kind: tx.kind || (tx.type === 'income' ? 'income' : 'purchase'),
+      reviewed: tx.reviewed === true,
     };
     this.showModal = true;
   }
@@ -702,7 +975,11 @@ export class TransactionsComponent implements OnInit, OnDestroy {
   closeModal() {
     this.showModal = false;
     this.editingTxId = null;
+    this.editingImported = false;
     this.newTx = this.emptyTx();
+    if (this.route.snapshot.queryParamMap.get('add') === '1') {
+      void this.router.navigate([], { relativeTo: this.route, queryParams: { add: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    }
   }
 
   async deleteTransaction(tx: Transaction) {

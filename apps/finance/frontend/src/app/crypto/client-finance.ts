@@ -10,6 +10,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { annualBasePayAt, jobCompensationBetween, stockSalesProceedsBetween } from '../utils/job-compensation.util';
+import { todayIsoDate } from '../utils/date.util';
 
 export function computeNetWorth(
   assets: Asset[],
@@ -20,10 +21,19 @@ export function computeNetWorth(
   const portfolio_sources: Record<string, string> = {};
   const portfolio_breakdown: Record<string, number> = {};
   let portfolio = 0;
-  for (const h of holdings) {
-    const price = Number(h.current_price ?? h.purchase_price) || 0;
+  const activeHoldings = holdings.filter(h => h.lifecycle_status !== 'inactive' && h.lifecycle_status !== 'staged');
+  for (const h of activeHoldings) {
     const shares = Number(h.shares) || 0;
-    const value = price * shares;
+    const exactValue = h.market_value == null ? null : Number(h.market_value);
+    const enrichedValue = h.value == null ? null : Number(h.value);
+    const price = h.current_price ?? h.purchase_price;
+    const value = exactValue != null && Number.isFinite(exactValue)
+      ? exactValue
+      : enrichedValue != null && Number.isFinite(enrichedValue)
+        ? enrichedValue
+        : price == null || !Number.isFinite(Number(price))
+          ? 0
+          : Number(price) * shares;
     portfolio += value;
     const symbol = (h.symbol || '').trim().toUpperCase() || `holding-${h.id}`;
     portfolio_sources[symbol] = h.price_source || 'manual';
@@ -37,9 +47,37 @@ export function computeNetWorth(
     total_assets: other_assets + portfolio,
     total: other_assets + portfolio - liab,
     as_of: new Date().toISOString(),
-    portfolio_sources: holdings.length ? portfolio_sources : undefined,
-    portfolio_breakdown: holdings.length ? portfolio_breakdown : undefined,
+    portfolio_sources: activeHoldings.length ? portfolio_sources : undefined,
+    portfolio_breakdown: activeHoldings.length ? portfolio_breakdown : undefined,
   };
+}
+
+export interface TransactionEffects {
+  income: number;
+  spending: number;
+}
+
+/** Shared recorded-ledger semantics. Legacy rows without `kind` keep their income/expense behavior. */
+export function transactionEffects(tx: Transaction): TransactionEffects {
+  const amount = Math.abs(Number(tx.amount) || 0);
+  switch (tx.kind) {
+    case 'purchase': return { income: 0, spending: amount };
+    case 'refund': return { income: 0, spending: -amount };
+    case 'income': return { income: amount, spending: 0 };
+    case 'payment':
+    case 'transfer':
+    case 'ambiguous_credit': return { income: 0, spending: 0 };
+    default:
+      return tx.type === 'income' ? { income: amount, spending: 0 } : { income: 0, spending: amount };
+  }
+}
+
+export function transactionIncome(tx: Transaction): number {
+  return transactionEffects(tx).income;
+}
+
+export function transactionSpending(tx: Transaction): number {
+  return transactionEffects(tx).spending;
 }
 
 function monthlyAmount(amount: number, frequency: string): number {
@@ -88,55 +126,161 @@ export function enrichJobIncome(row: JobIncome): JobIncome {
 
 export function enrichFixedExpense(row: FixedExpense): FixedExpense {
   const monthly = monthlyAmount(Number(row.amount) || 0, row.frequency);
-  return { ...row, monthly_amount: monthly, annual_amount: monthly * 12 };
+  return {
+    ...row,
+    next_due_date: row.is_active ? nextDueDate(row.start_date, row.frequency, row.due_day, row.end_date) : null,
+    monthly_amount: monthly,
+    annual_amount: monthly * 12,
+  };
 }
 
 export function enrichSubscription(row: Subscription): Subscription {
   const monthly = monthlyAmount(Number(row.amount) || 0, row.frequency);
-  return { ...row, monthly_amount: monthly, annual_amount: monthly * 12 };
+  return {
+    ...row,
+    next_due_date: row.is_active ? nextDueDate(row.next_bill_date, row.frequency, null, row.end_date) : null,
+    monthly_amount: monthly,
+    annual_amount: monthly * 12,
+  };
 }
 
 export function enrichHolding(row: Holding): Holding {
   const shares = Number(row.shares) || 0;
-  const purchase = Number(row.purchase_price) || 0;
-  const current = Number(row.current_price ?? row.purchase_price) || 0;
+  const priceSource = row.price_source === 'unavailable' ? null : row.current_price ?? row.purchase_price;
+  const current = priceSource == null || !Number.isFinite(Number(priceSource)) ? null : Number(priceSource);
+  const importedValue = row.market_value == null ? null : Number(row.market_value);
+  const value = importedValue != null && Number.isFinite(importedValue)
+    ? importedValue
+    : current == null
+      ? null
+      : shares * current;
   return {
     ...row,
-    current_price: current,
-    value: shares * current,
+    current_price: current == null ? undefined : current,
+    value,
   };
 }
 
-function addMonths(date: string, months: number): string {
-  const [year, month, day] = date.split('-').map(Number);
-  const targetMonth = month - 1 + months;
-  const targetYear = year + Math.floor(targetMonth / 12);
-  const normalizedMonth = ((targetMonth % 12) + 12) % 12;
-  const lastDay = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate();
-  return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+interface IsoDateParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+const DAY_MS = 86_400_000;
+
+function isoDateParts(value: string | null | undefined): IsoDateParts | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  return { year, month, day };
+}
+
+function recurrenceIntervalDays(frequency: string): number | null {
+  if (frequency === 'weekly') return 7;
+  if (frequency === 'biweekly') return 14;
+  return null;
+}
+
+function recurrenceIntervalMonths(frequency: string): number {
+  if (frequency === 'quarterly') return 3;
+  if (frequency === 'annual') return 12;
+  return 1;
+}
+
+function normalizedDueDay(dueDay: number | null | undefined, fallback: number): number {
+  const value = Number(dueDay);
+  return Number.isInteger(value) && value >= 1 && value <= 31 ? value : fallback;
 }
 
 function addDays(date: string, days: number): string {
-  const [year, month, day] = date.split('-').map(Number);
-  const next = new Date(Date.UTC(year, month - 1, day + days));
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + days);
   return next.toISOString().slice(0, 10);
 }
 
-function occurrencesBetween(start: string, frequency: string, rangeStart: string, rangeEnd: string, endDate?: string | null): string[] {
-  if (rangeEnd < rangeStart) return [];
-  const advance = (date: string) => {
-    if (frequency === 'weekly') return addDays(date, 7);
-    if (frequency === 'biweekly') return addDays(date, 14);
-    if (frequency === 'quarterly') return addMonths(date, 3);
-    if (frequency === 'annual') return addMonths(date, 12);
-    return addMonths(date, 1);
-  };
-  let cursor = start;
-  while (cursor < rangeStart) cursor = advance(cursor);
+function anchoredOccurrence(
+  start: string,
+  frequency: string,
+  index: number,
+  dueDay?: number | null,
+): string {
+  const anchor = isoDateParts(start)!;
+  const intervalDays = recurrenceIntervalDays(frequency);
+  if (intervalDays !== null) return addDays(start, intervalDays * index);
+
+  const intervalMonths = recurrenceIntervalMonths(frequency);
+  const monthIndex = anchor.year * 12 + anchor.month - 1 + intervalMonths * index;
+  const targetYear = Math.floor(monthIndex / 12);
+  const targetMonth = ((monthIndex % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const day = Math.min(normalizedDueDay(dueDay, anchor.day), lastDay);
+  return `${String(targetYear).padStart(4, '0')}-${String(targetMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function recurrenceIndexAtOrAfter(start: string, target: string, frequency: string): number {
+  const intervalDays = recurrenceIntervalDays(frequency);
+  if (intervalDays !== null) {
+    const days = (Date.parse(`${target}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY_MS;
+    return Math.max(0, Math.floor(days / intervalDays));
+  }
+
+  const anchor = isoDateParts(start)!;
+  const targetDate = isoDateParts(target)!;
+  const months = (targetDate.year - anchor.year) * 12 + targetDate.month - anchor.month;
+  return Math.max(0, Math.floor(months / recurrenceIntervalMonths(frequency)));
+}
+
+function firstOccurrenceOnOrAfter(
+  start: string,
+  frequency: string,
+  dueDay: number | null | undefined,
+  target: string,
+): { index: number; date: string } {
+  let index = recurrenceIndexAtOrAfter(start, target, frequency);
+  let occurrence = anchoredOccurrence(start, frequency, index, dueDay);
+  while (occurrence < target) {
+    index += 1;
+    occurrence = anchoredOccurrence(start, frequency, index, dueDay);
+  }
+  return { index, date: occurrence };
+}
+
+/** Finds the next scheduled date, or null when no date remains before the end date. */
+export function nextDueDate(
+  start: string | null | undefined,
+  frequency: string,
+  dueDay?: number | null,
+  endDate?: string | null,
+  asOf = todayIsoDate(),
+): string | null {
+  if (!start || !isoDateParts(start) || !isoDateParts(asOf)) return null;
+  if (endDate && !isoDateParts(endDate)) return null;
+  const target = start > asOf ? start : asOf;
+  const occurrence = firstOccurrenceOnOrAfter(start, frequency, dueDay, target).date;
+  return endDate && occurrence > endDate ? null : occurrence;
+}
+
+function occurrencesBetween(
+  start: string,
+  frequency: string,
+  rangeStart: string,
+  rangeEnd: string,
+  endDate?: string | null,
+  dueDay?: number | null,
+): string[] {
+  if (rangeEnd < rangeStart || !isoDateParts(start) || !isoDateParts(rangeStart) || !isoDateParts(rangeEnd)) return [];
+  if (endDate && !isoDateParts(endDate)) return [];
+  const target = start > rangeStart ? start : rangeStart;
+  const first = firstOccurrenceOnOrAfter(start, frequency, dueDay, target);
+  let index = first.index;
+  let cursor = first.date;
   const occurrences: string[] = [];
   while (cursor <= rangeEnd && (!endDate || cursor <= endDate)) {
     occurrences.push(cursor);
-    cursor = advance(cursor);
+    index += 1;
+    cursor = anchoredOccurrence(start, frequency, index, dueDay);
   }
   return occurrences;
 }
@@ -153,9 +297,9 @@ export function computeCashflowSummary(
   let transaction_expenses = 0;
   for (const tx of transactions) {
     if (tx.date < start || tx.date > end) continue;
-    const amt = Number(tx.amount) || 0;
-    if (tx.type === 'income') transaction_income += amt;
-    else transaction_expenses += Math.abs(amt);
+    const effect = transactionEffects(tx);
+    transaction_income += effect.income;
+    transaction_expenses += effect.spending;
   }
   const daysInRange = Math.max(1, (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1);
   const scheduledEmploymentIncome = jobIncomes
@@ -166,7 +310,7 @@ export function computeCashflowSummary(
   const planned_income = scheduledEmploymentIncome + stockSaleIncome;
   const fixedOccurrences = fixedExpenses
     .filter(row => row.is_active)
-    .flatMap(row => occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
+    .flatMap(row => occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date, row.due_day).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
   const subscriptionOccurrences = subscriptions
     .filter(row => row.is_active)
     .flatMap(row => occurrencesBetween(row.next_bill_date, row.frequency, start, end, row.end_date).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
@@ -232,7 +376,8 @@ export function monthlyCashflowSeries(
   transactions: Transaction[],
   jobIncomes: JobIncome[],
   fixedExpenses: FixedExpense[],
-  subscriptions: Subscription[]
+  subscriptions: Subscription[],
+  view: 'recorded' | 'scheduled' | 'combined' = 'recorded'
 ): { month: string; income: number; expense: number; net: number }[] {
   return months.map(month => {
     const summary = computeCashflowSummary(
@@ -243,11 +388,15 @@ export function monthlyCashflowSeries(
       fixedExpenses,
       subscriptions
     );
+    const income = view === 'recorded' ? summary.observed_income
+      : view === 'scheduled' ? summary.scheduled_income : summary.total_income;
+    const expense = view === 'recorded' ? summary.observed_expenses
+      : view === 'scheduled' ? summary.scheduled_expenses : summary.total_expenses;
     return {
       month,
-      income: summary.total_income,
-      expense: summary.total_expenses,
-      net: summary.net_cashflow,
+      income,
+      expense,
+      net: income - expense,
     };
   });
 }

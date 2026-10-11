@@ -370,6 +370,9 @@ describe('job compensation history', () => {
 
   it('allows grants after employment ends and rejects invalid price/quantity values', () => {
     const check = (changes: Partial<JobIncomeCreate>) => jobHistoryError({ ...job(), ...changes } as JobIncomeCreate);
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 1);
+    const futureDate = future.toISOString().slice(0, 10);
     expect(check({ end_date: '2026-01-31', stock_grants: [{ date: '2026-02-01', origin: 'bonus', quantity: 1, price_at_grant: 10 }] })).toBeNull();
     expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 0, price_at_grant: 10 }] })).toContain('positive');
     expect(check({ stock_valuations: [{ date: '2026-02-01', price_per_share: -1 }] })).toContain('non-negative');
@@ -386,7 +389,7 @@ describe('job compensation history', () => {
       date: '2026-10-10', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-09',
     }] })).toContain('cannot be in the future');
     expect(check({ effective_date: '2026-10-09', stock_symbol: 'MSFT', stock_valuations: [{
-      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-10',
+      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: futureDate,
     }] })).toContain('cannot be in the future');
     expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 0 }] })).toContain('positive');
     expect(check({ stock_grants: [{ date: '2026-02-01', origin: 'equity', quantity: 1, price_at_grant: 10, sales: [{ date: '2026-02-02', shares: 1, cash_proceeds: NaN }] }] })).toContain('non-negative');

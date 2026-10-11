@@ -6,6 +6,7 @@ import {
   enrichJobIncome,
   enrichSubscription,
   monthlyCashflowSeries,
+  nextDueDate,
 } from './client-finance';
 import {
   Asset,
@@ -74,6 +75,48 @@ describe('client-finance', () => {
     const row = enrichHolding(holding(3, 10));
     expect(row.value).toBe(30);
     expect(row.current_price).toBe(10);
+  });
+
+  it('preserves exact imported market value when the reported price is rounded', () => {
+    const row = enrichHolding({
+      ...holding(3, 10),
+      current_price: 33.33,
+      market_value: 100,
+      price_source: 'import_market_price',
+    });
+    expect(row.value).toBe(100);
+    expect(computeNetWorth([], [], [row]).portfolio).toBe(100);
+  });
+
+  it('excludes staged and inactive holdings while retaining legacy active rows', () => {
+    const staged = { ...holding(2, 50), lifecycle_status: 'staged', portfolio_stage_id: 8 } as Holding;
+    const inactive = { ...holding(1, 25), lifecycle_status: 'inactive' } as Holding;
+    const legacy = { ...holding(1, 10), lifecycle_status: undefined } as Holding;
+    const nw = computeNetWorth([], [], [staged, inactive, legacy]);
+    expect(nw.portfolio).toBe(10);
+    expect(nw.portfolio_breakdown).toEqual({ VTI: 10 });
+  });
+
+  it('keeps a valid market value in net worth even when cost basis is unknown', () => {
+    const row = {
+      ...holding(2, 0),
+      purchase_price: null,
+      current_price: 50,
+      value: 100,
+      market_value: 100,
+      cost_basis_status: 'unknown',
+    } as unknown as Holding;
+    expect(computeNetWorth([], [], [row]).portfolio).toBe(100);
+  });
+
+  it('does not turn zero cost basis into a market value when the import has no quote', () => {
+    const row = enrichHolding({
+      ...holding(2, 0),
+      current_price: null as any,
+      market_value: null,
+      price_source: 'unavailable',
+    });
+    expect(row.value).toBeNull();
   });
 
   it('enriches fixed expenses and subscriptions to monthly amounts', () => {
@@ -311,6 +354,95 @@ describe('client-finance', () => {
     expect(summary.subscription_occurrences.map(row => row.date)).toEqual(['2026-01-31']);
   });
 
+  it('keeps monthly and quarterly bill dates anchored when short months are clamped', () => {
+    const fixed = [
+      { id: 1, name: 'Monthly', category: 'home', amount: 10, frequency: 'monthly', start_date: '2026-01-01', due_day: 31, is_active: true },
+      { id: 2, name: 'Quarterly', category: 'home', amount: 20, frequency: 'quarterly', start_date: '2026-01-01', due_day: 31, is_active: true },
+    ] as FixedExpense[];
+
+    const summary = computeCashflowSummary('2026-01-01', '2026-10-31', [], [], fixed, []);
+
+    expect(summary.fixed_occurrences.filter(row => row.name === 'Monthly').map(row => row.date)).toEqual([
+      '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31',
+      '2026-06-30', '2026-07-31', '2026-08-31', '2026-09-30', '2026-10-31',
+    ]);
+    expect(summary.fixed_occurrences.filter(row => row.name === 'Quarterly').map(row => row.date)).toEqual([
+      '2026-01-31', '2026-04-30', '2026-07-31', '2026-10-31',
+    ]);
+  });
+
+  it('keeps annual subscription dates anchored through leap-year clamping', () => {
+    const subscriptions = [{
+      id: 1,
+      name: 'Annual',
+      category: 'software',
+      amount: 30,
+      frequency: 'annual',
+      next_bill_date: '2024-02-29',
+      is_active: true,
+    }] as Subscription[];
+
+    const summary = computeCashflowSummary('2024-01-01', '2032-12-31', [], [], [], subscriptions);
+
+    expect(summary.subscription_occurrences.map(row => row.date)).toEqual([
+      '2024-02-29', '2025-02-28', '2026-02-28', '2027-02-28', '2028-02-29',
+      '2029-02-28', '2030-02-28', '2031-02-28', '2032-02-29',
+    ]);
+  });
+
+  it('returns the same nullable next due date for bills and subscriptions', () => {
+    expect(nextDueDate('2026-01-01', 'monthly', 31, '2026-02-28', '2026-03-01')).toBeNull();
+    expect(nextDueDate('2026-01-31', 'monthly', null, '2026-02-28', '2026-03-01')).toBeNull();
+    expect(nextDueDate('2026-01-01', 'monthly', 31, '2026-03-31', '2026-02-01')).toBe('2026-02-28');
+    expect(nextDueDate('2026-01-31', 'monthly', null, '2026-03-31', '2026-02-01')).toBe('2026-02-28');
+  });
+
+  it('returns to the anchored day after a short month and preserves leap-year anchors', () => {
+    expect(nextDueDate('2026-01-31', 'monthly', null, null, '2026-02-28')).toBe('2026-02-28');
+    expect(nextDueDate('2026-01-31', 'monthly', null, null, '2026-03-01')).toBe('2026-03-31');
+    expect(nextDueDate('2024-02-29', 'annual', null, null, '2025-03-01')).toBe('2026-02-28');
+    expect(nextDueDate('2024-02-29', 'annual', null, null, '2028-02-28')).toBe('2028-02-29');
+  });
+
+  it('uses the due day within the recurrence month while respecting the start cutoff', () => {
+    expect(nextDueDate('2026-01-01', 'quarterly', 31, null, '2026-02-01')).toBe('2026-04-30');
+    expect(nextDueDate('2026-01-20', 'quarterly', 15, null, '2026-01-20')).toBe('2026-04-15');
+    expect(nextDueDate('2026-01-01', 'quarterly', 15, '2026-04-15', '2026-04-15')).toBe('2026-04-15');
+    expect(nextDueDate('2026-01-01', 'quarterly', 15, '2026-04-14', '2026-04-15')).toBeNull();
+  });
+
+  it('keeps weekly and biweekly schedules aligned to their original start date', () => {
+    expect(nextDueDate('2026-01-01', 'weekly', null, null, '2026-01-02')).toBe('2026-01-08');
+    expect(nextDueDate('2026-01-01', 'biweekly', null, null, '2026-01-15')).toBe('2026-01-15');
+  });
+
+  it('calculates far-future monthly occurrences from the anchor without date drift', () => {
+    expect(nextDueDate('2000-01-31', 'monthly', 31, null, '2050-01-30')).toBe('2050-01-31');
+    expect(nextDueDate('2000-01-31', 'monthly', 31, null, '2050-02-28')).toBe('2050-02-28');
+    expect(nextDueDate('2000-01-31', 'monthly', 31, null, '2050-03-01')).toBe('2050-03-31');
+  });
+
+  it('returns null for invalid start, target, or end dates', () => {
+    expect(nextDueDate('2026-02-30', 'monthly', 31, null, '2026-03-01')).toBeNull();
+    expect(nextDueDate('2026-01-01', 'monthly', 31, null, '2026-02-30')).toBeNull();
+    expect(nextDueDate('2026-01-01', 'monthly', 31, '2026-02-30', '2026-02-01')).toBeNull();
+  });
+
+  it('does not publish next due dates for inactive fixed expenses or subscriptions', () => {
+    const fixed = enrichFixedExpense({
+      id: 10, name: 'Stopped bill', category: 'home', amount: 50, frequency: 'monthly',
+      start_date: '2026-01-01', due_day: 15, is_active: false, next_due_date: '2026-02-15',
+      monthly_amount: 0, annual_amount: 0, created_at: '', updated_at: '',
+    } as FixedExpense);
+    const sub = enrichSubscription({
+      id: 11, name: 'Stopped subscription', category: 'software', amount: 5, frequency: 'monthly',
+      next_bill_date: '2026-01-01', is_active: false, next_due_date: '2026-02-01',
+      monthly_amount: 0, annual_amount: 0, created_at: '', updated_at: '',
+    } as Subscription);
+    expect(fixed.next_due_date).toBeNull();
+    expect(sub.next_due_date).toBeNull();
+  });
+
   it('includes active job income in monthly cashflow when there are no pay transactions', () => {
     const incomes = [
       enrichJobIncome({
@@ -341,7 +473,7 @@ describe('client-finance', () => {
         updated_at: '',
       } as JobIncome),
     ];
-    const rows = monthlyCashflowSeries(['2026-01', '2026-02'], [], incomes, [], []);
+    const rows = monthlyCashflowSeries(['2026-01', '2026-02'], [], incomes, [], [], 'scheduled');
     expect(rows).toHaveSize(2);
     expect(rows[0].income).toBeCloseTo(10_184.8, 1);
     expect(rows[1].income).toBeCloseTo(9_199.18, 1);

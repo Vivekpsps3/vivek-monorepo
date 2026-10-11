@@ -5,10 +5,15 @@
         <span class="home-tile__label">What you have</span>
         <span class="home-tile__value money">${{ have | number: '1.2-2' }}</span>
         <span class="home-tile__hint">
-          Holdings ${{ netWorth.portfolio | number: '1.0-0' }}
+          {{ portfolioValueIncomplete ? 'Known holdings' : 'Holdings' }} ${{ netWorth.portfolio | number: '1.0-0' }}
           · Assets ${{ netWorth.other_assets | number: '1.0-0' }}
           · Debts ${{ netWorth.liabilities | number: '1.0-0' }}
         </span>
+        <span class="home-tile__hint">Balance dates: {{ balanceSourceDates }}</span>
+        <span class="home-tile__hint">Totals calculated: {{ netWorthCalculationTime }}</span>
+        @if (portfolioValueIncomplete) {
+          <span class="home-tile__hint">Portfolio value incomplete · {{ unvaluedPositionCount }} position(s) unvalued</span>
+        }
       </a>
       <a routerLink="/spending" class="home-tile">
         <span class="home-tile__label">This month</span>
@@ -40,11 +45,41 @@
       </a>
     </nav>
 
+    <ui-card title="Review queue" class="review-queue-card">
+      @if (reviewItems.length) {
+        <p class="home-tile__hint">{{ reviewItems.length }} item(s) need attention across balances, positions, statement coverage, imports, or renewals.</p>
+        <ul class="review-queue-list">
+          @for (item of visibleReviewItems; track item.id) {
+            <li>
+              <div>
+                <span class="home-tile__hint">{{ item.category }}</span>
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.detail }}</span>
+              </div>
+              <a [routerLink]="item.link" [queryParams]="item.query">Review</a>
+            </li>
+          }
+        </ul>
+        @if (remainingReviewItemCount) {
+          <p class="home-tile__hint">And {{ remainingReviewItemCount }} more. Review all categories from What you have, Spending, and Recurring.</p>
+        }
+      } @else {
+        <p class="home-tile__hint">No balances, positions, statement coverage, imports, or annual renewals need review.</p>
+      }
+    </ui-card>
+
     <section class="holdings-panel" aria-labelledby="holdings-heading">
       <div class="holdings-panel__head">
         <div>
           <h2 id="holdings-heading">Holdings</h2>
-          <p class="home-tile__hint">${{ portfolioValue | number: '1.2-2' }} market value</p>
+          <p class="home-tile__hint">{{ portfolioValueIncomplete ? 'Known' : 'Total' }} portfolio value · ${{ portfolioValue | number: '1.2-2' }}</p>
+          <p class="home-tile__hint">Position dates: {{ positionSourceDates }} · Quote dates: {{ quoteSourceDates }}</p>
+          @if (portfolioValueIncomplete) {
+            <p class="home-tile__hint">{{ unvaluedPositionCount }} position(s) have no market value.</p>
+          }
+          @if (provisionalPositionCount) {
+            <p class="home-tile__hint">{{ provisionalPositionCount }} position(s) currently use provisional cost-basis values.</p>
+          }
         </div>
         <div class="holdings-panel__actions">
           <button type="button" class="text-link" (click)="holdingsOpen = !holdingsOpen">
@@ -61,10 +96,14 @@
               <span class="holding-list__name">{{ row.company_name || row.account_display || '—' }}</span>
               <span class="money">${{ holdingValue(row) | number: '1.2-2' }}</span>
               <span class="holding-list__meta">{{ holdingShare(row) | number: '1.0-0' }}%</span>
-              <span class="money" [class.negative]="gain(row) < 0">
-                {{ gain(row) >= 0 ? '+' : '−' }}${{ abs(gain(row)) | number: '1.0-0' }}
-                ({{ gainPct(row) | number: '1.1-1' }}%)
-              </span>
+              @if (gain(row) !== null && gainPct(row) !== null) {
+                <span class="money" [class.negative]="gain(row)! < 0">
+                  {{ gain(row)! >= 0 ? '+' : '−' }}${{ abs(gain(row)!) | number: '1.0-0' }}
+                  ({{ gainPct(row)! | number: '1.1-1' }}%)
+                </span>
+              } @else {
+                <span class="holding-list__meta">Basis unknown</span>
+              }
             </li>
           }
         </ul>

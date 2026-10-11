@@ -21,21 +21,43 @@
   </ui-page-header>
   <p class="refresh-note">Refreshing prices sends ticker symbols to the market quote service; holding details remain encrypted.</p>
   <p class="refresh-note" *ngIf="lastPortfolioRefresh">Last price refresh: {{ lastPortfolioRefresh }}</p>
+  @for (stage of resumableFidelityStages; track stage.id) {
+    <ui-card class="resume-stage" title="Fidelity replacement needs attention">
+      <p>{{ stage.filename }} · {{ stage.expected_row_count }} staged position(s) · {{ stage.account_masks.length }} account(s)</p>
+      <ui-button variant="primary" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
+        @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
+        Resume Fidelity import
+      </ui-button>
+    </ui-card>
+  }
 
   @if (holdings.length > 0) {
   <ui-card class="summary-card">
     <div class="summary">
       <div>
-        <div class="label">Total Portfolio Value</div>
+        <div class="label">{{ hasMissingValues ? 'Known Portfolio Value' : 'Total Portfolio Value' }}</div>
         <div class="big-number stat-display">${{ getTotalValue() | number: '1.2-2' }}</div>
+        <small>Position dates: {{ positionDateSummary() }}</small>
+        <small>Quote dates: {{ quoteDateSummary() }}</small>
+        @if (provisionalPositionCount) {
+          <small>{{ provisionalPositionCount }} position(s) currently use provisional cost-basis values.</small>
+        }
       </div>
       <div>
         <div class="label">Total Unrealized Gain/Loss</div>
-        <div class="big-number stat-display" [class.positive]="getTotalGain() >= 0" [class.negative]="getTotalGain() < 0">
-          {{ getTotalGain() >= 0 ? '+' : '' }}${{ getTotalGain() | number: '1.2-2' }}
-        </div>
+        @if (getTotalGain() == null) {
+          <div class="big-number stat-display">Unavailable</div>
+          <small>At least one position has an unknown basis or market value.</small>
+        } @else {
+          <div class="big-number stat-display" [class.positive]="totalGainIsPositive()" [class.negative]="totalGainIsNegative()">
+            {{ totalGainDisplay() }}
+          </div>
+        }
       </div>
     </div>
+    @if (hasMissingValues) {
+      <p class="text-sm text-secondary">{{ missingValueCount }} position(s) have no market value; the displayed portfolio value is incomplete.</p>
+    }
     @if (netWorth?.portfolio_breakdown) {
       <div class="portfolio-breakdown">
         @for (entry of (netWorth!.portfolio_breakdown | keyvalue); track entry.key) {
@@ -77,7 +99,7 @@
         <details class="account-section" open>
           <summary class="section-header">
             <strong>Fidelity</strong>
-            <span class="section-total">${{ accountGroups.fidelityTotal | number: '1.2-2' }}</span>
+            <span class="section-total">{{ accountGroups.fidelityHasUnvalued ? 'Known ' : '' }}${{ accountGroups.fidelityTotal | number: '1.2-2' }}</span>
           </summary>
 
           @for (group of accountGroups.fidelity; track group.label) {
@@ -111,7 +133,7 @@
                     </ui-button>
                   }
                 </span>
-                <span class="sub-total">${{ group.totalValue | number: '1.2-2' }}</span>
+                <span class="sub-total">{{ group.unvaluedCount ? 'Known ' : '' }}${{ group.totalValue | number: '1.2-2' }}</span>
                 <span class="toggle-hint">(click to collapse)</span>
               </summary>
 
@@ -127,6 +149,7 @@
                       <th scope="col">Gain</th>
                       <th scope="col">%</th>
                       <th scope="col">Price</th>
+                      <th scope="col">Position date</th>
                       <th scope="col">Actions</th>
                     </tr>
                   </thead>
@@ -140,24 +163,25 @@
                           }
                         </td>
                         <td>{{ h.shares }}</td>
-                        <td>${{ h.purchase_price | number: '1.2-2' }}</td>
-                        <td>${{ h.current_price | number: '1.2-2' }}</td>
-                        <td>${{ h.value | number: '1.2-2' }}</td>
-                        <td [class.positive]="getGain(h) >= 0" [class.negative]="getGain(h) < 0">
-                          {{ getGain(h) >= 0 ? '+' : '' }}${{ getGain(h) | number: '1.2-2' }}
-                        </td>
-                        <td [class.positive]="getGainPercent(h) >= 0" [class.negative]="getGainPercent(h) < 0">
-                          {{ getGainPercent(h) | number: '1.1-1' }}%
-                        </td>
+                        <td>{{ h.purchase_price == null ? 'Unknown' : ('$' + (h.purchase_price | number: '1.2-2')) }}</td>
+                        <td>{{ h.current_price == null ? 'Unavailable' : ('$' + (h.current_price | number: '1.2-2')) }}</td>
+                        <td>{{ h.value == null ? 'Unavailable' : ('$' + (h.value | number: '1.2-2')) }}</td>
+                        <td [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
+                        <td [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
                         <td class="price-cell">
                           <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
-                          <span class="as-of-small">{{ formatPriceTime(h.price_as_of) }}</span>
+                          <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
                           @if (priceSourceHint(h); as hint) {
                             <span class="price-hint">{{ hint }}</span>
                           }
                         </td>
+                        <td class="position-cell">
+                          <ui-badge [variant]="positionReviewStateFor(h) === 'due' ? 'warning' : positionReviewStateFor(h) === 'current' ? 'success' : 'default'">{{ positionFreshness(h) }}</ui-badge>
+                          <span class="as-of-small">{{ dateLabel(h.position_as_of) }}</span>
+                        </td>
                         <td class="actions actions--row">
                           <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
+                          <ui-button variant="ghost" size="sm" [ariaLabel]="'Confirm position for ' + h.symbol" (clicked)="confirmPosition(h)">Confirm position</ui-button>
                           <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
                           <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
                         </td>
@@ -176,7 +200,7 @@
         <div class="account-section">
           <div class="section-header">
             <strong>Manual / Unassigned</strong>
-            <span class="section-total">${{ accountGroups.manualTotal | number: '1.2-2' }}</span>
+            <span class="section-total">{{ accountGroups.manualUnvaluedCount ? 'Known ' : '' }}${{ accountGroups.manualTotal | number: '1.2-2' }}</span>
           </div>
 
           <div class="table-scroll">
@@ -191,6 +215,7 @@
                   <th scope="col">Gain</th>
                   <th scope="col">%</th>
                   <th scope="col">Price</th>
+                  <th scope="col">Position date</th>
                   <th scope="col">Actions</th>
                 </tr>
               </thead>
@@ -204,24 +229,25 @@
                       }
                     </td>
                     <td>{{ h.shares }}</td>
-                    <td>${{ h.purchase_price | number: '1.2-2' }}</td>
-                    <td>${{ h.current_price | number: '1.2-2' }}</td>
-                    <td>${{ h.value | number: '1.2-2' }}</td>
-                    <td [class.positive]="getGain(h) >= 0" [class.negative]="getGain(h) < 0">
-                      {{ getGain(h) >= 0 ? '+' : '' }}${{ getGain(h) | number: '1.2-2' }}
-                    </td>
-                    <td [class.positive]="getGainPercent(h) >= 0" [class.negative]="getGainPercent(h) < 0">
-                      {{ getGainPercent(h) | number: '1.1-1' }}%
-                    </td>
+                    <td>{{ h.purchase_price == null ? 'Unknown' : ('$' + (h.purchase_price | number: '1.2-2')) }}</td>
+                    <td>{{ h.current_price == null ? 'Unavailable' : ('$' + (h.current_price | number: '1.2-2')) }}</td>
+                    <td>{{ h.value == null ? 'Unavailable' : ('$' + (h.value | number: '1.2-2')) }}</td>
+                    <td [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
+                    <td [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
                     <td class="price-cell">
                       <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
-                      <span class="as-of-small">{{ formatPriceTime(h.price_as_of) }}</span>
+                      <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
                       @if (priceSourceHint(h); as hint) {
                         <span class="price-hint">{{ hint }}</span>
                       }
                     </td>
+                    <td class="position-cell">
+                      <ui-badge [variant]="positionReviewStateFor(h) === 'due' ? 'warning' : positionReviewStateFor(h) === 'current' ? 'success' : 'default'">{{ positionFreshness(h) }}</ui-badge>
+                      <span class="as-of-small">{{ dateLabel(h.position_as_of) }}</span>
+                    </td>
                     <td class="actions actions--row">
                       <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
+                      <ui-button variant="ghost" size="sm" [ariaLabel]="'Confirm position for ' + h.symbol" (clicked)="confirmPosition(h)">Confirm position</ui-button>
                       <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
                       <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
                     </td>
@@ -280,11 +306,11 @@
       <div class="form-row">
         <div class="form-group">
           <label for="h-cost">Cost basis (per share)</label>
-          <input id="h-cost" type="number" [(ngModel)]="newHolding.purchase_price" name="purchase_price" step="0.01" min="0.01" required />
+          <input id="h-cost" type="number" [(ngModel)]="newHolding.purchase_price" name="purchase_price" step="0.01" min="0" [required]="editingId === null" placeholder="Unknown" />
         </div>
         <div class="form-group">
           <label for="h-date">Purchase date</label>
-          <input id="h-date" type="date" [(ngModel)]="newHolding.purchase_date" name="purchase_date" required />
+          <input id="h-date" type="date" [(ngModel)]="newHolding.purchase_date" name="purchase_date" [required]="editingId === null" />
         </div>
       </div>
       <div class="form-actions">
@@ -304,8 +330,8 @@
     <h3 id="fidelity-import-modal-title">Import from Fidelity (replaces positions)</h3>
 
     <p class="import-warning">
-      ⚠️ This will <strong>delete and replace</strong> all current holdings for the Fidelity accounts present in the CSV.
-      Manual holdings and other accounts are unaffected.
+      Replacement positions are staged and verified first. Existing positions stay active until each selected account switches to the verified replacement.
+      Manual holdings and other brokerage accounts are unaffected.
     </p>
 
     @if (fidelityImportStep === 'upload') {
@@ -329,6 +355,9 @@
       <p class="import-summary">
         Will replace holdings for <strong>{{ fidelityImportPreview.accounts.length }}</strong> account(s),
         {{ fidelityImportPreview.summary.positions }} positions.
+        Reported market value: {{ fidelityImportPreview.summary.total_market_value == null ? 'incomplete' : ('$' + (fidelityImportPreview.summary.total_market_value | number:'1.2-2')) }}.
+        Provisional positions: {{ fidelityImportPreview.summary.provisional_positions || 0 }};
+        unavailable positions: {{ fidelityImportPreview.summary.unavailable_positions || 0 }}.
       </p>
 
       <div class="import-accounts">
@@ -340,16 +369,38 @@
         }
       </div>
 
+      <div class="replacement-preview" *ngIf="fidelityAccountReplacements.length">
+        <h4>Account-level replacement preview</h4>
+        <ui-data-table ariaLabel="Fidelity account replacement values">
+          <thead><tr><th>Account</th><th>Existing value</th><th>Replacement value</th><th>Change</th><th>Unvalued</th><th>Provisional</th></tr></thead>
+          <tbody>
+            @for (account of fidelityAccountReplacements; track account.account_mask) {
+              <tr>
+                <td>{{ account.account_display }}</td>
+                <td>{{ account.existing_market_value == null ? 'Incomplete' : ('$' + (account.existing_market_value | number:'1.2-2')) }}</td>
+                <td>{{ account.replacement_market_value == null ? 'Incomplete' : ('$' + (account.replacement_market_value | number:'1.2-2')) }}</td>
+                <td>{{ account.change == null ? 'Unavailable' : ((account.change >= 0 ? '+' : '') + '$' + (account.change | number:'1.2-2')) }}</td>
+                <td>{{ account.replacement_unvalued_positions }}</td>
+                <td>{{ account.replacement_provisional_positions }}</td>
+              </tr>
+            }
+          </tbody>
+        </ui-data-table>
+      </div>
+
       <div class="fidelity-preview-table">
         <ui-data-table ariaLabel="Fidelity import preview">
-          <thead><tr><th>Account</th><th>Symbol</th><th>Shares</th><th>Avg Cost</th></tr></thead>
+          <thead><tr><th>Account</th><th>Symbol</th><th>Shares</th><th>Cost basis</th><th>Market value</th><th>Value source</th><th>Position date</th></tr></thead>
           <tbody>
-            @for (row of fidelityImportPreview.rows; track row.symbol + row.account_mask) {
+            @for (row of fidelityImportPreview.rows; track $index) {
               <tr>
                 <td>{{ row.account_display }}</td>
                 <td>{{ row.symbol }}</td>
                 <td>{{ row.shares }}</td>
-                <td>${{ row.avg_cost_basis | number:'1.2-2' }}</td>
+                <td>{{ row.avg_cost_basis == null ? 'Unknown' : ('$' + (row.avg_cost_basis | number:'1.2-2')) }}</td>
+                <td>{{ row.market_value == null ? 'Unavailable' : ('$' + (row.market_value | number:'1.2-2')) }}</td>
+                <td>{{ row.valuation_source }}</td>
+                <td>{{ dateLabel(row.position_as_of) }}</td>
               </tr>
             }
           </tbody>

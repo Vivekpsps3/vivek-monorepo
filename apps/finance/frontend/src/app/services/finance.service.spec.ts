@@ -17,6 +17,14 @@ describe('FinanceService', () => {
       'getNetWorth',
       'updateHoldingPrice',
       'bulkRenameTransactionCategories',
+      'getBrokerageAccounts',
+      'upsertBrokerageAccount',
+      'createHoldingImportStage',
+      'getHoldingImportStages',
+      'getHoldingImportStageRows',
+      'verifyHoldingImportStage',
+      'activateHoldingImportStage',
+      'updateHolding',
     ]);
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -31,6 +39,19 @@ describe('FinanceService', () => {
   });
 
   afterEach(() => http.verify());
+
+  it('refreshes the complete transaction stream after an import instead of truncating it', async () => {
+    const transactions = Array.from({ length: 5001 }, (_, id) => ({
+      id: id + 1, date: '2026-01-01', type: 'expense', category: 'Other', amount: 1,
+    })) as any;
+    encStore.getTransactions.and.resolveTo(transactions);
+
+    (service as any).refreshAfterImport();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect((service as any)._transactions.value.length).toBe(5001);
+    expect((service as any)._dashboardTransactions.value.length).toBe(5001);
+  });
 
   it('imports bank CSV through encrypted records', done => {
     encStore.getTransactions.and.resolveTo([]);
@@ -137,11 +158,15 @@ describe('FinanceService', () => {
   });
 
   it('imports Fidelity positions client-side', done => {
-    encStore.getBrokerageAccounts = jasmine.createSpy().and.resolveTo([]);
-    encStore.upsertBrokerageAccount = jasmine.createSpy().and.callFake(async (body: any) => ({ id: 1, ...body }));
+    encStore.getBrokerageAccounts.and.resolveTo([]);
+    encStore.upsertBrokerageAccount.and.callFake(async (body: any) => ({ id: 1, ...body } as any));
     encStore.getHoldings.and.resolveTo([]);
-    encStore.deleteHolding = jasmine.createSpy().and.resolveTo(undefined);
-    encStore.addHolding = jasmine.createSpy().and.callFake(async (body: any) => ({ id: 5, ...body }));
+    const stage = { id: 4, source: 'fidelity', filename: 'fidelity.csv', status: 'staged', account_masks: ['Z111'], expected_row_count: 1, account_replacements: [], created_at: '2026-10-11T00:00:00Z' };
+    encStore.createHoldingImportStage.and.callFake(async (body: any, rows: any[]) => ({ id: 4, ...body, expected_row_count: rows.length } as any));
+    encStore.getHoldingImportStages.and.resolveTo([stage] as any);
+    encStore.getHoldingImportStageRows.and.resolveTo([]);
+    encStore.verifyHoldingImportStage.and.callFake(async () => ({ id: 4, status: 'verified' } as any));
+    encStore.activateHoldingImportStage.and.resolveTo({ accounts_replaced: 1, holdings_replaced: 0, inserted: 1, accounts: ['Fidelity ···Z111'], stage_id: 4, status: 'activated' });
     encStore.getNetWorth.and.resolveTo({
       other_assets: 0,
       portfolio: 0,
@@ -162,7 +187,9 @@ describe('FinanceService', () => {
         service.commitFidelityImport(preview.filename, preview.rows).subscribe({
           next: result => {
             expect(result.inserted).toBe(1);
-            expect(encStore.addHolding).toHaveBeenCalled();
+            expect(encStore.createHoldingImportStage).toHaveBeenCalled();
+            expect(encStore.verifyHoldingImportStage).toHaveBeenCalledWith(4);
+            expect(encStore.activateHoldingImportStage).toHaveBeenCalledWith(4);
             http.expectNone(r => r.url.includes('/imports/fidelity') || r.url.includes('/imports/brokerages'));
             done();
           },

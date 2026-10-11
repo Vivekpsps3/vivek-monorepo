@@ -12,7 +12,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FinanceService } from '../services/finance.service';
 import { FixedExpense, Holding, JobIncome, Subscription, Transaction } from '../models/transaction.model';
-import { lastCalendarMonths, monthlyCashflowSeries } from '../crypto/client-finance';
+import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '../crypto/client-finance';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { UiCardComponent, UiEmptyStateComponent } from '../shared/ui';
@@ -54,13 +54,14 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   subscriptions: Subscription[] = [];
   loading = true;
   collapsedCategories = true;
+  cashflowView: 'recorded' | 'scheduled' = 'recorded';
   sectionOpen = { cashflow: true, category: true, allocation: true };
 
   incomeTotal = 0;
   expenseTotal = 0;
   netCashflow = 0;
   monthlyRows: { label: string; income: number; expense: number; net: number }[] = [];
-  allCategoryRows: { label: string; value: number; pct: number }[] = [];
+  allCategoryRows: { label: string; value: number; pct: number | null }[] = [];
   allocationRows: { label: string; value: number; pct: number; companyName?: string | null }[] = [];
 
   private incomeChart?: ChartInstance;
@@ -106,13 +107,6 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       .pipe(debounceTime(120), takeUntil(this.destroy$))
       .subscribe(() => void this.schedulePaint());
 
-    this.financeService.transactions$.pipe(takeUntil(this.destroy$)).subscribe(data => {
-      this.transactions = data;
-      this.computeDerived();
-      this.render$.next();
-      this.cdr.markForCheck();
-    });
-
     this.financeService.holdings$.pipe(takeUntil(this.destroy$)).subscribe(data => {
       this.holdings = data;
       this.computeDerived();
@@ -138,8 +132,17 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cdr.markForCheck();
     });
 
+    // Chart totals are ledger-wide, independent of the currently visible table page.
+    this.financeService.getAllTransactions().pipe(takeUntil(this.destroy$)).subscribe(data => {
+      if (this.txOverride == null) {
+        this.transactions = data;
+        this.computeDerived();
+        this.render$.next();
+        this.cdr.markForCheck();
+      }
+    });
+
     if (!this.embedded) {
-      this.financeService.getTransactions().pipe(takeUntil(this.destroy$)).subscribe();
       this.financeService.getHoldings().pipe(takeUntil(this.destroy$)).subscribe();
       this.financeService.getJobIncomes().pipe(takeUntil(this.destroy$)).subscribe();
       this.financeService.getFixedExpenses().pipe(takeUntil(this.destroy$)).subscribe();
@@ -177,7 +180,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     void this.paintCharts();
   }
 
-  get categoryRows(): { label: string; value: number; pct: number }[] {
+  get categoryRows(): { label: string; value: number; pct: number | null }[] {
     if (!this.collapsedCategories || this.allCategoryRows.length <= 6) {
       return this.allCategoryRows;
     }
@@ -190,7 +193,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       {
         label: 'Other',
         value: otherValue,
-        pct: total ? (otherValue / total) * 100 : 0,
+        pct: total > 0 ? (otherValue / total) * 100 : null,
       },
     ];
   }
@@ -201,6 +204,13 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleCategories(): void {
     this.collapsedCategories = !this.collapsedCategories;
+    this.render$.next();
+    this.cdr.markForCheck();
+  }
+
+  setCashflowView(view: 'recorded' | 'scheduled'): void {
+    this.cashflowView = view;
+    this.computeDerived();
     this.render$.next();
     this.cdr.markForCheck();
   }
@@ -220,7 +230,8 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       txs,
       this.jobIncomes,
       this.fixedExpenses,
-      this.subscriptions
+      this.subscriptions,
+      this.cashflowView
     );
     this.incomeTotal = series.reduce((sum, row) => sum + row.income, 0);
     this.expenseTotal = series.reduce((sum, row) => sum + row.expense, 0);
@@ -236,16 +247,18 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const byCategory = new Map<string, number>();
     for (const tx of txs) {
-      if (tx.type !== 'expense') continue;
-      byCategory.set(tx.category, (byCategory.get(tx.category) || 0) + tx.amount);
+      const effect = transactionEffects(tx).spending;
+      if (!effect) continue;
+      byCategory.set(tx.category, (byCategory.get(tx.category) || 0) + effect);
     }
     const categoryTotal = [...byCategory.values()].reduce((s, v) => s + v, 0);
     this.allCategoryRows = [...byCategory.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .filter(([, value]) => value !== 0)
+      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
       .map(([label, value]) => ({
         label,
         value,
-        pct: categoryTotal ? (value / categoryTotal) * 100 : 0,
+        pct: categoryTotal > 0 ? (value / categoryTotal) * 100 : null,
       }));
 
     const totalVal = this.holdings.reduce((s, h) => s + (h.value || 0), 0);
@@ -286,6 +299,10 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!canvas) return existing;
     const ctx = canvas.getContext('2d');
     if (!ctx) return existing;
+    if (existing && (existing.config as { type?: string }).type !== config.type) {
+      existing.destroy();
+      existing = undefined;
+    }
     if (existing) {
       existing.data = config.data as typeof existing.data;
       if (config.options) {
@@ -354,18 +371,23 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.categoryChart = undefined;
       return;
     }
+    const hasRefundEffects = this.categoryRows.some(row => row.value < 0);
     this.categoryChart = this.upsertChart(Chart, this.categoryChart, canvas, {
-      type: 'doughnut',
+      type: hasRefundEffects ? 'bar' : 'doughnut',
       data: {
         labels: this.categoryRows.map(r => r.label),
         datasets: [{
           data: this.categoryRows.map(r => r.value),
-          backgroundColor: this.chartColors(this.categoryRows.length),
+          backgroundColor: hasRefundEffects
+            ? this.categoryRows.map(row => row.value < 0 ? chartDangerColor() : chartAccentColor())
+            : this.chartColors(this.categoryRows.length),
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        ...(hasRefundEffects ? { indexAxis: 'y' } : {}),
+        ...(hasRefundEffects ? { scales: chartCartesianScales() } : {}),
         plugins: {
           legend: chartLegendBottom(),
           tooltip: {
@@ -373,7 +395,8 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
             callbacks: {
               label: (ctx: TooltipCtx) => {
                 const row = this.categoryRows[ctx.dataIndex];
-                return `${row.label}: $${Number(ctx.raw).toLocaleString()} (${row.pct.toFixed(1)}%)`;
+                const pct = row.pct == null ? 'percentage unavailable' : `${row.pct.toFixed(1)}% of net total`;
+                return `${row.label}: $${Number(ctx.raw).toLocaleString()} (${pct})`;
               },
             },
           },

@@ -1,12 +1,42 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Subject, combineLatest, finalize, takeUntil } from 'rxjs';
+import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
 import { ChartsComponent } from '../charts/charts.component';
-import { CashflowSummary, Holding, NetWorth, Transaction } from '../models/transaction.model';
+import {
+  Asset,
+  BankAccountRecord,
+  CashflowSummary,
+  FixedExpense,
+  Holding,
+  ImportReceipt,
+  Liability,
+  NetWorth,
+  Subscription,
+  Transaction,
+} from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
 import { UiButtonComponent, UiCardComponent, UiSkeletonComponent } from '../shared/ui';
-import { holdingGain, holdingGainPercent, totalPortfolioValue } from '../utils/portfolio.util';
+import {
+  assetReviewState,
+  hasUnvaluedPositions,
+  holdingGain,
+  holdingGainPercent,
+  liabilityReviewState,
+  positionReviewState,
+  portfolioDateSummary,
+  totalPortfolioValue,
+} from '../utils/portfolio.util';
+import { buildSpendingSuggestion } from '../utils/planning-spending.util';
+
+interface ReviewQueueItem {
+  id: string;
+  category: string;
+  title: string;
+  detail: string;
+  link: string;
+  query?: Record<string, string>;
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -28,6 +58,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   cashflow: CashflowSummary | null = null;
   holdings: Holding[] = [];
   transactions: Transaction[] = [];
+  assets: Asset[] = [];
+  liabilities: Liability[] = [];
+  fixedExpenses: FixedExpense[] = [];
+  subscriptions: Subscription[] = [];
+  importReceipts: ImportReceipt[] = [];
+  bankAccounts: BankAccountRecord[] = [];
+  allTransactions: Transaction[] = [];
+  reviewItems: ReviewQueueItem[] = [];
   isLoading = true;
   error: string | null = null;
   holdingsOpen = true;
@@ -45,13 +83,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.finance.cashflowSummary$,
       this.finance.holdings$,
       this.finance.dashboardTransactions$,
+      this.finance.assets$,
+      this.finance.liabilities$,
+      this.finance.fixedExpenses$,
+      this.finance.subscriptions$,
     ])
       .pipe(takeUntil(this.destroy$))
-      .subscribe(([netWorth, cashflow, holdings, transactions]) => {
+      .subscribe(([netWorth, cashflow, holdings, transactions, assets, liabilities, fixedExpenses, subscriptions]) => {
         this.netWorth = netWorth;
         this.cashflow = cashflow;
         this.holdings = holdings;
         this.transactions = transactions;
+        this.assets = assets;
+        this.liabilities = liabilities;
+        this.fixedExpenses = fixedExpenses;
+        this.subscriptions = subscriptions;
+        this.refreshReviewItems();
         this.cdr.markForCheck();
       });
     this.load();
@@ -86,6 +133,102 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return totalPortfolioValue(this.holdings);
   }
 
+  get balanceSourceDates(): string {
+    return portfolioDateSummary([
+      ...this.assets.map(row => row.as_of_date),
+      ...this.liabilities.map(row => row.as_of_date),
+    ]);
+  }
+
+  get positionSourceDates(): string {
+    return portfolioDateSummary(this.holdings.map(row => row.position_as_of));
+  }
+
+  get quoteSourceDates(): string {
+    return portfolioDateSummary(this.holdings.map(row => {
+      const legacy = row.price_as_of?.slice(0, 10) || null;
+      return row.quote_date || (row as Holding & { market_date?: string | null }).market_date || legacy;
+    }));
+  }
+
+  get unvaluedPositionCount(): number {
+    return this.holdings.filter(row => row.value == null || !Number.isFinite(Number(row.value))).length;
+  }
+
+  get provisionalPositionCount(): number {
+    return this.holdings.filter(row => row.price_source === 'provisional_cost_basis' || row.price_source === 'fallback_purchase').length;
+  }
+
+  get portfolioValueIncomplete(): boolean {
+    return hasUnvaluedPositions(this.holdings);
+  }
+
+  get netWorthCalculationTime(): string {
+    return this.netWorth?.as_of || 'Time unknown';
+  }
+
+  get visibleReviewItems(): ReviewQueueItem[] {
+    return this.reviewItems.slice(0, 8);
+  }
+
+  get remainingReviewItemCount(): number {
+    return Math.max(0, this.reviewItems.length - this.visibleReviewItems.length);
+  }
+
+  private refreshReviewItems(): void {
+    const items: ReviewQueueItem[] = [
+      ...this.assets
+        .filter(row => assetReviewState(row) !== 'current')
+        .map(row => {
+          const state = assetReviewState(row);
+          return {
+            id: `asset-${row.id}`,
+            category: 'Balance review',
+            title: row.name,
+            detail: state === 'unknown'
+              ? 'Asset balance date unknown · confirm current balance'
+              : `Asset balance as of ${row.as_of_date} · review due`,
+            link: '/have',
+            query: { t: 'assets' },
+          };
+        }),
+      ...this.liabilities
+        .filter(row => liabilityReviewState(row) !== 'current')
+        .map(row => {
+          const state = liabilityReviewState(row);
+          return {
+            id: `liability-${row.id}`,
+            category: 'Balance review',
+            title: row.name,
+            detail: state === 'unknown'
+              ? 'Debt balance date unknown · confirm current balance'
+              : `Debt balance as of ${row.as_of_date} · review due`,
+            link: '/have',
+            query: { t: 'assets' },
+          };
+        }),
+      ...this.holdings
+        .filter(row => positionReviewState(row) !== 'current')
+        .map(row => {
+          const state = positionReviewState(row);
+          return {
+            id: `position-${row.id}`,
+            category: 'Position review',
+            title: row.symbol,
+            detail: state === 'unknown'
+              ? 'Position date unknown · confirm shares'
+              : `Shares confirmed ${row.position_as_of} · review due`,
+            link: '/have',
+            query: { t: 'holdings' },
+          };
+        }),
+      ...this.coverageReviewItems(),
+      ...this.importReceiptReviewItems(),
+      ...this.annualRenewalItems(),
+    ];
+    this.reviewItems = items;
+  }
+
   get topHoldings(): Holding[] {
     return [...this.holdings].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 6);
   }
@@ -99,11 +242,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return total > 0 ? ((row.value ?? 0) / total) * 100 : 0;
   }
 
-  gain(row: Holding): number {
+  gain(row: Holding): number | null {
     return holdingGain(row);
   }
 
-  gainPct(row: Holding): number {
+  gainPct(row: Holding): number | null {
     return holdingGainPercent(row);
   }
 
@@ -119,8 +262,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.error = null;
     this.cdr.markForCheck();
-    this.finance
-      .loadDashboard(force)
+    forkJoin({
+      dashboard: this.finance.loadDashboard(force),
+      liabilities: this.finance.getLiabilities(),
+      bankAccounts: this.finance.getBankAccounts(),
+      importReceipts: this.finance.getImportReceipts(),
+      allTransactions: this.finance.getAllTransactions(),
+    })
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -129,6 +277,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
+        next: result => {
+          this.liabilities = result.liabilities;
+          this.bankAccounts = result.bankAccounts;
+          this.importReceipts = result.importReceipts;
+          this.allTransactions = result.allTransactions;
+          this.refreshReviewItems();
+          this.cdr.markForCheck();
+        },
         error: (err: Error) => {
           const detail = err?.message ? ` ${err.message}` : '';
           this.error = `The app could not load Home.${detail}`;
@@ -136,4 +292,99 @@ export class DashboardComponent implements OnInit, OnDestroy {
         },
       });
   }
+
+  private coverageReviewItems(): ReviewQueueItem[] {
+    const confirmed = this.bankAccounts.filter(account => account.confirmed);
+    if (!confirmed.length) return [];
+    const coverage = buildSpendingSuggestion({
+      transactions: this.transactions,
+      receipts: this.importReceipts,
+      accounts: this.bankAccounts,
+      selectedAccountKeys: confirmed.map(account => account.account_key),
+      selectedCategories: [],
+      now: new Date(),
+    });
+    const accountNames = new Map(confirmed.map(account => [account.account_key, account.display_name]));
+    return coverage.coverageGaps.map(gap => ({
+      id: `coverage-${gap.accountKey}`,
+      category: 'Statement coverage',
+      title: accountNames.get(gap.accountKey) || 'Bank account',
+      detail: `Statement coverage gap ${gap.from} to ${gap.through} in the last three completed months`,
+      link: '/spending',
+      query: { t: 'imports' },
+    }));
+  }
+
+  private importReceiptReviewItems(): ReviewQueueItem[] {
+    return this.importReceipts
+      .filter(receipt => {
+        if (receipt.status === 'withdrawn') return false;
+        const unresolvedCount = this.unresolvedReceiptNotes(receipt).length;
+        return receipt.status !== 'complete' || unresolvedCount > 0;
+      })
+      .map(receipt => {
+        const unresolvedCount = this.unresolvedReceiptNotes(receipt).length;
+        const state = receipt.status === 'undoing' ? 'undo in progress' : `${receipt.status} import`;
+        return {
+          id: `receipt-${receipt.id}`,
+          category: 'Import review',
+          title: receipt.filenames?.join(', ') || 'Bank CSV import',
+          detail: unresolvedCount ? `${state} · ${unresolvedCount} unresolved row(s)` : state,
+          link: '/spending',
+          query: { t: 'imports' },
+        };
+      });
+  }
+
+  private unresolvedReceiptNotes(receipt: ImportReceipt) {
+    return (receipt.unresolved || []).filter(note => {
+      const match = note.reason.match(/^Unclassified credit from (\d{4}-\d{2}-\d{2}): (.*)$/);
+      if (!match) return true;
+      const matchingRows = this.allTransactions.filter(row =>
+        row.import_receipt_id === receipt.id && row.date === match[1] && row.description === match[2]
+      );
+      return matchingRows.length === 0 || matchingRows.some(row => !row.kind || row.kind === 'ambiguous_credit');
+    });
+  }
+
+  private annualRenewalItems(): ReviewQueueItem[] {
+    const today = todayIsoDate();
+    const through = addDays(today, 30);
+    const scheduled: Array<{ id: string; name: string; date: string }> = [
+      ...this.fixedExpenses
+        .filter(row => row.is_active && row.frequency === 'annual' && row.next_due_date)
+        .map(row => ({ id: `fixed-${row.id}`, name: row.name, date: row.next_due_date! })),
+      ...this.subscriptions
+        .filter(row => row.is_active && row.frequency === 'annual' && row.next_due_date)
+        .map(row => ({ id: `subscription-${row.id}`, name: row.name, date: row.next_due_date! })),
+    ];
+    return scheduled
+      .filter(row => isIsoDate(row.date) && row.date >= today && row.date <= through)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(row => ({
+        id: `renewal-${row.id}`,
+        category: 'Annual renewal',
+        title: row.name,
+        detail: `Due ${row.date}`,
+        link: '/recurring',
+        query: { t: 'spend' },
+      }));
+  }
+}
+
+function todayIsoDate(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+}
+
+function addDays(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }

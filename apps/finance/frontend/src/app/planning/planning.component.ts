@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, finalize, takeUntil } from 'rxjs';
+import { Subject, finalize, forkJoin, takeUntil } from 'rxjs';
 import { PlanningService } from '../services/planning.service';
 import { ConfirmService } from '../services/confirm.service';
 import { ToastService } from '../services/toast.service';
@@ -27,6 +27,7 @@ import {
   PlanningProjectionRow,
   PlanningRun,
   ProfilePayload,
+  SpendingComponents,
 } from '../models/planning.model';
 import { MonteCarloFanChartComponent, McChartData } from './monte-carlo-fan-chart.component';
 import {
@@ -42,6 +43,12 @@ import {
   evidenceKindLabel,
   planningEvidenceCards,
 } from '../utils/evidence-labels.util';
+import { BankAccountRecord, ImportReceipt, Transaction } from '../models/transaction.model';
+import {
+  buildSpendingSuggestion,
+  lastThreeCompletedMonths,
+  spendingCategories,
+} from '../utils/planning-spending.util';
 
 @Component({
   selector: 'app-planning',
@@ -75,6 +82,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
   assumptions: ProfilePayload = structuredClone(DEFAULT_MC_ASSUMPTIONS);
 
   useTxSpending = true;
+  spendingMode: 'recurring' | 'components' | 'manual' = 'recurring';
   useTxIncome = true;
   useManualNetCashflow = false;
   useInferredAllocation = true;
@@ -124,7 +132,17 @@ export class PlanningComponent implements OnInit, OnDestroy {
   };
 
   lastRun: PlanningRun | null = null;
+  baselineRun: PlanningRun | null = null;
+  scenarioRun: PlanningRun | null = null;
   chartData: McChartData | null = null;
+
+  spendingTransactions: Transaction[] = [];
+  spendingReceipts: ImportReceipt[] = [];
+  spendingAccounts: BankAccountRecord[] = [];
+  selectedSpendingAccountKeys: string[] = [];
+  selectedSpendingCategories: string[] = [];
+  excludedRecurringTransactionIds: number[] = [];
+  acceptingSpendingSuggestion = false;
 
   profiles: PlanningProfile[] = [];
   selectedProfileId: number | null = null;
@@ -168,7 +186,10 @@ export class PlanningComponent implements OnInit, OnDestroy {
       .subscribe({
         next: inp => {
           this.inputs = inp;
-          this.assumptions.annual_spending = inp.implied_annual_spending || null;
+          this.assumptions.annual_spending = null;
+          this.assumptions.spending_mode = 'recurring';
+          this.assumptions.spending_components = this.defaultSpendingComponents(inp);
+          this.spendingMode = 'recurring';
           this.assumptions.monthly_income = inp.avg_monthly_income || null;
           this.assumptions.extra_contributions.annual_contribution =
             inp.implied_annual_savings || null;
@@ -183,6 +204,198 @@ export class PlanningComponent implements OnInit, OnDestroy {
         },
       });
 
+    this.planning.getSpendingSuggestionContext().pipe(takeUntil(this.destroy$)).subscribe({
+      next: context => {
+        this.spendingTransactions = context.transactions;
+        this.spendingReceipts = context.receipts;
+        this.spendingAccounts = context.accounts.filter(account => account.confirmed);
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        // Planning remains usable with manual inputs when no receipt history is available.
+        this.spendingTransactions = [];
+        this.spendingReceipts = [];
+        this.spendingAccounts = [];
+        this.cdr.markForCheck();
+      },
+    });
+
+  }
+
+  private defaultSpendingComponents(inp: PlanningInputsPreview): SpendingComponents {
+    return {
+      fixed_annual: Number(inp.recurring_annual_spending ?? inp.implied_annual_spending) || 0,
+      variable_annual: 0,
+      irregular_annual: 0,
+    };
+  }
+
+  get spendingPeriod() {
+    return lastThreeCompletedMonths();
+  }
+
+  get availableSpendingCategories(): string[] {
+    return spendingCategories(
+      this.spendingTransactions,
+      this.selectedSpendingAccountKeys,
+      this.spendingPeriod
+    );
+  }
+
+  get spendingSuggestion() {
+    return buildSpendingSuggestion({
+      transactions: this.spendingTransactions,
+      receipts: this.spendingReceipts,
+      accounts: this.spendingAccounts,
+      selectedAccountKeys: this.selectedSpendingAccountKeys,
+      selectedCategories: this.selectedSpendingCategories,
+      excludedRecurringTransactionIds: this.excludedRecurringTransactionIds,
+    });
+  }
+
+  get recurringExclusionCandidates(): Transaction[] {
+    return buildSpendingSuggestion({
+      transactions: this.spendingTransactions,
+      receipts: this.spendingReceipts,
+      accounts: this.spendingAccounts,
+      selectedAccountKeys: this.selectedSpendingAccountKeys,
+      selectedCategories: this.selectedSpendingCategories,
+    }).eligibleTransactions;
+  }
+
+  get effectiveSpendingComponents(): SpendingComponents {
+    const parts = this.assumptions.spending_components || this.defaultSpendingComponents(this.inputs || {
+      recurring_annual_spending: 0, implied_annual_spending: 0,
+    } as PlanningInputsPreview);
+    return {
+      fixed_annual: Number(parts.fixed_annual) || 0,
+      variable_annual: Number(parts.variable_annual) || 0,
+      irregular_annual: Number(parts.irregular_annual) || 0,
+    };
+  }
+
+  get componentAnnualSpending(): number {
+    const parts = this.effectiveSpendingComponents;
+    return parts.fixed_annual + parts.variable_annual + parts.irregular_annual;
+  }
+
+  toggleSpendingAccount(key: string, checked: boolean): void {
+    this.selectedSpendingAccountKeys = checked
+      ? [...new Set([...this.selectedSpendingAccountKeys, key])]
+      : this.selectedSpendingAccountKeys.filter(value => value !== key);
+    this.selectedSpendingCategories = this.selectedSpendingCategories.filter(category =>
+      this.availableSpendingCategories.includes(category)
+    );
+    this.cdr.markForCheck();
+  }
+
+  toggleSpendingCategory(category: string, checked: boolean): void {
+    this.selectedSpendingCategories = checked
+      ? [...new Set([...this.selectedSpendingCategories, category])]
+      : this.selectedSpendingCategories.filter(value => value !== category);
+    this.cdr.markForCheck();
+  }
+
+  toggleRecurringExclusion(id: number, checked: boolean): void {
+    this.excludedRecurringTransactionIds = checked
+      ? [...new Set([...this.excludedRecurringTransactionIds, id])]
+      : this.excludedRecurringTransactionIds.filter(value => value !== id);
+    this.cdr.markForCheck();
+  }
+
+  isSelected(values: number[] | string[], value: number | string): boolean {
+    return (values as Array<number | string>).includes(value);
+  }
+
+  asPercent(value: number | null | undefined): number | null {
+    return value == null || !Number.isFinite(Number(value)) ? null : Number(value) * 100;
+  }
+
+  fromPercent(value: number | string | null): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed / 100 : 0;
+  }
+
+  toggleAnnualEventScope(event: PlanningCashflowEvent, scope: 'baseline' | 'scenario' | 'both'): void {
+    event.applies_to = scope;
+  }
+
+  eventsForCase(
+    events: PlanningCashflowEvent[],
+    scenario: 'baseline' | 'scenario'
+  ): PlanningCashflowEvent[] {
+    return events.filter(event => {
+      const scope = event.applies_to || 'both';
+      return scope === 'both' || scope === scenario;
+    });
+  }
+
+  onSpendingModeChange(mode: 'recurring' | 'components' | 'manual'): void {
+    const previousAmount = this.effectiveAnnualSpending();
+    this.spendingMode = mode;
+    this.assumptions.spending_mode = mode;
+    this.useTxSpending = mode === 'recurring';
+    if (mode === 'components' && !this.assumptions.spending_components) {
+      this.assumptions.spending_components = this.defaultSpendingComponents(this.inputs || {
+        recurring_annual_spending: 0, implied_annual_spending: 0,
+      } as PlanningInputsPreview);
+    }
+    if (mode === 'manual' && this.assumptions.annual_spending == null) {
+      this.assumptions.annual_spending = previousAmount;
+    }
+    this.cdr.markForCheck();
+  }
+
+  async acceptSpendingSuggestion(): Promise<void> {
+    const suggestion = this.spendingSuggestion;
+    if (!suggestion.canSuggest || suggestion.annualSuggestion == null) return;
+    this.acceptingSpendingSuggestion = true;
+    const acceptedPayload: ProfilePayload = {
+      ...structuredClone(this.assumptions),
+      spending_mode: 'components',
+      spending_components: {
+      ...this.effectiveSpendingComponents,
+      variable_annual: suggestion.annualSuggestion,
+      },
+      spending_acceptance: {
+        accepted_at: new Date().toISOString(),
+        period_start: suggestion.period.start,
+        period_end: suggestion.period.end,
+        account_keys: [...this.selectedSpendingAccountKeys],
+        categories: [...this.selectedSpendingCategories],
+        excluded_recurring_transaction_ids: [...this.excludedRecurringTransactionIds],
+        receipt_ids: suggestion.includedReceiptIds,
+        annual_suggestion: suggestion.annualSuggestion,
+      },
+    };
+    const current = this.profiles.find(profile => profile.id === this.selectedProfileId);
+    const name = current?.name || this.savedInputName.trim() || `Planning estimate ${suggestion.period.end}`;
+    const body = { name, payload: acceptedPayload };
+    const request = this.selectedProfileId != null
+      ? this.planning.updateProfile(this.selectedProfileId, body)
+      : this.planning.createProfile(body);
+    request.pipe(takeUntil(this.destroy$), finalize(() => {
+      this.acceptingSpendingSuggestion = false;
+      this.cdr.markForCheck();
+    })).subscribe({
+      next: profile => {
+        this.assumptions = acceptedPayload;
+        this.spendingMode = 'components';
+        this.useTxSpending = false;
+        if (this.selectedProfileId != null) {
+          this.profiles = this.profiles.map(row => row.id === profile.id ? profile : row);
+        } else {
+          this.profiles = [...this.profiles, profile];
+          this.selectedProfileId = profile.id;
+        }
+        this.savedInputName = profile.name;
+        this.toast.success('Covered spending estimate accepted and saved.');
+        this.cdr.markForCheck();
+      },
+      error: err => {
+        this.error = err?.message ?? 'Could not save the accepted spending estimate.';
+      },
+    });
   }
 
   showSpendingFallbackBanner(): boolean {
@@ -214,7 +427,11 @@ export class PlanningComponent implements OnInit, OnDestroy {
   fireAnnualSpending(): number {
     const base = this.fire.includeRecurringExpenses
       ? this.effectiveAnnualSpending()
-      : Math.max(0, this.effectiveAnnualSpending() - Number(this.inputs?.recurring_annual_spending || 0));
+      : Math.max(0, this.effectiveAnnualSpending() - Number(
+          this.spendingMode === 'components'
+            ? this.effectiveSpendingComponents.fixed_annual
+            : this.inputs?.recurring_annual_spending || 0
+        ));
     return Math.max(0, base + Number(this.fire.extraAnnualExpenses || 0));
   }
 
@@ -317,6 +534,11 @@ export class PlanningComponent implements OnInit, OnDestroy {
     const name = this.savedInputName.trim();
     if (!name) return;
     this.savingProfile = true;
+    this.assumptions.spending_mode = this.spendingMode;
+    this.assumptions.spending_components = this.effectiveSpendingComponents;
+    if (this.spendingMode === 'manual') {
+      this.assumptions.annual_spending = Number(this.assumptions.annual_spending) || 0;
+    }
     const body = { name, payload: this.assumptions };
     const req =
       this.selectedProfileId != null
@@ -358,14 +580,29 @@ export class PlanningComponent implements OnInit, OnDestroy {
       return;
     }
     this.savedInputName = profile.name;
-    this.assumptions = structuredClone(profile.payload);
+    this.assumptions = {
+      ...structuredClone(DEFAULT_MC_ASSUMPTIONS),
+      ...structuredClone(profile.payload),
+      extra_contributions: {
+        ...DEFAULT_MC_ASSUMPTIONS.extra_contributions,
+        ...(profile.payload.extra_contributions || {}),
+      },
+      checkpoints: profile.payload.checkpoints || [],
+      annual_cashflow_events: profile.payload.annual_cashflow_events || [],
+      spending_components: profile.payload.spending_components || this.defaultSpendingComponents(this.inputs || {
+        recurring_annual_spending: 0, implied_annual_spending: 0,
+      } as PlanningInputsPreview),
+    };
     this.syncTogglesFromProfile(profile.payload);
     this.cdr.markForCheck();
   }
 
   /** Align UI toggles with saved profile (matches server merge_profile / run overrides). */
   private syncTogglesFromProfile(payload: ProfilePayload): void {
-    this.useTxSpending = payload.annual_spending == null;
+    this.spendingMode = payload.spending_mode
+      || (payload.spending_components ? 'components' : payload.annual_spending != null ? 'manual' : 'recurring');
+    this.assumptions.spending_mode = this.spendingMode;
+    this.useTxSpending = this.spendingMode === 'recurring';
     this.useTxIncome = payload.monthly_income == null;
     const contrib = payload.extra_contributions?.annual_contribution;
     this.useManualNetCashflow = contrib != null;
@@ -379,6 +616,12 @@ export class PlanningComponent implements OnInit, OnDestroy {
   }
 
   private resetAssumptionTogglesToDefaults(): void {
+    this.spendingMode = 'recurring';
+    this.assumptions.spending_mode = 'recurring';
+    this.assumptions.annual_spending = null;
+    this.assumptions.spending_components = this.defaultSpendingComponents(this.inputs || {
+      recurring_annual_spending: 0, implied_annual_spending: 0,
+    } as PlanningInputsPreview);
     this.useTxSpending = true;
     this.useTxIncome = true;
     this.useManualNetCashflow = false;
@@ -431,9 +674,15 @@ export class PlanningComponent implements OnInit, OnDestroy {
   }
 
   onAnnualSpendingInput(value: number | null): void {
-    if (!this.useTxSpending) {
-      this.assumptions.annual_spending = value;
-    }
+    this.assumptions.annual_spending = value;
+  }
+
+  setSpendingComponent(key: keyof SpendingComponents, value: number | null): void {
+    this.assumptions.spending_components = {
+      ...this.effectiveSpendingComponents,
+      [key]: Math.max(0, Number(value) || 0),
+    };
+    this.cdr.markForCheck();
   }
 
   onMonthlyIncomeInput(value: number | null): void {
@@ -443,8 +692,9 @@ export class PlanningComponent implements OnInit, OnDestroy {
   }
 
   effectiveAnnualSpending(): number {
-    if (this.useTxSpending) return this.inputs?.implied_annual_spending ?? 0;
-    return Number(this.assumptions.annual_spending ?? 0);
+    if (this.spendingMode === 'recurring') return Number(this.inputs?.implied_annual_spending) || 0;
+    if (this.spendingMode === 'components') return this.componentAnnualSpending;
+    return Number(this.assumptions.annual_spending) || 0;
   }
 
   effectiveAnnualIncome(): number {
@@ -496,6 +746,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
         recurring: false,
         interval_years: 1,
         inflation_adjusted: true,
+        applies_to: 'scenario',
       },
     ];
   }
@@ -509,6 +760,8 @@ export class PlanningComponent implements OnInit, OnDestroy {
   runSimulation(): void {
     this.running = true;
     this.error = null;
+    const comparisonSeed = Number.isFinite(Number(this.seed)) ? Number(this.seed) : 1;
+    this.seed = comparisonSeed;
     this.cdr.markForCheck();
 
     const overrides: Record<string, unknown> = {
@@ -528,7 +781,9 @@ export class PlanningComponent implements OnInit, OnDestroy {
       start_net_worth: this.useLedgerStartingNetWorth
         ? null
         : Number(this.startingNetWorth ?? this.inputs?.net_worth_total ?? 0),
-      annual_spending: this.useTxSpending ? null : this.assumptions.annual_spending,
+      spending_mode: this.spendingMode,
+      spending_components: this.effectiveSpendingComponents,
+      annual_spending: this.spendingMode === 'manual' ? this.assumptions.annual_spending : null,
       monthly_income: this.useTxIncome ? null : this.assumptions.monthly_income,
       extra_contributions: this.useManualNetCashflow
         ? {
@@ -537,18 +792,30 @@ export class PlanningComponent implements OnInit, OnDestroy {
           }
         : { annual_contribution: null },
       checkpoints: this.cleanedCheckpoints(),
-      annual_cashflow_events: this.cleanedEvents(),
     };
 
-    this.planning
-      .createRun({
+    const events = this.cleanedEvents();
+    const baselineEvents = this.eventsForCase(events, 'baseline');
+    const scenarioEvents = this.eventsForCase(events, 'scenario');
+
+    forkJoin({
+      baseline: this.planning.createRun({
         tool_id: MC_TOOL_ID,
         profile_id: this.selectedProfileId,
-        overrides,
-        seed: this.seed,
+        overrides: { ...overrides, annual_cashflow_events: baselineEvents },
+        seed: comparisonSeed,
         n_paths: this.nPaths,
         horizon_years: this.horizonYears,
-      })
+      }),
+      scenario: this.planning.createRun({
+        tool_id: MC_TOOL_ID,
+        profile_id: this.selectedProfileId,
+        overrides: { ...overrides, annual_cashflow_events: scenarioEvents },
+        seed: comparisonSeed,
+        n_paths: this.nPaths,
+        horizon_years: this.horizonYears,
+      }),
+    })
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -557,12 +824,16 @@ export class PlanningComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: run => {
-          this.applyRunResult(run);
-          const p50 = run.result_summary?.terminal_p50;
+        next: runs => {
+          this.baselineRun = runs.baseline;
+          this.scenarioRun = runs.scenario;
+          this.applyRunResult(runs.scenario);
+          const p50 = runs.scenario.result_summary?.terminal_p50;
+          const baselineP50 = runs.baseline.result_summary?.terminal_p50;
+          const delta = p50 == null || baselineP50 == null ? null : p50 - baselineP50;
           const msg =
             p50 != null
-              ? `Simulation complete — median ending net worth ${this.formatMoney(p50)}.`
+              ? `Comparison complete — scenario median ${this.formatMoney(p50)}${delta == null ? '' : ` (${this.formatSignedMoney(delta)} vs baseline)`}.`
               : 'Simulation complete.';
           this.toast.success(msg);
         },
@@ -689,6 +960,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
           ? Math.min(80, Math.max(0.25, Number(ev.interval_years ?? 1)))
           : 1,
         inflation_adjusted: Boolean(ev.inflation_adjusted),
+        applies_to: ev.applies_to || 'both',
       }));
   }
 }

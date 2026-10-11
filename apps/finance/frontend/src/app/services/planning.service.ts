@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, from } from 'rxjs';
 import { isCurrentJob } from '../utils/job-compensation.util';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
+import { BankAccountRecord, ImportReceipt, Transaction } from '../models/transaction.model';
 import {
   MC_FAN_PATHS_PERSIST_MAX,
   MC_N_PATHS_MAX,
@@ -22,6 +23,18 @@ export class PlanningService {
 
   getInputs(): Observable<PlanningInputsPreview> {
     return from(this.clientInputs());
+  }
+
+  getSpendingSuggestionContext(): Observable<{
+    transactions: Transaction[];
+    receipts: ImportReceipt[];
+    accounts: BankAccountRecord[];
+  }> {
+    return from(Promise.all([
+      this.encStore.getTransactions(),
+      this.encStore.getImportReceipts(),
+      this.encStore.getBankAccounts(),
+    ]).then(([transactions, receipts, accounts]) => ({ transactions, receipts, accounts })));
   }
 
   listProfiles(): Observable<PlanningProfile[]> {
@@ -157,13 +170,29 @@ export class PlanningService {
       checkpoints: overrides.checkpoints ?? DEFAULT_MC_ASSUMPTIONS.checkpoints,
       annual_cashflow_events: overrides.annual_cashflow_events ?? DEFAULT_MC_ASSUMPTIONS.annual_cashflow_events,
     };
+    // An older/manual override may supply annual_spending without the newer mode field.
+    // Preserve that explicit contract instead of inheriting the default recurring mode.
+    const spendingMode = overrides.spending_mode
+      ?? (overrides.annual_spending != null ? 'manual' : profile.spending_mode);
     let state = seed >>> 0;
     const rand = () => {
       state = (1664525 * state + 1013904223) >>> 0;
       return state / 0xffffffff;
     };
     const start = profile.start_net_worth ?? (Number(inputs.net_worth_total) || 0);
-    const annualSpending = profile.annual_spending ?? (Number(inputs.implied_annual_spending) || 0);
+    const spendingComponents = profile.spending_components;
+    const componentTotal = spendingComponents
+      ? [spendingComponents.fixed_annual, spendingComponents.variable_annual, spendingComponents.irregular_annual]
+          .reduce((sum, amount) => sum + (Number(amount) || 0), 0)
+      : null;
+    const legacyManualSpending = profile.spending_mode == null && profile.annual_spending != null;
+    const annualSpending = spendingMode === 'components' && componentTotal != null
+      ? componentTotal
+      : spendingMode === 'manual' || legacyManualSpending
+        ? Number(profile.annual_spending) || 0
+        : spendingMode === 'recurring'
+          ? Number(inputs.implied_annual_spending) || 0
+          : profile.annual_spending ?? (Number(inputs.implied_annual_spending) || 0);
     const annualIncome = profile.monthly_income != null ? profile.monthly_income * 12 : inputs.avg_monthly_income * 12;
     const annualContribution = profile.extra_contributions?.annual_contribution ?? 0;
     const allocation = profile.portfolio_allocation ?? (inputs.net_worth_total ? inputs.net_worth_portfolio / inputs.net_worth_total : 0);
@@ -243,7 +272,11 @@ export class PlanningService {
       result_summary: {
         start_net_worth: start,
         annual_spending_start: annualSpending,
-        spend_assumption_source: inputs.annual_spending_source,
+        spend_assumption_source: spendingMode === 'components'
+          ? 'planning-spending-components'
+          : spendingMode === 'manual' || legacyManualSpending
+            ? 'manual-profile'
+            : inputs.annual_spending_source,
         annual_income_start: annualIncome,
         net_cashflow_source: 'active-job-income-and-recurring-schedules',
         annual_contribution_start: annualContribution,

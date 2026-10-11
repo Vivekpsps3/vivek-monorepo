@@ -47,7 +47,7 @@
             @for (row of monthSummary.categories; track row.label) {
               <tr>
                 <td>
-                  <a [routerLink]="['/spending']" [queryParams]="{ t: 'spend', month: monthKey, category: row.label }">{{ row.label }}</a>
+                  <a [routerLink]="['/spending']" [queryParams]="{ t: 'activity', v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
                 </td>
                 <td>${{ row.value | number: '1.2-2' }}</td>
                 <td>{{ row.pct | number: '1.0-0' }}%</td>
@@ -116,7 +116,7 @@
     <ui-card>
       <div class="selected-header">
         <h3>Transactions on {{ selectedDate }}</h3>
-        <a class="calendar-cta" routerLink="/spending">Add transaction</a>
+        <a class="calendar-cta" [routerLink]="['/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction</a>
       </div>
       @if (selectedTransactions.length) {
         <p class="day-net">
@@ -129,10 +129,10 @@
       @if (selectedTransactions.length > 0) {
         @for (tx of selectedTransactions; track tx.id) {
           <div class="tx-item">
-            <ui-badge [variant]="tx.type === 'income' ? 'success' : 'danger'">{{ tx.type }}</ui-badge>
+            <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ tx.kind || tx.type }}</ui-badge>
             <span class="category">{{ tx.category }}</span>
-            <span class="amount" [class.positive]="tx.type === 'income'">
-              {{ tx.type === 'income' ? '+' : '-' }}${{ tx.amount | number: '1.2-2' }}
+            <span class="amount" [class.positive]="transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0">
+              {{ transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0 ? '+' : transactionEffects(tx).spending > 0 ? '−' : '' }}${{ tx.amount | number: '1.2-2' }}
             </span>
             <span class="desc">{{ tx.description }}</span>
           </div>

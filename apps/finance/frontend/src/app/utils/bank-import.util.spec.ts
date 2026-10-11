@@ -40,7 +40,42 @@ describe('bank-import util', () => {
       })
     );
     expect(preview.rows[0].dedupe_key).toMatch(/^[a-f0-9]{64}$/);
-    expect(preview.skipped).toEqual([{ line: 3, reason: 'credit of $42.12 is not imported' }]);
+    expect(preview.skipped).toEqual([{ line: 3, reason: 'card payment is excluded from spending', kind: 'payment' }]);
+  });
+
+  it('accepts a Capital One CSV without a card column when a file account was selected', async () => {
+    const csv = [
+      'Transaction Date,Posted Date,Description,Category,Debit,Credit',
+      '2026-01-02,2026-01-03,Coffee,Food,12.00,',
+    ].join('\n');
+    const selected = await buildBankImportPreview(
+      'capital_one', 'no-card-number.csv', csv, new Set(), 'Capital One card', 'account-A', false, new Set(), ''
+    );
+    const unselected = await buildBankImportPreview('capital_one', 'no-card-number.csv', csv, new Set());
+
+    expect(selected.summary).toEqual({ total_parsed: 1, new: 1, duplicate: 0, skipped: 0, errors: 0 });
+    expect(selected.rows[0]).toEqual(jasmine.objectContaining({
+      account_display: 'Capital One card', account_key: 'account-A', source_account_mask: '', amount: 12,
+    }));
+    expect(unselected.summary.errors).toBe(1);
+    expect(unselected.errors[0].reason).toBe('missing card number');
+  });
+
+  it('accepts selected-file account identity when Amex, Citi, or X Money omits its account column', async () => {
+    const cases = [
+      { bank: 'amex', file: 'amex.csv', mask: 'amex', csv: 'Date,Description,Amount\n01/02/2026,Coffee,8.50' },
+      { bank: 'citi', file: 'citi.csv', mask: 'citi', csv: 'Status,Date,Description,Debit,Credit\nCleared,01/02/2026,Coffee,8.50,' },
+      { bank: 'x_money', file: 'x.csv', mask: '', csv: 'Date,Description,Type,Category,Amount,Status\n2026-01-02,Coffee,Card purchase,Food,-8.50,Completed' },
+    ];
+    for (const row of cases) {
+      const preview = await buildBankImportPreview(
+        row.bank, row.file, row.csv, new Set(), `${row.bank} selected account`, 'selected-account', false, new Set(), ''
+      );
+      expect(preview.summary).withContext(row.bank).toEqual({ total_parsed: 1, new: 1, duplicate: 0, skipped: 0, errors: 0 });
+      expect(preview.rows[0]).withContext(row.bank).toEqual(jasmine.objectContaining({
+        account_key: 'selected-account', account_display: `${row.bank} selected account`, source_account_mask: row.mask,
+      }));
+    }
   });
 
   it('marks existing and same-file duplicate rows during preview', async () => {
@@ -70,7 +105,7 @@ describe('bank-import util', () => {
 
     expect(preview.summary).toEqual({ total_parsed: 1, new: 1, duplicate: 0, skipped: 1, errors: 1 });
     expect(preview.errors).toEqual([{ line: 3, reason: 'Unrecognized date: "not-a-date"' }]);
-    expect(preview.skipped).toEqual([{ line: 4, reason: 'credit of $42.12 is not imported' }]);
+    expect(preview.skipped).toEqual([{ line: 4, reason: 'card payment is excluded from spending', kind: 'payment' }]);
     expect(preview.rows.map(row => row.description)).toEqual(['COSTCO GAS']);
   });
 
@@ -96,7 +131,7 @@ describe('bank-import util', () => {
         status: 'new',
       })
     );
-    expect(preview.skipped).toEqual([{ line: 3, reason: 'credit of $25.00 is not imported' }]);
+    expect(preview.skipped).toEqual([{ line: 3, reason: 'card payment is excluded from spending', kind: 'payment' }]);
   });
 
   it('commits only non-duplicate preview rows as encrypted expense transactions', async () => {
@@ -130,6 +165,31 @@ describe('bank-import util', () => {
         dedupe_key: preview.rows[0].dedupe_key,
       })
     );
+  });
+
+  it('updates a selected legacy bank account record by id while preserving its stable account key', async () => {
+    const preview = await buildBankImportPreview(
+      'chase', 'legacy-account.csv',
+      'Transaction Date,Post Date,Description,Category,Type,Amount,Memo\n01/02/2026,01/03/2026,Coffee,Food,Sale,-10.00,',
+      new Set(), 'Chase Checking', 'legacy-bank-account:41'
+    );
+    const store = {
+      getTransactions: async () => [],
+      addTransaction: async (row: any) => ({ ...row, id: 1 }),
+      upsertBankAccount: jasmine.createSpy('upsertBankAccount').and.resolveTo({ id: 41 } as any),
+    };
+
+    await commitBankImportRows(store, preview.rows, {
+      confirmed_bank_accounts: [{
+        id: 41, bank_slug: 'chase', account_mask: '', account_key: 'legacy-bank-account:41',
+        display_name: 'Chase Checking', confirmed: true,
+      }],
+    });
+
+    expect(store.upsertBankAccount).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+      id: 41, bank_slug: 'chase', account_key: 'legacy-bank-account:41',
+      display_name: 'Chase Checking', confirmed: true,
+    }));
   });
 });
 
@@ -185,6 +245,106 @@ describe('multi-file bank import', () => {
     expect(result.preview!.errors[0].line).toBe(2);
     expect(result.preview!.skipped[0].line).toBe(3);
     expect(result.preview!.summary.new).toBe(1);
+  });
+
+  it('deduplicates stable account keys across renames while keeping different accounts separate', async () => {
+    const csv = await chase('statement.csv').text();
+    const first = await buildBankImportPreview('chase', 'statement.csv', csv, new Set(), 'Old Chase name', 'account-A');
+    const renamed = await buildBankImportPreview(
+      'chase', 'renamed.csv', csv, new Set([first.rows[0].dedupe_key]), 'New Chase name', 'account-A'
+    );
+    const differentAccount = await buildBankImportPreview(
+      'chase', 'other.csv', csv, new Set([first.rows[0].dedupe_key]), 'Other Chase account', 'account-B'
+    );
+
+    expect(renamed.rows[0].status).toBe('duplicate');
+    expect(renamed.rows[0].account_display).toBe('New Chase name');
+    expect(differentAccount.rows[0].status).toBe('new');
+    expect(differentAccount.rows[0].dedupe_key).not.toBe(first.rows[0].dedupe_key);
+  });
+
+  it('matches old unassigned transactions only when legacy account mapping is explicitly enabled', async () => {
+    const csv = await chase('legacy.csv').text();
+    const legacy = await buildBankImportPreview('chase', 'legacy.csv', csv, new Set());
+    const unassignedKey = legacy.rows[0].dedupe_key;
+    const stored = new Set([unassignedKey]);
+    const stableLegacyKeys = new Set([unassignedKey]);
+    const defaultPreview = await buildBankImportPreview(
+      'chase', 'legacy.csv', csv, stored, 'Chase Sapphire', 'account-A', false, stableLegacyKeys
+    );
+    const mappedPreview = await buildBankImportPreview(
+      'chase', 'legacy.csv', csv, stored, 'Chase Sapphire', 'account-A', true, stableLegacyKeys, 'card'
+    );
+
+    expect(defaultPreview.rows[0].status).toBe('new');
+    expect(defaultPreview.rows[0].legacy_dedupe_key).toBeUndefined();
+    expect(mappedPreview.rows[0].status).toBe('duplicate');
+    expect(mappedPreview.rows[0].legacy_dedupe_key).toBe(unassignedKey);
+    expect(mappedPreview.rows[0].source_account_mask).toBe('card');
+  });
+
+  it('does not infer a legacy match from a selected mask when the source CSV has no historical identity', async () => {
+    const withMask = [
+      'Transaction Date,Posted Date,Card No.,Description,Category,Debit,Credit',
+      '2026-01-02,2026-01-03,card,Coffee,Food,10.00,',
+    ].join('\n');
+    const historical = await buildBankImportPreview('capital_one', 'with-mask.csv', withMask, new Set());
+    const withoutMask = [
+      'Transaction Date,Posted Date,Description,Category,Debit,Credit',
+      '2026-01-02,2026-01-03,Coffee,Food,10.00,',
+    ].join('\n');
+
+    const preview = await buildBankImportPreview(
+      'capital_one', 'without-mask.csv', withoutMask, new Set(), 'Selected card', 'account-card',
+      true, new Set([historical.rows[0].dedupe_key]), 'card'
+    );
+
+    expect(preview.rows[0].status).toBe('new');
+    expect(preview.rows[0].legacy_dedupe_key).toBeUndefined();
+    expect(preview.rows[0].source_account_mask).toBe('card');
+  });
+
+  it('binds explicitly mapped legacy rows without changing financial meaning or review state', async () => {
+    const csv = await chase('legacy.csv').text();
+    const legacy = await buildBankImportPreview('chase', 'legacy.csv', csv, new Set());
+    const oldKey = legacy.rows[0].dedupe_key;
+    const preview = await buildBankImportPreview(
+      'chase', 'legacy.csv', csv, new Set([oldKey]), 'Chase Sapphire', 'account-A', true, new Set([oldKey]), 'card'
+    );
+    const existing: any = {
+      id: 23,
+      date: preview.rows[0].date,
+      type: 'expense',
+      category: 'Refunds',
+      amount: 10,
+      description: preview.rows[0].description,
+      source: 'import',
+      dedupe_key: oldKey,
+      kind: 'refund',
+      reviewed: true,
+      review_reason: 'Reviewed credit',
+      import_edited: false,
+    };
+    const store = {
+      getTransactions: async () => [existing],
+      addTransaction: jasmine.createSpy('addTransaction'),
+      updateTransaction: async (id: number, patch: any) => {
+        expect(id).toBe(existing.id);
+        Object.assign(existing, patch);
+        return existing;
+      },
+    };
+
+    const result = await commitBankImportRows(store, preview.rows);
+
+    expect(result.inserted).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(store.addTransaction).not.toHaveBeenCalled();
+    expect(existing).toEqual(jasmine.objectContaining({
+      type: 'expense', category: 'Refunds', amount: 10, kind: 'refund', reviewed: true,
+      review_reason: 'Reviewed credit', account_display: 'Chase Sapphire', bank_account_key: 'account-A',
+      source_bank: 'chase', source_account_mask: 'card', dedupe_key: preview.rows[0].dedupe_key,
+    }));
   });
 
   it('retries a partially failed combined commit without inserting saved rows twice', async () => {

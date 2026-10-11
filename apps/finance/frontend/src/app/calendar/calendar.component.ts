@@ -15,6 +15,7 @@ import { Subject, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { FinanceService } from '../services/finance.service';
 import { Transaction } from '../models/transaction.model';
+import { transactionEffects } from '../crypto/client-finance';
 import { todayIsoDate } from '../utils/date.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
@@ -59,6 +60,7 @@ type ChartConstructor = new (item: ChartItem, config: unknown) => ChartInstance;
 })
 export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() embedded = false;
+  readonly transactionEffects = transactionEffects;
   @ViewChild('categoryChart') categoryCanvas?: ElementRef<HTMLCanvasElement>;
   currentDate = new Date();
   transactions: Transaction[] = [];
@@ -116,8 +118,9 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     const today = todayIsoDate();
     const spendByDay = new Map<string, number>();
     for (const tx of this.transactions) {
-      if (tx.type !== 'expense') continue;
-      spendByDay.set(tx.date, (spendByDay.get(tx.date) || 0) + tx.amount);
+      const spending = transactionEffects(tx).spending;
+      if (!spending) continue;
+      spendByDay.set(tx.date, (spendByDay.get(tx.date) || 0) + spending);
     }
 
     this.daysInMonth = [];
@@ -260,7 +263,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
 
   dayTotal(): number {
     return this.selectedTransactions.reduce(
-      (sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount),
+      (sum, t) => sum + transactionEffects(t).income - transactionEffects(t).spending,
       0
     );
   }

@@ -31,6 +31,15 @@
   margin: calc(-1 * var(--space-4)) 0 var(--space-4);
 }
 
+.resume-stage {
+  margin-bottom: var(--space-4);
+}
+
+.resume-stage p {
+  margin-top: 0;
+  color: var(--text-secondary);
+}
+
 .symbol-check {
   display: flex;
   gap: var(--space-3);
@@ -59,6 +68,19 @@
   max-height: 220px;
   overflow: auto;
   margin: 0.75rem 0;
+}
+
+.replacement-preview {
+  margin: 1rem 0;
+}
+
+.replacement-preview h4 {
+  margin-bottom: 0.5rem;
+  font-size: var(--text-sm);
+}
+
+.position-cell {
+  min-width: 8rem;
 }
 
 .summary {

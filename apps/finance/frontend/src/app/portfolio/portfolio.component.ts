@@ -27,9 +27,19 @@ import { downloadCsv } from '../utils/export.util';
 import {
   holdingGain,
   holdingGainPercent,
+  hasUnvaluedPositions,
+  portfolioDateSummary,
+  positionReviewState,
+  quoteFreshness,
+  quoteFreshnessLabel,
   totalPortfolioGain,
   totalPortfolioValue,
 } from '../utils/portfolio.util';
+import {
+  FidelityAccountReplacementPreview,
+  FidelityStageRecord,
+  replacementPreviewForAccounts,
+} from '../utils/fidelity-import.util';
 import {
   UiBadgeComponent,
   UiBadgeVariant,
@@ -82,6 +92,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   fidelityImportParsing = false;
   fidelityImportCommitting = false;
   selectedFidelityAccounts = new Set<string>();  // use account_mask for selected replaces
+  fidelityAccountReplacements: FidelityAccountReplacementPreview[] = [];
+  knownBrokerageAccounts: Array<{ id: number; broker_slug: string; broker_name: string; account_mask: string; account_name?: string; nickname?: string | null; label?: string | null }> = [];
+  resumableFidelityStages: FidelityStageRecord[] = [];
   editingId: number | null = null;
   newHolding: HoldingCreate = this.emptyHolding();
 
@@ -120,6 +133,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       },
     });
     this.financeService.getNetWorth().pipe(takeUntil(this.destroy$)).subscribe();
+    this.loadResumableFidelityStages();
     this.loading = true;
   }
 
@@ -171,6 +185,13 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     });
   }
 
+  confirmPosition(h: Holding) {
+    this.financeService.confirmHoldingPosition(h.id, todayIsoDate()).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => this.toastService.success(`${h.symbol} position confirmed`),
+      error: () => this.toastService.error(`Could not confirm ${h.symbol} position`),
+    });
+  }
+
   checkSharePrice() {
     const symbol = this.newHolding.symbol.trim().toUpperCase();
     if (!symbol) {
@@ -183,7 +204,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       next: quote => {
         this.checkingPrice = false;
         this.priceCheck = quote;
-        if (quote.valid && this.newHolding.purchase_price <= 0) {
+        if (quote.valid && (this.newHolding.purchase_price == null || this.newHolding.purchase_price <= 0)) {
           this.newHolding.purchase_price = quote.price;
         }
       },
@@ -200,8 +221,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   addOrUpdateHolding() {
     const symbol = this.newHolding.symbol.trim().toUpperCase();
-    if (!symbol || this.newHolding.shares <= 0 || this.newHolding.purchase_price <= 0) {
-      this.toastService.error('Symbol, shares, and cost basis are required.');
+    if (!symbol || this.newHolding.shares <= 0 || (this.editingId === null && (this.newHolding.purchase_price == null || this.newHolding.purchase_price <= 0))) {
+      this.toastService.error('Symbol and shares are required; new manual holdings also need cost basis.');
       return;
     }
 
@@ -210,6 +231,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       ...this.newHolding,
       symbol,
     };
+    if (this.editingId !== null && !payload.purchase_date) delete (payload as Partial<HoldingCreate>).purchase_date;
 
     const req =
       this.editingId !== null
@@ -234,7 +256,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   editHolding(h: Holding) {
     this.editingId = h.id;
-    const purchaseDate = h.purchase_date ? String(h.purchase_date).split('T')[0] : todayIsoDate();
+    const purchaseDate = h.purchase_date ? String(h.purchase_date).split('T')[0] : '';
     this.newHolding = {
       symbol: h.symbol,
       shares: h.shares,
@@ -256,14 +278,32 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     const s = (this.newHolding?.symbol || '').trim();
     return s.length > 0 &&
            (this.newHolding?.shares || 0) > 0 &&
-           (this.newHolding?.purchase_price || 0) > 0 &&
-           !!this.newHolding?.purchase_date;
+           (this.editingId !== null || (this.newHolding?.purchase_price != null && this.newHolding.purchase_price > 0 && !!this.newHolding?.purchase_date));
   }
 
   getTotalValue = () => totalPortfolioValue(this.holdings);
   getTotalGain = () => totalPortfolioGain(this.holdings);
   getGain = (h: Holding) => holdingGain(h);
   getGainPercent = (h: Holding) => holdingGainPercent(h);
+
+  gainIsPositive(h: Holding): boolean { const value = this.getGain(h); return value != null && value >= 0; }
+  gainIsNegative(h: Holding): boolean { const value = this.getGain(h); return value != null && value < 0; }
+  gainDisplay(h: Holding): string {
+    const value = this.getGain(h);
+    return value == null ? 'Unavailable' : `${value >= 0 ? '+' : ''}$${value.toFixed(2)}`;
+  }
+  gainPercentIsPositive(h: Holding): boolean { const value = this.getGainPercent(h); return value != null && value >= 0; }
+  gainPercentIsNegative(h: Holding): boolean { const value = this.getGainPercent(h); return value != null && value < 0; }
+  gainPercentDisplay(h: Holding): string {
+    const value = this.getGainPercent(h);
+    return value == null ? 'Unavailable' : `${value.toFixed(1)}%`;
+  }
+  totalGainIsPositive(): boolean { const value = this.getTotalGain(); return value != null && value >= 0; }
+  totalGainIsNegative(): boolean { const value = this.getTotalGain(); return value != null && value < 0; }
+  totalGainDisplay(): string {
+    const value = this.getTotalGain();
+    return value == null ? 'Unavailable' : `${value >= 0 ? '+' : ''}$${value.toFixed(2)}`;
+  }
 
   /** Grouped view for better account breakdown.
    *  Fidelity gets special treatment with sub-accounts.
@@ -291,6 +331,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         label,
         holdings: hs,
         totalValue: hs.reduce((sum, h) => sum + (h.value || 0), 0),
+        unvaluedCount: hs.filter(h => h.value == null || !Number.isFinite(Number(h.value))).length,
         brokerageAccountId: first?.brokerage_account_id || null,
       };
     }).sort((a, b) => a.label.localeCompare(b.label));
@@ -298,38 +339,109 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     return {
       fidelity: fidelityGroups,
       fidelityTotal: fidelityGroups.reduce((s, g) => s + g.totalValue, 0),
+      fidelityHasUnvalued: fidelityGroups.some(g => g.unvaluedCount > 0),
       manual,
       manualTotal: manual.reduce((s, h) => s + (h.value || 0), 0),
+      manualUnvaluedCount: manual.filter(h => h.value == null || !Number.isFinite(Number(h.value))).length,
     };
   }
 
   priceSourceBadgeVariant(h: Holding): UiBadgeVariant {
-    const src = h.price_source ?? '';
-    if (src === 'live' || src === 'live_eod') return 'success';
-    if (src === 'error') return 'danger';
-    if (src === 'fallback_purchase' || src === 'non_ticker') return 'warning';
-    if (src === 'cached' || src === 'sqlite_eod' || src.startsWith('redis')) return 'default';
+    const state = quoteFreshness(h);
+    if (state === 'Live') return 'success';
+    if (state === 'Cached') return 'default';
+    if (state === 'Unavailable') return 'danger';
+    if (state === 'Unknown') return 'default';
     return 'warning';
   }
 
   priceFreshness(h: Holding): string {
-    const src = h.price_source ?? '';
-    if (src === 'live' || src === 'live_eod') return 'Live';
-    if (src === 'cached') return 'Cached';
-    if (src === 'sqlite_eod') return 'EOD cache';
-    if (src.startsWith('redis')) return 'Cached';
-    if (src === 'fallback_purchase') return 'Cost basis';
-    if (src === 'non_ticker') return 'No ticker';
-    if (src === 'error') return 'Unavailable';
-    return src || 'Unknown';
+    return quoteFreshnessLabel(h);
   }
 
   priceSourceHint(h: Holding): string | null {
     const src = h.price_source ?? '';
-    if (src === 'fallback_purchase') return 'Using purchase price; refresh or fix symbol.';
+    if (src === 'provisional_cost_basis' || src === 'fallback_purchase') return 'Provisional value from cost basis; refresh the quote.';
     if (src === 'non_ticker') return 'Symbol is not a market ticker (e.g. CUSIP or sweep).';
-    if (src === 'error') return 'Live quote failed; value may use cost basis.';
+    if (src === 'error' || src === 'unavailable') return 'No market value is available for this position.';
     return null;
+  }
+
+  dateLabel(value: string | null | undefined): string {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'Date unknown';
+    const date = new Date(value + 'T00:00:00Z');
+    return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? 'Date unknown' : value;
+  }
+
+  positionFreshness(h: Holding): string {
+    const state = positionReviewState(h);
+    return state === 'current' ? 'Reviewed' : state === 'due' ? 'Review due' : 'Date unknown';
+  }
+
+  positionReviewStateFor(h: Holding): 'current' | 'due' | 'unknown' {
+    return positionReviewState(h);
+  }
+
+  positionDateSummary(): string {
+    return portfolioDateSummary(this.holdings.map(h => (h as Holding & { position_as_of?: string | null }).position_as_of));
+  }
+
+  quoteDateSummary(): string {
+    return portfolioDateSummary(this.holdings.map(h => this.quoteDate(h)));
+  }
+
+  quoteDate(h: Holding): string | null {
+    const row = h as Holding & { market_date?: string | null; price_as_of?: string | null };
+    const direct = h.quote_date ?? row.market_date;
+    if (direct) return direct;
+    return row.price_as_of ? row.price_as_of.slice(0, 10) : null;
+  }
+
+  quoteDateLabel(h: Holding): string {
+    return this.dateLabel(this.quoteDate(h));
+  }
+
+  get hasMissingValues(): boolean {
+    return hasUnvaluedPositions(this.holdings);
+  }
+
+  get missingValueCount(): number {
+    return this.holdings.filter(h => h.value == null || !Number.isFinite(Number(h.value))).length;
+  }
+
+  get provisionalPositionCount(): number {
+    return this.holdings.filter(h => h.price_source === 'provisional_cost_basis' || h.price_source === 'fallback_purchase').length;
+  }
+
+  loadResumableFidelityStages() {
+    this.financeService.getHoldingImportStages().pipe(takeUntil(this.destroy$)).subscribe({
+      next: stages => {
+        this.resumableFidelityStages = stages.filter(stage => ['staged', 'verified', 'interrupted'].includes(stage.status));
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.resumableFidelityStages = [];
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  resumeFidelityStage(stage: FidelityStageRecord) {
+    this.fidelityImportCommitting = true;
+    this.financeService.resumeFidelityImportStage(stage.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: result => {
+        this.fidelityImportCommitting = false;
+        this.toastService.success(`Activated ${result.inserted} Fidelity position(s)`);
+        this.loadResumableFidelityStages();
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.fidelityImportCommitting = false;
+        this.toastService.error('Fidelity import is still staged. Resume it after resolving the issue.');
+        this.loadResumableFidelityStages();
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   applyFilter() {
@@ -373,15 +485,17 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   exportToCsv() {
     downloadCsv(
       'holdings.csv',
-      ['Symbol', 'Shares', 'Cost Basis', 'Current Price', 'Market Value', 'Gain', 'Price Source'],
+      ['Symbol', 'Shares', 'Cost Basis', 'Current Price', 'Market Value', 'Gain', 'Price Source', 'Position As Of', 'Quote Date'],
       this.filteredHoldings.map(h => [
         h.symbol,
         h.shares,
-        h.purchase_price,
-        h.current_price ?? h.purchase_price,
-        h.value ?? 0,
-        this.getGain(h),
+        h.purchase_price ?? 'Unknown',
+        h.current_price ?? 'Unknown',
+        h.value ?? 'Unavailable',
+        this.getGain(h) ?? 'Unavailable',
         h.price_source ?? '',
+        this.dateLabel((h as Holding & { position_as_of?: string | null }).position_as_of),
+        this.quoteDateLabel(h),
       ])
     );
   }
@@ -462,12 +576,26 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         next: (preview) => {
           this.fidelityImportParsing = false;
           this.fidelityImportPreview = preview;
+          this.fidelityAccountReplacements = [];
           this.fidelityImportStep = 'preview';
           this.selectedFidelityAccounts.clear();
           // select all for replace
           for (const row of preview.rows) {
             this.selectedFidelityAccounts.add(row.account_mask);
           }
+          this.financeService.getBrokerageAccounts().pipe(takeUntil(this.destroy$)).subscribe({
+            next: accounts => {
+              this.knownBrokerageAccounts = accounts;
+              this.fidelityAccountReplacements = replacementPreviewForAccounts(
+                preview.rows,
+                this.holdings,
+                this.selectedFidelityAccounts,
+                accounts,
+              );
+              this.cdr.markForCheck();
+            },
+            error: () => this.cdr.markForCheck(),
+          });
           this.cdr.markForCheck();
         },
         error: () => {
@@ -502,8 +630,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
     const ok = await this.confirmService.ask(
       'Replace Fidelity holdings?',
-      `This permanently removes existing positions for each selected account and replaces them with the CSV.\n\nAccounts:\n${accountList}\n\n${rowsToSend.length} position row(s) will be imported.`,
-      'Replace holdings',
+      `The selected Fidelity accounts will switch to the verified CSV positions. Existing positions stay active until the staged replacement is verified.\n\nAccounts:\n${accountList}\n\n${rowsToSend.length} position row(s) will be imported.`,
+      'Confirm Replace',
       'Cancel'
     );
     if (!ok) return;
@@ -511,7 +639,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.fidelityImportCommitting = true;
     this.cdr.markForCheck();
     this.financeService
-      .commitFidelityImport(this.fidelityImportPreview.filename, rowsToSend)
+      .commitFidelityImport(this.fidelityImportPreview.filename, rowsToSend, selectedMasks)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res: FidelityCommitResult) => {
@@ -520,10 +648,13 @@ export class PortfolioComponent implements OnInit, OnDestroy {
           this.toastService.success(
             `Replaced ${res.holdings_replaced} holdings, inserted ${res.inserted} for ${res.accounts_replaced} account(s)`
           );
+          this.loadResumableFidelityStages();
           this.cdr.markForCheck();
         },
         error: () => {
           this.fidelityImportCommitting = false;
+          this.toastService.error('Replacement is staged and can be resumed after the interruption.');
+          this.loadResumableFidelityStages();
           this.cdr.markForCheck();
         },
       });
@@ -538,6 +669,14 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       this.selectedFidelityAccounts.delete(mask);
     } else {
       this.selectedFidelityAccounts.add(mask);
+    }
+    if (this.fidelityImportPreview) {
+      this.fidelityAccountReplacements = replacementPreviewForAccounts(
+        this.fidelityImportPreview.rows,
+        this.holdings,
+        this.selectedFidelityAccounts,
+        this.knownBrokerageAccounts,
+      );
     }
     this.cdr.markForCheck();
   }

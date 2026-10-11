@@ -23,10 +23,31 @@ export interface ProfilePayload {
   shock_loss_std: number;
   start_net_worth?: number | null;
   annual_spending?: number | null;
+  /** Additive spending model; legacy profiles may still contain only annual_spending. */
+  spending_mode?: 'recurring' | 'components' | 'manual';
+  spending_components?: SpendingComponents;
+  spending_acceptance?: SpendingAcceptanceEvidence | null;
   monthly_income?: number | null;
   extra_contributions: { annual_contribution?: number | null };
   checkpoints: PlanningCheckpoint[];
   annual_cashflow_events: PlanningCashflowEvent[];
+}
+
+export interface SpendingComponents {
+  fixed_annual: number;
+  variable_annual: number;
+  irregular_annual: number;
+}
+
+export interface SpendingAcceptanceEvidence {
+  accepted_at: string;
+  period_start: string;
+  period_end: string;
+  account_keys: string[];
+  categories: string[];
+  excluded_recurring_transaction_ids: number[];
+  receipt_ids: number[];
+  annual_suggestion: number;
 }
 
 export const DEFAULT_MC_ASSUMPTIONS: ProfilePayload = {
@@ -42,6 +63,9 @@ export const DEFAULT_MC_ASSUMPTIONS: ProfilePayload = {
   shock_mean_loss: 0.22,
   shock_loss_std: 0.08,
   annual_spending: null,
+  spending_mode: 'recurring',
+  spending_components: { fixed_annual: 0, variable_annual: 0, irregular_annual: 0 },
+  spending_acceptance: null,
   monthly_income: null,
   extra_contributions: { annual_contribution: null },
   checkpoints: [],
@@ -66,6 +90,8 @@ export interface PlanningCashflowEvent {
   /** Years between occurrences when recurring (0.5 = twice per year). */
   interval_years?: number;
   inflation_adjusted: boolean;
+  /** Legacy events without a scope apply to both comparison cases. */
+  applies_to?: 'baseline' | 'scenario' | 'both';
 }
 
 export interface PlanningInputsPreview {

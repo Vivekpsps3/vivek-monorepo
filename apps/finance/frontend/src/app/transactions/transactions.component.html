@@ -1,3 +1,43 @@
+@if (importsOnly) {
+  <div class="page imports-page">
+    <ui-page-header title="Imports" subtitle="Confirmed statement coverage, saved outcomes, and safe recovery actions.">
+      <div uiPageActions class="header-actions">
+        <ui-button variant="primary" (clicked)="openImportModal()">Import from bank</ui-button>
+      </div>
+    </ui-page-header>
+    @if (importReceipts.length) {
+      <ui-card title="Import receipts">
+        @for (receipt of importReceipts; track receipt.id) {
+          <article class="import-history-row">
+            <div>
+              <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
+              <span>{{ receipt.started_at | date: 'medium' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length || 0 }} unresolved</span>
+              @for (range of receipt.coverage || []; track $index) {
+                <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
+              } @empty {
+                <span>Coverage not confirmed</span>
+              }
+              @if (receipt.last_error) { <span class="import-error">Last attempt: {{ receipt.last_error }}</span> }
+              @for (note of (receipt.unresolved || []).slice(0, 3); track $index) {
+                <span>{{ note.filename || 'CSV' }} · line {{ note.line || '—' }}: {{ note.reason }}</span>
+              }
+            </div>
+            <div class="import-history-actions">
+              @if (receipt.status === 'staged' || receipt.status === 'partial' || receipt.status === 'undoing') {
+                <ui-button variant="secondary" size="sm" (clicked)="resumeImport(receipt)">{{ receipt.status === 'undoing' ? 'Resume undo' : 'Resume' }}</ui-button>
+              }
+              @if (receipt.status !== 'withdrawn') {
+                <ui-button variant="danger" size="sm" (clicked)="undoImport(receipt)">Undo</ui-button>
+              }
+            </div>
+          </article>
+        }
+      </ui-card>
+    } @else {
+      <ui-empty-state title="No import receipts yet" message="Import a statement to record its outcome and any confirmed coverage." />
+    }
+  </div>
+} @else {
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
@@ -45,19 +85,19 @@
       <div class="month-totals">
         @if (typeFilter !== 'income') {
           <div class="month-total month-total--expense">
-            <span class="month-total__label">{{ hasMore ? 'Loaded spend' : 'Spend' }}</span>
+            <span class="month-total__label">Spend across {{ allTransactions.length }} transaction(s)</span>
             <strong class="money">${{ monthExpenseTotal | number: '1.2-2' }}</strong>
           </div>
         }
         @if (typeFilter !== 'expense') {
           <div class="month-total month-total--income">
-            <span class="month-total__label">{{ hasMore ? 'Loaded pay' : 'Pay' }}</span>
+            <span class="month-total__label">Pay across {{ allTransactions.length }} transaction(s)</span>
             <strong class="money">${{ monthIncomeTotal | number: '1.2-2' }}</strong>
           </div>
         }
         @if (typeFilter === 'all') {
           <div class="month-total month-total--net">
-            <span class="month-total__label">{{ hasMore ? 'Loaded net' : 'Net' }}</span>
+            <span class="month-total__label">Recorded net</span>
             <strong class="money">${{ monthIncomeTotal - monthExpenseTotal | number: '1.2-2' }}</strong>
           </div>
         }
@@ -81,6 +121,13 @@
         [value]="categoryFilter"
         [options]="categorySelectOptions"
         (valueChange)="categoryFilter = $event; onCategoryFilterChange()"
+      />
+      <ui-select
+        selectId="tx-review-filter"
+        label="Review"
+        [value]="reviewFilter"
+        [options]="reviewOptions"
+        (valueChange)="onReviewFilterChange($event)"
       />
       <ui-select
         selectId="tx-sort"
@@ -170,9 +217,27 @@
           }
         </div>
       </div>
+      <div class="category-bulk-rename">
+        <div class="category-bulk-rename__header">
+          <div>
+            <strong>Bulk categorize a merchant</strong>
+            <p>Match the merchant name exactly; source descriptions remain unchanged.</p>
+          </div>
+        </div>
+        <div class="category-bulk-rename__row">
+          <label class="form-group"><span>Merchant</span><input type="text" [(ngModel)]="bulkMerchant" list="merchant-options" placeholder="Merchant name" /></label>
+          <label class="form-group"><span>Category</span><input type="text" [(ngModel)]="bulkMerchantCategory" list="category-options" placeholder="Category" /></label>
+          <ui-button variant="secondary" size="sm" [disabled]="categoryMergeSaving || !bulkMerchant.trim() || !bulkMerchantCategory.trim()" (clicked)="bulkCategorizeMerchant()">Apply</ui-button>
+        </div>
+      </div>
       <datalist id="category-options">
         @for (category of categoryOptions; track category) {
           <option [value]="category"></option>
+        }
+      </datalist>
+      <datalist id="merchant-options">
+        @for (merchant of merchantOptions; track merchant) {
+          <option [value]="merchant"></option>
         }
       </datalist>
     </details>
@@ -202,7 +267,8 @@
             <th scope="col" [attr.aria-sort]="sortColumn === 'category' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'" class="sortable">
               <button type="button" (click)="toggleSort('category')">Category {{ sortIcon('category') }}</button>
             </th>
-            <th scope="col">Description</th>
+            <th scope="col">Merchant</th>
+            <th scope="col">Source description</th>
             <th scope="col" [attr.aria-sort]="sortColumn === 'amount' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'" class="sortable amount-col">
               <button type="button" (click)="toggleSort('amount')">Amount {{ sortIcon('amount') }}</button>
             </th>
@@ -213,22 +279,52 @@
           <tr *ngFor="let tx of filteredTransactions; trackBy: trackByTxId">
             <td>{{ tx.date }}</td>
             <td>
-              <ui-badge [variant]="tx.type === 'income' ? 'success' : 'danger'">{{ tx.type }}</ui-badge>
+              <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ transactionLabel(tx) }}</ui-badge>
               <span class="import-tag" *ngIf="tx.source === 'import'">import</span>
+              <span class="import-tag" *ngIf="tx.reviewed !== true">needs review</span>
             </td>
             <td class="account-cell">{{ tx.account_display || '—' }}</td>
             <td>{{ tx.category }}</td>
+            <td>{{ tx.merchant || '—' }}</td>
             <td class="desc">{{ tx.description || '—' }}</td>
-            <td class="amount-col" [class.positive]="tx.type === 'income'">
-              {{ tx.type === 'income' ? '+' : '−' }}${{ tx.amount | number: '1.2-2' }}
+            <td class="amount-col" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
+              {{ transactionAmountPrefix(tx) }}${{ tx.amount | number: '1.2-2' }}
             </td>
             <td class="actions actions--row">
+              <ui-button *ngIf="tx.reviewed !== true" variant="ghost" size="sm" (clicked)="markReviewed(tx)">Reviewed</ui-button>
               <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
               <ui-button variant="ghost" size="sm" (clicked)="deleteTransaction(tx)">Delete</ui-button>
             </td>
           </tr>
         </tbody>
       </ui-data-table>
+    </div>
+
+    <div class="tx-mobile-list" *ngIf="filteredTransactions.length > 0" aria-label="Transaction activity">
+      @for (tx of filteredTransactions; track tx.id) {
+        <details class="tx-mobile-row">
+          <summary>
+            <span class="tx-mobile-main">
+              <strong>{{ tx.merchant || tx.category || 'Transaction' }}</strong>
+              <small>{{ tx.date }} · {{ tx.category }}</small>
+            </span>
+            <span class="tx-mobile-amount" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
+              {{ transactionAmountPrefix(tx) }}${{ tx.amount | number: '1.2-2' }}
+            </span>
+          </summary>
+          <div class="tx-mobile-details">
+            <p><strong>Source description</strong><span>{{ tx.description || '—' }}</span></p>
+            <p><strong>Account</strong><span>{{ tx.account_display || '—' }}</span></p>
+            <p><strong>Kind</strong><span>{{ transactionLabel(tx) }}</span></p>
+            @if (tx.review_reason) { <p><strong>Review</strong><span>{{ tx.review_reason }}</span></p> }
+            <div class="actions actions--row">
+              <ui-button *ngIf="tx.reviewed !== true" variant="ghost" size="sm" (clicked)="markReviewed(tx)">Reviewed</ui-button>
+              <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
+              <ui-button variant="ghost" size="sm" (clicked)="deleteTransaction(tx)">Delete</ui-button>
+            </div>
+          </div>
+        </details>
+      }
     </div>
 
     @if (hasMore && filteredTransactions.length > 0) {
@@ -251,9 +347,10 @@
     </ng-template>
   </ui-card>
 </div>
+}
 
 <ui-dialog [open]="showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeImportModal()">
-    <h3 id="import-modal-title">Import bank statements</h3>
+    <h3 id="import-modal-title">Import from bank</h3>
 
     @if (importStep === 'upload') {
       <div class="import-instructions">
@@ -282,9 +379,43 @@
               [(value)]="entry.bank_slug"
               [options]="importBankSelectOptions"
               [disabled]="importParsing"
-              (valueChange)="onImportBankChange()" />
+              (valueChange)="onImportBankSelectionChange(entry, $event)" />
             @if (importBank(entry.bank_slug); as bank) {
               <p class="import-hint">{{ bank.hint }}</p>
+              <label class="form-group import-account-picker">
+                <span>Account identity for this file</span>
+                <select [value]="entry.bank_account_id || ''" [disabled]="importParsing" (change)="onImportAccountChange(entry, $any($event.target).value)">
+                  <option value="">Enter a new account identity…</option>
+                  @for (account of accountOptionsFor(entry); track account.id) {
+                    <option [value]="account.id">{{ account.display_name }}</option>
+                  }
+                </select>
+              </label>
+              @if (!entry.bank_account_id) {
+                <label class="form-group import-account-picker">
+                  <span>Account name</span>
+                  <input type="text" [(ngModel)]="entry.new_account_label" [name]="'account-label-' + entry.id" placeholder="e.g. Chase Sapphire" [disabled]="importParsing" (ngModelChange)="onNewAccountLabelChange(entry)" />
+                </label>
+              }
+              @if (entry.account_key) {
+                <div class="import-legacy-mapping">
+                  <label class="check-label">
+                    <input type="checkbox" [checked]="entry.map_legacy_account === true" [name]="'map-legacy-account-' + entry.id" [disabled]="importParsing" (change)="onLegacyAccountMappingChange(entry, $any($event.target).checked)" />
+                    Map matching legacy transactions to this account
+                  </label>
+                  <p class="import-hint">Matches only unassigned transactions from this bank with the same date, amount, and description. Other account identities stay separate.</p>
+                </div>
+              }
+              <div class="import-coverage">
+                <strong>Statement coverage</strong>
+                <span>Coverage counts after you confirm the statement dates.</span>
+                <label>From <input type="date" [(ngModel)]="entry.coverage_start" [name]="'coverage-start-' + entry.id" [disabled]="importParsing" /></label>
+                <label>Through <input type="date" [(ngModel)]="entry.coverage_end" [name]="'coverage-end-' + entry.id" [disabled]="importParsing" /></label>
+                <label class="check-label">
+                  <input type="checkbox" [(ngModel)]="entry.confirm_coverage" [name]="'coverage-confirm-' + entry.id" [disabled]="importParsing || !entry.coverage_start || !entry.coverage_end || entry.coverage_end < entry.coverage_start" />
+                  I confirm these dates are the statement's covered period
+                </label>
+              </div>
             }
           </div>
         }
@@ -306,6 +437,32 @@
         Selected {{ selectedImportCount }} · ${{ selectedImportExpenseTotal | number: '1.2-2' }}.
       </p>
       <p class="import-hint">Duplicates include transactions already saved and overlapping rows across these files. Files with errors stay listed below; valid rows can still be imported.</p>
+      @if (importReceipts.length > 0) {
+        <details class="import-history">
+          <summary>Import receipts ({{ importReceipts.length }})</summary>
+          @for (receipt of importReceipts; track receipt.id) {
+            <div class="import-history-row">
+              <div>
+                <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
+                <span>{{ receipt.started_at | date: 'medium' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length }} unresolved</span>
+                @for (range of receipt.coverage || []; track $index) {
+                  <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
+                } @empty {
+                  <span>Coverage not confirmed</span>
+                }
+              </div>
+              <div class="import-history-actions">
+                @if (receipt.status === 'staged' || receipt.status === 'partial' || receipt.status === 'undoing') {
+                  <ui-button variant="secondary" size="sm" (clicked)="resumeImport(receipt)">Resume</ui-button>
+                }
+                @if (receipt.status !== 'withdrawn') {
+                  <ui-button variant="danger" size="sm" (clicked)="undoImport(receipt)">Undo</ui-button>
+                }
+              </div>
+            </div>
+          }
+        </details>
+      }
       @if (importError) {
         <p class="import-error" role="alert">{{ importError }}</p>
       }
@@ -329,26 +486,48 @@
                     <th>Date</th>
                     <th>Account</th>
                     <th>Category</th>
-                    <th>Description</th>
+                    <th>Merchant</th>
+                    <th>Source description</th>
                     <th>Amount</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (row of preview.rows; track $index) {
-                    <tr [class.duplicate-row]="row.status === 'duplicate'" (click)="toggleImportRow(row)">
+                    <tr [class.duplicate-row]="row.status === 'duplicate'" [class.review-row]="row.kind === 'ambiguous_credit'" (click)="toggleImportRow(row)">
                       <td>
-                        @if (row.status === 'new') {
-                          <input type="checkbox" [checked]="isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importCommitting" (change)="toggleImportRow(row)" />
+                        @if (row.status !== 'duplicate') {
+                          <input type="checkbox" [checked]="isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importCommitting || row.kind === 'ambiguous_credit'" (change)="toggleImportRow(row)" />
                         }
                       </td>
                       <td>{{ row.date }}</td>
                       <td>{{ row.account_display }}</td>
                       <td>{{ row.category }}</td>
+                      <td>
+                        <input type="text" [(ngModel)]="row.merchant" [name]="'merchant-' + entry.id + '-' + $index" placeholder="Merchant" aria-label="Merchant name" (click)="$event.stopPropagation()" />
+                        @if (!row.merchant && row.merchant_suggestion) {
+                          <button type="button" class="suggestion-button" (click)="$event.stopPropagation(); useMerchantSuggestion(row)">Use {{ row.merchant_suggestion }}</button>
+                        }
+                      </td>
                       <td>{{ row.description }}</td>
                       <td>${{ row.amount | number: '1.2-2' }}</td>
                       <td>
-                        <ui-badge [variant]="row.status === 'duplicate' ? 'default' : 'success'">{{ row.status }}</ui-badge>
+                        @if (row.status === 'review') {
+                          <label class="form-group import-classification">
+                            <span>Classify credit</span>
+                            <select [value]="row.kind" (click)="$event.stopPropagation()" (change)="$event.stopPropagation(); setImportKind(row, $any($event.target).value)">
+                              <option value="ambiguous_credit">Choose…</option>
+                              <option value="purchase">Purchase</option>
+                              <option value="refund">Refund</option>
+                              <option value="income">Income</option>
+                              <option value="payment">Card payment</option>
+                              <option value="transfer">Transfer</option>
+                            </select>
+                          </label>
+                        } @else {
+                          <ui-badge [variant]="row.status === 'duplicate' ? 'default' : row.kind === 'refund' ? 'warning' : 'success'">{{ row.kind || row.status }}</ui-badge>
+                          @if (row.review_reason) { <span class="import-hint">{{ row.review_reason }}</span> }
+                        }
                       </td>
                     </tr>
                   }
@@ -392,8 +571,8 @@
       }
       <div class="form-actions">
         <ui-button variant="secondary" [disabled]="importCommitting" (clicked)="backToImportFiles()">Back</ui-button>
-        <ui-button variant="primary" (clicked)="commitImport()" [disabled]="importCommitting || importSelected.size === 0">
-          {{ importCommitting ? 'Importing…' : 'Import ' + importSelected.size + ' transaction(s)' }}
+        <ui-button variant="primary" (clicked)="commitImport()" [disabled]="importCommitting || !canSaveImport">
+          {{ importCommitting ? 'Saving…' : importActionLabel }}
         </ui-button>
         <ui-button variant="secondary" [disabled]="importCommitting" (clicked)="closeImportModal()">Cancel</ui-button>
       </div>
@@ -428,8 +607,29 @@
       </div>
       <div class="form-group">
         <label for="tx-desc">Description (optional)</label>
-        <input id="tx-desc" type="text" [(ngModel)]="newTx.description" name="description" />
+        <input id="tx-desc" type="text" [(ngModel)]="newTx.description" name="description" [readonly]="editingImported" />
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tx-merchant">Merchant (optional)</label>
+          <input id="tx-merchant" type="text" [(ngModel)]="newTx.merchant" name="merchant" list="merchant-options" />
+        </div>
+        <div class="form-group">
+          <label for="tx-kind">Activity kind</label>
+          <select id="tx-kind" [(ngModel)]="newTx.kind" name="kind">
+            <option [ngValue]="undefined">Use income / expense</option>
+            <option value="purchase">Purchase</option>
+            <option value="refund">Refund</option>
+            <option value="income">Income</option>
+            <option value="payment">Card payment</option>
+            <option value="transfer">Transfer</option>
+          </select>
+        </div>
+      </div>
+      <label class="check-label">
+        <input type="checkbox" [(ngModel)]="newTx.reviewed" name="reviewed" />
+        Mark reviewed
+      </label>
       <div class="form-actions">
         <ui-button type="submit" variant="primary" [disabled]="!txForm.form.valid || saving">Save</ui-button>
         <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>

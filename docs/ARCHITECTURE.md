@@ -13,15 +13,29 @@ Local-first personal finance: **Angular 19** UI, **FastAPI** API, **SQLite** per
 | Plane | What it is | Writes | Reads for |
 |-------|------------|--------|-----------|
 | **Balance sheet** | per-user `assets`, `liabilities`, `holdings` + market prices | CRUD + Fidelity CSV (holdings per brokerage account) | **Net worth** (computed client-side in `client-finance.ts` after vault unlock) |
-| **Transactions ledger** | encrypted per-user transactions (income/expense, `source=import` from browser-side bank CSV) | Browser CRUD + client CSV preview/commit | Dashboard period charts, calendar, planning **inputs** (averages) |
+| **Transactions ledger** | encrypted per-user transactions; legacy income/expense direction plus a typed kind and optional review metadata | Browser CRUD + client-side staged bank CSV import | Spending and activity review, calendar, observed cashflow summaries |
 | **Recurring cashflow** | per-user `job_incomes`, `fixed_expenses`, `subscriptions` | CRUD on those tables only | Income / fixed-expense / subscription pages; cashflow summary computed client-side; planning spending inputs |
 | **Planning (speculative)** | MC profiles + encrypted `stock_lab_scenarios`; public market research cache | MC profiles; Stock Lab scenarios via vault; market research by symbol | Monte Carlo `/planning`, Stock Lab `/stock-lab` |
 
 **Invariant:** Net worth is always balance-sheet based: manual assets + portfolio market value − liabilities. Transactions, recurring cashflow rows, and simulations **never** update net worth.
 
+## Finance UX and data behavior
+
+These additions preserve the existing financial data planes:
+
+- Transactions retain the source description and legacy `income` / `expense` direction. An optional kind distinguishes `purchase`, `refund`, `payment`, `transfer`, and `ambiguous_credit`. Refunds reduce spend; payments and transfers are excluded from spend; ambiguous credits are excluded from totals and remain visible for review. Optional merchant, reviewed state, receipt link, and import-edited marker support cleanup and reliable undo.
+- Import receipts are encrypted, staged, and resumable. They record per-file account identity and remembered confirmed account mappings, selected/completed/unresolved rows, and user-confirmed account/date coverage, separately from observed transaction dates. Stable keys keep same-mask accounts distinct; renames use explicit account IDs. Receipt-row records contain at most 100 rows or 160 KB and vault checkpoints write at most 200 records. If initial staging is missing rows, the original CSV must be reattached before that receipt can resume or activate. Undo removes only receipt-created rows that have not been edited; edited rows remain, are reported, and their receipt coverage is withdrawn. No raw CSV is stored or sent to the backend.
+- Fidelity files may supply market value and/or market price. Preserve a reported market value and use a reported market price when present; otherwise derive price from market value divided by shares. Known cost basis used as a fallback is explicitly provisional. Unknown basis makes gains unavailable; position value remains usable when market value or price is known. Record valuation source, date, and provenance, and preview account-level replacement before committing the staged replacement.
+- Freshness rules use source dates: cash/checking/savings assets need review after 30 days, other assets after 180 days, liabilities after 30 days, positions after 30 days, and market quotes are stale after more than three calendar days. An undated value is unknown, not fresh. Freshness never changes a financial value.
+- Spending Review, Activity, Calendar, and Imports distinguish recorded transactions from scheduled recurring items and receipt coverage. Recorded activity is the default for spend totals. The ledger supports bulk review, category and merchant cleanup, and visible import coverage.
+- Cashflow charts switch between Recorded activity and Scheduled cashflow as separate views. Category charts use transaction-kind effects over the full ledger, independent of transaction-list paging.
+- Recurring due dates feed upcoming schedules. Planning estimates separate fixed, variable, and irregular annual spending, retain explicit exclusions for recurring charges already represented elsewhere, and show the source and coverage behind any suggested estimate. Planning and calendar occurrences remain estimates until recorded; none changes net worth.
+
+Current implementation status for fields and flows is documented in [DATA_MODEL.md](./DATA_MODEL.md) and [FRONTEND.md](./FRONTEND.md).
+
 Tax document storage was removed. Do not add document vault/BLOB storage back without a fresh product/security decision.
 
-Recurring cashflow (job income, rent/utilities-style fixed expenses, subscriptions) is a budget/plan plane. It can appear in cashflow summaries and planning inputs but does **not** change assets, liabilities, holdings, or net worth. Stock grants and manual private valuations stay in the encrypted job record. Dated stock-sale proceeds count as cashflow when sold; stock grant value and unrealized growth appear only in Planning → Compensation and do not affect recurring or retirement income.
+Recurring cashflow (job income, rent/utilities-style fixed expenses, subscriptions) is a budget/plan plane. It can appear in cashflow summaries and planning inputs but does **not** change assets, liabilities, holdings, or net worth. Planning spending estimates distinguish fixed, variable, and irregular annual amounts; ledger-derived suggestions require confirmed import coverage and explicit acceptance. Stock grants and manual private valuations stay in the encrypted job record. Dated stock-sale proceeds count as cashflow when sold; stock grant value and unrealized growth appear only in Planning → Compensation and do not affect recurring or retirement income.
 
 ## Request flow
 
@@ -67,8 +81,8 @@ There is **no** `routers/analytics.py`. Net-worth Monte Carlo still lives under 
 
 ## Imports
 
-- **Banks:** browser-side parsers in `apps/finance/frontend/src/app/utils/bank-import.util.ts` preview and commit CSV rows into encrypted transaction records.
-- **Brokerage:** client-side Fidelity CSV parse/preview/replace-commit into encrypted holdings.
+- **Banks:** browser-side parsers in `apps/finance/frontend/src/app/utils/bank-import.util.ts` preview CSV rows and create encrypted, staged/resumable import receipts. Receipts retain per-file account identity, selected/completed/unresolved row counts, user-confirmed account/date coverage separate from observed transaction dates, and safe undo state; stable account keys preserve distinct same-mask accounts and confirmed mappings can be reused. Initial missing row chunks require the original CSV to be reattached before resume. Raw CSV stays browser-local. Undo removes only unchanged rows created by that receipt, reports edited rows left in the ledger, and withdraws the receipt's coverage.
+- **Brokerage:** client-side Fidelity CSV parsing supports optional market-value, market-price, and position-date columns. Imports retain valuation provenance and cost-basis status, label known cost-basis fallback as provisional, show unavailable gains when basis is unknown, preview account-level replacement, and stage/verify the selected-account replacement before activating it.
 
 **SimpleFIN later:** the user wants SimpleFIN eventually. **Plaid is not the intended integration** even if placeholder env vars exist. CSV only today.
 

@@ -28,8 +28,7 @@
       <ui-icon name="spark" size="sm" />
       <p>
         <strong>No recurring spending schedules found.</strong>
-        Annual spending for this simulation defaults to <strong>$40,000</strong> until you add
-        fixed expenses or subscriptions, or turn off “Use recurring spending estimate” and enter a manual amount.
+        The recurring basis currently includes no scheduled spending. You can enter a manual annual total or use the fixed, variable, and irregular components.
       </p>
     </div>
   }
@@ -49,6 +48,107 @@
     }
   </nav>
 
+  @if (!loading) {
+    <ui-card title="Annual spending plan">
+      <p class="mc-help">
+        Compose fixed scheduled costs, variable spending, and irregular annual costs. A covered ledger estimate is optional and only enters the plan after you accept it.
+      </p>
+      <div class="mc-control-grid">
+        <label class="mc-field">
+          <span>Spending basis</span>
+          <select aria-label="Spending basis" [ngModel]="spendingMode" (ngModelChange)="onSpendingModeChange($event)">
+            <option value="recurring">Active recurring schedules</option>
+            <option value="components">Fixed + variable + irregular components</option>
+            <option value="manual">One manual annual total</option>
+          </select>
+        </label>
+      </div>
+      @if (spendingMode === 'components') {
+        <div class="mc-control-grid">
+          <label class="mc-field">
+            <span>Fixed annual spending</span>
+            <input aria-label="Fixed annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.fixed_annual" (ngModelChange)="setSpendingComponent('fixed_annual', $event)" />
+            <small class="mc-field-hint">Recurring fixed expenses and subscriptions; editable estimate.</small>
+          </label>
+          <label class="mc-field">
+            <span>Variable annual spending</span>
+            <input aria-label="Variable annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.variable_annual" (ngModelChange)="setSpendingComponent('variable_annual', $event)" />
+          </label>
+          <label class="mc-field">
+            <span>Irregular annual spending</span>
+            <input aria-label="Irregular annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.irregular_annual" (ngModelChange)="setSpendingComponent('irregular_annual', $event)" />
+            <small class="mc-field-hint">Annualized one-off costs such as repairs or travel.</small>
+          </label>
+        </div>
+        <p class="tool-metric" aria-label="Composed annual spending">Composed annual spending: {{ formatMoney(componentAnnualSpending) }}</p>
+      } @else if (spendingMode === 'manual') {
+        <label class="mc-field">
+          <span>Manual annual spending</span>
+          <input aria-label="Manual annual spending" type="number" min="0" step="100" [(ngModel)]="assumptions.annual_spending" />
+        </label>
+      }
+
+      <details class="spending-suggestion-details">
+        <summary>Suggest variable spending from the last three completed months</summary>
+        <p class="mc-help">Select confirmed accounts and categories. Every selected account needs confirmed, complete receipt coverage for {{ spendingPeriod.start }} through {{ spendingPeriod.end }}. Partial, staged, failed, and withdrawn imports do not count.</p>
+        <fieldset class="spending-choice-group">
+          <legend>Accounts</legend>
+          @if (!spendingAccounts.length) {
+            <p class="muted">No confirmed bank accounts are available yet.</p>
+          }
+          @for (account of spendingAccounts; track account.account_key) {
+            <label class="mc-check">
+              <input type="checkbox" [attr.aria-label]="'Select account ' + account.display_name" [checked]="isSelected(selectedSpendingAccountKeys, account.account_key)" (change)="toggleSpendingAccount(account.account_key, $any($event.target).checked)" />
+              <span>{{ account.display_name }} · {{ account.account_mask }}</span>
+            </label>
+          }
+        </fieldset>
+        <fieldset class="spending-choice-group">
+          <legend>Categories</legend>
+          @for (category of availableSpendingCategories; track category) {
+            <label class="mc-check">
+              <input type="checkbox" [attr.aria-label]="'Select category ' + (category === '*' ? 'All spending categories' : category)" [checked]="isSelected(selectedSpendingCategories, category)" (change)="toggleSpendingCategory(category, $any($event.target).checked)" />
+              <span>{{ category === '*' ? 'All spending categories' : category }}</span>
+            </label>
+          }
+        </fieldset>
+        @if (recurringExclusionCandidates.length) {
+          <fieldset class="spending-choice-group">
+            <legend>Exclude charges already represented in recurring schedules</legend>
+            @for (tx of recurringExclusionCandidates; track tx.id) {
+              <label class="mc-check">
+                <input type="checkbox" [checked]="isSelected(excludedRecurringTransactionIds, tx.id)" (change)="toggleRecurringExclusion(tx.id, $any($event.target).checked)" />
+                <span>{{ tx.date }} · {{ tx.merchant || tx.description || tx.category }} · {{ formatMoney(tx.amount) }}</span>
+              </label>
+            }
+          </fieldset>
+        }
+        @if (spendingSuggestion.invalidAccountKeys.length) {
+          <p class="mc-error" role="status">A selected account is no longer confirmed. Choose a confirmed account before estimating.</p>
+        }
+        @if (spendingSuggestion.coverageGaps.length) {
+          <p class="mc-error" role="status">
+            Coverage is incomplete. Missing days:
+            @for (gap of spendingSuggestion.coverageGaps; track gap.accountKey) {
+              {{ gap.accountKey }} {{ gap.from }}–{{ gap.through }}{{ !$last ? '; ' : '' }}
+            }
+          </p>
+        }
+        @if (spendingSuggestion.canSuggest) {
+          <p class="spending-suggestion-result" role="status">
+            Suggested annual variable spending: <strong>{{ formatMoney(spendingSuggestion.annualSuggestion) }}</strong>
+            from {{ spendingSuggestion.transactionCount }} eligible recorded rows. Refunds reduce spend; payments, transfers, and ambiguous credits are excluded.
+          </p>
+        } @else {
+          <p class="muted" role="status">Choose at least one confirmed account and category, then provide complete receipt coverage before a suggestion is available.</p>
+        }
+        <ui-button variant="primary" ariaLabel="Accept spending suggestion" [disabled]="!spendingSuggestion.canSuggest || acceptingSpendingSuggestion" (clicked)="acceptSpendingSuggestion()">
+          {{ acceptingSpendingSuggestion ? 'Saving accepted estimate…' : 'Accept and save estimate' }}
+        </ui-button>
+      </details>
+    </ui-card>
+  }
+
   @if (loading) {
     <ui-skeleton height="320px" />
   } @else {
@@ -65,23 +165,22 @@
               <span>Annual spending: {{ formatMoney(effectiveAnnualSpending()) }}</span>
               <span>Fixed expenses: {{ formatMoney(inputs?.annual_fixed_expenses) }}</span>
               <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>
-              <span>Transactions: {{ inputs?.transaction_count ?? 0 }} (count only — not used for spend)</span>
             </div>
           </ui-card>
           <ui-card title="Useful tools">
-            <p>FIRE, goal funding, and debt payoff use the same scheduled recurring spending basis as Monte Carlo unless you disable recurring expenses or enter scenario overrides.</p>
+            <p>FIRE, goal funding, debt payoff, and Monte Carlo use the selected spending basis. Saved manual totals remain available in legacy profiles.</p>
           </ui-card>
         }
         @if (activeTab === 'fire') {
           <ui-card title="FIRE / 4% Rule" class="tool-card-wide">
             <div class="tool-form-grid">
               <label class="mc-field">
-                <span>Withdrawal rate</span>
-                <input type="number" min="0.01" max="0.12" step="0.0025" [(ngModel)]="fire.withdrawalRate" />
+                <span>Withdrawal rate (%)</span>
+                <input type="number" min="1" max="12" step="0.25" [ngModel]="asPercent(fire.withdrawalRate)" (ngModelChange)="fire.withdrawalRate = fromPercent($event)" />
               </label>
               <label class="mc-field">
-                <span>Expected return</span>
-                <input type="number" min="-0.5" max="0.5" step="0.005" [(ngModel)]="fire.expectedReturn" />
+                <span>Expected return (%)</span>
+                <input type="number" min="-50" max="50" step="0.5" [ngModel]="asPercent(fire.expectedReturn)" (ngModelChange)="fire.expectedReturn = fromPercent($event)" />
               </label>
               <label class="mc-field">
                 <span>Extra annual expenses</span>
@@ -132,8 +231,8 @@
                 <input type="number" min="0.1" max="80" step="0.5" [(ngModel)]="goal.years" />
               </label>
               <label class="mc-field">
-                <span>Expected return</span>
-                <input type="number" min="-0.5" max="0.5" step="0.005" [(ngModel)]="goal.expectedReturn" />
+                <span>Expected return (%)</span>
+                <input type="number" min="-50" max="50" step="0.5" [ngModel]="asPercent(goal.expectedReturn)" (ngModelChange)="goal.expectedReturn = fromPercent($event)" />
               </label>
             </div>
             <section class="tool-results-grid">
@@ -164,8 +263,8 @@
                 <input type="number" min="0" step="100" [(ngModel)]="debt.balance" />
               </label>
               <label class="mc-field">
-                <span>APR</span>
-                <input type="number" min="0" max="1" step="0.005" [(ngModel)]="debt.apr" />
+                <span>APR (%)</span>
+                <input type="number" min="0" max="100" step="0.5" [ngModel]="asPercent(debt.apr)" (ngModelChange)="debt.apr = fromPercent($event)" />
               </label>
               <label class="mc-field">
                 <span>Minimum payment</span>
@@ -300,22 +399,6 @@
 
         <ui-card title="Cash flow">
           <label class="mc-check">
-            <input type="checkbox" [(ngModel)]="useTxSpending" />
-            <span>Use recurring spending estimate</span>
-          </label>
-          <label class="mc-field">
-            <span>Annual spending</span>
-            <input
-              type="number"
-              min="0"
-              step="1000"
-              [disabled]="useTxSpending"
-              [ngModel]="useTxSpending ? txImpliedAnnualSpending() : assumptions.annual_spending"
-              (ngModelChange)="onAnnualSpendingInput($event)"
-            />
-          </label>
-
-          <label class="mc-check">
             <input type="checkbox" [(ngModel)]="useTxIncome" />
             <span>Use active job-income estimate</span>
           </label>
@@ -347,15 +430,16 @@
 
           <div class="mc-control-grid">
             <label class="mc-field">
-              <span>Inflation</span>
-              <input type="number" step="0.005" [(ngModel)]="assumptions.inflation_cpi" />
+              <span>Inflation (%)</span>
+              <input type="number" step="0.25" [ngModel]="asPercent(assumptions.inflation_cpi)" (ngModelChange)="assumptions.inflation_cpi = fromPercent($event)" />
             </label>
             <label class="mc-field">
-              <span>Income growth</span>
+              <span>Income growth (%)</span>
               <input
                 type="number"
-                step="0.005"
-                [(ngModel)]="assumptions.annual_income_growth"
+                step="0.25"
+                [ngModel]="asPercent(assumptions.annual_income_growth)"
+                (ngModelChange)="assumptions.annual_income_growth = fromPercent($event)"
               />
             </label>
           </div>
@@ -367,71 +451,76 @@
             <span>Infer growth allocation</span>
           </label>
           <label class="mc-field">
-            <span>Growth allocation</span>
+            <span>Growth allocation (%)</span>
             <input
               type="number"
               min="0"
-              max="1"
-              step="0.05"
+              max="100"
+              step="5"
               [disabled]="useInferredAllocation"
-              [(ngModel)]="assumptions.portfolio_allocation"
+              [ngModel]="asPercent(assumptions.portfolio_allocation)"
+              (ngModelChange)="assumptions.portfolio_allocation = fromPercent($event)"
             />
           </label>
 
           <div class="mc-control-grid">
             <label class="mc-field">
-              <span>Return mean</span>
-              <input type="number" step="0.005" [(ngModel)]="assumptions.nominal_return_mean" />
+              <span>Return mean (%)</span>
+              <input type="number" step="0.25" [ngModel]="asPercent(assumptions.nominal_return_mean)" (ngModelChange)="assumptions.nominal_return_mean = fromPercent($event)" />
             </label>
             <label class="mc-field">
-              <span>Volatility</span>
-              <input type="number" step="0.005" [(ngModel)]="assumptions.nominal_return_std" />
+              <span>Volatility (%)</span>
+              <input type="number" min="0" step="0.25" [ngModel]="asPercent(assumptions.nominal_return_std)" (ngModelChange)="assumptions.nominal_return_std = fromPercent($event)" />
             </label>
             <label class="mc-field">
-              <span>Stable return</span>
-              <input type="number" step="0.005" [(ngModel)]="assumptions.stable_return_mean" />
+              <span>Stable return (%)</span>
+              <input type="number" step="0.25" [ngModel]="asPercent(assumptions.stable_return_mean)" (ngModelChange)="assumptions.stable_return_mean = fromPercent($event)" />
             </label>
             <label class="mc-field">
-              <span>Tax drag</span>
-              <input type="number" min="0" step="0.0025" [(ngModel)]="assumptions.tax_drag" />
+              <span>Tax drag (%)</span>
+              <input type="number" min="0" step="0.25" [ngModel]="asPercent(assumptions.tax_drag)" (ngModelChange)="assumptions.tax_drag = fromPercent($event)" />
             </label>
             <label class="mc-field">
-              <span>Fee drag</span>
+              <span>Fee drag (%)</span>
               <input
                 type="number"
                 min="0"
-                step="0.0025"
-                [(ngModel)]="assumptions.annual_fee_drag"
+                step="0.25"
+                [ngModel]="asPercent(assumptions.annual_fee_drag)"
+                (ngModelChange)="assumptions.annual_fee_drag = fromPercent($event)"
               />
             </label>
             <label class="mc-field">
-              <span>Shock chance</span>
+              <span>Shock chance (%)</span>
               <input
                 type="number"
                 min="0"
-                max="1"
-                step="0.01"
-                [(ngModel)]="assumptions.shock_probability"
+                max="100"
+                step="1"
+                [ngModel]="asPercent(assumptions.shock_probability)"
+                (ngModelChange)="assumptions.shock_probability = fromPercent($event)"
               />
             </label>
             <label class="mc-field">
-              <span>Shock loss</span>
+              <span>Shock loss (%)</span>
               <input
                 type="number"
                 min="0"
-                max="0.9"
-                step="0.01"
-                [(ngModel)]="assumptions.shock_mean_loss"
+                max="90"
+                step="1"
+                [ngModel]="asPercent(assumptions.shock_mean_loss)"
+                (ngModelChange)="assumptions.shock_mean_loss = fromPercent($event)"
               />
             </label>
             <label class="mc-field">
-              <span>Shock spread</span>
+              <span>Shock spread (%)</span>
               <input
                 type="number"
                 min="0"
-                max="0.5"
-                step="0.01"
-                [(ngModel)]="assumptions.shock_loss_std"
+                max="50"
+                step="1"
+                [ngModel]="asPercent(assumptions.shock_loss_std)"
+                (ngModelChange)="assumptions.shock_loss_std = fromPercent($event)"
               />
             </label>
           </div>
@@ -458,13 +547,14 @@
                   <input type="number" min="0" step="10000" [(ngModel)]="checkpoint.target_net_worth" />
                 </label>
                 <label class="mc-field">
-                  <span>Required odds</span>
+                  <span>Required odds (%)</span>
                   <input
                     type="number"
                     min="0"
-                    max="1"
-                    step="0.05"
-                    [(ngModel)]="checkpoint.min_success_probability"
+                    max="100"
+                    step="5"
+                    [ngModel]="asPercent(checkpoint.min_success_probability)"
+                    (ngModelChange)="checkpoint.min_success_probability = fromPercent($event)"
                   />
                 </label>
                 <div class="mc-row-action">
@@ -494,6 +584,14 @@
                 <label class="mc-field">
                   <span>Amount (each time)</span>
                   <input type="number" step="1000" [(ngModel)]="event.amount" />
+                </label>
+                <label class="mc-field">
+                  <span>Include in</span>
+                  <select aria-label="Annual event applies to" [ngModel]="event.applies_to || 'both'" (ngModelChange)="toggleAnnualEventScope(event, $event)">
+                    <option value="baseline">Baseline only</option>
+                    <option value="scenario">Scenario only</option>
+                    <option value="both">Baseline and scenario</option>
+                  </select>
                 </label>
                 <label class="mc-check mc-check--compact">
                   <input type="checkbox" [(ngModel)]="event.recurring" />
@@ -569,6 +667,23 @@
             </p>
           </div>
         } @else {
+          <ui-card title="Baseline vs scenario">
+            <p class="mc-help">Both runs use the same starting balances, assumptions, horizon, and random seed. Only annual events assigned to each case differ.</p>
+            <section class="tool-results-grid" aria-label="Baseline scenario comparison">
+              <div>
+                <span>Baseline median ending net worth</span>
+                <strong>{{ formatMoney(baselineRun?.result_summary?.terminal_p50) }}</strong>
+              </div>
+              <div>
+                <span>Scenario median ending net worth</span>
+                <strong>{{ formatMoney(scenarioRun?.result_summary?.terminal_p50) }}</strong>
+              </div>
+              <div>
+                <span>Scenario difference</span>
+                <strong>{{ formatSignedMoney((scenarioRun?.result_summary?.terminal_p50 ?? 0) - (baselineRun?.result_summary?.terminal_p50 ?? 0)) }}</strong>
+              </div>
+            </section>
+          </ui-card>
           <section class="mc-kpis" aria-label="Monte Carlo result summary">
             <div class="mc-kpi">
               <span>Horizon survival</span>

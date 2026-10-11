@@ -7,6 +7,21 @@ export interface Transaction {
   description?: string;
   source?: 'manual' | 'import';
   account_display?: string | null;
+  /** Stable encrypted account identity, independent of its editable display name. */
+  bank_account_key?: string | null;
+  source_bank?: string | null;
+  source_account_mask?: string | null;
+  /** Existing records omit this field and retain their income/expense meaning. */
+  kind?: 'purchase' | 'refund' | 'payment' | 'transfer' | 'income' | 'ambiguous_credit';
+  /** User-facing merchant label. `description` always retains the source text. */
+  merchant?: string | null;
+  reviewed?: boolean;
+  review_reason?: string | null;
+  import_receipt_id?: number | null;
+  import_edited?: boolean;
+  /** Snapshot of the source values used to safely distinguish unchanged imports for undo. */
+  import_snapshot?: Pick<Transaction, 'date' | 'type' | 'category' | 'amount' | 'description' | 'merchant' | 'kind' | 'account_display' | 'bank_account_key' | 'source_bank' | 'source_account_mask' | 'reviewed' | 'review_reason'>;
+  dedupe_key?: string;
 }
 
 export interface ImportPreviewRow {
@@ -17,12 +32,24 @@ export interface ImportPreviewRow {
   description: string;
   category: string;
   amount: number;
-  status: 'new' | 'duplicate';
+  status: 'new' | 'duplicate' | 'review';
+  reviewed?: boolean;
+  account_key?: string;
+  bank_slug?: string;
+  source_account_mask?: string;
+  /** Previous importer identity checked only for explicitly mapped legacy accounts. */
+  legacy_dedupe_key?: string;
+  kind?: Transaction['kind'];
+  review_reason?: string | null;
+  merchant_suggestion?: string | null;
+  merchant?: string | null;
 }
 
 export interface ImportRowNote {
   line: number;
   reason: string;
+  filename?: string;
+  kind?: 'payment' | 'transfer' | 'other';
 }
 
 export interface ImportPreviewResult {
@@ -46,6 +73,16 @@ export interface BankImportFile {
   id: number;
   bank_slug: string;
   file: File;
+  account_display?: string;
+  bank_account_id?: number | null;
+  account_key?: string;
+  account_mask_override?: string;
+  new_account_label?: string;
+  /** Explicitly bind matching transactions from the legacy, unassigned importer identity. */
+  map_legacy_account?: boolean;
+  coverage_start?: string;
+  coverage_end?: string;
+  confirm_coverage?: boolean;
 }
 
 export interface BankImportFilePreview {
@@ -67,6 +104,48 @@ export interface ImportCommitResult {
   inserted: number;
   skipped: number;
   batch_id: number;
+  receipt_id?: number;
+  unresolved?: number;
+  coverage_start?: string | null;
+  coverage_end?: string | null;
+}
+
+export interface BankAccountRecord {
+  id: number;
+  bank_slug: string;
+  account_mask: string;
+  account_key: string;
+  display_name: string;
+  confirmed: boolean;
+}
+
+export interface ImportReceipt {
+  id: number;
+  bank_slugs: string[];
+  filenames: string[];
+  status: 'staging' | 'staged' | 'complete' | 'partial' | 'undoing' | 'withdrawn';
+  started_at: string;
+  completed_at?: string | null;
+  selected_rows?: ImportPreviewRow[];
+  selected_row_count: number;
+  inserted_count: number;
+  completed_dedupe_keys?: string[];
+  unresolved: ImportRowNote[];
+  last_error?: string | null;
+  coverage_start?: string | null;
+  coverage_end?: string | null;
+  account_displays: string[];
+  coverage?: Array<{ account_display: string; account_key?: string; bank_account_id?: number | null; start_date: string; end_date: string; confirmed: true }>;
+  undo_summary?: { removed: number; edited: number; missing: number } | null;
+  undo_progress?: { removed: number; edited: number; missing: number; expected_count?: number; pending_ids?: number[] } | null;
+}
+
+export interface ImportReceiptRows {
+  id: number;
+  record_type: 'bank_receipt_rows';
+  receipt_id: number;
+  chunk_index: number;
+  rows: ImportPreviewRow[];
 }
 
 export interface CategoryRenameResult {
@@ -221,7 +300,7 @@ export interface FixedExpense {
   payment_account?: string | null;
   is_active: boolean;
   notes?: string | null;
-  next_due_date: string;
+  next_due_date: string | null;
   monthly_amount: number;
   annual_amount: number;
   created_at: string;
@@ -253,7 +332,7 @@ export interface Subscription {
   payment_account?: string | null;
   is_active: boolean;
   notes?: string | null;
-  next_due_date: string;
+  next_due_date: string | null;
   monthly_amount: number;
   annual_amount: number;
   created_at: string;
@@ -320,15 +399,23 @@ export interface Holding {
   id: number;
   symbol: string;
   shares: number;
-  purchase_price: number;
-  purchase_date: string;
-  current_price?: number;
-  value?: number;
+  purchase_price: number | null;
+  purchase_date: string | null;
+  current_price?: number | null;
+  value?: number | null;
   price_source?: string;
   price_as_of?: string | null;
   account_display?: string | null;
   company_name?: string | null;
   brokerage_account_id?: number | null;
+  cost_basis_status?: 'known' | 'provisional' | 'unknown';
+  market_value?: number | null;
+  quote_date?: string | null;
+  position_as_of?: string | null;
+  position_review_interval_days?: number | null;
+  lifecycle_status?: 'staged' | 'active' | 'inactive';
+  portfolio_stage_id?: number | null;
+  portfolio_row_index?: number;
 }
 
 export interface TransactionCreate {
@@ -337,13 +424,16 @@ export interface TransactionCreate {
   category: string;
   amount: number;
   description?: string;
+  kind?: Transaction['kind'];
+  merchant?: string | null;
+  reviewed?: boolean;
 }
 
 export interface HoldingCreate {
   symbol: string;
   shares: number;
-  purchase_price: number;
-  purchase_date: string;
+  purchase_price: number | null;
+  purchase_date: string | null;
 }
 
 export interface Asset {
@@ -353,6 +443,7 @@ export interface Asset {
   current_value: number;
   as_of_date: string;
   notes?: string | null;
+  review_interval_days?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -363,6 +454,7 @@ export interface AssetCreate {
   current_value: number;
   as_of_date: string;
   notes?: string;
+  review_interval_days?: number | null;
 }
 
 export interface Liability {
@@ -372,6 +464,7 @@ export interface Liability {
   balance_owed: number;
   as_of_date: string;
   notes?: string | null;
+  review_interval_days?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -382,6 +475,7 @@ export interface LiabilityCreate {
   balance_owed: number;
   as_of_date: string;
   notes?: string;
+  review_interval_days?: number | null;
 }
 
 export interface NetWorth {
@@ -408,8 +502,12 @@ export interface FidelityPreviewRow {
   account_display: string;
   symbol: string;
   shares: number;
-  avg_cost_basis: number;
-  cost_basis_total: number;
+  avg_cost_basis: number | null;
+  cost_basis_total: number | null;
+  market_price?: number | null;
+  market_value?: number | null;
+  position_as_of?: string | null;
+  valuation_source?: 'reported_price' | 'derived_market_value' | 'provisional_cost_basis' | 'unavailable';
   status: string;
 }
 
@@ -418,7 +516,7 @@ export interface FidelityPreviewResult {
   filename: string;
   accounts: string[];
   rows: FidelityPreviewRow[];
-  summary: { accounts: number; positions: number; total_cost: number };
+  summary: { accounts: number; positions: number; total_cost: number | null; known_cost_total?: number; total_market_value?: number | null; provisional_positions?: number; unavailable_positions?: number; unknown_basis_positions?: number };
 }
 
 export interface FidelityCommitResult {
@@ -426,6 +524,8 @@ export interface FidelityCommitResult {
   holdings_replaced: number;
   inserted: number;
   accounts: string[];
+  stage_id?: number;
+  status?: 'staged' | 'activated';
 }
 
 export interface MarketPriceQuote {

@@ -97,6 +97,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   withdrawalRate = 4;
   inflationRate = 3;
   monthlyContribution = 0;
+  monthlyContributionIncrease = 0;
   projectionYears = 30;
   loading = true;
 
@@ -180,6 +181,18 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
 
   get projectedRealValue(): number {
     return this.projection.at(-1)?.realValue ?? this.portfolioValue;
+  }
+
+  get scenarioMonthlyContribution(): number {
+    return this.monthlyContribution + this.monthlyContributionIncrease;
+  }
+
+  get scenarioProjectedValue(): number {
+    return this.projectValueAtContribution(this.scenarioMonthlyContribution, this.annualGrowthRate);
+  }
+
+  get contributionScenarioDifference(): number {
+    return this.scenarioProjectedValue - this.projectedValue;
   }
 
   get totalContributions(): number {
@@ -296,6 +309,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
     this.withdrawalRate = 4;
     this.inflationRate = 3;
     this.monthlyContribution = 0;
+    this.monthlyContributionIncrease = 0;
     this.projectionYears = 30;
     this.onAssumptionChange();
   }
@@ -307,12 +321,35 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   }
 
   private projectValueAtRate(rate: number): number {
+    return this.projectValueAtContribution(this.monthlyContribution, rate);
+  }
+
+  private projectValueAtContribution(monthlyContribution: number, rate: number): number {
     let value = this.portfolioValue;
     const monthlyRate = rate / 100 / 12;
     for (let month = 0; month < this.projectionYears * 12; month += 1) {
-      value = value * (1 + monthlyRate) + this.monthlyContribution;
+      value = value * (1 + monthlyRate) + monthlyContribution;
     }
     return value;
+  }
+
+  private get scenarioProjection(): ProjectionPoint[] {
+    const points: ProjectionPoint[] = [];
+    const monthlyRate = (this.annualGrowthRate / 100) / 12;
+    let value = this.portfolioValue;
+    for (let year = 0; year <= this.projectionYears; year += 1) {
+      if (year > 0) {
+        for (let month = 0; month < 12; month += 1) {
+          value = value * (1 + monthlyRate) + this.scenarioMonthlyContribution;
+        }
+      }
+      points.push({
+        year,
+        value,
+        realValue: value / Math.pow(1 + this.inflationRate / 100, year),
+      });
+    }
+    return points;
   }
 
   private normalizeAssumptions(): void {
@@ -320,6 +357,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
     this.withdrawalRate = this.clampNumber(this.withdrawalRate, 0, 12, 4);
     this.inflationRate = this.clampNumber(this.inflationRate, 0, 15, 3);
     this.monthlyContribution = this.clampNumber(this.monthlyContribution, 0, 1_000_000, 0);
+    this.monthlyContributionIncrease = this.clampNumber(this.monthlyContributionIncrease, 0, 1_000_000, 0);
     this.projectionYears = Math.round(this.clampNumber(this.projectionYears, 1, 60, 30));
   }
 
@@ -394,6 +432,19 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
               tension: 0,
             },
           ]
+        : []),
+      ...(this.monthlyContributionIncrease > 0
+        ? [{
+            label: 'Contribution increase scenario',
+            data: this.scenarioProjection.map(point => point.value),
+            borderColor: chartSuccessColor(),
+            backgroundColor: chartSuccessColor(),
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            borderDash: [3, 4],
+            borderWidth: 2,
+            tension: 0.28,
+          }]
         : []),
     ];
 

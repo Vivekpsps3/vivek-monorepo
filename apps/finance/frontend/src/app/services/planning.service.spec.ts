@@ -14,6 +14,8 @@ describe('PlanningService', () => {
       'getFixedExpenses',
       'getSubscriptions',
       'getTransactions',
+      'getImportReceipts',
+      'getBankAccounts',
       'listPlanningProfiles',
       'savePlanningProfile',
       'deletePlanningProfile',
@@ -115,7 +117,65 @@ describe('PlanningService', () => {
         expect(run.seed).toBe(0);
         expect(run.result_summary.start_net_worth).toBe(250_000);
         expect(run.result_summary.annual_contribution_start).toBe(5_000);
+          expect(run.result_summary.spend_assumption_source).toBe('manual-profile');
         expect(run.result_summary.terminal_p50).toBe(240_000);
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('composes fixed, variable, and irregular annual spending components', done => {
+    encStore.getNetWorth.and.resolveTo({ total: 100_000, portfolio: 0, liabilities: 0 } as any);
+    encStore.getJobIncomes.and.resolveTo([]);
+    encStore.getFixedExpenses.and.resolveTo([]);
+    encStore.getSubscriptions.and.resolveTo([]);
+    encStore.getTransactions.and.resolveTo([]);
+
+    service.createRun({
+      tool_id: MC_TOOL_ID,
+      seed: 0,
+      n_paths: 100,
+      horizon_years: 1,
+      overrides: {
+        start_net_worth: 100_000,
+        monthly_income: 0,
+        annual_income_growth: 0,
+        inflation_cpi: 0,
+        nominal_return_mean: 0,
+        nominal_return_std: 0,
+        stable_return_mean: 0,
+        portfolio_allocation: 0,
+        tax_drag: 0,
+        annual_fee_drag: 0,
+        shock_probability: 0,
+        shock_mean_loss: 0,
+        shock_loss_std: 0,
+        spending_mode: 'components',
+        spending_components: { fixed_annual: 40_000, variable_annual: 20_000, irregular_annual: 10_000 },
+      },
+    }).subscribe({
+      next: run => {
+        expect(run.result_summary.annual_spending_start).toBe(70_000);
+        expect(run.result_summary.spend_assumption_source).toBe('planning-spending-components');
+        expect(run.result_summary.terminal_p50).toBe(30_000);
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('loads the full encrypted receipt and account context for the suggestion utility', done => {
+    const transactions = [{ id: 1 } as any];
+    const receipts = [{ id: 2, status: 'complete' } as any];
+    const accounts = [{ id: 3, account_key: 'acct-a', confirmed: true } as any];
+    encStore.getTransactions.and.resolveTo(transactions);
+    encStore.getImportReceipts.and.resolveTo(receipts);
+    encStore.getBankAccounts.and.resolveTo(accounts);
+
+    service.getSpendingSuggestionContext().subscribe({
+      next: context => {
+        expect(context).toEqual({ transactions, receipts, accounts });
         done();
       },
       error: done.fail,

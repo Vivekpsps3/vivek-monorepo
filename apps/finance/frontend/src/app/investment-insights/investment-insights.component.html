@@ -91,6 +91,10 @@
               <span>Monthly contribution</span>
               <div class="input-with-unit"><b>$</b><input type="number" min="0" step="50" [(ngModel)]="monthlyContribution" (ngModelChange)="onAssumptionChange()" /></div>
             </label>
+            <label class="control-field" title="Monthly increase applied only to the scenario. Starting value, return, inflation, and horizon remain the same as the baseline.">
+              <span>Monthly contribution increase</span>
+              <div class="input-with-unit"><b>$</b><input aria-label="Monthly contribution increase" type="number" min="0" step="50" [(ngModel)]="monthlyContributionIncrease" (ngModelChange)="onAssumptionChange()" /></div>
+            </label>
             <label class="control-field" title="Projection horizon in years.">
               <span>Projection length</span>
               <div class="input-with-unit"><input type="number" min="1" max="60" step="1" [(ngModel)]="projectionYears" (ngModelChange)="onAssumptionChange()" /><em>yrs</em></div>
@@ -121,6 +125,29 @@
             <div title="Approximate years to double at the selected annual growth rate using the rule of 72.">
               <span>Years to double</span>
               <strong>{{ yearsToDouble === null ? '-' : (yearsToDouble | number: '1.1-1') }}</strong>
+            </div>
+          </div>
+          <div class="projection-comparison" aria-label="Contribution baseline and scenario comparison">
+            <div>
+              <span>Baseline monthly contribution</span>
+              <strong class="money">${{ monthlyContribution | number: '1.0-0' }}</strong>
+            </div>
+            <div>
+              <span>Scenario monthly contribution</span>
+              <strong class="money">${{ scenarioMonthlyContribution | number: '1.0-0' }}</strong>
+            </div>
+            <div>
+              <span>Baseline projected value</span>
+              <strong class="money">${{ projectedValue | number: '1.0-0' }}</strong>
+            </div>
+            <div>
+              <span>Scenario projected value</span>
+              <strong class="money">${{ scenarioProjectedValue | number: '1.0-0' }}</strong>
+            </div>
+            <div>
+              <span>Difference after {{ projectionYears }} years</span>
+              <strong class="money">${{ contributionScenarioDifference | number: '1.0-0' }}</strong>
+              <small>Same starting value, return, and horizon</small>
             </div>
           </div>
         </ui-card>

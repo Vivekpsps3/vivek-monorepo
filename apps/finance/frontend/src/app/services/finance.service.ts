@@ -19,6 +19,7 @@ import { apiUrl } from '../core/api-url';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import {
+  BankAccountRecord,
   Holding,
   HoldingCreate,
   NetWorth,
@@ -38,6 +39,8 @@ import {
   FidelityPreviewRow,
   FidelityCommitResult,
   ImportCommitResult,
+  ImportReceipt,
+  ImportRowNote,
   ImportPreviewResult,
   ImportPreviewRow,
   JobIncome,
@@ -54,11 +57,16 @@ import {
   buildBankImportPreviews,
   commitBankImportRows,
   listClientBankImports,
+  resumeBankImportReceipt,
 } from '../utils/bank-import.util';
 import {
   buildFidelityImportPreview,
   commitFidelityImportRows,
+  getResumableFidelityStages,
   listClientBrokerageImports,
+  resumeFidelityImportStage as resumeStagedFidelityImport,
+  BrokerageAccountRecord,
+  FidelityStageRecord,
 } from '../utils/fidelity-import.util';
 
 export type DashboardLoadResult = [
@@ -141,7 +149,7 @@ export class FinanceService {
   private refreshAfterImport(): void {
     this.invalidateDashboardCache();
     this.getDashboardTransactions({ limit: 5000 }).pipe(take(1)).subscribe();
-    this.getTransactions({ limit: 5000 }).pipe(take(1)).subscribe();
+    this.getTransactions().pipe(take(1)).subscribe();
   }
 
   refreshAll(): Observable<DashboardLoadResult> {
@@ -183,7 +191,10 @@ export class FinanceService {
         const q = options.search.toLowerCase();
         out = out.filter(r =>
           (r.description || '').toLowerCase().includes(q) ||
-          (r.category || '').toLowerCase().includes(q)
+          (r.category || '').toLowerCase().includes(q) ||
+          (r.merchant || '').toLowerCase().includes(q) ||
+          (r.account_display || '').toLowerCase().includes(q) ||
+          (r.kind || '').toLowerCase().includes(q)
         );
       }
       const skip = options?.skip ?? 0;
@@ -195,9 +206,15 @@ export class FinanceService {
     }));
   }
 
+  /** Full encrypted ledger for totals that must stay correct when the visible table is paged. */
+  getAllTransactions(): Observable<Transaction[]> {
+    return from(this.encStore.getTransactions());
+  }
+
   getDashboardTransactions(options?: { limit?: number }): Observable<Transaction[]> {
     return from(this.encStore.getTransactions().then(rows => {
-      const out = rows.slice(0, options?.limit ?? 5000);
+      // Dashboard totals must use the complete ledger; visible pagination is a component concern.
+      const out = rows;
       this._dashboardTransactions.next(out);
       return out;
     }));
@@ -387,6 +404,14 @@ export class FinanceService {
     }));
   }
 
+  bulkCategorizeMerchant(merchant: string, category: string): Observable<{ updated: number; conflicts: number }> {
+    return from(this.encStore.bulkCategorizeMerchant(merchant, category).then(async result => {
+      this._transactions.next(await this.encStore.getTransactions());
+      this.invalidateDashboardCache();
+      return result;
+    }));
+  }
+
   getHoldings(_refreshPrices = false): Observable<Holding[]> {
     return from(this.encStore.getHoldings().then(rows => {
       this._holdings.next(rows);
@@ -421,9 +446,31 @@ export class FinanceService {
   }
 
   refreshHoldingPrice(holdingId: number): Observable<Holding> {
-    return from(this.encStore.getHoldings().then(rows => {
-      const row = rows.find(r => r.id === holdingId);
-      if (!row) throw new Error('Holding not found');
+    return from(this.encStore.getHoldings()).pipe(
+      mergeMap(rows => {
+        const row = rows.find(item => item.id === holdingId);
+        if (!row) return throwError(() => new Error('Holding not found'));
+        if (!/^[A-Z][A-Z0-9.-]*$/i.test(row.symbol.trim())) {
+          return throwError(() => new Error('This holding does not have a market ticker.'));
+        }
+        return this.lookupSharePrice(row.symbol, true).pipe(
+          mergeMap(quote => {
+            if (!quote.valid) return throwError(() => new Error('No valid market quote was returned.'));
+            return from(this.encStore.updateHoldingPrice(row.id, quote).then(async updated => {
+              this._holdings.next(await this.encStore.getHoldings());
+              this.refreshDerivedMetrics();
+              return updated;
+            }));
+          })
+        );
+      })
+    );
+  }
+
+  confirmHoldingPosition(holdingId: number, asOfDate: string): Observable<Holding> {
+    return from(this.encStore.updateHolding(holdingId, { position_as_of: asOfDate }).then(async row => {
+      this._holdings.next(await this.encStore.getHoldings());
+      this.refreshDerivedMetrics();
       return row;
     }));
   }
@@ -553,12 +600,43 @@ export class FinanceService {
       const existing = new Set(
         transactions.map(tx => String((tx as Transaction & { dedupe_key?: string }).dedupe_key || '')).filter(Boolean)
       );
-      return buildBankImportPreviews(files, existing);
+      const legacy = new Set(transactions
+        .filter(tx => tx.source === 'import' && !tx.bank_account_key)
+        .map(tx => String((tx as Transaction & { dedupe_key?: string }).dedupe_key || ''))
+        .filter(Boolean));
+      return buildBankImportPreviews(files, existing, legacy);
     })());
   }
 
-  commitBankImports(rows: ImportPreviewRow[]): Observable<ImportCommitResult> {
-    return from(commitBankImportRows(this.encStore, rows)).pipe(tap(() => this.refreshAfterImport()));
+  getBankAccounts(): Observable<BankAccountRecord[]> {
+    return from(this.encStore.getBankAccounts());
+  }
+
+  getImportReceipts(): Observable<ImportReceipt[]> {
+    return from(this.encStore.getImportReceipts());
+  }
+
+  commitBankImports(
+    rows: ImportPreviewRow[],
+    context?: {
+      bank_slugs?: string[];
+      filenames?: string[];
+      unresolved?: ImportRowNote[];
+      account_displays?: string[];
+      coverage?: ImportReceipt['coverage'];
+      resume_receipt_id?: number;
+      confirmed_bank_accounts?: Array<Omit<BankAccountRecord, 'id'> & { id?: number }>;
+    }
+  ): Observable<ImportCommitResult> {
+    return from(commitBankImportRows(this.encStore, rows, context)).pipe(tap(() => this.refreshAfterImport()));
+  }
+
+  resumeBankImport(receiptId: number): Observable<ImportCommitResult> {
+    return from(resumeBankImportReceipt(this.encStore, receiptId)).pipe(tap(() => this.refreshAfterImport()));
+  }
+
+  undoBankImport(receiptId: number): Observable<{ removed: number; edited: number; missing: number }> {
+    return from(this.encStore.undoImportReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
   }
 
   commitBankImport(
@@ -580,10 +658,29 @@ export class FinanceService {
   }
 
   commitFidelityImport(
-    _filename: string,
-    rows: FidelityPreviewRow[]
+    filename: string,
+    rows: FidelityPreviewRow[],
+    selectedAccountMasks?: string[],
   ): Observable<FidelityCommitResult> {
-    return from(commitFidelityImportRows(this.encStore, rows)).pipe(
+    return from(commitFidelityImportRows(this.encStore, rows, selectedAccountMasks, filename)).pipe(
+      tap(() => {
+        this.invalidateDashboardCache();
+        this.getHoldings().pipe(take(1)).subscribe();
+        this.getNetWorth().pipe(take(1)).subscribe();
+      })
+    );
+  }
+
+  getBrokerageAccounts(): Observable<BrokerageAccountRecord[]> {
+    return from(this.encStore.getBrokerageAccounts());
+  }
+
+  getHoldingImportStages(): Observable<FidelityStageRecord[]> {
+    return from(getResumableFidelityStages(this.encStore));
+  }
+
+  resumeFidelityImportStage(stageId: number): Observable<FidelityCommitResult> {
+    return from(resumeStagedFidelityImport(this.encStore, stageId)).pipe(
       tap(() => {
         this.invalidateDashboardCache();
         this.getHoldings().pipe(take(1)).subscribe();

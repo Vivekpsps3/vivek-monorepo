@@ -33,6 +33,10 @@ Always **current** — computed client-side after vault unlock by `computeNetWor
 
 Net worth history is not stored. The current total exists only as the client-side computed value in the browser.
 
+### Review dates and freshness
+
+Current assets/liabilities have `as_of_date`; holdings retain position dates and quote source/date metadata. Default review intervals are 30 days for cash/checking/savings assets, 180 days for other assets, 30 days for liabilities, and 30 days for positions. Users can save a positive whole-day override. A dated market quote is stale after more than three calendar days; an undated or future-dated value has unknown freshness. Review prompts let users enter a changed amount or confirm the unchanged value and date; freshness never changes a financial value or creates history.
+
 Expenses, income, card payments, rent, utilities, transfers, and bank imports remain
 transaction/cashflow data. They only affect net worth after the corresponding current
 asset/liability value is updated.
@@ -64,13 +68,23 @@ Each row has `name`, `category`, value (`current_value` or `balance_owed`), `as_
 
 Optional `brokerage_accounts` / `brokerages` group imported positions; nickname can be set via import API.
 
+### Fidelity valuation provenance
+
+Fidelity CSV parsing accepts optional market-value, market-price, and position-date columns. A supplied market value is preserved as the exact position value; a supplied market price is retained, and when only market value is supplied, per-share price is derived as value divided by shares. Cost basis is retained separately from market valuation. If neither market value nor price is present, known cost basis supplies a clearly provisional value. Unknown basis always makes gains unavailable; position value remains available when market value or price is known, and is unavailable only when neither market valuation nor usable cost basis is present. Imported valuation source and position date remain distinct from later market quote source, market date, and fetch time. The importer previews existing versus replacement value per account, stages and verifies the selected accounts, then activates the replacement. Portfolio value and net worth use available position values with their provenance visible.
+
 ## Transactions ledger
 
-Encrypted transaction records — per-user `income` and `expense` (manual or `source=import` from browser-side bank CSV). Powers calendar, dashboard period views, and monthly expense/income totals on the Transactions page. **Does not** update net worth.
+Encrypted transaction records — per-user `income` and `expense` (manual or `source=import` from browser-side bank CSV). Current records include date, direction, category, amount, optional description, source, and optional account display. They power the spending/activity list, calendar, dashboard period views, and monthly expense/income totals. **They do not** update net worth.
+
+The encrypted ledger preserves `description` as the source description and supports optional `kind`, `merchant`, `reviewed`, `review_reason`, `import_receipt_id`, `import_edited`, and stable bank-account identity fields. `kind` supports `purchase`, `refund`, `payment`, `transfer`, `income`, and `ambiguous_credit`; legacy rows without a kind retain their income/expense direction. Purchases contribute to spending, refunds reduce spending, and payment/transfer rows affect neither spending nor income. Ambiguous credits are excluded from totals and remain visible for review. Merchant normalization never replaces the source description.
 
 The user mostly transacts by card. Rent and utilities can be modeled as fixed expenses (below) rather than only as one-off transactions; neither path directly mutates net worth.
 
-Imports: see [ADDING_A_BANK_IMPORT.md](./ADDING_A_BANK_IMPORT.md). Built-in browser-side bank slugs today: `capital_one`, `chase`, `amex`, `citi`, `bank_of_america`, `x_money`. Brokerage Fidelity plaintext import is retired until moved client-side.
+Imports: see [ADDING_A_BANK_IMPORT.md](./ADDING_A_BANK_IMPORT.md). Built-in browser-side bank slugs today: `capital_one`, `chase`, `amex`, `citi`, `bank_of_america`, `x_money`.
+
+Bank CSV preview reports parsed, new, duplicate, skipped, and error row counts across multiple files. Each encrypted import receipt is staged/resumable and tracks per-file source account identity, confirmed account mapping, selected/completed/unresolved rows, and explicitly confirmed account/date coverage. Stable account keys let the app remember confirmed mappings; different keys remain separate even when the bank slug and displayed account mask match, and renames use the explicit account ID. Coverage records the user-confirmed statement interval, separately from the file's observed transaction min/max dates; a latest transaction date alone never establishes coverage. Coverage describes the dates the user confirms are represented by a file, not proof of statement completeness. Receipt rows are encrypted in chunks of at most 100 parsed rows or 160 KB, with vault writes capped at 200 records per checkpoint. If the first staging checkpoint is missing rows, the receipt cannot activate or resume until the original CSV is reattached and staged again. Raw CSV files remain browser-local and are never included in a receipt.
+
+Receipt undo removes only transaction rows created by that receipt that still match their imported values. Edited rows remain in the ledger and are reported during undo; the receipt's coverage is withdrawn so an edited or incomplete import cannot qualify as verified history. A transaction edited after import is marked `import_edited`. Bank-account identities and receipt details are encrypted client-side.
 
 SimpleFIN is the likely future aggregation path. Plaid placeholders may exist in env examples, but Plaid is not the intended integration for this user.
 
@@ -88,6 +102,8 @@ The cashflow summary is computed client-side after vault unlock (`apps/finance/f
 it combines period **transaction** totals with pro-rated/planned job income and scheduled
 fixed-expense/subscription occurrences for the selected range. There is no cashflow-summary
 HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, or net worth.
+
+`fixed_expenses.due_day` places upcoming occurrences on the configured day within each period when present; `start_date` and frequency define the schedule, and `end_date` bounds it. Subscriptions use `next_bill_date` as their schedule anchor. Recurring and calendar views show the next scheduled dates. Scheduled occurrences remain estimates until reflected by actual ledger transactions.
 
 Job records retain `effective_date` as the employment start date and add optional
 `end_date`, `promotions` (date, replacement annual base pay, optional role), and
@@ -149,8 +165,11 @@ shown through the selected end date.
 Starting base pay stays intact when promotions are added. This view can edit the
 same job records as Recurring → Pay and never writes net-worth or ledger data.
 
-Planning reads recurring annual fixed expenses and subscriptions into its input snapshot for
-spending estimates when useful.
+`PlanningService.getInputs()` builds its default spending estimate from active fixed expenses and subscriptions, annualized from their configured frequency. Active job records supply estimated income. The default recurring input includes transaction count in its snapshot hash but does not derive its estimate from transactions.
+
+Planning profiles support three explicit spending modes: active recurring schedules, a composed fixed + variable + irregular annual total, or a manually entered legacy-style annual total. A variable-spending suggestion uses the last three completed browser-local calendar months. Every selected confirmed account must have complete, confirmed receipt coverage for every day in those months, checked by the union of that account's eligible receipt intervals; staged, partial, failed, withdrawn, invalid, or unknown-account coverage does not count. Selected categories constrain the estimate, refunds reduce spend, and payments, transfers, and ambiguous credits are excluded. A fully covered zero-spend period is a valid zero suggestion. Users can exclude individual recurring-charge transaction IDs, then explicitly accept and save the estimate. The encrypted profile stores the selected accounts/categories, exclusions, coverage receipt IDs, period, acceptance time, and accepted amount while preserving legacy manual values and saved profiles.
+
+Annual cashflow events can be scoped to the baseline, scenario, or both; legacy unscoped events apply to both. The app compares both simulations using the same seed and otherwise identical assumptions, with only their event scope differing. Portfolio projections compare a flat monthly contribution with a user-entered dollar increase. Advanced rate controls display percentages and store decimal rates. These estimates and scenarios do not mutate transactions, recurring records, assets, liabilities, holdings, or net worth.
 
 ## Planning lab (speculative)
 

@@ -1,3 +1,6 @@
+import { transactionEffects } from '../crypto/client-finance';
+import { Transaction } from '../models/transaction.model';
+
 export interface SpendCategoryRow {
   label: string;
   value: number;
@@ -31,25 +34,22 @@ export function inMonth(date: string, monthKey: string): boolean {
 }
 
 export function summarizeMonthSpend(
-  transactions: Array<{
-    id: number;
-    date: string;
-    type: string;
-    category: string;
-    description?: string | null;
-    amount: number;
-  }>,
+  transactions: Array<Pick<Transaction, 'id' | 'date' | 'type' | 'category' | 'description' | 'amount' | 'kind'>>,
   monthKey: string,
   topN = 5
 ): MonthSpendSummary {
-  const rows = monthKey ? transactions.filter(tx => inMonth(tx.date, monthKey)) : transactions;
-  const expenses = rows.filter(tx => tx.type === 'expense');
-  const incomeTotal = rows.filter(tx => tx.type === 'income').reduce((sum, tx) => sum + tx.amount, 0);
-  const expenseTotal = expenses.reduce((sum, tx) => sum + tx.amount, 0);
+  const rows = (monthKey ? transactions.filter(tx => inMonth(tx.date, monthKey)) : transactions)
+    .filter(tx => {
+      const effect = transactionEffects(tx as Transaction);
+      return effect.income !== 0 || effect.spending !== 0;
+    });
+  const expenses = rows.filter(tx => transactionEffects(tx as Transaction).spending !== 0);
+  const incomeTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).income, 0);
+  const expenseTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).spending, 0);
   const byCategory = new Map<string, number>();
   for (const tx of expenses) {
     const label = tx.category.trim() || 'Uncategorized';
-    byCategory.set(label, (byCategory.get(label) || 0) + tx.amount);
+    byCategory.set(label, (byCategory.get(label) || 0) + transactionEffects(tx as Transaction).spending);
   }
   const categories = [...byCategory.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -58,7 +58,7 @@ export function summarizeMonthSpend(
       value,
       pct: expenseTotal ? (value / expenseTotal) * 100 : 0,
     }));
-  const topPurchases = [...expenses]
+  const topPurchases = [...expenses.filter(tx => transactionEffects(tx as Transaction).spending > 0)]
     .sort((a, b) => b.amount - a.amount || b.date.localeCompare(a.date))
     .slice(0, topN)
     .map(tx => ({

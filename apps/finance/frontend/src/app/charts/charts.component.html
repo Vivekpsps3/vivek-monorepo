@@ -15,6 +15,10 @@
         <span>Monthly cashflow</span>
         <span>{{ sectionOpen.cashflow ? 'Hide' : 'Show' }}</span>
       </button>
+      <div class="view-switch" role="group" aria-label="Cashflow view">
+        <button type="button" [attr.aria-pressed]="cashflowView === 'recorded'" (click)="setCashflowView('recorded')">Recorded</button>
+        <button type="button" [attr.aria-pressed]="cashflowView === 'scheduled'" (click)="setCashflowView('scheduled')">Scheduled</button>
+      </div>
       @if (sectionOpen.cashflow && monthlyRows.length) {
         <div class="chart-wrap tall" [class.chart-dim]="chartDimmed">
           <canvas #incomeExpenseChart role="img" aria-label="Monthly income, spending, and net cashflow chart"></canvas>
@@ -46,7 +50,7 @@
 
     <ui-card>
       <button type="button" class="section-toggle" (click)="toggleSection('category')">
-        <span>Spending by category</span>
+        <span>Recorded category amounts · full history</span>
         <span>{{ sectionOpen.category ? 'Hide' : 'Show' }}</span>
       </button>
       @if (sectionOpen.category && categoryRows.length) {
@@ -61,7 +65,7 @@
                 <tr>
                   <td>{{ row.label }}</td>
                   <td>${{ row.value | number:'1.2-2' }}</td>
-                  <td>{{ row.pct | number:'1.1-1' }}%</td>
+                  <td>@if (row.pct == null) { Unavailable } @else { {{ row.pct | number:'1.1-1' }}% }</td>
                 </tr>
               }
             </tbody>
