@@ -103,12 +103,12 @@ The workflow runs entirely on the production host against the live repo tree at
 
 1. Resolve the deployed SHA (CI `workflow_run` on `main`, or manual `workflow_dispatch`).
 2. Sync the live tree to that SHA: `git fetch` + `git checkout -B main <sha>`.
-3. Source the repo root `.env` and create `$FINANCE_DATA_DIR`, `$FINANCE_BACKUP_DIR`, `$ME_DATA_DIR`, plus the canonical vault `/home/vivek/Deployments/Vault`.
+3. Source the repo root `.env` and create `$FINANCE_DATA_DIR` and `$FINANCE_BACKUP_DIR`.
 4. Verify Docker access: `sudo -n docker compose version`.
 5. Back up the SQLite database with `scripts/backup-db.sh`.
-6. Build images: `make -C "$CONTROL" build STACK=finance-tracker` and `STACK=me-app`.
-7. Restart stacks: `make -C "$CONTROL" up STACK=...` for both, then `make -C "$CONTROL" site-deploy`.
-8. Health-check `http://127.0.0.1:8085/api/health` (finance) and `http://127.0.0.1:8090/login` (me-app).
+6. Build and restart Finance: `make -C "$CONTROL" build STACK=finance-tracker`, then `make -C "$CONTROL" up STACK=finance-tracker`.
+7. Deploy the personal site: `make -C "$CONTROL" site-deploy`.
+8. Health-check `http://127.0.0.1:8085/api/health`.
 
 There is no `.env.production` and no `docker-compose.prod.yml`; runtime
 configuration comes from the repo root `.env` (plus the `production`

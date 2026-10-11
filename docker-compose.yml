@@ -1,7 +1,6 @@
 # Local-first production-like stack: web serves Angular and proxies /api to FastAPI.
 # Usage: docker compose --env-file .env up --build
 # Open: http://127.0.0.1:8080
-# me-app: docker compose --env-file .env --profile apps up --build
 
 services:
   api:
@@ -46,30 +45,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-  me:
-    build:
-      context: ./apps/me
-      additional_contexts:
-        packages: ./packages
-    container_name: me-app
-    network_mode: host
-    environment:
-      HOST: 127.0.0.1
-      PORT: "8090"
-      ORIGIN: ${ME_ORIGIN:-https://me.vivekpanchagnula.com}
-      SQLITE_PATH: /data/app.db
-      STATIC_DIR: /app/static
-      PI_CODING_AGENT_DIR: /data/pi
-      PI_SKIP_VERSION_CHECK: "1"
-      PI_TELEMETRY: "0"
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://127.0.0.1:8999/v1}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-local}
-      OPENAI_MODEL: ${OPENAI_MODEL:-muse-glimmer-30b-thinking}
-      OPENAI_CONTEXT_LENGTH: ${OPENAI_CONTEXT_LENGTH:-131072}
-    volumes:
-      - ${ME_DATA_DIR:-./data/me}:/data
-      - /home/vivek/Deployments/Vault:/data/vault
-    restart: unless-stopped
-    profiles:
-      - apps

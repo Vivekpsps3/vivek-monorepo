@@ -34,7 +34,6 @@ jobs:
       matrix:
         app:
           - { dir: apps/finance/frontend, lock: apps/finance/frontend/package-lock.json }
-          - { dir: apps/me/frontend, lock: apps/me/frontend/package-lock.json }
           - { dir: apps/site, lock: apps/site/package-lock.json }
     steps:
       - uses: actions/checkout@v4
@@ -56,4 +55,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose --profile apps build
+      - run: docker compose build

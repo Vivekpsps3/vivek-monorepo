@@ -1,16 +1,17 @@
-<nav class="vivek-nav" aria-label="Main">
+<a class="skip-link" [href]="skipLinkHref">Skip to main content</a>
+<nav class="vivek-nav" aria-label="Primary navigation">
   <div class="vivek-nav__inner">
-    <a class="vivek-nav__logo" routerLink="/home">Vivek</a>
+    <a class="vivek-nav__logo" routerLink="/home" aria-label="Vivek Panchagnula home">Vivek</a>
     <div class="vivek-nav__tabs">
-      <a routerLink="/home" routerLinkActive="on">Home</a>
-      <a routerLink="/about" routerLinkActive="on">About</a>
-      <a routerLink="/blog" routerLinkActive="on">Blog</a>
-      <a routerLink="/secrets" routerLinkActive="on">Secrets</a>
+      <a routerLink="/home" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page">Home</a>
+      <a routerLink="/work" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page">Work</a>
+      <a routerLink="/about" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page">About</a>
+      <a routerLink="/secrets" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page">Encryption demo</a>
     </div>
     <div class="vivek-nav__end">
       <div class="vivek-nav__theme" role="group" aria-label="Color mode">
-        <button type="button" [class.on]="theme() !== 'dark'" (click)="setTheme('light')">Light</button>
-        <button type="button" [class.on]="theme() === 'dark'" (click)="setTheme('dark')">Dark</button>
+        <button type="button" [class.on]="theme() === 'light'" [attr.aria-pressed]="theme() === 'light'" aria-label="Use light theme" (click)="setTheme('light')">Light</button>
+        <button type="button" [class.on]="theme() === 'dark'" [attr.aria-pressed]="theme() === 'dark'" aria-label="Use dark theme" (click)="setTheme('dark')">Dark</button>
       </div>
     </div>
   </div>

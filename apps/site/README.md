@@ -1,59 +1,35 @@
-# PersonalWebsite
+# Personal site
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 19.1.8.
+This is the Angular site for Vivek Panchagnula's public portfolio.
 
-## Development server
+## Run and build
 
-To start a local development server, run:
-
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+From `apps/site`, install dependencies and start the local server:
 
 ```bash
-ng generate component component-name
+npm install
+npm start
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+The development site runs at `http://localhost:4200/`.
+The dev server disables dependency prebundling because the workspace's Angular path aliases otherwise load a duplicate Angular runtime and render a blank page. This setting affects local development only.
+
+Build the site with:
 
 ```bash
-ng generate --help
+npx ng build --configuration development
 ```
 
-## Building
+The build writes to `dist/personal-website`.
 
-To build the project run:
+## Content ownership
 
-```bash
-ng build
-```
+- `src/app/app.routes.ts` owns routes, page titles, and route descriptions.
+- `src/app/app.component.html` owns the shared navigation, theme controls, and skip link.
+- `src/app/components/home/` owns the homepage introduction and selected-work previews.
+- `src/app/components/work/` owns the employment stories and selected projects.
+- `src/app/components/about/` owns education, employment history, and skills.
+- `src/app/components/secrets/` owns the `/secrets` encryption demo UI; `src/app/services/ecdh.service.ts` owns its browser-side key exchange and prompt encryption.
+- `src/styles.css` and `src/app/app.component.css` own site-specific layout and responsive rules. They use shared design tokens from `packages/ui/kit.css`.
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+`/blog` redirects to `/home` to preserve old links. Keep that redirect if the retired blog route changes again.

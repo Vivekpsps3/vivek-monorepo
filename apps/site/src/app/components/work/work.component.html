@@ -1,0 +1,94 @@
+<main class="page" id="main-content" tabindex="-1">
+  <header class="page-intro">
+    <p class="eyebrow">Experience &amp; projects</p>
+    <h1 class="page-intro__title">Work</h1>
+    <p class="page-intro__summary">Production infrastructure, alerting, and AI tools for engineering and operations.</p>
+  </header>
+
+  <section class="editorial-section" aria-labelledby="experience-title">
+    <h2 id="experience-title">Experience</h2>
+    <div class="work-list">
+      <article class="work-entry" id="multi-region">
+        <div class="work-entry__heading">
+          <h3>Multi-region operations infrastructure</h3>
+          <p class="work-entry__role">SpaceX · Software Engineer</p>
+          <p class="details">Aug 2025–Present</p>
+        </div>
+        <div class="work-entry__copy">
+          <p>Personally led a single-to-multi-region Kubernetes migration supporting production users and global operational data processing. The work covered deployment configuration and Helm, worker sizing, authentication, CockroachDB, and Celery.</p>
+          <p>During a data center outage, critical jobs resumed in under 10 minutes through operator-initiated failover.</p>
+        </div>
+      </article>
+
+      <article class="work-entry" id="alerting">
+        <div class="work-entry__heading">
+          <h3>Reviewed alert routing</h3>
+          <p class="work-entry__role">SpaceX · Software Engineer</p>
+          <p class="details">One of two primary technical owners company-wide</p>
+        </div>
+        <div class="work-entry__copy">
+          <p>Built alert throttling, deduplication, and monitoring to reduce repetitive triage. Moved UI and database routing definitions into reviewed code and a build pipeline, supporting bulk changes and required review.</p>
+          <p>Routing improvements have shipped; the broader pipeline migration remains in progress.</p>
+        </div>
+      </article>
+
+      <article class="work-entry" id="ai-tools">
+        <div class="work-entry__heading">
+          <h3>AI code review</h3>
+          <p class="work-entry__role">SpaceX · Software Engineer</p>
+        </div>
+        <div class="work-entry__copy">
+          <p>Built a multi-agent code reviewer with supporting tools and custom evaluations. Refined prompts, tools, and custom evaluations using engineer feedback, with attention to false positives and actionable findings. The team uses the reviewer to catch frontend behavior, API, and database-contract issues.</p>
+        </div>
+      </article>
+
+      <article class="work-entry" id="ai-operations">
+        <div class="work-entry__heading">
+          <h3>Operator-reviewed AI triage</h3>
+          <p class="work-entry__role">SpaceX · Software Engineer</p>
+        </div>
+        <div class="work-entry__copy">
+          <p>Combines metrics, logs, and source-code analysis to prepare hypotheses and draft fixes for review. It does not remediate automatically. Prometheus and Grafana are examples of observability tools used with this work.</p>
+          <p>Resource recommendations are applied only after operator approval.</p>
+        </div>
+      </article>
+
+      <article class="work-entry" id="exxonmobil">
+        <div class="work-entry__heading">
+          <h3>Iterative retrieval and analytics</h3>
+          <p class="work-entry__role">ExxonMobil · Machine Learning Researcher Intern</p>
+          <p class="details">May–Aug 2025</p>
+        </div>
+        <div class="work-entry__copy">
+          <p>Built a Python and Hugging Face retrieval-augmented application over more than one million internal records. Iterative tool calls and generated database filters handled queries that needed more than one pass; time-series algorithms calculated results for an LLM to summarize.</p>
+          <p>The application was later adopted into production by internal teams.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="editorial-section" aria-labelledby="projects-title">
+    <h2 id="projects-title">Selected projects</h2>
+    <div class="work-list">
+      <article class="work-entry">
+        <div class="work-entry__heading"><h3>Dancing Purdue Pete</h3></div>
+        <div class="work-entry__copy">
+          <p>Spotify API state, STM32 servo firmware, and Raspberry Pi SPI drivers for album art.</p>
+        </div>
+      </article>
+      <article class="work-entry">
+        <div class="work-entry__heading"><h3>Thinkerbot</h3></div>
+        <div class="work-entry__copy">
+          <p>A local chatbot built with asynchronous Python, queues, sockets, and persistence.</p>
+        </div>
+      </article>
+      <article class="work-entry">
+        <div class="work-entry__heading"><h3>Datacenter network design</h3></div>
+        <div class="work-entry__copy">
+          <p>Coursework in ECMP routing and ABR video delivery.</p>
+        </div>
+      </article>
+    </div>
+    <p class="work-demo-link"><a routerLink="/secrets">Explore the encryption demo <span aria-hidden="true">↗</span></a></p>
+  </section>
+</main>

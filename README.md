@@ -45,11 +45,10 @@ Details: **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 vivek-monorepo/
   apps/finance/backend      # FastAPI
   apps/finance/frontend     # Angular finance UI
-  apps/me/                  # wall kiosk (Angular + FastAPI)
   apps/site/                # vivekpanchagnula.com
   packages/auth             # shared passwordless crypto
   packages/ui               # shared ink+dust CSS
-  .env.example              # one env file for all three apps
+  .env.example              # finance runtime configuration
   docs/
 ```
 

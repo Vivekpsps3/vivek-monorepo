@@ -1,81 +1,86 @@
-<main class="page">
-  <header class="ui-page-header">
-    <div>
-      <h1 class="ui-page-header__title">Vivek Panchagnula</h1>
-      <p class="ui-page-header__subtitle">Computer Engineer · AI &amp; ML</p>
-    </div>
+<main class="page" id="main-content" tabindex="-1">
+  <header class="page-intro">
+    <p class="eyebrow">Background</p>
+    <h1 class="page-intro__title">About</h1>
+    <p class="page-intro__summary">Computer engineer working across applied AI, software engineering, and systems.</p>
   </header>
 
-  <section class="ui-card">
+  <section class="editorial-section" aria-labelledby="contact-title">
+    <h2 id="contact-title">Find me</h2>
     <p class="links">
-      <a href="https://github.com/Vivekpsps3" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://linkedin.com/in/vivek-panchagnula" target="_blank" rel="noopener">LinkedIn</a>
+      <a href="https://github.com/Vivekpsps3" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://linkedin.com/in/vivek-panchagnula" target="_blank" rel="noopener noreferrer">LinkedIn</a>
       <a href="mailto:vivek.panchagnula@gmail.com">Email</a>
     </p>
   </section>
 
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Education</h3></div>
-    <p><strong>Purdue University, West Lafayette, IN</strong></p>
-    <p class="details">M.S. Computer Engineering, AI &amp; ML (Expected Aug 2025)</p>
-    <p class="details">B.S. Computer Engineering, Minor in Mathematics (Dec 2024)</p>
-    <p class="details">GPA: 3.8/4.0 · Gold President's Volunteering Service Award, Dean's List, Academic Merit Scholarship</p>
+  <section class="editorial-section" aria-labelledby="experience-title">
+    <h2 id="experience-title">Experience</h2>
+    <div class="about-history">
+      <article class="editorial-entry">
+        <div class="history-heading">
+          <h3>SpaceX</h3>
+          <p class="history-role">Software Engineer</p>
+        </div>
+        <p class="details">Aug 2025–Present</p>
+        <p>Production applications, distributed infrastructure, and AI tools for engineering and operations.</p>
+      </article>
+
+      <article class="editorial-entry">
+        <div class="history-heading">
+          <h3>ExxonMobil</h3>
+          <p class="history-role">Machine Learning Researcher Intern</p>
+        </div>
+        <p class="details">May–Aug 2025</p>
+        <p>Python and Hugging Face retrieval-augmented generation over more than one million internal records; the work was later adopted into production by internal teams.</p>
+      </article>
+
+      <article class="editorial-entry">
+        <div class="history-heading">
+          <h3>Purdue University</h3>
+          <p class="history-role">Graduate Teaching Assistant &amp; Software Engineer</p>
+        </div>
+        <p class="details">Oct 2024–Aug 2025</p>
+        <p>Python 3 migration and grading automation, advanced embedded C, Verilog, and assembly courses, and course-platform updates.</p>
+      </article>
+
+      <article class="editorial-entry">
+        <div class="history-heading">
+          <h3>IEEE / HKN</h3>
+          <p class="history-role">Student leadership</p>
+        </div>
+        <p class="details">May 2022–Aug 2025</p>
+        <p>Roles included Vice President, Lab Coordinator, Facilities Director, and Industrial Leader. Work included POS and containerized data pipelines.</p>
+      </article>
+
+      <article class="editorial-entry">
+        <div class="history-heading">
+          <h3>Tesla</h3>
+          <p class="history-role">Intern</p>
+        </div>
+        <p class="details">Aug–Dec 2023</p>
+        <p>LLM/NLP line-item validation, Python analytics, and vehicle-log analysis with Splunk.</p>
+      </article>
+    </div>
   </section>
 
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Skills</h3></div>
-    <p><strong>Languages:</strong> C, Python, System Verilog, ARM Assembly, MATLAB, C++, Java, JavaScript, Bash, HTML/CSS, SQL</p>
-    <p><strong>Software:</strong> Agile, Git, Docker, Full-stack, Kubernetes, TDD, CI/CD, Jira, Confluence, REST, MongoDB</p>
+  <section class="editorial-section" aria-labelledby="education-title">
+    <h2 id="education-title">Education</h2>
+    <div class="about-history">
+      <article class="editorial-entry">
+        <h3>Purdue University · West Lafayette, Indiana</h3>
+        <p>M.S. Electrical and Computer Engineering, AI/ML concentration · Awarded Aug 2025</p>
+        <p>B.S. Computer Engineering, Mathematics minor · Dec 2024</p>
+      </article>
+    </div>
   </section>
 
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Tesla — Data Intern</h3></div>
-    <p class="details">Aug 2023 – Dec 2023</p>
-    <ul>
-      <li>LLM/NLP platform automating 100k line item validation.</li>
-      <li>Negotiated $1.1M in contracts via cost-benefit analysis, saving $400k.</li>
-      <li>Python analytics app forecasting $10k cost savings.</li>
-      <li>Vehicle-log analysis with Splunk.</li>
-    </ul>
-  </section>
-
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Purdue University — GTA &amp; Software Engineer</h3></div>
-    <p class="details">Oct 2024 – Present</p>
-    <ul>
-      <li>Supervised 710 students (Embedded C, Verilog, Assembly).</li>
-      <li>Rebased codebase to Python 3, cutting assignment processing time by 50%.</li>
-      <li>Redesigned course platform for 99.9% uptime.</li>
-    </ul>
-  </section>
-
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Secure Air-gapped LLM Inference</h3></div>
-    <ul>
-      <li>Custom LLM inference with AES-256, SHA-1, ECC.</li>
-      <li>Resilient TCP for high-latency, lossy networks.</li>
-    </ul>
-  </section>
-
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Dancing Purdue Pete</h3></div>
-    <ul>
-      <li>Software lead; Spotify API state + STM32 servo firmware.</li>
-      <li>Raspberry Pi SPI drivers for 50MHz album art.</li>
-    </ul>
-  </section>
-
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Thinkerbot</h3></div>
-    <ul>
-      <li>Local-LLM chatbot with asyncio, queues, sockets, and persistence.</li>
-    </ul>
-  </section>
-
-  <section class="ui-card">
-    <div class="ui-card__header"><h3 class="ui-card__title">Datacenter Network Design</h3></div>
-    <ul>
-      <li>ECMP routing, ABR video delivery, transport at full link bandwidth.</li>
-    </ul>
+  <section class="editorial-section" aria-labelledby="skills-title">
+    <h2 id="skills-title">Tools and languages</h2>
+    <div class="skills-list">
+      <p><strong>Languages</strong><span>Python, TypeScript, JavaScript, C#, C/C++, SQL, Bash</span></p>
+      <p><strong>Infrastructure</strong><span>Angular, Kubernetes, Helm, Docker, CI/CD, Celery, CockroachDB, Prometheus, Grafana</span></p>
+      <p><strong>Applied AI</strong><span>AI tools, evaluations, retrieval-augmented generation</span></p>
+    </div>
   </section>
 </main>

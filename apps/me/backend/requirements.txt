@@ -1,6 +1,0 @@
-fastapi==0.115.8
-uvicorn[standard]==0.34.0
-pyyaml==6.0.2
-markdown==3.7
-httpx==0.28.1
-cryptography==44.0.2
