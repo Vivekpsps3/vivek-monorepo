@@ -2,7 +2,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    title="Bills"
+    [title]="'Bills'"
     subtitle="Rent, utilities, and other fixed costs. This does not change net worth.">
     <div uiPageActions class="header-actions">
       <ui-button variant="primary" (clicked)="openAddModal()">Add bill</ui-button>
@@ -21,7 +21,7 @@
     </div>
   </section>
 
-  <ui-card title="Rent and recurring expenses">
+  <ui-card [title]="'Rent and recurring expenses'">
     @if (expenses.length) {
       <ui-data-table ariaLabel="Bills">
         <thead>

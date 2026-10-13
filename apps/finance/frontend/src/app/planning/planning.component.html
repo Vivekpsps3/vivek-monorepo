@@ -1,7 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    title="Planning"
+    [title]="'Planning'"
     subtitle="What-if only. This does not change real balances."
   />
 
@@ -10,18 +10,18 @@
     <p>{{ disclaimer }}</p>
   </div>
 
-  <ui-card title="Your current facts">
+  <ui-card [title]="'Your current facts'">
     <div class="planning-facts-grid">
       <div>
         <span>Current net worth</span>
         <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
-        <a routerLink="/have" [queryParams]="{ t: 'assets' }">Review assets and debts</a>
+        <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open assets and debts</a>
         <small>Oldest valid balance date: {{ inputs?.oldest_balance_as_of || 'No valid date recorded' }}</small>
       </div>
       <div>
         <span>Portfolio value</span>
         <strong>{{ formatMoney(inputs?.net_worth_portfolio) }}</strong>
-        <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Review holdings</a>
+        <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
         <small>
           Oldest quote {{ inputs?.oldest_portfolio_quote_date || 'undated' }} ·
           position {{ inputs?.oldest_portfolio_position_date || 'undated' }}
@@ -30,13 +30,13 @@
       <div>
         <span>Annual take-home pay</span>
         <strong>{{ formatMoney((inputs?.avg_monthly_income || 0) * 12) }}</strong>
-        <a routerLink="/recurring" [queryParams]="{ t: 'pay' }">Review job income</a>
+        <a routerLink="/recurring" [queryParams]="{ t: 'pay' }">Open jobs and pay</a>
         <small>Active job-income schedules</small>
       </div>
       <div>
         <span>Scheduled annual costs</span>
         <strong>{{ formatMoney(inputs?.recurring_annual_spending) }}</strong>
-        <a routerLink="/recurring" [queryParams]="{ t: 'spend' }">Review fixed costs and subscriptions</a>
+        <a routerLink="/recurring" [queryParams]="{ t: 'spend' }">Open bills and subscriptions</a>
         <small>Active scheduled costs · {{ formatMoney(inputs?.annual_fixed_expenses) }} fixed · {{ formatMoney(inputs?.annual_subscriptions) }} subscriptions</small>
       </div>
     </div>
@@ -95,7 +95,7 @@
 
   @if (!loading) {
     @if (showSpendingPlan()) {
-    <ui-card title="Annual spending plan">
+    <ui-card [title]="'Annual spending plan'">
       <p class="mc-help">
         Compose fixed scheduled costs, variable spending, and irregular annual costs. A covered ledger estimate is optional and only enters the plan after you accept it.
       </p>
@@ -205,7 +205,7 @@
     @if (activeTool !== 'simulation') {
       <section class="planning-tools-grid">
         @if (activeTool === 'overview') {
-          <ui-card title="Planning snapshot">
+          <ui-card [title]="'Planning snapshot'">
             <p class="tool-metric">{{ formatMoney(inputs?.net_worth_total) }}</p>
             <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} annual cashflow using your selected assumptions.</p>
             <div class="tool-breakdown">
@@ -217,12 +217,12 @@
               <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>
             </div>
           </ui-card>
-          <ui-card title="Useful tools">
+          <ui-card [title]="'Useful tools'">
             <p>FIRE, goal funding, debt payoff, and Monte Carlo use the selected spending basis. Saved manual totals remain available in legacy profiles.</p>
           </ui-card>
         }
         @if (activeTool === 'retirement-target') {
-          <ui-card title="Retirement target" class="tool-card-wide">
+          <ui-card [title]="'Retirement target'" class="tool-card-wide">
             <p class="mc-help">A quick estimate based on your selected spending, withdrawal rate, portfolio, and current annual cashflow.</p>
             <div class="tool-form-grid">
               <label class="mc-field">
@@ -260,7 +260,7 @@
           </ui-card>
         }
         @if (activeTool === 'savings-goal') {
-          <ui-card title="Savings goal" class="tool-card-wide">
+          <ui-card [title]="'Savings goal'" class="tool-card-wide">
             <p class="mc-help">Enter only money already set aside for this goal. This starts at $0 and does not assume your full net worth is available.</p>
             <div class="tool-form-grid">
               <label class="mc-field">
@@ -301,7 +301,7 @@
           </ui-card>
         }
         @if (activeTool === 'debt-payoff') {
-          <ui-card title="Debt payoff" class="tool-card-wide">
+          <ui-card [title]="'Debt payoff'" class="tool-card-wide">
             <p class="mc-help">This calculator starts with a $0 manual estimate. Select one liability to use its saved balance, or enter a hypothetical amount.</p>
             <div class="tool-form-grid">
               <label class="mc-field mc-field--wide">
@@ -312,7 +312,7 @@
                     <option [value]="liability.id">{{ liability.name }} · {{ formatMoney(liability.balance_owed) }} · as of {{ liability.as_of_date || 'undated' }}</option>
                   }
                 </select>
-                <a routerLink="/have" [queryParams]="{ t: 'assets' }">Review saved liabilities</a>
+                <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open saved liabilities</a>
               </label>
               <label class="mc-field">
                 <span>Debt name</span>
@@ -343,7 +343,7 @@
               </div>
               <div>
                 <span>Payoff timeline</span>
-                <strong>{{ debtPayoffMonths() ?? 'Review payment' }} months</strong>
+                <strong>{{ debtPayoffMonths() ?? 'No estimate' }} months</strong>
               </div>
               <div>
                 <span>Payoff date</span>
@@ -358,7 +358,7 @@
         }
       </section>
     } @else {
-    <ui-card title="Saved inputs">
+    <ui-card [title]="'Saved inputs'">
       <p class="mc-saved-hint">Name and save your assumption set. Simulations are not stored—only these input presets.</p>
       <div class="mc-profiles-row">
         <label class="mc-field">
@@ -415,7 +415,7 @@
 
     <div class="mc-workbench">
       <aside class="mc-panel" aria-label="Scenario builder">
-        <ui-card title="Run setup">
+        <ui-card [title]="'Run setup'">
           <div class="mc-control-grid">
             <label class="mc-field">
               <span>Horizon</span>
@@ -458,7 +458,7 @@
           </label>
         </ui-card>
 
-        <ui-card title="Add a what-if change">
+        <ui-card [title]="'Add a what-if change'">
           <p class="mc-help">Choose a starting point. The amount begins at $0 so you can enter your own expected purchase cost or missed take-home pay.</p>
           <div class="mc-secondary-action-wrap">
             <ui-button variant="secondary" (clicked)="addScenarioTemplate('car-purchase')">Car purchase</ui-button>
@@ -467,7 +467,7 @@
         </ui-card>
 
         @if (assumptions.annual_cashflow_events.length) {
-          <ui-card title="What-if changes">
+          <ui-card [title]="'What-if changes'">
             <p class="mc-help">Enter costs or missed take-home pay as negative amounts. New changes affect the scenario; detailed timing and scope are under advanced assumptions.</p>
             <div class="mc-list">
               @for (event of assumptions.annual_cashflow_events; track trackByIndex($index)) {
@@ -491,7 +491,7 @@
 
         <details class="planning-advanced-controls">
           <summary>Advanced assumptions and event details</summary>
-        <ui-card title="Cash flow">
+        <ui-card [title]="'Cash flow'">
           <label class="mc-check">
             <input type="checkbox" [ngModel]="useTxIncome" (ngModelChange)="setUseTxIncome($event)" />
             <span>Use active job-income estimate</span>
@@ -545,7 +545,7 @@
           </div>
         </ui-card>
 
-        <ui-card title="Market model">
+        <ui-card [title]="'Market model'">
           <label class="mc-check">
             <input type="checkbox" [ngModel]="useInferredAllocation" (ngModelChange)="setUseInferredAllocation($event)" />
             <span>Infer growth allocation</span>
@@ -626,7 +626,7 @@
           </div>
         </ui-card>
 
-        <ui-card title="Goals">
+        <ui-card [title]="'Goals'">
           <div class="mc-list">
             @for (checkpoint of assumptions.checkpoints; track trackByIndex($index)) {
               <div class="mc-editor-row">
@@ -668,7 +668,7 @@
           </div>
         </ui-card>
 
-        <ui-card title="Future events">
+        <ui-card [title]="'Future events'">
           <p class="mc-help">
             Simulation years: <strong>1</strong> = first year after today, up to your horizon.
             Amount is <strong>per occurrence</strong>, summed into each simulation year (negative = outflow).
@@ -758,7 +758,7 @@
             </p>
           </div>
         } @else {
-          <ui-card title="Baseline vs scenario">
+          <ui-card [title]="'Baseline vs scenario'">
             <p class="mc-help">Both runs use the same starting balances, assumptions, horizon, and random seed. Only annual events assigned to each case differ.</p>
             <section class="tool-results-grid" aria-label="Baseline scenario comparison">
               <div>
@@ -798,7 +798,7 @@
             </div>
           </section>
 
-          <ui-card title="Net worth fan chart">
+          <ui-card [title]="'Net worth fan chart'">
             @if (fanPathCaption(); as caption) {
               <p class="mc-help">{{ caption }}</p>
             }
@@ -809,7 +809,7 @@
           </ui-card>
 
           @if (checkpointRows().length) {
-            <ui-card title="Checkpoint goals">
+            <ui-card [title]="'Checkpoint goals'">
               <ui-data-table ariaLabel="Checkpoint goal results">
                 <table>
                   <thead>
@@ -845,7 +845,7 @@
             </ui-card>
           }
 
-          <ui-card title="Projection table">
+          <ui-card [title]="'Projection table'">
             <ui-data-table ariaLabel="Projection percentile table">
               <table>
                 <thead>
@@ -873,7 +873,7 @@
           </ui-card>
 
           @if (lastRun.result_summary.narrative?.length) {
-            <ui-card title="Readout">
+            <ui-card [title]="'Readout'">
               <ul class="mc-narrative">
                 @for (line of lastRun.result_summary.narrative; track line) {
                   <li>{{ line }}</li>

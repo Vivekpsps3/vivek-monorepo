@@ -1,4 +1,4 @@
-<ui-page-header title="Users" subtitle="Accounts, sessions, and admin tools." />
+<ui-page-header [title]="'Users'" subtitle="Accounts, sessions, and admin tools." />
 
 @if (error) { <p class="status status--error page-status" role="alert">{{ error }}</p> }
 @if (message) { <p class="status status--ok page-status">{{ message }}</p> }
@@ -17,7 +17,7 @@
   <div class="section-heading">
     <div>
       <h2 id="users-title">All users</h2>
-      <p>Review accounts and manage access.</p>
+      <p>View accounts and manage access.</p>
     </div>
     <ui-button variant="secondary" size="sm" (clicked)="loadUsers()" [disabled]="usersLoading">
       {{ usersLoading ? 'Loading' : 'Refresh' }}

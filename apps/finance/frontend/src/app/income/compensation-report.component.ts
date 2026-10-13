@@ -14,7 +14,7 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '..
   standalone: true,
   imports: [CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent],
   template: `
-    <ui-card title="Total compensation by employer">
+    <ui-card [title]="'Total compensation by employer'">
       <p>Read-only estimate from the jobs and dated compensation history above. Edit those records in Jobs &amp; pay.</p>
       <p>Gross compensation from your recorded jobs, including past employers. Base pay and recurring annual estimates are prorated by employment dates and promotions; dated payments count once on their dates. ESPP compensation excludes the money you contributed to buy shares.</p>
       <div class="form-row">

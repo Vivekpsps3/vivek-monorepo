@@ -12,9 +12,8 @@
         <strong id="release-notice-title">A new version is ready</strong>
         <p>
           This tab loaded build
-          <code [title]="releaseFreshness.loadedRelease || ''">{{ releaseFreshness.loadedReleaseLabel }}</code>
-          and build
-          <code [title]="releaseFreshness.latestRelease() || ''">{{ releaseFreshness.latestRelease()?.slice(0, 12) }}</code>
+          <code>{{ releaseFreshness.loadedReleaseLabel }}</code>
+          and build <code>{{ releaseFreshness.latestRelease()?.slice(0, 12) }}</code>
           is available. Finish or save any unsaved edits, then reload when you are ready.
         </p>
       } @else {
@@ -26,7 +25,7 @@
         @if (releaseFreshness.loadedReleaseLabel) {
           <p class="release-notice__build">
             Loaded build
-            <code [title]="releaseFreshness.loadedRelease || ''">{{ releaseFreshness.loadedReleaseLabel }}</code>
+            <code>{{ releaseFreshness.loadedReleaseLabel }}</code>
           </p>
         }
       }

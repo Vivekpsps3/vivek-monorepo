@@ -11,7 +11,6 @@
         </span>
         <span class="home-tile__hint">Balance dates: {{ balanceSourceDates }}</span>
         <span class="home-tile__hint">Position dates: {{ positionSourceDates }} · quote dates: {{ quoteSourceDates }}</span>
-        <span class="home-tile__hint">Totals calculated: {{ netWorthCalculationTime }}</span>
         @if (portfolioValueIncomplete) {
           <span class="home-tile__hint">Portfolio value incomplete · {{ unvaluedPositionCount }} position(s) unvalued</span>
         }
@@ -50,7 +49,7 @@
     </nav>
 
     @if (isStarterState) {
-      <ui-card title="First steps">
+      <ui-card [title]="'First steps'">
         <p class="home-tile__hint">Start with the parts you use. You can add balances, transaction history, recurring pay and bills, and a plan separately.</p>
         <nav class="starter-links" aria-label="Finance setup">
           <a routerLink="/have" [queryParams]="{ t: 'assets' }">Add assets and debts</a>
@@ -62,29 +61,6 @@
         </nav>
       </ui-card>
     }
-
-    <ui-card title="Review queue" class="review-queue-card">
-      @if (reviewItems.length) {
-        <p class="home-tile__hint">{{ reviewItems.length }} item(s) need attention across balances, positions, card activity, statement coverage, imports, or renewals.</p>
-        <ul class="review-queue-list">
-          @for (item of visibleReviewItems; track item.id) {
-            <li>
-              <div>
-                <span class="home-tile__hint">{{ item.category }}</span>
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.detail }}</span>
-              </div>
-              <a [routerLink]="item.link" [queryParams]="item.query">Review</a>
-            </li>
-          }
-        </ul>
-        @if (remainingReviewItemCount) {
-          <p class="home-tile__hint">And {{ remainingReviewItemCount }} more. Review all categories from What you have, Spending, and Recurring.</p>
-        }
-      } @else {
-        <p class="home-tile__hint">No balances, positions, card activity, statement coverage, imports, or annual renewals need review.</p>
-      }
-    </ui-card>
 
     <app-charts [embedded]="true" [dataReady]="!isLoading" [overrideTransactions]="transactions" />
   } @else if (isLoading) {

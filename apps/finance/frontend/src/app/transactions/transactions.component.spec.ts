@@ -237,7 +237,7 @@ describe('Transactions multi-file import UI', () => {
     component.openAddModal();
     component.newTx = {
       date: '2026-10-11', type: 'expense', category: 'Food', amount: 12,
-      description: '', merchant: null, reviewed: true,
+      description: '', merchant: null,
     };
 
     component.saveTransaction();
@@ -279,16 +279,16 @@ describe('Transactions multi-file import UI', () => {
     const matching = Array.from({ length: 101 }, (_, index) => ({
       id: index + 1, date: '2026-05-12', type: 'expense', category: index % 2 ? 'Food' : ' FOOD ',
       amount: 10, description: 'Cafe charge', merchant: index % 2 ? 'Coffee Shop' : ' coffee shop ',
-      bank_account_key: 'acct-a', account_display: 'Card A', kind: 'purchase', reviewed: false,
+      bank_account_key: 'acct-a', account_display: 'Card A', kind: 'purchase',
     }));
     const other = Array.from({ length: 50 }, (_, index) => ({
       id: 200 + index, date: '2026-04-12', type: 'expense', category: 'Travel', amount: 900,
-      merchant: 'Rail', bank_account_key: 'acct-b', kind: 'purchase', reviewed: false,
+      merchant: 'Rail', bank_account_key: 'acct-b', kind: 'purchase',
     }));
     finance.getAllTransactions.and.returnValue(of([...matching, ...other] as any));
     component.retryActivityLoad();
     routeQuery.next(convertToParamMap({
-      t: 'activity', month: '2026-05', account: 'acct-a', category: ' FOOD ', merchant: ' Coffee Shop ', review: 'needs',
+      t: 'activity', month: '2026-05', account: 'acct-a', category: ' FOOD ', merchant: ' Coffee Shop ',
     }));
     fixture.detectChanges();
 
@@ -299,7 +299,7 @@ describe('Transactions multi-file import UI', () => {
     expect(component.hasMore).toBeTrue();
     expect(component.monthExpenseTotal).toBe(1010);
 
-    routeQuery.next(convertToParamMap({ t: 'activity', month: '2026-04', account: 'acct-b', category: 'travel', merchant: 'rail', review: 'needs' }));
+    routeQuery.next(convertToParamMap({ t: 'activity', month: '2026-04', account: 'acct-b', category: 'travel', merchant: 'rail' }));
     fixture.detectChanges();
     expect(component.matchingTransactions.length).toBe(50);
     expect(component.monthExpenseTotal).toBe(45000);
@@ -309,21 +309,42 @@ describe('Transactions multi-file import UI', () => {
     component.closeImportModal();
     const unassigned = {
       id: 701, date: '2026-03-10', type: 'expense', category: 'Food', amount: 7,
-      merchant: '  ', bank_account_key: null, kind: 'purchase', reviewed: false,
+      merchant: '  ', bank_account_key: null, kind: 'purchase',
     };
     finance.getAllTransactions.and.returnValue(of([unassigned] as any));
     component.retryActivityLoad();
     routeQuery.next(convertToParamMap({
-      t: 'activity', month: '2026-03', account: '__unassigned_account__', category: 'food', merchant: 'unassigned merchant', review: 'needs',
+      t: 'activity', month: '2026-03', account: '__unassigned_account__', category: 'food', merchant: 'unassigned merchant',
     }));
     expect(component.matchingTransactions.map(row => row.id)).toEqual([701]);
+  });
+
+  it('ignores legacy reviewed flags while keeping unclassified credits visible but out of totals', () => {
+    component.closeImportModal();
+    const rows = [
+      { id: 711, date: '2026-03-10', type: 'expense', category: 'Food', amount: 20, kind: 'purchase', reviewed: true },
+      { id: 712, date: '2026-03-11', type: 'expense', category: 'Food', amount: 30, kind: 'purchase', reviewed: false },
+      { id: 713, date: '2026-03-12', type: 'expense', category: 'Food', amount: 7, kind: 'ambiguous_credit', reviewed: false },
+    ];
+    finance.getAllTransactions.and.returnValue(of(rows as any));
+    component.retryActivityLoad();
+    routeQuery.next(convertToParamMap({ t: 'activity', month: '2026-03', review: 'needs' }));
+
+    expect(component.matchingTransactions.map(row => row.id)).toEqual([711, 712, 713]);
+    expect(component.monthExpenseTotal).toBe(50);
+
+    component.typeFilter = 'expense';
+    component.applyFilterAndSort();
+    expect(component.matchingTransactions.map(row => row.id)).toEqual([711, 712, 713]);
+    expect(component.monthExpenseTotal).toBe(50);
+    expect(component.transactionLabel(rows[2] as any)).toBe('Credit type needed');
   });
 
   it('keeps all historical category totals visible for a full-history chart drilldown', () => {
     component.closeImportModal();
     const rows = [
-      { id: 801, date: '2024-05-10', type: 'expense', category: 'Food', amount: 11, kind: 'purchase', reviewed: true },
-      { id: 802, date: '2025-05-10', type: 'expense', category: ' FOOD ', amount: 19, kind: 'purchase', reviewed: true },
+      { id: 801, date: '2024-05-10', type: 'expense', category: 'Food', amount: 11, kind: 'purchase' },
+      { id: 802, date: '2025-05-10', type: 'expense', category: ' FOOD ', amount: 19, kind: 'purchase' },
     ];
     finance.getAllTransactions.and.returnValue(of(rows as any));
     component.retryActivityLoad();

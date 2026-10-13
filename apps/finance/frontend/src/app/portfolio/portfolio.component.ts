@@ -31,7 +31,6 @@ import {
   hasUnvaluedPositions,
   actualQuoteDate,
   portfolioDateSummary,
-  positionReviewState,
   quoteFreshness,
   quoteFreshnessLabel,
   totalPortfolioGain,
@@ -220,13 +219,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         this.holdingsLoadError = error?.message || 'The app could not load holdings. Try again.';
         this.cdr.markForCheck();
       },
-    });
-  }
-
-  confirmPosition(h: Holding) {
-    this.financeService.confirmHoldingPosition(h.id, todayIsoDate()).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success(`${h.symbol} position confirmed`),
-      error: () => this.toastService.error(`Could not confirm ${h.symbol} position`),
     });
   }
 
@@ -425,15 +417,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'Date unknown';
     const date = new Date(value + 'T00:00:00Z');
     return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? 'Date unknown' : value;
-  }
-
-  positionFreshness(h: Holding): string {
-    const state = positionReviewState(h);
-    return state === 'current' ? 'Reviewed' : state === 'due' ? 'Review due' : 'Date unknown';
-  }
-
-  positionReviewStateFor(h: Holding): 'current' | 'due' | 'unknown' {
-    return positionReviewState(h);
   }
 
   positionDateSummary(): string {

@@ -1,7 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    title="Holdings"
+    [title]="'Holdings'"
     subtitle="Shares and funds. These values are part of net worth.">
     <div uiPageActions class="header-actions">
       <ui-button
@@ -23,7 +23,7 @@
     <p class="refresh-note" role="status">Refreshing {{ marketState.completedSymbols }} of {{ marketState.totalSymbols || 'configured' }} tickers. Saved prices remain available during refresh.</p>
   }
   @for (stage of resumableFidelityStages; track stage.id) {
-    <ui-card class="resume-stage" title="Fidelity replacement needs attention">
+    <ui-card class="resume-stage" [title]="'Fidelity replacement needs attention'">
       <p>{{ stage.filename }} · {{ stage.expected_row_count }} staged position(s) · {{ stage.account_masks.length }} account(s)</p>
       <ui-button variant="primary" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
         @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
@@ -69,7 +69,7 @@
   </ui-card>
   }
 
-  <ui-card title="Holdings">
+  <ui-card [title]="'Holdings'">
     <div uiCardActions class="table-actions table-actions--toolbar">
         <input
           type="search"
@@ -181,12 +181,10 @@
                           }
                         </td>
                         <td class="position-cell">
-                          <ui-badge [variant]="positionReviewStateFor(h) === 'due' ? 'warning' : positionReviewStateFor(h) === 'current' ? 'success' : 'default'">{{ positionFreshness(h) }}</ui-badge>
                           <span class="as-of-small">{{ dateLabel(h.position_as_of) }}</span>
                         </td>
                         <td class="actions actions--row">
                           <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
-                          <ui-button variant="ghost" size="sm" [ariaLabel]="'Confirm position for ' + h.symbol" (clicked)="confirmPosition(h)">Confirm position</ui-button>
                           <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
                           <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
                         </td>
@@ -247,12 +245,10 @@
                       }
                     </td>
                     <td class="position-cell">
-                      <ui-badge [variant]="positionReviewStateFor(h) === 'due' ? 'warning' : positionReviewStateFor(h) === 'current' ? 'success' : 'default'">{{ positionFreshness(h) }}</ui-badge>
                       <span class="as-of-small">{{ dateLabel(h.position_as_of) }}</span>
                     </td>
                     <td class="actions actions--row">
                       <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
-                      <ui-button variant="ghost" size="sm" [ariaLabel]="'Confirm position for ' + h.symbol" (clicked)="confirmPosition(h)">Confirm position</ui-button>
                       <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
                       <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
                     </td>

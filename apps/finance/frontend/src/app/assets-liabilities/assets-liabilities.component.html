@@ -1,10 +1,9 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    title="Assets and debts"
+    [title]="'Assets and debts'"
     subtitle="Cash, property, vehicles, and debts.">
     <div uiPageActions class="header-actions">
-      <ui-button variant="secondary" (clicked)="openBalanceReview()">Review balances</ui-button>
       <ui-button variant="secondary" (clicked)="openAddLiability()">Add liability</ui-button>
       <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
     </div>
@@ -36,7 +35,7 @@
     </ui-card>
   }
 
-  <ui-card title="Assets">
+  <ui-card [title]="'Assets'">
     @if (assets.length) {
       <ui-data-table ariaLabel="Assets">
         <thead>
@@ -45,8 +44,6 @@
             <th>Category</th>
             <th>Value</th>
             <th>As of</th>
-            <th>Review</th>
-            <th>Interval</th>
             <th></th>
           </tr>
         </thead>
@@ -57,8 +54,6 @@
               <td>{{ row.category | formatCategory }}</td>
               <td>${{ row.current_value | number: '1.2-2' }}</td>
               <td>{{ row.as_of_date || 'Date unknown' }}</td>
-              <td><ui-badge [variant]="assetState(row) === 'current' ? 'success' : assetState(row) === 'due' ? 'warning' : 'default'">{{ assetState(row) === 'current' ? 'Current' : assetState(row) === 'due' ? 'Due' : 'Unknown' }}</ui-badge></td>
-              <td>{{ assetInterval(row) }} days</td>
               <td class="actions actions--row">
                 <ui-button variant="ghost" size="sm" (clicked)="openEditAsset(row)">Edit</ui-button>
                 <ui-button variant="danger" size="sm" (clicked)="deleteAsset(row)">Delete</ui-button>
@@ -75,7 +70,7 @@
     }
   </ui-card>
 
-  <ui-card title="Liabilities">
+  <ui-card [title]="'Liabilities'">
     @if (liabilities.length) {
       <ui-data-table ariaLabel="Liabilities">
         <thead>
@@ -84,8 +79,6 @@
             <th>Category</th>
             <th>Balance owed</th>
             <th>As of</th>
-            <th>Review</th>
-            <th>Interval</th>
             <th></th>
           </tr>
         </thead>
@@ -96,8 +89,6 @@
               <td>{{ row.category | formatCategory }}</td>
               <td>${{ row.balance_owed | number: '1.2-2' }}</td>
               <td>{{ row.as_of_date || 'Date unknown' }}</td>
-              <td><ui-badge [variant]="liabilityState(row) === 'current' ? 'success' : liabilityState(row) === 'due' ? 'warning' : 'default'">{{ liabilityState(row) === 'current' ? 'Current' : liabilityState(row) === 'due' ? 'Due' : 'Unknown' }}</ui-badge></td>
-              <td>{{ liabilityInterval(row) }} days</td>
               <td class="actions actions--row">
                 <ui-button variant="ghost" size="sm" (clicked)="openEditLiability(row)">Edit</ui-button>
                 <ui-button variant="danger" size="sm" (clicked)="deleteLiability(row)">Delete</ui-button>
@@ -121,15 +112,12 @@
   <ui-select label="Category" [options]="assetCategoryOptions" [(value)]="assetForm.category" />
   <label>Value <input type="number" min="0" step="0.01" [(ngModel)]="assetForm.current_value" /></label>
   <label>As of <input type="date" [(ngModel)]="assetForm.as_of_date" /></label>
-  <label>Review interval override (days) <input type="number" min="1" step="1" [(ngModel)]="assetForm.review_interval_days" placeholder="Default: cash 30, other 180" /></label>
-  <p class="hint">Leave blank to use the category default.</p>
   <label>Notes <input [(ngModel)]="assetForm.notes" /></label>
   <div class="modal-actions">
     <ui-button variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
     <ui-button variant="primary" [disabled]="saving" (clicked)="saveAsset()">Save</ui-button>
   </div>
 </ui-dialog>
-
 <ui-dialog [open]="showLiabilityModal" labelledBy="liability-modal-title" (closed)="closeModals()">
   <h3 id="liability-modal-title">{{ editingLiabilityId ? 'Edit liability' : 'Add liability' }}</h3>
   <label>Name <input [(ngModel)]="liabilityForm.name" data-dialog-initial-focus /></label>
@@ -139,46 +127,9 @@
     [(value)]="liabilityForm.category" />
   <label>Balance owed <input type="number" min="0" step="0.01" [(ngModel)]="liabilityForm.balance_owed" /></label>
   <label>As of <input type="date" [(ngModel)]="liabilityForm.as_of_date" /></label>
-  <label>Review interval override (days) <input type="number" min="1" step="1" [(ngModel)]="liabilityForm.review_interval_days" placeholder="Default: 30" /></label>
-  <p class="hint">Leave blank to use the 30-day default.</p>
   <label>Notes <input [(ngModel)]="liabilityForm.notes" /></label>
   <div class="modal-actions">
     <ui-button variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
     <ui-button variant="primary" [disabled]="saving" (clicked)="saveLiability()">Save</ui-button>
-  </div>
-</ui-dialog>
-
-<ui-dialog [open]="showBalanceReview" labelledBy="balance-review-title" panelClass="ui-dialog-panel--wide" (closed)="showBalanceReview = false">
-  <h3 id="balance-review-title">Review balances</h3>
-  <p class="hint">Enter changed amounts, or confirm that each unchanged balance is still accurate. Confirmed rows receive the review date below.</p>
-  <label>Review date <input type="date" [(ngModel)]="balanceReviewDate" /></label>
-  <div class="balance-review-list">
-    <ui-data-table ariaLabel="Balance review">
-      <thead><tr><th>Name</th><th>Value</th><th>As of</th><th>Interval</th><th>Confirmation</th></tr></thead>
-      <tbody>
-        @for (row of balanceReviewRows; track row.key) {
-          <tr>
-            <td>{{ row.name }} <small>{{ row.kind === 'asset' ? 'Asset' : 'Liability' }}</small></td>
-            <td><input type="number" min="0" step="0.01" [attr.aria-label]="row.name + ' value'" [(ngModel)]="row.amount" [ngModelOptions]="{standalone: true}" (ngModelChange)="updateReviewAmount(row)" /></td>
-            <td>{{ row.asOfDate || 'Date unknown' }}</td>
-            <td>
-              <input type="number" min="1" step="1" [attr.aria-label]="row.name + ' review interval'" [(ngModel)]="row.intervalInput" [ngModelOptions]="{standalone: true}" (ngModelChange)="reviewIntervalChanged(row)" placeholder="{{ row.intervalDays }} default" />
-              <small>Effective: {{ row.intervalDays }} days</small>
-            </td>
-            <td>
-              @if (row.amountChanged) {
-                <span>Amount changed</span>
-              } @else {
-                <label class="unchanged-label"><input type="checkbox" [checked]="row.confirmedUnchanged" (change)="toggleUnchangedConfirmation(row)" /> Confirmed unchanged</label>
-              }
-            </td>
-          </tr>
-        }
-      </tbody>
-    </ui-data-table>
-  </div>
-  <div class="modal-actions">
-    <ui-button variant="ghost" (clicked)="showBalanceReview = false">Cancel</ui-button>
-    <ui-button variant="primary" [disabled]="saving" (clicked)="saveBalanceReview()">Save reviewed balances</ui-button>
   </div>
 </ui-dialog>

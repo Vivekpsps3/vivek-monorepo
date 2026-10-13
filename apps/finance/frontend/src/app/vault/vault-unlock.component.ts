@@ -14,9 +14,9 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../sh
   template: `
     <div class="page vault-page">
       <ui-page-header
-        title="Unlock vault"
+        [title]="'Unlock vault'"
         subtitle="Decrypt your finance data in this browser session. Nothing sensitive is sent to the server." />
-      <ui-card title="Vault passphrase">
+      <ui-card [title]="'Vault passphrase'">
         <label>
           Vault passphrase
           <input type="password" [(ngModel)]="passphrase" autocomplete="current-password" />

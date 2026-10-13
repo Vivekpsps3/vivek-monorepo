@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { syntheticVault } from './synthetic-vault';
 
 const today = () => new Date().toISOString().slice(0, 10);
+const nativeHoverTitleSelector = 'ui-card[title], ui-page-header[title], ui-empty-state[title], nav [title], ui-button[title], button[title], a[title]';
 const expectQuoteRequests = async (vault: Awaited<ReturnType<typeof syntheticVault>>, symbols: string[]) => {
   await expect.poll(() => vault.quoteRequests.map(symbol => symbol.toUpperCase()).sort()).toEqual([...symbols].sort());
 };
@@ -15,11 +16,11 @@ const seed = () => ({
   liabilities: [{ id: 11, name: 'Card balance', category: 'credit_card', balance_owed: 100, as_of_date: '2026-01-01' }],
   holdings: [{ id: 12, symbol: 'VOO', shares: 1, purchase_price: 80, purchase_date: '2026-01-01', current_price: 100, price_source: 'manual' }],
   transactions: [
-    { id: 20, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 100, description: 'SOURCE GROCERY', merchant: 'Grocery', reviewed: false },
-    { id: 21, date: today(), type: 'expense', kind: 'refund', category: 'Food', amount: 25, description: 'SOURCE REFUND', reviewed: false },
-    { id: 22, date: today(), type: 'income', kind: 'income', category: 'Salary', amount: 200, description: 'Paycheck', reviewed: true },
-    { id: 23, date: today(), type: 'expense', kind: 'payment', category: 'Card', amount: 500, description: 'AUTOPAY PAYMENT', reviewed: true },
-    { id: 24, date: today(), type: 'income', kind: 'ambiguous_credit', category: 'Unresolved', amount: 30, description: 'UNKNOWN CREDIT', reviewed: false },
+    { id: 20, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 100, description: 'SOURCE GROCERY', merchant: 'Grocery' },
+    { id: 21, date: today(), type: 'expense', kind: 'refund', category: 'Food', amount: 25, description: 'SOURCE REFUND', merchant: 'Grocery' },
+    { id: 22, date: today(), type: 'income', kind: 'income', category: 'Salary', amount: 200, description: 'Paycheck' },
+    { id: 23, date: today(), type: 'expense', kind: 'payment', category: 'Card', amount: 500, description: 'AUTOPAY PAYMENT' },
+    { id: 24, date: today(), type: 'income', kind: 'ambiguous_credit', category: 'Unresolved', amount: 30, description: 'UNKNOWN CREDIT' },
   ],
 });
 
@@ -65,64 +66,6 @@ function legacyChaseDedupeKey(date: string, amount: number, description: string)
   return createHash('sha256')
     .update(['chase', 'chase', date, normalizedAmount, normalizedDescription].join('|'))
     .digest('hex');
-}
-
-function homeReviewSeed() {
-  const now = new Date();
-  const start = dateAtOffset(now, -3, 1);
-  const coveredThrough = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 0)).toISOString().slice(0, 10);
-  const staleDate = shiftIsoDate(today(), -45);
-  return {
-    assets: [{ id: 10, name: 'Checking', category: 'cash', current_value: 1000, as_of_date: staleDate }],
-    liabilities: [{ id: 11, name: 'Card balance', category: 'credit_card', balance_owed: 100, as_of_date: today() }],
-    holdings: [{ id: 12, symbol: 'VOO', shares: 1, purchase_price: 80, purchase_date: '2026-01-01', current_price: 100,
-      price_source: 'manual', position_as_of: staleDate }],
-    bank_accounts: [{ id: 40, bank_slug: 'chase', account_mask: 'card', account_key: 'card', display_name: 'Daily card', confirmed: true }],
-    import_batches: [
-      { id: 50, record_type: 'bank_receipt', bank_slugs: ['chase'], filenames: ['covered-first-month.csv'], status: 'complete',
-        started_at: start, completed_at: coveredThrough, selected_row_count: 2, inserted_count: 2, unresolved: [],
-        account_displays: ['Daily card'], coverage: [{ account_key: 'card', account_display: 'Daily card', confirmed: true,
-          start_date: start, end_date: coveredThrough }] },
-      { id: 51, record_type: 'bank_receipt', bank_slugs: ['chase'], filenames: ['partial-statement.csv'], status: 'partial',
-        started_at: today(), completed_at: null, selected_row_count: 2, inserted_count: 1, unresolved: [],
-        account_displays: ['Daily card'], coverage: [] },
-    ],
-    subscriptions: [{ id: 60, name: 'Annual license', category: 'Software', amount: 120, frequency: 'annual',
-      next_bill_date: shiftIsoDate(today(), 7), payment_account: 'Daily card', is_active: true }],
-  };
-}
-
-function spendingReviewSeed(now: Date) {
-  const currentMonthStart = dateAtOffset(now, 0, 1);
-  const priorMonthStart = dateAtOffset(now, -1, 1);
-  const comparisonDay = Math.min(now.getUTCDate(), new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).getUTCDate());
-  const priorCoverageEnd = dateAtOffset(now, -1, comparisonDay);
-  const currentCoverageEnd = shiftIsoDate(currentMonthStart, now.getUTCDate() - 2);
-  const currentDay = `${now.toISOString().slice(0, 7)}-${String(now.getUTCDate()).padStart(2, '0')}`;
-  const futurePriorDay = dateAtOffset(now, -1, comparisonDay + 1);
-  return {
-    bank_accounts: [{ id: 40, bank_slug: 'chase', account_mask: 'card', account_key: 'card', display_name: 'Daily card', confirmed: true }],
-    import_batches: [{ id: 50, record_type: 'bank_receipt', bank_slugs: ['chase'], filenames: ['review-window.csv'], status: 'complete',
-      started_at: currentMonthStart, completed_at: currentDay, selected_row_count: 5, inserted_count: 5, unresolved: [],
-      account_displays: ['Daily card'], coverage: [
-        { account_key: 'card', account_display: 'Daily card', confirmed: true, start_date: currentMonthStart, end_date: currentCoverageEnd },
-        { account_key: 'card', account_display: 'Daily card', confirmed: true, start_date: priorMonthStart, end_date: priorCoverageEnd },
-      ] }],
-    transactions: [
-      { id: 60, date: dateAtOffset(now, 0, 5), type: 'expense', kind: 'purchase', category: 'Food', amount: 100,
-        description: 'SOURCE GROCERY CURRENT', merchant: 'Grocery', bank_account_key: 'card' },
-      { id: 61, date: dateAtOffset(now, 0, 6), type: 'expense', kind: 'refund', category: 'Food', amount: 25,
-        description: 'SOURCE GROCERY REFUND', merchant: 'Grocery', bank_account_key: 'card' },
-      { id: 62, date: dateAtOffset(now, -1, 5), type: 'expense', kind: 'purchase', category: 'Food', amount: 50,
-        description: 'SOURCE GROCERY PRIOR', merchant: 'Grocery', bank_account_key: 'card' },
-      { id: 63, date: futurePriorDay, type: 'expense', kind: 'purchase', category: 'Food', amount: 900,
-        description: 'SOURCE FUTURE PRIOR', merchant: 'Grocery', bank_account_key: 'card' },
-      { id: 64, date: currentDay, type: 'expense', kind: 'payment', category: 'Card', amount: 500,
-        description: 'Card payment', merchant: 'Card payment', bank_account_key: 'card' },
-      { id: 65, date: currentDay, type: 'income', kind: 'ambiguous_credit', category: 'Unresolved', amount: 30,
-        description: 'Unresolved credit', merchant: 'Unresolved credit', bank_account_key: 'card' },
-    ],
-  };
 }
 
 test('empty vault supports keyboard transaction entry and a failed save can be retried', async ({ page }) => {
@@ -175,38 +118,32 @@ test('recorded totals count refunds and exclude payments and unresolved credits 
   expect(vault.data('holdings')[0].shares).toBe(1);
 });
 
-test('Home puts stale balances, positions, coverage gaps, partial imports and near renewals in Review queue', async ({ page }) => {
-  const vault = await syntheticVault(page, homeReviewSeed());
-  await vault.open('/');
-  await expectQuoteRequests(vault, ['VOO']);
-  await expectHoldingPrice(vault, 'VOO', 125);
+test('Spending opens on Activity without review controls and Home has no review queue', async ({ page }) => {
+  const oldDate = shiftIsoDate(today(), -45);
+  const vault = await syntheticVault(page, {
+    assets: [{ id: 10, name: 'Checking', category: 'cash', current_value: 1000, as_of_date: oldDate }],
+    liabilities: [{ id: 11, name: 'Card balance', category: 'credit_card', balance_owed: 100, as_of_date: oldDate }],
+    transactions: [{ id: 20, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 20,
+      description: 'Older card record', reviewed: false }],
+  });
 
-  const queue = page.locator('.review-queue-card');
-  const charts = page.locator('app-charts');
-  await expect(queue).toBeVisible();
-  await expect(queue).toContainText('Checking');
-  await expect(queue).toContainText('VOO');
-  await expect(queue).toContainText('Daily card');
-  await expect(queue).toContainText('Statement coverage gap');
-  await expect(queue).toContainText('partial-statement.csv');
-  await expect(queue).toContainText('Annual license');
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: '/tmp/finance-home-review.png', fullPage: true });
-  const queueBox = await queue.boundingBox();
-  const chartsBox = await charts.boundingBox();
-  expect(queueBox).not.toBeNull();
-  expect(chartsBox).not.toBeNull();
-  expect(queueBox!.y + queueBox!.height).toBeLessThanOrEqual(chartsBox!.y);
-  await expect(page.locator('.holdings-panel')).toHaveCount(0);
-
-  const coverageItem = queue.locator('.review-queue-list li').filter({ hasText: 'Statement coverage' });
-  await coverageItem.getByRole('link', { name: 'Review', exact: true }).click();
-  await expect(page).toHaveURL(/\/spending\?t=imports/);
+  await vault.open('/spending');
+  await expect(page.getByRole('link', { name: 'Activity', exact: true })).toHaveClass(/on/);
+  await expect(page.locator('app-transactions')).toBeVisible();
+  await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reviewed', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: /review/i })).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: 'Older card record' })).toContainText('$20.00');
 
   await vault.open('/');
-  const partialItem = queue.locator('.review-queue-list li').filter({ hasText: 'partial-statement.csv' });
-  await partialItem.getByRole('link', { name: 'Review', exact: true }).click();
-  await expect(page).toHaveURL(/\/spending\?t=imports/);
+  await expect(page.locator('.review-queue-card')).toHaveCount(0);
+  await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$900.00');
+  expect(vault.data('transactions')[0]).toMatchObject({ description: 'Older card record', amount: 20 });
+
+  await vault.open('/planning');
+  await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
 });
 
 test('Charts switch between recorded totals and scheduled commitments without changing financial records', async ({ page }) => {
@@ -284,66 +221,6 @@ test('Upcoming commitments are date sorted and show account, autopay and frequen
   await expect(rows.nth(2)).toContainText('$60.00');
 });
 
-test('Spending Review compares matched elapsed days, preserves refund net, shows coverage gaps and opens Activity sources', async ({ page }) => {
-  const reviewNow = new Date('2026-10-11T12:00:00Z');
-  await page.clock.install({ time: reviewNow });
-  const vault = await syntheticVault(page, spendingReviewSeed(reviewNow));
-  await vault.open('/spending?t=review');
-
-  const review = page.locator('app-spending-review');
-  await expect(page.getByLabel('Review month', { exact: true })).toHaveValue('2026-10');
-  await expect(review.locator('.period-caption')).toContainText('Both periods include the same 11 elapsed calendar days.');
-  const coverage = review.locator('.coverage-panel');
-  await expect(coverage).toContainText('Daily card');
-  await expect(coverage.locator('.coverage-gap')).toContainText('2026-10-11');
-  await expect(coverage.locator('.coverage-complete')).toContainText('Every date in this period has explicit coverage.');
-
-  const food = review.getByRole('row', { name: /Food \$75\.00 \$50\.00/ });
-  await expect(food.locator('td').nth(0)).toContainText('$75.00');
-  await expect(food.locator('td').nth(1)).toContainText('$50.00');
-  await review.getByRole('button', { name: 'Food', exact: true }).click();
-  const drilldown = review.locator('.drilldown-panel');
-  await expect(drilldown).toContainText('SOURCE GROCERY CURRENT');
-  await expect(drilldown).toContainText('SOURCE GROCERY REFUND');
-  await expect(drilldown).toContainText('SOURCE GROCERY PRIOR');
-  await expect(drilldown).not.toContainText('SOURCE FUTURE PRIOR');
-  await drilldown.locator('.drilldown-transaction').filter({ hasText: 'SOURCE GROCERY CURRENT' })
-    .getByRole('button', { name: 'Edit in Activity', exact: true }).click();
-  const activityUrl = new URL(page.url());
-  expect(activityUrl.pathname).toBe('/spending');
-  expect(activityUrl.searchParams.get('t')).toBe('activity');
-  expect(activityUrl.searchParams.get('v')).toBe('spending');
-  expect(activityUrl.searchParams.get('account')).toBe('card');
-  expect(activityUrl.searchParams.get('category')).toBe('Food');
-  expect(activityUrl.searchParams.get('merchant')).toBeNull();
-  expect(activityUrl.searchParams.get('q')).toBeNull();
-  expect(activityUrl.searchParams.get('periodStart')).toBe('2026-10-01');
-  expect(activityUrl.searchParams.get('periodEnd')).toBe('2026-10-11');
-  expect(activityUrl.searchParams.get('priorStart')).toBe('2026-09-01');
-  expect(activityUrl.searchParams.get('priorEnd')).toBe('2026-09-11');
-  expect(activityUrl.searchParams.get('edit')).toBe('60');
-  await expect(page.getByRole('dialog', { name: 'Edit transaction' })).toBeVisible();
-
-  await vault.open('/spending?t=review');
-  await review.getByRole('button', { name: 'Merchants', exact: true }).click();
-  const grocery = review.getByRole('row', { name: /Grocery \$75\.00 \$50\.00/ });
-  await expect(grocery.locator('td').nth(0)).toContainText('$75.00');
-  await expect(grocery.locator('td').nth(1)).toContainText('$50.00');
-});
-
-test('phone Spending Review stays within the viewport and can render a mobile screenshot', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const reviewNow = new Date('2026-10-11T12:00:00Z');
-  await page.clock.install({ time: reviewNow });
-  const vault = await syntheticVault(page, spendingReviewSeed(reviewNow));
-  await vault.open('/spending?t=review');
-  await expect(page.locator('.comparison-mobile-card').first()).toBeVisible();
-  const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
-  expect(width.document).toBeLessThanOrEqual(width.viewport);
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: '/tmp/finance-review-mobile.png', fullPage: true });
-});
-
 test('Calendar keeps its selected date when opening Add transaction', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/spending?t=calendar');
@@ -357,29 +234,11 @@ test('Calendar keeps its selected date when opening Add transaction', async ({ p
   await expect(dialog).toBeHidden();
 });
 
-test('bulk balance review persists changed amounts, unchanged confirmations and review intervals', async ({ page }) => {
-  const vault = await syntheticVault(page, seed());
-  await vault.open('/have?t=balances');
-  await page.getByRole('button', { name: 'Review balances', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Review balances', exact: true });
-  await dialog.getByLabel('Checking value', { exact: true }).fill('1050');
-  await dialog.getByLabel('Checking review interval', { exact: true }).fill('20');
-  await dialog.getByRole('row').filter({ hasText: 'Card balance' }).getByRole('checkbox').check();
-  await dialog.getByRole('button', { name: 'Save reviewed balances', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(vault.data('assets')[0]).toMatchObject({ current_value: 1050, as_of_date: today(), review_interval_days: 20 });
-  expect(vault.data('liabilities')[0]).toMatchObject({ balance_owed: 100, as_of_date: today() });
-  await page.getByRole('link', { name: 'Home', exact: true }).first().click();
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,075.00');
-  expect(vault.data('holdings')[0].shares).toBe(1);
-  expect(vault.data('transactions')).toHaveLength(5);
-});
-
 test('summaries include transactions beyond 5,000 while visible rows remain paginated', async ({ page }) => {
   test.setTimeout(60_000);
   const rows = Array.from({ length: 5_101 }, (_, index) => ({
     id: index + 1, date: today(), type: 'expense', category: 'Food', amount: 1,
-    description: `Purchase ${index}`, reviewed: false,
+    description: `Purchase ${index}`,
   }));
   const vault = await syntheticVault(page, { transactions: rows });
   await vault.open('/');
@@ -392,7 +251,7 @@ test('summaries include transactions beyond 5,000 while visible rows remain pagi
 test('legacy spending links translate to Activity filters and five navigation hubs remain accessible', async ({ page }) => {
   const vault = await syntheticVault(page, seed());
   await vault.open('/spending?t=pay');
-  await expect(page.getByRole('navigation', { name: 'Spending review', exact: true })).toContainText('Activity');
+  await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).toContainText('Activity');
   await expect(page.getByRole('button', { name: 'Income', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await vault.open('/spending?t=spend');
   await expect(page.getByRole('button', { name: 'Spending', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -501,7 +360,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   const description = 'SOURCE LEGACY COFFEE';
   const legacy = {
     id: 70, date, type: 'expense', category: 'Food', amount: 10, description,
-    merchant: 'Coffee shop', reviewed: true, source: 'import',
+    merchant: 'Coffee shop', source: 'import',
     dedupe_key: legacyChaseDedupeKey(date, 10, description),
   };
   const vault = await syntheticVault(page, {
@@ -509,9 +368,9 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
       display_name: 'Chase account A', confirmed: true }],
     transactions: [legacy],
   });
-  const preservedReviewFields = {
+  const preservedTransactionFields = {
     date: legacy.date, type: legacy.type, category: legacy.category, amount: legacy.amount,
-    description: legacy.description, merchant: legacy.merchant, reviewed: legacy.reviewed,
+    description: legacy.description, merchant: legacy.merchant,
   };
   const csv = Buffer.from([
     'Transaction Date,Post Date,Description,Category,Type,Amount,Memo',
@@ -541,7 +400,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   await expect.poll(() => vault.data('transactions').find(row => row.id === legacy.id)?.bank_account_key).toBe('chase-account-a');
   expect(vault.data('transactions')).toHaveLength(1);
   expect(vault.data('transactions')[0]).toMatchObject({
-    ...preservedReviewFields,
+    ...preservedTransactionFields,
     bank_account_key: 'chase-account-a',
     account_display: 'Chase account A',
     source_bank: 'chase',
@@ -564,7 +423,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   const mappedLegacy = vault.data('transactions').find(row => row.id === legacy.id)!;
   const freshAccountRow = vault.data('transactions').find(row => row.id !== legacy.id)!;
   expect(mappedLegacy).toMatchObject({
-    ...preservedReviewFields,
+    ...preservedTransactionFields,
     bank_account_key: 'chase-account-a',
     account_display: 'Chase account A',
   });
@@ -606,7 +465,6 @@ test('bank imports require account identity, resume one receipt, and undo retain
   expect(new Set(vault.data('transactions').map(row => row.import_receipt_id)).size).toBe(1);
   const credit = vault.data('transactions').find(row => row.description === 'MISC CREDIT');
   expect(credit?.kind).toBe('ambiguous_credit');
-  expect(credit?.reviewed).toBe(false);
   await page.getByRole('link', { name: 'Activity', exact: true }).click();
   const historyRow = page.getByRole('row').filter({ hasText: 'SOURCE COFFEE' });
   await historyRow.getByRole('button', { name: 'Edit', exact: true }).click();

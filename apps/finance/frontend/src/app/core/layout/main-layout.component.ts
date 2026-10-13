@@ -18,14 +18,12 @@ export interface NavItem {
   shortLabel: string;
   icon: UiIconName;
   exact: boolean;
-  tooltip: string;
 }
 
 interface NavGroup {
   label: string;
   shortLabel: string;
   icon: UiIconName;
-  tooltip: string;
   adminOnly?: boolean;
   items: NavItem[];
 }
@@ -64,43 +62,38 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       label: 'Home',
       shortLabel: 'Home',
       icon: 'dashboard',
-      tooltip: 'What you have, this month, and what repeats.',
-      items: [{ path: '/', label: 'Home', shortLabel: 'Home', icon: 'dashboard', exact: true, tooltip: 'Home' }],
+      items: [{ path: '/', label: 'Home', shortLabel: 'Home', icon: 'dashboard', exact: true }],
     },
     {
       label: 'What you have',
       shortLabel: 'Have',
       icon: 'scale',
-      tooltip: 'Assets, debts, and holdings.',
       items: [
-        { path: '/have', label: 'What you have', shortLabel: 'Have', icon: 'scale', exact: false, tooltip: 'Assets, debts, holdings' },
+        { path: '/have', label: 'What you have', shortLabel: 'Have', icon: 'scale', exact: false },
       ],
     },
     {
       label: 'Spending',
       shortLabel: 'Spend',
       icon: 'transactions',
-      tooltip: 'Card and bank activity.',
       items: [
-        { path: '/spending', label: 'Spending', shortLabel: 'Spend', icon: 'transactions', exact: false, tooltip: 'Spending' },
+        { path: '/spending', label: 'Spending', shortLabel: 'Spend', icon: 'transactions', exact: false },
       ],
     },
     {
       label: 'Recurring',
       shortLabel: 'Repeat',
       icon: 'wallet',
-      tooltip: 'Paychecks, bills, and subscriptions.',
       items: [
-        { path: '/recurring', label: 'Recurring', shortLabel: 'Repeat', icon: 'wallet', exact: false, tooltip: 'Paychecks, bills, subscriptions' },
+        { path: '/recurring', label: 'Recurring', shortLabel: 'Repeat', icon: 'wallet', exact: false },
       ],
     },
     {
       label: 'Planning',
       shortLabel: 'Plan',
       icon: 'trending',
-      tooltip: 'What-if only. Does not change real balances.',
       items: [
-        { path: '/planning', label: 'Planning', shortLabel: 'Plan', icon: 'trending', exact: false, tooltip: 'Planning' },
+        { path: '/planning', label: 'Planning', shortLabel: 'Plan', icon: 'trending', exact: false },
       ],
     },
   ];

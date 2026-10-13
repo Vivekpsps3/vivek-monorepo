@@ -1,7 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="calendar-page">
   <ui-page-header
     [embedded]="embedded"
-    title="Calendar"
+    [title]="'Calendar'"
     subtitle="Activity by day. This view does not change net worth." />
 
   <div class="calendar-toolbar">
@@ -34,7 +34,7 @@
   </section>
 
   <div class="month-charts">
-    <ui-card title="Category breakdown">
+    <ui-card [title]="'Category breakdown'">
       @if (monthSummary.categories.length) {
         <div class="chart-wrap">
           <canvas #categoryChart role="img" [attr.aria-label]="'Spending by category for ' + getMonthName()"></canvas>
@@ -60,7 +60,7 @@
       }
     </ui-card>
 
-    <ui-card title="Highest purchases">
+    <ui-card [title]="'Highest purchases'">
       @if (monthSummary.topPurchases.length) {
         <ol class="top-list">
           @for (row of monthSummary.topPurchases; track row.id) {

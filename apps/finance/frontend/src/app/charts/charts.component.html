@@ -102,7 +102,10 @@
             <tbody>
               @for (row of allocationRows; track row.label) {
                 <tr>
-                  <td [title]="row.companyName || row.label">{{ row.label }}</td>
+                  <td>
+                    {{ row.label }}
+                    @if (row.companyName) { <small class="chart-company-name">{{ row.companyName }}</small> }
+                  </td>
                   <td>${{ row.value | number:'1.2-2' }}</td>
                   <td>{{ row.pct | number:'1.1-1' }}%</td>
                 </tr>

@@ -83,7 +83,7 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const respond = (body: any, status = 200) => route.fulfill({ status, json: body });
-    if (path === '/api/auth/me') return respond({ user: { id: 987, username: 'synthetic', display_name: 'Synthetic review', role: 'user', is_active: true } });
+    if (path === '/api/auth/me') return respond({ user: { id: 987, username: 'synthetic', display_name: 'Synthetic user', role: 'user', is_active: true } });
     if (path === '/api/vault/status') return respond({ exists: true, key_version: 1, migration_status: 'complete', migrated: true,
       kdf_algorithm: 'PBKDF2', kdf_salt_b64: salt.toString('base64'), kdf_iterations: 1000, wrapped_dek_b64: wrappedKey });
     if (path === '/api/health') return respond({ status: 'ok' });

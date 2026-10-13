@@ -17,7 +17,7 @@ import { FinanceService } from '../services/finance.service';
 import { Transaction } from '../models/transaction.model';
 import { transactionEffects } from '../crypto/client-finance';
 import { todayIsoDate } from '../utils/date.util';
-import { spendingComparisonGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-review.util';
+import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
   chartColorAt,
@@ -120,8 +120,8 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       month: this.monthKey,
       date: tx.date,
       account: tx.bank_account_key || UNASSIGNED_ACCOUNT_FILTER,
-      category: spendingComparisonGroupKey(tx, 'category'),
-      merchant: spendingComparisonGroupKey(tx, 'merchant'),
+      category: spendingGroupKey(tx, 'category'),
+      merchant: spendingGroupKey(tx, 'merchant'),
       edit: tx.id,
     };
   }

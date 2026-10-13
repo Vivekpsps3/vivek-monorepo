@@ -4,6 +4,13 @@ Audit date: 2026-10-12. This is the starting map of the actual application,
 followed by the target ownership model and implementation decisions. User
 journeys are independent critical reviews, not reports of real customers.
 
+> Historical snapshot: the map, recommendations, and execution record below
+> describe the application on 2026-10-12. On 2026-10-13 the user retired the
+> Spending Review tab, transaction approval flags, Home review queue, and
+> interval-based balance/position prompts. Current behavior is documented in
+> [FRONTEND.md](./FRONTEND.md) and [DESIGN_GUIDE.md](./DESIGN_GUIDE.md). The
+> earlier audit remains here as an execution record.
+
 ## Complete starting map
 
 The authenticated shell has five hubs, desktop navigation, mobile abbreviated

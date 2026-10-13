@@ -33,9 +33,9 @@ Always **current** — computed client-side after vault unlock by `computeNetWor
 
 Net worth history is not stored. The current total exists only as the client-side computed value in the browser.
 
-### Review dates and freshness
+### Source dates and freshness
 
-Current assets/liabilities have `as_of_date`; holdings retain position dates and quote source/date metadata. Default review intervals are 30 days for cash/checking/savings assets, 180 days for other assets, 30 days for liabilities, and 30 days for positions. Users can save a positive whole-day override. A dated market quote is stale after more than three calendar days; an undated or future-dated value has unknown freshness. Review prompts let users enter a changed amount or confirm the unchanged value and date; freshness never changes a financial value or creates history.
+Current assets/liabilities have `as_of_date`; holdings retain position dates and quote source/date metadata. A dated market quote is stale after more than three calendar days; an undated or future-dated value has unknown freshness. These dates describe recorded source values; freshness never changes a financial value or creates history.
 
 Expenses, income, card payments, rent, utilities, transfers, and bank imports remain
 transaction/cashflow data. They only affect net worth after the corresponding current
@@ -76,7 +76,7 @@ Fidelity CSV parsing accepts optional market-value, market-price, and position-d
 
 Encrypted transaction records — per-user `income` and `expense` (manual or `source=import` from browser-side bank CSV). Current records include date, direction, category, amount, optional description, source, and optional account display. They power the spending/activity list, calendar, dashboard period views, and monthly expense/income totals. **They do not** update net worth.
 
-The encrypted ledger preserves `description` as the source description and supports optional `kind`, `merchant`, `reviewed`, `review_reason`, `import_receipt_id`, `import_edited`, and stable bank-account identity fields. `kind` supports `purchase`, `refund`, `payment`, `transfer`, `income`, and `ambiguous_credit`; legacy rows without a kind retain their income/expense direction. Purchases contribute to spending, refunds reduce spending, and payment/transfer rows affect neither spending nor income. Ambiguous credits are excluded from totals and remain visible for review. Merchant normalization never replaces the source description.
+The encrypted ledger preserves `description` as the source description and supports optional `kind`, `merchant`, `import_receipt_id`, `import_edited`, and stable bank-account identity fields. `kind` supports `purchase`, `refund`, `payment`, `transfer`, `income`, and `ambiguous_credit`; legacy rows without a kind retain their income/expense direction. Purchases contribute to spending, refunds reduce spending, and payment/transfer rows affect neither spending nor income. Ambiguous credits are excluded from totals until classified. Merchant normalization never replaces the source description.
 
 The user mostly transacts by card. Rent and utilities can be modeled as fixed expenses (below) rather than only as one-off transactions; neither path directly mutates net worth.
 

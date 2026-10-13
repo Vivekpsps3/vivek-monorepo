@@ -34,7 +34,7 @@
   </section>
   }
 
-  <ui-card title="Jobs and pay">
+  <ui-card [title]="'Jobs and pay'">
     <div class="income-guidance">
       <div>
         <strong>Start with the basics</strong>
@@ -42,8 +42,8 @@
           Enter your employer, starting salary, pay frequency, and start date. You can add tax estimates, bonuses, and stock history later.
         </p>
       </div>
-      <div title="Pay figures feed Recurring and Planning. They do not change net worth.">
-        <ui-icon name="spark" size="sm" /> Separate from transactions
+      <div>
+        <ui-icon name="spark" size="sm" /> Feeds Recurring and Planning, not transaction history
       </div>
     </div>
 
@@ -275,7 +275,8 @@
               [options]="stateTaxOptions"
               [(value)]="taxEstimator.state" />
             <label class="form-group">
-              <span title="Common pre-tax deductions: traditional 401(k), health insurance, HSA, FSA, commuter benefits.">Pre-tax deductions per period</span>
+              <span>Pre-tax deductions per period</span>
+              <small class="muted block">Examples: 401(k), insurance, HSA/FSA, or commuter benefits.</small>
               <input name="pre_tax_deductions" type="number" min="0" step="0.01" [(ngModel)]="taxEstimator.preTaxDeductionsPerPeriod" />
             </label>
           </div>
@@ -292,11 +293,13 @@
 
         <div class="form-row">
           <label class="form-group">
-            <span title="Use actual federal, state, local, Social Security, and Medicare withholding from your paystub when available.">{{ payPeriodLabel | titlecase }} taxes</span>
+            <span>{{ payPeriodLabel | titlecase }} taxes</span>
+            <small class="muted block">Use actual paystub withholding when available.</small>
             <input name="taxes_per_period" type="number" min="0" step="0.01" [(ngModel)]="form.taxes_per_period" />
           </label>
           <label class="form-group">
-            <span title="Use recurring paycheck deductions such as medical, dental, vision, HSA, FSA, 401(k), commuter, or union dues.">{{ payPeriodLabel | titlecase }} deductions</span>
+            <span>{{ payPeriodLabel | titlecase }} deductions</span>
+            <small class="muted block">Include recurring deductions such as insurance, retirement, or transit.</small>
             <input name="deductions_per_period" type="number" min="0" step="0.01" [(ngModel)]="form.deductions_per_period" />
           </label>
         </div>

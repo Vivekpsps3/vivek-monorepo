@@ -2,7 +2,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="subscriptions">
   <ui-page-header
     [embedded]="embedded"
-    title="Subscriptions"
+    [title]="'Subscriptions'"
     subtitle="Services that repeat. This does not change net worth.">
     <div uiPageActions>
       <ui-button variant="primary" (clicked)="openAddModal()">
@@ -26,7 +26,7 @@
     </ui-card>
   </section>
 
-  <ui-card title="Subscriptions">
+  <ui-card [title]="'Subscriptions'">
     @if (subscriptions.length) {
       <div class="subscription-list">
         @for (row of subscriptions; track row.id) {

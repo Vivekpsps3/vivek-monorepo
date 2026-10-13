@@ -1,14 +1,14 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="stock-lab-page">
   <ui-page-header
     [embedded]="embedded"
-    title="Stock research"
+    [title]="'Stock research'"
     subtitle="Study a stock or fund. This does not add holdings."
   />
 
   <div class="stock-disclosure"><ui-icon name="spark" size="sm" /><span>{{ disclosure }}</span></div>
   @if (error) { <p class="stock-error" role="alert">{{ error }}</p> }
 
-  <ui-card title="Facts and guesses">
+  <ui-card [title]="'Facts and guesses'">
     <ul class="evidence-list">
       @for (card of evidenceCards; track card.label) {
         <li>
@@ -21,7 +21,7 @@
     </ul>
   </ui-card>
 
-  <ui-card title="Command center">
+  <ui-card [title]="'Command center'">
     <div class="stock-controls-grid">
       <label class="stock-field"><span>Primary ticker</span><input [ngModel]="scenario.primary_symbol" (ngModelChange)="setPrimarySymbol($event)" maxlength="10" /></label>
       <label class="stock-field"><span>History period</span><select [(ngModel)]="period"><option value="1y">1y</option><option value="2y">2y</option><option value="5y">5y</option><option value="10y">10y</option><option value="max">Max</option></select></label>
@@ -48,7 +48,7 @@
     }
   </section>
 
-  <ui-card title="Comparison tickers">
+  <ui-card [title]="'Comparison tickers'">
     <div class="stock-actions-row">
       <input class="stock-inline-input" [(ngModel)]="newComparisonSymbol" aria-label="Add ticker" maxlength="10" />
       <ui-button variant="secondary" (clicked)="addComparisonSymbol()">Add comparison</ui-button>
@@ -62,7 +62,7 @@
 
   @if (primaryResearch; as primary) {
     <section class="stock-main-grid">
-      <ui-card title="Headline snapshot">
+      <ui-card [title]="'Headline snapshot'">
         <div class="metric-grid">
           <div><span>Current price</span><strong>{{ formatMoney(primary.quote?.current_price) }}</strong></div>
           <div><span>Previous close</span><strong>{{ formatMoney(primary.quote?.previous_close) }}</strong></div>
@@ -73,14 +73,14 @@
         </div>
       </ui-card>
 
-      <ui-card title="Analysis scorecard">
+      <ui-card [title]="'Analysis scorecard'">
         <div class="scorecard-list">
           @for (item of scorecard; track item.label) { <div class="scorecard-row"><span>{{ item.label }}</span><strong>{{ item.score }}</strong><small>{{ item.note }}</small></div> }
         </div>
       </ui-card>
     </section>
 
-    <ui-card title="Return matrix">
+    <ui-card [title]="'Return matrix'">
       <ui-data-table ariaLabel="Stock return matrix">
         <thead><tr><th>Period</th><th>Start</th><th>End</th><th>Price return</th><th>Dividend return</th><th>Total return</th><th>Annualized total</th></tr></thead>
         <tbody>
@@ -92,7 +92,7 @@
     </ui-card>
 
     <section class="stock-main-grid">
-      <ui-card title="Purchase planner">
+      <ui-card [title]="'Purchase planner'">
         <div class="stock-controls-grid compact">
           <label class="stock-field"><span>Purchase mode</span><select [(ngModel)]="scenario.purchase_mode"><option value="budget">Budget</option><option value="shares">Shares</option><option value="target_price">Target price</option></select></label>
           <label class="stock-field"><span>Shares</span><input type="number" [(ngModel)]="scenario.shares" /></label>
@@ -106,7 +106,7 @@
         @if (purchasePlan; as plan) { <div class="metric-grid"><div><span>Shares</span><strong>{{ plan.shares | number:'1.2-4' }}</strong></div><div><span>Cash required</span><strong>{{ formatMoney(plan.cash_required) }}</strong></div><div><span>Projected value</span><strong>{{ formatMoney(plan.projected_nominal_value) }}</strong></div><div><span>Today's dollars</span><strong>{{ formatMoney(plan.projected_real_value) }}</strong></div><div><span>Annual dividend</span><strong>{{ formatMoney(plan.annual_dividend_income) }}</strong></div></div> }
       </ui-card>
 
-      <ui-card title="Dividends and provider detail">
+      <ui-card [title]="'Dividends and provider detail'">
         <p>Cadence: <strong>{{ dividendCadence }}</strong></p>
         <p>Forward yield: <strong>{{ formatPct(primary.quote?.dividend_yield) }}</strong></p>
         <p>Sector: <strong>{{ primary.profile?.sector || 'Unavailable' }}</strong></p>
@@ -115,6 +115,6 @@
       </ui-card>
     </section>
   } @else if (!loading) {
-    <ui-card><ui-empty-state title="No market data" message="Enter a ticker. Then click Analyze." /></ui-card>
+    <ui-card><ui-empty-state [title]="'No market data'" message="Enter a ticker. Then click Analyze." /></ui-card>
   }
 </div>

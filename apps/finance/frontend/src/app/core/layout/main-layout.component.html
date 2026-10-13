@@ -2,7 +2,7 @@
 
 <nav class="navbar" aria-label="Main navigation">
   <div class="nav-content">
-    <a routerLink="/" class="logo" aria-label="Finance home" title="Home">
+    <a routerLink="/" class="logo" aria-label="Finance home">
       <svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
         <rect width="32" height="32" rx="8" fill="var(--accent-glow)" stroke="var(--accent)" stroke-width="1"/>
         <path d="M8 22V10M14 22V6M20 22v-6M26 22H6" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
@@ -16,9 +16,7 @@
           class="nav-tab"
           [class.active]="isActiveGroup(group)"
           [attr.aria-current]="isActiveGroup(group) ? 'page' : null"
-          [attr.aria-label]="group.label"
-          [attr.title]="group.tooltip"
-          >
+          [attr.aria-label]="group.label">
           <ui-icon [name]="group.icon" size="sm" />
           <span class="nav-link__label">{{ group.label }}</span>
           <span class="nav-link__short">{{ group.shortLabel }}</span>
@@ -26,26 +24,26 @@
       }
     </div>
     <div class="account-menu">
-      <ui-button variant="secondary" size="sm" tooltip="How to add your data." (clicked)="openTutorial()">Guide</ui-button>
+      <ui-button variant="secondary" size="sm" (clicked)="openTutorial()">Guide</ui-button>
       <details class="account-actions">
-        <summary [attr.title]="user ? 'Signed in as ' + user.email : 'Open account actions'">
+        <summary>
           <span class="account-avatar" aria-hidden="true">{{ (user?.username || user?.email)?.charAt(0)?.toUpperCase() || 'U' }}</span>
           <span class="account-email">{{ user?.username || user?.email || 'Account' }}</span>
         </summary>
         <div class="account-popover">
             @if (user) {
-            <p class="account-popover__email" [attr.title]="'Signed in as ' + (user.username || user.email)">{{ user.username || user.email }}</p>
+            <p class="account-popover__email">{{ user.username || user.email }}</p>
           }
           <div class="theme-split" role="group" aria-label="Color mode">
             <button type="button" [class.on]="theme === 'light'" (click)="setTheme('light')">Light</button>
             <button type="button" [class.on]="theme === 'dark'" (click)="setTheme('dark')">Dark</button>
           </div>
           @if (isAdmin) {
-            <a routerLink="/admin/users" title="Manage users and sessions.">Users</a>
+            <a routerLink="/admin/users">Users</a>
           }
-          <button type="button" title="Lock the vault. This clears finance data from memory." (click)="lockVault()">Lock vault</button>
-          <button type="button" title="End this session." (click)="logout()">Sign out</button>
-          <button type="button" class="danger" title="Remove your finance records. Your account stays." [disabled]="isResettingData" (click)="clearMyData()">Clear data</button>
+          <button type="button" (click)="lockVault()">Lock vault</button>
+          <button type="button" (click)="logout()">Sign out</button>
+          <button type="button" class="danger" [disabled]="isResettingData" (click)="clearMyData()">Clear data</button>
         </div>
       </details>
     </div>
@@ -59,7 +57,7 @@
         <ui-icon name="spark" size="sm" />
         <strong class="api-banner__title">The API is not available</strong>
         <span class="api-banner__detail">Start the backend. Then try again.</span>
-        <ui-button variant="secondary" size="sm" tooltip="Try the API again." (clicked)="refreshApiStatus()">Try again</ui-button>
+        <ui-button variant="secondary" size="sm" (clicked)="refreshApiStatus()">Try again</ui-button>
       </div>
     </ui-card>
   </div>
@@ -82,7 +80,7 @@
           }
         </div>
         @if (marketState.phase === 'partial' || marketState.phase === 'failed') {
-          <ui-button variant="secondary" size="sm" tooltip="Retry public market price refresh." (clicked)="retryMarketRefresh()">Retry prices</ui-button>
+          <ui-button variant="secondary" size="sm" (clicked)="retryMarketRefresh()">Retry prices</ui-button>
         }
       </div>
     </ui-card>
@@ -100,9 +98,9 @@
         <div>
           <p class="section-eyebrow">Guide</p>
           <h2 id="tutorial-title">How to start</h2>
-          <p>Add only the records you want to review. Each area keeps its own job.</p>
+          <p>Add the records you need. Each area keeps its own job.</p>
         </div>
-        <ui-button variant="ghost" size="sm" tooltip="Close this guide." (clicked)="closeTutorial()">Close</ui-button>
+        <ui-button variant="ghost" size="sm" (clicked)="closeTutorial()">Close</ui-button>
       </div>
 
       <div class="tutorial-grid">
@@ -116,7 +114,7 @@
         <article class="tutorial-step">
           <span class="tutorial-step__number">2</span>
           <h3>Spending</h3>
-          <p>Import CSVs, review card activity, or compare unusual spending. Activity does not change net worth.</p>
+          <p>Import CSVs or view and edit card activity. Transactions do not change net worth.</p>
           <a routerLink="/spending" [queryParams]="{ t: 'imports' }" (click)="closeTutorial()">Import bank CSVs</a>
           <a routerLink="/spending" [queryParams]="{ t: 'activity' }" (click)="closeTutorial()">Open Activity</a>
         </article>

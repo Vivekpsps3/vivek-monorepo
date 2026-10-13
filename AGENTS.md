@@ -8,7 +8,7 @@ to resume with minimal rediscovery.
 Personal, self-hosted finance tracker. The user wants first-class support for:
 
 - current net worth
-- spending and transaction review
+- spending activity and transaction imports
 - investments and portfolio imports
 - recurring cashflow (job income, fixed expenses, subscriptions)
 - planning/retirement analysis
@@ -115,6 +115,9 @@ migrating them with tests and docs. Add tests for any financial invariant.
 
 For UI work, keep operational density. Avoid marketing/landing pages. Use shared
 `ui-*` components where practical and keep cards for real grouped surfaces.
+Avoid redundant native hover titles. Put useful field guidance and financial
+semantics in concise visible text; keep meaningful chart values, privacy
+disclosures, and source provenance.
 
 Before finalizing a substantial change, run:
 

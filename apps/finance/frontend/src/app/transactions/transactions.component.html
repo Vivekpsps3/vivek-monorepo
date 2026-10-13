@@ -1,12 +1,12 @@
 @if (importsOnly) {
   <div class="page imports-page">
-    <ui-page-header title="Imports" subtitle="Confirmed statement coverage, saved outcomes, and safe recovery actions.">
+    <ui-page-header [title]="'Imports'" subtitle="Confirmed statement coverage, saved outcomes, and safe recovery actions.">
       <div uiPageActions class="header-actions">
         <ui-button variant="primary" (clicked)="openImportModal()">Import from bank</ui-button>
       </div>
     </ui-page-header>
     @if (importReceipts.length) {
-      <ui-card title="Import receipts">
+      <ui-card [title]="'Import receipts'">
         @for (receipt of importReceipts; track receipt.id) {
           <article class="import-history-row">
             <div>
@@ -16,8 +16,8 @@
               @if (receiptParseIssueCount(receipt)) {
                 <span class="import-error">{{ receiptParseIssueCount(receipt) }} CSV row(s) could not be parsed. Correct the file and reattach it to this receipt.</span>
               }
-              @if (receiptReviewIssueCount(receipt)) {
-                <span>{{ receiptReviewIssueCount(receipt) }} imported transaction(s) still need review. These rows were saved and can be fixed in Activity.</span>
+              @if (receiptNeedsClassificationCount(receipt)) {
+                <span>{{ receiptNeedsClassificationCount(receipt) }} credit transaction(s) need a type and are excluded from totals until classified.</span>
               }
               @for (range of receipt.coverage || []; track $index) {
                 <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
@@ -30,8 +30,8 @@
               }
             </div>
             <div class="import-history-actions">
-              @if (receiptHasReviewRows(receipt) || receiptReviewIssueCount(receipt)) {
-                <ui-button variant="secondary" size="sm" (clicked)="reviewImportedReceipt(receipt)">Review imported items</ui-button>
+              @if (receiptTransactionCount(receipt)) {
+                <ui-button variant="secondary" size="sm" (clicked)="viewImportedTransactions(receipt)">View transactions</ui-button>
               }
               @if (receiptParseIssueCount(receipt)) {
                 <ui-button variant="secondary" size="sm" (clicked)="reattachCorrectedCsv(receipt)">Reattach corrected CSV</ui-button>
@@ -47,7 +47,7 @@
         }
       </ui-card>
     } @else {
-      <ui-empty-state title="No import receipts yet" message="Import a statement to record its outcome and any confirmed coverage." />
+      <ui-empty-state [title]="'No import receipts yet'" message="Import a statement to record its outcome and any confirmed coverage." />
     }
   </div>
 } @else {
@@ -69,20 +69,20 @@
       <h2 id="import-guide-heading">Bring in card and bank CSVs safely</h2>
       <p>
         Download CSV activity from your bank, select a bank for each file, preview every row, then import only the new transactions.
-        This ledger is for spending review and cashflow; it never changes your current net worth.
+        This ledger records spending and cashflow; it never changes your current net worth.
       </p>
     </div>
     <div class="import-guide-steps">
-      <span title="Most banks expose CSV export from activity, statements, or download transactions.">1. Export CSV</span>
-      <span title="Preview catches duplicates before anything is saved.">2. Preview</span>
-      <span title="Uncheck any transfer, payment, or duplicate you do not want in the ledger.">3. Select rows</span>
-      <span title="Use Category tools after import to normalize merchant categories.">4. Clean categories</span>
+      <span>1. Export CSV</span>
+      <span>2. Preview</span>
+      <span>3. Select rows</span>
+      <span>4. Clean categories</span>
     </div>
   </section>
   }
 
   <section class="month-hero">
-    <p class="section-eyebrow">{{ summaryMonth ? 'This month' : reviewPeriodCaption ? 'Compared review periods' : 'Matching activity' }}</p>
+    <p class="section-eyebrow">{{ summaryMonth ? 'This month' : 'Matching activity' }}</p>
     <div class="month-summary-row">
       <label class="month-picker">
         <input
@@ -118,7 +118,7 @@
     </div>
   </section>
 
-  <ui-card title="History">
+  <ui-card [title]="'History'">
     <div uiCardActions class="table-actions table-actions--toolbar">
       <input
         type="search"
@@ -150,13 +150,6 @@
         (valueChange)="accountFilter = $event; onAccountFilterChange()"
       />
       <ui-select
-        selectId="tx-review-filter"
-        label="Review"
-        [value]="reviewFilter"
-        [options]="reviewOptions"
-        (valueChange)="onReviewFilterChange($event)"
-      />
-      <ui-select
         selectId="tx-sort"
         label="Sort"
         [value]="sortPreset"
@@ -173,9 +166,6 @@
         <ui-button variant="ghost" size="sm" (clicked)="clearFilters()">Clear filters</ui-button>
       }
     </div>
-    @if (reviewPeriodCaption) {
-      <p class="review-context-caption">{{ reviewPeriodCaption }} · account and exact group filters are retained.</p>
-    }
     @if (listError) {
       <div class="activity-load-error" role="alert">
         <span>{{ listError }}</span>
@@ -325,7 +315,6 @@
             <td>
               <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ transactionLabel(tx) }}</ui-badge>
               <span class="import-tag" *ngIf="tx.source === 'import'">import</span>
-              <span class="import-tag" *ngIf="tx.reviewed !== true">needs review</span>
             </td>
             <td class="account-cell">{{ tx.account_display || '—' }}</td>
             <td>{{ tx.category }}</td>
@@ -335,7 +324,6 @@
               {{ transactionAmountPrefix(tx) }}${{ tx.amount | number: '1.2-2' }}
             </td>
             <td class="actions actions--row">
-              <ui-button *ngIf="tx.reviewed !== true" variant="ghost" size="sm" (clicked)="markReviewed(tx)">Reviewed</ui-button>
               <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
               <ui-button variant="ghost" size="sm" (clicked)="deleteTransaction(tx)">Delete</ui-button>
             </td>
@@ -360,9 +348,8 @@
             <p><strong>Source description</strong><span>{{ tx.description || '—' }}</span></p>
             <p><strong>Account</strong><span>{{ tx.account_display || '—' }}</span></p>
             <p><strong>Kind</strong><span>{{ transactionLabel(tx) }}</span></p>
-            @if (tx.review_reason) { <p><strong>Review</strong><span>{{ tx.review_reason }}</span></p> }
+            @if (tx.kind === 'ambiguous_credit') { <p><strong>Classification</strong><span>Choose a type to include this credit in spending or income totals.</span></p> }
             <div class="actions actions--row">
-              <ui-button *ngIf="tx.reviewed !== true" variant="ghost" size="sm" (clicked)="markReviewed(tx)">Reviewed</ui-button>
               <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
               <ui-button variant="ghost" size="sm" (clicked)="deleteTransaction(tx)">Delete</ui-button>
             </div>
@@ -382,11 +369,11 @@
     <ng-template #empty>
       @if (!loading && !listLoading && !listError) {
         @if (hasActiveFilters) {
-          <ui-empty-state title="No activity matches these filters" message="Try clearing one filter or changing the date range.">
+          <ui-empty-state [title]="'No activity matches these filters'" message="Try clearing one filter or changing the date range.">
             <ui-button variant="secondary" (clicked)="clearFilters()">Clear filters</ui-button>
           </ui-empty-state>
         } @else {
-        <ui-empty-state title="No transactions yet">
+        <ui-empty-state [title]="'No transactions yet'">
           <ui-icon name="transactions" size="lg" style="margin-bottom: 8px; opacity: 0.6;" />
           <p class="empty-import-copy">Start with a bank CSV if you want the fastest and most accurate history.</p>
           <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
@@ -409,7 +396,7 @@
           <li>Export posted transactions as CSV from each bank.</li>
           <li>Choose one or more files, then select the matching bank for each file. Supported banks: {{ supportedImporterNames }}.</li>
           <li>Preview all files. Nothing is saved until you confirm selected rows.</li>
-          <li>Review duplicates, transfers, card payments, refunds, and account labels before importing.</li>
+          <li>Check duplicates, transfers, card payments, refunds, and account labels before importing.</li>
         </ol>
       </div>
       @if (activeImportReceiptId && reattachReceiptFilename) {
@@ -547,7 +534,7 @@
                 </thead>
                 <tbody>
                   @for (row of preview.rows; track $index) {
-                    <tr [class.duplicate-row]="row.status === 'duplicate'" [class.review-row]="row.kind === 'ambiguous_credit'" (click)="toggleImportRow(row)">
+                    <tr [class.duplicate-row]="row.status === 'duplicate'" [class.classification-row]="row.kind === 'ambiguous_credit'" (click)="toggleImportRow(row)">
                       <td>
                         @if (row.status !== 'duplicate') {
                           <input type="checkbox" [checked]="isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importCommitting || row.kind === 'ambiguous_credit'" (change)="toggleImportRow(row)" />
@@ -671,6 +658,7 @@
           <label for="tx-kind">Activity kind</label>
           <select id="tx-kind" [(ngModel)]="newTx.kind" name="kind">
             <option [ngValue]="undefined">Use income / expense</option>
+            <option value="ambiguous_credit">Credit type needed</option>
             <option value="purchase">Purchase</option>
             <option value="refund">Refund</option>
             <option value="income">Income</option>
@@ -679,10 +667,6 @@
           </select>
         </div>
       </div>
-      <label class="check-label">
-        <input type="checkbox" [(ngModel)]="newTx.reviewed" name="reviewed" />
-        Mark reviewed
-      </label>
       <div class="form-actions">
         <ui-button type="submit" variant="primary" [disabled]="!txForm.form.valid || saving">Save</ui-button>
         <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>

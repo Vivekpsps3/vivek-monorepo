@@ -6,7 +6,7 @@ import { MarketRefreshState, MarketRefreshCoordinatorService } from '../services
 function componentWithFinance(overrides: Record<string, unknown> = {}) {
   const finance = jasmine.createSpyObj('FinanceService', [
     'refreshAllHoldingPrices', 'lookupSharePrice', 'getHoldingImportStages', 'getHoldings', 'getNetWorth',
-    'resumeFidelityImportStage', 'confirmHoldingPosition',
+    'resumeFidelityImportStage',
   ]);
   Object.assign(finance, overrides);
   finance.refreshAllHoldingPrices.and.returnValue(of({ holdings: [], updated: 0, failed: 0 }));
@@ -14,7 +14,6 @@ function componentWithFinance(overrides: Record<string, unknown> = {}) {
   finance.getHoldings.and.returnValue(of([]));
   finance.getNetWorth.and.returnValue(of(null));
   finance.resumeFidelityImportStage.and.returnValue(of({ inserted: 1, status: 'activated' }));
-  finance.confirmHoldingPosition.and.returnValue(of({}));
   const market = jasmine.createSpyObj<MarketRefreshCoordinatorService>('MarketRefreshCoordinatorService', ['refreshNow', 'refreshSymbol']);
   const idle: MarketRefreshState = {
     phase: 'idle', automatic: false, totalSymbols: 0, completedSymbols: 0,
@@ -87,11 +86,4 @@ describe('PortfolioComponent', () => {
     expect(toast.success).toHaveBeenCalledWith('Activated 1 Fidelity position(s)');
   });
 
-  it('confirms a position date independently of refreshing its price', () => {
-    const { component, finance, market } = componentWithFinance();
-    const holding = { id: 9, symbol: 'VOO' } as Holding;
-    component.confirmPosition(holding);
-    expect(finance.confirmHoldingPosition).toHaveBeenCalledWith(9, jasmine.any(String));
-    expect(market.refreshNow).not.toHaveBeenCalled();
-  });
 });

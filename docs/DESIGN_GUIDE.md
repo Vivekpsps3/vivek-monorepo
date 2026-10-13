@@ -16,12 +16,11 @@ clear graphs.
 
 ## Dashboard Standard
 
-Home starts with three clickable blocks, followed by a first-steps checklist for an empty vault, its review queue, and charts:
+Home starts with three clickable blocks, followed by a first-steps checklist for an empty vault and charts:
 
 - current net worth with a holdings / assets / debts split
 - recorded pay and spend for this month
 - scheduled recurring pay and spend
-- cross-plane review queue for balances, positions, unreviewed activity, ambiguous credits, parse-failed imports, statement coverage, and annual renewals
 - portfolio summary with source dates and a portfolio allocation chart; detailed holdings remain on What you have
 - embedded cashflow, category, and allocation charts
 
@@ -29,9 +28,8 @@ Home starts with three clickable blocks, followed by a first-steps checklist for
 
 Each major subpage should have page-level metrics at the top:
 
-- Activity: recorded income, spend, net cashflow, full matching transaction count, exact account/merchant/category/review/date filters, and visible review state. Persist filters in the URL and calculate totals/exports over the full match set rather than the visible page.
-- Spending Review: selected/prior month spending by category or merchant, comparable elapsed days for the current month, confirmed coverage gaps, and transaction drilldown. Its Activity handoff preserves current/prior full date ranges, account, exact group, and selected transaction editor.
-- Imports: per-file outcome, confirmed account mapping, row state, coverage, and recovery actions. Make corrected CSV reattachment distinct from reviewing imported ambiguous credits.
+- Activity: recorded income, spend, net cashflow, full matching transaction count, and exact account/merchant/category/date filters. Persist filters in the URL and calculate totals/exports over the full match set rather than the visible page.
+- Imports: per-file outcome, confirmed account mapping, row state, coverage, and recovery actions. Make corrected CSV reattachment distinct from classifying ambiguous credits.
 - Jobs & pay: annual/monthly gross and net, active jobs.
 - Bills: monthly/annual total, active count, largest items.
 - Subscriptions: monthly/annual total, next bills, active count.
@@ -45,20 +43,19 @@ Each major subpage should have page-level metrics at the top:
 Tables are acceptable for detail, but a page is incomplete if it only exposes a
 table when a summary or graph would answer the natural question faster.
 
-## Ledger review and import coverage
+## Ledger and import coverage
 
-Keep recorded activity as the default for spending totals. `purchase` contributes to spend, `refund` reduces spend, `payment` and `transfer` affect neither spend nor income, and `ambiguous_credit` stays visible for review while excluded from totals. Preserve the original source description when showing a normalized merchant. Make `reviewed` and edited-import state visible in bulk review tools.
+Keep recorded activity as the default for spending totals. `purchase` contributes to spend, `refund` reduces spend, `payment` and `transfer` affect neither spend nor income, and `ambiguous_credit` is excluded from totals until classified. Preserve the original source description when showing a normalized merchant.
 
-Home's review queue links to due balance/position reviews, statement-coverage gaps, unresolved imports, and upcoming annual renewals. Import receipts show the confirmed account mapping, import state, selected/completed/unresolved row counts, and observed date coverage. Coverage gaps should be visible beside comparisons and estimates. A date span is evidence about rows in the file, not proof that the bank statement is complete. Receipt undo removes only unchanged rows created by that receipt; surface edited rows that remain and show that coverage was withdrawn. Never show or persist the raw CSV as a receipt.
+Import receipts show the confirmed account mapping, import state, selected/completed/unresolved row counts, and observed date coverage. Coverage informs estimates, but a date span is evidence about rows in the file, not proof that the bank statement is complete. Receipt undo removes only unchanged rows created by that receipt; surface edited rows that remain and show that coverage was withdrawn. Never show or persist the raw CSV as a receipt.
 
-Activity filters are exact account and normalized category/merchant groups; support unassigned accounts and blank merchants. Query changes must update on browser history navigation. Give CSV export and totals the full filtered dataset even when the visible list is paginated. On Review handoffs, avoid carrying a previous broad search or receipt filter into the selected transaction.
+Activity filters are exact account and normalized category/merchant groups; support unassigned accounts and blank merchants. Query changes must update on browser history navigation. Give CSV export and totals the full filtered dataset even when the visible list is paginated.
 
 Label the selected period and data coverage so a short import is not mistaken for a complete month. If a partial-month equivalent is displayed, calculate it only from comparable covered days. Ledger analysis must not change the current balance sheet.
 
 ## Freshness and valuation provenance
 
-- Show manual asset/liability `as_of_date` beside the amount. Default review intervals are 30 days for cash/checking/savings assets, 180 days for other assets, and 30 days for liabilities; allow per-row overrides. A review cue does not change the entered value or create net-worth history.
-- Show position valuation dates and sources; ask users to review a position after 30 days. Mark quotes stale after more than three calendar days. If a value is undated, show freshness as unknown.
+- Show manual asset/liability `as_of_date` beside the amount and position valuation dates with their sources. Mark quotes stale after more than three calendar days. If a value is undated, show freshness as unknown.
 - For Fidelity, keep imported snapshot date, market value/price source, cost basis, and later market quote date/source/fetch time distinct. Derive price from market value divided by shares when available, otherwise use a supplied market price. Label cost-basis fallback as provisional; do not calculate gains when basis is unknown.
 - Preview account-level replacement and let the user confirm it before a Fidelity staged replacement commits.
 

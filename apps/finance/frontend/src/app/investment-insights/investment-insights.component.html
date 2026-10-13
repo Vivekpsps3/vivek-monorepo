@@ -1,7 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="investment-insights-page">
   <ui-page-header
     [embedded]="embedded"
-    title="Portfolio projection"
+    [title]="'Portfolio projection'"
     subtitle="Growth of holdings. This does not change net worth." />
 
   @if (loading) {
@@ -15,7 +15,7 @@
       </ui-empty-state>
     </ui-card>
   } @else {
-    <section class="insights-answer" title="This headline updates as you change assumptions below.">
+    <section class="insights-answer">
       <div class="answer-copy">
         <p class="section-eyebrow">Projection answer</p>
         <h2>Projected portfolio</h2>
@@ -29,17 +29,17 @@
       </div>
 
       <div class="answer-metrics" aria-label="Projection answer details">
-        <div title="Projected value discounted by your inflation assumption.">
+        <div>
           <span>Today's-dollar value</span>
           <strong class="money">${{ projectedRealValue | number: '1.0-0' }}</strong>
           <small>After {{ inflationRate | number: '1.1-1' }}% inflation</small>
         </div>
-        <div title="Monthly income estimate from the projected future portfolio using the selected withdrawal rate.">
+        <div>
           <span>Future monthly income</span>
           <strong class="money">${{ projectedMonthlyWithdrawalIncome | number: '1.0-0' }}</strong>
           <small>{{ withdrawalRate | number: '1.1-1' }}% rule on projected value</small>
         </div>
-        <div title="Inflation-adjusted monthly income estimate from the projected portfolio.">
+        <div>
           <span>Spending power / month</span>
           <strong class="money">${{ projectedRealMonthlyWithdrawalIncome | number: '1.0-0' }}</strong>
           <small>In today's dollars</small>
@@ -49,23 +49,24 @@
 
     <section class="investment-workbench">
       <aside class="assumptions-panel" aria-label="Projection assumptions">
-        <ui-card title="Assumptions">
-          <div class="current-snapshot" title="Portfolio value comes from your current holdings and market-price fallback logic.">
+        <ui-card [title]="'Assumptions'">
+          <div class="current-snapshot">
             <span>Current portfolio</span>
             <strong class="money">${{ portfolioValue | number: '1.2-2' }}</strong>
+            <small>From current holdings and saved market prices.</small>
           </div>
 
           <div class="preset-block">
             <div class="preset-heading">
               <span>Growth preset</span>
-              <ui-button variant="ghost" size="sm" tooltip="Restore 7% growth, 4% withdrawal, 3% inflation, $0 contribution, and 30 years." (clicked)="resetAssumptions()">Reset</ui-button>
+              <ui-button variant="ghost" size="sm" (clicked)="resetAssumptions()">Reset defaults</ui-button>
             </div>
             <div class="preset-row" aria-label="Annual growth presets">
               @for (rate of [5, 7, 10, 12]; track rate) {
                 <ui-button
                   variant="secondary"
                   size="sm"
-                  [tooltip]="rate + '% annual growth preset'"
+                  [ariaLabel]="rate + '% annual growth preset'"
                   [disabled]="annualGrowthRate === rate"
                   (clicked)="setGrowthPreset(rate)">
                   {{ rate }}%
@@ -75,27 +76,27 @@
           </div>
 
           <div class="controls-grid compact-controls">
-            <label class="control-field" title="Expected nominal annual portfolio growth before inflation.">
+            <label class="control-field">
               <span>Annual growth</span>
               <div class="input-with-unit"><input type="number" min="-20" max="30" step="0.25" [(ngModel)]="annualGrowthRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
             </label>
-            <label class="control-field" title="Annual withdrawal-rate assumption used for income estimates.">
+            <label class="control-field">
               <span>Withdrawal rate</span>
               <div class="input-with-unit"><input type="number" min="0" max="12" step="0.25" [(ngModel)]="withdrawalRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
             </label>
-            <label class="control-field" title="Inflation assumption used to convert projected value into today's dollars.">
+            <label class="control-field">
               <span>Inflation</span>
               <div class="input-with-unit"><input type="number" min="0" max="15" step="0.25" [(ngModel)]="inflationRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
             </label>
-            <label class="control-field" title="Additional monthly investment contribution added throughout the projection.">
+            <label class="control-field">
               <span>Monthly contribution</span>
               <div class="input-with-unit"><b>$</b><input type="number" min="0" step="50" [(ngModel)]="monthlyContribution" (ngModelChange)="onAssumptionChange()" /></div>
             </label>
-            <label class="control-field" title="Monthly increase applied only to the scenario. Starting value, return, inflation, and horizon remain the same as the baseline.">
+            <label class="control-field">
               <span>Monthly contribution increase</span>
               <div class="input-with-unit"><b>$</b><input aria-label="Monthly contribution increase" type="number" min="0" step="50" [(ngModel)]="monthlyContributionIncrease" (ngModelChange)="onAssumptionChange()" /></div>
             </label>
-            <label class="control-field" title="Projection horizon in years.">
+            <label class="control-field">
               <span>Projection length</span>
               <div class="input-with-unit"><input type="number" min="1" max="60" step="1" [(ngModel)]="projectionYears" (ngModelChange)="onAssumptionChange()" /><em>yrs</em></div>
             </label>
@@ -104,25 +105,25 @@
       </aside>
 
       <div class="insights-main">
-        <ui-card title="Projection path">
+        <ui-card [title]="'Projection path'">
           <div class="projection-chart-wrap">
             <canvas #projectionChart aria-label="Projected portfolio growth chart"></canvas>
           </div>
 
           <div class="projection-summary">
-            <div title="Nominal projected portfolio value at the end of the selected horizon.">
+            <div>
               <span>Projected value</span>
               <strong class="money">${{ projectedValue | number: '1.2-2' }}</strong>
             </div>
-            <div title="Projected value discounted by the inflation assumption.">
+            <div>
               <span>Today's dollars</span>
               <strong class="money">${{ projectedRealValue | number: '1.2-2' }}</strong>
             </div>
-            <div title="Projected gain after subtracting starting portfolio and new contributions.">
+            <div>
               <span>Growth above contributions</span>
               <strong class="money">${{ projectedGrowthOnly | number: '1.2-2' }}</strong>
             </div>
-            <div title="Approximate years to double at the selected annual growth rate using the rule of 72.">
+            <div>
               <span>Years to double</span>
               <strong>{{ yearsToDouble === null ? '-' : (yearsToDouble | number: '1.1-1') }}</strong>
             </div>
@@ -153,28 +154,28 @@
         </ui-card>
 
         <section class="insight-grid" aria-label="Key outputs">
-          <div class="insight-box" title="Simple annual growth estimate using the current portfolio and selected annual growth rate.">
+          <div class="insight-box">
             <span>Expected annual growth</span>
             <strong class="money">${{ annualExpectedGrowth | number: '1.2-2' }}</strong>
           </div>
-          <div class="insight-box primary" title="Monthly income estimate using the selected withdrawal-rate assumption.">
+          <div class="insight-box primary">
             <span>If retiring today</span>
             <strong class="money">${{ monthlyWithdrawalIncome | number: '1.2-2' }}</strong>
           </div>
-          <div class="insight-box" title="The percent of final projected value that comes from growth rather than starting balance or contributions.">
+          <div class="insight-box">
             <span>Projected growth contribution</span>
             <strong>{{ growthShareOfFinal | number: '1.0-0' }}%</strong>
           </div>
-          <div class="insight-box" title="How far the current portfolio is from the next million-dollar portfolio threshold.">
+          <div class="insight-box">
             <span>Distance to next $1M</span>
             <strong class="money">${{ nextMillionGap | number: '1.0-0' }}</strong>
           </div>
         </section>
 
         <details class="insight-details">
-          <summary title="Open detailed period tables for expected growth and withdrawal estimates.">Period math</summary>
+          <summary>Period math</summary>
           <div class="two-column compact-detail-grid">
-            <ui-card title="Expected growth">
+            <ui-card [title]="'Expected growth'">
               <ui-data-table ariaLabel="Expected growth by period">
                 <thead><tr><th>Period</th><th>Growth</th></tr></thead>
                 <tbody>
@@ -185,7 +186,7 @@
               </ui-data-table>
             </ui-card>
 
-            <ui-card title="Withdrawal income">
+            <ui-card [title]="'Withdrawal income'">
               <ui-data-table ariaLabel="Withdrawal income by period">
                 <thead><tr><th>Period</th><th>{{ withdrawalRate | number: '1.1-1' }}% rule income</th></tr></thead>
                 <tbody>
@@ -199,9 +200,9 @@
         </details>
 
         <details class="insight-details">
-          <summary title="Open yearly projection checkpoints and alternate growth scenarios.">Milestones and scenarios</summary>
+          <summary>Milestones and scenarios</summary>
           <div class="two-column compact-detail-grid">
-            <ui-card title="Projection milestones">
+            <ui-card [title]="'Projection milestones'">
               <ui-data-table ariaLabel="Projection milestones">
                 <thead><tr><th>Year</th><th>Nominal</th><th>Today's dollars</th></tr></thead>
                 <tbody>
@@ -212,7 +213,7 @@
               </ui-data-table>
             </ui-card>
 
-            <ui-card title="Scenario comparison">
+            <ui-card [title]="'Scenario comparison'">
               <ui-data-table ariaLabel="Scenario comparison">
                 <thead><tr><th>Scenario</th><th>{{ projectionYears }} year value</th><th>Monthly income</th></tr></thead>
                 <tbody>

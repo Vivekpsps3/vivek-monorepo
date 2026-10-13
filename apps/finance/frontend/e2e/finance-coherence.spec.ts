@@ -72,7 +72,7 @@ test('unlock refreshes each unique holding and former-employer ticker once, appl
 test('a partial quote failure retains saved prices and position facts while Home recalculates from successful quotes', async ({ page }) => {
   const originalAssets = [{ id: 1, name: 'Checking', category: 'cash', current_value: 1000, as_of_date: '2026-10-01' }];
   const originalLiabilities = [{ id: 2, name: 'Card', category: 'credit_card', balance_owed: 100, as_of_date: '2026-10-01' }];
-  const originalTransactions = [{ id: 3, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 40, description: 'Grocery', reviewed: true }];
+  const originalTransactions = [{ id: 3, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 40, description: 'Grocery' }];
   const originalHoldings = [
     { id: 10, symbol: 'VOO', shares: 1, purchase_price: 80, purchase_date: '2022-01-01', current_price: 100, price_source: 'manual', position_as_of: '2026-10-10' },
     { id: 11, symbol: 'AAPL', shares: 2, purchase_price: 20, purchase_date: '2023-01-01', current_price: 50, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-11' },
@@ -164,7 +164,7 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
 
 test('one combined commitments list hands off to bill editing and keeps a failed save retryable', async ({ page }) => {
   const assets = [{ id: 1, name: 'Checking', category: 'cash', current_value: 1000, as_of_date: '2026-10-01' }];
-  const transactions = [{ id: 3, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 40, description: 'Grocery', reviewed: true }];
+  const transactions = [{ id: 3, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 40, description: 'Grocery' }];
   const vault = await syntheticVault(page, {
     assets,
     transactions,
@@ -232,7 +232,7 @@ test('phone commitments use one expandable card per obligation and stay keyboard
 test('cold direct Activity links retain their account selection after encrypted account options load', async ({ page }) => {
   const vault = await syntheticVault(page, {
     bank_accounts: [{ id: 40, bank_slug: 'chase', account_mask: '1111', account_key: 'card-a', display_name: 'Daily card', confirmed: true }],
-    transactions: [{ id: 1, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 10, description: 'Coffee', bank_account_key: 'card-a', account_display: 'Daily card', reviewed: false }],
+    transactions: [{ id: 1, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 10, description: 'Coffee', bank_account_key: 'card-a', account_display: 'Daily card' }],
   });
   await vault.open('/spending?t=activity&v=spending&month=all&account=card-a');
 
@@ -246,11 +246,11 @@ test('cold direct Activity links retain their account selection after encrypted 
 test('Activity exact account filters keep full matching totals through pagination and browser history', async ({ page }) => {
   const matching = Array.from({ length: 110 }, (_, index) => ({
     id: index + 1, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 1,
-    description: `Grocery source ${index}`, merchant: 'Grocery', bank_account_key: 'card-a', account_display: 'Daily card', reviewed: false,
+    description: `Grocery source ${index}`, merchant: 'Grocery', bank_account_key: 'card-a', account_display: 'Daily card',
   }));
   const otherAccount = Array.from({ length: 10 }, (_, index) => ({
     id: 200 + index, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 5,
-    description: `Other card source ${index}`, merchant: 'Grocery', bank_account_key: 'card-b', account_display: 'Travel card', reviewed: false,
+    description: `Other card source ${index}`, merchant: 'Grocery', bank_account_key: 'card-b', account_display: 'Travel card',
   }));
   const vault = await syntheticVault(page, {
     bank_accounts: [
@@ -363,7 +363,7 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
     };
   });
   const vault = await syntheticVault(page, {
-    transactions: [{ id: 7, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 10, description: 'CROSS TAB PRIVATE DESCRIPTION', merchant: 'Market', reviewed: true }],
+    transactions: [{ id: 7, date: today(), type: 'expense', kind: 'purchase', category: 'Food', amount: 10, description: 'CROSS TAB PRIVATE DESCRIPTION', merchant: 'Market' }],
   });
   const second = await page.context().newPage();
   await vault.open('/spending?t=activity', page);
@@ -465,7 +465,7 @@ test('import account mapping refreshes the exact account label in another mounte
   const date = '2026-10-01';
   const description = 'LEGACY CROSS TAB COFFEE';
   const legacy = {
-    id: 70, date, type: 'expense', category: 'Food', amount: 10, description, merchant: 'Coffee shop', reviewed: true,
+    id: 70, date, type: 'expense', category: 'Food', amount: 10, description, merchant: 'Coffee shop',
     source: 'import', dedupe_key: legacyChaseDedupeKey(date, 10, description),
   };
   const vault = await syntheticVault(page, { transactions: [legacy] });
@@ -497,24 +497,20 @@ test('import account mapping refreshes the exact account label in another mounte
   });
 });
 
-test('coverage and receipt commit and undo refresh mounted Review and Home tabs', async ({ page }) => {
+test('receipt coverage is saved and undo refreshes mounted Activity and Home tabs', async ({ page }) => {
   const now = new Date();
   const coverageStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1)).toISOString().slice(0, 10);
-  const transactionDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 10)).toISOString().slice(0, 10);
+  const transactionDate = today();
   const coverageEnd = today();
   const vault = await syntheticVault(page, {
     bank_accounts: [{ id: 40, bank_slug: 'chase', account_mask: 'card', account_key: 'card', display_name: 'Daily card', confirmed: true }],
   });
-  const reviewTab = await page.context().newPage();
+  const activityTab = await page.context().newPage();
   const homeTab = await page.context().newPage();
   await vault.open('/spending?t=imports', page);
-  await vault.open('/spending?t=review', reviewTab);
+  await vault.open('/spending?t=activity', activityTab);
   await vault.open('/', homeTab);
-  const reviewCoverage = reviewTab.locator('.coverage-panel');
-  await expect(reviewCoverage).toContainText('Daily card');
-  await expect(reviewCoverage.locator('.coverage-gap').first()).toBeVisible();
-  const homeQueue = homeTab.locator('.review-queue-card');
-  await expect(homeQueue).toContainText('Statement coverage gap');
+  const homeMonth = homeTab.locator('.home-tile').filter({ hasText: 'This month' });
 
   await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
   let dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
@@ -532,8 +528,8 @@ test('coverage and receipt commit and undo refresh mounted Review and Home tabs'
   await dialog.getByRole('button', { name: /^Import 1 transaction/ }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => vault.data('import_batches')[0]?.status).toBe('complete');
-  await expect(homeQueue).not.toContainText('Statement coverage gap');
-  await expect(reviewCoverage.locator('.coverage-complete').first()).toBeVisible();
+  await expect(activityTab.getByRole('row').filter({ hasText: 'COVERAGE PURCHASE' })).toContainText('$10.00');
+  await expect(homeMonth).toContainText('$10.00');
   expect(vault.data('import_batches')[0].coverage[0]).toMatchObject({
     account_key: 'card', start_date: coverageStart, end_date: coverageEnd, confirmed: true,
   });
@@ -544,8 +540,8 @@ test('coverage and receipt commit and undo refresh mounted Review and Home tabs'
   await receipt.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   await expect.poll(() => vault.data('import_batches')[0]?.status).toBe('withdrawn');
-  await expect(homeQueue).toContainText('Statement coverage gap');
-  await expect(reviewCoverage.locator('.coverage-gap').first()).toBeVisible();
+  await expect(activityTab.getByRole('row').filter({ hasText: 'COVERAGE PURCHASE' })).toHaveCount(0);
+  await expect(homeMonth).toContainText('$0.00');
   expect(vault.data('transactions')).toHaveLength(0);
   expect(vault.data('bank_accounts')[0]).toMatchObject({ account_key: 'card', display_name: 'Daily card', confirmed: true });
 });

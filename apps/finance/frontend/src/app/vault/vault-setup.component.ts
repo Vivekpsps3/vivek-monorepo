@@ -12,9 +12,9 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../sh
   template: `
     <div class="page vault-page">
       <ui-page-header
-        title="Create your vault"
+        [title]="'Create your vault'"
         subtitle="Your finance data is encrypted in the browser. The server only stores ciphertext." />
-      <ui-card title="Vault passphrase">
+      <ui-card [title]="'Vault passphrase'">
         <p class="muted">
           Choose a strong vault passphrase (12+). It unlocks encrypted finance data on this browser.
           If you lose the passphrase, your data cannot be recovered—administrators cannot reset vault access.
