@@ -63,6 +63,14 @@ function persistence() {
     failSecondReplacementBatch: () => { holdingBatches = 0; failHoldingBatch = 2; },
     failHoldingCleanupOnce: () => { failHoldingDelete = true; },
     failFirstReceiptChunkOnce: () => { failFirstReceiptChunk = true; },
+    mutateStage: (stageId: number, patch: Record<string, unknown>) => {
+      for (const row of records.values()) {
+        const payload = row.collection === 'import_batches' ? payloads.get(row.ciphertext_b64) : null;
+        if (payload?.record_type === 'holding_stage' && Number(payload.id) === stageId) {
+          payloads.set(row.ciphertext_b64, { ...payload, ...patch });
+        }
+      }
+    },
     data: (collection: string) => [...records.values()].filter(row => row.collection === collection)
       .map(row => structuredClone(payloads.get(row.ciphertext_b64))),
   };
@@ -175,22 +183,77 @@ describe('encrypted import persistence recovery', () => {
       current_price: 120, value: 120, price_source: 'import_market_price', price_as_of: null,
       quote_date: null, cost_basis_status: 'known', lifecycle_status: 'staged', portfolio_row_index: 0,
     });
+    const sameCallerTimestamp = new Date().toISOString();
     const createStage = (filename: string, symbol: string) => fixture.store.createHoldingImportStage({
       source: 'fidelity', filename, status: 'staged', account_masks: ['8899'], expected_row_count: 1,
-      account_replacements: [], created_at: new Date().toISOString(),
+      account_replacements: [], created_at: sameCallerTimestamp,
     }, [stageRow(symbol)]);
     const older = await createStage('older.csv', 'OLDER');
     fixture.failHoldingCleanupOnce();
     await expectAsync(fixture.store.activateHoldingImportStage(older.id)).toBeRejectedWithError('Injected interrupted holding cleanup');
 
     const newer = await createStage('newer.csv', 'NEWER');
+    expect(Date.parse(newer.created_at)).toBeGreaterThan(Date.parse(older.created_at));
     await fixture.store.activateHoldingImportStage(newer.id);
     expect((await fixture.store.getHoldings()).map(row => row.symbol)).toEqual(['NEWER']);
+    const activatedStages = await fixture.store.getHoldingImportStages();
+    expect(Date.parse(activatedStages.find(row => row.id === newer.id)!.activated_at!))
+      .toBeGreaterThan(Date.parse(activatedStages.find(row => row.id === older.id)!.activated_at!));
+
+    // Equal activation timestamps must use the explicit stage creation order,
+    // never the randomized numeric record IDs.
+    const tiedActivationTime = '2026-10-12T00:00:00.000Z';
+    fixture.mutateStage(older.id, { activated_at: tiedActivationTime });
+    fixture.mutateStage(newer.id, { activated_at: tiedActivationTime });
 
     fixture.store.clear();
     await resumeFidelityImportStage(fixture.store, older.id);
     expect((await fixture.store.getHoldings()).map(row => row.symbol)).toEqual(['NEWER']);
     expect(fixture.data('holdings').map(row => row.symbol)).toEqual(['NEWER']);
+
+    // Legacy activated stages may not have activated_at. Their durable
+    // created_at order remains sufficient after a vault reload.
+    fixture.mutateStage(older.id, {
+      activated_at: null, cleanup_complete: false, created_at: '2026-10-10T00:00:00.000Z',
+    });
+    fixture.mutateStage(newer.id, {
+      activated_at: null, created_at: '2026-10-11T00:00:00.000Z',
+    });
+    fixture.store.clear();
+    await resumeFidelityImportStage(fixture.store, older.id);
+    expect((await fixture.store.getHoldings()).map(row => row.symbol)).toEqual(['NEWER']);
+    expect(fixture.data('holdings').map(row => row.symbol)).toEqual(['NEWER']);
+  });
+
+  it('advances a new activation past a legacy stage missing activated_at', async () => {
+    const fixture = persistence();
+    const account = await fixture.store.upsertBrokerageAccount({ broker_slug: 'fidelity', broker_name: 'Fidelity', account_mask: '9900' });
+    const stageRow = (symbol: string): FidelityStageRow => ({
+      account_mask: '9900', account_display: 'Fidelity ···9900', symbol, shares: 1,
+      avg_cost_basis: 80, cost_basis_total: 80, market_price: 120, market_value: 120,
+      valuation_source: 'reported_price', position_as_of: '2026-10-01', status: 'replace',
+      brokerage_account_id: account.id, purchase_price: 80, purchase_date: null,
+      current_price: 120, value: 120, price_source: 'import_market_price', price_as_of: null,
+      quote_date: null, cost_basis_status: 'known', lifecycle_status: 'staged', portfolio_row_index: 0,
+    });
+    const createStage = (filename: string, symbol: string) => fixture.store.createHoldingImportStage({
+      source: 'fidelity', filename, status: 'staged', account_masks: ['9900'], expected_row_count: 1,
+      account_replacements: [], created_at: new Date().toISOString(),
+    }, [stageRow(symbol)]);
+
+    const legacy = await createStage('legacy.csv', 'LEGACY');
+    await fixture.store.activateHoldingImportStage(legacy.id);
+    const futureLegacyCreatedAt = '2035-01-01T00:00:00.000Z';
+    fixture.mutateStage(legacy.id, { activated_at: null, created_at: futureLegacyCreatedAt });
+    fixture.store.clear();
+
+    const newer = await createStage('newer.csv', 'NEWER');
+    await fixture.store.activateHoldingImportStage(newer.id);
+
+    const stages = await fixture.store.getHoldingImportStages();
+    const activatedNewer = stages.find(row => row.id === newer.id)!;
+    expect(Date.parse(activatedNewer.activated_at!)).toBeGreaterThan(Date.parse(futureLegacyCreatedAt));
+    expect((await fixture.store.getHoldings()).map(row => row.symbol)).toEqual(['NEWER']);
   });
 
   it('keeps legacy unlinked Fidelity holdings out of value after activation even when cleanup is interrupted', async () => {

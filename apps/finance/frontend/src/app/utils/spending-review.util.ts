@@ -32,6 +32,9 @@ export interface DateRange {
 
 export type SpendingReviewDimension = 'category' | 'merchant';
 
+/** Filter sentinel used by Activity and Review for rows without a bank account identity. */
+export const UNASSIGNED_ACCOUNT_FILTER = '__unassigned_account__';
+
 function monthKey(year: number, monthIndex: number): string {
   return `${String(year).padStart(4, '0')}-${String(monthIndex + 1).padStart(2, '0')}`;
 }
@@ -95,17 +98,17 @@ export function buildSpendingReviewPeriods(month: string, now = new Date()): Spe
   };
 }
 
-function normalizeLabel(value: string): string {
+export function normalizeSpendingLabel(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
-function labelFor(transaction: Transaction, dimension: SpendingReviewDimension): string {
+export function spendingComparisonGroupLabel(transaction: Transaction, dimension: SpendingReviewDimension): string {
   const value = dimension === 'category' ? transaction.category : transaction.merchant;
   return String(value || '').trim() || (dimension === 'category' ? 'Uncategorized' : 'Unassigned merchant');
 }
 
 export function spendingComparisonGroupKey(transaction: Transaction, dimension: SpendingReviewDimension): string {
-  return normalizeLabel(labelFor(transaction, dimension));
+  return normalizeSpendingLabel(spendingComparisonGroupLabel(transaction, dimension));
 }
 
 function inPeriod(date: string, period: ReviewPeriod): boolean {
@@ -121,7 +124,8 @@ export function compareSpending(
 ): SpendingComparisonRow[] {
   const rows = new Map<string, SpendingComparisonRow>();
   for (const transaction of transactions) {
-    if (accountKey && transaction.bank_account_key !== accountKey) continue;
+    if (accountKey === UNASSIGNED_ACCOUNT_FILTER && transaction.bank_account_key) continue;
+    if (accountKey && accountKey !== UNASSIGNED_ACCOUNT_FILTER && transaction.bank_account_key !== accountKey) continue;
     const current = inPeriod(transaction.date, periods.current);
     const previous = inPeriod(transaction.date, periods.previous);
     if (!current && !previous) continue;
@@ -129,7 +133,7 @@ export function compareSpending(
     const amount = transactionEffects(transaction).spending;
     if (amount === 0) continue;
 
-    const label = labelFor(transaction, dimension);
+    const label = spendingComparisonGroupLabel(transaction, dimension);
     const key = spendingComparisonGroupKey(transaction, dimension);
     const row = rows.get(key) || {
       key,

@@ -21,7 +21,7 @@
       </div>
       @if (sectionOpen.cashflow && monthlyRows.length) {
         <div class="chart-wrap tall" [class.chart-dim]="chartDimmed">
-          <canvas #incomeExpenseChart role="img" aria-label="Monthly income, spending, and net cashflow chart"></canvas>
+          <canvas #incomeExpenseChart role="img" [attr.aria-label]="cashflowView === 'recorded' ? 'Monthly recorded cashflow chart. Select a month to open matching Activity.' : 'Monthly scheduled cashflow chart. Select a month to open Recurring.'"></canvas>
         </div>
         <p class="chart-note">
           Income <strong>${{ incomeTotal | number:'1.2-2' }}</strong>
@@ -35,9 +35,9 @@
               @for (row of monthlyRows; track row.label) {
                 <tr>
                   <td>{{ row.label }}</td>
-                  <td>${{ row.income | number:'1.2-2' }}</td>
-                  <td>${{ row.expense | number:'1.2-2' }}</td>
-                  <td [class.positive]="row.net >= 0">{{ row.net >= 0 ? '+' : '−' }}${{ (row.net < 0 ? -row.net : row.net) | number:'1.2-2' }}</td>
+                  <td><a [routerLink]="cashflowView === 'recorded' ? ['/spending'] : ['/recurring']" [queryParams]="monthlyRowQuery(row, 0)" [attr.aria-label]="'Open ' + row.label + (cashflowView === 'recorded' ? ' recorded income in Activity' : ' scheduled income in Recurring')">${{ row.income | number:'1.2-2' }}</a></td>
+                  <td><a [routerLink]="cashflowView === 'recorded' ? ['/spending'] : ['/recurring']" [queryParams]="monthlyRowQuery(row, 1)" [attr.aria-label]="'Open ' + row.label + (cashflowView === 'recorded' ? ' recorded spending in Activity' : ' scheduled costs in Recurring')">${{ row.expense | number:'1.2-2' }}</a></td>
+                  <td [class.positive]="row.net >= 0"><a [routerLink]="cashflowView === 'recorded' ? ['/spending'] : ['/recurring']" [queryParams]="monthlyRowQuery(row, 2)" [attr.aria-label]="'Open ' + row.label + (cashflowView === 'recorded' ? ' recorded activity' : ' scheduled items')">{{ row.net >= 0 ? '+' : '−' }}${{ (row.net < 0 ? -row.net : row.net) | number:'1.2-2' }}</a></td>
                 </tr>
               }
             </tbody>
@@ -55,15 +55,21 @@
       </button>
       @if (sectionOpen.category && categoryRows.length) {
         <div class="chart-wrap" [class.chart-dim]="chartDimmed">
-          <canvas #categoryChart role="img" aria-label="Spending by category chart"></canvas>
+          <canvas #categoryChart role="img" aria-label="Spending by category chart. Select a category to open matching Activity; select Other to expand categories"></canvas>
         </div>
         <div class="chart-fallback">
           <table aria-label="Spending category data table">
             <thead><tr><th>Category</th><th>Amount</th><th>%</th></tr></thead>
             <tbody>
-              @for (row of categoryRows; track row.label) {
+              @for (row of categoryRows; track (row.synthetic ? 'synthetic:' : 'category:') + row.label) {
                 <tr>
-                  <td>{{ row.label }}</td>
+                  <td>
+                    @if (row.synthetic) {
+                      <button type="button" class="chart-drilldown-link" (click)="toggleCategories()">{{ row.label }} · Show all categories</button>
+                    } @else {
+                      <a [routerLink]="['/spending']" [queryParams]="categoryRowQuery(row) || {}">{{ row.label }}</a>
+                    }
+                  </td>
                   <td>${{ row.value | number:'1.2-2' }}</td>
                   <td>@if (row.pct == null) { Unavailable } @else { {{ row.pct | number:'1.1-1' }}% }</td>
                 </tr>

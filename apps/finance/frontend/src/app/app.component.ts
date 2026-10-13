@@ -5,6 +5,7 @@ import { ToastService } from './services/toast.service';
 import { ConfirmDialogComponent } from './shared/confirm-dialog.component';
 import { UiButtonComponent } from '@vivek/ui';
 import { ToastPayload } from './models/transaction.model';
+import { ReleaseFreshnessService } from './services/release-freshness.service';
 
 @Component({
   selector: 'app-root',
@@ -18,11 +19,13 @@ export class AppComponent implements OnInit {
 
   constructor(
     private toastService: ToastService,
-    _theme: ThemeService
+    _theme: ThemeService,
+    public releaseFreshness: ReleaseFreshnessService
   ) {}
 
   ngOnInit() {
     this.toastService.toast$.subscribe(t => (this.toast = t));
+    this.releaseFreshness.start();
   }
 
   dismissToast() {

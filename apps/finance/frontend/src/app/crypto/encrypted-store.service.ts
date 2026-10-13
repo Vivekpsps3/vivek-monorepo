@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
 import {
   Asset,
   BankAccountRecord,
@@ -26,7 +26,7 @@ import {
 import { randomClientId } from './vault-crypto';
 import { VaultService } from './vault.service';
 
-type CollectionName =
+export type EncryptedCollection =
   | 'transactions'
   | 'assets'
   | 'liabilities'
@@ -39,6 +39,22 @@ type CollectionName =
   | 'import_batches'
   | 'planning_profiles'
   | 'stock_lab_scenarios';
+
+type CollectionName = EncryptedCollection;
+
+export interface EncryptedStoreChange {
+  collection: EncryptedCollection;
+  source: 'local' | 'remote';
+}
+
+export class RecordRevisionConflictError extends Error {
+  constructor(readonly collection: EncryptedCollection, readonly recordId: number, latestLoaded: boolean) {
+    super(latestLoaded
+      ? `This ${collection.replaceAll('_', ' ')} record changed in another tab. The latest saved version was refreshed; your draft is still open. Review the saved version, then retry.`
+      : `This ${collection.replaceAll('_', ' ')} record changed in another tab. Your draft is still open; reload the latest saved data, review it, then retry.`);
+    this.name = 'RecordRevisionConflictError';
+  }
+}
 
 interface StoredEnvelope<T> {
   id: number;
@@ -53,11 +69,16 @@ const CURRENT_RECORD_SCHEMA_VERSION = 2;
 
 @Injectable({ providedIn: 'root' })
 export class EncryptedStoreService {
+  private changesSubject = new Subject<EncryptedStoreChange>();
+  readonly changes$ = this.changesSubject.asObservable();
   private loaded = false;
   private generation = 0;
   private loadingGeneration = -1;
   private loadingPromise: Promise<void> | null = null;
-  private nextId = 1;
+  private reservedIds = new Set<number>();
+  private recordQueues = new Map<string, Promise<unknown>>();
+  private reloadQueues = new Map<CollectionName, Promise<void>>();
+  private collectionVersions = new Map<CollectionName, number>();
   private bags: Record<string, Map<string, StoredEnvelope<any>>> = {
     transactions: new Map(),
     assets: new Map(),
@@ -80,8 +101,54 @@ export class EncryptedStoreService {
     this.loaded = false;
     this.loadingGeneration = -1;
     this.loadingPromise = null;
-    this.nextId = 1;
+    this.reservedIds.clear();
+    this.recordQueues.clear();
+    this.reloadQueues.clear();
+    this.collectionVersions.clear();
     for (const key of Object.keys(this.bags)) this.bags[key] = new Map();
+  }
+
+  get sessionToken(): number {
+    return this.generation;
+  }
+
+  private assertSession(expectedGeneration: number): void {
+    if (expectedGeneration !== this.generation) throw new Error('Vault session changed');
+  }
+
+  private bumpCollectionVersion(collection: CollectionName): void {
+    this.collectionVersions.set(collection, (this.collectionVersions.get(collection) ?? 0) + 1);
+  }
+
+  private runRecordUpdate<T>(
+    collection: CollectionName,
+    id: number,
+    expectedGeneration: number,
+    update: () => Promise<T>
+  ): Promise<T> {
+    const key = `${collection}:${id}`;
+    const previous = this.recordQueues.get(key) ?? Promise.resolve();
+    const pending = previous.catch(() => undefined).then(async () => {
+      this.assertSession(expectedGeneration);
+      return update();
+    });
+    this.recordQueues.set(key, pending);
+    return pending.finally(() => {
+      if (this.recordQueues.get(key) === pending) this.recordQueues.delete(key);
+    });
+  }
+
+  private async withRecordUpdates<T>(
+    collection: CollectionName,
+    ids: number[],
+    expectedGeneration: number,
+    update: () => Promise<T>
+  ): Promise<T> {
+    const uniqueIds = [...new Set(ids)].sort((a, b) => a - b);
+    const acquire = (index: number): Promise<T> => index >= uniqueIds.length
+      ? update()
+      : this.runRecordUpdate(collection, uniqueIds[index], expectedGeneration, () => acquire(index + 1));
+    return acquire(0);
   }
 
   async ensureLoaded(): Promise<void> {
@@ -115,7 +182,7 @@ export class EncryptedStoreService {
     const rows = await firstValueFrom(this.vault.listRecords());
     if (generation !== this.generation) throw new Error('Vault session changed');
     for (const key of Object.keys(this.bags)) this.bags[key] = new Map();
-    let maxId = 0;
+    const decoded: Array<{ row: any; data: any }> = [];
     for (const row of rows) {
       if (!this.bags[row.collection]) continue;
       const data = await this.vault.decryptPayload<any>(
@@ -126,8 +193,13 @@ export class EncryptedStoreService {
         row.key_version
       );
       if (generation !== this.generation) throw new Error('Vault session changed');
+      const existingId = Number(data.id);
+      if (existingId) this.reservedIds.add(existingId);
+      decoded.push({ row, data });
+    }
+    for (const { row, data } of decoded) {
       const id = Number(data.id) || this.allocateId();
-      maxId = Math.max(maxId, id);
+      this.reservedIds.add(id);
       const envelope: StoredEnvelope<any> = {
         id,
         client_id: row.client_id,
@@ -139,16 +211,26 @@ export class EncryptedStoreService {
       this.bags[row.collection].set(row.client_id, envelope);
     }
     this.loaded = true;
-    this.nextId = maxId + 1;
     await this.rewriteLegacyRecords(generation);
     if (generation !== this.generation) throw new Error('Vault session changed');
     await this.migrateLegacyPlaintext(generation);
   }
 
   private allocateId(): number {
-    const id = this.nextId;
-    this.nextId += 1;
-    return id;
+    const inMemoryIds = new Set(this.reservedIds);
+    for (const bag of Object.values(this.bags)) {
+      for (const envelope of bag.values()) inMemoryIds.add(envelope.id);
+    }
+    const words = new Uint32Array(2);
+    for (let attempt = 0; attempt < 128; attempt += 1) {
+      globalThis.crypto.getRandomValues(words);
+      const id = (words[0] & 0x001fffff) * 0x1_0000_0000 + words[1];
+      if (id > 0 && Number.isSafeInteger(id) && !inMemoryIds.has(id)) {
+        this.reservedIds.add(id);
+        return id;
+      }
+    }
+    throw new Error('Could not allocate a unique local record ID.');
   }
 
   private list<T>(collection: CollectionName): T[] {
@@ -159,7 +241,7 @@ export class EncryptedStoreService {
   private async readPersistedRows<T>(collection: CollectionName, generation = this.generation): Promise<T[]> {
     const records = await firstValueFrom(this.vault.listRecords());
     if (generation !== this.generation) throw new Error('Vault session changed');
-    const rows: T[] = [];
+    const decoded: T[] = [];
     for (const record of records.filter(row => row.collection === collection)) {
       const data = await this.vault.decryptPayload<T>(
         record.ciphertext_b64,
@@ -169,9 +251,15 @@ export class EncryptedStoreService {
         record.key_version
       );
       if (generation !== this.generation) throw new Error('Vault session changed');
-      rows.push({ ...data, id: Number((data as any).id) || this.allocateId() } as T);
+      const existingId = Number((data as any).id);
+      if (existingId) this.reservedIds.add(existingId);
+      decoded.push(data);
     }
-    return rows;
+    return decoded.map(data => {
+      const id = Number((data as any).id) || this.allocateId();
+      this.reservedIds.add(id);
+      return { ...data, id } as T;
+    });
   }
 
   private async upsert<T extends { id?: number }>(
@@ -190,7 +278,7 @@ export class EncryptedStoreService {
         ? Array.from(this.bags[collection].values()).find(v => v.id === payload.id)
         : undefined;
     const id = existing?.id ?? payload.id ?? this.allocateId();
-    this.nextId = Math.max(this.nextId, id + 1);
+    this.reservedIds.add(id);
     const cid = existing?.client_id ?? clientId ?? randomClientId(collection.slice(0, 3));
     const data = { ...payload, id };
     const schemaVersion = CURRENT_RECORD_SCHEMA_VERSION;
@@ -218,9 +306,25 @@ export class EncryptedStoreService {
           indexes,
         },
       ])
-    );
+    ).catch(async error => {
+      if (Number((error as any)?.status) === 409) {
+        let latestLoaded = false;
+        if (this.loaded && generation === this.generation) {
+          try {
+            await this.reloadCollections([collection]);
+            latestLoaded = true;
+            this.changesSubject.next({ collection, source: 'remote' });
+          } catch {
+            // Keep the user's draft and report that the latest version still needs a reload.
+          }
+        }
+        throw new RecordRevisionConflictError(collection, id, latestLoaded);
+      }
+      throw error;
+    });
     if (generation !== this.generation) throw new Error('Vault session changed');
     const row = saved[0];
+    this.bumpCollectionVersion(collection);
     this.bags[collection].set(cid, {
       id,
       client_id: cid,
@@ -229,6 +333,7 @@ export class EncryptedStoreService {
       key_version: keyVersion,
       data,
     });
+    this.changesSubject.next({ collection, source: 'local' });
     return data;
   }
 
@@ -239,6 +344,18 @@ export class EncryptedStoreService {
     _replaceExisting = false
   ): Promise<T[]> {
     const generation = this.generation;
+    if (collection === 'holdings' && records.length) {
+      return this.withRecordUpdates(collection, records.map(record => record.id), generation,
+        () => this.savePreparedRecordsUnlocked(collection, records, generation));
+    }
+    return this.savePreparedRecordsUnlocked(collection, records, generation);
+  }
+
+  private async savePreparedRecordsUnlocked<T extends { id: number }>(
+    collection: CollectionName,
+    records: T[],
+    generation: number
+  ): Promise<T[]> {
     await this.ensureLoaded();
     if (generation !== this.generation) throw new Error('Vault session changed');
     const output: T[] = [];
@@ -255,6 +372,7 @@ export class EncryptedStoreService {
       }> = [];
       const envelopes: Array<{ id: number; client_id: string; schema_version: number; key_version: number; data: T }> = [];
       for (const data of part) {
+        this.reservedIds.add(data.id);
         const existing = Array.from(this.bags[collection].values()).find(row => row.id === data.id);
         const client_id = existing?.client_id ?? randomClientId(collection.slice(0, 3));
         const schema_version = CURRENT_RECORD_SCHEMA_VERSION;
@@ -275,6 +393,7 @@ export class EncryptedStoreService {
       if (generation !== this.generation) throw new Error('Vault session changed');
       const saved = await firstValueFrom(this.vault.upsertRecords(prepared));
       if (generation !== this.generation) throw new Error('Vault session changed');
+      this.bumpCollectionVersion(collection);
       saved.forEach((row, index) => {
         const envelope = envelopes[index];
         this.bags[collection].set(envelope.client_id, {
@@ -283,6 +402,7 @@ export class EncryptedStoreService {
         });
         output.push(envelope.data);
       });
+      this.changesSubject.next({ collection, source: 'local' });
     }
     return output;
   }
@@ -335,7 +455,65 @@ export class EncryptedStoreService {
       ])
     );
     if (generation !== this.generation) throw new Error('Vault session changed');
+    this.bumpCollectionVersion(collection);
     this.bags[collection].delete(found.client_id);
+    this.changesSubject.next({ collection, source: 'local' });
+  }
+
+  /** Reloads encrypted records after another same-account tab changes them. */
+  async reloadCollections(collections: EncryptedCollection[]): Promise<void> {
+    const generation = this.generation;
+    await this.ensureLoaded();
+    for (const collection of [...new Set(collections)]) {
+      const previous = this.reloadQueues.get(collection) ?? Promise.resolve();
+      const pending = previous.catch(() => undefined).then(() => this.reloadCollectionSnapshot(collection, generation));
+      this.reloadQueues.set(collection, pending);
+      try {
+        await pending;
+      } finally {
+        if (this.reloadQueues.get(collection) === pending) this.reloadQueues.delete(collection);
+      }
+    }
+  }
+
+  private async reloadCollectionSnapshot(collection: CollectionName, generation: number): Promise<void> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      this.assertSession(generation);
+      const version = this.collectionVersions.get(collection) ?? 0;
+      const records = await firstValueFrom(this.vault.listRecords(collection));
+      this.assertSession(generation);
+      const latest = new Map<string, StoredEnvelope<any>>();
+      const decoded: Array<{ record: any; data: any }> = [];
+      for (const record of records) {
+        const data = await this.vault.decryptPayload<any>(
+          record.ciphertext_b64,
+          record.collection,
+          record.client_id,
+          record.schema_version,
+          record.key_version
+        );
+        this.assertSession(generation);
+        const existingId = Number(data.id);
+        if (existingId) this.reservedIds.add(existingId);
+        decoded.push({ record, data });
+      }
+      for (const { record, data } of decoded) {
+        const id = Number(data.id) || this.allocateId();
+        this.reservedIds.add(id);
+        latest.set(record.client_id, {
+          id,
+          client_id: record.client_id,
+          revision: record.revision,
+          schema_version: record.schema_version,
+          key_version: record.key_version,
+          data: { ...data, id },
+        });
+      }
+      if (version !== (this.collectionVersions.get(collection) ?? 0)) continue;
+      this.bags[collection] = latest;
+      return;
+    }
+    throw new Error(`Could not refresh ${collection.replaceAll('_', ' ')} because local changes are still being saved.`);
   }
 
   async getTransactions(): Promise<Transaction[]> {
@@ -348,7 +526,9 @@ export class EncryptedStoreService {
   }
 
   async updateTransaction(id: number, tx: Partial<Transaction>): Promise<Transaction> {
+    const generation = this.generation;
     await this.ensureLoaded();
+    this.assertSession(generation);
     const current = this.list<Transaction>('transactions').find(t => t.id === id);
     if (!current) throw new Error('Transaction not found');
     const contentFields: Array<keyof Transaction> = [
@@ -363,7 +543,7 @@ export class EncryptedStoreService {
       ...tx,
       ...(edited ? { import_edited: true } : {}),
       id,
-    });
+    }, undefined, generation);
   }
 
   async deleteTransaction(id: number): Promise<void> {
@@ -381,7 +561,9 @@ export class EncryptedStoreService {
         collection: 'transactions', client_id: row.client_id, expected_revision: row.revision,
       }))));
       if (generation !== this.generation) throw new Error('Vault session changed');
+      this.bumpCollectionVersion('transactions');
       for (const row of batch) this.bags['transactions'].delete(row.client_id);
+      this.changesSubject.next({ collection: 'transactions', source: 'local' });
     }
   }
 
@@ -410,7 +592,7 @@ export class EncryptedStoreService {
       ...body,
       account_key: current?.account_key || body.account_key || randomClientId('bank-account'),
       id: body.id ?? current?.id,
-    });
+    }, undefined, generation);
     return { ...saved, id: Number(saved.id) };
   }
 
@@ -523,9 +705,11 @@ export class EncryptedStoreService {
   }
 
   async updateImportReceipt(id: number, body: Partial<ImportReceipt>): Promise<ImportReceipt> {
+    const generation = this.generation;
     const current = (await this.getImportReceipts()).find(row => row.id === id);
+    this.assertSession(generation);
     if (!current) throw new Error('Import receipt not found');
-    return this.upsert('import_batches', { ...current, ...body, record_type: 'bank_receipt', id } as any);
+    return this.upsert('import_batches', { ...current, ...body, record_type: 'bank_receipt', id } as any, undefined, generation);
   }
 
   async undoImportReceipt(id: number): Promise<{ removed: number; edited: number; missing: number }> {
@@ -634,9 +818,11 @@ export class EncryptedStoreService {
   }
 
   async updateAsset(id: number, body: any): Promise<Asset> {
+    const generation = this.generation;
     const current = (await this.getAssets()).find(a => a.id === id);
+    this.assertSession(generation);
     if (!current) throw new Error('Asset not found');
-    return this.upsert('assets', { ...current, ...body, id });
+    return this.upsert('assets', { ...current, ...body, id }, undefined, generation);
   }
 
   async deleteAsset(id: number): Promise<void> {
@@ -653,9 +839,11 @@ export class EncryptedStoreService {
   }
 
   async updateLiability(id: number, body: any): Promise<Liability> {
+    const generation = this.generation;
     const current = (await this.getLiabilities()).find(a => a.id === id);
+    this.assertSession(generation);
     if (!current) throw new Error('Liability not found');
-    return this.upsert('liabilities', { ...current, ...body, id });
+    return this.upsert('liabilities', { ...current, ...body, id }, undefined, generation);
   }
 
   async deleteLiability(id: number): Promise<void> {
@@ -709,9 +897,11 @@ export class EncryptedStoreService {
   }
 
   async addHolding(body: any): Promise<Holding> {
+    const generation = this.generation;
     const payload = { ...body };
     if (payload.brokerage_account_id != null && payload.portfolio_stage_id == null) {
       const stage = (await this.getLatestActivatedHoldingStages()).byAccountId.get(Number(payload.brokerage_account_id));
+      this.assertSession(generation);
       if (stage) {
         payload.portfolio_stage_id = stage.id;
         payload.lifecycle_status = 'active';
@@ -721,46 +911,108 @@ export class EncryptedStoreService {
       ...payload,
       current_price: body.current_price ?? body.purchase_price,
       price_source: body.price_source ?? 'manual',
-    });
+    }, undefined, generation);
     return enrichHolding(row);
   }
 
-  async updateHolding(id: number, body: any): Promise<Holding> {
-    const current = (await this.getHoldings()).find(a => a.id === id);
-    if (!current) throw new Error('Holding not found');
-    const next = { ...current, ...body, id };
-    const sharesChanged = body.shares !== undefined && Number(body.shares) !== Number(current.shares);
-    const priceChanged = body.current_price !== undefined && (body.current_price == null
-      ? current.current_price != null
-      : Number(body.current_price) !== Number(current.current_price));
-    if ((sharesChanged || priceChanged) && body.market_value === undefined) {
-      // Imported market value describes the imported share count and price. When
-      // either input changes, derive a fresh value while retaining source dates.
-      next.market_value = null;
-      next.value = null;
-    }
-    if (body.purchase_price !== undefined && body.cost_basis_status === undefined) {
-      next.cost_basis_status = body.purchase_price == null ? 'unknown' : 'known';
-    }
-    return enrichHolding(await this.upsert('holdings', next));
+  async updateHolding(id: number, body: any, expectedGeneration = this.generation): Promise<Holding> {
+    const generation = expectedGeneration;
+    return this.runRecordUpdate('holdings', id, generation, async () => {
+      const current = (await this.getHoldings()).find(a => a.id === id);
+      this.assertSession(generation);
+      if (!current) throw new Error('Holding not found');
+      const next = { ...current, ...body, id };
+      const sharesChanged = body.shares !== undefined && Number(body.shares) !== Number(current.shares);
+      const priceChanged = body.current_price !== undefined && (body.current_price == null
+        ? current.current_price != null
+        : Number(body.current_price) !== Number(current.current_price));
+      if ((sharesChanged || priceChanged) && body.market_value === undefined) {
+        next.market_value = null;
+        next.value = null;
+      }
+      if (body.purchase_price !== undefined && body.cost_basis_status === undefined) {
+        next.cost_basis_status = body.purchase_price == null ? 'unknown' : 'known';
+      }
+      return enrichHolding(await this.upsert('holdings', next, undefined, generation));
+    });
   }
 
   async updateHoldingPrice(
     id: number,
-    quote: { price: number; price_source: string; price_as_of?: string | null; quote_date?: string | null; market_date?: string | null }
+    quote: { symbol: string; price: number; price_source: string; price_as_of?: string | null; quote_date?: string | null; market_date?: string | null },
+    expectedGeneration = this.generation
   ): Promise<Holding> {
-    return this.updateHolding(id, {
-      current_price: quote.price,
-      market_value: null,
-      value: null,
-      price_source: quote.price_source,
-      price_as_of: quote.price_as_of ?? null,
-      quote_date: quote.quote_date ?? quote.market_date ?? quote.price_as_of?.slice(0, 10) ?? null,
+    this.assertValidQuote(quote);
+    return this.runRecordUpdate('holdings', id, expectedGeneration, async () => {
+      const current = (await this.getHoldings()).find(row => row.id === id);
+      this.assertSession(expectedGeneration);
+      if (!current) throw new Error('Holding not found');
+      if (this.normalizeSymbol(current.symbol) !== this.normalizeSymbol(quote.symbol)) {
+        throw new Error('The holding ticker changed while its quote was loading. Refresh again.');
+      }
+      const next = {
+        ...current,
+        current_price: quote.price,
+        market_value: null,
+        value: null,
+        price_source: quote.price_source,
+        price_as_of: quote.price_as_of ?? null,
+        quote_date: quote.quote_date ?? quote.market_date ?? null,
+      };
+      return enrichHolding(await this.upsert('holdings', next, undefined, expectedGeneration));
     });
   }
 
+  async updateJobIncomeMarketQuote(
+    id: number,
+    requestedSymbol: string,
+    quote: { symbol: string; price: number; price_source: string; price_as_of?: string | null; quote_date?: string | null },
+    expectedGeneration = this.generation
+  ): Promise<JobIncome> {
+    this.assertValidQuote(quote);
+    return this.runRecordUpdate('job_incomes', id, expectedGeneration, async () => {
+      const current = (await this.getJobIncomes()).find(row => row.id === id);
+      this.assertSession(expectedGeneration);
+      if (!current) throw new Error('Income not found');
+      const symbol = this.normalizeSymbol(requestedSymbol);
+      if (this.normalizeSymbol(current.stock_symbol || '') !== symbol || this.normalizeSymbol(quote.symbol) !== symbol) {
+        throw new Error('The employer ticker changed while its quote was loading. Refresh again.');
+      }
+      const date = quote.quote_date ?? '';
+      const observedDate = quote.price_as_of ? quote.price_as_of.slice(0, 10) : undefined;
+      const valuation = {
+        date,
+        price_per_share: quote.price,
+        source: quote.price_source,
+        price_as_of: quote.price_as_of ?? null,
+        ...(observedDate && this.isValidDate(observedDate) ? { observed_date: observedDate } : {}),
+        symbol,
+      };
+      const valuations = [...(current.stock_valuations || [])].filter(item => item.date !== date);
+      valuations.push(valuation);
+      valuations.sort((a, b) => a.date.localeCompare(b.date));
+      return enrichJobIncome(await this.upsert('job_incomes', { ...current, stock_valuations: valuations }, undefined, expectedGeneration));
+    });
+  }
+
+  private assertValidQuote(quote: { symbol: string; price: number; quote_date?: string | null }): void {
+    if (!/^[A-Z][A-Z0-9.-]*$/.test(this.normalizeSymbol(quote?.symbol || ''))) throw new Error('Invalid market ticker.');
+    if (!Number.isFinite(quote?.price) || quote.price <= 0) throw new Error('Market quote price must be a positive finite number.');
+    const date = quote.quote_date ?? '';
+    if (!this.isValidDate(date) || date > new Date().toISOString().slice(0, 10)) throw new Error('Market quote has an invalid or future trading date.');
+  }
+
+  private normalizeSymbol(value: string): string { return value.trim().toUpperCase(); }
+
+  private isValidDate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }
+
   async deleteHolding(id: number): Promise<void> {
-    return this.remove('holdings', id);
+    const generation = this.generation;
+    return this.runRecordUpdate('holdings', id, generation, () => this.remove('holdings', id));
   }
 
   async getBrokerageAccounts(): Promise<
@@ -795,10 +1047,12 @@ export class EncryptedStoreService {
     nickname?: string | null;
     label?: string | null;
   }> {
+    const generation = this.generation;
     const existing = (await this.getBrokerageAccounts()).find(account =>
       account.broker_slug === body.broker_slug && account.account_mask === body.account_mask
     );
-    const row = await this.upsert('brokerage_accounts', { ...existing, ...body, id: body.id ?? existing?.id });
+    this.assertSession(generation);
+    const row = await this.upsert('brokerage_accounts', { ...existing, ...body, id: body.id ?? existing?.id }, undefined, generation);
     return { ...row, id: Number(row.id) };
   }
 
@@ -808,8 +1062,19 @@ export class EncryptedStoreService {
   ): Promise<FidelityStageRecord> {
     await this.ensureLoaded();
     const generation = this.generation;
+    // Millisecond timestamps can collide for consecutive imports, and record IDs
+    // are intentionally random. Keep stage chronology explicit by advancing the
+    // creation time beyond every persisted Fidelity stage.
+    const existingBatches = await this.readPersistedRows<any>('import_batches', generation);
+    const latestStageTime = existingBatches
+      .filter(row => row.record_type === 'holding_stage')
+      .reduce((latest, row) => {
+        const timestamp = Date.parse(String(row.created_at || ''));
+        return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+      }, 0);
+    const createdAt = new Date(Math.max(Date.now(), latestStageTime + 1)).toISOString();
     const id = this.allocateId();
-    const stage = { ...body, id, status: 'staged', expected_row_count: rows.length, record_type: 'holding_stage' } as FidelityStageRecord & { record_type: string };
+    const stage = { ...body, id, created_at: createdAt, status: 'staged', expected_row_count: rows.length, record_type: 'holding_stage' } as FidelityStageRecord & { record_type: string };
     await this.upsert('import_batches', stage as any, undefined, generation);
     const chunks: Array<{ id: number; record_type: 'holding_stage_rows'; stage_id: number; chunk_index: number; rows: FidelityStageRow[] }> = [];
     let current: FidelityStageRow[] = [];
@@ -843,7 +1108,7 @@ export class EncryptedStoreService {
     await this.ensureLoaded();
     return this.list<any>('import_batches')
       .filter(row => row.record_type === 'holding_stage')
-      .sort((a, b) => Number(b.id) - Number(a.id));
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')) || Number(b.id) - Number(a.id));
   }
 
   async getHoldingImportStageRows(stageId: number): Promise<FidelityStageRow[]> {
@@ -852,6 +1117,17 @@ export class EncryptedStoreService {
       .filter(row => row.record_type === 'holding_stage_rows' && Number(row.stage_id) === stageId)
       .sort((a, b) => Number(a.chunk_index) - Number(b.chunk_index))
       .flatMap(row => row.rows || []);
+  }
+
+  private async nextHoldingStageActivationTime(generation: number): Promise<string> {
+    const batches = await this.readPersistedRows<any>('import_batches', generation);
+    const latestActivationTime = batches
+      .filter(row => row.record_type === 'holding_stage' && row.status === 'activated')
+      .reduce((latest, row) => {
+        const timestamp = Date.parse(String(row.activated_at || row.created_at || ''));
+        return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+      }, 0);
+    return new Date(Math.max(Date.now(), latestActivationTime + 1)).toISOString();
   }
 
   private async getLatestActivatedHoldingStages(): Promise<{
@@ -863,7 +1139,10 @@ export class EncryptedStoreService {
       .sort((a, b) => {
         const byActivationTime = String(a.activated_at || a.created_at || '')
           .localeCompare(String(b.activated_at || b.created_at || ''));
-        return byActivationTime || Number(a.id) - Number(b.id);
+        const byCreationTime = String(a.created_at || '').localeCompare(String(b.created_at || ''));
+        // ID is only a stable fallback for legacy records with indistinguishable
+        // timestamps. Newly-created stages receive strictly increasing created_at.
+        return byActivationTime || byCreationTime || Number(a.id) - Number(b.id);
       });
     const byAccountId = new Map<number, FidelityStageRecord>();
     const byAccountMask = new Map<string, FidelityStageRecord>();
@@ -944,7 +1223,7 @@ export class EncryptedStoreService {
       activeStage = await this.upsert('import_batches', {
         ...stage,
         status: 'activated',
-        activated_at: new Date().toISOString(),
+        activated_at: await this.nextHoldingStageActivationTime(generation),
         cleanup_complete: false,
         record_type: 'holding_stage',
       } as any, undefined, generation) as FidelityStageRecord;
@@ -981,7 +1260,9 @@ export class EncryptedStoreService {
   }
 
   async setBrokerageAccountNickname(accountId: number, nickname: string | null) {
+    const generation = this.generation;
     const accounts = await this.getBrokerageAccounts();
+    this.assertSession(generation);
     const current = accounts.find(a => a.id === accountId);
     if (!current) throw new Error('Brokerage account not found');
     const nextNickname = nickname?.trim() || null;
@@ -995,8 +1276,10 @@ export class EncryptedStoreService {
       label,
     });
     const holdings = await this.getHoldings();
+    this.assertSession(generation);
     for (const holding of holdings.filter(h => h.brokerage_account_id === accountId)) {
-      await this.updateHolding(holding.id, { account_display: label });
+      this.assertSession(generation);
+      await this.updateHolding(holding.id, { account_display: label }, generation);
     }
     return updated;
   }
@@ -1011,13 +1294,18 @@ export class EncryptedStoreService {
   }
 
   async updateJobIncome(id: number, body: any): Promise<JobIncome> {
-    const current = (await this.getJobIncomes()).find(a => a.id === id);
-    if (!current) throw new Error('Income not found');
-    return enrichJobIncome(await this.upsert('job_incomes', { ...current, ...body, id }));
+    const generation = this.generation;
+    return this.runRecordUpdate('job_incomes', id, generation, async () => {
+      const current = (await this.getJobIncomes()).find(a => a.id === id);
+      this.assertSession(generation);
+      if (!current) throw new Error('Income not found');
+      return enrichJobIncome(await this.upsert('job_incomes', { ...current, ...body, id }, undefined, generation));
+    });
   }
 
   async deleteJobIncome(id: number): Promise<void> {
-    return this.remove('job_incomes', id);
+    const generation = this.generation;
+    return this.runRecordUpdate('job_incomes', id, generation, () => this.remove('job_incomes', id));
   }
 
   async getFixedExpenses(): Promise<FixedExpense[]> {
@@ -1030,9 +1318,13 @@ export class EncryptedStoreService {
   }
 
   async updateFixedExpense(id: number, body: any): Promise<FixedExpense> {
-    const current = (await this.getFixedExpenses()).find(a => a.id === id);
-    if (!current) throw new Error('Expense not found');
-    return enrichFixedExpense(await this.upsert('fixed_expenses', { ...current, ...body, id }));
+    const generation = this.generation;
+    return this.runRecordUpdate('fixed_expenses', id, generation, async () => {
+      const current = (await this.getFixedExpenses()).find(a => a.id === id);
+      this.assertSession(generation);
+      if (!current) throw new Error('Expense not found');
+      return enrichFixedExpense(await this.upsert('fixed_expenses', { ...current, ...body, id }, undefined, generation));
+    });
   }
 
   async deleteFixedExpense(id: number): Promise<void> {
@@ -1049,9 +1341,13 @@ export class EncryptedStoreService {
   }
 
   async updateSubscription(id: number, body: any): Promise<Subscription> {
-    const current = (await this.getSubscriptions()).find(a => a.id === id);
-    if (!current) throw new Error('Subscription not found');
-    return enrichSubscription(await this.upsert('subscriptions', { ...current, ...body, id }));
+    const generation = this.generation;
+    return this.runRecordUpdate('subscriptions', id, generation, async () => {
+      const current = (await this.getSubscriptions()).find(a => a.id === id);
+      this.assertSession(generation);
+      if (!current) throw new Error('Subscription not found');
+      return enrichSubscription(await this.upsert('subscriptions', { ...current, ...body, id }, undefined, generation));
+    });
   }
 
   async deleteSubscription(id: number): Promise<void> {
@@ -1086,11 +1382,13 @@ export class EncryptedStoreService {
   }
 
   async savePlanningProfile(body: any, id?: number): Promise<any> {
+    const generation = this.generation;
     if (id != null) {
       const current = (await this.listPlanningProfiles()).find(p => p.id === id) || { id };
-      return this.upsert('planning_profiles', { ...current, ...body, id });
+      this.assertSession(generation);
+      return this.upsert('planning_profiles', { ...current, ...body, id }, undefined, generation);
     }
-    return this.upsert('planning_profiles', body);
+    return this.upsert('planning_profiles', body, undefined, generation);
   }
 
   async deletePlanningProfile(id: number): Promise<void> {

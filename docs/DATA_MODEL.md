@@ -153,7 +153,7 @@ in their selected period, including final payments after employment ends.
 Annual taxes/deductions remain recurring estimates; dated payments do not carry
 an additional withholding estimate.
 
-Planning → Compensation (`/planning?t=compensation`) groups gross compensation
+Recurring → Jobs & pay compensation history groups gross compensation
 by employer (trimmed, case insensitive), including inactive/past jobs. Its range
 defaults to all recorded history through today; a calendar-year selector and date
 range are available, and future ranges are labeled as projections. Base, annual
@@ -162,8 +162,10 @@ convention. Individual payments are additional to annual estimates, so users mus
 avoid recording the same amount in both places. Stock awards appear as separate
 period compensation, with cumulative sale proceeds and the remaining-share snapshot
 shown through the selected end date.
-Starting base pay stays intact when promotions are added. This view can edit the
-same job records as Recurring → Pay and never writes net-worth or ledger data.
+Starting base pay stays intact when promotions are added. This is a read-only
+report; edit the source job in Recurring → Jobs & pay. The legacy
+`/planning?t=compensation` deep link redirects there and opens the history
+section. Compensation history never writes net-worth or ledger data.
 
 `PlanningService.getInputs()` builds its default spending estimate from active fixed expenses and subscriptions, annualized from their configured frequency. Active job records supply estimated income. The default recurring input includes transaction count in its snapshot hash but does not derive its estimate from transactions.
 
@@ -184,6 +186,12 @@ Separate from net worth and the transaction ledger. Code: `apps/finance/backend/
 - **Does not** affect net worth.
 - API: `/api/planning/v1/*` — all responses include speculative disclaimers.
 - Only tool wired: `mc_net_worth_paths`.
+
+The browser builds the current planning facts from the encrypted balance sheet and recurring schedules. Net worth uses current assets + holdings market value − liabilities; active job income and scheduled fixed expenses/subscriptions provide the default annual pay and cost inputs. Transactions remain a separate card ledger: they can support a user-accepted variable-spend suggestion, but do not silently become the spending assumption. The displayed source dates are the record dates (`as_of_date`, holding `quote_date`, and `position_as_of`); calculation time and market fetch time do not establish source freshness. Missing or future source dates are reported as unknown.
+
+Profiles save assumptions, not frozen copies of live financial facts. When a live-source option is selected, its profile/run field is `null`, so reopening the profile uses current facts. Non-null manual overrides remain saved. Older profiles with `extra_contributions.annual_contribution` continue to add that amount to annual income minus spending. The newer optional `net_annual_cashflow_override` is the complete current annual net cashflow and replaces both that calculated difference and any legacy additional contribution when present. For example, $60,000 income, $40,000 spending, and a $10,000 total override contributes $10,000 per year; without the override, a $5,000 legacy addition contributes $25,000. This keeps the FIRE estimate and Monte Carlo model on the same current cashflow.
+
+The inferred growth allocation is portfolio value divided by gross assets (`net worth + liabilities`), clamped to 0–100%; a no-portfolio or no-assets case uses 0%. The displayed estimate and simulation share this calculation. Goal funding starts with $0 already saved until the user enters an amount. Debt payoff starts with a $0 manual estimate and can explicitly select one saved liability; total net worth and all liabilities are never treated as the amount for one goal or one debt. The retirement timeline is a straight-line gap/current-cashflow estimate and does not include investment growth. A saved scenario run is not stored; source edits mark visible prior results stale rather than rerunning them.
 
 ### Stock Lab scenarios
 

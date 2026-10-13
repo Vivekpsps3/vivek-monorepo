@@ -1,14 +1,20 @@
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
+  EventEmitter,
   Component,
   Input,
+  OnChanges,
   OnDestroy,
   OnInit,
+  Output,
+  SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, finalize, forkJoin, takeUntil } from 'rxjs';
+import { RouterLink } from '@angular/router';
+import { Subject, auditTime, finalize, forkJoin, takeUntil } from 'rxjs';
+import { FinanceDataChange, FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
 import { ConfirmService } from '../services/confirm.service';
 import { ToastService } from '../services/toast.service';
@@ -23,6 +29,7 @@ import {
   PlanningCheckpoint,
   PlanningCheckpointResult,
   PlanningInputsPreview,
+  PlanningToolId,
   PlanningProfile,
   PlanningProjectionRow,
   PlanningRun,
@@ -49,6 +56,7 @@ import {
   lastThreeCompletedMonths,
   spendingCategories,
 } from '../utils/planning-spending.util';
+import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
 
 @Component({
   selector: 'app-planning',
@@ -56,6 +64,7 @@ import {
   imports: [
     CommonModule,
     FormsModule,
+    RouterLink,
     UiPageHeaderComponent,
     UiCardComponent,
     UiButtonComponent,
@@ -68,11 +77,13 @@ import {
   styleUrl: './planning.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PlanningComponent implements OnInit, OnDestroy {
+export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   @Input() embedded = false;
+  @Input() tool: PlanningToolId = 'overview';
+  @Output() toolChange = new EventEmitter<PlanningToolId>();
   readonly disclaimer = PLANNING_DISCLAIMER;
   readonly evidenceKindLabel = evidenceKindLabel;
-  activeTab: 'overview' | 'monte-carlo' | 'fire' | 'goals' | 'debt' = 'overview';
+  activeTool: PlanningToolId = 'overview';
 
   loading = true;
   running = false;
@@ -84,7 +95,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
   useTxSpending = true;
   spendingMode: 'recurring' | 'components' | 'manual' = 'recurring';
   useTxIncome = true;
-  useManualNetCashflow = false;
+  useNetCashflowOverride = false;
   useInferredAllocation = true;
   useLedgerStartingNetWorth = true;
   startingNetWorth: number | null = null;
@@ -110,8 +121,6 @@ export class PlanningComponent implements OnInit, OnDestroy {
   fire = {
     withdrawalRate: 0.04,
     extraAnnualExpenses: 0,
-    expectedReturn: 0.07,
-    savingsGrowth: 0.03,
     includeRecurringExpenses: true,
   };
 
@@ -125,7 +134,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
 
   debt = {
     name: 'Debt',
-    balance: 10000,
+    balance: 0,
     apr: 0.08,
     minimumPayment: 250,
     extraPayment: 250,
@@ -135,6 +144,9 @@ export class PlanningComponent implements OnInit, OnDestroy {
   baselineRun: PlanningRun | null = null;
   scenarioRun: PlanningRun | null = null;
   chartData: McChartData | null = null;
+  runStale = false;
+  runStaleMessage = '';
+  sourceRefreshError: string | null = null;
 
   spendingTransactions: Transaction[] = [];
   spendingReceipts: ImportReceipt[] = [];
@@ -148,25 +160,27 @@ export class PlanningComponent implements OnInit, OnDestroy {
   selectedProfileId: number | null = null;
   savedInputName = '';
   savingProfile = false;
+  selectedDebtLiabilityId: number | null = null;
+  debtSourceMessage = '';
 
   private destroy$ = new Subject<void>();
-
-  readonly planningTabs = [
-    { id: 'overview', label: 'Summary' },
-    { id: 'monte-carlo', label: 'Path' },
-    { id: 'fire', label: 'FIRE / 4% Rule' },
-    { id: 'goals', label: 'Goal Funding' },
-    { id: 'debt', label: 'Debt Payoff' },
-  ] as const;
+  private inputRefreshRequest = 0;
+  private financeChangeVersion = 0;
 
   constructor(
     private planning: PlanningService,
     private confirm: ConfirmService,
     private toast: ToastService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private finance: FinanceService,
   ) {}
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['tool']) this.activeTool = this.validTool(this.tool);
+  }
+
   ngOnInit(): void {
+    this.activeTool = this.validTool(this.tool);
     this.randomizeSeed();
     this.planning.listProfiles().pipe(takeUntil(this.destroy$)).subscribe({
       next: list => {
@@ -191,13 +205,9 @@ export class PlanningComponent implements OnInit, OnDestroy {
           this.assumptions.spending_components = this.defaultSpendingComponents(inp);
           this.spendingMode = 'recurring';
           this.assumptions.monthly_income = inp.avg_monthly_income || null;
-          this.assumptions.extra_contributions.annual_contribution =
-            inp.implied_annual_savings || null;
           this.assumptions.portfolio_allocation = this.inferredAllocation();
           this.assumptions.checkpoints = this.defaultCheckpoints(inp);
           this.startingNetWorth = inp.net_worth_total;
-          this.goal.currentSaved = Math.max(0, inp.net_worth_total);
-          this.debt.balance = Math.max(0, inp.net_worth_liabilities);
         },
         error: err => {
           this.error = err?.message ?? 'Could not load planning inputs.';
@@ -219,6 +229,11 @@ export class PlanningComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       },
     });
+
+    this.finance.dataChanges$.pipe(
+      auditTime(120),
+      takeUntil(this.destroy$),
+    ).subscribe(change => this.onFinanceDataChange(change));
 
   }
 
@@ -368,9 +383,10 @@ export class PlanningComponent implements OnInit, OnDestroy {
         annual_suggestion: suggestion.annualSuggestion,
       },
     };
+    const normalizedAcceptedPayload = this.normalizedAssumptions('components', acceptedPayload);
     const current = this.profiles.find(profile => profile.id === this.selectedProfileId);
     const name = current?.name || this.savedInputName.trim() || `Planning estimate ${suggestion.period.end}`;
-    const body = { name, payload: acceptedPayload };
+    const body = { name, payload: normalizedAcceptedPayload };
     const request = this.selectedProfileId != null
       ? this.planning.updateProfile(this.selectedProfileId, body)
       : this.planning.createProfile(body);
@@ -379,7 +395,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     })).subscribe({
       next: profile => {
-        this.assumptions = acceptedPayload;
+        this.assumptions = normalizedAcceptedPayload;
         this.spendingMode = 'components';
         this.useTxSpending = false;
         if (this.selectedProfileId != null) {
@@ -404,8 +420,110 @@ export class PlanningComponent implements OnInit, OnDestroy {
     return src === 'default_fallback_40000' || src.includes('default_fallback');
   }
 
-  setTab(tab: 'overview' | 'monte-carlo' | 'fire' | 'goals' | 'debt'): void {
-    this.activeTab = tab;
+  private validTool(tool: unknown): PlanningToolId {
+    return tool === 'simulation' || tool === 'retirement-target' || tool === 'savings-goal' || tool === 'debt-payoff'
+      ? tool
+      : 'overview';
+  }
+
+  setTool(tool: PlanningToolId): void {
+    this.activeTool = this.validTool(tool);
+    this.toolChange.emit(this.activeTool);
+    this.cdr.markForCheck();
+  }
+
+  showSpendingPlan(): boolean {
+    return this.activeTool === 'overview' || this.activeTool === 'simulation' || this.activeTool === 'retirement-target';
+  }
+
+  showAdvancedEvidence(): boolean {
+    return this.activeTool === 'overview' || this.activeTool === 'simulation' || this.activeTool === 'retirement-target';
+  }
+
+  showVariableCostWarning(): boolean {
+    return this.spendingMode === 'recurring'
+      || (this.spendingMode === 'components' && this.effectiveSpendingComponents.variable_annual <= 0);
+  }
+
+  private onFinanceDataChange(change: FinanceDataChange): void {
+    const changed = new Set<string>(change.collections);
+    const sourceInputsChanged = [
+      'assets', 'liabilities', 'holdings', 'job_incomes', 'fixed_expenses', 'subscriptions',
+    ].some(collection => changed.has(collection));
+    const spendingHistoryChanged = [
+      'transactions', 'bank_accounts', 'import_batches',
+    ].some(collection => changed.has(collection));
+    if (!sourceInputsChanged && !spendingHistoryChanged) return;
+    this.financeChangeVersion += 1;
+
+    if (this.lastRun) {
+      this.runStale = true;
+      this.runStaleMessage = change.source === 'remote'
+        ? 'Your finance facts changed in another tab. These results still use the earlier facts.'
+        : 'Your finance facts changed. These results still use the earlier facts.';
+    }
+    if (sourceInputsChanged || spendingHistoryChanged) this.refreshSourceFacts();
+    if (spendingHistoryChanged) this.refreshSpendingHistory();
+  }
+
+  refreshSourceFacts(): void {
+    const request = ++this.inputRefreshRequest;
+    this.sourceRefreshError = null;
+    this.planning.getInputs().pipe(takeUntil(this.destroy$)).subscribe({
+      next: inputs => {
+        if (request !== this.inputRefreshRequest) return;
+        this.inputs = inputs;
+        if (this.useLedgerStartingNetWorth) this.startingNetWorth = inputs.net_worth_total;
+        if (this.selectedDebtLiabilityId != null) {
+          const liability = inputs.liability_sources?.find(row => row.id === this.selectedDebtLiabilityId);
+          if (liability) {
+            this.debt.balance = liability.balance_owed;
+            this.debtSourceMessage = `Using ${liability.name} from What you have · balance date ${liability.as_of_date || 'unknown'}.`;
+          } else {
+            this.selectedDebtLiabilityId = null;
+            this.debtSourceMessage = 'The selected liability was removed. Its last balance is kept as a manual estimate.';
+          }
+        }
+        this.cdr.markForCheck();
+      },
+      error: err => {
+        if (request !== this.inputRefreshRequest) return;
+        this.sourceRefreshError = err?.message ?? 'Could not refresh planning facts.';
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  private refreshSpendingHistory(): void {
+    this.planning.getSpendingSuggestionContext().pipe(takeUntil(this.destroy$)).subscribe({
+      next: context => {
+        this.spendingTransactions = context.transactions;
+        this.spendingReceipts = context.receipts;
+        this.spendingAccounts = context.accounts.filter(account => account.confirmed);
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.spendingTransactions = [];
+        this.spendingReceipts = [];
+        this.spendingAccounts = [];
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  selectDebtLiability(value: string): void {
+    const id = value === '' ? null : Number.parseInt(value, 10);
+    this.selectedDebtLiabilityId = Number.isFinite(id as number) ? id : null;
+    const liability = this.inputs?.liability_sources?.find(row => row.id === this.selectedDebtLiabilityId);
+    if (liability) {
+      this.debt.name = liability.name;
+      this.debt.balance = liability.balance_owed;
+      this.debtSourceMessage = `Using ${liability.name} from What you have · balance date ${liability.as_of_date || 'unknown'}.`;
+    } else {
+      this.debt.name = 'Debt estimate';
+      this.debt.balance = 0;
+      this.debtSourceMessage = 'Enter an amount for a hypothetical debt. No real liability is selected.';
+    }
     this.cdr.markForCheck();
   }
 
@@ -419,9 +537,11 @@ export class PlanningComponent implements OnInit, OnDestroy {
   }
 
   yearsToFire(): number | null {
+    const gap = this.fireGap();
+    if (gap <= 0) return 0;
     const annualSavings = Math.max(this.effectiveNetCashflow(), 0);
     if (annualSavings <= 0) return null;
-    return Math.ceil(this.fireGap() / annualSavings);
+    return Math.ceil(gap / annualSavings);
   }
 
   fireAnnualSpending(): number {
@@ -435,14 +555,8 @@ export class PlanningComponent implements OnInit, OnDestroy {
     return Math.max(0, base + Number(this.fire.extraAnnualExpenses || 0));
   }
 
-  fireProjectedPortfolioAtTarget(): number | null {
-    const years = this.yearsToFire();
-    if (years == null) return null;
-    const current = Math.max(0, Number(this.inputs?.net_worth_portfolio || 0));
-    const savings = Math.max(0, this.effectiveNetCashflow());
-    const r = Math.max(-0.99, Number(this.fire.expectedReturn || 0));
-    if (r === 0) return current + savings * years;
-    return current * Math.pow(1 + r, years) + savings * ((Math.pow(1 + r, years) - 1) / r);
+  fireEstimateDescription(): string {
+    return 'Straight-line estimate: portfolio gap divided by today’s annual cashflow. It assumes the cashflow stays constant and excludes investment growth, taxes, and future changes in spending.';
   }
 
   monthlyGoalContribution(): number {
@@ -534,12 +648,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
     const name = this.savedInputName.trim();
     if (!name) return;
     this.savingProfile = true;
-    this.assumptions.spending_mode = this.spendingMode;
-    this.assumptions.spending_components = this.effectiveSpendingComponents;
-    if (this.spendingMode === 'manual') {
-      this.assumptions.annual_spending = Number(this.assumptions.annual_spending) || 0;
-    }
-    const body = { name, payload: this.assumptions };
+    const body = { name, payload: this.normalizedAssumptions() };
     const req =
       this.selectedProfileId != null
         ? this.planning.updateProfile(this.selectedProfileId, body)
@@ -604,8 +713,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
     this.assumptions.spending_mode = this.spendingMode;
     this.useTxSpending = this.spendingMode === 'recurring';
     this.useTxIncome = payload.monthly_income == null;
-    const contrib = payload.extra_contributions?.annual_contribution;
-    this.useManualNetCashflow = contrib != null;
+    this.useNetCashflowOverride = payload.net_annual_cashflow_override != null;
     this.useInferredAllocation = payload.portfolio_allocation == null;
     this.useLedgerStartingNetWorth = payload.start_net_worth == null;
     if (!this.useLedgerStartingNetWorth && payload.start_net_worth != null) {
@@ -624,7 +732,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
     } as PlanningInputsPreview);
     this.useTxSpending = true;
     this.useTxIncome = true;
-    this.useManualNetCashflow = false;
+    this.useNetCashflowOverride = false;
     this.useInferredAllocation = true;
     this.useLedgerStartingNetWorth = true;
     if (this.inputs) {
@@ -691,6 +799,20 @@ export class PlanningComponent implements OnInit, OnDestroy {
     }
   }
 
+  setUseTxIncome(useCurrent: boolean): void {
+    if (!useCurrent && this.assumptions.monthly_income == null) {
+      this.assumptions.monthly_income = this.inputs?.avg_monthly_income ?? 0;
+    }
+    this.useTxIncome = useCurrent;
+  }
+
+  setUseInferredAllocation(useInferred: boolean): void {
+    if (!useInferred && this.assumptions.portfolio_allocation == null) {
+      this.assumptions.portfolio_allocation = this.inferredAllocation();
+    }
+    this.useInferredAllocation = useInferred;
+  }
+
   effectiveAnnualSpending(): number {
     if (this.spendingMode === 'recurring') return Number(this.inputs?.implied_annual_spending) || 0;
     if (this.spendingMode === 'components') return this.componentAnnualSpending;
@@ -703,18 +825,48 @@ export class PlanningComponent implements OnInit, OnDestroy {
   }
 
   effectiveNetCashflow(): number {
-    if (this.useManualNetCashflow) {
-      return Number(this.assumptions.extra_contributions.annual_contribution ?? 0);
+    if (this.useNetCashflowOverride) {
+      return Number(this.assumptions.net_annual_cashflow_override ?? 0);
     }
-    return this.effectiveAnnualIncome() - this.effectiveAnnualSpending();
+    return this.effectiveAnnualIncome()
+      - this.effectiveAnnualSpending()
+      + Number(this.assumptions.extra_contributions?.annual_contribution ?? 0);
+  }
+
+  effectiveCashflowDescription(): string {
+    if (this.useNetCashflowOverride) return 'Manual total replaces income less spending and any legacy additional contribution';
+    return Number(this.assumptions.extra_contributions?.annual_contribution ?? 0) !== 0
+      ? 'Job income less selected spending, plus saved additional contribution'
+      : 'Job income less selected spending';
+  }
+
+  private normalizedAssumptions(
+    spendingMode = this.spendingMode,
+    base: ProfilePayload = this.assumptions,
+  ): ProfilePayload {
+    return {
+      ...structuredClone(base),
+      spending_mode: spendingMode,
+      spending_components: structuredClone(base.spending_components || this.effectiveSpendingComponents),
+      monthly_income: this.useTxIncome ? null : base.monthly_income,
+      net_annual_cashflow_override: this.useNetCashflowOverride
+        ? Number(base.net_annual_cashflow_override ?? 0)
+        : null,
+      portfolio_allocation: this.useInferredAllocation ? null : base.portfolio_allocation,
+      start_net_worth: this.useLedgerStartingNetWorth
+        ? null
+        : Number(this.startingNetWorth ?? this.inputs?.net_worth_total ?? 0),
+      // Preserve old additional-contribution assumptions. A total override takes precedence at run time.
+      extra_contributions: {
+        annual_contribution: base.extra_contributions?.annual_contribution ?? null,
+      },
+    };
   }
 
   inferredAllocation(): number {
     const inp = this.inputs;
-    if (!inp || inp.net_worth_total <= 0) return 0.35;
-    const liabilities = Math.max(0, inp.net_worth_liabilities);
-    const assets = Math.max(1, inp.net_worth_total + liabilities);
-    return Math.min(0.95, Math.max(0.05, inp.net_worth_portfolio / assets || 0.35));
+    if (!inp) return 0;
+    return inferredPortfolioAllocation(inp.net_worth_total, inp.net_worth_portfolio, inp.net_worth_liabilities);
   }
 
   addCheckpoint(): void {
@@ -739,7 +891,7 @@ export class PlanningComponent implements OnInit, OnDestroy {
       ...this.assumptions.annual_cashflow_events,
       {
         label: `Event ${this.assumptions.annual_cashflow_events.length + 1}`,
-        amount: -10000,
+        amount: 0,
         year: 5,
         start_year: null,
         end_year: null,
@@ -751,6 +903,25 @@ export class PlanningComponent implements OnInit, OnDestroy {
     ];
   }
 
+  addScenarioTemplate(template: 'car-purchase' | 'time-off'): void {
+    const timeOff = template === 'time-off';
+    this.assumptions.annual_cashflow_events = [
+      ...this.assumptions.annual_cashflow_events,
+      {
+        label: timeOff ? 'Time off' : 'Car purchase',
+        amount: 0,
+        year: 1,
+        start_year: null,
+        end_year: null,
+        recurring: false,
+        interval_years: 1,
+        inflation_adjusted: true,
+        applies_to: 'scenario',
+      },
+    ];
+    this.cdr.markForCheck();
+  }
+
   removeEvent(index: number): void {
     this.assumptions.annual_cashflow_events = this.assumptions.annual_cashflow_events.filter(
       (_, i) => i !== index
@@ -760,37 +931,31 @@ export class PlanningComponent implements OnInit, OnDestroy {
   runSimulation(): void {
     this.running = true;
     this.error = null;
+    const runChangeVersion = this.financeChangeVersion;
+    const normalized = this.normalizedAssumptions();
     const comparisonSeed = Number.isFinite(Number(this.seed)) ? Number(this.seed) : 1;
     this.seed = comparisonSeed;
     this.cdr.markForCheck();
 
     const overrides: Record<string, unknown> = {
-      annual_income_growth: this.assumptions.annual_income_growth,
-      inflation_cpi: this.assumptions.inflation_cpi,
-      nominal_return_mean: this.assumptions.nominal_return_mean,
-      nominal_return_std: this.assumptions.nominal_return_std,
-      stable_return_mean: this.assumptions.stable_return_mean,
-      portfolio_allocation: this.useInferredAllocation
-        ? null
-        : this.assumptions.portfolio_allocation,
-      tax_drag: this.assumptions.tax_drag,
-      annual_fee_drag: this.assumptions.annual_fee_drag,
-      shock_probability: this.assumptions.shock_probability,
-      shock_mean_loss: this.assumptions.shock_mean_loss,
-      shock_loss_std: this.assumptions.shock_loss_std,
-      start_net_worth: this.useLedgerStartingNetWorth
-        ? null
-        : Number(this.startingNetWorth ?? this.inputs?.net_worth_total ?? 0),
+      annual_income_growth: normalized.annual_income_growth,
+      inflation_cpi: normalized.inflation_cpi,
+      nominal_return_mean: normalized.nominal_return_mean,
+      nominal_return_std: normalized.nominal_return_std,
+      stable_return_mean: normalized.stable_return_mean,
+      portfolio_allocation: normalized.portfolio_allocation,
+      tax_drag: normalized.tax_drag,
+      annual_fee_drag: normalized.annual_fee_drag,
+      shock_probability: normalized.shock_probability,
+      shock_mean_loss: normalized.shock_mean_loss,
+      shock_loss_std: normalized.shock_loss_std,
+      start_net_worth: normalized.start_net_worth,
       spending_mode: this.spendingMode,
-      spending_components: this.effectiveSpendingComponents,
-      annual_spending: this.spendingMode === 'manual' ? this.assumptions.annual_spending : null,
-      monthly_income: this.useTxIncome ? null : this.assumptions.monthly_income,
-      extra_contributions: this.useManualNetCashflow
-        ? {
-            annual_contribution:
-              this.assumptions.extra_contributions.annual_contribution ?? null,
-          }
-        : { annual_contribution: null },
+      spending_components: normalized.spending_components,
+      annual_spending: this.spendingMode === 'manual' ? normalized.annual_spending : null,
+      monthly_income: normalized.monthly_income,
+      net_annual_cashflow_override: normalized.net_annual_cashflow_override,
+      extra_contributions: normalized.extra_contributions,
       checkpoints: this.cleanedCheckpoints(),
     };
 
@@ -828,6 +993,10 @@ export class PlanningComponent implements OnInit, OnDestroy {
           this.baselineRun = runs.baseline;
           this.scenarioRun = runs.scenario;
           this.applyRunResult(runs.scenario);
+          this.runStale = this.financeChangeVersion !== runChangeVersion;
+          this.runStaleMessage = this.runStale
+            ? 'Your finance facts changed while this run was in progress. These results use the earlier facts.'
+            : '';
           const p50 = runs.scenario.result_summary?.terminal_p50;
           const baselineP50 = runs.baseline.result_summary?.terminal_p50;
           const delta = p50 == null || baselineP50 == null ? null : p50 - baselineP50;

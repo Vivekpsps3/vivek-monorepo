@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
+import { EMPTY, Subject, combineLatest, debounceTime, finalize, filter, forkJoin, takeUntil } from 'rxjs';
 import { ChartsComponent } from '../charts/charts.component';
 import {
   Asset,
@@ -9,6 +9,7 @@ import {
   CashflowSummary,
   FixedExpense,
   Holding,
+  JobIncome,
   ImportReceipt,
   Liability,
   NetWorth,
@@ -19,6 +20,7 @@ import { FinanceService } from '../services/finance.service';
 import { UiButtonComponent, UiCardComponent, UiSkeletonComponent } from '../shared/ui';
 import {
   assetReviewState,
+  actualQuoteDate,
   hasUnvaluedPositions,
   holdingGain,
   holdingGainPercent,
@@ -61,6 +63,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   assets: Asset[] = [];
   liabilities: Liability[] = [];
   fixedExpenses: FixedExpense[] = [];
+  jobIncomes: JobIncome[] = [];
   subscriptions: Subscription[] = [];
   importReceipts: ImportReceipt[] = [];
   bankAccounts: BankAccountRecord[] = [];
@@ -71,6 +74,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   holdingsOpen = true;
 
   private destroy$ = new Subject<void>();
+  private reviewSourcesRequest = 0;
 
   constructor(
     private finance: FinanceService,
@@ -86,10 +90,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.finance.assets$,
       this.finance.liabilities$,
       this.finance.fixedExpenses$,
+      this.finance.jobIncomes$,
       this.finance.subscriptions$,
     ])
       .pipe(takeUntil(this.destroy$))
-      .subscribe(([netWorth, cashflow, holdings, transactions, assets, liabilities, fixedExpenses, subscriptions]) => {
+      .subscribe(([netWorth, cashflow, holdings, transactions, assets, liabilities, fixedExpenses, jobIncomes, subscriptions]) => {
         this.netWorth = netWorth;
         this.cashflow = cashflow;
         this.holdings = holdings;
@@ -97,10 +102,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.assets = assets;
         this.liabilities = liabilities;
         this.fixedExpenses = fixedExpenses;
+        this.jobIncomes = jobIncomes;
         this.subscriptions = subscriptions;
         this.refreshReviewItems();
         this.cdr.markForCheck();
       });
+    (this.finance.dataChanges$ || EMPTY).pipe(
+      filter(change => change.collections.some(collection =>
+        ['transactions', 'bank_accounts', 'import_batches'].includes(collection))),
+      debounceTime(60),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.refreshReviewSources());
     this.load();
   }
 
@@ -145,10 +157,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   get quoteSourceDates(): string {
-    return portfolioDateSummary(this.holdings.map(row => {
-      const legacy = row.price_as_of?.slice(0, 10) || null;
-      return row.quote_date || (row as Holding & { market_date?: string | null }).market_date || legacy;
-    }));
+    return portfolioDateSummary(this.holdings.map(actualQuoteDate));
   }
 
   get unvaluedPositionCount(): number {
@@ -173,6 +182,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get remainingReviewItemCount(): number {
     return Math.max(0, this.reviewItems.length - this.visibleReviewItems.length);
+  }
+
+  get isStarterState(): boolean {
+    return !this.assets.length && !this.liabilities.length && !this.holdings.length
+      && !this.allTransactions.length && !this.fixedExpenses.length && !this.jobIncomes.length
+      && !this.subscriptions.length && !this.importReceipts.length;
   }
 
   private refreshReviewItems(): void {
@@ -223,10 +238,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
           };
         }),
       ...this.coverageReviewItems(),
+      ...this.transactionReviewItems(),
       ...this.importReceiptReviewItems(),
       ...this.annualRenewalItems(),
     ];
     this.reviewItems = items;
+  }
+
+  private transactionReviewItems(): ReviewQueueItem[] {
+    return this.allTransactions
+      .filter(row => row.reviewed !== true)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+      .map(row => {
+        const ambiguous = row.kind === 'ambiguous_credit';
+        const account = row.bank_account_key || '__unassigned_account__';
+        return {
+          id: `${ambiguous ? 'credit' : 'transaction'}-${row.id}`,
+          category: ambiguous ? 'Ambiguous credit' : 'Transaction review',
+          title: row.merchant || row.category || row.description || 'Imported transaction',
+          detail: `${row.date} · $${Number(row.amount || 0).toFixed(2)} · ${row.account_display || 'Unassigned account'}${row.review_reason ? ` · ${row.review_reason}` : ''}`,
+          link: '/spending',
+          query: {
+            t: 'activity', v: 'all', review: 'needs', edit: String(row.id), date: row.date,
+            account, category: row.category?.trim() || 'uncategorized',
+          },
+        };
+      });
   }
 
   get topHoldings(): Holding[] {
@@ -259,6 +296,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private load(force = false): void {
+    const reviewSourcesRequest = ++this.reviewSourcesRequest;
     this.isLoading = true;
     this.error = null;
     this.cdr.markForCheck();
@@ -268,6 +306,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       bankAccounts: this.finance.getBankAccounts(),
       importReceipts: this.finance.getImportReceipts(),
       allTransactions: this.finance.getAllTransactions(),
+      jobIncomes: this.finance.getJobIncomes(),
     })
       .pipe(
         takeUntil(this.destroy$),
@@ -279,9 +318,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .subscribe({
         next: result => {
           this.liabilities = result.liabilities;
-          this.bankAccounts = result.bankAccounts;
-          this.importReceipts = result.importReceipts;
-          this.allTransactions = result.allTransactions;
+          if (reviewSourcesRequest === this.reviewSourcesRequest) {
+            this.bankAccounts = result.bankAccounts;
+            this.importReceipts = result.importReceipts;
+            this.allTransactions = result.allTransactions;
+          }
+          this.jobIncomes = result.jobIncomes;
           this.refreshReviewItems();
           this.cdr.markForCheck();
         },
@@ -293,11 +335,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
   }
 
+  private refreshReviewSources(): void {
+    const request = ++this.reviewSourcesRequest;
+    forkJoin({
+      bankAccounts: this.finance.getBankAccounts(),
+      importReceipts: this.finance.getImportReceipts(),
+      allTransactions: this.finance.getAllTransactions(),
+    }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: result => {
+        if (request !== this.reviewSourcesRequest) return;
+        this.bankAccounts = result.bankAccounts;
+        this.importReceipts = result.importReceipts;
+        this.allTransactions = result.allTransactions;
+        this.refreshReviewItems();
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
   private coverageReviewItems(): ReviewQueueItem[] {
     const confirmed = this.bankAccounts.filter(account => account.confirmed);
     if (!confirmed.length) return [];
     const coverage = buildSpendingSuggestion({
-      transactions: this.transactions,
+      transactions: this.allTransactions,
       receipts: this.importReceipts,
       accounts: this.bankAccounts,
       selectedAccountKeys: confirmed.map(account => account.account_key),
@@ -323,7 +383,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         return receipt.status !== 'complete' || unresolvedCount > 0;
       })
       .map(receipt => {
-        const unresolvedCount = this.unresolvedReceiptNotes(receipt).length;
+      const unresolvedCount = this.unresolvedReceiptNotes(receipt).length;
         const state = receipt.status === 'undoing' ? 'undo in progress' : `${receipt.status} import`;
         return {
           id: `receipt-${receipt.id}`,
@@ -340,10 +400,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return (receipt.unresolved || []).filter(note => {
       const match = note.reason.match(/^Unclassified credit from (\d{4}-\d{2}-\d{2}): (.*)$/);
       if (!match) return true;
-      const matchingRows = this.allTransactions.filter(row =>
-        row.import_receipt_id === receipt.id && row.date === match[1] && row.description === match[2]
-      );
-      return matchingRows.length === 0 || matchingRows.some(row => !row.kind || row.kind === 'ambiguous_credit');
+      return false;
     });
   }
 

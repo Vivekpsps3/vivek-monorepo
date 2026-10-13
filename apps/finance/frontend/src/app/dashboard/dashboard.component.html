@@ -10,16 +10,20 @@
           · Debts ${{ netWorth.liabilities | number: '1.0-0' }}
         </span>
         <span class="home-tile__hint">Balance dates: {{ balanceSourceDates }}</span>
+        <span class="home-tile__hint">Position dates: {{ positionSourceDates }} · quote dates: {{ quoteSourceDates }}</span>
         <span class="home-tile__hint">Totals calculated: {{ netWorthCalculationTime }}</span>
         @if (portfolioValueIncomplete) {
           <span class="home-tile__hint">Portfolio value incomplete · {{ unvaluedPositionCount }} position(s) unvalued</span>
+        }
+        @if (provisionalPositionCount) {
+          <span class="home-tile__hint">{{ provisionalPositionCount }} position(s) use provisional values</span>
         }
       </a>
       <a routerLink="/spending" class="home-tile">
         <span class="home-tile__label">This month</span>
         <span class="home-split">
           <span>
-            <small>Pay</small>
+            <small>Income</small>
             <strong class="money">${{ monthPay | number: '1.2-2' }}</strong>
           </span>
           <span>
@@ -45,9 +49,23 @@
       </a>
     </nav>
 
+    @if (isStarterState) {
+      <ui-card title="First steps">
+        <p class="home-tile__hint">Start with the parts you use. You can add balances, transaction history, recurring pay and bills, and a plan separately.</p>
+        <nav class="starter-links" aria-label="Finance setup">
+          <a routerLink="/have" [queryParams]="{ t: 'assets' }">Add assets and debts</a>
+          <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Add holdings</a>
+          <a routerLink="/spending" [queryParams]="{ t: 'imports' }">Import bank CSVs</a>
+          <a routerLink="/recurring" [queryParams]="{ t: 'pay' }">Add jobs and pay</a>
+          <a routerLink="/recurring" [queryParams]="{ t: 'spend' }">Add bills and subscriptions</a>
+          <a routerLink="/planning">Build a plan</a>
+        </nav>
+      </ui-card>
+    }
+
     <ui-card title="Review queue" class="review-queue-card">
       @if (reviewItems.length) {
-        <p class="home-tile__hint">{{ reviewItems.length }} item(s) need attention across balances, positions, statement coverage, imports, or renewals.</p>
+        <p class="home-tile__hint">{{ reviewItems.length }} item(s) need attention across balances, positions, card activity, statement coverage, imports, or renewals.</p>
         <ul class="review-queue-list">
           @for (item of visibleReviewItems; track item.id) {
             <li>
@@ -64,53 +82,9 @@
           <p class="home-tile__hint">And {{ remainingReviewItemCount }} more. Review all categories from What you have, Spending, and Recurring.</p>
         }
       } @else {
-        <p class="home-tile__hint">No balances, positions, statement coverage, imports, or annual renewals need review.</p>
+        <p class="home-tile__hint">No balances, positions, card activity, statement coverage, imports, or annual renewals need review.</p>
       }
     </ui-card>
-
-    <section class="holdings-panel" aria-labelledby="holdings-heading">
-      <div class="holdings-panel__head">
-        <div>
-          <h2 id="holdings-heading">Holdings</h2>
-          <p class="home-tile__hint">{{ portfolioValueIncomplete ? 'Known' : 'Total' }} portfolio value · ${{ portfolioValue | number: '1.2-2' }}</p>
-          <p class="home-tile__hint">Position dates: {{ positionSourceDates }} · Quote dates: {{ quoteSourceDates }}</p>
-          @if (portfolioValueIncomplete) {
-            <p class="home-tile__hint">{{ unvaluedPositionCount }} position(s) have no market value.</p>
-          }
-          @if (provisionalPositionCount) {
-            <p class="home-tile__hint">{{ provisionalPositionCount }} position(s) currently use provisional cost-basis values.</p>
-          }
-        </div>
-        <div class="holdings-panel__actions">
-          <button type="button" class="text-link" (click)="holdingsOpen = !holdingsOpen">
-            {{ holdingsOpen ? 'Hide' : 'Show' }}
-          </button>
-          <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
-        </div>
-      </div>
-      @if (holdingsOpen && topHoldings.length) {
-        <ul class="holding-list">
-          @for (row of topHoldings; track row.id) {
-            <li>
-              <span class="holding-list__symbol">{{ row.symbol }}</span>
-              <span class="holding-list__name">{{ row.company_name || row.account_display || '—' }}</span>
-              <span class="money">${{ holdingValue(row) | number: '1.2-2' }}</span>
-              <span class="holding-list__meta">{{ holdingShare(row) | number: '1.0-0' }}%</span>
-              @if (gain(row) !== null && gainPct(row) !== null) {
-                <span class="money" [class.negative]="gain(row)! < 0">
-                  {{ gain(row)! >= 0 ? '+' : '−' }}${{ abs(gain(row)!) | number: '1.0-0' }}
-                  ({{ gainPct(row)! | number: '1.1-1' }}%)
-                </span>
-              } @else {
-                <span class="holding-list__meta">Basis unknown</span>
-              }
-            </li>
-          }
-        </ul>
-      } @else if (holdingsOpen) {
-        <p class="home-tile__hint">Add holdings on What you have.</p>
-      }
-    </section>
 
     <app-charts [embedded]="true" [dataReady]="!isLoading" [overrideTransactions]="transactions" />
   } @else if (isLoading) {

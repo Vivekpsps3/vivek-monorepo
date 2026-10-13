@@ -21,6 +21,7 @@ import {
   FidelityCommitResult,
 } from '../models/transaction.model';
 import { ToastService } from '../services/toast.service';
+import { MarketRefreshCoordinatorService, MarketRefreshState } from '../services/market-refresh-coordinator.service';
 import { ConfirmService } from '../services/confirm.service';
 import { todayIsoDate } from '../utils/date.util';
 import { downloadCsv } from '../utils/export.util';
@@ -28,6 +29,7 @@ import {
   holdingGain,
   holdingGainPercent,
   hasUnvaluedPositions,
+  actualQuoteDate,
   portfolioDateSummary,
   positionReviewState,
   quoteFreshness,
@@ -80,9 +82,13 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   saving = false;
   loading = false;
   refreshingPrices = false;
+  holdingsLoadError: string | null = null;
   checkingPrice = false;
   priceCheck: MarketPriceQuote | null = null;
-  lastPortfolioRefresh: string | null = null;
+  marketState: MarketRefreshState = {
+    phase: 'idle', automatic: false, totalSymbols: 0, completedSymbols: 0,
+    updatedHoldings: 0, updatedEmployerValuations: 0, failures: [], startedAt: null, finishedAt: null,
+  };
 
   // Fidelity import state (modeled on Transactions import)
   showFidelityImportModal = false;
@@ -103,15 +109,23 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   nicknameDraft: string = '';
 
   private destroy$ = new Subject<void>();
+  private destroyed = false;
 
   constructor(
     private financeService: FinanceService,
+    private marketRefresh: MarketRefreshCoordinatorService,
     private toastService: ToastService,
     private confirmService: ConfirmService,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
+    this.loading = true;
+    this.marketRefresh.status$.pipe(takeUntil(this.destroy$)).subscribe(state => {
+      this.marketState = state;
+      this.refreshingPrices = state.phase === 'refreshing';
+      this.cdr.markForCheck();
+    });
     this.financeService.isLoading$.pipe(takeUntil(this.destroy$)).subscribe();
     this.financeService.holdings$.pipe(takeUntil(this.destroy$)).subscribe(data => {
       this.holdings = data;
@@ -125,19 +139,21 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.financeService.getHoldings().pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.loading = false;
+        this.holdingsLoadError = null;
         this.cdr.markForCheck();
       },
-      error: () => {
+      error: error => {
         this.loading = false;
+        this.holdingsLoadError = error?.message || 'The app could not load holdings. Try again.';
         this.cdr.markForCheck();
       },
     });
     this.financeService.getNetWorth().pipe(takeUntil(this.destroy$)).subscribe();
     this.loadResumableFidelityStages();
-    this.loading = true;
   }
 
   ngOnDestroy() {
+    this.destroyed = true;
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -161,27 +177,49 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   refreshAllPrices() {
     this.refreshingPrices = true;
-    this.financeService.refreshAllHoldingPrices().pipe(takeUntil(this.destroy$)).subscribe({
-      next: result => {
+    void this.marketRefresh.refreshNow().then(result => {
+        if (!this.destroyed) {
         this.refreshingPrices = false;
-        this.lastPortfolioRefresh = new Date().toLocaleString();
-        this.toastService.success(
-          result.failed
-            ? `Updated ${result.updated} holding price(s); ${result.failed} ticker(s) unavailable`
-            : `Updated ${result.updated} holding price(s)`
+        if (result.phase === 'complete') this.toastService.success(
+          `Updated ${result.updatedHoldings} holding price(s) and ${result.updatedEmployerValuations} employer valuation(s)`
         );
+        else this.toastService.error('Some prices could not be refreshed. Saved prices remain available; see the refresh details above.');
         this.cdr.markForCheck();
-      },
-      error: () => {
+        }
+      }).catch(() => {
+        if (this.destroyed) return;
         this.refreshingPrices = false;
+        this.toastService.error('Prices could not be refreshed. Saved prices remain available.');
         this.cdr.markForCheck();
-      },
-    });
+      });
   }
 
   refreshHoldingPrice(h: Holding) {
-    this.financeService.refreshHoldingPrice(h.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success(`${h.symbol} price refreshed`),
+    void this.marketRefresh.refreshSymbol(h.symbol).then(result => {
+      if (result.error || result.failedRecords.length) {
+        this.toastService.error(`${h.symbol} quote could not be fully saved. Its prior price remains available.`);
+      } else {
+        this.toastService.success(`${h.symbol} price refreshed`);
+      }
+      this.cdr.markForCheck();
+    }).catch(() => this.toastService.error(`${h.symbol} price could not be refreshed. Its prior price remains available.`));
+  }
+
+  retryLoadHoldings(): void {
+    this.holdingsLoadError = null;
+    this.loading = true;
+    this.cdr.markForCheck();
+    this.financeService.getHoldings().pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.loading = false;
+        this.holdingsLoadError = null;
+        this.cdr.markForCheck();
+      },
+      error: error => {
+        this.loading = false;
+        this.holdingsLoadError = error?.message || 'The app could not load holdings. Try again.';
+        this.cdr.markForCheck();
+      },
     });
   }
 
@@ -204,9 +242,25 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       next: quote => {
         this.checkingPrice = false;
         this.priceCheck = quote;
-        if (quote.valid && (this.newHolding.purchase_price == null || this.newHolding.purchase_price <= 0)) {
+        const quoteDate = quote.quote_date || '';
+        const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(quoteDate) ? new Date(`${quoteDate}T00:00:00Z`) : null;
+        const validDate = !!parsedDate && !Number.isNaN(parsedDate.getTime())
+          && parsedDate.toISOString().slice(0, 10) === quoteDate
+          && quoteDate <= new Date().toISOString().slice(0, 10);
+        const usable = quote.valid
+          && quote.symbol?.trim().toUpperCase() === symbol
+          && Number.isFinite(quote.price)
+          && quote.price > 0
+          && validDate;
+        if (!usable) {
+          this.toastService.error('Market service returned an invalid quote. Your saved prices and cost basis remain unchanged.');
+          this.cdr.markForCheck();
+          return;
+        }
+        if (this.newHolding.purchase_price == null || this.newHolding.purchase_price <= 0) {
           this.newHolding.purchase_price = quote.price;
         }
+        this.cdr.markForCheck();
       },
       error: () => {
         this.checkingPrice = false;
@@ -391,10 +445,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   quoteDate(h: Holding): string | null {
-    const row = h as Holding & { market_date?: string | null; price_as_of?: string | null };
-    const direct = h.quote_date ?? row.market_date;
-    if (direct) return direct;
-    return row.price_as_of ? row.price_as_of.slice(0, 10) : null;
+    return actualQuoteDate(h);
   }
 
   quoteDateLabel(h: Holding): string {

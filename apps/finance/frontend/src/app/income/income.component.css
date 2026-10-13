@@ -248,3 +248,29 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+.pay-disclosure,
+.job-history {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  padding: var(--space-4);
+  margin: var(--space-3) 0;
+}
+
+.pay-disclosure > summary,
+.job-history > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.pay-disclosure--history > section {
+  margin-top: var(--space-4);
+}
+
+.job-history > * + * {
+  margin-top: var(--space-2);
+}

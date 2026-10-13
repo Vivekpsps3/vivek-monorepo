@@ -104,6 +104,15 @@ export class StockLabComponent implements OnInit, OnDestroy {
     return this.primaryResearch ? trailingTwelveMonthDividend(this.primaryResearch) : 0;
   }
 
+  asPercent(rate: number | null | undefined): number | null {
+    return rate == null || !Number.isFinite(Number(rate)) ? null : Number((Number(rate) * 100).toFixed(6));
+  }
+
+  setRatePercent(key: 'base_growth_rate' | 'dividend_growth_rate' | 'inflation_rate', percent: number | string | null): void {
+    const value = Number(percent);
+    this.scenario[key] = Number.isFinite(value) ? value / 100 : 0;
+  }
+
   get evidenceCards(): EvidenceCard[] {
     const primary = this.primaryResearch;
     return stockLabEvidenceCards({

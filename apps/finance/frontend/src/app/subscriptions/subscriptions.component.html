@@ -1,3 +1,4 @@
+@if (!editorOnly) {
 <div [class.page]="!embedded" [class.embed]="embedded" class="subscriptions">
   <ui-page-header
     [embedded]="embedded"
@@ -54,8 +55,11 @@
       <ui-empty-state icon="credit-card" message="Add subscriptions to see them in dashboard expenses." />
     }
   </ui-card>
+ </div>
+}
 
   <ui-dialog [open]="showModal" labelledBy="subscription-modal-title" (closed)="closeModal()">
+      @if (saveError) { <p role="alert" class="form-error">{{ saveError }}</p> }
       <h2 id="subscription-modal-title">{{ editingId ? 'Edit subscription' : 'Add subscription' }}</h2>
       <form (ngSubmit)="saveSubscription()" class="form-grid">
         <label>
@@ -102,4 +106,3 @@
         </div>
       </form>
   </ui-dialog>
-</div>

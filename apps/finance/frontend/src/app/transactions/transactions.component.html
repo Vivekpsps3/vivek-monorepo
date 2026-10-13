@@ -12,17 +12,30 @@
             <div>
               <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
               <span>{{ receipt.started_at | date: 'medium' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length || 0 }} unresolved</span>
+              <span>Account outcome: {{ receipt.account_displays.join(', ') || 'No account confirmed' }}</span>
+              @if (receiptParseIssueCount(receipt)) {
+                <span class="import-error">{{ receiptParseIssueCount(receipt) }} CSV row(s) could not be parsed. Correct the file and reattach it to this receipt.</span>
+              }
+              @if (receiptReviewIssueCount(receipt)) {
+                <span>{{ receiptReviewIssueCount(receipt) }} imported transaction(s) still need review. These rows were saved and can be fixed in Activity.</span>
+              }
               @for (range of receipt.coverage || []; track $index) {
                 <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
               } @empty {
                 <span>Coverage not confirmed</span>
               }
               @if (receipt.last_error) { <span class="import-error">Last attempt: {{ receipt.last_error }}</span> }
-              @for (note of (receipt.unresolved || []).slice(0, 3); track $index) {
+              @for (note of (receipt.unresolved || []); track $index) {
                 <span>{{ note.filename || 'CSV' }} · line {{ note.line || '—' }}: {{ note.reason }}</span>
               }
             </div>
             <div class="import-history-actions">
+              @if (receiptHasReviewRows(receipt) || receiptReviewIssueCount(receipt)) {
+                <ui-button variant="secondary" size="sm" (clicked)="reviewImportedReceipt(receipt)">Review imported items</ui-button>
+              }
+              @if (receiptParseIssueCount(receipt)) {
+                <ui-button variant="secondary" size="sm" (clicked)="reattachCorrectedCsv(receipt)">Reattach corrected CSV</ui-button>
+              }
               @if (receipt.status === 'staged' || receipt.status === 'partial' || receipt.status === 'undoing') {
                 <ui-button variant="secondary" size="sm" (clicked)="resumeImport(receipt)">{{ receipt.status === 'undoing' ? 'Resume undo' : 'Resume' }}</ui-button>
               }
@@ -41,7 +54,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="typeFilter === 'income' ? 'Pay' : typeFilter === 'expense' ? 'Spend' : 'Spending'"
+    [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'"
     subtitle="Card and bank activity. This list does not change net worth.">
     <div uiPageActions class="header-actions">
       <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
@@ -69,7 +82,7 @@
   }
 
   <section class="month-hero">
-    <p class="section-eyebrow">{{ summaryMonth ? 'This month' : 'Loaded activity' }}</p>
+    <p class="section-eyebrow">{{ summaryMonth ? 'This month' : reviewPeriodCaption ? 'Compared review periods' : 'Matching activity' }}</p>
     <div class="month-summary-row">
       <label class="month-picker">
         <input
@@ -85,13 +98,13 @@
       <div class="month-totals">
         @if (typeFilter !== 'income') {
           <div class="month-total month-total--expense">
-            <span class="month-total__label">Spend across {{ allTransactions.length }} transaction(s)</span>
+            <span class="month-total__label">Spend · {{ matchingTransactions.length }} matching row(s)</span>
             <strong class="money">${{ monthExpenseTotal | number: '1.2-2' }}</strong>
           </div>
         }
         @if (typeFilter !== 'expense') {
           <div class="month-total month-total--income">
-            <span class="month-total__label">Pay across {{ allTransactions.length }} transaction(s)</span>
+            <span class="month-total__label">Income · {{ matchingTransactions.length }} matching row(s)</span>
             <strong class="money">${{ monthIncomeTotal | number: '1.2-2' }}</strong>
           </div>
         }
@@ -123,6 +136,20 @@
         (valueChange)="categoryFilter = $event; onCategoryFilterChange()"
       />
       <ui-select
+        selectId="tx-merchant-filter"
+        label="Merchant"
+        [value]="merchantFilter"
+        [options]="merchantSelectOptions"
+        (valueChange)="merchantFilter = $event; onMerchantFilterChange()"
+      />
+      <ui-select
+        selectId="tx-account-filter"
+        label="Account"
+        [value]="accountFilter"
+        [options]="accountSelectOptions"
+        (valueChange)="accountFilter = $event; onAccountFilterChange()"
+      />
+      <ui-select
         selectId="tx-review-filter"
         label="Review"
         [value]="reviewFilter"
@@ -138,6 +165,23 @@
       />
       <ui-button variant="secondary" size="sm" (clicked)="exportToCsv()">Export CSV</ui-button>
     </div>
+
+    <div class="activity-date-filters" aria-label="Activity date range">
+      <label>From <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
+      <label>Through <input type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
+      @if (hasActiveFilters) {
+        <ui-button variant="ghost" size="sm" (clicked)="clearFilters()">Clear filters</ui-button>
+      }
+    </div>
+    @if (reviewPeriodCaption) {
+      <p class="review-context-caption">{{ reviewPeriodCaption }} · account and exact group filters are retained.</p>
+    }
+    @if (listError) {
+      <div class="activity-load-error" role="alert">
+        <span>{{ listError }}</span>
+        <ui-button variant="secondary" size="sm" (clicked)="retryActivityLoad()">Try again</ui-button>
+      </div>
+    }
 
     <details class="category-tools">
       <summary>Category tools</summary>
@@ -248,7 +292,7 @@
 
     @if (filteredTransactions.length > 0) {
       <p class="list-hint" role="status">
-        {{ filteredTransactions.length }} shown
+        {{ filteredTransactions.length }} shown of {{ matchingTransactions.length }} matching
         @if (summaryMonth) { for {{ summaryMonthLabel }} }
         @if (categoryFilter) { in {{ categoryFilter }} }
         @if (hasMore) { · load more for older history }
@@ -336,13 +380,19 @@
     }
 
     <ng-template #empty>
-      @if (!loading) {
+      @if (!loading && !listLoading && !listError) {
+        @if (hasActiveFilters) {
+          <ui-empty-state title="No activity matches these filters" message="Try clearing one filter or changing the date range.">
+            <ui-button variant="secondary" (clicked)="clearFilters()">Clear filters</ui-button>
+          </ui-empty-state>
+        } @else {
         <ui-empty-state title="No transactions yet">
           <ui-icon name="transactions" size="lg" style="margin-bottom: 8px; opacity: 0.6;" />
           <p class="empty-import-copy">Start with a bank CSV if you want the fastest and most accurate history.</p>
           <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
           <ui-button variant="primary" (clicked)="openAddModal()">Add income or expense</ui-button>
         </ui-empty-state>
+        }
       }
     </ng-template>
   </ui-card>
@@ -362,6 +412,9 @@
           <li>Review duplicates, transfers, card payments, refunds, and account labels before importing.</li>
         </ol>
       </div>
+      @if (activeImportReceiptId && reattachReceiptFilename) {
+        <p class="import-hint" role="status">Replacing the parse attempt for {{ reattachReceiptFilename }} in receipt #{{ activeImportReceiptId }}. Valid rows from other files in that receipt will be kept; choose the same bank and account for the corrected file.</p>
+      }
       <div class="form-group">
         <label for="import-file">Add CSV files</label>
         <input id="import-file" type="file" accept=".csv" multiple [disabled]="importParsing" (change)="onImportFileSelected($event)" />

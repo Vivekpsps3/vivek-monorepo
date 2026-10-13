@@ -66,8 +66,10 @@ describe('portfolio.util', () => {
     expect(quoteFreshness({ ...recent, quote_date: '2026-10-08' } as Holding, '2026-10-11')).toBe('Live');
     expect(quoteFreshness({ ...recent, quote_date: '2026-10-07' } as Holding, '2026-10-11')).toBe('Stale');
     expect(quoteFreshnessLabel({ ...recent, quote_date: '2026-10-07' } as Holding, '2026-10-11')).toBe('Stale · 4 days old');
-    expect(quoteFreshness({ ...recent, quote_date: null } as Holding, '2026-10-11')).toBe('Live');
-    expect(quoteFreshness({ ...recent, quote_date: null, price_as_of: '2026-10-07T23:00:00Z' } as Holding, '2026-10-11')).toBe('Stale');
+    const fetchedRecentlyWithoutSourceDate = { ...recent, quote_date: null, price_as_of: '2026-10-11T08:00:00Z' } as Holding;
+    expect(quoteFreshness(fetchedRecentlyWithoutSourceDate, '2026-10-11')).toBe('Unknown');
+    expect(quoteFreshnessLabel(fetchedRecentlyWithoutSourceDate, '2026-10-11')).toBe('Unknown');
+    expect(quoteFreshness({ ...recent, quote_date: null, market_date: '2026-10-07' } as Holding, '2026-10-11')).toBe('Stale');
   });
 
   it('keeps imported, provisional, and unavailable provenance visible without a source date', () => {

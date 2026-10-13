@@ -4,7 +4,10 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve --configuration development",
-    "build": "ng build",
+    "build": "ng build && node scripts/write-release-manifest.mjs",
+    "build:development": "ng build --configuration development",
+    "test:release-manifest": "node scripts/test-release-manifest.mjs",
+    "test:release-cache": "node scripts/test-release-cache.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "e2e": "playwright test",

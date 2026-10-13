@@ -78,6 +78,7 @@ export const routes: Routes = [
       { path: 'subscriptions', pathMatch: 'full', redirectTo: () => '/recurring?t=spend' },
       { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/planning?t=growth' },
       { path: 'stock-lab', pathMatch: 'full', redirectTo: () => '/planning?t=stocks' },
+      { path: 'charts', pathMatch: 'full', redirectTo: '' },
       {
         path: 'admin/users',
         title: 'Users · Finance',
@@ -92,5 +93,4 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: 'charts', redirectTo: '', pathMatch: 'full' },
 ];

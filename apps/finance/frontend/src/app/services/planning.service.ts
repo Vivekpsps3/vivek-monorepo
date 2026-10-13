@@ -8,6 +8,7 @@ import {
   MC_N_PATHS_MAX,
   MC_N_PATHS_MIN,
   PLANNING_DISCLAIMER,
+  PlanningLiabilitySource,
   PlanningInputsPreview,
   PlanningProfile,
   PlanningProfileCreate,
@@ -16,6 +17,7 @@ import {
   DEFAULT_MC_ASSUMPTIONS,
   ProfilePayload,
 } from '../models/planning.model';
+import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
 
 @Injectable({ providedIn: 'root' })
 export class PlanningService {
@@ -109,11 +111,16 @@ export class PlanningService {
   }
 
   private async clientInputs(): Promise<PlanningInputsPreview> {
-    const nw = await this.encStore.getNetWorth();
-    const incomes = await this.encStore.getJobIncomes();
-    const fixed = await this.encStore.getFixedExpenses();
-    const subs = await this.encStore.getSubscriptions();
-    const txs = await this.encStore.getTransactions();
+    const [nw, incomes, fixed, subs, txs, assets, liabilities, holdings] = await Promise.all([
+      this.encStore.getNetWorth(),
+      this.encStore.getJobIncomes(),
+      this.encStore.getFixedExpenses(),
+      this.encStore.getSubscriptions(),
+      this.encStore.getTransactions(),
+      this.encStore.getAssets(),
+      this.encStore.getLiabilities(),
+      this.encStore.getHoldings(),
+    ]);
     const activeIncomes = incomes.filter(row => isCurrentJob(row));
     const activeFixed = fixed.filter(row => row.is_active);
     const activeSubs = subs.filter(row => row.is_active);
@@ -126,10 +133,28 @@ export class PlanningService {
     const activeIncomeCount = activeIncomes.length;
     const activeFixedCount = activeFixed.length;
     const activeSubCount = activeSubs.length;
+    const currentHoldings = holdings.filter(row => row.lifecycle_status !== 'inactive' && row.lifecycle_status !== 'staged');
+    const oldestBalanceAsOf = oldestIsoDate([
+      ...assets.map(row => row.as_of_date),
+      ...liabilities.map(row => row.as_of_date),
+    ]);
+    const oldestPortfolioQuoteDate = oldestIsoDate(currentHoldings.map(row => row.quote_date));
+    const oldestPortfolioPositionDate = oldestIsoDate(currentHoldings.map(row => row.position_as_of));
+    const undatedAssetBalances = assets.filter(row => !isIsoDate(row.as_of_date)).length;
+    const undatedLiabilityBalances = liabilities.filter(row => !isIsoDate(row.as_of_date)).length;
+    const undatedPortfolioQuotes = currentHoldings.filter(row => !isIsoDate(row.quote_date)).length;
+    const undatedPortfolioPositions = currentHoldings.filter(row => !isIsoDate(row.position_as_of)).length;
+    const undatedPortfolioValues = currentHoldings.filter(row =>
+      !isIsoDate(row.quote_date) && !isIsoDate(row.position_as_of)
+    ).length;
     // Hash balance-sheet + recurring schedules (spend source), not transaction-derived spend.
     const snapshot_hash = [
       'client',
       `nw:${nw.total.toFixed(2)}`,
+      `portfolio:${nw.portfolio.toFixed(2)}`,
+      `liabilities:${nw.liabilities.toFixed(2)}`,
+      `balance-date:${oldestBalanceAsOf ?? 'unknown'}:${undatedAssetBalances}:${undatedLiabilityBalances}`,
+      `portfolio-dates:${oldestPortfolioQuoteDate ?? 'unknown'}:${oldestPortfolioPositionDate ?? 'unknown'}:${undatedPortfolioQuotes}:${undatedPortfolioPositions}`,
       `inc:${monthlyIncome.toFixed(2)}x${activeIncomeCount}`,
       `spend:${implied_annual_spending.toFixed(2)}f${activeFixedCount}s${activeSubCount}`,
       `txcount:${txs.length}`,
@@ -153,6 +178,21 @@ export class PlanningService {
       net_worth_source: 'balance-sheet',
       annual_income_source: 'active-job-income',
       transaction_role: 'count-only-not-used-for-spend',
+      oldest_balance_as_of: oldestBalanceAsOf,
+      undated_asset_balances: undatedAssetBalances,
+      undated_liability_balances: undatedLiabilityBalances,
+      oldest_portfolio_quote_date: oldestPortfolioQuoteDate,
+      oldest_portfolio_position_date: oldestPortfolioPositionDate,
+      undated_portfolio_quotes: undatedPortfolioQuotes,
+      undated_portfolio_positions: undatedPortfolioPositions,
+      undated_portfolio_values: undatedPortfolioValues,
+      liability_sources: liabilities.map((row): PlanningLiabilitySource => ({
+        id: row.id,
+        name: row.name,
+        category: row.category,
+        balance_owed: Number(row.balance_owed) || 0,
+        as_of_date: isIsoDate(row.as_of_date) ? row.as_of_date : null,
+      })),
     };
   }
 
@@ -194,8 +234,17 @@ export class PlanningService {
           ? Number(inputs.implied_annual_spending) || 0
           : profile.annual_spending ?? (Number(inputs.implied_annual_spending) || 0);
     const annualIncome = profile.monthly_income != null ? profile.monthly_income * 12 : inputs.avg_monthly_income * 12;
-    const annualContribution = profile.extra_contributions?.annual_contribution ?? 0;
-    const allocation = profile.portfolio_allocation ?? (inputs.net_worth_total ? inputs.net_worth_portfolio / inputs.net_worth_total : 0);
+    const netCashflowOverride = profile.net_annual_cashflow_override;
+    const legacyAdditionalContribution = profile.extra_contributions?.annual_contribution ?? 0;
+    const annualContribution = netCashflowOverride == null ? legacyAdditionalContribution : 0;
+    const currentAnnualNetCashflow = netCashflowOverride == null
+      ? annualIncome - annualSpending + legacyAdditionalContribution
+      : netCashflowOverride;
+    const allocation = profile.portfolio_allocation ?? inferredPortfolioAllocation(
+      inputs.net_worth_total,
+      inputs.net_worth_portfolio,
+      inputs.net_worth_liabilities,
+    );
     const paths: number[][] = [];
     for (let p = 0; p < nPaths; p += 1) {
       const series = [start];
@@ -219,7 +268,10 @@ export class PlanningService {
             : event.year === year + 1;
           return happens ? sum + event.amount * (event.inflation_adjusted ? (1 + profile.inflation_cpi) ** year : 1) : sum;
         }, 0);
-        const cashflow = annualIncome * (1 + profile.annual_income_growth) ** year - annualSpending * (1 + profile.inflation_cpi) ** year + annualContribution + events;
+        const calculatedCashflow = annualIncome * (1 + profile.annual_income_growth) ** year
+          - annualSpending * (1 + profile.inflation_cpi) ** year
+          + legacyAdditionalContribution;
+        const cashflow = (netCashflowOverride == null ? calculatedCashflow : netCashflowOverride) + events;
         value = Math.max(value * (allocation * (1 + growthReturn) + (1 - allocation) * (1 + stableReturn)) + cashflow, 0);
         series.push(value);
       }
@@ -271,6 +323,7 @@ export class PlanningService {
       disclaimer: PLANNING_DISCLAIMER,
       result_summary: {
         start_net_worth: start,
+        starting_growth_allocation: allocation,
         annual_spending_start: annualSpending,
         spend_assumption_source: spendingMode === 'components'
           ? 'planning-spending-components'
@@ -278,8 +331,14 @@ export class PlanningService {
             ? 'manual-profile'
             : inputs.annual_spending_source,
         annual_income_start: annualIncome,
-        net_cashflow_source: 'active-job-income-and-recurring-schedules',
+        net_cashflow_source: netCashflowOverride == null
+          ? profile.monthly_income != null
+            ? 'manual-income-and-selected-spending'
+            : 'active-job-income-and-selected-spending'
+          : 'manual-total-annual-cashflow',
         annual_contribution_start: annualContribution,
+        net_annual_cashflow_start: currentAnnualNetCashflow,
+        cashflow_override_source: netCashflowOverride == null ? null : 'manual-total-annual-cashflow',
         terminal_p5: terminal('p5'),
         terminal_p10: terminal('p10'),
         terminal_p25: terminal('p25'),
@@ -303,4 +362,16 @@ export class PlanningService {
       finished_at: new Date().toISOString(),
     };
   }
+}
+
+function isIsoDate(value: string | null | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime())
+    && parsed.toISOString().slice(0, 10) === value
+    && value <= new Date().toISOString().slice(0, 10);
+}
+
+function oldestIsoDate(values: Array<string | null | undefined>): string | null {
+  return values.filter(isIsoDate).sort()[0] ?? null;
 }

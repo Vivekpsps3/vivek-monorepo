@@ -10,18 +10,74 @@
     <p>{{ disclaimer }}</p>
   </div>
 
-  <ui-card title="Facts and guesses">
-    <ul class="evidence-list">
-      @for (card of evidenceCards; track card.label) {
-        <li>
-          <div>
-            <strong>{{ evidenceKindLabel(card.kind) }} · {{ card.label }}</strong>
-            <p>{{ card.detail }}</p>
-          </div>
-        </li>
-      }
-    </ul>
+  <ui-card title="Your current facts">
+    <div class="planning-facts-grid">
+      <div>
+        <span>Current net worth</span>
+        <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
+        <a routerLink="/have" [queryParams]="{ t: 'assets' }">Review assets and debts</a>
+        <small>Oldest valid balance date: {{ inputs?.oldest_balance_as_of || 'No valid date recorded' }}</small>
+      </div>
+      <div>
+        <span>Portfolio value</span>
+        <strong>{{ formatMoney(inputs?.net_worth_portfolio) }}</strong>
+        <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Review holdings</a>
+        <small>
+          Oldest quote {{ inputs?.oldest_portfolio_quote_date || 'undated' }} ·
+          position {{ inputs?.oldest_portfolio_position_date || 'undated' }}
+        </small>
+      </div>
+      <div>
+        <span>Annual take-home pay</span>
+        <strong>{{ formatMoney((inputs?.avg_monthly_income || 0) * 12) }}</strong>
+        <a routerLink="/recurring" [queryParams]="{ t: 'pay' }">Review job income</a>
+        <small>Active job-income schedules</small>
+      </div>
+      <div>
+        <span>Scheduled annual costs</span>
+        <strong>{{ formatMoney(inputs?.recurring_annual_spending) }}</strong>
+        <a routerLink="/recurring" [queryParams]="{ t: 'spend' }">Review fixed costs and subscriptions</a>
+        <small>Active scheduled costs · {{ formatMoney(inputs?.annual_fixed_expenses) }} fixed · {{ formatMoney(inputs?.annual_subscriptions) }} subscriptions</small>
+      </div>
+    </div>
+    @if ((inputs?.undated_asset_balances || 0) + (inputs?.undated_liability_balances || 0) > 0) {
+      <p class="mc-help">Some balance records have no entered date: {{ inputs?.undated_asset_balances || 0 }} assets and {{ inputs?.undated_liability_balances || 0 }} liabilities.</p>
+    }
+    @if ((inputs?.undated_portfolio_quotes || 0) + (inputs?.undated_portfolio_positions || 0) > 0) {
+      <p class="mc-help">Some holdings have no quote date ({{ inputs?.undated_portfolio_quotes || 0 }}) or position date ({{ inputs?.undated_portfolio_positions || 0 }}). The planning calculation date is not used as a market-data date.</p>
+    }
+    @if (sourceRefreshError) {
+      <p class="mc-error" role="status">{{ sourceRefreshError }} <button type="button" class="planning-retry" (click)="refreshSourceFacts()">Retry loading current facts</button></p>
+    }
+    @if (showAdvancedEvidence()) {
+      <details class="planning-evidence-details">
+        <summary>How these facts and estimates are used</summary>
+        <ul class="evidence-list">
+          @for (card of evidenceCards; track card.label) {
+            <li>
+              <div>
+                <strong>{{ evidenceKindLabel(card.kind) }} · {{ card.label }}</strong>
+                <p>{{ card.detail }}</p>
+              </div>
+            </li>
+          }
+        </ul>
+      </details>
+    }
   </ui-card>
+
+  <div class="planning-question">
+    <label class="mc-field">
+      <span>What are you trying to decide?</span>
+      <select aria-label="Planning question" [ngModel]="activeTool" (ngModelChange)="setTool($event)">
+        <option value="overview">See my current picture</option>
+        <option value="simulation">Try a what-if scenario</option>
+        <option value="retirement-target">Can I retire or take time off?</option>
+        <option value="savings-goal">Can I reach a savings goal?</option>
+        <option value="debt-payoff">How long to pay off a debt?</option>
+      </select>
+    </label>
+  </div>
 
   @if (showSpendingFallbackBanner()) {
     <div class="mc-callout mc-spending-fallback" role="status">
@@ -37,22 +93,15 @@
     <p class="mc-error" role="alert">{{ error }}</p>
   }
 
-  <nav class="planning-tabs" aria-label="Planning tools">
-    @for (tab of planningTabs; track tab.id) {
-      <button
-        type="button"
-        [class.active]="activeTab === tab.id"
-        (click)="setTab(tab.id)">
-        {{ tab.label }}
-      </button>
-    }
-  </nav>
-
   @if (!loading) {
+    @if (showSpendingPlan()) {
     <ui-card title="Annual spending plan">
       <p class="mc-help">
         Compose fixed scheduled costs, variable spending, and irregular annual costs. A covered ledger estimate is optional and only enters the plan after you accept it.
       </p>
+      @if (showVariableCostWarning()) {
+        <p class="mc-callout mc-cost-warning" role="status">This basis may omit variable card purchases. Active recurring schedules cover fixed expenses and subscriptions; they do not include your transaction history. Add a realistic variable amount under “Fixed + variable + irregular components” or enter one manual annual total.</p>
+      }
       <div class="mc-control-grid">
         <label class="mc-field">
           <span>Spending basis</span>
@@ -147,17 +196,18 @@
         </ui-button>
       </details>
     </ui-card>
+    }
   }
 
   @if (loading) {
     <ui-skeleton height="320px" />
   } @else {
-    @if (activeTab !== 'monte-carlo') {
+    @if (activeTool !== 'simulation') {
       <section class="planning-tools-grid">
-        @if (activeTab === 'overview') {
+        @if (activeTool === 'overview') {
           <ui-card title="Planning snapshot">
             <p class="tool-metric">{{ formatMoney(inputs?.net_worth_total) }}</p>
-            <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} scheduled annual cashflow (scenario-adjustable).</p>
+            <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} annual cashflow using your selected assumptions.</p>
             <div class="tool-breakdown">
               <span>Net worth source: {{ inputs?.net_worth_source || 'balance-sheet' }}</span>
               <span>Income source: {{ inputs?.annual_income_source || 'active-job-income' }}</span>
@@ -171,16 +221,13 @@
             <p>FIRE, goal funding, debt payoff, and Monte Carlo use the selected spending basis. Saved manual totals remain available in legacy profiles.</p>
           </ui-card>
         }
-        @if (activeTab === 'fire') {
-          <ui-card title="FIRE / 4% Rule" class="tool-card-wide">
+        @if (activeTool === 'retirement-target') {
+          <ui-card title="Retirement target" class="tool-card-wide">
+            <p class="mc-help">A quick estimate based on your selected spending, withdrawal rate, portfolio, and current annual cashflow.</p>
             <div class="tool-form-grid">
               <label class="mc-field">
                 <span>Withdrawal rate (%)</span>
                 <input type="number" min="1" max="12" step="0.25" [ngModel]="asPercent(fire.withdrawalRate)" (ngModelChange)="fire.withdrawalRate = fromPercent($event)" />
-              </label>
-              <label class="mc-field">
-                <span>Expected return (%)</span>
-                <input type="number" min="-50" max="50" step="0.5" [ngModel]="asPercent(fire.expectedReturn)" (ngModelChange)="fire.expectedReturn = fromPercent($event)" />
               </label>
               <label class="mc-field">
                 <span>Extra annual expenses</span>
@@ -207,12 +254,14 @@
               <div>
                 <span>Years at current cashflow</span>
                 <strong>{{ yearsToFire() ?? 'Not reachable' }}</strong>
+                <small>{{ fireEstimateDescription() }}</small>
               </div>
             </section>
           </ui-card>
         }
-        @if (activeTab === 'goals') {
-          <ui-card title="Goal Funding" class="tool-card-wide">
+        @if (activeTool === 'savings-goal') {
+          <ui-card title="Savings goal" class="tool-card-wide">
+            <p class="mc-help">Enter only money already set aside for this goal. This starts at $0 and does not assume your full net worth is available.</p>
             <div class="tool-form-grid">
               <label class="mc-field">
                 <span>Goal name</span>
@@ -251,16 +300,27 @@
             </section>
           </ui-card>
         }
-        @if (activeTab === 'debt') {
-          <ui-card title="Debt Payoff" class="tool-card-wide">
+        @if (activeTool === 'debt-payoff') {
+          <ui-card title="Debt payoff" class="tool-card-wide">
+            <p class="mc-help">This calculator starts with a $0 manual estimate. Select one liability to use its saved balance, or enter a hypothetical amount.</p>
             <div class="tool-form-grid">
+              <label class="mc-field mc-field--wide">
+                <span>Use a saved liability (optional)</span>
+                <select [value]="selectedDebtLiabilityId ?? ''" (change)="selectDebtLiability($any($event.target).value)">
+                  <option value="">Manual debt estimate</option>
+                  @for (liability of inputs?.liability_sources || []; track liability.id) {
+                    <option [value]="liability.id">{{ liability.name }} · {{ formatMoney(liability.balance_owed) }} · as of {{ liability.as_of_date || 'undated' }}</option>
+                  }
+                </select>
+                <a routerLink="/have" [queryParams]="{ t: 'assets' }">Review saved liabilities</a>
+              </label>
               <label class="mc-field">
                 <span>Debt name</span>
-                <input type="text" [(ngModel)]="debt.name" />
+                <input type="text" [(ngModel)]="debt.name" [disabled]="selectedDebtLiabilityId != null" />
               </label>
               <label class="mc-field">
                 <span>Balance</span>
-                <input type="number" min="0" step="100" [(ngModel)]="debt.balance" />
+                <input type="number" min="0" step="100" [(ngModel)]="debt.balance" [disabled]="selectedDebtLiabilityId != null" />
               </label>
               <label class="mc-field">
                 <span>APR (%)</span>
@@ -275,6 +335,7 @@
                 <input type="number" min="0" step="25" [(ngModel)]="debt.extraPayment" />
               </label>
             </div>
+            @if (debtSourceMessage) { <p class="mc-help" role="status">{{ debtSourceMessage }}</p> }
             <section class="tool-results-grid">
               <div>
                 <span>Monthly payment</span>
@@ -326,6 +387,7 @@
       </div>
     </ui-card>
 
+    @if (runStale && runStaleMessage) { <p class="mc-warning" role="status">{{ runStaleMessage }}</p> }
     <section class="mc-summary-band" aria-label="Planning inputs">
       <div class="mc-metric">
         <span>Current net worth</span>
@@ -338,11 +400,10 @@
         <small>{{ formatMoney(inputs?.net_worth_portfolio) }} portfolio value</small>
       </div>
       <div class="mc-metric">
-        <span>Yearly pay minus costs</span>
+        <span>Annual cashflow</span>
         <strong>{{ formatSignedMoney(effectiveNetCashflow()) }}</strong>
         <small>
-          {{ formatMoney(effectiveAnnualIncome()) }} {{ inputs?.annual_income_source || 'job-income' }} /
-          {{ formatMoney(effectiveAnnualSpending()) }} {{ inputs?.annual_spending_source || 'recurring' }}
+          {{ effectiveCashflowDescription() }}
         </small>
       </div>
       <div class="mc-metric">
@@ -397,9 +458,42 @@
           </label>
         </ui-card>
 
+        <ui-card title="Add a what-if change">
+          <p class="mc-help">Choose a starting point. The amount begins at $0 so you can enter your own expected purchase cost or missed take-home pay.</p>
+          <div class="mc-secondary-action-wrap">
+            <ui-button variant="secondary" (clicked)="addScenarioTemplate('car-purchase')">Car purchase</ui-button>
+            <ui-button variant="secondary" (clicked)="addScenarioTemplate('time-off')">Time off</ui-button>
+          </div>
+        </ui-card>
+
+        @if (assumptions.annual_cashflow_events.length) {
+          <ui-card title="What-if changes">
+            <p class="mc-help">Enter costs or missed take-home pay as negative amounts. New changes affect the scenario; detailed timing and scope are under advanced assumptions.</p>
+            <div class="mc-list">
+              @for (event of assumptions.annual_cashflow_events; track trackByIndex($index)) {
+                <div class="mc-editor-row">
+                  <label class="mc-field mc-field--wide">
+                    <span>Name</span>
+                    <input type="text" [(ngModel)]="event.label" />
+                  </label>
+                  <label class="mc-field">
+                    <span>Amount (each time)</span>
+                    <input type="number" step="1000" [(ngModel)]="event.amount" />
+                  </label>
+                  <div class="mc-row-action">
+                    <ui-button variant="danger" size="sm" (clicked)="removeEvent($index)">Remove</ui-button>
+                  </div>
+                </div>
+              }
+            </div>
+          </ui-card>
+        }
+
+        <details class="planning-advanced-controls">
+          <summary>Advanced assumptions and event details</summary>
         <ui-card title="Cash flow">
           <label class="mc-check">
-            <input type="checkbox" [(ngModel)]="useTxIncome" />
+            <input type="checkbox" [ngModel]="useTxIncome" (ngModelChange)="setUseTxIncome($event)" />
             <span>Use active job-income estimate</span>
           </label>
           <label class="mc-field">
@@ -415,17 +509,23 @@
           </label>
 
           <label class="mc-check">
-            <input type="checkbox" [(ngModel)]="useManualNetCashflow" />
-            <span>Override net annual cash flow</span>
+            <input type="checkbox" [(ngModel)]="useNetCashflowOverride" />
+            <span>Use one total annual cashflow instead</span>
           </label>
           <label class="mc-field">
-            <span>Net contribution / withdrawal</span>
+            <span>Total annual cashflow</span>
             <input
               type="number"
               step="1000"
-              [disabled]="!useManualNetCashflow"
-              [(ngModel)]="assumptions.extra_contributions.annual_contribution"
+              [disabled]="!useNetCashflowOverride"
+              [(ngModel)]="assumptions.net_annual_cashflow_override"
             />
+            <small class="mc-field-hint">Positive adds to savings; negative withdraws. Replaces income less spending and any older additional-contribution amount.</small>
+          </label>
+          <label class="mc-field">
+            <span>Additional annual contribution</span>
+            <input type="number" step="1000" [(ngModel)]="assumptions.extra_contributions.annual_contribution" />
+            <small class="mc-field-hint">Kept for older saved inputs. Added to income less spending only when the total annual cashflow override is off.</small>
           </label>
 
           <div class="mc-control-grid">
@@ -447,7 +547,7 @@
 
         <ui-card title="Market model">
           <label class="mc-check">
-            <input type="checkbox" [(ngModel)]="useInferredAllocation" />
+            <input type="checkbox" [ngModel]="useInferredAllocation" (ngModelChange)="setUseInferredAllocation($event)" />
             <span>Infer growth allocation</span>
           </label>
           <label class="mc-field">
@@ -573,18 +673,11 @@
             Simulation years: <strong>1</strong> = first year after today, up to your horizon.
             Amount is <strong>per occurrence</strong>, summed into each simulation year (negative = outflow).
             Repeating events use <strong>every N years</strong> (0.5 ≈ twice per year, 2 = every two years).
+            Templates start at $0. New event templates are included in the scenario only; the baseline keeps the same shared seed and assumptions.
           </p>
           <div class="mc-list">
             @for (event of assumptions.annual_cashflow_events; track trackByIndex($index)) {
               <div class="mc-editor-row">
-                <label class="mc-field mc-field--wide">
-                  <span>Name</span>
-                  <input type="text" [(ngModel)]="event.label" />
-                </label>
-                <label class="mc-field">
-                  <span>Amount (each time)</span>
-                  <input type="number" step="1000" [(ngModel)]="event.amount" />
-                </label>
                 <label class="mc-field">
                   <span>Include in</span>
                   <select aria-label="Annual event applies to" [ngModel]="event.applies_to || 'both'" (ngModelChange)="toggleAnnualEventScope(event, $event)">
@@ -640,9 +733,6 @@
                   <input type="checkbox" [(ngModel)]="event.inflation_adjusted" />
                   <span>Inflation</span>
                 </label>
-                <div class="mc-row-action">
-                  <ui-button variant="danger" size="sm" (clicked)="removeEvent($index)">Remove</ui-button>
-                </div>
               </div>
             }
           </div>
@@ -650,6 +740,7 @@
             <ui-button variant="secondary" (clicked)="addEvent()">Add event</ui-button>
           </div>
         </ui-card>
+        </details>
 
         <ui-button variant="primary" [disabled]="running" (clicked)="runSimulation()">
           {{ running ? 'Running' : 'Run' }}

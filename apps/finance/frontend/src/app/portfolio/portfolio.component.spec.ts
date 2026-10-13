@@ -1,29 +1,53 @@
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { Holding } from '../models/transaction.model';
 import { PortfolioComponent } from './portfolio.component';
+import { MarketRefreshState, MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 
 function componentWithFinance(overrides: Record<string, unknown> = {}) {
   const finance = jasmine.createSpyObj('FinanceService', [
-    'refreshAllHoldingPrices', 'lookupSharePrice', 'getHoldingImportStages',
+    'refreshAllHoldingPrices', 'lookupSharePrice', 'getHoldingImportStages', 'getHoldings', 'getNetWorth',
     'resumeFidelityImportStage', 'confirmHoldingPosition',
   ]);
   Object.assign(finance, overrides);
   finance.refreshAllHoldingPrices.and.returnValue(of({ holdings: [], updated: 0, failed: 0 }));
   finance.getHoldingImportStages.and.returnValue(of([]));
+  finance.getHoldings.and.returnValue(of([]));
+  finance.getNetWorth.and.returnValue(of(null));
   finance.resumeFidelityImportStage.and.returnValue(of({ inserted: 1, status: 'activated' }));
   finance.confirmHoldingPosition.and.returnValue(of({}));
+  const market = jasmine.createSpyObj<MarketRefreshCoordinatorService>('MarketRefreshCoordinatorService', ['refreshNow', 'refreshSymbol']);
+  const idle: MarketRefreshState = {
+    phase: 'idle', automatic: false, totalSymbols: 0, completedSymbols: 0,
+    updatedHoldings: 0, updatedEmployerValuations: 0, failures: [], startedAt: null, finishedAt: null,
+  };
+  (market as any).status$ = of(idle);
+  market.refreshNow.and.resolveTo({ ...idle, phase: 'complete' });
+  market.refreshSymbol.and.resolveTo({ symbol: 'VOO', holdingsUpdated: 1, employerValuationsUpdated: 0, failedRecords: [] });
   const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
-  const component = new PortfolioComponent(finance, toast, {} as any, { markForCheck: () => {} } as any);
-  return { component, finance, toast };
+  const component = new PortfolioComponent(finance, market, toast, {} as any, { markForCheck: () => {} } as any);
+  return { component, finance, market, toast };
 }
 
 describe('PortfolioComponent', () => {
-  it('does not request market quotes until the explicit refresh action is invoked', () => {
-    const { component, finance } = componentWithFinance();
+  it('routes explicit price refresh through the shared coordinator', async () => {
+    const { component, finance, market } = componentWithFinance();
     expect(finance.lookupSharePrice).not.toHaveBeenCalled();
     component.refreshAllPrices();
-    expect(finance.refreshAllHoldingPrices).toHaveBeenCalled();
+    await Promise.resolve();
+    expect(market.refreshNow).toHaveBeenCalled();
+    expect(finance.refreshAllHoldingPrices).not.toHaveBeenCalled();
     expect(finance.lookupSharePrice).not.toHaveBeenCalled();
+  });
+
+  it('shows a load error instead of the empty-vault state when holdings fail to load', () => {
+    const { component, finance } = componentWithFinance();
+    finance.holdings$ = of([]);
+    finance.netWorth$ = of(null);
+    finance.isLoading$ = of(false);
+    finance.getHoldings.and.returnValue(throwError(() => new Error('vault request failed')));
+    component.ngOnInit();
+    expect(component.holdingsLoadError).toContain('vault request failed');
+    expect(component.loading).toBeFalse();
   });
 
   it('keeps gains unavailable for unknown basis and labels undated imports', () => {
@@ -64,10 +88,10 @@ describe('PortfolioComponent', () => {
   });
 
   it('confirms a position date independently of refreshing its price', () => {
-    const { component, finance } = componentWithFinance();
+    const { component, finance, market } = componentWithFinance();
     const holding = { id: 9, symbol: 'VOO' } as Holding;
     component.confirmPosition(holding);
     expect(finance.confirmHoldingPosition).toHaveBeenCalledWith(9, jasmine.any(String));
-    expect(finance.refreshAllHoldingPrices).not.toHaveBeenCalled();
+    expect(market.refreshNow).not.toHaveBeenCalled();
   });
 });

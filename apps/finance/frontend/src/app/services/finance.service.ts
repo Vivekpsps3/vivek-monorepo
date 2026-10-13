@@ -2,9 +2,11 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
+  Subject,
   Observable,
   forkJoin,
   from,
+  firstValueFrom,
   of,
   mergeMap,
   reduce,
@@ -17,6 +19,7 @@ import {
 } from 'rxjs';
 import { apiUrl } from '../core/api-url';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
+import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import {
   BankAccountRecord,
@@ -80,8 +83,23 @@ export type DashboardLoadResult = [
   Subscription[],
 ];
 
+export interface FinanceDataChange {
+  collections: EncryptedCollection[];
+  source: 'local' | 'remote';
+}
+
+export interface MarketQuoteApplyResult {
+  holdingsUpdated: number;
+  employerValuationsUpdated: number;
+  failedRecords: string[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class FinanceService {
+  private dataChangesSubject = new Subject<FinanceDataChange>();
+  private snapshotEpoch = 0;
+  private collectionEpochs = new Map<EncryptedCollection, number>();
+  readonly dataChanges$ = this.dataChangesSubject.asObservable();
   private _transactions = new BehaviorSubject<Transaction[]>([]);
   private _dashboardTransactions = new BehaviorSubject<Transaction[]>([]);
   private _holdings = new BehaviorSubject<Holding[]>([]);
@@ -113,12 +131,200 @@ export class FinanceService {
     private http: HttpClient,
     private vault: VaultService,
     private encStore: EncryptedStoreService
-  ) {}
+  ) {
+    this.encStore.changes$?.subscribe(change => {
+      this.snapshotEpoch += 1;
+      this.bumpCollectionEpoch(change.collection);
+      this.invalidateDashboardCache();
+      if (change.source === 'remote') {
+        const epochs = new Map<EncryptedCollection, string>([[change.collection, this.dataEpoch([change.collection])]]);
+        void this.refreshCollectionViewsFromStore([change.collection], this.encStore.sessionToken, epochs)
+          .catch(() => undefined);
+      }
+      this.dataChangesSubject.next({ collections: [change.collection], source: change.source });
+    });
+  }
+
+  get sessionToken(): number {
+    return this.encStore.sessionToken;
+  }
+
+  private bumpCollectionEpoch(collection: EncryptedCollection): void {
+    this.collectionEpochs.set(collection, (this.collectionEpochs.get(collection) ?? 0) + 1);
+  }
+
+  private dataEpoch(collections: EncryptedCollection[]): string {
+    const versions = [...new Set(collections)].sort().map(collection =>
+      `${collection}:${this.collectionEpochs.get(collection) ?? 0}`
+    ).join('|');
+    return `${this.encStore.sessionToken}::${versions}`;
+  }
+
+  async getConfiguredMarketSymbols(): Promise<string[]> {
+    const [holdings, jobs] = await Promise.all([
+      this.encStore.getHoldings(),
+      this.encStore.getJobIncomes(),
+    ]);
+    const symbols = [
+      ...holdings.map(row => row.symbol),
+      ...jobs.map(row => row.stock_symbol || ''),
+    ].map(value => value.trim().toUpperCase()).filter(value => /^[A-Z][A-Z0-9.-]*$/.test(value));
+    return [...new Set(symbols)].sort();
+  }
+
+  async applyMarketQuoteForSymbol(
+    symbol: string,
+    quote: MarketPriceQuote,
+    expectedSessionToken: number
+  ): Promise<MarketQuoteApplyResult> {
+    const requested = symbol.trim().toUpperCase();
+    this.assertUsableMarketQuote(quote, requested);
+    if (expectedSessionToken !== this.encStore.sessionToken) throw new Error('Vault session changed');
+    const [holdings, jobs] = await Promise.all([
+      this.encStore.getHoldings(),
+      this.encStore.getJobIncomes(),
+    ]);
+    if (expectedSessionToken !== this.encStore.sessionToken) throw new Error('Vault session changed');
+    const holdingTargets = holdings.filter(row => row.symbol.trim().toUpperCase() === requested);
+    const jobTargets = jobs.filter(row => row.stock_symbol?.trim().toUpperCase() === requested);
+    let holdingsUpdated = 0;
+    let employerValuationsUpdated = 0;
+    const failedRecords: string[] = [];
+    await Promise.all([
+      ...holdingTargets.map(async row => {
+        try {
+          await this.encStore.updateHoldingPrice(row.id, quote, expectedSessionToken);
+          holdingsUpdated += 1;
+        } catch (error) {
+          if (expectedSessionToken !== this.encStore.sessionToken) throw error;
+          failedRecords.push(`holding ${row.id}`);
+        }
+      }),
+      ...jobTargets.map(async row => {
+        try {
+          await this.encStore.updateJobIncomeMarketQuote(row.id, requested, quote, expectedSessionToken);
+          employerValuationsUpdated += 1;
+        } catch (error) {
+          if (expectedSessionToken !== this.encStore.sessionToken) throw error;
+          failedRecords.push(`employer valuation ${row.id}`);
+        }
+      }),
+    ]);
+    if (expectedSessionToken !== this.encStore.sessionToken) throw new Error('Vault session changed');
+    const changedCollections: EncryptedCollection[] = [];
+    const holdingsEpoch = this.dataEpoch(['holdings']);
+    const incomesEpoch = this.dataEpoch(['job_incomes']);
+    if (holdingsUpdated) {
+      const latest = await this.encStore.getHoldings();
+      if (holdingsEpoch === this.dataEpoch(['holdings']) && expectedSessionToken === this.encStore.sessionToken) this._holdings.next(latest);
+      changedCollections.push('holdings');
+    }
+    if (employerValuationsUpdated) {
+      const latest = await this.encStore.getJobIncomes();
+      if (incomesEpoch === this.dataEpoch(['job_incomes']) && expectedSessionToken === this.encStore.sessionToken) this._jobIncomes.next(latest);
+      changedCollections.push('job_incomes');
+    }
+    if (changedCollections.length) {
+      this.invalidateDashboardCache();
+      this.refreshDerivedMetrics();
+    }
+    return { holdingsUpdated, employerValuationsUpdated, failedRecords };
+  }
+
+  private assertUsableMarketQuote(quote: MarketPriceQuote, requestedSymbol: string): void {
+    const date = quote?.quote_date || '';
+    if (!quote?.valid || quote.symbol?.trim().toUpperCase() !== requestedSymbol) {
+      throw new Error('Market quote did not match the requested ticker.');
+    }
+    if (!Number.isFinite(quote.price) || quote.price <= 0) {
+      throw new Error('Market quote price must be a positive finite number.');
+    }
+    if (!isValidMarketDate(date) || date > new Date().toISOString().slice(0, 10)) {
+      throw new Error('Market quote has an invalid or future trading date.');
+    }
+  }
+
+  /** Replaces only clean encrypted snapshots after another tab reports a scoped invalidation. */
+  async refreshCollectionsFromAnotherTab(collections: EncryptedCollection[]): Promise<void> {
+    const unique = [...new Set(collections)];
+    this.snapshotEpoch += 1;
+    this.invalidateDashboardCache();
+    unique.forEach(collection => this.bumpCollectionEpoch(collection));
+    const epochs = new Map<EncryptedCollection, string>(unique.map(collection => [collection, this.dataEpoch([collection])]));
+    const sessionToken = this.encStore.sessionToken;
+    await this.encStore.reloadCollections(unique);
+    if (sessionToken !== this.encStore.sessionToken) return;
+    await this.refreshCollectionViewsFromStore(unique, sessionToken, epochs);
+    if (sessionToken !== this.encStore.sessionToken) return;
+    this.snapshotEpoch += 1;
+    this.invalidateDashboardCache();
+    this.dataChangesSubject.next({ collections: unique, source: 'remote' });
+  }
+
+  private async refreshCollectionViewsFromStore(
+    collections: EncryptedCollection[],
+    sessionToken: number,
+    expectedEpochs: Map<EncryptedCollection, string>
+  ): Promise<void> {
+    const unique = [...new Set(collections)];
+    const isCurrent = (required: EncryptedCollection[]) => sessionToken === this.encStore.sessionToken
+      && required.every(collection => expectedEpochs.get(collection) === this.dataEpoch([collection]));
+    if (unique.includes('transactions')) {
+      const rows = await this.encStore.getTransactions();
+      if (sessionToken !== this.encStore.sessionToken) return;
+      if (isCurrent(['transactions'])) {
+        this._transactions.next(rows);
+        this._dashboardTransactions.next(rows);
+      }
+    }
+    if (unique.includes('holdings')) {
+      const rows = await this.encStore.getHoldings();
+      if (sessionToken !== this.encStore.sessionToken) return;
+      if (isCurrent(['holdings'])) this._holdings.next(rows);
+    }
+    if (unique.includes('assets')) {
+      const rows = await this.encStore.getAssets();
+      if (sessionToken !== this.encStore.sessionToken) return;
+      if (isCurrent(['assets'])) this._assets.next(rows);
+    }
+    if (unique.includes('liabilities')) {
+      const rows = await this.encStore.getLiabilities();
+      if (sessionToken !== this.encStore.sessionToken) return;
+      if (isCurrent(['liabilities'])) this._liabilities.next(rows);
+    }
+    if (unique.includes('job_incomes')) {
+      const rows = await this.encStore.getJobIncomes();
+      if (sessionToken !== this.encStore.sessionToken) return;
+      if (isCurrent(['job_incomes'])) this._jobIncomes.next(rows);
+    }
+    if (unique.includes('fixed_expenses')) {
+      const rows = await this.encStore.getFixedExpenses();
+      if (sessionToken !== this.encStore.sessionToken) return;
+      if (isCurrent(['fixed_expenses'])) this._fixedExpenses.next(rows);
+    }
+    if (unique.includes('subscriptions')) {
+      const rows = await this.encStore.getSubscriptions();
+      if (sessionToken !== this.encStore.sessionToken) return;
+      if (isCurrent(['subscriptions'])) this._subscriptions.next(rows);
+    }
+    const cashflowCollections: EncryptedCollection[] = ['transactions', 'job_incomes', 'fixed_expenses', 'subscriptions'];
+    const balanceCollections: EncryptedCollection[] = ['holdings', 'assets', 'liabilities'];
+    if (unique.some(name => cashflowCollections.includes(name))) {
+      await firstValueFrom(this.getCashflowSummaryForCurrentMonth().pipe(take(1)));
+      if (sessionToken !== this.encStore.sessionToken) return;
+    }
+    if (unique.some(name => balanceCollections.includes(name))) {
+      await firstValueFrom(this.getNetWorth().pipe(take(1)));
+      if (sessionToken !== this.encStore.sessionToken) return;
+    }
+  }
 
   loadDashboard(force = false): Observable<DashboardLoadResult> {
     if (force) this.dashboardLoad$ = null;
     if (!this.dashboardLoad$) {
-      this.dashboardLoad$ = forkJoin([
+      const requestedEpoch = this.snapshotEpoch;
+      let request!: Observable<DashboardLoadResult>;
+      request = forkJoin([
         this.getDashboardTransactions({ limit: 5000 }),
         this.getHoldings(),
         this.getAssets(),
@@ -128,12 +334,14 @@ export class FinanceService {
         this.getFixedExpenses(),
         this.getSubscriptions(),
       ]).pipe(
+        mergeMap(result => requestedEpoch === this.snapshotEpoch ? of(result) : this.loadDashboard()),
         shareReplay({ bufferSize: 1, refCount: false }),
         catchError(err => {
-          this.dashboardLoad$ = null;
+          if (this.dashboardLoad$ === request) this.dashboardLoad$ = null;
           return throwError(() => err);
         })
       );
+      this.dashboardLoad$ = request;
     }
     return this.dashboardLoad$;
   }
@@ -153,18 +361,8 @@ export class FinanceService {
   }
 
   refreshAll(): Observable<DashboardLoadResult> {
-    this.dashboardLoad$ = null;
     this.isLoading.next(true);
-    return forkJoin([
-      this.getDashboardTransactions({ limit: 5000 }),
-      this.getHoldings(),
-      this.getAssets(),
-      this.getNetWorth(),
-      this.getCashflowSummaryForCurrentMonth(),
-      this.getJobIncomes(),
-      this.getFixedExpenses(),
-      this.getSubscriptions(),
-    ]).pipe(
+    return this.loadDashboard(true).pipe(
       timeout(60_000),
       tap({
         next: () => this.isLoading.next(false),
@@ -185,6 +383,7 @@ export class FinanceService {
     limit?: number;
     append?: boolean;
   }): Observable<Transaction[]> {
+    const epoch = this.dataEpoch(['transactions']);
     return from(this.encStore.getTransactions().then(rows => {
       let out = rows;
       if (options?.search) {
@@ -200,8 +399,10 @@ export class FinanceService {
       const skip = options?.skip ?? 0;
       const limit = options?.limit ?? out.length;
       out = out.slice(skip, skip + limit);
-      if (options?.append) this._transactions.next([...this._transactions.value, ...out]);
-      else this._transactions.next(out);
+      if (epoch === this.dataEpoch(['transactions'])) {
+        if (options?.append) this._transactions.next([...this._transactions.value, ...out]);
+        else this._transactions.next(out);
+      }
       return out;
     }));
   }
@@ -212,17 +413,20 @@ export class FinanceService {
   }
 
   getDashboardTransactions(options?: { limit?: number }): Observable<Transaction[]> {
+    const epoch = this.dataEpoch(['transactions']);
     return from(this.encStore.getTransactions().then(rows => {
       // Dashboard totals must use the complete ledger; visible pagination is a component concern.
       const out = rows;
-      this._dashboardTransactions.next(out);
+      if (epoch === this.dataEpoch(['transactions'])) this._dashboardTransactions.next(out);
       return out;
     }));
   }
 
   getCashflowSummary(startDate: string, endDate: string): Observable<CashflowSummary> {
+    const dependencies: EncryptedCollection[] = ['transactions', 'job_incomes', 'fixed_expenses', 'subscriptions'];
+    const epoch = this.dataEpoch(dependencies);
     return from(this.encStore.getCashflowSummary(startDate, endDate).then(s => {
-      this._cashflowSummary.next(s as CashflowSummary);
+      if (epoch === this.dataEpoch(dependencies)) this._cashflowSummary.next(s as CashflowSummary);
       return s as CashflowSummary;
     }));
   }
@@ -260,8 +464,9 @@ export class FinanceService {
   }
 
   getJobIncomes(): Observable<JobIncome[]> {
+    const epoch = this.dataEpoch(['job_incomes']);
     return from(this.encStore.getJobIncomes().then(rows => {
-      this._jobIncomes.next(rows);
+      if (epoch === this.dataEpoch(['job_incomes'])) this._jobIncomes.next(rows);
       return rows;
     }));
   }
@@ -329,6 +534,7 @@ export class FinanceService {
   }
 
   clearSessionState(): void {
+    this.snapshotEpoch += 1;
     this.encStore.clear();
     this.vault.lock();
     this.dashboardLoad$ = null;
@@ -413,8 +619,9 @@ export class FinanceService {
   }
 
   getHoldings(_refreshPrices = false): Observable<Holding[]> {
+    const epoch = this.dataEpoch(['holdings']);
     return from(this.encStore.getHoldings().then(rows => {
-      this._holdings.next(rows);
+      if (epoch === this.dataEpoch(['holdings'])) this._holdings.next(rows);
       return rows;
     }));
   }
@@ -507,15 +714,18 @@ export class FinanceService {
   }
 
   getNetWorth(): Observable<NetWorth> {
+    const dependencies: EncryptedCollection[] = ['holdings', 'assets', 'liabilities'];
+    const epoch = this.dataEpoch(dependencies);
     return from(this.encStore.getNetWorth().then(nw => {
-      this._netWorth.next(nw);
+      if (epoch === this.dataEpoch(dependencies)) this._netWorth.next(nw);
       return nw;
     }));
   }
 
   getAssets(): Observable<Asset[]> {
+    const epoch = this.dataEpoch(['assets']);
     return from(this.encStore.getAssets().then(rows => {
-      this._assets.next(rows);
+      if (epoch === this.dataEpoch(['assets'])) this._assets.next(rows);
       return rows;
     }));
   }
@@ -545,8 +755,9 @@ export class FinanceService {
   }
 
   getLiabilities(): Observable<Liability[]> {
+    const epoch = this.dataEpoch(['liabilities']);
     return from(this.encStore.getLiabilities().then(rows => {
-      this._liabilities.next(rows);
+      if (epoch === this.dataEpoch(['liabilities'])) this._liabilities.next(rows);
       return rows;
     }));
   }
@@ -698,4 +909,10 @@ export class FinanceService {
       })
     );
   }
+}
+
+function isValidMarketDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

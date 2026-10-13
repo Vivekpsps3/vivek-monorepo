@@ -3,6 +3,13 @@ import { test, expect } from '@playwright/test';
 import { syntheticVault } from './synthetic-vault';
 
 const today = () => new Date().toISOString().slice(0, 10);
+const expectQuoteRequests = async (vault: Awaited<ReturnType<typeof syntheticVault>>, symbols: string[]) => {
+  await expect.poll(() => vault.quoteRequests.map(symbol => symbol.toUpperCase()).sort()).toEqual([...symbols].sort());
+};
+const expectHoldingPrice = async (vault: Awaited<ReturnType<typeof syntheticVault>>, symbol: string, price: number) => {
+  await expect.poll(() => vault.data('holdings').find(row => row.symbol.toUpperCase() === symbol.toUpperCase())?.current_price)
+    .toBe(price);
+};
 const seed = () => ({
   assets: [{ id: 10, name: 'Checking', category: 'cash', current_value: 1000, as_of_date: '2026-01-01' }],
   liabilities: [{ id: 11, name: 'Card balance', category: 'credit_card', balance_owed: 100, as_of_date: '2026-01-01' }],
@@ -149,17 +156,21 @@ test('empty vault supports keyboard transaction entry and a failed save can be r
 test('recorded totals count refunds and exclude payments and unresolved credits on Home, Activity and Calendar', async ({ page }) => {
   const vault = await syntheticVault(page, seed());
   await vault.open('/');
+  await expectQuoteRequests(vault, ['VOO']);
+  await expectHoldingPrice(vault, 'VOO', 125);
   const activity = page.locator('.home-tile').filter({ hasText: 'This month' });
   await expect(activity).toContainText('$200.00');
   await expect(activity).toContainText('$75.00');
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,000.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,025.00');
   await vault.open('/spending?t=activity');
   await expect(page.locator('.month-total--expense')).toContainText('$75.00');
   await expect(page.locator('.month-total--income')).toContainText('$200.00');
   await vault.open('/spending?t=calendar');
   await expect(page.locator('.month-total--expense')).toContainText('$75.00');
   await expect(page.locator('.month-totals')).toContainText('$200.00');
-  expect(vault.quoteRequests).toEqual([]);
+  expect(vault.data('holdings')[0].current_price).toBe(125);
+  expect(vault.data('holdings')[0].quote_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(vault.data('holdings')[0].quote_date! <= today()).toBe(true);
   expect(vault.data('assets')[0].current_value).toBe(1000);
   expect(vault.data('holdings')[0].shares).toBe(1);
 });
@@ -167,9 +178,11 @@ test('recorded totals count refunds and exclude payments and unresolved credits 
 test('Home puts stale balances, positions, coverage gaps, partial imports and near renewals in Review queue', async ({ page }) => {
   const vault = await syntheticVault(page, homeReviewSeed());
   await vault.open('/');
+  await expectQuoteRequests(vault, ['VOO']);
+  await expectHoldingPrice(vault, 'VOO', 125);
 
   const queue = page.locator('.review-queue-card');
-  const holdings = page.locator('.holdings-panel');
+  const charts = page.locator('app-charts');
   await expect(queue).toBeVisible();
   await expect(queue).toContainText('Checking');
   await expect(queue).toContainText('VOO');
@@ -177,12 +190,14 @@ test('Home puts stale balances, positions, coverage gaps, partial imports and ne
   await expect(queue).toContainText('Statement coverage gap');
   await expect(queue).toContainText('partial-statement.csv');
   await expect(queue).toContainText('Annual license');
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '/tmp/finance-home-review.png', fullPage: true });
   const queueBox = await queue.boundingBox();
-  const holdingsBox = await holdings.boundingBox();
+  const chartsBox = await charts.boundingBox();
   expect(queueBox).not.toBeNull();
-  expect(holdingsBox).not.toBeNull();
-  expect(queueBox!.y + queueBox!.height).toBeLessThanOrEqual(holdingsBox!.y);
+  expect(chartsBox).not.toBeNull();
+  expect(queueBox!.y + queueBox!.height).toBeLessThanOrEqual(chartsBox!.y);
+  await expect(page.locator('.holdings-panel')).toHaveCount(0);
 
   const coverageItem = queue.locator('.review-queue-list li').filter({ hasText: 'Statement coverage' });
   await coverageItem.getByRole('link', { name: 'Review', exact: true }).click();
@@ -211,6 +226,17 @@ test('Charts switch between recorded totals and scheduled commitments without ch
     transactions: vault.data('transactions'),
   };
   await vault.open('/');
+  await expectQuoteRequests(vault, ['VOO']);
+  await expectHoldingPrice(vault, 'VOO', 125);
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,025.00');
+  const refreshedData = {
+    assets: vault.data('assets'),
+    liabilities: vault.data('liabilities'),
+    holdings: vault.data('holdings'),
+    transactions: vault.data('transactions'),
+  };
+  const quoteRequestCount = vault.quoteRequests.length;
+  const mutationCount = vault.mutations.length;
 
   const charts = page.locator('app-charts');
   const recorded = charts.locator('.chart-note');
@@ -223,12 +249,13 @@ test('Charts switch between recorded totals and scheduled commitments without ch
   await expect(charts.locator('.chart-note')).toContainText('Spending $130.00');
   const currentMonthRow = charts.getByRole('table', { name: 'Monthly cashflow data table' }).getByRole('row').last();
   await expect(currentMonthRow).toContainText('$130.00');
-  expect(vault.mutations).toEqual([]);
-  expect(vault.quoteRequests).toEqual([]);
-  expect(vault.data('assets')).toEqual(initialData.assets);
-  expect(vault.data('liabilities')).toEqual(initialData.liabilities);
-  expect(vault.data('holdings')).toEqual(initialData.holdings);
-  expect(vault.data('transactions')).toEqual(initialData.transactions);
+  expect(vault.mutations).toHaveLength(mutationCount);
+  expect(vault.quoteRequests).toHaveLength(quoteRequestCount);
+  expect(vault.data('assets')).toEqual(refreshedData.assets);
+  expect(vault.data('liabilities')).toEqual(refreshedData.liabilities);
+  expect(vault.data('holdings')).toEqual(refreshedData.holdings);
+  expect(vault.data('transactions')).toEqual(refreshedData.transactions);
+  expect(refreshedData).not.toEqual(initialData);
 });
 
 test('Upcoming commitments are date sorted and show account, autopay and frequency', async ({ page }) => {
@@ -242,18 +269,18 @@ test('Upcoming commitments are date sorted and show account, autopay and frequen
   });
   await vault.open('/recurring?t=spend');
 
-  const commitments = page.getByRole('table', { name: 'Upcoming commitments' });
+  const commitments = page.getByRole('table', { name: 'Bills and subscriptions' });
   const rows = commitments.getByRole('row');
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(1)).toContainText('Cloud storage');
   await expect(rows.nth(1)).toContainText('Travel card');
   await expect(rows.nth(1)).toContainText('Not recorded');
-  await expect(rows.nth(1)).toContainText('annual');
+  await expect(rows.nth(1)).toContainText('Annual');
   await expect(rows.nth(1)).toContainText('$120.00');
   await expect(rows.nth(2)).toContainText('Internet bill');
   await expect(rows.nth(2)).toContainText('Everyday checking');
   await expect(rows.nth(2)).toContainText('Manual');
-  await expect(rows.nth(2)).toContainText('monthly');
+  await expect(rows.nth(2)).toContainText('Monthly');
   await expect(rows.nth(2)).toContainText('$60.00');
 });
 
@@ -281,9 +308,21 @@ test('Spending Review compares matched elapsed days, preserves refund net, shows
   await expect(drilldown).toContainText('SOURCE GROCERY PRIOR');
   await expect(drilldown).not.toContainText('SOURCE FUTURE PRIOR');
   await drilldown.locator('.drilldown-transaction').filter({ hasText: 'SOURCE GROCERY CURRENT' })
-    .getByRole('button', { name: 'Open in Activity', exact: true }).click();
-  await expect(page).toHaveURL(/\/spending\?[^#]*t=activity[^#]*q=SOURCE%20GROCERY%20CURRENT/);
-  await expect(page.getByRole('cell', { name: 'SOURCE GROCERY CURRENT', exact: true })).toBeVisible();
+    .getByRole('button', { name: 'Edit in Activity', exact: true }).click();
+  const activityUrl = new URL(page.url());
+  expect(activityUrl.pathname).toBe('/spending');
+  expect(activityUrl.searchParams.get('t')).toBe('activity');
+  expect(activityUrl.searchParams.get('v')).toBe('spending');
+  expect(activityUrl.searchParams.get('account')).toBe('card');
+  expect(activityUrl.searchParams.get('category')).toBe('Food');
+  expect(activityUrl.searchParams.get('merchant')).toBeNull();
+  expect(activityUrl.searchParams.get('q')).toBeNull();
+  expect(activityUrl.searchParams.get('periodStart')).toBe('2026-10-01');
+  expect(activityUrl.searchParams.get('periodEnd')).toBe('2026-10-11');
+  expect(activityUrl.searchParams.get('priorStart')).toBe('2026-09-01');
+  expect(activityUrl.searchParams.get('priorEnd')).toBe('2026-09-11');
+  expect(activityUrl.searchParams.get('edit')).toBe('60');
+  await expect(page.getByRole('dialog', { name: 'Edit transaction' })).toBeVisible();
 
   await vault.open('/spending?t=review');
   await review.getByRole('button', { name: 'Merchants', exact: true }).click();
@@ -301,6 +340,7 @@ test('phone Spending Review stays within the viewport and can render a mobile sc
   await expect(page.locator('.comparison-mobile-card').first()).toBeVisible();
   const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
   expect(width.document).toBeLessThanOrEqual(width.viewport);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '/tmp/finance-review-mobile.png', fullPage: true });
 });
 
@@ -330,7 +370,7 @@ test('bulk balance review persists changed amounts, unchanged confirmations and 
   expect(vault.data('assets')[0]).toMatchObject({ current_value: 1050, as_of_date: today(), review_interval_days: 20 });
   expect(vault.data('liabilities')[0]).toMatchObject({ balance_owed: 100, as_of_date: today() });
   await page.getByRole('link', { name: 'Home', exact: true }).first().click();
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,050.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,075.00');
   expect(vault.data('holdings')[0].shares).toBe(1);
   expect(vault.data('transactions')).toHaveLength(5);
 });
@@ -357,7 +397,7 @@ test('legacy spending links translate to Activity filters and five navigation hu
   await vault.open('/spending?t=spend');
   await expect(page.getByRole('button', { name: 'Spending', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await vault.open('/planning');
-  await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Retirement simulation');
+  await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Retirement & goals');
   await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Portfolio projection');
   await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Stock research');
 });
@@ -395,8 +435,8 @@ test('a coverage gap prevents a planning estimate and preserves a legacy manual 
   const vault = await syntheticVault(page, { ...spendingPlanSeed(true), planning_profiles: [{
     id: 90, name: 'Legacy manual plan', base_currency: 'USD', payload_json: JSON.stringify({ annual_spending: 7777 }),
   }] });
-  await vault.open('/planning');
-  await page.getByRole('button', { name: 'Path', exact: true }).click();
+  await vault.open('/planning?t=path&tool=simulation');
+  await expect(page.getByLabel('Planning question', { exact: true })).toHaveValue('simulation');
   await page.getByRole('combobox', { name: 'Load saved inputs', exact: true }).selectOption('90');
   await expect(page.getByLabel('Spending basis', { exact: true })).toHaveValue('manual');
   await expect(page.getByLabel('Manual annual spending', { exact: true })).toHaveValue('7777');
@@ -409,7 +449,7 @@ test('a coverage gap prevents a planning estimate and preserves a legacy manual 
   expect(JSON.parse(vault.data('planning_profiles')[0].payload_json).annual_spending).toBe(7777);
 });
 
-test('Fidelity market values survive an interrupted replacement and quotes refresh only on request', async ({ page }) => {
+test('Fidelity market values survive an interrupted replacement and explicit refresh follows automatic entry quotes', async ({ page }) => {
   const initial = seed();
   const vault = await syntheticVault(page, {
     ...initial,
@@ -417,6 +457,8 @@ test('Fidelity market values survive an interrupted replacement and quotes refre
     holdings: [{ ...initial.holdings[0], brokerage_account_id: 30, account_display: 'Fidelity ···Z111' }],
   });
   await vault.open('/have?t=holdings');
+  await expectQuoteRequests(vault, ['VOO']);
+  await expectHoldingPrice(vault, 'VOO', 125);
   await page.getByRole('button', { name: 'Import from Fidelity', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: /Import from Fidelity/ });
   await dialog.locator('input[type=file]').setInputFiles({
@@ -426,7 +468,7 @@ test('Fidelity market values survive an interrupted replacement and quotes refre
   });
   await dialog.getByRole('button', { name: /Preview/ }).click();
   await expect(dialog.getByRole('table', { name: 'Fidelity import preview' })).toContainText('$240');
-  expect(vault.quoteRequests).toEqual([]);
+  expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
   vault.failWriteIn('holdings');
   await dialog.getByRole('button', { name: 'Confirm Replace', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: 'Replace Fidelity holdings?' });
@@ -437,18 +479,19 @@ test('Fidelity market values survive an interrupted replacement and quotes refre
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('link', { name: 'Home', exact: true }).first().click();
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,000.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,025.00');
   await vault.open('/have?t=holdings');
   await page.getByRole('button', { name: /Resume/ }).first().click();
   await expect(page.locator('.summary-card')).toContainText('$340.00');
   await expect(page.locator('app-portfolio')).toContainText(/unavailable|unknown/i);
-  expect(vault.quoteRequests).toEqual([]);
+  expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
   await page.getByRole('button', { name: 'Refresh all share prices', exact: true }).click();
-  await expect.poll(() => vault.quoteRequests.slice().sort()).toEqual(['SPAXX', 'VOO']);
+  await expect.poll(() => vault.quoteRequests.slice(1).map(symbol => symbol.toUpperCase()).sort()).toEqual(['SPAXX', 'VOO']);
   await expect(page.locator('.summary-card')).toContainText('$12,750.00');
   expect(vault.data('assets')[0].current_value).toBe(1000);
   for (const holding of vault.data('holdings')) {
-    expect(holding.quote_date).toBe(today());
+    expect(holding.quote_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(holding.quote_date! <= today()).toBe(true);
     expect(holding.position_as_of ?? null).toBeNull();
   }
 });
@@ -595,5 +638,6 @@ test('phone Activity rows expand with the original description and keyboard acce
   await expect(row.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
   const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
   expect(width.document).toBeLessThanOrEqual(width.viewport);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '/tmp/finance-activity-mobile.png', fullPage: true });
 });

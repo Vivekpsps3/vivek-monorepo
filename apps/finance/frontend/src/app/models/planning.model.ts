@@ -9,6 +9,21 @@ export const MC_N_PATHS_MIN = 100;
 export const MC_N_PATHS_MAX = 5000;
 export const MC_FAN_PATHS_PERSIST_MAX = 500;
 
+export type PlanningToolId =
+  | 'overview'
+  | 'simulation'
+  | 'retirement-target'
+  | 'savings-goal'
+  | 'debt-payoff';
+
+export interface PlanningLiabilitySource {
+  id: number;
+  name: string;
+  category: string;
+  balance_owed: number;
+  as_of_date: string | null;
+}
+
 export interface ProfilePayload {
   annual_income_growth: number;
   inflation_cpi: number;
@@ -23,6 +38,8 @@ export interface ProfilePayload {
   shock_loss_std: number;
   start_net_worth?: number | null;
   annual_spending?: number | null;
+  /** Full current annual net cashflow. Replaces income less spending when supplied. */
+  net_annual_cashflow_override?: number | null;
   /** Additive spending model; legacy profiles may still contain only annual_spending. */
   spending_mode?: 'recurring' | 'components' | 'manual';
   spending_components?: SpendingComponents;
@@ -116,6 +133,19 @@ export interface PlanningInputsPreview {
   annual_income_source?: string;
   /** Count only — transactions do not drive spending assumptions. */
   transaction_role?: string;
+  /** Earliest valid past date among current asset and liability balance entries. */
+  oldest_balance_as_of?: string | null;
+  undated_asset_balances?: number;
+  undated_liability_balances?: number;
+  /** Earliest valid past quote date among holdings used in net worth. */
+  oldest_portfolio_quote_date?: string | null;
+  /** Earliest valid past position date among holdings used in net worth. */
+  oldest_portfolio_position_date?: string | null;
+  undated_portfolio_quotes?: number;
+  undated_portfolio_positions?: number;
+  undated_portfolio_values?: number;
+  /** Current liabilities, offered only as explicit sources for the one-debt calculator. */
+  liability_sources?: PlanningLiabilitySource[];
 }
 
 export interface PlanningProfile {
@@ -169,6 +199,8 @@ export interface McResultSummary {
   spend_assumption_source?: string;
   annual_contribution_start?: number;
   net_cashflow_source?: string;
+  net_annual_cashflow_start?: number | null;
+  cashflow_override_source?: string | null;
   success_rate_pct?: number;
   pct_depleted_before_horizon?: number;
   median_depletion_year?: number | null;

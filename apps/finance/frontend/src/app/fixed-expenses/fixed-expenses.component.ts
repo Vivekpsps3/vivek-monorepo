@@ -53,9 +53,11 @@ import {
 })
 export class FixedExpensesComponent implements OnInit, OnDestroy {
   @Input() embedded = false;
+  @Input() editorOnly = false;
   expenses: FixedExpense[] = [];
   showModal = false;
   saving = false;
+  saveError = '';
   editingId: number | null = null;
   form: FixedExpenseCreate = this.emptyForm();
 
@@ -83,7 +85,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       this.expenses = rows;
       this.cdr.markForCheck();
     });
-    this.financeService.getFixedExpenses().pipe(takeUntil(this.destroy$)).subscribe();
+    if (!this.editorOnly) this.financeService.getFixedExpenses().pipe(takeUntil(this.destroy$)).subscribe();
   }
 
   ngOnDestroy(): void {
@@ -122,7 +124,9 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   openAddModal(): void {
     this.editingId = null;
     this.form = this.emptyForm();
+    this.saveError = '';
     this.showModal = true;
+    this.cdr.markForCheck();
   }
 
   openEditModal(row: FixedExpense): void {
@@ -140,13 +144,17 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       is_active: row.is_active,
       notes: row.notes || '',
     };
+    this.saveError = '';
     this.showModal = true;
+    this.cdr.markForCheck();
   }
 
   closeModal(): void {
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
+    this.saveError = '';
+    this.cdr.markForCheck();
   }
 
   saveExpense(): void {
@@ -159,6 +167,8 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       return;
     }
     this.saving = true;
+    this.saveError = '';
+    const wasEditing = this.editingId !== null;
     const payload: FixedExpenseCreate = {
       ...this.form,
       name: this.form.name.trim(),
@@ -176,11 +186,12 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       next: () => {
         this.saving = false;
         this.closeModal();
-        this.toastService.success(this.editingId ? 'Fixed expense updated' : 'Fixed expense added');
+        this.toastService.success(wasEditing ? 'Bill updated' : 'Bill added');
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
+        this.saveError = 'This bill could not be saved. Your details are still here; check your vault and try again.';
         this.cdr.markForCheck();
       },
     });
@@ -196,6 +207,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     if (!ok) return;
     this.financeService.deleteFixedExpense(row.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Fixed expense deleted'),
+      error: () => this.toastService.error('This bill could not be deleted. Try again.'),
     });
   }
 

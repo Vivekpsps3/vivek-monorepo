@@ -1,5 +1,43 @@
 <router-outlet />
 
+@if (releaseFreshness.noticeVisible()) {
+  <aside
+    class="release-notice"
+    aria-labelledby="release-notice-title"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <div class="release-notice__copy">
+      @if (releaseFreshness.updateAvailable()) {
+        <strong id="release-notice-title">A new version is ready</strong>
+        <p>
+          This tab loaded build
+          <code [title]="releaseFreshness.loadedRelease || ''">{{ releaseFreshness.loadedReleaseLabel }}</code>
+          and build
+          <code [title]="releaseFreshness.latestRelease() || ''">{{ releaseFreshness.latestRelease()?.slice(0, 12) }}</code>
+          is available. Finish or save any unsaved edits, then reload when you are ready.
+        </p>
+      } @else {
+        <strong id="release-notice-title">A page section could not load</strong>
+        <p>
+          This can happen after an update or during a temporary connection problem.
+          Check your connection and reload when you are ready.
+        </p>
+        @if (releaseFreshness.loadedReleaseLabel) {
+          <p class="release-notice__build">
+            Loaded build
+            <code [title]="releaseFreshness.loadedRelease || ''">{{ releaseFreshness.loadedReleaseLabel }}</code>
+          </p>
+        }
+      }
+    </div>
+    <div class="release-notice__actions">
+      <ui-button variant="primary" size="sm" (clicked)="releaseFreshness.reload()">Reload now</ui-button>
+      <ui-button variant="ghost" size="sm" (clicked)="releaseFreshness.dismissNotice()">Dismiss</ui-button>
+    </div>
+  </aside>
+}
+
 <app-confirm-dialog />
 
 <div class="toast-host" aria-live="polite" aria-atomic="true">

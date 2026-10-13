@@ -15,7 +15,7 @@ Local-first personal finance: **Angular 19** UI, **FastAPI** API, **SQLite** per
 | **Balance sheet** | per-user `assets`, `liabilities`, `holdings` + market prices | CRUD + Fidelity CSV (holdings per brokerage account) | **Net worth** (computed client-side in `client-finance.ts` after vault unlock) |
 | **Transactions ledger** | encrypted per-user transactions; legacy income/expense direction plus a typed kind and optional review metadata | Browser CRUD + client-side staged bank CSV import | Spending and activity review, calendar, observed cashflow summaries |
 | **Recurring cashflow** | per-user `job_incomes`, `fixed_expenses`, `subscriptions` | CRUD on those tables only | Income / fixed-expense / subscription pages; cashflow summary computed client-side; planning spending inputs |
-| **Planning (speculative)** | MC profiles + encrypted `stock_lab_scenarios`; public market research cache | MC profiles; Stock Lab scenarios via vault; market research by symbol | Monte Carlo `/planning`, Stock Lab `/stock-lab` |
+| **Planning (speculative)** | Encrypted `planning_profiles` and `stock_lab_scenarios`; public market research cache | Browser-side profile CRUD and Monte Carlo; Stock Lab scenarios via vault; market research by symbol | Monte Carlo `/planning`, Stock Lab `/stock-lab` |
 
 **Invariant:** Net worth is always balance-sheet based: manual assets + portfolio market value − liabilities. Transactions, recurring cashflow rows, and simulations **never** update net worth.
 
@@ -35,7 +35,15 @@ Current implementation status for fields and flows is documented in [DATA_MODEL.
 
 Tax document storage was removed. Do not add document vault/BLOB storage back without a fresh product/security decision.
 
-Recurring cashflow (job income, rent/utilities-style fixed expenses, subscriptions) is a budget/plan plane. It can appear in cashflow summaries and planning inputs but does **not** change assets, liabilities, holdings, or net worth. Planning spending estimates distinguish fixed, variable, and irregular annual amounts; ledger-derived suggestions require confirmed import coverage and explicit acceptance. Stock grants and manual private valuations stay in the encrypted job record. Dated stock-sale proceeds count as cashflow when sold; stock grant value and unrealized growth appear only in Planning → Compensation and do not affect recurring or retirement income.
+Recurring cashflow (job income, rent/utilities-style fixed expenses, subscriptions) is a budget/plan plane. It can appear in cashflow summaries and planning inputs but does **not** change assets, liabilities, holdings, or net worth. Planning spending estimates distinguish fixed, variable, and irregular annual amounts; ledger-derived suggestions require confirmed import coverage and explicit acceptance. Stock grants and dated valuations stay in the encrypted job record. Dated stock-sale proceeds count as cashflow when sold; compensation analysis is available from the Recurring hub and does not turn job valuation history into net worth or recurring income.
+
+After authenticated entry and vault unlock, the browser starts one bounded,
+nonblocking market refresh per unlocked session for the deduplicated symbols in
+holdings and configured employer jobs. It sends ticker symbols to the public
+market endpoint; all financial records and quote results stay in the encrypted
+vault. The shell shows the ticker disclosure, progress, partial failures, and
+an explicit retry action. The saved quote date is the provider's trading date,
+never the browser's calculation time. See [SECURITY_MODEL.md](./SECURITY_MODEL.md#holdings-price-privacy).
 
 ## Request flow
 
@@ -61,7 +69,7 @@ Browser/domain proxy
 ## Auth And Users
 
 - Login is passwordless: the browser uses a username and vault passphrase to unwrap a browser-held signing key, then signs a server-issued single-use challenge. Successful verification sets an HttpOnly session cookie and readable CSRF cookie.
-- First-run setup generates the first admin's browser-held auth key and vault (`/api/auth/bootstrap-status`, `/api/auth/bootstrap/passwordless`). Admins create invitation/enrollment records for later users; there is no self-service password signup.
+- First-run setup generates the first admin's browser-held auth key and vault (`/api/auth/bootstrap-status`, `/api/auth/bootstrap/passwordless`). Passwordless self-signup is open; admins can also issue invitation/enrollment records.
 - Legacy password login exists only for a bounded, unenrolled-account migration endpoint. Enrollment registers the public key, stores only encrypted wraps, and clears the password hash.
 - All non-health finance APIs require a valid session. Mutating requests require `X-CSRF-Token`.
 - Optional legacy `API_KEY` / `FINANCE_API_KEY` middleware can also gate `/api/*` (except health) for non-browser clients.
@@ -69,13 +77,12 @@ Browser/domain proxy
 - Admin UI route: `/admin/users`. Admins create invitations, disable, reset contents, delete, and manage users, and view metrics. They cannot reset a vault passphrase or recover a user's keys. The raw SQL console is disabled. Self-delete and deleting or disabling the final active admin are blocked.
 - User-owned finance tables include `user_id`; market quote cache and provider registries stay global.
 
-There is **no** `routers/analytics.py`. Net-worth Monte Carlo still lives under `/api/planning/v1`; Stock Lab market research is under `/api/market/research/*`.
+There is no active plaintext analytics or planning router. Monte Carlo inputs and calculations run in the browser after vault unlock; saved profiles use encrypted vault collection `planning_profiles`, and runs are ephemeral. Stock Lab market research is under `/api/market/research/*`. Retired and reserved APIs are listed in [LIFECYCLE.md](./LIFECYCLE.md).
 
 ## Planning (as built)
 
-- **Monte Carlo tool:** `mc_net_worth_paths` — read-only ledger snapshot → MC paths (ephemeral; **not** written to `planning_scenario_runs`).
-- **MC saved inputs:** `planning_assumption_profiles` (named presets).
-- API prefix: `/api/planning/v1` (`tools`, `inputs`, `profiles`, `POST /runs`).
+- **Monte Carlo:** client-side and read-only; it computes paths from the unlocked encrypted financial snapshot and does not persist runs.
+- **Saved inputs:** named presets in the encrypted vault collection `planning_profiles`.
 - UI: `apps/finance/frontend/src/app/planning/` + `PlanningService`; route `/planning`.
 - **Stock Lab:** `/stock-lab` is a speculative stock/ETF planning page. It saves encrypted scenario inputs in the vault and uses `/api/market/research/*` for public ticker research. Ticker symbols, including selected owned symbols, are intentionally disclosed for this feature; purchase assumptions remain encrypted client data.
 
@@ -91,7 +98,7 @@ There is **no** `routers/analytics.py`. Net-worth Monte Carlo still lives under 
 - Shell: `MainLayoutComponent` (five hubs: Home, What you have, Spending, Recurring, Planning; admin/user actions in the account menu); lazy feature routes in `app.routes.ts`; `authGuard` + `vaultGuard` protect the app shell; `adminGuard` for `/admin/users`.
 - Vault routes (auth only, outside shell): `/vault/setup`, `/vault/unlock`.
 - State: `FinanceService` / `PlanningService` use the encrypted client store after vault unlock; `VaultService` / `EncryptedStoreService`; `AuthService`.
-- Prices: manual/imported prices remain local. An explicit Portfolio refresh and Stock Lab/typed lookup disclose only ticker symbols to `/api/market` and yfinance; shares, values, account details, and other holding fields remain encrypted.
+- Prices: manual/imported prices remain local. After authenticated entry and vault unlock, one bounded, nonblocking session refresh sends deduplicated holding and configured employer ticker symbols to `/api/market`; Portfolio retry and Stock Lab/typed lookup also disclose symbols. Shares, values, account details, and other holding fields remain encrypted. See [SECURITY_MODEL.md](./SECURITY_MODEL.md#holdings-price-privacy).
 - Server-blind storage: `/api/vault/*` stores wraps + ciphertext only; backend never decrypts. Plaintext finance HTTP is unmounted.
 
 ## Where to read more

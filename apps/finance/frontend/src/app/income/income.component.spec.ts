@@ -4,11 +4,13 @@ import { IncomeComponent } from './income.component';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '../services/confirm.service';
 import { ToastService } from '../services/toast.service';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { JobIncome } from '../models/transaction.model';
 
 describe('IncomeComponent compensation editing', () => {
   let component: IncomeComponent;
   let finance: jasmine.SpyObj<FinanceService>;
+  let market: jasmine.SpyObj<MarketRefreshCoordinatorService>;
   let toast: jasmine.SpyObj<ToastService>;
   const row = { id: 3, employer: 'Acme', pay_frequency: 'annual', base_pay: 36525,
     effective_date: '2026-01-01', end_date: '2026-12-31', is_active: true,
@@ -19,8 +21,10 @@ describe('IncomeComponent compensation editing', () => {
   beforeEach(() => {
     finance = jasmine.createSpyObj('FinanceService', ['addJobIncome', 'updateJobIncome']);
     finance.updateJobIncome.and.returnValue(of(row));
+    market = jasmine.createSpyObj('MarketRefreshCoordinatorService', ['refreshSymbol']);
+    market.refreshSymbol.and.resolveTo({ symbol: 'MSFT', holdingsUpdated: 1, employerValuationsUpdated: 1, failedRecords: [] });
     toast = jasmine.createSpyObj('ToastService', ['error', 'success']);
-    component = new IncomeComponent(finance, {} as ConfirmService, toast, { markForCheck() {} } as ChangeDetectorRef);
+    component = new IncomeComponent(finance, market, {} as ConfirmService, toast, { markForCheck() {} } as ChangeDetectorRef);
     component.incomes = [row];
   });
 
@@ -63,5 +67,16 @@ describe('IncomeComponent compensation editing', () => {
     component.saveIncome();
     await flushPromises();
     expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.objectContaining({ end_date: null }));
+  });
+
+  it('routes manual employer quote refresh through the shared coordinator', async () => {
+    const job = { ...row, stock_symbol: 'MSFT', stock_valuations: [
+      { date: '2026-10-12', price_per_share: 200, source: 'live_eod', symbol: 'MSFT' },
+    ] } as JobIncome;
+    component.incomes = [job];
+    component.refreshStockTicker('msft');
+    await flushPromises();
+    expect(market.refreshSymbol).toHaveBeenCalledOnceWith('MSFT');
+    expect(finance.updateJobIncome).not.toHaveBeenCalled();
   });
 });

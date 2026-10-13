@@ -10,6 +10,7 @@ import {
   AfterViewInit,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router, RouterLink } from '@angular/router';
 import { FinanceService } from '../services/finance.service';
 import { FixedExpense, Holding, JobIncome, Subscription, Transaction } from '../models/transaction.model';
 import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '../crypto/client-finance';
@@ -35,7 +36,7 @@ type ChartConstructor = new (
 @Component({
   selector: 'app-charts',
   standalone: true,
-  imports: [CommonModule, UiCardComponent, UiEmptyStateComponent],
+  imports: [CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -60,7 +61,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   incomeTotal = 0;
   expenseTotal = 0;
   netCashflow = 0;
-  monthlyRows: { label: string; income: number; expense: number; net: number }[] = [];
+  monthlyRows: { month: string; label: string; income: number; expense: number; net: number }[] = [];
   allCategoryRows: { label: string; value: number; pct: number | null }[] = [];
   allocationRows: { label: string; value: number; pct: number; companyName?: string | null }[] = [];
 
@@ -99,7 +100,8 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(
     private financeService: FinanceService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private router: Router,
   ) {}
 
   ngOnInit() {
@@ -180,7 +182,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     void this.paintCharts();
   }
 
-  get categoryRows(): { label: string; value: number; pct: number | null }[] {
+  get categoryRows(): { label: string; value: number; pct: number | null; synthetic?: boolean }[] {
     if (!this.collapsedCategories || this.allCategoryRows.length <= 6) {
       return this.allCategoryRows;
     }
@@ -194,6 +196,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         label: 'Other',
         value: otherValue,
         pct: total > 0 ? (otherValue / total) * 100 : null,
+        synthetic: true,
       },
     ];
   }
@@ -223,6 +226,43 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  openMonthlyDrilldown(index: number, datasetIndex = 0): void {
+    const row = this.monthlyRows[index];
+    if (!row) return;
+    if (this.cashflowView === 'scheduled') {
+      const tab = datasetIndex === 0 ? 'pay' : 'spend';
+      void this.router.navigate(['/recurring'], { queryParams: { t: tab } });
+      return;
+    }
+    const view = datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all';
+    void this.router.navigate(['/spending'], {
+      queryParams: { t: 'activity', v: view, month: row.month },
+    });
+  }
+
+  openCategoryDrilldown(index: number): void {
+    const row = this.categoryRows[index];
+    if (!row) return;
+    if (row.synthetic) {
+      this.collapsedCategories = false;
+      this.render$.next();
+      this.cdr.markForCheck();
+      return;
+    }
+    void this.router.navigate(['/spending'], {
+      queryParams: { t: 'activity', v: 'spending', month: 'all', category: row.label },
+    });
+  }
+
+  monthlyRowQuery(row: { month: string }, datasetIndex = 0): { [key: string]: string } {
+    if (this.cashflowView === 'scheduled') return { t: datasetIndex === 0 ? 'pay' : 'spend' };
+    return { t: 'activity', v: datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all', month: row.month };
+  }
+
+  categoryRowQuery(row: { label: string; synthetic?: boolean }): { [key: string]: string } | null {
+    return row.synthetic ? null : { t: 'activity', v: 'spending', month: 'all', category: row.label };
+  }
+
   private computeDerived() {
     const txs = this.txOverride ?? this.transactions;
     const series = monthlyCashflowSeries(
@@ -238,6 +278,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.netCashflow = this.incomeTotal - this.expenseTotal;
     this.monthlyRows = series.some(row => row.income || row.expense)
       ? series.map(row => ({
+          month: row.month,
           label: this.formatMonth(row.month),
           income: row.income,
           expense: row.expense,
@@ -359,6 +400,10 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
             callbacks: { label: (ctx: TooltipCtx) => '$' + Number(ctx.raw).toLocaleString() },
           },
         },
+        onClick: (_event: unknown, active: Array<{ datasetIndex: number; index: number }>) => {
+          const point = active[0];
+          if (point) this.openMonthlyDrilldown(point.index, point.datasetIndex);
+        },
         scales: chartCartesianScales(),
       },
     });
@@ -400,6 +445,10 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
               },
             },
           },
+        },
+        onClick: (_event: unknown, active: Array<{ index: number }>) => {
+          const point = active[0];
+          if (point) this.openCategoryDrilldown(point.index);
         },
       },
     });

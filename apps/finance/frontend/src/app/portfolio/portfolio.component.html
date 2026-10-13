@@ -19,8 +19,9 @@
       <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
     </div>
   </ui-page-header>
-  <p class="refresh-note">Refreshing prices sends ticker symbols to the market quote service; holding details remain encrypted.</p>
-  <p class="refresh-note" *ngIf="lastPortfolioRefresh">Last price refresh: {{ lastPortfolioRefresh }}</p>
+  @if (marketState.phase === 'refreshing') {
+    <p class="refresh-note" role="status">Refreshing {{ marketState.completedSymbols }} of {{ marketState.totalSymbols || 'configured' }} tickers. Saved prices remain available during refresh.</p>
+  }
   @for (stage of resumableFidelityStages; track stage.id) {
     <ui-card class="resume-stage" title="Fidelity replacement needs attention">
       <p>{{ stage.filename }} · {{ stage.expected_row_count }} staged position(s) · {{ stage.account_masks.length }} account(s)</p>
@@ -78,9 +79,6 @@
           class="search-input"
           aria-label="Search holdings"
         />
-        <ui-button variant="secondary" size="sm" (clicked)="refreshAllPrices()" [disabled]="refreshingPrices || holdings.length === 0">
-          Refresh prices
-        </ui-button>
         <ui-button variant="secondary" size="sm" (clicked)="exportToCsv()">Export CSV</ui-button>
     </div>
     <p class="text-sm text-secondary holdings-tip">
@@ -90,6 +88,13 @@
     <div *ngIf="loading" class="loading-overlay" role="status">
       <span class="spinner-inline" aria-hidden="true"></span> Loading holdings…
     </div>
+
+    @if (holdingsLoadError) {
+      <div class="holdings-load-error" role="alert">
+        <span>The holdings list could not be loaded: {{ holdingsLoadError }}</span>
+        <ui-button variant="secondary" size="sm" (clicked)="retryLoadHoldings()">Try again</ui-button>
+      </div>
+    }
 
     <!-- Grouped by account with collapsible sub-tables -->
     <div *ngIf="filteredHoldings.length > 0; else empty">
@@ -262,7 +267,7 @@
     </div>
 
     <ng-template #empty>
-      @if (!loading) {
+      @if (!loading && !holdingsLoadError) {
         <ui-empty-state message="No holdings yet.">
           <ui-button variant="primary" (clicked)="openAddModal()">Add your first</ui-button>
           <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>

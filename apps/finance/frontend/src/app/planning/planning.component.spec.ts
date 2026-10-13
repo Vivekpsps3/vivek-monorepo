@@ -1,4 +1,4 @@
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { PlanningComponent } from './planning.component';
 import { DEFAULT_MC_ASSUMPTIONS, PlanningProfile } from '../models/planning.model';
 import { lastThreeCompletedMonths } from '../utils/planning-spending.util';
@@ -12,7 +12,8 @@ function createComponent() {
     planning as any,
     { ask: jasmine.createSpy('ask').and.resolveTo(true) } as any,
     toast as any,
-    { markForCheck: () => undefined } as any
+    { markForCheck: () => undefined } as any,
+    { dataChanges$: new Subject<any>() } as any
   );
   return { component, planning, toast };
 }
@@ -46,6 +47,100 @@ describe('PlanningComponent spending acceptance', () => {
 
     expect(component.eventsForCase(events, 'baseline').map(event => event.label)).toEqual(['Legacy event', 'Time off']);
     expect(component.eventsForCase(events, 'scenario').map(event => event.label)).toEqual(['Legacy event', 'Purchase']);
+  });
+
+  it('starts car and time-off what-if templates at zero and scopes them to the scenario', () => {
+    const { component } = createComponent();
+    component.addScenarioTemplate('car-purchase');
+    component.addScenarioTemplate('time-off');
+    component.addEvent();
+
+    expect(component.assumptions.annual_cashflow_events.map(event => event.amount)).toEqual([0, 0, 0]);
+    expect(component.assumptions.annual_cashflow_events.slice(0, 2).map(event => event.applies_to)).toEqual(['scenario', 'scenario']);
+  });
+
+  it('uses the same live cashflow as planning: income less selected costs plus a legacy add-on, unless the total overrides it', () => {
+    const { component } = createComponent();
+    component.inputs = {
+      avg_monthly_income: 5_000,
+      implied_annual_spending: 40_000,
+      net_worth_total: 0,
+    } as any;
+    component.useTxIncome = true;
+    component.spendingMode = 'recurring';
+    component.assumptions.extra_contributions.annual_contribution = 5_000;
+
+    expect(component.effectiveNetCashflow()).toBe(25_000);
+    component.useNetCashflowOverride = true;
+    component.assumptions.net_annual_cashflow_override = 10_000;
+    expect(component.effectiveNetCashflow()).toBe(10_000);
+  });
+
+  it('shows the same gross-asset allocation the simulation uses for debt, no-holding, and capped inputs', () => {
+    const { component } = createComponent();
+    component.inputs = { net_worth_total: -5_000, net_worth_portfolio: 10_000, net_worth_liabilities: 105_000 } as any;
+    expect(component.inferredAllocation()).toBe(0.1);
+    component.inputs = { net_worth_total: 100_000, net_worth_portfolio: 0, net_worth_liabilities: 0 } as any;
+    expect(component.inferredAllocation()).toBe(0);
+    component.inputs = { net_worth_total: 10_000, net_worth_portfolio: 150_000, net_worth_liabilities: 0 } as any;
+    expect(component.inferredAllocation()).toBe(1);
+  });
+
+  it('saves live facts as null while retaining manual assumptions and legacy additional contributions', () => {
+    const { component, planning } = createComponent();
+    const saved: PlanningProfile = {
+      id: 7,
+      name: 'Retirement baseline',
+      base_currency: 'USD',
+      payload: structuredClone(DEFAULT_MC_ASSUMPTIONS),
+      created_at: '',
+      updated_at: '',
+    };
+    planning.createProfile.and.returnValue(of(saved));
+    component.savedInputName = saved.name;
+    component.spendingMode = 'manual';
+    component.assumptions = {
+      ...structuredClone(DEFAULT_MC_ASSUMPTIONS),
+      annual_spending: 42_000,
+      monthly_income: 5_000,
+      portfolio_allocation: 0.6,
+      start_net_worth: 123_000,
+      net_annual_cashflow_override: 10_000,
+      extra_contributions: { annual_contribution: 5_000 },
+    };
+
+    component.saveSavedInputs();
+
+    const payload = planning.createProfile.calls.mostRecent().args[0].payload;
+    expect(payload.monthly_income).toBeNull();
+    expect(payload.portfolio_allocation).toBeNull();
+    expect(payload.start_net_worth).toBeNull();
+    expect(payload.net_annual_cashflow_override).toBeNull();
+    expect(payload.annual_spending).toBe(42_000);
+    expect(payload.extra_contributions.annual_contribution).toBe(5_000);
+  });
+
+  it('reopens a legacy additional-contribution profile without treating it as a total override', () => {
+    const { component } = createComponent();
+    component.inputs = {
+      avg_monthly_income: 5_000,
+      implied_annual_spending: 40_000,
+      net_worth_total: 0,
+    } as any;
+    component.profiles = [{
+      id: 9,
+      name: 'Old plan',
+      base_currency: 'USD',
+      payload: { ...structuredClone(DEFAULT_MC_ASSUMPTIONS), extra_contributions: { annual_contribution: 5_000 } },
+      created_at: '',
+      updated_at: '',
+    }];
+
+    component.onProfileSelected('9');
+
+    expect(component.useNetCashflowOverride).toBeFalse();
+    expect(component.assumptions.extra_contributions.annual_contribution).toBe(5_000);
+    expect(component.effectiveNetCashflow()).toBe(25_000);
   });
 
   it('refuses to persist an estimate without complete receipt coverage', async () => {

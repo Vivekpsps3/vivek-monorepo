@@ -373,4 +373,55 @@ describe('multi-file bank import', () => {
     expect(saved.length).toBe(2);
     expect(new Set(saved.map(row => row.dedupe_key)).size).toBe(2);
   });
+
+  it('replaces only the corrected file rows and parse notes in a multi-file receipt', async () => {
+    const correctedPreview = await buildBankImportPreviews([
+      { id: 3, bank_slug: 'chase', file: chase('corrected.csv') },
+    ], new Set());
+    const correctedRows = correctedPreview[0].preview!.rows;
+    expect(correctedRows[0].source_filename).toBe('corrected.csv');
+    const keptRow = { ...correctedRows[0], dedupe_key: 'other-file-row', source_filename: 'other.csv' };
+    const replacedRow = { ...correctedRows[0], dedupe_key: 'old-file-row', source_filename: 'broken.csv' };
+    const stagedRows = [keptRow, replacedRow];
+    const receipt: any = {
+      id: 41,
+      bank_slugs: ['chase'],
+      filenames: ['broken.csv', 'other.csv'],
+      status: 'partial',
+      started_at: '2026-01-01T00:00:00Z',
+      selected_row_count: 2,
+      inserted_count: 0,
+      unresolved: [{ line: 4, filename: 'broken.csv', reason: 'Unrecognized date: bad date' }],
+      account_displays: ['Chase card'],
+      coverage: [],
+    };
+    const savedTransactions: any[] = [];
+    const store: any = {
+      getTransactions: async () => savedTransactions,
+      addTransaction: async (row: any) => {
+        const saved = { ...row, id: savedTransactions.length + 1 };
+        savedTransactions.push(saved);
+        return saved;
+      },
+      getImportReceipt: async () => receipt,
+      getImportReceiptRows: async () => stagedRows,
+      saveImportReceiptRows: async (_id: number, rows: any[]) => { stagedRows.splice(0, stagedRows.length, ...rows); },
+      updateImportReceipt: async (_id: number, patch: any) => Object.assign(receipt, patch),
+    };
+
+    await commitBankImportRows(store, correctedRows, {
+      resume_receipt_id: 41,
+      replace_filename: 'broken.csv',
+      bank_slugs: ['chase'],
+      filenames: ['corrected.csv'],
+      unresolved: [],
+      account_displays: ['Chase card'],
+    });
+
+    expect(stagedRows.map(row => row.source_filename).sort()).toEqual(['corrected.csv', 'other.csv']);
+    expect(receipt.filenames).toEqual(['other.csv', 'corrected.csv']);
+    expect(receipt.unresolved).toEqual([]);
+    expect(receipt.status).toBe('complete');
+    expect(savedTransactions.length).toBe(2);
+  });
 });

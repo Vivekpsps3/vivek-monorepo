@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { forkJoin, Subject, takeUntil } from 'rxjs';
+import { EMPTY, catchError, debounceTime, filter, forkJoin, of, Subject, switchMap, takeUntil } from 'rxjs';
 import { transactionEffects } from '../crypto/client-finance';
 import { BankAccountRecord, ImportReceipt, Transaction } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
@@ -15,6 +15,7 @@ import {
   SpendingReviewDimension,
   SpendingReviewPeriods,
   spendingComparisonGroupKey,
+  UNASSIGNED_ACCOUNT_FILTER,
 } from '../utils/spending-review.util';
 
 interface CoverageReport {
@@ -48,6 +49,7 @@ interface DrilldownRow {
             <span>Account</span>
             <select [(ngModel)]="accountKey" (ngModelChange)="onAccountChange()" aria-label="Filter by confirmed account">
               <option value="">All accounts</option>
+              <option [value]="unassignedAccountFilter">Unassigned account</option>
               @for (account of confirmedAccounts; track account.account_key) {
                 <option [value]="account.account_key">{{ account.display_name }}</option>
               }
@@ -60,6 +62,7 @@ interface DrilldownRow {
         <p class="review-status" role="status">Loading encrypted transaction and import records…</p>
       } @else if (loadError) {
         <p class="review-error" role="alert">{{ loadError }}</p>
+        <button type="button" class="clear-selection" (click)="loadReview()">Try again</button>
       } @else if (!periods) {
         <p class="review-error" role="alert">Choose a valid month to compare spending.</p>
       } @else {
@@ -181,7 +184,7 @@ interface DrilldownRow {
                       </div>
                       <div class="drilldown-actions">
                         <strong [class.change-down]="transactionEffects(item.transaction).spending < 0">{{ transactionEffects(item.transaction).spending | currency:'USD' }}</strong>
-                        <button type="button" class="open-activity" (click)="openActivity(item.transaction)">Open in Activity</button>
+                        <button type="button" class="open-activity" (click)="openActivity(item.transaction)">Edit in Activity</button>
                       </div>
                     </article>
                   }
@@ -290,6 +293,7 @@ interface DrilldownRow {
 })
 export class SpendingReviewComponent implements OnInit, OnDestroy {
   readonly transactionEffects = transactionEffects;
+  readonly unassignedAccountFilter = UNASSIGNED_ACCOUNT_FILTER;
   month = this.currentMonthKey();
   dimension: SpendingReviewDimension = 'category';
   accountKey = '';
@@ -301,6 +305,7 @@ export class SpendingReviewComponent implements OnInit, OnDestroy {
   selectedGroupKey = '';
 
   private readonly destroy$ = new Subject<void>();
+  private readonly reviewRefresh$ = new Subject<void>();
 
   constructor(
     private financeService: FinanceService,
@@ -310,12 +315,35 @@ export class SpendingReviewComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    forkJoin({
-      transactions: this.financeService.getAllTransactions(),
-      accounts: this.financeService.getBankAccounts(),
-      receipts: this.financeService.getImportReceipts(),
-    }).pipe(takeUntil(this.destroy$)).subscribe({
+    this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe(params => {
+      const requestedMonth = params.get('month');
+      if (requestedMonth && /^\d{4}-\d{2}$/.test(requestedMonth)) this.month = requestedMonth;
+      this.accountKey = params.get('account') || '';
+      const requestedDimension = params.get('dimension');
+      this.dimension = requestedDimension === 'merchant' ? 'merchant' : 'category';
+      this.selectedGroupKey = params.get('group') || '';
+      this.cdr.markForCheck();
+    });
+    this.reviewRefresh$.pipe(
+      switchMap(() => {
+        this.loading = true;
+        this.loadError = '';
+        this.cdr.markForCheck();
+        return forkJoin({
+          transactions: this.financeService.getAllTransactions(),
+          accounts: this.financeService.getBankAccounts(),
+          receipts: this.financeService.getImportReceipts(),
+        }).pipe(catchError(() => of(null)));
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe({
       next: result => {
+        if (!result) {
+          this.loading = false;
+          this.loadError = 'Spending review could not load the encrypted finance records. Try refreshing the page.';
+          this.cdr.markForCheck();
+          return;
+        }
         this.transactions = result.transactions;
         this.confirmedAccounts = result.accounts.filter(account => account.confirmed)
           .sort((a, b) => a.display_name.localeCompare(b.display_name));
@@ -323,12 +351,18 @@ export class SpendingReviewComponent implements OnInit, OnDestroy {
         this.loading = false;
         this.cdr.markForCheck();
       },
-      error: () => {
-        this.loading = false;
-        this.loadError = 'Spending review could not load the encrypted finance records. Try refreshing the page.';
-        this.cdr.markForCheck();
-      },
     });
+    (this.financeService.dataChanges$ || EMPTY).pipe(
+      filter(change => change.collections.some((collection: string) =>
+        ['transactions', 'bank_accounts', 'import_batches'].includes(collection))),
+      debounceTime(60),
+      takeUntil(this.destroy$),
+    ).subscribe(() => this.loadReview());
+    this.loadReview();
+  }
+
+  loadReview(): void {
+    this.reviewRefresh$.next();
   }
 
   ngOnDestroy(): void {
@@ -374,7 +408,9 @@ export class SpendingReviewComponent implements OnInit, OnDestroy {
     const periods = this.periods;
     if (!row || !periods) return [];
     return this.transactions
-      .filter(transaction => (!this.accountKey || transaction.bank_account_key === this.accountKey)
+      .filter(transaction => (this.accountKey === UNASSIGNED_ACCOUNT_FILTER
+        ? !transaction.bank_account_key
+        : !this.accountKey || transaction.bank_account_key === this.accountKey)
         && spendingComparisonGroupKey(transaction, this.dimension) === row.key
         && transactionEffects(transaction).spending !== 0
         && (transaction.date >= periods.current.start && transaction.date <= periods.current.end
@@ -389,42 +425,91 @@ export class SpendingReviewComponent implements OnInit, OnDestroy {
   onMonthChange(month: string): void {
     this.month = month;
     this.clearSelection();
+    this.syncReviewQuery();
   }
 
   onAccountChange(): void {
     this.clearSelection();
+    this.syncReviewQuery();
   }
 
   setDimension(dimension: SpendingReviewDimension): void {
     if (this.dimension === dimension) return;
     this.dimension = dimension;
     this.clearSelection();
+    this.syncReviewQuery();
   }
 
   openDrilldown(row: SpendingComparisonRow): void {
     this.selectedGroupKey = row.key;
+    this.syncReviewQuery();
     this.cdr.markForCheck();
   }
 
   clearSelection(): void {
     this.selectedGroupKey = '';
+    this.syncReviewQuery();
     this.cdr.markForCheck();
   }
 
   openActivity(transaction: Transaction): void {
-    const query = String(transaction.description || transaction.merchant || transaction.category || '').trim();
+    const periods = this.periods;
+    const row = this.selectedRow;
+    if (!periods || !row) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
         t: 'activity',
         v: 'spending',
-        q: query || null,
-        month: transaction.date.slice(0, 7),
-        category: null,
+        account: this.accountKey || transaction.bank_account_key || UNASSIGNED_ACCOUNT_FILTER,
+        category: this.dimension === 'category' ? row.label : null,
+        merchant: this.dimension === 'merchant' ? row.label : null,
+        q: null,
+        review: null,
+        receipt: null,
+        month: null,
+        from: null,
+        through: null,
+        periodStart: periods.current.start,
+        periodEnd: periods.current.end,
+        priorStart: periods.previous.start,
+        priorEnd: periods.previous.end,
+        edit: transaction.id,
         date: null,
         add: null,
+        group: null,
+        dimension: null,
       },
       queryParamsHandling: 'merge',
+    });
+  }
+
+  private syncReviewQuery(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        t: 'review',
+        q: null,
+        category: null,
+        merchant: null,
+        review: null,
+        from: null,
+        through: null,
+        receipt: null,
+        date: null,
+        edit: null,
+        add: null,
+        periodStart: null,
+        periodEnd: null,
+        priorStart: null,
+        priorEnd: null,
+        month: this.month || null,
+        account: this.accountKey || null,
+        dimension: this.dimension,
+        group: this.selectedGroupKey || null,
+      },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
     });
   }
 

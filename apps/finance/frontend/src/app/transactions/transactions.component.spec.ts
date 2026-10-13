@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { from, of, Subject, throwError } from 'rxjs';
+import { BehaviorSubject, from, of, Subject, throwError } from 'rxjs';
 import { TransactionsComponent } from './transactions.component';
 import { FinanceService } from '../services/finance.service';
 import { ToastService } from '../services/toast.service';
@@ -12,12 +12,15 @@ describe('Transactions multi-file import UI', () => {
   let fixture: ComponentFixture<TransactionsComponent>;
   let component: TransactionsComponent;
   let finance: jasmine.SpyObj<FinanceService>;
+  let routeQuery: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
+  let dataChanges$: Subject<any>;
   let previewPromise: Promise<BankImportFilePreview[]> | undefined;
   const chaseFile = () => new File(['Transaction Date,Post Date,Description,Category,Type,Amount,Memo\n01/02/2026,01/03/2026,Coffee,Food,Sale,-10.00,'], 'chase.csv');
   const amexFile = () => new File(['Date,Description,Account #,Amount,Category\n01/02/2026,Lunch,-1001,20.00,Food'], 'amex.csv');
 
   beforeEach(async () => {
-    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getImportReceipts', 'getBankAccounts', 'getImportBanks', 'previewBankImports', 'commitBankImports', 'addTransaction'], { isLoading$: of(false), transactions$: of([]) });
+    dataChanges$ = new Subject<any>();
+    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getImportReceipts', 'getBankAccounts', 'getImportBanks', 'previewBankImports', 'commitBankImports', 'addTransaction'], { isLoading$: of(false), transactions$: of([]), dataChanges$ });
     finance.getTransactions.and.returnValue(of([]));
     finance.getAllTransactions.and.returnValue(of([]));
     finance.getImportReceipts.and.returnValue(of([]));
@@ -29,24 +32,64 @@ describe('Transactions multi-file import UI', () => {
       return from(previewPromise);
     });
     finance.commitBankImports.and.returnValue(of({ inserted: 2, skipped: 0, batch_id: 0 }));
+    routeQuery = new BehaviorSubject(convertToParamMap({}));
     await TestBed.configureTestingModule({
       imports: [TransactionsComponent],
       providers: [
         { provide: FinanceService, useValue: finance },
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
         { provide: ConfirmService, useValue: {} },
-        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) }, queryParamMap: routeQuery.asObservable() } },
         { provide: Router, useValue: { navigate: () => Promise.resolve(true) } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(TransactionsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-    component.openImportModal();
+    (component as any).startImportWizard();
     fixture.detectChanges();
   });
 
   const button = (name: string): HTMLButtonElement => Array.from(fixture.nativeElement.querySelectorAll('button')).find((node: any) => node.textContent.trim() === name) as HTMLButtonElement;
+
+  it('refreshes account and receipt context in the open import wizard without replacing its draft', async () => {
+    let accounts: any[] = [{ id: 1, account_key: 'account-a', display_name: 'Old card label', confirmed: true, bank_slug: 'chase' }];
+    let receipts: any[] = [];
+    finance.getBankAccounts.and.callFake(() => of(accounts));
+    finance.getImportReceipts.and.callFake(() => of(receipts));
+    const draft = { id: 'draft-1', filename: 'statement.csv', bank_slug: 'chase', bank_account_id: 1, account_display: 'Old card label' } as any;
+    component.importFiles = [draft];
+    component.importStep = 'preview';
+    component.importError = 'Keep this draft message';
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    accounts = [{ ...accounts[0], display_name: 'Renamed card' }];
+    receipts = [{ id: 9, status: 'withdrawn', filenames: ['statement.csv'], unresolved: [], account_displays: ['Renamed card'] }];
+    dataChanges$.next({ collections: ['bank_accounts', 'import_batches'], source: 'remote' });
+    await new Promise(resolve => setTimeout(resolve, 150));
+    fixture.detectChanges();
+
+    expect(component.showImportModal).toBeTrue();
+    expect(component.bankAccounts[0].display_name).toBe('Renamed card');
+    expect(component.importReceipts.map(receipt => receipt.id)).toEqual([9]);
+    expect(component.importFiles[0]).toBe(draft);
+    expect(component.importStep).toBe('preview');
+    expect(component.importError).toBe('Keep this draft message');
+  });
+
+  it('shows the exact account from a deep link after account options load asynchronously', async () => {
+    const accounts = [{ id: 1, account_key: 'card-a', display_name: 'Primary card', confirmed: true, bank_slug: 'chase' }];
+    finance.getBankAccounts.and.returnValue(of(accounts as any));
+    routeQuery.next(convertToParamMap({ account: 'card-a' }));
+    dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
+    await new Promise(resolve => setTimeout(resolve, 160));
+    fixture.detectChanges();
+
+    const accountSelect: HTMLSelectElement = fixture.nativeElement.querySelector('#tx-account-filter');
+    expect(component.accountFilter).toBe('card-a');
+    expect(accountSelect.value).toBe('card-a');
+    expect(accountSelect.selectedOptions[0].textContent?.trim()).toBe('Primary card');
+  });
 
   function chooseFiles(files: File[]) {
     const transfer = new DataTransfer();
@@ -229,5 +272,64 @@ describe('Transactions multi-file import UI', () => {
     expect(component.importStep).toBe('upload');
     expect(component.importParsing).toBeFalse();
     expect(component.importFiles).toEqual([]);
+  });
+
+  it('filters exact Activity context and calculates totals over the full matching ledger beyond pagination', () => {
+    component.closeImportModal();
+    const matching = Array.from({ length: 101 }, (_, index) => ({
+      id: index + 1, date: '2026-05-12', type: 'expense', category: index % 2 ? 'Food' : ' FOOD ',
+      amount: 10, description: 'Cafe charge', merchant: index % 2 ? 'Coffee Shop' : ' coffee shop ',
+      bank_account_key: 'acct-a', account_display: 'Card A', kind: 'purchase', reviewed: false,
+    }));
+    const other = Array.from({ length: 50 }, (_, index) => ({
+      id: 200 + index, date: '2026-04-12', type: 'expense', category: 'Travel', amount: 900,
+      merchant: 'Rail', bank_account_key: 'acct-b', kind: 'purchase', reviewed: false,
+    }));
+    finance.getAllTransactions.and.returnValue(of([...matching, ...other] as any));
+    component.retryActivityLoad();
+    routeQuery.next(convertToParamMap({
+      t: 'activity', month: '2026-05', account: 'acct-a', category: ' FOOD ', merchant: ' Coffee Shop ', review: 'needs',
+    }));
+    fixture.detectChanges();
+
+    expect(component.matchingTransactions.length).toBe(101);
+    expect(component.sortedMatchingTransactions.length).toBe(101);
+    expect(component.sortedMatchingTransactions.length).toBeGreaterThan(component.pageSize);
+    expect(component.filteredTransactions.length).toBe(100);
+    expect(component.hasMore).toBeTrue();
+    expect(component.monthExpenseTotal).toBe(1010);
+
+    routeQuery.next(convertToParamMap({ t: 'activity', month: '2026-04', account: 'acct-b', category: 'travel', merchant: 'rail', review: 'needs' }));
+    fixture.detectChanges();
+    expect(component.matchingTransactions.length).toBe(50);
+    expect(component.monthExpenseTotal).toBe(45000);
+  });
+
+  it('supports blank merchant and unassigned account exact filters', () => {
+    component.closeImportModal();
+    const unassigned = {
+      id: 701, date: '2026-03-10', type: 'expense', category: 'Food', amount: 7,
+      merchant: '  ', bank_account_key: null, kind: 'purchase', reviewed: false,
+    };
+    finance.getAllTransactions.and.returnValue(of([unassigned] as any));
+    component.retryActivityLoad();
+    routeQuery.next(convertToParamMap({
+      t: 'activity', month: '2026-03', account: '__unassigned_account__', category: 'food', merchant: 'unassigned merchant', review: 'needs',
+    }));
+    expect(component.matchingTransactions.map(row => row.id)).toEqual([701]);
+  });
+
+  it('keeps all historical category totals visible for a full-history chart drilldown', () => {
+    component.closeImportModal();
+    const rows = [
+      { id: 801, date: '2024-05-10', type: 'expense', category: 'Food', amount: 11, kind: 'purchase', reviewed: true },
+      { id: 802, date: '2025-05-10', type: 'expense', category: ' FOOD ', amount: 19, kind: 'purchase', reviewed: true },
+    ];
+    finance.getAllTransactions.and.returnValue(of(rows as any));
+    component.retryActivityLoad();
+    routeQuery.next(convertToParamMap({ t: 'activity', month: 'all', category: 'food' }));
+    expect(component.summaryMonth).toBe('');
+    expect(component.matchingTransactions.map(row => row.id)).toEqual([801, 802]);
+    expect(component.monthExpenseTotal).toBe(30);
   });
 });

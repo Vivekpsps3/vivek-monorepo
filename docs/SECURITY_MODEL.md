@@ -58,18 +58,25 @@ the operator controls the code delivered to browsers.
 
 ## Holdings price privacy
 
-Automated server-side quote lookup conflicts with encrypted holdings if symbols
-are private. Manual/imported prices do not disclose symbols. An explicit
-Portfolio refresh, employer stock price refresh, one-off quote lookup, or Stock Lab research request discloses
-only the requested ticker symbols to the public market endpoint and yfinance.
-Shares, values, employee purchase contributions, cost bases, employer titles,
-account details, and saved scenario inputs remain encrypted; the backend market
-cache stores only public symbol-level data.
+Manual and imported prices do not disclose symbols. After an authenticated user
+unlocks the vault, the browser starts a bounded, nonblocking refresh for the
+deduplicated symbols in current holdings and configured employer jobs, including
+inactive or former jobs with stock history. An explicit retry, one-off quote
+lookup, or Stock Lab research request also sends ticker symbols to the public
+market endpoint and yfinance. The shell discloses this before or while refresh
+is active and reports partial failures; a failed quote leaves the last saved
+price in place.
+
+The browser saves successful quotes inside encrypted holdings and dated employer
+valuations, using the provider's trading date. Shares, values, employee purchase
+contributions, cost bases, employer titles, account details, and saved scenario
+inputs remain encrypted; the backend market cache stores only public
+symbol-level data.
 
 Longer-term choices if stricter holdings privacy is required:
 
 1. Encrypt symbols and use manual/current imported prices.
-2. Disclose symbols to the backend for quote lookup with explicit UI disclosure.
+2. Disclose symbols to the backend for quote lookup with a clear UI disclosure.
 3. Fetch quotes directly from the browser, accepting third-party/API-key tradeoffs.
 4. Serve broad public quote datasets so the browser can look up symbols locally.
 
@@ -85,7 +92,7 @@ Client-side financial signals, detectors, and local snapshots must obey:
 | Network | Detectors and signal modules send **no** requests. No amounts, merchants, shares, account masks, or private evidence leave the browser. |
 | Mutation | Signals never write assets, liabilities, holdings, transactions, or recurring cashflow. Actions are reversible user navigation only. |
 | Evidence | Evidence strings stay in-memory or encrypted vault collections if persisted later; never server plaintext logs. |
-| Ticker exception | Only explicit Portfolio refresh / Stock Lab research may disclose symbols, under the holdings privacy section above. |
+| Ticker exception | Session price refresh, explicit retry or one-off lookup, and Stock Lab research may disclose symbols, under the holdings privacy section above. |
 | Versioning | Each detector has a stable `detectorId` + version; fixtures prove deterministic outputs. |
 
 Feature contracts for new analytics must list transmitted fields (default: **none**)

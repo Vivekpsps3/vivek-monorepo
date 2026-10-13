@@ -40,9 +40,11 @@ import {
 })
 export class SubscriptionsComponent implements OnInit, OnDestroy {
   @Input() embedded = false;
+  @Input() editorOnly = false;
   subscriptions: Subscription[] = [];
   showModal = false;
   saving = false;
+  saveError = '';
   editingId: number | null = null;
   form: SubscriptionCreate = this.emptyForm();
 
@@ -68,7 +70,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       this.subscriptions = rows;
       this.cdr.markForCheck();
     });
-    this.finance.getSubscriptions().pipe(takeUntil(this.destroy$)).subscribe();
+    if (!this.editorOnly) this.finance.getSubscriptions().pipe(takeUntil(this.destroy$)).subscribe();
   }
 
   ngOnDestroy(): void {
@@ -87,7 +89,9 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   openAddModal(): void {
     this.editingId = null;
     this.form = this.emptyForm();
+    this.saveError = '';
     this.showModal = true;
+    this.cdr.markForCheck();
   }
 
   openEditModal(row: Subscription): void {
@@ -103,13 +107,17 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       is_active: row.is_active,
       notes: row.notes || '',
     };
+    this.saveError = '';
     this.showModal = true;
+    this.cdr.markForCheck();
   }
 
   closeModal(): void {
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
+    this.saveError = '';
+    this.cdr.markForCheck();
   }
 
   saveSubscription(): void {
@@ -126,6 +134,8 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       notes: this.form.notes?.trim() || '',
     };
     this.saving = true;
+    this.saveError = '';
+    const wasEditing = this.editingId !== null;
     const req =
       this.editingId !== null
         ? this.finance.updateSubscription(this.editingId, payload)
@@ -134,11 +144,12 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       next: () => {
         this.saving = false;
         this.closeModal();
-        this.toast.success(this.editingId ? 'Subscription updated' : 'Subscription added');
+        this.toast.success(wasEditing ? 'Subscription updated' : 'Subscription added');
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
+        this.saveError = 'This subscription could not be saved. Your details are still here; check your vault and try again.';
         this.cdr.markForCheck();
       },
     });
@@ -149,6 +160,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     if (!ok) return;
     this.finance.deleteSubscription(row.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toast.success('Subscription deleted'),
+      error: () => this.toast.error('This subscription could not be deleted. Try again.'),
     });
   }
 

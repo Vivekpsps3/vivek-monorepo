@@ -35,6 +35,20 @@
   margin-bottom: var(--space-4);
 }
 
+.holdings-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius-lg);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--card-bg));
+}
+
 .resume-stage p {
   margin-top: 0;
   color: var(--text-secondary);

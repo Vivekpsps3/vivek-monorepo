@@ -65,12 +65,14 @@
         <ol class="top-list">
           @for (row of monthSummary.topPurchases; track row.id) {
             <li>
-              <div class="top-row">
-                <span class="top-desc">{{ row.description }}</span>
-                <span class="top-amt">${{ row.amount | number: '1.2-2' }}</span>
-              </div>
-              <div class="top-meta">{{ row.date }} · {{ row.category }}</div>
-              <div class="top-bar" [style.width.%]="(row.amount / topPurchaseMax) * 100"></div>
+              <a class="top-purchase-link" [routerLink]="['/spending']" [queryParams]="transactionActivityQuery(row.id)">
+                <span class="top-row">
+                  <span class="top-desc">{{ row.description }}</span>
+                  <span class="top-amt">${{ row.amount | number: '1.2-2' }}</span>
+                </span>
+                <span class="top-meta">{{ row.date }} · {{ row.category }} · Open transaction</span>
+                <span class="top-bar" [style.width.%]="(row.amount / topPurchaseMax) * 100"></span>
+              </a>
             </li>
           }
         </ol>
@@ -128,14 +130,15 @@
       }
       @if (selectedTransactions.length > 0) {
         @for (tx of selectedTransactions; track tx.id) {
-          <div class="tx-item">
+          <a class="tx-item tx-item-link" [routerLink]="['/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.category || 'transaction') + ' from ' + tx.date">
             <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ tx.kind || tx.type }}</ui-badge>
             <span class="category">{{ tx.category }}</span>
             <span class="amount" [class.positive]="transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0">
               {{ transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0 ? '+' : transactionEffects(tx).spending > 0 ? '−' : '' }}${{ tx.amount | number: '1.2-2' }}
             </span>
             <span class="desc">{{ tx.description }}</span>
-          </div>
+            <span class="calendar-edit-hint">Edit</span>
+          </a>
         }
       } @else {
         <ui-empty-state message="No transactions on this day." />

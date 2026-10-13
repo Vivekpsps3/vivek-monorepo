@@ -1,1 +1,67 @@
 /* App shell: global overlays only; layout chrome lives in MainLayoutComponent */
+.release-notice {
+  position: fixed;
+  z-index: 2600;
+  top: max(var(--space-4), env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: min(52rem, calc(100vw - 2rem));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  color: var(--text);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.release-notice__copy {
+  min-width: 0;
+}
+
+.release-notice__copy > strong {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.release-notice__copy p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.release-notice__copy code {
+  color: var(--text);
+  font-size: var(--text-xs);
+}
+
+.release-notice__build {
+  margin-top: var(--space-1) !important;
+}
+
+.release-notice__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .release-notice {
+    top: max(var(--space-2), env(safe-area-inset-top));
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .release-notice__actions {
+    justify-content: flex-end;
+  }
+}

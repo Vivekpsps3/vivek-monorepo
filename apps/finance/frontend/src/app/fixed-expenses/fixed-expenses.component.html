@@ -1,3 +1,4 @@
+@if (!editorOnly) {
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
@@ -76,9 +77,11 @@
     }
   </ui-card>
 </div>
+}
 
 <ui-dialog [open]="showModal" labelledBy="fixed-expense-modal-title" (closed)="closeModal()">
       <h3 id="fixed-expense-modal-title">{{ editingId ? 'Edit bill' : 'Add bill' }}</h3>
+      @if (saveError) { <p role="alert" class="form-error">{{ saveError }}</p> }
       <form (ngSubmit)="saveExpense()" #expenseForm="ngForm">
         <div class="form-row">
           <label class="form-group">

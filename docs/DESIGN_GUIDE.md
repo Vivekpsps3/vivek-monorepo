@@ -16,30 +16,30 @@ clear graphs.
 
 ## Dashboard Standard
 
-Home starts with three clickable blocks, followed by its review queue, holdings, and charts:
+Home starts with three clickable blocks, followed by a first-steps checklist for an empty vault, its review queue, and charts:
 
 - current net worth with a holdings / assets / debts split
 - recorded pay and spend for this month
 - scheduled recurring pay and spend
-- cross-plane review queue for balances, positions, statement coverage, unresolved imports, and annual renewals
-- top holdings
+- cross-plane review queue for balances, positions, unreviewed activity, ambiguous credits, parse-failed imports, statement coverage, and annual renewals
+- portfolio summary with source dates and a portfolio allocation chart; detailed holdings remain on What you have
 - embedded cashflow, category, and allocation charts
 
 ## Subpage Standard
 
 Each major subpage should have page-level metrics at the top:
 
-- Activity: recorded income, spend, net cashflow, transaction count, and review state.
-- Spending Review: selected/prior month spending by category or merchant, comparable elapsed days for the current month, confirmed coverage gaps, and transaction drilldown.
-- Imports: per-file outcome, confirmed account mapping, row state, coverage, and recovery actions.
-- Income: annual/monthly gross and net, active jobs.
+- Activity: recorded income, spend, net cashflow, full matching transaction count, exact account/merchant/category/review/date filters, and visible review state. Persist filters in the URL and calculate totals/exports over the full match set rather than the visible page.
+- Spending Review: selected/prior month spending by category or merchant, comparable elapsed days for the current month, confirmed coverage gaps, and transaction drilldown. Its Activity handoff preserves current/prior full date ranges, account, exact group, and selected transaction editor.
+- Imports: per-file outcome, confirmed account mapping, row state, coverage, and recovery actions. Make corrected CSV reattachment distinct from reviewing imported ambiguous credits.
+- Jobs & pay: annual/monthly gross and net, active jobs.
 - Bills: monthly/annual total, active count, largest items.
 - Subscriptions: monthly/annual total, next bills, active count.
 - Balance sheet: total assets, liabilities, net worth, stale balances.
 - Portfolio: market value, account allocation, largest holdings, price freshness.
 - Investment insights: portfolio value, growth assumptions, projected value, withdrawal-rate income (client-side; speculative).
-- Calendar: monthly posted spending, income, net cashflow, active days, plus separately marked upcoming recurring due dates.
-- Planning: scenario success rate, median ending value, risk bands, assumptions.
+- Calendar: monthly posted spending, income, net cashflow, active days, plus separately marked upcoming recurring due dates. Highest-purchase and selected-day rows preserve month/date and open the chosen Activity editor; keep the calendar Add action's selected date.
+- Planning: current balance-sheet/cashflow facts with source links, then a clear question selector, scenario success rate, median ending value, risk bands, and assumptions.
 - Stock Lab: primary ticker price, price return, total return, dividend income, purchase scenario value, scorecard warnings, and comparison tickers.
 
 Tables are acceptable for detail, but a page is incomplete if it only exposes a
@@ -50,6 +50,8 @@ table when a summary or graph would answer the natural question faster.
 Keep recorded activity as the default for spending totals. `purchase` contributes to spend, `refund` reduces spend, `payment` and `transfer` affect neither spend nor income, and `ambiguous_credit` stays visible for review while excluded from totals. Preserve the original source description when showing a normalized merchant. Make `reviewed` and edited-import state visible in bulk review tools.
 
 Home's review queue links to due balance/position reviews, statement-coverage gaps, unresolved imports, and upcoming annual renewals. Import receipts show the confirmed account mapping, import state, selected/completed/unresolved row counts, and observed date coverage. Coverage gaps should be visible beside comparisons and estimates. A date span is evidence about rows in the file, not proof that the bank statement is complete. Receipt undo removes only unchanged rows created by that receipt; surface edited rows that remain and show that coverage was withdrawn. Never show or persist the raw CSV as a receipt.
+
+Activity filters are exact account and normalized category/merchant groups; support unassigned accounts and blank merchants. Query changes must update on browser history navigation. Give CSV export and totals the full filtered dataset even when the visible list is paginated. On Review handoffs, avoid carrying a previous broad search or receipt filter into the selected transaction.
 
 Label the selected period and data coverage so a short import is not mistaken for a complete month. If a partial-month equivalent is displayed, calculate it only from comparable covered days. Ledger analysis must not change the current balance sheet.
 
@@ -64,7 +66,7 @@ Label the selected period and data coverage so a short import is not mistaken fo
 
 Display recurring due dates as future scheduled events, distinct from posted ledger activity. Use `due_day` for fixed-expense scheduling and `next_bill_date` for subscription schedules. Cashflow and calendar views label scheduled amounts as estimates; posted totals remain based on posted transactions by default.
 
-Planning separates fixed, variable, and irregular annual spending, identifies the source and period for each estimate, and lets users exclude recurring charges already represented in schedules. Offer a three-completed-month suggestion only when selected accounts and categories have complete confirmed coverage; require explicit acceptance and refuse the estimate when coverage is incomplete. Preserve the user's manually entered and saved profile values. Scope annual cashflow events to baseline, scenario, or both for items such as purchases or time off. Portfolio projections compare the existing monthly contribution with a user-entered dollar increase. Advanced percentage inputs display percentages while storing decimal rates.
+Planning separates fixed, variable, and irregular annual spending, identifies the source and period for each estimate, and lets users exclude recurring charges already represented in schedules. Show the live net-worth, holdings, income, and scheduled-cost owners near the question selector; use genuine balance, position, and quote dates, and label missing or future dates unknown. Warn when fixed schedules omit variable card costs. Offer a three-completed-month suggestion only when selected accounts and categories have complete confirmed coverage; require explicit acceptance and refuse the estimate when coverage is incomplete. Preserve manual saved values while live-source fields follow refreshed facts. Goals start with $0 saved and debt starts with $0 manual balance; only an explicitly selected single liability may fill the debt calculator. Scope annual cashflow events to baseline, scenario, or both, and offer zero-amount starting templates for purchases and time off so users provide their own values. Keep advanced assumptions expandable. A new total annual cashflow replaces calculated income less spending and any legacy add-on; absent that override, preserve the older additive contribution behavior. Data edits mark existing results stale instead of rerunning them. The retirement timeline labels its straight-line approximation and excludes investment growth. Portfolio projections compare the existing monthly contribution with a user-entered dollar increase. Advanced percentage inputs display percentages while storing decimal rates.
 
 ## Chart Rules
 
@@ -74,6 +76,7 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 - Every chart needs a nearby numeric summary so the user does not have to hover.
 - Cashflow charts keep Recorded activity and Scheduled cashflow as separate views; do not combine them into one total.
 - Category charts use transaction-kind effects over the full ledger, independent of transaction-list paging.
+- Recorded monthly/category chart values have accessible drilldown links and matching chart-click behavior. Scheduled values go to Recurring. A collapsed synthetic `Other` tail expands categories instead of pretending to be a real category named `Other`.
 - Keep net worth charts sourced from the current balance-sheet formula, never
   from transaction sums.
 - Investment-insights projections are speculative client-side charts, not

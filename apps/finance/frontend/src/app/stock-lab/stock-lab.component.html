@@ -1,7 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="stock-lab-page">
   <ui-page-header
     [embedded]="embedded"
-    title="Stocks"
+    title="Stock research"
     subtitle="Study a stock or fund. This does not add holdings."
   />
 
@@ -99,9 +99,9 @@
           <label class="stock-field"><span>Budget</span><input type="number" [(ngModel)]="scenario.budget" /></label>
           <label class="stock-field"><span>Target price</span><input type="number" [(ngModel)]="scenario.target_price" /></label>
           <label class="stock-field"><span>Years</span><input type="number" [(ngModel)]="scenario.projection_years" /></label>
-          <label class="stock-field"><span>Base growth</span><input type="number" step="0.005" [(ngModel)]="scenario.base_growth_rate" /></label>
-          <label class="stock-field"><span>Dividend growth</span><input type="number" step="0.005" [(ngModel)]="scenario.dividend_growth_rate" /></label>
-          <label class="stock-field"><span>Inflation</span><input type="number" step="0.005" [(ngModel)]="scenario.inflation_rate" /></label>
+          <label class="stock-field"><span>Base growth (%)</span><input type="number" step="0.5" [ngModel]="asPercent(scenario.base_growth_rate)" (ngModelChange)="setRatePercent('base_growth_rate', $event)" /></label>
+          <label class="stock-field"><span>Dividend growth (%)</span><input type="number" step="0.5" [ngModel]="asPercent(scenario.dividend_growth_rate)" (ngModelChange)="setRatePercent('dividend_growth_rate', $event)" /></label>
+          <label class="stock-field"><span>Inflation (%)</span><input type="number" step="0.5" [ngModel]="asPercent(scenario.inflation_rate)" (ngModelChange)="setRatePercent('inflation_rate', $event)" /></label>
         </div>
         @if (purchasePlan; as plan) { <div class="metric-grid"><div><span>Shares</span><strong>{{ plan.shares | number:'1.2-4' }}</strong></div><div><span>Cash required</span><strong>{{ formatMoney(plan.cash_required) }}</strong></div><div><span>Projected value</span><strong>{{ formatMoney(plan.projected_nominal_value) }}</strong></div><div><span>Today's dollars</span><strong>{{ formatMoney(plan.projected_real_value) }}</strong></div><div><span>Annual dividend</span><strong>{{ formatMoney(plan.annual_dividend_income) }}</strong></div></div> }
       </ui-card>

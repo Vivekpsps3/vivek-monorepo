@@ -26,6 +26,8 @@ export interface Transaction {
 
 export interface ImportPreviewRow {
   dedupe_key: string;
+  /** Original CSV name, used to replace only the corrected file in a multi-file receipt. */
+  source_filename?: string;
   date: string;
   account_mask: string;
   account_display: string;

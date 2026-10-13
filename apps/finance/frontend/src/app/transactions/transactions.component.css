@@ -61,6 +61,50 @@
   max-width: 16rem;
 }
 
+.activity-date-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 0 var(--space-1) var(--space-2);
+}
+
+.activity-date-filters label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.activity-date-filters input {
+  min-height: 2.5rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--text);
+  font: inherit;
+}
+
+.review-context-caption {
+  margin: var(--space-2) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.activity-load-error {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius-md);
+  color: var(--danger);
+}
+
 .month-summary-row,
 .month-totals {
   display: flex;
@@ -455,6 +499,10 @@
   .month-picker input {
     width: 100%;
   }
+
+  .activity-date-filters { align-items: stretch; }
+  .activity-date-filters label { flex: 1 1 8rem; }
+  .activity-date-filters input { width: 100%; }
 
   .import-guide-card {
     flex-direction: column;

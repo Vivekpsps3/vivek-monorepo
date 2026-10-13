@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { firstValueFrom, Subject } from 'rxjs';
 import { FinanceService } from './finance.service';
 import { VaultService } from '../crypto/vault.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
@@ -8,6 +9,7 @@ describe('FinanceService', () => {
   let service: FinanceService;
   let http: HttpTestingController;
   let encStore: jasmine.SpyObj<EncryptedStoreService>;
+  let storeChanges: Subject<any>;
 
   beforeEach(() => {
     encStore = jasmine.createSpyObj<EncryptedStoreService>('EncryptedStoreService', [
@@ -15,6 +17,13 @@ describe('FinanceService', () => {
       'addTransaction',
       'getHoldings',
       'getNetWorth',
+      'getAssets',
+      'getLiabilities',
+      'getJobIncomes',
+      'getFixedExpenses',
+      'getSubscriptions',
+      'getCashflowSummary',
+      'reloadCollections',
       'updateHoldingPrice',
       'bulkRenameTransactionCategories',
       'getBrokerageAccounts',
@@ -26,6 +35,8 @@ describe('FinanceService', () => {
       'activateHoldingImportStage',
       'updateHolding',
     ]);
+    storeChanges = new Subject<any>();
+    (encStore as any).changes$ = storeChanges.asObservable();
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
       providers: [
@@ -51,6 +62,80 @@ describe('FinanceService', () => {
 
     expect((service as any)._transactions.value.length).toBe(5001);
     expect((service as any)._dashboardTransactions.value.length).toBe(5001);
+  });
+
+  it('retries an in-flight Home snapshot after a holding quote invalidates the dashboard cache', async () => {
+    encStore.getTransactions.and.resolveTo([] as any);
+    encStore.getAssets.and.resolveTo([] as any);
+    encStore.getLiabilities.and.resolveTo([] as any);
+    encStore.getJobIncomes.and.resolveTo([] as any);
+    encStore.getFixedExpenses.and.resolveTo([] as any);
+    encStore.getSubscriptions.and.resolveTo([] as any);
+    encStore.getNetWorth.and.resolveTo({ total: 0 } as any);
+    encStore.getCashflowSummary.and.resolveTo({} as any);
+    const beforeQuote = [{ id: 1, symbol: 'VOO', shares: 2, purchase_price: 100, purchase_date: null, current_price: 100 }];
+    const afterQuote = [{ ...beforeQuote[0], current_price: 125 }];
+    let releaseInitial!: (rows: any[]) => void;
+    const initialHoldings = new Promise<any[]>(resolve => { releaseInitial = resolve; });
+    let calls = 0;
+    encStore.getHoldings.and.callFake(() => calls++ === 0 ? initialHoldings as any : Promise.resolve(afterQuote) as any);
+
+    const dashboard = firstValueFrom(service.loadDashboard());
+    storeChanges.next({ collection: 'holdings', source: 'local' });
+    releaseInitial(beforeQuote);
+    const result = await dashboard;
+
+    expect(calls).toBe(2);
+    expect(result[1]).toEqual(afterQuote);
+  });
+
+  it('publishes overlapping remote invalidations for different collections independently', async () => {
+    const asset = { id: 3, name: 'Remote cash', current_value: 100 };
+    const liability = { id: 4, name: 'Remote loan', current_balance: 200 };
+    let releaseAssets!: (rows: any[]) => void;
+    const assetRead = new Promise<any[]>(resolve => { releaseAssets = resolve; });
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getAssets.and.returnValue(assetRead as any);
+    encStore.getLiabilities.and.resolveTo([liability] as any);
+    encStore.getNetWorth.and.resolveTo({ total: -100 } as any);
+    const events: any[] = [];
+    const subscription = service.dataChanges$.subscribe(change => events.push(change));
+
+    const assetsRefresh = service.refreshCollectionsFromAnotherTab(['assets']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const liabilitiesRefresh = service.refreshCollectionsFromAnotherTab(['liabilities']);
+    await liabilitiesRefresh;
+    releaseAssets([asset]);
+    await assetsRefresh;
+    subscription.unsubscribe();
+
+    expect((service as any)._assets.value).toEqual([asset]);
+    expect((service as any)._liabilities.value).toEqual([liability]);
+    expect(events).toContain(jasmine.objectContaining({ collections: ['assets'], source: 'remote' }));
+    expect(events).toContain(jasmine.objectContaining({ collections: ['liabilities'], source: 'remote' }));
+  });
+
+  it('continues refreshing valid collections when one member of a multi-collection snapshot goes stale', async () => {
+    const freshHolding = { id: 2, symbol: 'VOO', shares: 3, current_price: 120 };
+    const asset = { id: 3, name: 'Remote cash', current_value: 100 };
+    let releaseFirstHoldings!: (rows: any[]) => void;
+    const firstHoldingsRead = new Promise<any[]>(resolve => { releaseFirstHoldings = resolve; });
+    let holdingReads = 0;
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getHoldings.and.callFake(() => holdingReads++ === 0
+      ? firstHoldingsRead as any
+      : Promise.resolve([freshHolding]) as any);
+    encStore.getAssets.and.resolveTo([asset] as any);
+    encStore.getNetWorth.and.resolveTo({ total: 460 } as any);
+
+    const mixedRefresh = service.refreshCollectionsFromAnotherTab(['holdings', 'assets']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await service.refreshCollectionsFromAnotherTab(['holdings']);
+    releaseFirstHoldings([{ id: 1, symbol: 'VOO', shares: 2, current_price: 100 }]);
+    await mixedRefresh;
+
+    expect((service as any)._holdings.value).toEqual([freshHolding]);
+    expect((service as any)._assets.value).toEqual([asset]);
   });
 
   it('imports bank CSV through encrypted records', done => {

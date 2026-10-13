@@ -17,6 +17,7 @@ import { FinanceService } from '../services/finance.service';
 import { Transaction } from '../models/transaction.model';
 import { transactionEffects } from '../crypto/client-finance';
 import { todayIsoDate } from '../utils/date.util';
+import { spendingComparisonGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-review.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
   chartColorAt,
@@ -108,6 +109,21 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get topPurchaseMax(): number {
     return this.monthSummary.topPurchases[0]?.amount || 1;
+  }
+
+  transactionActivityQuery(transactionId: number): Record<string, string | number> {
+    const tx = this.transactions.find(row => row.id === transactionId);
+    if (!tx) return { t: 'activity', v: 'spending', month: this.monthKey };
+    return {
+      t: 'activity',
+      v: 'all',
+      month: this.monthKey,
+      date: tx.date,
+      account: tx.bank_account_key || UNASSIGNED_ACCOUNT_FILTER,
+      category: spendingComparisonGroupKey(tx, 'category'),
+      merchant: spendingComparisonGroupKey(tx, 'merchant'),
+      edit: tx.id,
+    };
   }
 
   generateCalendar() {

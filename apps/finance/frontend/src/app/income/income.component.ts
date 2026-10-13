@@ -12,7 +12,7 @@ import { firstValueFrom, from, Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '../services/confirm.service';
 import { ToastService } from '../services/toast.service';
-import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation, MarketPriceQuote } from '../models/transaction.model';
+import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation } from '../models/transaction.model';
 import {
   annualBasePayAt,
   isCurrentJob,
@@ -25,6 +25,7 @@ import {
   stockSnapshotAt,
 } from '../utils/job-compensation.util';
 import { todayIsoDate } from '../utils/date.util';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 
 interface StockPriceDraft {
   date: string;
@@ -114,7 +115,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
   ];
 
   private destroy$ = new Subject<void>();
-  private configuredStockSymbols = new Set<string>();
   private refreshingStockSymbols = new Set<string>();
   private jobUpdateQueues = new Map<number, Promise<unknown>>();
   private editBaseStockValuations: JobStockValuation[] = [];
@@ -123,6 +123,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
 
   constructor(
     private financeService: FinanceService,
+    private marketRefresh: MarketRefreshCoordinatorService,
     private confirmService: ConfirmService,
     private toastService: ToastService,
     private cdr: ChangeDetectorRef
@@ -132,7 +133,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.financeService.jobIncomes$.pipe(takeUntil(this.destroy$)).subscribe(rows => {
       this.incomes = rows;
       this.ensureStockPriceDrafts(rows);
-      this.refreshNewlyConfiguredStockSymbols(rows);
       this.cdr.markForCheck();
     });
     this.financeService.getJobIncomes().pipe(takeUntil(this.destroy$)).subscribe();
@@ -444,16 +444,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
     return { date: todayIsoDate(), price: latest ? String(latest.price_per_share) : '' };
   }
 
-  private refreshNewlyConfiguredStockSymbols(rows: JobIncome[]): void {
-    const symbols = new Set(rows
-      .map(row => this.normalizeStockSymbol(row.stock_symbol || ''))
-      .filter(symbol => symbol.length > 0));
-    for (const symbol of symbols) {
-      if (!this.configuredStockSymbols.has(symbol)) this.refreshStockTicker(symbol);
-    }
-    this.configuredStockSymbols = symbols;
-  }
-
   private async fetchAndSaveStockQuote(rawSymbol: string): Promise<void> {
     const symbol = this.normalizeStockSymbol(rawSymbol);
     if (this.destroyed || !symbol || this.refreshingStockSymbols.has(symbol)) return;
@@ -464,43 +454,29 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.stockQuoteStatuses[symbol] = { state: 'loading', message: '' };
     this.cdr.markForCheck();
     try {
-      // The public market endpoint receives only the user-configured ticker symbol.
-      const quote = await firstValueFrom<MarketPriceQuote, null>(
-        this.financeService.lookupSharePrice(symbol, true).pipe(takeUntil(this.destroy$)),
-        { defaultValue: null }
-      );
-      if (this.destroyed || !quote) return;
-      if (!this.isUsableQuote(quote, symbol)) {
-        this.markQuoteUnavailable(symbol, 'Market quote unavailable or invalid.');
-        return;
-      }
-      const date = this.quoteValuationDate(quote);
-      if (!isValidIsoDate(date) || date > todayIsoDate()) {
-        this.markQuoteUnavailable(symbol, 'Market quote has an invalid or future trading date.');
-        return;
-      }
-      const valuation: JobStockValuation = {
-        date,
-        price_per_share: quote.price,
-        source: quote.price_source || 'market quote',
-        price_as_of: quote.price_as_of || null,
-        observed_date: todayIsoDate(),
-        symbol,
-      };
-      let updatedJobs = 0;
-      for (const row of jobs) {
-        if (this.destroyed) return;
-        const saved = await this.enqueueJobIncomeUpdate(row.id, current => {
-          if (this.normalizeStockSymbol(current.stock_symbol || '') !== symbol) return null;
-          return { stock_valuations: replaceStockValuation(current.stock_valuations || [], valuation) };
-        }, row);
-        if (saved) updatedJobs += 1;
-      }
+      const result = await this.marketRefresh.refreshSymbol(symbol);
       if (this.destroyed) return;
-      if (!updatedJobs) return;
+      if (result.error) {
+        this.markQuoteUnavailable(symbol, result.error);
+        return;
+      }
+      if (result.failedRecords.length) {
+        const latest = this.incomes.find(row => this.normalizeStockSymbol(row.stock_symbol || '') === symbol);
+        const saved = latest ? this.latestStockPrice(latest) : undefined;
+        this.markQuoteUnavailable(symbol, saved
+          ? `Some quote records could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
+          : 'Some quote records could not be saved; existing valuation fallbacks remain.');
+        return;
+      }
+      const latest = this.incomes.find(row => this.normalizeStockSymbol(row.stock_symbol || '') === symbol);
+      const saved = latest ? this.latestStockPrice(latest) : undefined;
+      if (!result.employerValuationsUpdated || !saved) {
+        this.markQuoteUnavailable(symbol, 'No employer valuation was changed. Any existing dated price remains available.');
+        return;
+      }
       this.stockQuoteStatuses[symbol] = {
         state: 'updated',
-        message: `Market quote $${quote.price.toFixed(4)} per share saved for ${date} (${this.priceSourceLabel(valuation.source)}${quote.price_as_of ? `; fetched ${this.formatQuoteTimestamp(quote.price_as_of)}` : ''}). Historical snapshots use only prices dated on or before their selected date.`,
+        message: `Market quote saved at $${Number(saved.price_per_share).toFixed(4)} per share for ${saved.date} (${this.priceSourceLabel(saved.source)}). Historical snapshots use only prices dated on or before their selected date.`,
       };
     } catch {
       if (!this.destroyed) this.markQuoteUnavailable(symbol, 'Market quote refresh failed.');
@@ -508,19 +484,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
       this.refreshingStockSymbols.delete(symbol);
       if (!this.destroyed) this.cdr.markForCheck();
     }
-  }
-
-  private isUsableQuote(quote: MarketPriceQuote, requestedSymbol: string): boolean {
-    return Boolean(quote?.valid)
-      && this.normalizeStockSymbol(quote.symbol || '') === requestedSymbol
-      && Number.isFinite(quote.price)
-      && quote.price >= 0;
-  }
-
-  private quoteValuationDate(quote: MarketPriceQuote): string {
-    if (quote.quote_date != null) return isValidIsoDate(quote.quote_date) ? quote.quote_date : '';
-    const timestamp = quote.price_as_of ? Date.parse(quote.price_as_of) : NaN;
-    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString().slice(0, 10) : '';
   }
 
   private async enqueueJobIncomeUpdate(
@@ -591,11 +554,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
   private priceSourceLabel(source?: string | null): string {
     if (!source || source === 'manual') return 'manual price';
     return source.replaceAll('_', ' ');
-  }
-
-  private formatQuoteTimestamp(timestamp: string): string {
-    const parsed = new Date(timestamp);
-    return Number.isNaN(parsed.getTime()) ? timestamp : parsed.toLocaleString();
   }
 
   jobStatus(row: JobIncome): string {

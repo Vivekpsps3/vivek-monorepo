@@ -44,6 +44,50 @@ that loopback port.
 The API is private to the Compose network and is reached through the web
 container at `/api`.
 
+### Frontend release caching
+
+The production frontend build (`npm run build` and the Docker build) writes a
+deterministic SHA-256 release id to the built `index.html` and `version.json`.
+The id covers the built HTML and its linked JavaScript and CSS entry artifacts.
+Direct Angular development builds keep working without release metadata, so
+`ng serve` and `ng build --configuration development` do not report a production
+release.
+
+The frontend Nginx policy is:
+
+- `/`, SPA routes, `/index.html`, and `/version.json` use `no-store`; index
+  responses also disable ETag and `If-Modified-Since` shortcuts.
+- Angular production JavaScript and CSS names with an eight-character
+  URL-safe output hash are immutable for one year.
+- Unversioned static files revalidate. Missing scripts, stylesheets, source
+  maps, and `/assets/` files return a plain-text 404 with `no-store`, never the
+  Angular shell.
+- `/api/` responses are private and `no-store`; the frontend proxy removes
+  upstream cache headers before applying that policy.
+
+An open tab checks the current manifest at startup, after returning to a visible
+tab, when focused, and after navigation, with checks throttled to once per 30
+seconds. If a release changed or an Angular lazy chunk failed, the tab shows an
+accessible notice with the loaded and available release ids and a manual Reload
+action. It does not reload by itself, so the page and its in-progress edits stay
+open until the user chooses to reload.
+
+Run the isolated cache regressions from `apps/finance/frontend`:
+
+```bash
+npm run test:release-manifest
+npm run test:release-cache
+```
+
+The first command checks deterministic release ids, HTML-only release changes,
+idempotent metadata insertion, and development output cleanup. The second uses
+the real Nginx image from the Dockerfile and a Chromium context with browser
+caching enabled to verify two consecutive releases, cache headers, SPA routing,
+static 404s, and API cache policy. It requires a running Docker daemon and a
+Playwright Chromium browser. If Playwright's default browser build is not
+installed, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an installed Chromium binary
+or run `npx playwright install chromium` from the frontend directory.
+
 Default Docker persistence is repo-local:
 
 ```bash

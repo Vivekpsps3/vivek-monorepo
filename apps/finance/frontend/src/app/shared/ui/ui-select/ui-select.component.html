@@ -10,7 +10,7 @@
     [value]="value()"
     (change)="value.set($any($event.target).value)">
     @for (opt of options(); track opt.value) {
-      <option [value]="opt.value" [disabled]="opt.disabled ?? false">{{ opt.label }}</option>
+      <option [value]="opt.value" [selected]="opt.value === value()" [disabled]="opt.disabled ?? false">{{ opt.label }}</option>
     }
   </select>
 </div>

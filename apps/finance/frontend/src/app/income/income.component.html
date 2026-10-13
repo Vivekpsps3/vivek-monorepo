@@ -1,10 +1,10 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="compensationTracking ? 'Compensation history' : 'Pay'"
-    subtitle="Record employment dates, pay, stock awards, employee share purchases, and dated pay changes. This does not change net worth.">
+    [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'"
+    subtitle="Record who you work for, when, and how you are paid. Add dated pay or stock history when you need it. This does not change net worth.">
     <div uiPageActions class="header-actions">
-      <ui-button variant="primary" (clicked)="openAddModal()">Add income</ui-button>
+      <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
     </div>
   </ui-page-header>
 
@@ -28,18 +28,18 @@
       </div>
       <div class="summary-pill">
         <ui-icon name="wallet" size="sm" />
-        <span>{{ incomes.length }} income {{ incomes.length === 1 ? 'entry' : 'entries' }}</span>
+        <span>{{ incomes.length }} {{ incomes.length === 1 ? 'job' : 'jobs' }}</span>
       </div>
     </div>
   </section>
   }
 
-  <ui-card title="Jobs and compensation">
+  <ui-card title="Jobs and pay">
     <div class="income-guidance">
       <div>
-        <strong>What to enter first</strong>
+        <strong>Start with the basics</strong>
         <p>
-          Use the numbers from your offer letter or most recent paystub: starting gross pay, pay frequency, recurring annual bonus/equity, taxes withheld, and deductions such as health insurance, HSA, FSA, 401(k), or commuter benefits. Stock awards and employee-funded share purchases belong in the dated stock history below.
+          Enter your employer, starting salary, pay frequency, and start date. You can add tax estimates, bonuses, and stock history later.
         </p>
       </div>
       <div title="Pay figures feed Recurring and Planning. They do not change net worth.">
@@ -48,7 +48,7 @@
     </div>
 
     @if (incomes.length) {
-      <ui-data-table ariaLabel="Job income schema">
+      <ui-data-table ariaLabel="Jobs and pay">
         <thead>
           <tr>
             <th>Employer</th>
@@ -83,6 +83,9 @@
               </td>
               <td>
                 <span>{{ row.effective_date }} → {{ row.end_date || 'Present' }}</span>
+                @if ((row.promotions || []).length + (row.compensation_payments || []).length + (row.stock_grants || []).length + (row.stock_purchases || []).length || row.stock_symbol) {
+                  <details class="job-history">
+                    <summary>Show recorded pay and stock history</summary>
                 @for (promotion of row.promotions || []; track $index) {
                   <span class="muted block">{{ promotion.date }}: {{ promotion.role_title || 'Promotion' }} · ${{ promotion.annual_base_pay | number: '1.2-2' }} / year</span>
                 }
@@ -161,6 +164,8 @@
                     </small>
                   </section>
                 }
+                  </details>
+                }
               </td>
               <td>
                 <ui-badge [variant]="isCurrentJob(row) ? 'success' : 'default'">
@@ -176,16 +181,16 @@
         </tbody>
       </ui-data-table>
     } @else {
-      <ui-empty-state message="Add your job income schema for planning and reference.">
+      <ui-empty-state message="Add your salary and pay schedule. You can add tax estimates and dated stock history later.">
         <ui-icon name="wallet" size="lg" style="display:block; margin: 0 auto 8px; opacity:.5;" />
-        <ui-button variant="primary" (clicked)="openAddModal()">Add income</ui-button>
+        <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
       </ui-empty-state>
     }
   </ui-card>
 </div>
 
 <ui-dialog [open]="showModal" labelledBy="income-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeModal()">
-      <h3 id="income-modal-title">{{ editingId ? 'Edit income' : 'Add income' }}</h3>
+      <h3 id="income-modal-title">{{ editingId ? 'Edit job' : 'Add job' }}</h3>
       <form (ngSubmit)="saveIncome()" #incomeForm="ngForm">
         <div class="form-row">
           <label class="form-group">
@@ -216,7 +221,24 @@
           </label>
         }
 
-        <p class="muted">Annual bonus, equity, and other pay are recurring estimates, prorated over employment. Enter individual dated payments or stock awards only when they are additional to these estimates.</p>
+        <div class="form-row">
+          <label class="form-group">
+            <span>Start date</span>
+            <input name="effective_date" type="date" [(ngModel)]="form.effective_date" required />
+          </label>
+          <label class="form-group">
+            <span>End date (optional)</span>
+            <input name="end_date" type="date" [min]="form.effective_date" [(ngModel)]="form.end_date" />
+          </label>
+          <label class="checkbox-field">
+            <input name="is_active" type="checkbox" [(ngModel)]="form.is_active" />
+            <span>Active</span>
+          </label>
+        </div>
+
+        <details class="pay-disclosure">
+          <summary>Annual pay estimates, taxes, and take-home estimate</summary>
+          <p class="muted">Annual bonus, equity, and other pay are estimates added to base pay and prorated over your employment dates. Dated payments and stock awards count only when they are additional to these estimates.</p>
         <div class="form-row">
           <label class="form-group">
             <span>Annual bonus</span>
@@ -298,21 +320,12 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <label class="form-group">
-            <span>Start date</span>
-            <input name="effective_date" type="date" [(ngModel)]="form.effective_date" required />
-          </label>
-          <label class="form-group">
-            <span>End date (optional)</span>
-            <input name="end_date" type="date" [min]="form.effective_date" [(ngModel)]="form.end_date" />
-          </label>
-          <label class="checkbox-field">
-            <input name="is_active" type="checkbox" [(ngModel)]="form.is_active" />
-            <span>Active</span>
-          </label>
-        </div>
 
+
+        </details>
+
+        <details class="pay-disclosure pay-disclosure--history">
+          <summary>Promotions, dated payments, stock, and ESPP history</summary>
         <section class="compensation-history" aria-labelledby="promotions-title">
           <div class="history-heading">
             <h4 id="promotions-title">Promotions and pay changes</h4>
@@ -557,6 +570,8 @@
             </div>
           }
         </section>
+
+        </details>
 
         <label class="form-group">
           <span>Notes</span>

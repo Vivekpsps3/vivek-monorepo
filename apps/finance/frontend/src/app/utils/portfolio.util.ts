@@ -12,6 +12,12 @@ type ValuedHolding = Holding & {
   position_review_interval_days?: number | null;
 };
 
+/** Return the provider's source/trading date, never the request or fetch timestamp. */
+export function actualQuoteDate(holding: Holding): string | null {
+  const row = holding as ValuedHolding;
+  return row.quote_date ?? row.market_date ?? null;
+}
+
 export function holdingGain(h: Holding): number | null {
   const row = h as ValuedHolding;
   if (row.cost_basis_status === 'unknown' || h.purchase_price == null || h.value == null) return null;
@@ -46,7 +52,6 @@ export function hasUnvaluedPositions(holdings: Holding[]): boolean {
 }
 
 export function quoteFreshness(holding: Holding, asOf = todayDate()): QuoteState {
-  const row = holding as ValuedHolding;
   const source = String(holding.price_source || '');
   // Imported and provisional values describe their provenance independently of
   // whether the source file supplied a date. Keep that label visible while the
@@ -55,7 +60,7 @@ export function quoteFreshness(holding: Holding, asOf = todayDate()): QuoteState
   if (source === 'provisional_cost_basis' || source === 'fallback_purchase') return 'Provisional';
   if (source === 'error' || source === 'unavailable') return 'Unavailable';
 
-  const quoteDate = row.quote_date ?? row.market_date ?? datePart(row.price_as_of);
+  const quoteDate = actualQuoteDate(holding);
   const age = calendarAgeDays(quoteDate, asOf);
   if (age == null || age < 0) return 'Unknown';
   if (age > 3) return 'Stale';
@@ -68,8 +73,7 @@ export function quoteFreshness(holding: Holding, asOf = todayDate()): QuoteState
 export function quoteFreshnessLabel(holding: Holding, asOf = todayDate()): string {
   const state = quoteFreshness(holding, asOf);
   if (state !== 'Stale') return state;
-  const row = holding as ValuedHolding;
-  const quoteDate = row.quote_date ?? row.market_date ?? datePart(row.price_as_of);
+  const quoteDate = actualQuoteDate(holding);
   const age = calendarAgeDays(quoteDate, asOf);
   return age == null ? 'Stale' : `Stale · ${age} days old`;
 }
@@ -130,12 +134,6 @@ function isIsoDate(value: string | null | undefined): value is string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(value + 'T00:00:00Z');
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
-
-function datePart(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const candidate = value.slice(0, 10);
-  return isIsoDate(candidate) ? candidate : null;
 }
 
 function todayDate(): string {

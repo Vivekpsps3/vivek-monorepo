@@ -18,6 +18,86 @@
   font-size: var(--text-sm);
 }
 
+.planning-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.planning-facts-grid > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.planning-facts-grid span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.planning-facts-grid strong {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.planning-facts-grid a {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.planning-facts-grid small {
+  color: var(--text-tertiary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.planning-question {
+  margin: var(--space-4) 0;
+  max-width: 36rem;
+}
+
+.planning-evidence-details,
+.planning-advanced-controls {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.planning-evidence-details > summary,
+.planning-advanced-controls > summary {
+  color: var(--text);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.planning-advanced-controls > summary {
+  margin-bottom: var(--space-3);
+}
+
+.mc-cost-warning {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface-2));
+}
+
+.mc-warning {
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  border-radius: var(--radius-lg);
+}
+
 .mc-callout {
   display: flex;
   gap: var(--space-3);
@@ -74,6 +154,18 @@
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
   border-radius: var(--radius-lg);
+}
+
+.planning-retry {
+  margin-left: var(--space-2);
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  background: transparent;
+  cursor: pointer;
 }
 
 .mc-summary-band,
@@ -463,6 +555,9 @@
 }
 
 @media (max-width: 1100px) {
+  .planning-facts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .mc-summary-band,
   .mc-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -486,6 +581,9 @@
 }
 
 @media (max-width: 680px) {
+  .planning-facts-grid {
+    grid-template-columns: 1fr;
+  }
   .mc-summary-band,
   .mc-kpis,
   .mc-control-grid,

@@ -162,6 +162,10 @@
   display: flex;
   gap: var(--space-1);
   border-bottom: 1px solid var(--border);
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
 }
 
 .hub-tabs a,
@@ -177,6 +181,8 @@
   font-size: var(--text-sm);
   cursor: pointer;
   text-decoration: none;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .hub-tabs a.on,

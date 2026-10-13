@@ -95,9 +95,18 @@ The user clarified:
 - Schema-v1 records migrate in-browser to schema-v2 authenticated-record AAD;
   verify encrypted replacement before deleting legacy plaintext, then checkpoint
   WAL and `VACUUM`.
-- Explicit Portfolio refresh and Stock Lab research disclose ticker symbols to
-  the backend/yfinance. Shares, values, account details, and saved scenarios
-  remain encrypted; do not describe ticker symbols as server-blind after use.
+- Market prices refresh automatically once per authenticated, unlocked browser
+  session, including configured employer tickers. Portfolio refresh and Stock
+  Lab research also disclose ticker symbols to the backend/yfinance. The shared
+  refresh status explains this; shares, values, account details, and saved
+  scenarios remain encrypted. Do not describe ticker symbols as server-blind
+  after use. Source trading dates remain separate from fetch/calculation times.
+- Financial facts have one editing destination: balances/positions in What you
+  have, transactions in Spending Activity, accounts/coverage/receipts in
+  Spending Imports, jobs and dated compensation in Recurring Jobs & pay, and
+  bills/subscriptions in Recurring's combined commitments list. Planning stores
+  speculative assumptions only; other surfaces link to owners or show derived
+  summaries. See `docs/FINANCE_UX_AUDIT.md` for the map and user journeys.
 
 ## Implementation Notes
 

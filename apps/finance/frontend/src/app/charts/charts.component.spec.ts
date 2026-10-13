@@ -17,7 +17,8 @@ describe('ChartsComponent', () => {
       getAllTransactions: jasmine.createSpy().and.returnValue(of(fullLedger)),
     };
     const cdr = { markForCheck: jasmine.createSpy() };
-    const component = new ChartsComponent(financeService as any, cdr as any);
+    const router = jasmine.createSpyObj('Router', ['navigate']);
+    const component = new ChartsComponent(financeService as any, cdr as any, router as any);
     component.embedded = true;
 
     component.ngOnInit();
@@ -29,7 +30,7 @@ describe('ChartsComponent', () => {
   });
 
   it('keeps refund-only category effects signed and uses net total percentages', () => {
-    const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any);
+    const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any, { navigate: () => Promise.resolve(true) } as any);
     (component as any).txOverride = [
       { id: 1, date: '2026-08-02', type: 'expense', category: 'Dining', amount: 25, kind: 'purchase' },
       { id: 2, date: '2026-08-03', type: 'expense', category: 'Returned item', amount: 10, kind: 'refund' },
@@ -46,11 +47,51 @@ describe('ChartsComponent', () => {
   });
 
   it('marks percentages unavailable when recorded category totals are non-positive', () => {
-    const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any);
+    const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any, { navigate: () => Promise.resolve(true) } as any);
     (component as any).txOverride = [
       { id: 1, date: '2026-08-02', type: 'expense', category: 'Returned item', amount: 10, kind: 'refund' },
     ];
     (component as any).computeDerived();
     expect(component.allCategoryRows).toEqual([{ label: 'Returned item', value: -10, pct: null }]);
+  });
+
+  it('drills recorded chart points into Activity and scheduled points into Recurring', () => {
+    const router = jasmine.createSpyObj('Router', ['navigate']);
+    const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any, router as any);
+    component.monthlyRows = [{ month: '2026-09', label: 'Sep 26', income: 20, expense: 12, net: 8 }];
+
+    component.openMonthlyDrilldown(0, 1);
+    expect(router.navigate.calls.mostRecent().args).toEqual([
+      ['/spending'], { queryParams: { t: 'activity', v: 'spending', month: '2026-09' } },
+    ]);
+
+    component.cashflowView = 'scheduled';
+    component.monthlyRows = [{ month: '2026-09', label: 'Sep 26', income: 20, expense: 12, net: 8 }];
+    component.openMonthlyDrilldown(0, 1);
+    expect(router.navigate.calls.mostRecent().args).toEqual([
+      ['/recurring'], { queryParams: { t: 'spend' } },
+    ]);
+    expect(component.monthlyRowQuery(component.monthlyRows[0], 0)).toEqual({ t: 'pay' });
+    expect(component.monthlyRowQuery(component.monthlyRows[0], 1)).toEqual({ t: 'spend' });
+  });
+
+  it('keeps a real Other category drillable while the synthetic Other tail only expands', () => {
+    const router = jasmine.createSpyObj('Router', ['navigate']);
+    const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any, router as any);
+    component.allCategoryRows = [
+      { label: 'Other', value: 100, pct: 40 },
+      ...['A', 'B', 'C', 'D', 'E', 'F'].map((label, index) => ({ label, value: 50 - index, pct: 10 })),
+    ];
+    const rows = component.categoryRows;
+    expect(rows[0].label).toBe('Other');
+    expect(rows[6]).toEqual(jasmine.objectContaining({ label: 'Other', synthetic: true }));
+    component.openCategoryDrilldown(0);
+    expect(router.navigate.calls.mostRecent().args).toEqual([
+      ['/spending'], { queryParams: { t: 'activity', v: 'spending', month: 'all', category: 'Other' } },
+    ]);
+    router.navigate.calls.reset();
+    component.openCategoryDrilldown(6);
+    expect(component.collapsedCategories).toBeFalse();
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 });

@@ -2,14 +2,37 @@ import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:
 import { Page } from '@playwright/test';
 
 type Payload = Record<string, any>;
+type QuoteResponse = {
+  status?: number;
+  symbol?: string;
+  price?: number;
+  valid?: boolean;
+  quote_date?: string;
+  price_as_of?: string | null;
+};
 type RecordRow = {
   collection: string; client_id: string; ciphertext_b64: string;
   schema_version: number; key_version: number; revision: number; updated_at: string;
 };
 
+function lastCompletedTradingDate(now = new Date()): string {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const day = date.getUTCDay();
+  const daysBack = day === 0 ? 2 : day === 1 ? 3 : day === 6 ? 1 : 0;
+  date.setUTCDate(date.getUTCDate() - daysBack);
+  return date.toISOString().slice(0, 10);
+}
+
 /** Each test uses a fresh key and an in-memory ciphertext server; no real API or vault. */
 export async function syntheticVault(page: Page, seed: Record<string, Payload[]> = {}) {
-  page.on('pageerror', error => console.error('Synthetic finance browser error:', error.message));
+  const context = page.context();
+  const attachedPages = new WeakSet<Page>();
+  const attach = (target: Page) => {
+    if (attachedPages.has(target)) return;
+    attachedPages.add(target);
+    target.on('pageerror', error => console.error('Synthetic finance browser error:', error.message));
+  };
+  attach(page);
   const key = randomBytes(32);
   const passphrase = 'Synthetic finance test passphrase';
   const salt = randomBytes(16);
@@ -18,9 +41,17 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
   const wrappedKey = Buffer.concat([wrapIv, wrapCipher.update(key), wrapCipher.final(), wrapCipher.getAuthTag()]).toString('base64');
   const records = new Map<string, RecordRow>();
   const quoteRequests: string[] = [];
+  const quoteRequestDetails: Array<{ symbol: string; refresh: boolean }> = [];
+  const quoteResponses = new Map<string, QuoteResponse>();
   const mutations: Array<{ path: string; body: any }> = [];
   let failedWrites = 0;
   let collectionFailure: { collection: string; remaining: number } | null = null;
+  let heldUpsertsTarget = 0;
+  let heldUpsertsArrived = 0;
+  let heldUpsertsGate: Promise<void> | null = null;
+  let releaseHeldUpsertsResolve: (() => void) | null = null;
+  let heldUpsertsArrivedResolve: (() => void) | null = null;
+  let heldUpsertsArrivedPromise: Promise<void> | null = null;
   const identity = (collection: string, clientId: string) => `${collection}/${clientId}`;
   const aad = (row: Pick<RecordRow, 'collection' | 'client_id' | 'schema_version' | 'key_version'>) =>
     Buffer.from(JSON.stringify([row.collection, row.client_id, row.schema_version, row.key_version]));
@@ -48,7 +79,7 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
       records.set(identity(collection, row.client_id), row);
     }
   }
-  await page.route('**/api/**', async route => {
+  await context.route('**/api/**', async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const respond = (body: any, status = 200) => route.fulfill({ status, json: body });
@@ -68,6 +99,11 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
     if (path === '/api/vault/records/upsert' || path === '/api/vault/records/delete') {
       const body = request.postDataJSON();
       mutations.push({ path, body });
+      if (path.endsWith('/upsert') && heldUpsertsTarget > 0) {
+        heldUpsertsArrived++;
+        if (heldUpsertsArrived >= heldUpsertsTarget) heldUpsertsArrivedResolve?.();
+        await heldUpsertsGate;
+      }
       if (failedWrites > 0) { failedWrites--; return respond({ detail: 'Synthetic save failed' }, 503); }
       if (collectionFailure && body.records.some((row: any) => row.collection === collectionFailure!.collection)) {
         collectionFailure.remaining--;
@@ -104,42 +140,68 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
     }
     if (path.startsWith('/api/market/price/')) {
       const symbol = decodeURIComponent(path.split('/').pop()!);
+      const upperSymbol = symbol.trim().toUpperCase();
       quoteRequests.push(symbol);
-      return respond({ symbol, price: 125, price_source: 'live_eod', source: 'yfinance', valid: true, price_as_of: new Date().toISOString(), market_date: new Date().toISOString().slice(0, 10) });
+      quoteRequestDetails.push({ symbol: upperSymbol, refresh: new URL(request.url()).searchParams.get('refresh') === 'true' });
+      const quote = quoteResponses.get(upperSymbol);
+      if (quote?.status && quote.status >= 400) return respond({ detail: `Synthetic ${upperSymbol} quote failure` }, quote.status);
+      return respond({ symbol: upperSymbol, price: 125, price_source: 'live_eod', source: 'yfinance', valid: true,
+        price_as_of: new Date().toISOString(), quote_date: lastCompletedTradingDate(), ...quote });
     }
     return respond({ detail: `Unexpected synthetic endpoint ${path}` }, 404);
   });
-  let entered = false;
-  async function unlock() {
-    await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(passphrase);
-    await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-    await page.waitForURL(url => url.pathname === '/');
-    entered = true;
+  const enteredPages = new WeakSet<Page>();
+  async function unlock(target: Page = page) {
+    attach(target);
+    await target.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(passphrase);
+    await target.getByRole('button', { name: 'Unlock', exact: true }).click();
+    await target.waitForURL(url => url.pathname === '/');
+    enteredPages.add(target);
   }
-  async function navigate(path: string) {
+  async function navigate(path: string, target: Page = page) {
     // Browser history navigation exercises Angular guards without replacing the unlocked session.
-    await page.evaluate(target => {
-      history.pushState(null, '', target);
+    await target.evaluate(nextPath => {
+      history.pushState(null, '', nextPath);
       window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
     }, path);
-    await page.waitForURL(url => url.pathname + url.search === path);
+    await target.waitForURL(url => url.pathname + url.search === path);
   }
   return {
-    quoteRequests, mutations,
-    async open(path: string) {
-      if (!entered) { await page.goto('/vault/unlock'); await unlock(); }
-      const current = new URL(page.url());
-      if (current.pathname + current.search !== path) await navigate(path);
+    quoteRequests, quoteRequestDetails, mutations,
+    async open(path: string, target: Page = page) {
+      attach(target);
+      if (!enteredPages.has(target)) { await target.goto('/vault/unlock'); await unlock(target); }
+      const current = new URL(target.url());
+      if (current.pathname + current.search !== path) await navigate(path, target);
     },
-    async reload() {
-      const previous = new URL(page.url());
+    async reload(target: Page = page) {
+      const previous = new URL(target.url());
       const path = previous.pathname + previous.search;
-      await page.reload();
-      await unlock();
-      if (path !== '/') await navigate(path);
+      await target.reload();
+      enteredPages.delete(target);
+      await unlock(target);
+      if (path !== '/') await navigate(path, target);
     },
     failNextWrites(count = 1) { failedWrites = count; },
+    holdNextUpserts(count = 1) {
+      heldUpsertsTarget = count;
+      heldUpsertsArrived = 0;
+      heldUpsertsGate = new Promise<void>(resolve => { releaseHeldUpsertsResolve = resolve; });
+      heldUpsertsArrivedPromise = new Promise<void>(resolve => { heldUpsertsArrivedResolve = resolve; });
+    },
+    waitForHeldUpserts() { return heldUpsertsArrivedPromise ?? Promise.resolve(); },
+    releaseHeldUpserts() {
+      heldUpsertsTarget = 0;
+      releaseHeldUpsertsResolve?.();
+      releaseHeldUpsertsResolve = null;
+      heldUpsertsGate = null;
+      heldUpsertsArrivedPromise = null;
+      heldUpsertsArrivedResolve = null;
+    },
     failWriteIn(collection: string, occurrence = 1) { collectionFailure = { collection, remaining: occurrence }; },
+    failQuote(symbol: string, status = 503) { quoteResponses.set(symbol.trim().toUpperCase(), { status }); },
+    setQuote(symbol: string, response: QuoteResponse) { quoteResponses.set(symbol.trim().toUpperCase(), response); },
+    attach,
     data(collection: string) { return [...records.values()].filter(row => row.collection === collection).map(plaintext); },
   };
 }

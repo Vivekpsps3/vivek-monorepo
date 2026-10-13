@@ -201,6 +201,7 @@ export async function buildBankImportPreviews(
         legacyDedupeKeys,
         entry.account_mask_override
       );
+      for (const row of result.preview.rows) row.source_filename = entry.file.name;
       for (const row of result.preview.rows) seen.add(row.dedupe_key);
     } catch (error) {
       result.error = errorMessage(error);
@@ -213,7 +214,7 @@ export async function buildBankImportPreviews(
 export async function commitBankImportRows(
   store: EncryptedImportStore,
   rows: ImportPreviewRow[],
-  receiptContext?: { bank_slugs?: string[]; filenames?: string[]; unresolved?: ImportRowNote[]; account_displays?: string[]; coverage?: ImportReceipt['coverage']; resume_receipt_id?: number; confirmed_bank_accounts?: Array<Omit<BankAccountRecord, 'id'> & { id?: number }> }
+  receiptContext?: { bank_slugs?: string[]; filenames?: string[]; unresolved?: ImportRowNote[]; account_displays?: string[]; coverage?: ImportReceipt['coverage']; resume_receipt_id?: number; replace_filename?: string; confirmed_bank_accounts?: Array<Omit<BankAccountRecord, 'id'> & { id?: number }> }
 ): Promise<ImportCommitResult> {
   const transactions = await store.getTransactions();
   const existing = new Map(
@@ -249,8 +250,38 @@ export async function commitBankImportRows(
     : store.addImportReceipt
       ? await store.addImportReceipt({ ...receiptBody, selected_rows: rows })
       : null);
+  let replacementReceiptFields: Partial<ImportReceipt> = {};
   if (receipt && resume) {
-    if (rows.length && store.saveImportReceiptRows) {
+    if (receiptContext?.replace_filename) {
+      const existingRows = store.getImportReceiptRows ? await store.getImportReceiptRows(receipt.id) : [];
+      const combined = [...existingRows.filter(row => row.source_filename !== receiptContext.replace_filename), ...rows];
+      const byDedupeKey = new Map<string, ImportPreviewRow>();
+      for (const row of combined) byDedupeKey.set(row.dedupe_key, row);
+      rows = [...byDedupeKey.values()];
+      if (store.saveImportReceiptRows) await store.saveImportReceiptRows(receipt.id, rows);
+      const filenames = Array.from(new Set([
+        ...receipt.filenames.filter(filename => filename !== receiptContext.replace_filename),
+        ...(receiptContext.filenames || []),
+      ]));
+      const coverage = Array.from(new Map([
+        ...(receipt.coverage || []),
+        ...(receiptContext.coverage || []),
+      ].map(entry => [`${entry.account_key || ''}:${entry.start_date}:${entry.end_date}`, entry] as const)).values());
+      replacementReceiptFields = {
+        bank_slugs: Array.from(new Set([...receipt.bank_slugs, ...(receiptContext.bank_slugs || [])])),
+        filenames,
+        unresolved: [
+          ...receipt.unresolved.filter(note => note.filename !== receiptContext.replace_filename),
+          ...(receiptContext.unresolved || []),
+        ],
+        account_displays: Array.from(new Set([...receipt.account_displays, ...(receiptContext.account_displays || [])])),
+        coverage,
+        coverage_start: coverage.length ? coverage.map(row => row.start_date).sort()[0] : null,
+        coverage_end: coverage.length ? coverage.map(row => row.end_date).sort().at(-1) || null : null,
+      };
+      await store.updateImportReceipt?.(receipt.id, replacementReceiptFields);
+      receipt = await store.getImportReceipt?.(receipt.id) || { ...receipt, ...replacementReceiptFields };
+    } else if (rows.length && store.saveImportReceiptRows) {
       await store.saveImportReceiptRows(receipt.id, rows);
       receipt = await store.getImportReceipt?.(receipt.id) || receipt;
     } else if (store.getImportReceiptRows) {
@@ -263,7 +294,9 @@ export async function commitBankImportRows(
   let inserted = 0;
   let skipped = 0;
   const seen = new Set<string>();
-  const unresolved = [...(receipt?.unresolved || receiptContext?.unresolved || [])];
+  const unresolved = [...(receiptContext?.replace_filename
+    ? replacementReceiptFields.unresolved || receiptContext.unresolved || []
+    : receipt?.unresolved || receiptContext?.unresolved || [])];
   try {
   for (const row of rows) {
     const legacy = row.legacy_dedupe_key ? existing.get(row.legacy_dedupe_key) : undefined;
@@ -329,6 +362,7 @@ export async function commitBankImportRows(
     const linkedCount = (await store.getTransactions()).filter(tx => tx.import_receipt_id === receipt.id).length;
     try {
       await store.updateImportReceipt(receipt.id, {
+        ...replacementReceiptFields,
         status: 'complete',
         completed_at: new Date().toISOString(),
         inserted_count: linkedCount,
