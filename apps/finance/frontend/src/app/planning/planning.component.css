@@ -436,6 +436,14 @@
   border-bottom: 1px solid var(--border);
 }
 
+@media (max-width: 768px) {
+  .mc-results th,
+  .mc-results td,
+  .mc-seed-row ui-button {
+    white-space: normal;
+  }
+}
+
 .mc-results th {
   font-size: 0.72rem;
   font-weight: 700;

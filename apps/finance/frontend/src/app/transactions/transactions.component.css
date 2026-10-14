@@ -382,6 +382,39 @@
   border-radius: var(--radius-lg);
 }
 
+@media (max-width: 768px) {
+  .import-table-scroll,
+  .import-notes-list {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .month-hero {
+    padding: var(--space-4);
+  }
+
+  .month-picker__caption {
+    display: none;
+  }
+
+  .month-summary-row,
+  .month-totals {
+    gap: var(--space-4);
+  }
+
+  .table-actions--toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .table-actions ui-select {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+}
+
 .import-preview-actions {
   margin-top: var(--space-2);
 }

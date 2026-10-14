@@ -80,7 +80,7 @@ type McDisplayRow = {
             }
           </dl>
         } @else {
-          <span class="mc-chart-hover__hint">Hover, tap, or use Previous/Next year — median and percentiles always shown</span>
+          <span class="mc-chart-hover__hint">Tap the chart or use Previous year and Next year. The numbers for that year stay in this list.</span>
         }
       </div>
       <div class="mc-year-controls" role="group" aria-label="Inspect simulation year">
@@ -88,25 +88,6 @@ type McDisplayRow = {
         <button type="button" class="mc-year-btn" (click)="selectAdjacentYear(1)" [disabled]="!canStepYear(1)">Next year</button>
       </div>
       <div class="mc-chart-wrap">
-        @if (tooltipVisible && hoverSnapshot) {
-          <div
-            class="mc-floating-tooltip"
-            role="tooltip"
-            [style.left.px]="tooltipX"
-            [style.top.px]="tooltipY">
-            <div class="mc-floating-tooltip__title">{{ hoverSnapshot.yearLabel }}</div>
-            @for (row of displayRows; track row.label) {
-              <div
-                class="mc-floating-tooltip__row"
-                [class.mc-floating-tooltip__row--sample]="row.variant === 'sample'"
-                [class.mc-floating-tooltip__row--median]="row.variant === 'median'"
-                [class.mc-floating-tooltip__row--goal]="row.variant === 'goal'">
-                <span class="mc-floating-tooltip__label">{{ row.label }}</span>
-                <span class="mc-floating-tooltip__value">{{ row.formatted }}</span>
-              </div>
-            }
-          </div>
-        }
         <canvas
           #canvas
           role="img"
@@ -194,58 +175,6 @@ type McDisplayRow = {
       .mc-chart-hover__row--goal dd {
         color: var(--success, #22c55e);
       }
-      .mc-floating-tooltip {
-        position: absolute;
-        z-index: 20;
-        pointer-events: none;
-        min-width: 11rem;
-        max-width: 16rem;
-        padding: 0.5rem 0.65rem;
-        border-radius: var(--radius-md, 8px);
-        border: 1px solid var(--border, #333);
-        background: var(--card-bg, #1a1a1a);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-        font-size: 0.75rem;
-      }
-      .mc-floating-tooltip__title {
-        font-weight: 700;
-        color: var(--text, #f5f5f5);
-        margin-bottom: 0.35rem;
-        padding-bottom: 0.25rem;
-        border-bottom: 1px solid var(--border-subtle, #2a2a2a);
-      }
-      .mc-floating-tooltip__row {
-        display: flex;
-        justify-content: space-between;
-        gap: 0.75rem;
-        padding: 0.12rem 0;
-        color: var(--text-secondary, #b8b8b8);
-      }
-      .mc-floating-tooltip__value {
-        font-variant-numeric: tabular-nums;
-        color: var(--text, #f5f5f5);
-        font-weight: 600;
-      }
-      .mc-floating-tooltip__row--sample {
-        color: var(--accent, #3b82f6);
-        font-weight: 600;
-        padding-bottom: 0.3rem;
-        margin-bottom: 0.2rem;
-        border-bottom: 1px solid var(--border-subtle, #2a2a2a);
-      }
-      .mc-floating-tooltip__row--sample .mc-floating-tooltip__label,
-      .mc-floating-tooltip__row--sample .mc-floating-tooltip__value {
-        color: var(--accent, #3b82f6);
-      }
-      .mc-floating-tooltip__row--median .mc-floating-tooltip__label,
-      .mc-floating-tooltip__row--median .mc-floating-tooltip__value {
-        font-weight: 800;
-        color: var(--text, #f5f5f5);
-      }
-      .mc-floating-tooltip__row--goal .mc-floating-tooltip__label,
-      .mc-floating-tooltip__row--goal .mc-floating-tooltip__value {
-        color: var(--success, #22c55e);
-      }
       .mc-chart-hover--empty .mc-chart-hover__hint {
         color: var(--text-tertiary, #888);
       }
@@ -254,6 +183,22 @@ type McDisplayRow = {
         width: 100%;
         min-height: 320px;
         height: min(42vh, 420px);
+      }
+      @media (max-width: 768px) {
+        .mc-chart-wrap {
+          min-height: 220px;
+          height: 240px;
+        }
+        .mc-chart-hover__grid {
+          grid-template-columns: 1fr;
+        }
+        .mc-year-controls {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+        .mc-year-btn {
+          width: 100%;
+        }
       }
       canvas {
         width: 100% !important;
@@ -271,9 +216,6 @@ export class MonteCarloFanChartComponent implements AfterViewInit, OnChanges, On
 
   hoverSnapshot: McHoverSnapshot | null = null;
   displayRows: McDisplayRow[] = [];
-  tooltipVisible = false;
-  tooltipX = 0;
-  tooltipY = 0;
   /** Updated each buildConfig for dimming non-hovered sample paths. */
   private samplePathDatasetIndices: number[] = [];
 
@@ -343,7 +285,6 @@ export class MonteCarloFanChartComponent implements AfterViewInit, OnChanges, On
     if (!snapshot) return;
     this.hoverSnapshot = snapshot;
     this.displayRows = this.buildDisplayRows(snapshot);
-    this.tooltipVisible = false;
     this.cdr.markForCheck();
   }
 
@@ -503,16 +444,10 @@ export class MonteCarloFanChartComponent implements AfterViewInit, OnChanges, On
   }
 
   private clearHoverDetail(): void {
-    const chart = this.chart;
     this.applySamplePathHighlight(null);
-    if (chart?.tooltip) {
-      chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-      chart.update('none');
-    }
-    if (this.hoverSnapshot === null && !this.tooltipVisible) return;
+    if (this.hoverSnapshot === null) return;
     this.hoverSnapshot = null;
     this.displayRows = [];
-    this.tooltipVisible = false;
     this.cdr.markForCheck();
   }
 
@@ -594,27 +529,6 @@ export class MonteCarloFanChartComponent implements AfterViewInit, OnChanges, On
     this.hoverSnapshot = snapshot;
     this.displayRows = this.buildDisplayRows(snapshot);
     this.applySamplePathHighlight(snapshot.samplePath?.datasetIndex ?? null);
-
-    const wrap = this.canvasRef.nativeElement.parentElement;
-    if (wrap) {
-      const wrapRect = wrap.getBoundingClientRect();
-      this.tooltipX = event.clientX - wrapRect.left + 14;
-      this.tooltipY = event.clientY - wrapRect.top - 12;
-      this.tooltipVisible = true;
-    }
-
-    const anchor = snapshot.samplePath?.datasetIndex;
-    if (chart.tooltip) {
-      const rect = chart.canvas.getBoundingClientRect();
-      const pos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-      if (anchor != null && anchor >= 0) {
-        chart.tooltip.setActiveElements([{ datasetIndex: anchor, index: snapshot.dataIndex }], pos);
-      } else {
-        chart.tooltip.setActiveElements([], pos);
-      }
-      chart.update('none');
-    }
-
     this.cdr.markForCheck();
   }
 

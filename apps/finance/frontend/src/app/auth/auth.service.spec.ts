@@ -10,6 +10,7 @@ describe('AuthService passwordless login', () => {
   let service: AuthService;
   let http: HttpTestingController;
   let vault: jasmine.SpyObj<VaultService>;
+  let finance: { clearSessionState: jasmine.Spy };
   const api = environment.apiUrl;
 
   beforeEach(() => {
@@ -20,12 +21,13 @@ describe('AuthService passwordless login', () => {
       'adoptBootstrapVault',
     ]);
     vault.unlock.and.resolveTo();
+    finance = { clearSessionState: jasmine.createSpy('clearSessionState') };
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
       providers: [
         AuthService,
         { provide: VaultService, useValue: vault },
-        { provide: FinanceService, useValue: { clearSessionState: jasmine.createSpy('clearSessionState') } },
+        { provide: FinanceService, useValue: finance },
         { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
       ],
     });
@@ -70,5 +72,34 @@ describe('AuthService passwordless login', () => {
       message: 'vault-auth-v1\nhttp://localhost\n2099-01-01T00:00:00',
     });
     await expectAsync(loginPromise).toBeRejected();
+  });
+
+  it('keeps the unlocked vault when a reload still has a valid session cookie', async () => {
+    const session = service.loadSession().toPromise();
+    http.expectOne(`${api}/auth/me`).flush({
+      user: {
+        id: 4,
+        email: 'vivek@pending.local',
+        username: 'vivek',
+        display_name: 'Vivek',
+        role: 'user',
+        is_active: true,
+        must_change_password: false,
+        created_at: '2026-10-14T00:00:00',
+        updated_at: '2026-10-14T00:00:00',
+      },
+    });
+    await expectAsync(session).toBeResolvedTo(jasmine.objectContaining({ username: 'vivek' }));
+    expect(finance.clearSessionState).not.toHaveBeenCalled();
+  });
+
+  it('clears the saved vault only when the session cookie is rejected', async () => {
+    const session = service.loadSession().toPromise();
+    http.expectOne(`${api}/auth/me`).flush(
+      { detail: 'Session expired' },
+      { status: 401, statusText: 'Unauthorized' }
+    );
+    await expectAsync(session).toBeResolvedTo(null);
+    expect(finance.clearSessionState).toHaveBeenCalled();
   });
 });

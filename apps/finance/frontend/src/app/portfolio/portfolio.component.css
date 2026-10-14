@@ -84,6 +84,13 @@
   margin: 0.75rem 0;
 }
 
+@media (max-width: 768px) {
+  .fidelity-preview-table {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
 .replacement-preview {
   margin: 1rem 0;
 }
@@ -107,6 +114,13 @@
   color: var(--text-secondary);
   font-size: var(--text-sm);
   margin-bottom: var(--space-2);
+}
+
+.summary small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 
 .big-number {
@@ -259,5 +273,17 @@ details.account-sub[open] > summary::before {
   .account-sub .sub-total {
     margin-left: 0;
     width: 100%;
+  }
+
+  .account-sub .toggle-hint {
+    display: none;
+  }
+
+  .price-cell {
+    max-width: none;
+  }
+
+  .actions {
+    white-space: normal;
   }
 }

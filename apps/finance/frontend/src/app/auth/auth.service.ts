@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap } from 'rxjs';
 import { Router } from '@angular/router';
 import { apiUrl } from '../core/api-url';
@@ -39,13 +39,14 @@ export class AuthService {
     return this.http.get<MeResponse>(apiUrl('/auth/me'), { withCredentials: true }).pipe(
       tap(res => {
         this.checkedSession = true;
-        this.finance.clearSessionState();
+        // A reload still has the session cookie and the saved vault key.
+        // Clearing here locked the vault on every refresh.
         this.userSubject.next(res.user);
       }),
       map(res => res.user),
-      catchError(() => {
+      catchError((err: HttpErrorResponse) => {
         this.checkedSession = true;
-        this.finance.clearSessionState();
+        if (err.status === 401) this.finance.clearSessionState();
         this.userSubject.next(null);
         return of(null);
       })
@@ -81,9 +82,9 @@ export class AuthService {
       auth: signingMaterial.wrapped,
     }, { withCredentials: true }).toPromise();
     if (!response) throw new Error('Unable to create passwordless account');
-    await this.vault.adoptBootstrapVault(vaultMaterial.dek);
     this.checkedSession = true;
     this.finance.clearSessionState();
+    await this.vault.adoptBootstrapVault(vaultMaterial.dek);
     this.userSubject.next(response.user);
     return response.user;
   }
@@ -116,9 +117,9 @@ export class AuthService {
       )
       .toPromise();
     if (!response) throw new Error('Unable to create account');
-    await this.vault.adoptBootstrapVault(vaultMaterial.dek);
     this.checkedSession = true;
     this.finance.clearSessionState();
+    await this.vault.adoptBootstrapVault(vaultMaterial.dek);
     this.userSubject.next(response.user);
     return response.user;
   }

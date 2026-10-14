@@ -157,6 +157,11 @@
     align-items: stretch;
   }
 
+  .summary-pill,
+  .income-guidance > div:last-child {
+    white-space: normal;
+  }
+
   .summary-pill {
     align-self: flex-start;
   }

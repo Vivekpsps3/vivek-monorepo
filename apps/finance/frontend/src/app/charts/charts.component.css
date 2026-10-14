@@ -71,9 +71,23 @@
   z-index: 1;
 }
 
-@media (max-width: 420px) {
-  .view-switch { display: flex; width: max-content; max-width: 100%; }
-  .view-switch button { padding-inline: var(--space-3); }
+@media (max-width: 768px) {
+  .chart-wrap,
+  .chart-wrap.tall {
+    height: 220px;
+    min-height: 220px;
+  }
+
+  .view-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .view-switch button {
+    min-width: 0;
+    padding-inline: var(--space-2);
+  }
 }
 
 .section-toggle {

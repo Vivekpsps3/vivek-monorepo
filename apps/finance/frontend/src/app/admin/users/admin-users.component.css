@@ -160,6 +160,7 @@
 
   .row-actions {
     justify-content: flex-start;
-    min-width: 240px;
+    min-width: 0;
+    width: 100%;
   }
 }

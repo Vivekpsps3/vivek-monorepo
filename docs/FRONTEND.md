@@ -47,7 +47,7 @@ Source of truth: `apps/finance/frontend/src/theme/tokens.css`.
 | `--border` | Borders |
 | `--success` / `--danger` / `--warning` | Status |
 
-Charts: `src/theme/chart-colors.ts` (prefer CSS vars for axes/tooltips; segment palette in `CHART_COLORS`).
+Charts: `src/theme/chart-colors.ts` (prefer CSS vars for axes; segment palette in `CHART_COLORS`). Chart hover tooltips are off. Values sit in the table or readout beside the chart.
 
 **Appearance:** light is the default token set (paper `#F4F2EC`, card `#FFFEFA`,
 ink `#1C1B18`, pine accent `#3F6F5C`). Dark is `[data-theme="dark"]`. First
@@ -61,9 +61,9 @@ helpers live in `utils/format.util.ts`.
 
 | Viewport | Navigation | Tables / dense data |
 |----------|------------|---------------------|
-| 390×844 | Icon + short labels, horizontal scroll, 44px targets | Horizontal scroll (dense table); list-cells deferred |
-| 844×390 | Same, landscape | Same |
-| 768×1024 | Short or full labels | Dense tables |
+| 390×844 | Compact header and a fixed bottom tab bar. `data-viewport="mobile"` | One vertical scroll. Tables become labeled cards. Dialogs are bottom sheets |
+| 844×390 | Same phone shell, landscape | Same |
+| 768×1024 | Phone shell through 768px | Card tables |
 | 1024×768 | Desktop grid nav | Dense tables |
 | 1280×800+ | Full labels | Dense tables |
 
@@ -94,7 +94,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 ## Privacy and migration
 
 - Vault finance records are schema-v2 authenticated-record ciphertext. The browser migrates schema-v1 records after login, verifies encrypted replacements, then removes legacy plaintext rows.
-- Manual/imported Portfolio prices stay local. After authenticated vault unlock, the browser automatically refreshes deduplicated holding and configured employer tickers with bounded concurrency; the shell discloses the symbol sharing, reports progress/failures, and offers retry. Explicit retry, typed lookup, and Stock Lab research also send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
+- Manual/imported Portfolio prices stay local. After authenticated vault unlock, the browser automatically refreshes deduplicated holding and configured employer tickers with bounded concurrency. The shell does not show a ticker countdown. A quiet mark means prices are updating. The account menu discloses that ticker symbols are sent to the market service. Failures stay on screen with retry. Explicit retry, typed lookup, and Stock Lab research also send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
 - Login unwraps a browser-held signing key with the vault passphrase and signs a single-use challenge. Admins issue invitations but cannot reset a user's vault passphrase or recover encrypted data.
 
 ## Home behavior

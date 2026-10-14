@@ -29,7 +29,6 @@ import {
   chartCartesianScales,
   chartLegendBottom,
   chartSuccessColor,
-  chartTooltipTheme,
 } from '../../theme/chart-colors';
 
 interface PeriodRow {
@@ -390,12 +389,6 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
     }));
     const labels = this.projection.map(point => `${point.year}y`);
     const compact = (value: number) => this.formatCompactMoney(value);
-    const fullCurrency = (value: number) =>
-      new Intl.NumberFormat(undefined, {
-        style: 'currency',
-        currency: 'USD',
-        maximumFractionDigits: 0,
-      }).format(value);
 
     const datasets = [
       {
@@ -457,13 +450,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: chartLegendBottom(),
-          tooltip: {
-            ...chartTooltipTheme(),
-            callbacks: {
-              label: (ctx: { dataset: { label?: string }; raw: number }) =>
-                `${ctx.dataset.label || 'Value'}: ${fullCurrency(ctx.raw)}`,
-            },
-          },
+          tooltip: { enabled: false },
         },
         scales: {
           ...chartCartesianScales(),

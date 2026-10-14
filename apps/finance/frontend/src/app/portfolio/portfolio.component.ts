@@ -21,7 +21,7 @@ import {
   FidelityCommitResult,
 } from '../models/transaction.model';
 import { ToastService } from '../services/toast.service';
-import { MarketRefreshCoordinatorService, MarketRefreshState } from '../services/market-refresh-coordinator.service';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ConfirmService } from '../services/confirm.service';
 import { todayIsoDate } from '../utils/date.util';
 import { downloadCsv } from '../utils/export.util';
@@ -84,10 +84,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   holdingsLoadError: string | null = null;
   checkingPrice = false;
   priceCheck: MarketPriceQuote | null = null;
-  marketState: MarketRefreshState = {
-    phase: 'idle', automatic: false, totalSymbols: 0, completedSymbols: 0,
-    updatedHoldings: 0, updatedEmployerValuations: 0, failures: [], startedAt: null, finishedAt: null,
-  };
 
   // Fidelity import state (modeled on Transactions import)
   showFidelityImportModal = false;
@@ -121,7 +117,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.loading = true;
     this.marketRefresh.status$.pipe(takeUntil(this.destroy$)).subscribe(state => {
-      this.marketState = state;
       this.refreshingPrices = state.phase === 'refreshing';
       this.cdr.markForCheck();
     });

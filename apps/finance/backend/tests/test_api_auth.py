@@ -33,6 +33,38 @@ def test_finance_api_requires_login():
     assert r.status_code == 401
 
 
+def test_session_cookie_persists_and_slides_while_the_browser_is_in_use():
+    from datetime import timedelta
+
+    from auth import utc_now_naive
+    from database import SessionLocal
+    from models import UserSession
+
+    client = authenticated_client(app, email="persist@example.com")
+    me = client.get("/api/auth/me")
+    assert me.status_code == 200
+    session_cookie = next(item for item in me.headers.get_list("set-cookie") if item.startswith("finance_session="))
+    assert "Max-Age=604800" in session_cookie
+    assert "expires=" in session_cookie.lower()
+
+    db = SessionLocal()
+    try:
+        row = db.query(UserSession).one()
+        row.expires_at = utc_now_naive() + timedelta(hours=1)
+        db.commit()
+        row_id = row.id
+    finally:
+        db.close()
+
+    assert client.get("/api/auth/me").status_code == 200
+    db = SessionLocal()
+    try:
+        updated = db.query(UserSession).filter(UserSession.id == row_id).one()
+        assert updated.expires_at > utc_now_naive() + timedelta(days=6)
+    finally:
+        db.close()
+
+
 def test_login_me_and_logout():
     client = authenticated_client(app, email="login@example.com")
     me = client.get("/api/auth/me")

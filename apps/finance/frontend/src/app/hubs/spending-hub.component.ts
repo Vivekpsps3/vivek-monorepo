@@ -109,9 +109,9 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
       position: relative;
       z-index: 1;
     }
-    @media (max-width: 420px) {
-      .activity-switch { display: flex; width: 100%; }
-      .activity-switch button { flex: 1; padding-inline: var(--space-2); }
+    @media (max-width: 768px) {
+      .activity-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+      .activity-switch button { min-width: 0; padding-inline: var(--space-2); }
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,

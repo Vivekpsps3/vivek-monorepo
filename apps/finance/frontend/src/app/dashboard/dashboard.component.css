@@ -95,4 +95,12 @@
     grid-template-columns: 1fr;
   }
 
+  .home-tile {
+    padding: var(--space-4);
+  }
+
+  .home-tile__value {
+    font-size: clamp(1.65rem, 8vw, var(--text-display));
+    overflow-wrap: anywhere;
+  }
 }

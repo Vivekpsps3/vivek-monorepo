@@ -6,7 +6,7 @@
   left: 50%;
   transform: translateX(-50%);
   box-sizing: border-box;
-  width: min(52rem, calc(100vw - 2rem));
+  width: min(52rem, calc(100% - 2rem));
   display: flex;
   align-items: center;
   justify-content: space-between;

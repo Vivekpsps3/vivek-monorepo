@@ -24,10 +24,7 @@ import {
   chartSuccessColor,
   chartDangerColor,
   chartAccentColor,
-  chartTooltipTheme,
 } from '../../theme/chart-colors';
-
-type TooltipCtx = { raw: number; dataIndex: number };
 type ChartConstructor = new (
   item: ChartItem,
   config: unknown
@@ -395,10 +392,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         maintainAspectRatio: false,
         plugins: {
           legend: chartLegendBottom(),
-          tooltip: {
-            ...chartTooltipTheme(),
-            callbacks: { label: (ctx: TooltipCtx) => '$' + Number(ctx.raw).toLocaleString() },
-          },
+          tooltip: { enabled: false },
         },
         onClick: (_event: unknown, active: Array<{ datasetIndex: number; index: number }>) => {
           const point = active[0];
@@ -435,16 +429,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         ...(hasRefundEffects ? { scales: chartCartesianScales() } : {}),
         plugins: {
           legend: chartLegendBottom(),
-          tooltip: {
-            ...chartTooltipTheme(),
-            callbacks: {
-              label: (ctx: TooltipCtx) => {
-                const row = this.categoryRows[ctx.dataIndex];
-                const pct = row.pct == null ? 'percentage unavailable' : `${row.pct.toFixed(1)}% of net total`;
-                return `${row.label}: $${Number(ctx.raw).toLocaleString()} (${pct})`;
-              },
-            },
-          },
+          tooltip: { enabled: false },
         },
         onClick: (_event: unknown, active: Array<{ index: number }>) => {
           const point = active[0];
@@ -483,16 +468,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         maintainAspectRatio: false,
         plugins: {
           legend: chartLegendBottom(),
-          tooltip: {
-            ...chartTooltipTheme(),
-            callbacks: {
-              label: (ctx: TooltipCtx) => {
-                const row = this.allocationRows[ctx.dataIndex];
-                const name = row.companyName ? ` - ${row.companyName}` : '';
-                return `${row.label}${name}: $${Number(ctx.raw).toLocaleString()} (${row.pct.toFixed(1)}%)`;
-              },
-            },
-          },
+          tooltip: { enabled: false },
         },
       },
     });

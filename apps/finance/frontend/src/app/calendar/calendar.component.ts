@@ -22,7 +22,6 @@ import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../uti
 import {
   chartColorAt,
   chartLegendBottom,
-  chartTooltipTheme,
 } from '../../theme/chart-colors';
 import {
   UiBadgeComponent,
@@ -196,16 +195,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
         maintainAspectRatio: false,
         plugins: {
           legend: chartLegendBottom(),
-          tooltip: {
-            ...chartTooltipTheme(),
-            callbacks: {
-              label: (ctx: { raw: number; dataIndex: number }) => {
-                const row = this.chartCategoryRows()[ctx.dataIndex];
-                if (!row) return '';
-                return `${row.label}: $${Number(ctx.raw).toLocaleString()} (${row.pct.toFixed(1)}%)`;
-              },
-            },
-          },
+          tooltip: { enabled: false },
         },
       },
     });

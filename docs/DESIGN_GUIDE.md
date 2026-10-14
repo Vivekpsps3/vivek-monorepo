@@ -70,7 +70,7 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 - Use Chart.js through existing chart utilities.
 - Use token-based colors from `apps/finance/frontend/src/theme/chart-colors.ts`.
 - Every chart needs a meaningful empty state.
-- Every chart needs a nearby numeric summary so the user does not have to hover.
+- Every chart needs a nearby numeric summary. Do not add hover tooltips.
 - Cashflow charts keep Recorded activity and Scheduled cashflow as separate views; do not combine them into one total.
 - Category charts use transaction-kind effects over the full ledger, independent of transaction-list paging.
 - Recorded monthly/category chart values have accessible drilldown links and matching chart-click behavior. Scheduled values go to Recurring. A collapsed synthetic `Other` tail expands categories instead of pretending to be a real category named `Other`.

@@ -19,9 +19,6 @@
       <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
     </div>
   </ui-page-header>
-  @if (marketState.phase === 'refreshing') {
-    <p class="refresh-note" role="status">Refreshing {{ marketState.completedSymbols }} of {{ marketState.totalSymbols || 'configured' }} tickers. Saved prices remain available during refresh.</p>
-  }
   @for (stage of resumableFidelityStages; track stage.id) {
     <ui-card class="resume-stage" [title]="'Fidelity replacement needs attention'">
       <p>{{ stage.filename }} · {{ stage.expected_row_count }} staged position(s) · {{ stage.account_masks.length }} account(s)</p>

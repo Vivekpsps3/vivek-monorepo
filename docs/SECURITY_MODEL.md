@@ -31,8 +31,9 @@ the operator controls the code delivered to browsers.
 3. The backend stores the signing public key, encrypted wraps, and a hash of each short-lived, single-use login challenge.
 4. Vault passphrases, signing private keys, and unwrapped data keys never reach the backend.
 5. Browser signs an account-bound challenge locally; only the public-key verification result creates a session.
-6. Browser encrypts finance records before upload and decrypts them after download.
-7. Backend stores ciphertext, non-sensitive sync metadata, and optional blind indexes only; it never computes over private plaintext.
+6. The session is an HttpOnly cookie (plus a readable CSRF cookie), not the vault passphrase. `SESSION_DAYS` is the lifetime, and each authenticated request slides that lifetime forward. The unwrapped data key stays in this browser's local storage so a reload stays unlocked. Lock vault and sign out delete that key. The passphrase is never written to a cookie, token, or the server.
+7. Browser encrypts finance records before upload and decrypts them after download.
+8. Backend stores ciphertext, non-sensitive sync metadata, and optional blind indexes only; it never computes over private plaintext.
 
 ## Plaintext allowed on the backend
 

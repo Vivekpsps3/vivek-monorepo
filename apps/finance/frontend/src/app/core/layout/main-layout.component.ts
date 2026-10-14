@@ -204,20 +204,13 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     void this.marketRefresh.refreshNow();
   }
 
+  get marketNoticeVisible(): boolean {
+    return this.marketState.phase === 'partial' || this.marketState.phase === 'failed';
+  }
+
   get marketRefreshMessage(): string {
-    if (this.marketState.phase === 'refreshing') {
-      return this.marketState.totalSymbols
-        ? `Refreshing prices · ${this.marketState.completedSymbols} of ${this.marketState.totalSymbols} tickers checked`
-        : 'Finding configured market tickers…';
-    }
-    if (this.marketState.phase === 'partial') {
-      return `Updated ${this.marketState.updatedHoldings} holding price(s) and ${this.marketState.updatedEmployerValuations} employer valuation(s); some prices could not be refreshed.`;
-    }
-    if (this.marketState.phase === 'failed') return 'Market prices could not be fully refreshed. Saved prices remain available.';
-    if (this.marketState.phase === 'complete' && this.marketState.totalSymbols) {
-      return `Updated ${this.marketState.updatedHoldings} holding price(s) and ${this.marketState.updatedEmployerValuations} employer valuation(s).`;
-    }
-    return '';
+    if (!this.marketNoticeVisible) return '';
+    return 'Some prices could not be refreshed. Saved prices remain available.';
   }
 
   async clearMyData(): Promise<void> {

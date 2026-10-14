@@ -51,7 +51,7 @@ test('unlock refreshes each unique holding and former-employer ticker once, appl
     .toBe(true);
   await expect.poll(() => vault.data('job_incomes')[0]?.stock_valuations?.some((row: any) => row.price_per_share === 125 && row.symbol === 'VOO'))
     .toBe(true);
-  await expect(page.locator('.market-banner')).toContainText('Updated 2 holding price(s) and 1 employer valuation(s).');
+  await expect(page.locator('.market-banner')).toHaveCount(0);
   await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,275.00');
 
   expect(vault.quoteRequestDetails).toEqual([{ symbol: 'VOO', refresh: true }]);

@@ -2,13 +2,21 @@
 
 <nav class="navbar" aria-label="Main navigation">
   <div class="nav-content">
-    <a routerLink="/" class="logo" aria-label="Finance home">
-      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect width="32" height="32" rx="8" fill="var(--accent-glow)" stroke="var(--accent)" stroke-width="1"/>
-        <path d="M8 22V10M14 22V6M20 22v-6M26 22H6" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <span class="logo-text">Finance</span>
-    </a>
+    <div class="logo-lockup">
+      <a routerLink="/" class="logo" aria-label="Finance home">
+        <svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="var(--accent-glow)" stroke="var(--accent)" stroke-width="1"/>
+          <path d="M8 22V10M14 22V6M20 22v-6M26 22H6" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-text">Finance</span>
+      </a>
+      @if (marketState.phase === 'refreshing') {
+        <span class="price-pulse" role="status">
+          <span class="price-pulse__dot" aria-hidden="true"></span>
+          <span class="visually-hidden">Updating prices. {{ marketRefreshDisclosure }}</span>
+        </span>
+      }
+    </div>
     <div class="nav-tabs" aria-label="Finance sections">
       @for (group of visibleNavGroups; track group.label) {
         <a
@@ -44,10 +52,24 @@
           <button type="button" (click)="lockVault()">Lock vault</button>
           <button type="button" (click)="logout()">Sign out</button>
           <button type="button" class="danger" [disabled]="isResettingData" (click)="clearMyData()">Clear data</button>
+          <p class="account-popover__note">Price checks send ticker symbols to the market service. Shares, balances, and saved plans stay in this browser.</p>
         </div>
       </details>
     </div>
   </div>
+</nav>
+
+<nav class="mobile-tabbar" aria-label="Finance sections">
+  @for (group of visibleNavGroups; track group.label) {
+    <a
+      [routerLink]="group.items[0].path"
+      class="mobile-tab"
+      [class.active]="isActiveGroup(group)"
+      [attr.aria-current]="isActiveGroup(group) ? 'page' : null">
+      <ui-icon [name]="group.icon" size="sm" />
+      <span>{{ group.shortLabel }}</span>
+    </a>
+  }
 </nav>
 
 @if (apiOffline) {
@@ -63,7 +85,7 @@
   </div>
 }
 
-@if (marketState.phase !== 'idle' && !(marketState.phase === 'complete' && marketState.totalSymbols === 0)) {
+@if (marketNoticeVisible) {
   <div class="market-banner-wrap">
     <ui-card class="market-banner-card" padding="none">
       <div class="market-banner" [class.market-banner--error]="marketState.phase === 'partial' || marketState.phase === 'failed'" role="status" aria-live="polite">

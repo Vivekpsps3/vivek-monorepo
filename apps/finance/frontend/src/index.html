@@ -17,6 +17,12 @@
       }
       document.documentElement.setAttribute('data-theme', theme);
       document.documentElement.style.colorScheme = theme;
+      var mobileQuery = window.matchMedia('(max-width: 768px)');
+      var applyViewport = function () {
+        document.documentElement.setAttribute('data-viewport', mobileQuery.matches ? 'mobile' : 'desktop');
+      };
+      applyViewport();
+      if (mobileQuery.addEventListener) mobileQuery.addEventListener('change', applyViewport);
     })();
   </script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">

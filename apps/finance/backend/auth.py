@@ -85,11 +85,16 @@ def public_user(user: User) -> dict:
     }
 
 
+def _cookie_expires() -> datetime:
+    return datetime.now(UTC) + timedelta(days=SESSION_DAYS)
+
+
 def set_session_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,
         max_age=SESSION_DAYS * 24 * 60 * 60,
+        expires=_cookie_expires(),
         httponly=True,
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
@@ -102,6 +107,7 @@ def set_csrf_cookie(response: Response, csrf: str) -> None:
         CSRF_COOKIE_NAME,
         csrf,
         max_age=SESSION_DAYS * 24 * 60 * 60,
+        expires=_cookie_expires(),
         httponly=False,
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
@@ -110,8 +116,26 @@ def set_csrf_cookie(response: Response, csrf: str) -> None:
 
 
 def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
-    response.delete_cookie(CSRF_COOKIE_NAME, path="/")
+    response.delete_cookie(
+        SESSION_COOKIE_NAME, path="/", secure=COOKIE_SECURE, httponly=True, samesite=COOKIE_SAMESITE
+    )
+    response.delete_cookie(
+        CSRF_COOKIE_NAME, path="/", secure=COOKIE_SECURE, httponly=False, samesite=COOKIE_SAMESITE
+    )
+
+
+def refresh_session_cookies(request: Request, response: Response, session: UserSession) -> None:
+    """Keep a browser that is still in use signed in for another SESSION_DAYS."""
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        return
+    now = utc_now_naive()
+    session.expires_at = now + timedelta(days=SESSION_DAYS)
+    session.last_seen_at = now
+    set_session_cookie(response, token)
+    csrf = request.cookies.get(CSRF_COOKIE_NAME)
+    if csrf and secrets.compare_digest(_hash_secret(csrf), session.csrf_token_hash):
+        set_csrf_cookie(response, csrf)
 
 
 def create_session(db: Session, user: User, request: Request, response: Response, *, migration_only: bool = False) -> str:
@@ -163,17 +187,19 @@ def require_csrf(request: Request, session: UserSession) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token")
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+def get_current_user(request: Request, response: Response, db: Session = Depends(get_db)) -> User:
     session, user = _session_from_request(db, request)
     require_csrf(request, session)
+    refresh_session_cookies(request, response, session)
     return user
 
 
-def get_current_migration_user(request: Request, db: Session = Depends(get_db)) -> User:
+def get_current_migration_user(request: Request, response: Response, db: Session = Depends(get_db)) -> User:
     session, user = _session_from_request(db, request, allow_migration=True)
     if not session.migration_only:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Passwordless enrollment is only available during migration")
     require_csrf(request, session)
+    refresh_session_cookies(request, response, session)
     return user
 
 

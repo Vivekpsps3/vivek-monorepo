@@ -31,12 +31,14 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
   @ViewChild('panel') private panel?: ElementRef<HTMLElement>;
   private lastFocused: HTMLElement | null = null;
   private focusedOpen = false;
+  private lockedScroll: HTMLElement | null = null;
+  private previousOverflow = '';
 
   ngAfterViewChecked(): void {
     if (this.open() && !this.focusedOpen) {
       this.lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       this.focusedOpen = true;
-      document.body.style.overflow = 'hidden';
+      this.lockBackgroundScroll();
       queueMicrotask(() => {
         const root = this.panel?.nativeElement;
         if (!root) return;
@@ -48,13 +50,13 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
     }
     if (!this.open() && this.focusedOpen) {
       this.focusedOpen = false;
-      document.body.style.overflow = '';
+      this.unlockBackgroundScroll();
       this.restoreFocus();
     }
   }
 
   ngOnDestroy(): void {
-    document.body.style.overflow = '';
+    this.unlockBackgroundScroll();
     this.restoreFocus();
   }
 
@@ -81,6 +83,21 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
       event.preventDefault();
       focusable[0].focus();
     }
+  }
+
+  private lockBackgroundScroll(): void {
+    const target = document.querySelector('.main-content') instanceof HTMLElement
+      ? document.querySelector('.main-content') as HTMLElement
+      : document.body;
+    this.lockedScroll = target;
+    this.previousOverflow = target.style.overflow;
+    target.style.overflow = 'hidden';
+  }
+
+  private unlockBackgroundScroll(): void {
+    if (!this.lockedScroll) return;
+    this.lockedScroll.style.overflow = this.previousOverflow;
+    this.lockedScroll = null;
   }
 
   private restoreFocus(): void {
