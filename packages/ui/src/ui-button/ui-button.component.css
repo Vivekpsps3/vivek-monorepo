@@ -3,13 +3,12 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   font-weight: 650;
   font-size: var(--text-sm);
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
-    box-shadow 0.2s ease, transform 0.15s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
   font-family: inherit;
   line-height: 1.25;
   box-shadow: none;
@@ -29,7 +28,7 @@
 }
 
 .ui-btn:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: none;
 }
 
 .ui-btn--md {

@@ -1,5 +1,5 @@
 /**
- * Chart.js palette from design tokens (--chart-1 … --chart-6 in theme/tokens.css).
+ * Chart.js palette from design tokens (--chart-1 … --chart-6 in packages/ui/tokens.css).
  */
 const CHART_VAR_NAMES = [
   '--chart-1',

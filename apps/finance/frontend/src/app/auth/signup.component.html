@@ -1,40 +1,38 @@
 <main class="login-shell">
-  <section class="login-panel" aria-labelledby="signup-title">
-    <div class="brand-lockup">
-      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect width="32" height="32" rx="8" fill="var(--accent-glow)" stroke="var(--accent)" stroke-width="1"/>
-        <path d="M8 22V10M14 22V6M20 22v-6M26 22H6" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
-      </svg>
+  <section class="auth-layout" aria-labelledby="signup-title">
+    <div class="auth-intro">
+      <a class="brand-lockup" routerLink="/login">Finance</a>
       <h1 id="signup-title">Create account</h1>
+      <p class="privacy-note">A lost passphrase cannot be reset or used to recover your encrypted data.</p>
     </div>
 
-    <ui-card>
-      <form class="login-form" (ngSubmit)="submit()">
-        <ui-input
-          label="Username"
-          autocomplete="username"
-          [required]="true"
-          [(value)]="username" />
-        <ui-input
-          label="Vault passphrase"
-          type="password"
-          [showPasswordToggle]="true"
-          autocomplete="new-password"
-          [required]="true"
-          [(value)]="password" />
-        <p class="password-hint">
-          Use 3-64 letters, numbers, dots, underscores, or hyphens for your username.
-          Your vault passphrase must be at least 12 characters. No invitation required.
-          Admins cannot reset your vault passphrase.
-        </p>
-        @if (error) {
-          <p class="login-error" role="alert">{{ error }}</p>
-        }
-        <ui-button type="submit" [disabled]="!canSubmit">
-          {{ loading ? 'Creating account' : 'Sign up' }}
-        </ui-button>
-      </form>
-      <a class="mode-link" routerLink="/login">Already have an account? Sign in</a>
-    </ui-card>
+    <div class="login-panel">
+      <ui-card>
+        <form class="login-form" (ngSubmit)="submit()">
+          <ui-input
+            label="Username"
+            autocomplete="username"
+            [required]="true"
+            [(value)]="username" />
+          <ui-input
+            label="Vault passphrase"
+            type="password"
+            [showPasswordToggle]="true"
+            autocomplete="new-password"
+            [required]="true"
+            [(value)]="password" />
+          <p class="password-hint">
+            Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+          </p>
+          @if (error) {
+            <p class="login-error" role="alert">{{ error }}</p>
+          }
+          <ui-button type="submit" [disabled]="!canSubmit">
+            {{ loading ? 'Creating account' : 'Sign up' }}
+          </ui-button>
+        </form>
+        <a class="mode-link" routerLink="/login">Sign in</a>
+      </ui-card>
+    </div>
   </section>
 </main>

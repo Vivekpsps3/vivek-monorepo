@@ -81,13 +81,34 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 
 ## Visual Style
 
-- Light, airy, operational UI. Paper canvas `#F4F2EC`, card `#FFFEFA`, ink
-  `#1C1B18`, pine accent `#3F6F5C`. Dark is an explicit Light / Dark split.
-- Content width is 72rem. No shadows or glows. No `NW` / `CF` / `ACT+CF` / `PLAN` chips.
-- Hierarchy from type weight, alignment, and hairline borders — not shadows or
-  accent glows. Cards sit on a slightly lighter surface than the canvas.
-- Cards are for real grouped surfaces, not decorative nesting.
-- Modest radii (6–12px). Pills are for buttons and chips only.
-- Use responsive grids for metric tiles.
-- Keep tables horizontally safe on mobile.
-- Avoid oversized hero sections, ornamental gradients, and marketing copy.
+- Use a near-neutral light canvas (`#F7F7F5`), white surfaces, graphite text
+  (`#222522`), and a restrained evergreen accent (`#3F6658`). Dark mode uses
+  the same hierarchy with charcoal surfaces and a muted green accent.
+- Keep content width near 72rem. Use alignment, type, spacing, and thin dividers
+  to establish hierarchy. Reserve bordered surfaces for related content and
+  shadows for overlays.
+- Use modest 6–10px control and surface radii. Buttons are rectangular; use
+  rounded shapes only where they carry familiar meaning, such as dates or status.
+- Group the three Home summary links in one section with fine dividers. Keep
+  balances, recorded cashflow, and scheduled cashflow separate and label source
+  dates near the balance figures.
+- Keep forms focused and concise. State the passphrase recovery limit beside
+  the sign-in fields. Use content-first rows for trips and portfolio work.
+- Cards group real data. Avoid decorative icon badges, nested card layouts,
+  gradients, oversized hero panels, generic bento grids, and repeated copy.
+- Keep focus states visible, charts accessible, and table values available for
+  people who need precise numbers.
+
+## Research and decisions
+
+These references informed the shared visual direction and writing:
+
+- [Linear: How we redesigned the Linear UI](https://linear.app/now/how-we-redesigned-the-linear-ui) — use alignment, hierarchy, and structured views with quieter chrome.
+- [Nielsen Norman Group: Aesthetic and minimalist design](https://www.nngroup.com/articles/aesthetic-minimalist-design/) — keep only the elements that support the user's task while preserving recognizable controls.
+- [GOV.UK: Writing for user interfaces](https://www.gov.uk/service-manual/design/writing-for-user-interfaces) — use concise, meaningful labels and plain instructions.
+
+Applied here: a neutral token set replaces paper-like contrast and card shadows;
+Home summaries share one surface; auth uses a single compact form; Travel trips
+and portfolio highlights use divided rows; navigation keeps a quiet active
+indicator. Existing routes, data meanings, source dates, chart values, and
+keyboard affordances remain visible.

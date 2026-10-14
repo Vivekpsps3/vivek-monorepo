@@ -15,9 +15,9 @@
   width: 100%;
   box-sizing: border-box;
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--card-bg);
   color: var(--text);
   font-size: var(--text-base);
   font-family: inherit;
@@ -35,7 +35,7 @@
 .ui-field__control:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow-sm);
 }
 
 .ui-field__control:disabled {

@@ -380,9 +380,9 @@ function renderHome(home) {
         .join("")}</section>`
     : "";
   const empty = !home.in_progress.length && !home.upcoming.length
-    ? `<section class="empty"><h2>No upcoming trips</h2><p class="lede">A trip runs from the day you leave through the day you come back. Add the flights, drives, and the plans for each day.</p><p class="row-actions"><a class="btn btn-primary" href="#/trips/new">New trip</a></p></section>`
+    ? `<section class="empty"><h2>No upcoming trips</h2><p class="lede">Add dates first. Flights and day plans can come later.</p><p class="row-actions"><a class="btn btn-primary" href="#/trips/new">New trip</a></p></section>`
     : "";
-  return `${banner()}${head("Upcoming", "Each card is one trip: the days you are away, the flights and drives, and what you are doing on those days.")}<section class="metrics">${metricHtml}</section>${attention}${empty}${blocks}${past}`;
+  return `${banner()}${head("Upcoming", "Trips, travel details, and day plans.") }<section class="metrics">${metricHtml}</section>${attention}${empty}${blocks}${past}`;
 }
 
 function renderTripCard(trip) {

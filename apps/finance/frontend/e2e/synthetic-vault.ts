@@ -178,9 +178,15 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
       const previous = new URL(target.url());
       const path = previous.pathname + previous.search;
       await target.reload();
-      enteredPages.delete(target);
-      await unlock(target);
-      if (path !== '/') await navigate(path, target);
+      await target.locator('app-main-layout, app-vault-unlock').first().waitFor({ state: 'visible' });
+      if (await target.locator('app-vault-unlock').isVisible()) {
+        enteredPages.delete(target);
+        await unlock(target);
+      } else {
+        enteredPages.add(target);
+      }
+      const current = new URL(target.url());
+      if (current.pathname + current.search !== path) await navigate(path, target);
     },
     failNextWrites(count = 1) { failedWrites = count; },
     holdNextUpserts(count = 1) {

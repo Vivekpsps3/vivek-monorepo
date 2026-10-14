@@ -123,12 +123,12 @@ export class LoginComponent {
 
   get passwordHint(): string {
     if (this.needsDisplayName) {
-      return 'Use at least 12 characters. Username + vault passphrase sign you in and unlock finance data. Admins cannot reset your vault.';
+      return 'Use at least 12 characters. Your passphrase signs in and unlocks your vault.';
     }
     if (this.legacyMode) {
-      return 'One-time only: verify your old email/password, choose a username and new vault passphrase (12+).';
+      return 'Enter your old credentials, then choose a username and a new passphrase (12+ characters).';
     }
-    return 'Use the username you enrolled with (shown under your profile when signed in), plus your vault passphrase. Email only works if that is your account email. Lost passphrase means lost data.';
+    return 'Use your username or the email linked to your account.';
   }
 
   private errorMessage(err: any): string {

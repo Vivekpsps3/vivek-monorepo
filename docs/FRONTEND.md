@@ -4,7 +4,7 @@ Angular 19 standalone app under `apps/finance/frontend/src/app/`.
 
 ## Stack
 
-- **Plain CSS** with design tokens from `src/theme/tokens.css` (ink + dust light default; dark only via `prefers-color-scheme`)
+- **Plain CSS** with shared design tokens from `packages/ui/tokens.css` (near-neutral light default; explicit light/dark choice)
 - **Shared UI** — finance-local `shared/ui/*` (selector prefix `ui-`) plus primitives re-exported from `@vivek/ui` (`packages/ui`)
 - **State** — `FinanceService` over `EncryptedStoreService` after vault unlock (RxJS `BehaviorSubject`s for ledger, balance sheet, recurring cashflow); `PlanningService`; `AuthService`
 - Stock Lab uses `MarketResearchService` for explicit ticker lookups and `EncryptedStoreService` for encrypted `stock_lab_scenarios`.
@@ -34,7 +34,7 @@ Shell: `MainLayoutComponent` (five hubs, `#main-content`). Admin and account act
 
 ## Design tokens
 
-Source of truth: `apps/finance/frontend/src/theme/tokens.css`.
+Source of truth: `packages/ui/tokens.css`. The Finance path under `src/theme/` remains a compatibility mirror.
 
 | CSS variable | Role |
 |--------------|------|
@@ -43,16 +43,18 @@ Source of truth: `apps/finance/frontend/src/theme/tokens.css`.
 | `--surface-2` | Inputs, chips |
 | `--text` | Primary text |
 | `--text-secondary` | Secondary text |
-| `--accent` | Indigo `#5266EB` — links, primary actions |
+| `--accent` | Restrained green `#3F6658` — links, primary actions |
 | `--border` | Borders |
 | `--success` / `--danger` / `--warning` | Status |
 
 Charts: `src/theme/chart-colors.ts` (prefer CSS vars for axes; segment palette in `CHART_COLORS`). Chart hover tooltips are off. Values sit in the table or readout beside the chart.
 
-**Appearance:** light is the default token set (paper `#F4F2EC`, card `#FFFEFA`,
-ink `#1C1B18`, pine accent `#3F6F5C`). Dark is `[data-theme="dark"]`. First
-visit follows the OS. The account menu has a Light / Dark split. Choice is
-stored in `localStorage` key `ft-theme`. Elevation is surface value, not drop shadow.
+**Appearance:** light is the default token set (canvas `#F7F7F5`, white
+surfaces, graphite `#222522`, restrained green `#3F6658`). Grouped surfaces use
+thin borders and no shadow; overlays may use elevation. Dark is
+`[data-theme="dark"]`. First visit follows the OS. The account menu has a
+Light / Dark split. Choice is stored in `localStorage` key `ft-theme`. Controls
+use rectangular 8px corners; status and date shapes retain familiar forms.
 Reduced transparency and increased contrast media queries are honored.
 Typography prefers the system stack (no remote font fetch). Locale money/date
 helpers live in `utils/format.util.ts`.
@@ -99,7 +101,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Home behavior
 
-- Home begins with three clickable metrics, then a first-steps checklist for an empty vault and charts. Detailed holdings stay on What you have; Home keeps portfolio value and position/quote provenance in its summary and retains the allocation chart.
+- Home begins with three clickable summaries in one divided section: current net worth, recorded cashflow this month, and scheduled recurring cashflow. It then shows a first-steps list for an empty vault and charts. Detailed holdings stay on What you have; Home keeps the holdings / assets / debts split and compact balance, position, and quote source dates, and retains the allocation chart.
 - **What you have** is the current net worth total.
 - **This month** is recorded pay and spend for the current month.
 - **What repeats** shows scheduled pay and spend from recurring rows.

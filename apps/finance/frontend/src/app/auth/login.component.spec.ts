@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { LoginComponent } from './login.component';
 import { AuthService } from './auth.service';
 
@@ -11,9 +11,11 @@ describe('LoginComponent', () => {
       imports: [LoginComponent],
       providers: [
         { provide: AuthService, useValue: auth },
-        { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate', 'navigateByUrl']) },
+        provideRouter([]),
       ],
     });
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigateByUrl').and.resolveTo(true);
     const fixture: ComponentFixture<LoginComponent> = TestBed.createComponent(LoginComponent);
     const component = fixture.componentInstance;
     const cdr = (component as any).cdr as jasmine.SpyObj<{ markForCheck(): void }>;

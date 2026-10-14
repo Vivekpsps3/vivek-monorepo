@@ -1,41 +1,39 @@
 <main class="login-shell">
-  <section class="login-panel" aria-labelledby="login-title">
-    <div class="brand-lockup">
-      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect width="32" height="32" rx="8" fill="var(--accent-glow)" stroke="var(--accent)" stroke-width="1"/>
-        <path d="M8 22V10M14 22V6M20 22v-6M26 22H6" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <h1 id="login-title">{{ setupMode ? 'Set up Finance' : 'Finance' }}</h1>
+  <section class="auth-layout" aria-labelledby="login-title">
+    <div class="auth-intro">
+      <a class="brand-lockup" routerLink="/login">Finance</a>
+      <h1 id="login-title">{{ setupMode ? 'Set up Finance' : 'Sign in' }}</h1>
+      <p class="privacy-note">Finance records are encrypted in your browser before they reach the server. A lost passphrase cannot be reset or recovered.</p>
     </div>
 
-    <ui-card>
-      <form class="login-form" (ngSubmit)="submit()">
-        @if (legacyMode) {
-          <ui-input label="Email" type="email" autocomplete="username" [required]="true" [(value)]="email" />
-          <ui-input label="Old account password" type="password" [showPasswordToggle]="true" autocomplete="current-password" [required]="true" [(value)]="password" />
-          <ui-input label="New username" autocomplete="username" [required]="true" [(value)]="username" />
-          <ui-input label="New vault passphrase" type="password" [showPasswordToggle]="true" autocomplete="new-password" [required]="true" [(value)]="vaultPassphrase" />
-        } @else {
-          <ui-input label="Username" autocomplete="username" [required]="true" [(value)]="username" />
-          @if (needsDisplayName) {
-            <ui-input label="Display name" autocomplete="name" [required]="true" [(value)]="displayName" />
+    <div class="login-panel">
+      <ui-card>
+        <form class="login-form" (ngSubmit)="submit()">
+          @if (legacyMode) {
+            <ui-input label="Email" type="email" autocomplete="username" [required]="true" [(value)]="email" />
+            <ui-input label="Old account password" type="password" [showPasswordToggle]="true" autocomplete="current-password" [required]="true" [(value)]="password" />
+            <ui-input label="New username" autocomplete="username" [required]="true" [(value)]="username" />
+            <ui-input label="New vault passphrase" type="password" [showPasswordToggle]="true" autocomplete="new-password" [required]="true" [(value)]="vaultPassphrase" />
+          } @else {
+            <ui-input label="Username" autocomplete="username" [required]="true" [(value)]="username" />
+            @if (needsDisplayName) {
+              <ui-input label="Display name" autocomplete="name" [required]="true" [(value)]="displayName" />
+            }
+            <ui-input label="Vault passphrase" type="password" [showPasswordToggle]="true" [autocomplete]="needsDisplayName ? 'new-password' : 'current-password'" [required]="true" [(value)]="password" />
           }
-          <ui-input label="Vault passphrase" type="password" [showPasswordToggle]="true" [autocomplete]="needsDisplayName ? 'new-password' : 'current-password'" [required]="true" [(value)]="password" />
+          @if (passwordHint) { <p class="password-hint">{{ passwordHint }}</p> }
+          @if (error) { <p class="login-error" role="alert">{{ error }}</p> }
+          <ui-button type="submit" [disabled]="!canSubmit">
+            {{ loading ? (needsDisplayName ? 'Creating account' : (legacyMode ? 'Migrating' : 'Signing in')) : (setupMode ? 'Create admin account' : (legacyMode ? 'Migrate and sign in' : 'Sign in')) }}
+          </ui-button>
+        </form>
+        @if (!setupMode) {
+          <a class="mode-link" routerLink="/signup">Create an account</a>
+          <button type="button" class="mode-link" (click)="toggleLegacyMode()">
+            {{ legacyMode ? 'Back to sign in' : 'Migrate old account' }}
+          </button>
         }
-        @if (passwordHint) { <p class="password-hint">{{ passwordHint }}</p> }
-        @if (error) {
-          <p class="login-error" role="alert">{{ error }}</p>
-        }
-        <ui-button type="submit" [disabled]="!canSubmit">
-          {{ loading ? (needsDisplayName ? 'Creating account' : (legacyMode ? 'Migrating' : 'Signing in')) : (setupMode ? 'Create admin account' : (legacyMode ? 'Migrate and sign in' : 'Sign in')) }}
-        </ui-button>
-      </form>
-      @if (!setupMode) {
-        <a class="mode-link" routerLink="/signup">Create an account</a>
-        <button type="button" class="mode-link" (click)="toggleLegacyMode()">
-          {{ legacyMode ? 'Back to username + vault passphrase' : 'One-time account migration (old password)' }}
-        </button>
-      }
-    </ui-card>
+      </ui-card>
+    </div>
   </section>
 </main>

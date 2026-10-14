@@ -39,19 +39,47 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../sh
   styles: [
     `
       .vault-page {
-        max-width: 40rem;
+        max-width: 42rem;
+        min-height: 100dvh;
+        align-content: center;
+        padding-block: var(--space-8);
       }
       label {
         display: grid;
-        gap: 0.4rem;
-        margin: 1rem 0;
+        gap: var(--space-2);
+        margin: var(--space-4) 0;
+        color: var(--text-secondary);
+        font-size: var(--text-sm);
+        font-weight: 600;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 48px;
+        padding: var(--space-3) var(--space-4);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--card-bg);
+        color: var(--text);
+        font: inherit;
+      }
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
       }
       .error {
         color: var(--danger);
+        font-size: var(--text-sm);
       }
       .muted {
         color: var(--text-secondary);
-        font-size: 0.9rem;
+        font-size: var(--text-sm);
+        line-height: 1.55;
+      }
+      .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: var(--space-4);
       }
     `,
   ],

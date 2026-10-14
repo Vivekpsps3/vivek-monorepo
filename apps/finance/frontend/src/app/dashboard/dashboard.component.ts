@@ -15,7 +15,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
-import { UiButtonComponent, UiCardComponent, UiSkeletonComponent } from '../shared/ui';
+import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '../shared/ui';
 import {
   actualQuoteDate,
   hasUnvaluedPositions,
@@ -32,6 +32,7 @@ import {
     ChartsComponent,
     UiButtonComponent,
     UiCardComponent,
+    UiIconComponent,
     UiSkeletonComponent,
   ],
   templateUrl: './dashboard.component.html',

@@ -101,9 +101,9 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   expect(tutorialBox?.height ?? 999).toBeLessThanOrEqual(844);
   await page.getByRole('button', { name: 'Close' }).click();
 
-  await page.locator('summary').click();
+  await page.locator('.account-actions > summary').click();
   await expect(page.locator('.account-popover__note')).toContainText('ticker symbols');
-  await page.locator('summary').click();
+  await page.locator('.account-actions > summary').click();
 
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(page.locator('.mobile-tabbar')).toBeVisible();

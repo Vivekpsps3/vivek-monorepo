@@ -1,72 +1,61 @@
 .login-shell {
+  box-sizing: border-box;
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: var(--space-6);
+  padding: max(var(--space-6), env(safe-area-inset-top)) var(--space-4)
+    max(var(--space-6), env(safe-area-inset-bottom));
   background: var(--bg);
 }
-
-.login-panel {
+.auth-layout {
+  box-sizing: border-box;
   width: min(100%, 420px);
   display: grid;
   gap: var(--space-5);
 }
-
+.auth-intro { display: grid; gap: var(--space-3); }
 .brand-lockup {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-}
-
-.brand-mark {
-  width: 36px;
-  height: 36px;
-}
-
-@media (max-width: 520px) {
-  .login-shell {
-    align-items: start;
-    padding: var(--space-8) var(--space-4);
-  }
-}
-
-h1 {
-  margin: 0;
-  font-size: var(--text-2xl);
-  letter-spacing: 0;
-}
-
-.login-form {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.login-error {
-  margin: 0;
-  color: var(--danger);
+  width: fit-content;
+  color: var(--text-secondary);
   font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
 }
-
+.auth-intro h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-2xl);
+  font-weight: 620;
+  letter-spacing: -0.03em;
+}
+.privacy-note {
+  max-width: 38rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.privacy-note strong { color: var(--text); font-weight: 600; }
+.login-panel { width: 100%; min-width: 0; }
+.login-form { display: grid; gap: var(--space-4); }
+.login-error { margin: 0; color: var(--danger); font-size: var(--text-sm); }
 .password-hint {
   margin: calc(-1 * var(--space-2)) 0 0;
   color: var(--text-secondary);
   font-size: var(--text-sm);
+  line-height: 1.5;
 }
-
 .mode-link {
   display: block;
   width: 100%;
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
   border: 0;
   background: transparent;
   color: var(--accent);
   font: inherit;
+  font-size: var(--text-sm);
   text-align: center;
   text-decoration: none;
   cursor: pointer;
 }
-
-.mode-link:hover {
-  text-decoration: underline;
-}
+.mode-link:hover { text-decoration: underline; }

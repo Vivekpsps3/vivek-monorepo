@@ -9,6 +9,10 @@
   gap: var(--space-6);
 }
 
+.charts-section.embedded .charts-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .chart-wide {
   grid-column: 1 / -1;
 }
@@ -32,6 +36,15 @@
   color: var(--text-secondary);
   margin-bottom: var(--space-4);
 }
+
+.chart-data { margin-top: var(--space-3); }
+.chart-data summary {
+  width: fit-content;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.chart-data[open] summary { margin-bottom: var(--space-2); }
 
 .view-switch {
   display: inline-flex;
@@ -72,6 +85,10 @@
 }
 
 @media (max-width: 768px) {
+  .charts-section.embedded .charts-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .chart-wrap,
   .chart-wrap.tall {
     height: 220px;

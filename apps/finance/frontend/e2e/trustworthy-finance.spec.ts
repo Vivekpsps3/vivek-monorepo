@@ -184,6 +184,7 @@ test('Charts switch between recorded totals and scheduled commitments without ch
   await charts.getByRole('button', { name: 'Scheduled', exact: true }).click();
   await expect(charts.locator('.chart-note')).toContainText('Income $0.00');
   await expect(charts.locator('.chart-note')).toContainText('Spending $130.00');
+  await charts.getByText('Data', { exact: true }).click();
   const currentMonthRow = charts.getByRole('table', { name: 'Monthly cashflow data table' }).getByRole('row').last();
   await expect(currentMonthRow).toContainText('$130.00');
   expect(vault.mutations).toHaveLength(mutationCount);

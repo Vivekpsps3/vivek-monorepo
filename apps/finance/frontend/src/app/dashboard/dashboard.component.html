@@ -1,65 +1,93 @@
 <div class="page dashboard">
   @if (!isLoading && !error && netWorth) {
-    <nav class="home-grid" aria-label="Home">
-      <a routerLink="/have" class="home-tile">
-        <span class="home-tile__label">What you have</span>
+    <header class="home-header">
+      <h1>Home</h1>
+    </header>
+
+    <nav class="home-overview" aria-label="Home overview">
+      <a routerLink="/have" class="home-tile home-tile--balance">
+        <span class="home-tile__topline">What you have <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money">${{ have | number: '1.2-2' }}</span>
-        <span class="home-tile__hint">
-          {{ portfolioValueIncomplete ? 'Known holdings' : 'Holdings' }} ${{ netWorth.portfolio | number: '1.0-0' }}
-          · Assets ${{ netWorth.other_assets | number: '1.0-0' }}
-          · Debts ${{ netWorth.liabilities | number: '1.0-0' }}
-        </span>
-        <span class="home-tile__hint">Balance dates: {{ balanceSourceDates }}</span>
-        <span class="home-tile__hint">Position dates: {{ positionSourceDates }} · quote dates: {{ quoteSourceDates }}</span>
+        <span class="home-tile__metric-name">Current net worth</span>
+
+        <dl class="balance-breakdown">
+          <div>
+            <dt>{{ portfolioValueIncomplete ? 'Known holdings' : 'Holdings' }}</dt>
+            <dd class="money">${{ netWorth.portfolio | number: '1.0-0' }}</dd>
+          </div>
+          <div>
+            <dt>Other assets</dt>
+            <dd class="money">${{ netWorth.other_assets | number: '1.0-0' }}</dd>
+          </div>
+          <div>
+            <dt>Debts</dt>
+            <dd class="money negative">${{ netWorth.liabilities | number: '1.0-0' }}</dd>
+          </div>
+        </dl>
+
+        <div class="source-dates">
+          <p class="source-dates__heading">Source dates</p>
+          <dl>
+            <div><dt>Balances</dt><dd>{{ balanceSourceDates }}</dd></div>
+            <div><dt>Positions</dt><dd>{{ positionSourceDates }}</dd></div>
+            <div><dt>Quotes</dt><dd>{{ quoteSourceDates }}</dd></div>
+          </dl>
+        </div>
+
         @if (portfolioValueIncomplete) {
-          <span class="home-tile__hint">Portfolio value incomplete · {{ unvaluedPositionCount }} position(s) unvalued</span>
+          <span class="home-status">Portfolio value incomplete · {{ unvaluedPositionCount }} unvalued position(s)</span>
         }
         @if (provisionalPositionCount) {
-          <span class="home-tile__hint">{{ provisionalPositionCount }} position(s) use provisional values</span>
+          <span class="home-status">{{ provisionalPositionCount }} position(s) use provisional values</span>
         }
       </a>
-      <a routerLink="/spending" class="home-tile">
-        <span class="home-tile__label">This month</span>
+
+      <a routerLink="/spending" class="home-tile home-tile--activity">
+        <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+        <span class="home-tile__metric-name">Recorded activity</span>
         <span class="home-split">
           <span>
             <small>Income</small>
             <strong class="money">${{ monthPay | number: '1.2-2' }}</strong>
           </span>
           <span>
-            <small>Spend</small>
+            <small>Spending</small>
             <strong class="money negative">${{ monthSpend | number: '1.2-2' }}</strong>
           </span>
         </span>
-        <span class="home-tile__hint">Card and bank activity</span>
       </a>
-      <a routerLink="/recurring" class="home-tile">
-        <span class="home-tile__label">What repeats</span>
+
+      <a routerLink="/recurring" class="home-tile home-tile--scheduled">
+        <span class="home-tile__topline">What repeats <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+        <span class="home-tile__metric-name">Scheduled estimate</span>
         <span class="home-split">
           <span>
             <small>Pay</small>
             <strong class="money">${{ repeatPay | number: '1.2-2' }}</strong>
           </span>
           <span>
-            <small>Spend</small>
+            <small>Costs</small>
             <strong class="money negative">${{ repeatSpend | number: '1.2-2' }}</strong>
           </span>
         </span>
-        <span class="home-tile__hint">Pay, bills, and subscriptions</span>
       </a>
     </nav>
 
     @if (isStarterState) {
-      <ui-card [title]="'First steps'">
-        <p class="home-tile__hint">Start with the parts you use. You can add balances, transaction history, recurring pay and bills, and a plan separately.</p>
+      <section class="starter-card" aria-labelledby="starter-title">
+        <div class="starter-card__heading">
+          <h2 id="starter-title">First steps</h2>
+          <p>Add the parts you track, in any order.</p>
+        </div>
         <nav class="starter-links" aria-label="Finance setup">
-          <a routerLink="/have" [queryParams]="{ t: 'assets' }">Add assets and debts</a>
-          <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Add holdings</a>
-          <a routerLink="/spending" [queryParams]="{ t: 'imports' }">Import bank CSVs</a>
-          <a routerLink="/recurring" [queryParams]="{ t: 'pay' }">Add jobs and pay</a>
-          <a routerLink="/recurring" [queryParams]="{ t: 'spend' }">Add bills and subscriptions</a>
-          <a routerLink="/planning">Build a plan</a>
+          <a routerLink="/have" [queryParams]="{ t: 'assets' }"><ui-icon name="wallet" size="sm" />Add assets and debts<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/have" [queryParams]="{ t: 'holdings' }"><ui-icon name="portfolio" size="sm" />Add holdings<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/spending" [queryParams]="{ t: 'imports' }"><ui-icon name="upload" size="sm" />Import bank CSVs<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/recurring" [queryParams]="{ t: 'pay' }"><ui-icon name="building" size="sm" />Add jobs and pay<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/recurring" [queryParams]="{ t: 'spend' }"><ui-icon name="calendar" size="sm" />Add bills and subscriptions<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/planning"><ui-icon name="trending" size="sm" />Build a plan<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
         </nav>
-      </ui-card>
+      </section>
     }
 
     <app-charts [embedded]="true" [dataReady]="!isLoading" [overrideTransactions]="transactions" />
