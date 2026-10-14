@@ -1,27 +1,31 @@
 # Travel
 
-Personal trip planner for the local network. A trip is the span from the day you leave through the day you come back.
+Personal trip planner. A trip is the span from the day you leave through the day you come back.
 
-This app does not use the finance database, vault, or net-worth math. Trip budgets and PTO stay here.
+This app does not use the finance database, vault, or net-worth math. Trip budgets and PTO stay here. Sign-in is the finance session: the same `finance_session` cookie that Finance sets.
 
 ## Run
+
+Supported host, with Finance:
+
+```bash
+docker compose up --build
+```
+
+Open `/finance/` and `/travel/` on that origin. The finance API stays at `/api/`, including `/api/health`.
+
+Direct process, without the shared cookie:
 
 ```bash
 make travel-install
 make travel-dev
 ```
 
-Open `http://<this-machine>:8090`. The dev server listens on `0.0.0.0` so other devices on your LAN can reach it. Do not port-forward it to the public internet.
+That listens on `0.0.0.0:8090` at `/`. Its sign-in link points at `/finance/login` on that same port, which is not the Finance app. Do not port-forward it to the public internet.
 
-Set `TRAVEL_ACCESS_TOKEN` before starting if you want a passphrase. Set `FLIGHTAWARE_API_KEY` or save a key in Settings for flight lookup. Without a key, type the flight yourself.
+Set `FLIGHTAWARE_API_KEY` or save a key in Settings for flight lookup. Without a key, type the flight yourself.
 
-Docker, still LAN-only:
-
-```bash
-docker compose -f apps/travel/docker-compose.yml up --build
-```
-
-SQLite file: `apps/travel/backend/travel.db` in dev, `data/travel.db` in Docker.
+SQLite file: `apps/travel/backend/travel.db` in dev, `data/travel.db` in Docker. Copy `data/travel.db` yourself when you back up; `scripts/backup-db.sh` covers `finance.db`.
 
 ## What it stores
 

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
+from deps import require_actor
 from models import PtoEntry, PtoPolicy
 from schemas import PtoEntryIn, PtoPolicyIn
 from services.assemble import snapshot_pto
@@ -22,12 +23,21 @@ def _quantize(value: Decimal) -> Decimal:
 
 
 def _entries(db: Session):
-    return db.query(PtoEntry).order_by(PtoEntry.start_date, PtoEntry.id).all()
+    return (
+        db.query(PtoEntry)
+        .filter(PtoEntry.user_id == require_actor().id)
+        .order_by(PtoEntry.start_date, PtoEntry.id)
+        .all()
+    )
+
+
+def _policy_row(db: Session) -> PtoPolicy | None:
+    return db.query(PtoPolicy).filter(PtoPolicy.user_id == require_actor().id).one_or_none()
 
 
 def _payload(db: Session, today: date | None = None) -> dict:
     today = today or date.today()
-    row = db.get(PtoPolicy, 1)
+    row = _policy_row(db)
     policy = policy_from_row(row)
     usages = usages_from_rows(_entries(db))
     entries = [
@@ -53,9 +63,9 @@ def read_pto(db: Session = Depends(get_db)):
 
 @router.put("/pto/policy")
 def save_policy(body: PtoPolicyIn, db: Session = Depends(get_db)):
-    row = db.get(PtoPolicy, 1)
+    row = _policy_row(db)
     if row is None:
-        row = PtoPolicy(id=1, balance_as_of=body.balance_as_of)
+        row = PtoPolicy(user_id=require_actor().id, balance_as_of=body.balance_as_of)
         db.add(row)
     row.configured = True
     row.accrual_amount = fmt_days(_quantize(body.accrual_amount))
@@ -73,6 +83,7 @@ def save_policy(body: PtoPolicyIn, db: Session = Depends(get_db)):
 def create_entry(body: PtoEntryIn, db: Session = Depends(get_db)):
     days = body.days if body.days is not None else Decimal(weekday_count(body.start_date, body.end_date))
     row = PtoEntry(
+        user_id=require_actor().id,
         trip_id=None,
         start_date=body.start_date,
         end_date=body.end_date,
@@ -89,7 +100,7 @@ def create_entry(body: PtoEntryIn, db: Session = Depends(get_db)):
 @router.delete("/pto/entries/{entry_id}", status_code=204)
 def delete_entry(entry_id: int, db: Session = Depends(get_db)):
     row = db.get(PtoEntry, entry_id)
-    if row is None:
+    if row is None or row.user_id != require_actor().id:
         raise HTTPException(status_code=404, detail="That PTO entry is not here.")
     if row.trip_id is not None:
         raise HTTPException(status_code=400, detail="This PTO comes from a trip. Change it on the trip.")
@@ -103,7 +114,7 @@ def preview(
     days: Decimal | None = None,
     db: Session = Depends(get_db),
 ):
-    policy = policy_from_row(db.get(PtoPolicy, 1))
+    policy = policy_from_row(_policy_row(db))
     usages = usages_from_rows(_entries(db))
     try:
         parsed = parse_days(days) if days is not None else None

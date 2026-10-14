@@ -223,12 +223,30 @@ def test_flight_lookup_and_place_cache(client, monkeypatch):
     assert calls["n"] == 1
 
 
-def test_access_token_locks_the_api(client, monkeypatch):
-    monkeypatch.setenv("TRAVEL_ACCESS_TOKEN", "secret")
-    assert client.get("/api/home").status_code == 401
+def test_trips_stay_with_the_finance_user(client):
+    from deps import AuthResult, Principal
+
+    created = client.post(
+        "/api/trips",
+        json={"title": "Mine", "start_date": "2026-11-02", "end_date": "2026-11-06", "stays": [], "transports": []},
+    )
+    assert created.status_code == 201, created.text
+    trip_id = created.json()["id"]
+    client.app.state.principal_checker = lambda _request: AuthResult(Principal(2, "other", "Other"), [])
+    assert client.get(f"/api/trips/{trip_id}").status_code == 404
+    assert client.get("/api/home").json()["upcoming"] == []
+    assert client.get("/api/settings").json()["account"]["name"] == "Other"
+
+
+def test_finance_session_is_required(client, monkeypatch):
+    from fastapi import HTTPException
+
+    client.app.state.principal_checker = None
+
+    def deny(_request):
+        raise HTTPException(status_code=401, detail="Sign in through Finance.")
+
+    monkeypatch.setattr("deps.fetch_principal", deny)
     assert client.get("/api/health").status_code == 200
-    denied = client.post("/api/session", json={"token": "nope"})
-    assert denied.status_code == 401
-    opened = client.post("/api/session", json={"token": "secret"})
-    assert opened.status_code == 200
-    assert client.get("/api/home").status_code == 200
+    assert client.get("/api/home").status_code == 401
+    assert client.get("/api/home").json()["detail"] == "Sign in through Finance."

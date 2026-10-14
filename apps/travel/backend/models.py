@@ -7,7 +7,7 @@ that trip. PTO is a separate projection and never writes finance data.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -21,6 +21,8 @@ class Trip(Base):
     __tablename__ = "trips"
 
     id = Column(Integer, primary_key=True)
+    # Finance user id. Travel does not write finance rows; it only keeps this id.
+    user_id = Column(Integer, nullable=False, index=True)
     title = Column(String(200), nullable=False)
     start_date = Column(Date, nullable=False, index=True)
     end_date = Column(Date, nullable=False, index=True)
@@ -189,8 +191,10 @@ class BudgetLine(Base):
 
 class PtoPolicy(Base):
     __tablename__ = "pto_policy"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_pto_policy_user_id"),)
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
     configured = Column(Boolean, nullable=False, default=False)
     accrual_amount = Column(String(32), nullable=False, default="0")
     accrual_unit = Column(String(10), nullable=False, default="day")  # day, hour
@@ -207,6 +211,7 @@ class PtoEntry(Base):
     __tablename__ = "pto_entries"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
     trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=True, unique=True)
     start_date = Column(Date, nullable=False, index=True)
     end_date = Column(Date, nullable=False)

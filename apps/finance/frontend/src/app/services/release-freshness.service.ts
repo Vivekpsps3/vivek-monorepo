@@ -3,7 +3,11 @@ import { Injectable, OnDestroy, inject, signal } from '@angular/core';
 import { NavigationEnd, NavigationError, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
-const MANIFEST_PATH = '/version.json';
+/** Resolve version.json against <base href>, so / and /finance/ both hit the built manifest. */
+export function releaseManifestUrl(doc: Document): string {
+  const base = doc.querySelector('base')?.href || doc.baseURI;
+  return new URL('version.json', base).href;
+}
 const CHECK_THROTTLE_MS = 30_000;
 const RELEASE_ID_PATTERN = /^[a-f0-9]{64}$/i;
 
@@ -92,7 +96,7 @@ export class ReleaseFreshnessService implements OnDestroy {
 
   private async fetchManifest(): Promise<ReleaseManifest | null> {
     try {
-      const response = await fetch(MANIFEST_PATH, {
+      const response = await fetch(releaseManifestUrl(this.document), {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',

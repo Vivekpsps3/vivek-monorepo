@@ -6,6 +6,8 @@ The ledger, auth tables, and planning profiles live in SQLite. Paths:
 |------|-----------------|
 | Local dev (`make dev`) | `apps/finance/backend/finance.db` |
 | Docker Compose | `data/finance.db` |
+| Travel, local dev | `apps/travel/backend/travel.db` |
+| Travel, Docker | `data/travel.db` |
 
 `DATABASE_URL` can point elsewhere. These files are gitignored; you are
 responsible for backups.
@@ -71,6 +73,7 @@ cp /path/to/finance.db.bak-YYYYMMDD data/finance.db
 |------|------|
 | Dev ledger DB | `apps/finance/backend/finance.db` |
 | Docker ledger DB | `data/finance.db` |
+| Travel DB | `data/travel.db` or `apps/travel/backend/travel.db`. Separate from finance. `scripts/backup-db.sh` does not copy it. |
 | Env secrets | `apps/finance/backend/.env` (not in git) |
 | Users/sessions/audit | Inside `finance.db` |
 | Balance sheet, holdings, transactions, recurring cashflow | Inside `finance.db` |

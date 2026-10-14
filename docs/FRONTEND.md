@@ -30,7 +30,7 @@ Angular 19 standalone app under `apps/finance/frontend/src/app/`.
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
-Shell: `MainLayoutComponent` (five hubs, `#main-content`). Admin and account actions live in the account menu. Dev API: `apiUrl: '/api'` + `proxy.conf.js` (`/api/**` → FastAPI).
+Shell: `MainLayoutComponent` (five hubs plus a Travel link to `/travel/`, `#main-content`). Admin and account actions live in the account menu. Dev API: `apiUrl: '/api'` + `proxy.conf.js` (`/api/**` → FastAPI). `ng serve` stays at `/`. The production image uses `<base href="/finance/">`, so these router paths are served under `/finance/` and `router.navigateByUrl('/have')` must stay unprefixed.
 
 ## Design tokens
 

@@ -1,7 +1,7 @@
-# Travel app for the local network. Do not put this behind a public proxy.
-# From the repo root:
-#   docker compose -f apps/travel/docker-compose.yml up --build
-# Open http://<this-machine>:8090 from another device on your LAN.
+# Direct container for debugging Travel by itself on port 8090 at /.
+# The image expects the suite's finance API at http://api:8000, which this
+# file does not run. The supported host is the repo-root compose stack:
+# /finance/ and /travel/ on one origin.
 
 services:
   travel:
@@ -16,6 +16,6 @@ services:
       - ../../data:/data
     environment:
       TRAVEL_DATABASE_URL: sqlite:////data/travel.db
+      TRAVEL_MOUNT_PATH: ""
       FLIGHTAWARE_API_KEY: ${FLIGHTAWARE_API_KEY:-}
-      TRAVEL_ACCESS_TOKEN: ${TRAVEL_ACCESS_TOKEN:-}
     restart: unless-stopped

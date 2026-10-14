@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { afterAuthUrl } from '../auth/after-auth';
+import { continueAfterAuth } from '../auth/after-auth';
 import { AuthService } from '../auth/auth.service';
 import { VaultService } from '../crypto/vault.service';
 import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../shared/ui';
@@ -113,7 +113,7 @@ export class VaultUnlockComponent implements OnInit {
       return;
     }
     if (this.vault.isUnlocked) {
-      await this.router.navigateByUrl(afterAuthUrl());
+      await continueAfterAuth(this.router);
     }
   }
 
@@ -123,7 +123,7 @@ export class VaultUnlockComponent implements OnInit {
     try {
       await this.vault.unlock(this.passphrase);
       await this.vault.refreshStatus();
-      await this.router.navigateByUrl(afterAuthUrl());
+      await continueAfterAuth(this.router);
     } catch (e: any) {
       this.error = e?.error?.detail || e?.message || 'Unlock failed';
     } finally {

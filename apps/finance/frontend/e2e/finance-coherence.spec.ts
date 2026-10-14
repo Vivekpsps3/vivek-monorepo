@@ -598,11 +598,12 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await page.screenshot({ path: '/tmp/finance-ux-home-dark.png', fullPage: true });
 });
 
-test('phone navigation keeps all five hubs in view and supports keyboard Plan navigation', async ({ page }) => {
+test('phone navigation keeps every section in view and supports keyboard Plan navigation', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/');
   const desktopNav = page.locator('.nav-tabs');
-  await expect(desktopNav.getByRole('link')).toHaveCount(5);
+  await expect(desktopNav.getByRole('link')).toHaveCount(6);
+  await expect(desktopNav.getByRole('link', { name: 'Travel', exact: true })).toHaveAttribute('href', '/travel/');
 
   for (const width of [320, 390]) {
     if (width > 320) await vault.open('/');
@@ -626,7 +627,7 @@ test('phone navigation keeps all five hubs in view and supports keyboard Plan na
     });
     expect(layout.document).toBeLessThanOrEqual(layout.viewport + 1);
     expect(layout.nav.scrollWidth).toBeLessThanOrEqual(layout.nav.width + 1);
-    expect(layout.links).toHaveLength(5);
+    expect(layout.links).toHaveLength(6);
     for (const link of layout.links) {
       expect(link.left).toBeGreaterThanOrEqual(layout.nav.left - 1);
       expect(link.right).toBeLessThanOrEqual(layout.nav.right + 1);

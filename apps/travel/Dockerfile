@@ -11,6 +11,7 @@ COPY backend /app
 COPY --from=tokens tokens.css /app/static/tokens.css
 
 ENV TRAVEL_DATABASE_URL=sqlite:////data/travel.db
+ENV FINANCE_API_URL=http://api:8000
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

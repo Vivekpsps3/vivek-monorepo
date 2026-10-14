@@ -123,8 +123,9 @@ def sync_trip_pto(db, trip) -> None:
         return
     days, _auto = effective_pto_days(trip.pto_days, trip.start_date, trip.end_date)
     if entry is None:
-        entry = PtoEntry(trip_id=trip.id, kind="trip")
+        entry = PtoEntry(trip_id=trip.id, user_id=trip.user_id, kind="trip")
         db.add(entry)
+    entry.user_id = trip.user_id
     entry.start_date = trip.start_date
     entry.end_date = trip.end_date
     entry.days = fmt_days(days)

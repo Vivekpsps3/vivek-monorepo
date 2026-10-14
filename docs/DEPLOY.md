@@ -7,9 +7,13 @@ or similar host:
 
 ```
 domain / LAN / VPN
-  → web container (Nginx serves Angular and proxies /api)
-  → api container (FastAPI, private Compose network)
-  → SQLite DB file
+  → host nginx proxies the whole site to 127.0.0.1:8085
+  → web container
+       /finance/  Angular
+       /travel/   travel container
+       /api/      finance API (health check stays here)
+  → api container (FastAPI, private Compose network) and travel container
+  → data/finance.db and data/travel.db
 ```
 
 ## Before exposing the API
@@ -17,7 +21,7 @@ domain / LAN / VPN
 | Step | Action |
 |------|--------|
 | 1 | Put TLS in front of the web container and keep the API private to Compose or loopback. |
-| 2 | Open `/login` on a fresh database and create the first admin with a username and vault passphrase (lost passphrase = lost vault data). Open self-signup is also available at `/signup`. |
+| 2 | Open `/finance/login` on a fresh database and create the first admin with a username and vault passphrase (lost passphrase = lost vault data). Open self-signup is at `/finance/signup`. Older `/login` and `/have` links redirect under `/finance/`. |
 | 3 | Set **`CORS_ORIGINS`** to your UI origin(s) only (comma-separated). Avoid `*`. |
 | 4 | Keep **`allow_credentials=True`** and explicit origins because browser auth uses cookies. |
 | 5 | Set **`SESSION_COOKIE_SECURE=1`** for HTTPS deployments. Use `0` only for local HTTP development. |
@@ -27,7 +31,8 @@ domain / LAN / VPN
 
 ## Data & backups
 
-- SQLite file (production): `data/finance.db` (local dev default: `apps/finance/backend/finance.db`; see [BACKUP.md](./BACKUP.md)).
+- Finance SQLite (production): `data/finance.db` (local dev default: `apps/finance/backend/finance.db`; see [BACKUP.md](./BACKUP.md)).
+- Travel SQLite: `data/travel.db` in Docker, `apps/travel/backend/travel.db` for `make travel-dev`. It is a separate file. Trip rows do not belong in `finance.db`.
 - Copy the DB before upgrades or `make reset-db`.
 - **OPS-009:** Single SQLite file = no built-in HA or replication; use file backups and one writer process.
 
@@ -37,33 +42,35 @@ domain / LAN / VPN
 docker compose up --build
 ```
 
-UI: http://127.0.0.1:8080 by default. Production currently uses
-http://127.0.0.1:8085 because nginx routes `finance.vivekpanchagnula.com` to
-that loopback port.
+Finance: http://127.0.0.1:8080/finance/ by default. Travel: http://127.0.0.1:8080/travel/.
+Production currently uses http://127.0.0.1:8085 because host nginx routes
+`finance.vivekpanchagnula.com` to that loopback port. Host nginx forwards every
+path; the web container chooses `/finance/`, `/travel/`, and `/api/`.
 
-The API is private to the Compose network and is reached through the web
-container at `/api`.
+The finance API is private to the Compose network and is reached through the web
+container at `/api`. `GET /api/health` stays on that path. `/finance/api/` is the
+same proxy. Travel calls `http://api:8000` with the browser's finance cookie.
 
 ### Frontend release caching
 
-The production frontend build (`npm run build` and the Docker build) writes a
-deterministic SHA-256 release id to the built `index.html` and `version.json`.
+Local `npm run build` writes a deterministic SHA-256 release id to `index.html`
+and `version.json` at the site root. The Docker image builds with
+`--base-href /finance/` and serves that output under `/finance/`. The release
+check fetches relative `version.json`, so it follows the page's base href.
 The id covers the built HTML and its linked JavaScript and CSS entry artifacts.
 Direct Angular development builds keep working without release metadata, so
 `ng serve` and `ng build --configuration development` do not report a production
 release.
 
-The frontend Nginx policy is:
+`apps/finance/frontend/nginx.conf` is the unprefixed policy. The production
+image uses `nginx.suite.conf`, which applies the same rules under `/finance/`
+and leaves `/api/` unchanged. The suite file also proxies `/travel/` to the
+travel container.
 
-- `/`, SPA routes, `/index.html`, and `/version.json` use `no-store`; index
-  responses also disable ETag and `If-Modified-Since` shortcuts.
-- Angular production JavaScript and CSS names with an eight-character
-  URL-safe output hash are immutable for one year.
-- Unversioned static files revalidate. Missing scripts, stylesheets, source
-  maps, and `/assets/` files return a plain-text 404 with `no-store`, never the
-  Angular shell.
-- `/api/` responses are private and `no-store`; the frontend proxy removes
-  upstream cache headers before applying that policy.
+- `/finance/`, its routes, `/finance/index.html`, and `/finance/version.json` use `no-store`; index responses also disable ETag and `If-Modified-Since` shortcuts.
+- Angular production JavaScript and CSS names with an eight-character URL-safe output hash are immutable for one year.
+- Unversioned static files revalidate. Missing scripts, stylesheets, source maps, and `/finance/assets/` files return a plain-text 404 with `no-store`, never the Angular shell.
+- `/api/` and `/finance/api/` responses are private and `no-store`; the frontend proxy removes upstream cache headers before applying that policy.
 
 An open tab checks the current manifest at startup, after returning to a visible
 tab, when focused, and after navigation, with checks throttled to once per 30
@@ -77,16 +84,19 @@ Run the isolated cache regressions from `apps/finance/frontend`:
 ```bash
 npm run test:release-manifest
 npm run test:release-cache
+npm run test:suite-routes
 ```
 
 The first command checks deterministic release ids, HTML-only release changes,
-idempotent metadata insertion, and development output cleanup. The second uses
-the real Nginx image from the Dockerfile and a Chromium context with browser
-caching enabled to verify two consecutive releases, cache headers, SPA routing,
-static 404s, and API cache policy. It requires a running Docker daemon and a
-Playwright Chromium browser. If Playwright's default browser build is not
+idempotent metadata insertion, and development output cleanup. The second
+bind-mounts `nginx.conf` into the Nginx image and uses a Chromium context with
+browser caching enabled to verify two consecutive releases, cache headers, SPA
+routing, static 404s, and API cache policy. It requires a running Docker daemon
+and a Playwright Chromium browser. If Playwright's default browser build is not
 installed, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an installed Chromium binary
-or run `npx playwright install chromium` from the frontend directory.
+or run `npx playwright install chromium` from the frontend directory. The third
+checks `nginx.suite.conf`: `/finance/`, `/travel/`, `/api/health`, and the
+redirect from an old `/have` link. It needs Docker and does not need a browser.
 
 Default Docker persistence is repo-local:
 
@@ -120,7 +130,7 @@ finance.vivekpanchagnula.com {
 }
 ```
 
-Create the first admin by opening `/login` after the API starts, or use open self-signup at `/signup`. Admins cannot reset another user's vault access.
+Create the first admin by opening `/finance/login` after the API starts, or use open self-signup at `/finance/signup`. Admins cannot reset another user's vault access. Travel at `/travel/` uses the same session cookie.
 
 ## GitHub Actions production deployment
 
@@ -236,6 +246,7 @@ sudo ./svc.sh start
 | `SESSION_DAYS` | Session lifetime in days |
 | `SESSION_COOKIE_SECURE` | `1` for HTTPS, `0` only for local HTTP |
 | `SESSION_COOKIE_SAMESITE` | Cookie SameSite setting, default `lax` |
+| `FLIGHTAWARE_API_KEY` | Optional. Passed into the travel container for flight lookup. |
 
 ## Logging (OPS-011)
 

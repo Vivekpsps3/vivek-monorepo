@@ -43,7 +43,23 @@ def init_db(url: str | None = None) -> str:
     event.listen(engine, "connect", _enable_foreign_keys)
     SessionLocal = sessionmaker(autocommit=False, autoflush=True, expire_on_commit=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    _ensure_user_columns()
     return resolved
+
+
+def _ensure_user_columns() -> None:
+    """Add owner columns to a travel database created before finance sign-in."""
+    if engine is None:
+        return
+    with engine.begin() as conn:
+        for table in ("trips", "pto_policy", "pto_entries"):
+            rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+            if not rows or any(row[1] == "user_id" for row in rows):
+                continue
+            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN user_id INTEGER")
+        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_trips_user_id ON trips(user_id)")
+        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_pto_entries_user_id ON pto_entries(user_id)")
+        conn.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS uq_pto_policy_user_id ON pto_policy(user_id)")
 
 
 def get_db():

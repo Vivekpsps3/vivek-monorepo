@@ -78,13 +78,33 @@ function messageFrom(payload, status) {
   return `Request failed (${status}).`;
 }
 
+function readCookie(name) {
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const item = part.trim();
+    if (item.startsWith(prefix)) return decodeURIComponent(item.slice(prefix.length));
+  }
+  return "";
+}
+
+function financeLoginHref() {
+  const next = `${location.pathname}${location.search}${location.hash}`;
+  return `/finance/login?next=${encodeURIComponent(next)}`;
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const method = (options.method || "GET").toUpperCase();
+  const headers = { ...(options.headers || {}) };
+  if (options.body) headers["Content-Type"] = "application/json";
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrf = readCookie("finance_csrf");
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
+  const root = window.TRAVEL_ROOT || "";
+  const response = await fetch(`${root}${path}`, {
     ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
+    credentials: "include",
+    headers,
   });
   if (response.status === 204) return null;
   const text = await response.text();
@@ -866,14 +886,14 @@ function renderSettings(settings) {
       <p>${flight.configured ? `Key is set from ${esc(flight.source)}. Ending ${esc(flight.last4)}.` : "No key yet."}</p>
       <form class="stack" data-form="flight-key"><div class="form-grid">${field("API key", "api_key", "", "password", true)}</div><div class="row-actions"><button class="btn btn-primary" type="submit">Save key</button><button class="btn btn-ghost" type="button" data-action="clear-key">Remove saved key</button></div></form>
     </section>
-    <section class="card"><h2>Network lock</h2>
-      <p class="lede">${settings.access_locked ? "This app asks for TRAVEL_ACCESS_TOKEN." : "This app is open on the network it is bound to. Set TRAVEL_ACCESS_TOKEN before starting it if you want a passphrase."}</p>
-      ${settings.access_locked ? `<button class="btn btn-secondary" type="button" data-action="logout">Lock</button>` : ""}
+    <section class="card"><h2>Sign-in</h2>
+      <p class="lede">Signed in as ${esc(settings.account ? settings.account.name : "you")} with the Finance session. Sign out from Finance.</p>
+      <p class="row-actions"><a class="btn btn-secondary" href="/finance/">Open Finance</a></p>
     </section>`;
 }
 
 function renderLogin() {
-  return `${head("Locked", "Enter the travel passphrase for this network.")}<form class="card stack" data-form="login"><div class="form-grid">${field("Passphrase", "token", "", "password", true)}</div><button class="btn btn-primary" type="submit">Unlock</button></form>`;
+  return `${head("Sign in", "Travel uses the Finance sign-in. The same session cookie opens both apps.")}<p class="row-actions"><a class="btn btn-primary" href="${financeLoginHref()}">Sign in</a></p>`;
 }
 
 function readLeg(root, role) {
@@ -965,11 +985,6 @@ function readTransport(form) {
 
 async function submit(kind, form) {
   state.error = "";
-  if (kind === "login") {
-    await api("/api/session", { method: "POST", body: JSON.stringify({ token: val(form, "token") || "" }) });
-    await render();
-    return;
-  }
   if (kind === "create-trip") {
     const start = val(form, "start_date");
     const end = val(form, "end_date");
@@ -1404,10 +1419,6 @@ async function onAction(button) {
     await api("/api/settings/flightaware", { method: "DELETE" });
     await render();
     return;
-  }
-  if (action === "logout") {
-    await api("/api/session/logout", { method: "POST" });
-    await render();
   }
 }
 

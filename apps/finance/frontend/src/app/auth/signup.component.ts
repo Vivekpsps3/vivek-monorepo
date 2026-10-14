@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { continueAfterAuth } from './after-auth';
 import { AuthService } from './auth.service';
 import { UiButtonComponent, UiCardComponent, UiInputComponent } from '../shared/ui';
 
@@ -39,7 +40,7 @@ export class SignupComponent {
       () => {
         this.loading = false;
         this.cdr.markForCheck();
-        return this.router.navigate(['/']);
+        return continueAfterAuth(this.router);
       },
       err => {
         this.error = this.errorMessage(err);

@@ -16,6 +16,7 @@ from schemas import (
     TripCreate,
     TripPatch,
 )
+from deps import require_actor
 from services.assemble import build_trip, load_trip, pto_context
 from services.dates import ensure_stay_inside
 from services.pto import sync_trip_pto
@@ -35,13 +36,13 @@ router = APIRouter()
 
 def _trip_or_404(db: Session, trip_id: int) -> Trip:
     trip = db.get(Trip, trip_id)
-    if trip is None:
+    if trip is None or trip.user_id != require_actor().id:
         raise HTTPException(status_code=404, detail="That trip is not here.")
     return trip
 
 
 def _detail(db: Session, trip_id: int) -> dict:
-    trip = load_trip(db, trip_id)
+    trip = load_trip(db, trip_id, require_actor().id)
     if trip is None:
         raise HTTPException(status_code=404, detail="That trip is not here.")
     _row, policy, usages = pto_context(db)
@@ -79,6 +80,7 @@ def read_trip(trip_id: int, db: Session = Depends(get_db)):
 @router.post("/trips", status_code=201)
 def create_trip(body: TripCreate, db: Session = Depends(get_db)):
     trip = Trip(
+        user_id=require_actor().id,
         title=body.title,
         start_date=body.start_date,
         end_date=body.end_date,

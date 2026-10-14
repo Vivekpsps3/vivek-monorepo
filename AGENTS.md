@@ -131,6 +131,13 @@ explicitly.
 
 ## Other apps
 
-Travel lives in `apps/travel/` and is documented in `docs/TRAVEL.md`. It does
-not share the finance database, vault, or net-worth formulas. Do not store
-trip plans or PTO in finance tables.
+Travel lives in `apps/travel/` and is documented in `docs/TRAVEL.md`. The suite
+serves Finance at `/finance/` and Travel at `/travel/` on one origin. The web
+container keeps `/api/` as the finance API, including `GET /api/health`.
+
+Travel authorizes each request with the browser's `finance_session` cookie by
+calling finance `GET /api/auth/me` for reads and `POST /api/auth/session` for
+writes. Writes also require the finance `X-CSRF-Token`. Travel does not open
+`finance.db`, the vault, or net worth. Trip plans and PTO stay in `travel.db`,
+scoped by the finance user id. `make travel-dev` serves Travel at `/` on port
+8090. Sign-in and the `/finance/` paths live on the suite origin.

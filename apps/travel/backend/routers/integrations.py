@@ -1,15 +1,12 @@
 """FlightAware lookup, map search, and local settings."""
 
-import hashlib
-import hmac
-
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from deps import access_token, flightaware_key, get_flight_lookup, get_geocoder
+from deps import flightaware_key, get_flight_lookup, get_geocoder, require_actor, settings_key
 from models import Setting
-from schemas import FlightAwareKeyIn, FlightLookupIn, SessionIn
+from schemas import FlightAwareKeyIn, FlightLookupIn
 from services.flights import FlightAwareError, normalize_ident
 from services.places import cached_search
 
@@ -25,13 +22,17 @@ def _last4(value: str | None) -> str | None:
 @router.get("/settings")
 def read_settings(db: Session = Depends(get_db)):
     key, source = flightaware_key(db)
+    person = require_actor()
     return {
         "flightaware": {
             "configured": key is not None,
             "source": source,
             "last4": _last4(key),
         },
-        "access_locked": bool(access_token()),
+        "account": {
+            "id": person.id,
+            "name": person.display_name,
+        },
         "map": {
             "provider": "openstreetmap",
             "search": "nominatim",
@@ -42,12 +43,13 @@ def read_settings(db: Session = Depends(get_db)):
 @router.put("/settings/flightaware")
 def save_flightaware(body: FlightAwareKeyIn, db: Session = Depends(get_db)):
     text = body.api_key.strip()
-    row = db.get(Setting, "flightaware_api_key")
+    key_name = settings_key("flightaware_api_key")
+    row = db.get(Setting, key_name)
     if not text:
         if row is not None:
             db.delete(row)
     elif row is None:
-        db.add(Setting(key="flightaware_api_key", value=text))
+        db.add(Setting(key=key_name, value=text))
     else:
         row.value = text
     db.flush()
@@ -57,7 +59,7 @@ def save_flightaware(body: FlightAwareKeyIn, db: Session = Depends(get_db)):
 
 @router.delete("/settings/flightaware", status_code=204)
 def clear_flightaware(db: Session = Depends(get_db)):
-    row = db.get(Setting, "flightaware_api_key")
+    row = db.get(Setting, settings_key("flightaware_api_key"))
     if row is not None:
         db.delete(row)
 
@@ -93,37 +95,4 @@ def search_places(q: str, db: Session = Depends(get_db), fetch=Depends(get_geoco
     return {"results": results}
 
 
-def _match(got: str, expected: str) -> bool:
-    return hmac.compare_digest(
-        hashlib.sha256(got.encode("utf-8")).digest(),
-        hashlib.sha256(expected.encode("utf-8")).digest(),
-    )
 
-
-@router.post("/session")
-def open_session(body: SessionIn, response: Response):
-    expected = access_token()
-    if not expected:
-        return {"ok": True, "locked": False}
-    if not _match(body.token, expected):
-        raise HTTPException(status_code=401, detail="That passphrase does not match.")
-    response.set_cookie(
-        "travel_access",
-        expected,
-        httponly=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 30,
-        secure=_cookie_secure(),
-    )
-    return {"ok": True, "locked": True}
-
-
-@router.post("/session/logout", status_code=204)
-def close_session(response: Response):
-    response.delete_cookie("travel_access")
-
-
-def _cookie_secure() -> bool:
-    import os
-
-    return os.getenv("TRAVEL_COOKIE_SECURE", "").lower() in ("1", "true", "yes")

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { NavigationEnd, NavigationError, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { ReleaseFreshnessService } from './release-freshness.service';
+import { ReleaseFreshnessService, releaseManifestUrl } from './release-freshness.service';
 
 describe('ReleaseFreshnessService', () => {
   const loadedRelease = 'a'.repeat(64);
@@ -31,7 +31,7 @@ describe('ReleaseFreshnessService', () => {
 
     await service.checkForUpdate(true);
 
-    expect(fetchSpy).toHaveBeenCalledWith('/version.json', {
+    expect(fetchSpy).toHaveBeenCalledWith(releaseManifestUrl(document), {
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
     });

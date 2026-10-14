@@ -83,7 +83,7 @@ Local database: `apps/finance/backend/finance.db` (not committed; see `.gitignor
 
 ## Travel
 
-Trip planner in `apps/travel/`: one trip from the day you leave through the day you come back, with flights, drives, a calendar, day plans, parking, budget, and a PTO projection. It does not share the finance database. `make travel-install && make travel-dev` serves it on port 8090 for your LAN. See [docs/TRAVEL.md](docs/TRAVEL.md).
+Trip planner in `apps/travel/`: one trip from the day you leave through the day you come back, with flights, drives, a calendar, day plans, parking, budget, and a PTO projection. It keeps its own SQLite file. On the suite it is served at `/travel/` and accepts the finance session cookie. See [docs/TRAVEL.md](docs/TRAVEL.md).
 
 ## Tests & CI-style check
 
@@ -98,10 +98,12 @@ cd frontend && npx ng build --configuration development
 docker compose up --build
 ```
 
-Open http://127.0.0.1:8080. The `web` container serves Angular and proxies
-`/api` to the private FastAPI container. Docker stores SQLite at
-`data/finance.db`; local dev defaults to `apps/finance/backend/finance.db`. Override with
-`DATABASE_URL` and a matching Compose volume when needed.
+Open http://127.0.0.1:8080/finance/. Travel is http://127.0.0.1:8080/travel/.
+The `web` container serves both and proxies `/api` to the private finance API.
+`/api/health` stays on that path. Docker stores finance at `data/finance.db`
+and travel at `data/travel.db`. Local finance dev defaults to
+`apps/finance/backend/finance.db`. Override finance with `DATABASE_URL` and a
+matching Compose volume when needed.
 
 ## Production checklist
 

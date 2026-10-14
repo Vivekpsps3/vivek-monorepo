@@ -14,6 +14,7 @@ from services.budget import (
 )
 from services.dates import iter_dates, nights_away, phase_for, span_days
 from services.money import fmt_days, fmt_money, stored_days
+from deps import require_actor
 from services.pto import effective_pto_days, policy_from_row, trip_projection, usages_from_rows, walk
 
 ROLE_ORDER = {"outbound": 0, "connection": 1, "local": 2, "inbound": 3}
@@ -27,12 +28,13 @@ MODE_LABELS = {
 }
 
 
-def load_trip(db, trip_id: int) -> Trip | None:
+def load_trip(db, trip_id: int, user_id: int) -> Trip | None:
     # New flights, plans, and notes are inserted by trip_id. If this session
     # already loaded a collection, selectinload would keep that snapshot.
     return (
         db.query(Trip)
         .populate_existing()
+        .filter(Trip.id == trip_id, Trip.user_id == user_id)
         .options(
             selectinload(Trip.stays),
             selectinload(Trip.transports),
@@ -43,7 +45,6 @@ def load_trip(db, trip_id: int) -> Trip | None:
             selectinload(Trip.budget_lines),
             selectinload(Trip.pto_entry),
         )
-        .filter(Trip.id == trip_id)
         .one_or_none()
     )
 
@@ -402,10 +403,13 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
     }
 
 
-def pto_context(db):
-    row = db.get(PtoPolicy, 1)
+def pto_context(db, user_id: int | None = None):
+    owner = require_actor().id if user_id is None else user_id
+    row = db.query(PtoPolicy).filter(PtoPolicy.user_id == owner).one_or_none()
     policy = policy_from_row(row)
-    usages = usages_from_rows(db.query(PtoEntry).order_by(PtoEntry.start_date, PtoEntry.id).all())
+    usages = usages_from_rows(
+        db.query(PtoEntry).filter(PtoEntry.user_id == owner).order_by(PtoEntry.start_date, PtoEntry.id).all()
+    )
     return row, policy, usages
 
 
@@ -474,9 +478,11 @@ def attention_for(detail: dict) -> list[dict]:
 
 def build_home(db, today: date | None = None) -> dict:
     today = today or date.today()
-    _row, policy, usages = pto_context(db)
+    owner = require_actor().id
+    _row, policy, usages = pto_context(db, owner)
     trips = (
         db.query(Trip)
+        .filter(Trip.user_id == owner)
         .options(
             selectinload(Trip.stays),
             selectinload(Trip.transports),
@@ -548,10 +554,11 @@ def build_calendar(db, start: date, end: date, today: date | None = None) -> dic
         raise ValueError("The calendar end date has to be on or after the start.")
     if (end - start).days > 70:
         raise ValueError("Ask for at most 70 calendar days at a time.")
+    owner = require_actor().id
     trips = (
         db.query(Trip)
         .options(selectinload(Trip.stays))
-        .filter(Trip.end_date >= start, Trip.start_date <= end)
+        .filter(Trip.user_id == owner, Trip.end_date >= start, Trip.start_date <= end)
         .order_by(Trip.start_date, Trip.id)
         .all()
     )

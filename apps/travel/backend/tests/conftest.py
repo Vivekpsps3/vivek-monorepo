@@ -13,9 +13,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv("FLIGHTAWARE_API_KEY", raising=False)
     monkeypatch.delenv("TRAVEL_ACCESS_TOKEN", raising=False)
     from app import create_app
-    from deps import get_geocoder
+    from deps import AuthResult, Principal, get_geocoder
 
     application = create_app()
+    application.state.principal_checker = lambda _request: AuthResult(Principal(1, "tester", "Tester"), [])
     application.dependency_overrides[get_geocoder] = lambda: (lambda _query: [])
     with TestClient(application) as test_client:
         yield test_client

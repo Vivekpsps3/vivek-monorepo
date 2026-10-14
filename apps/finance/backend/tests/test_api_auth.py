@@ -65,6 +65,16 @@ def test_session_cookie_persists_and_slides_while_the_browser_is_in_use():
         db.close()
 
 
+def test_session_probe_reuses_the_finance_login():
+    client = authenticated_client(app, email="session-probe@example.com")
+    probed = client.post("/api/auth/session")
+    assert probed.status_code == 200, probed.text
+    assert probed.json()["user"]["email"] == "session-probe@example.com"
+    client.headers.pop("X-CSRF-Token", None)
+    assert client.post("/api/auth/session").status_code == 403
+    assert client.get("/api/auth/me").status_code == 200
+
+
 def test_login_me_and_logout():
     client = authenticated_client(app, email="login@example.com")
     me = client.get("/api/auth/me")

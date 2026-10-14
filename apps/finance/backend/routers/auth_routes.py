@@ -354,6 +354,12 @@ def me(current_user: User = Depends(get_current_user)):
     return {"user": _user_response(current_user), "csrf_token": None}
 
 
+@router.post("/auth/session", response_model=MeResponse)
+def confirm_session(current_user: User = Depends(get_current_user)):
+    """Same-origin check for Travel writes. CSRF is required; this does not mint a session."""
+    return {"user": _user_response(current_user), "csrf_token": None}
+
+
 @router.post("/auth/reset-data")
 def reset_my_data(
     body: SelfDataResetRequest,
