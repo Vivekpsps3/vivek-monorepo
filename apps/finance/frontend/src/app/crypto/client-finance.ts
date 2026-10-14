@@ -1,5 +1,6 @@
 import {
   Asset,
+  CashflowOccurrence,
   CashflowSummary,
   FixedExpense,
   Holding,
@@ -285,6 +286,68 @@ function occurrencesBetween(
   return occurrences;
 }
 
+const SAME_PAY_STREAM = 0.2;
+const BILL_MATCH_DAYS = 4;
+
+function dayDistance(left: string, right: string): number {
+  return Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) / 86_400_000;
+}
+
+function amountsMatch(posted: number, expected: number): boolean {
+  const scale = Math.max(Math.abs(posted), Math.abs(expected), 1);
+  return Math.abs(posted - expected) <= Math.max(1, scale * 0.02);
+}
+
+/**
+ * Pay that shows up both as a deposit and as job pay is one stream when the
+ * two totals are within 20%. A much smaller or larger deposit is other income
+ * and stays in the total.
+ */
+export function unifyIncome(observed: number, scheduled: number): number {
+  const posted = Math.round(observed * 100) / 100;
+  const repeating = Math.round(scheduled * 100) / 100;
+  if (posted <= 0 || repeating <= 0) return Math.round((posted + repeating) * 100) / 100;
+  const scale = Math.max(posted, repeating);
+  if (Math.abs(posted - repeating) / scale <= SAME_PAY_STREAM) return Math.max(posted, repeating);
+  return Math.round((posted + repeating) * 100) / 100;
+}
+
+export function incomeStreamsMatch(observed: number, scheduled: number): boolean {
+  if (observed <= 0 || scheduled <= 0) return false;
+  return Math.abs(observed - scheduled) / Math.max(observed, scheduled) <= SAME_PAY_STREAM;
+}
+
+/** Bills already posted as a transaction within four days and 2% (or $1). Each posted row matches at most one bill. */
+export function unmatchedScheduledExpenses(
+  transactions: Transaction[],
+  occurrences: CashflowOccurrence[],
+  start: string,
+  end: string,
+): CashflowOccurrence[] {
+  const posted = transactions
+    .filter(tx => tx.date >= start && tx.date <= end)
+    .map(tx => ({ date: tx.date, spending: transactionEffects(tx).spending, used: false }))
+    .filter(tx => tx.spending > 0);
+  const unmatched: CashflowOccurrence[] = [];
+  for (const occurrence of occurrences) {
+    let best = -1;
+    let bestScore = Number.POSITIVE_INFINITY;
+    posted.forEach((tx, index) => {
+      if (tx.used) return;
+      const days = dayDistance(tx.date, occurrence.date);
+      if (days > BILL_MATCH_DAYS || !amountsMatch(tx.spending, occurrence.amount)) return;
+      const score = days * 1000 + Math.abs(tx.spending - occurrence.amount);
+      if (score < bestScore) {
+        bestScore = score;
+        best = index;
+      }
+    });
+    if (best >= 0) posted[best].used = true;
+    else unmatched.push(occurrence);
+  }
+  return unmatched;
+}
+
 export function computeCashflowSummary(
   start: string,
   end: string,
@@ -325,9 +388,16 @@ export function computeCashflowSummary(
   const scheduled_income = roundedIncome;
   const scheduled_expenses = Math.round((roundedFixed + roundedSubscriptions) * 100) / 100;
   const scheduled_net_cashflow = Math.round((scheduled_income - scheduled_expenses) * 100) / 100;
-  // Combined outlook always sums observed + scheduled (additive). Overlap flags warn when both planes are non-zero.
-  const total_income = Math.round((transaction_income + roundedIncome) * 100) / 100;
-  const total_expenses = Math.round((transaction_expenses + roundedFixed + roundedSubscriptions) * 100) / 100;
+  const counted_occurrences = unmatchedScheduledExpenses(
+    transactions,
+    [...fixedOccurrences, ...subscriptionOccurrences],
+    start,
+    end,
+  );
+  const repeatingExpenses = Math.round(counted_occurrences.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
+  // One cashflow: posted activity plus repeating pay and bills that are not already posted.
+  const total_income = unifyIncome(observed_income, scheduled_income);
+  const total_expenses = Math.round((observed_expenses + repeatingExpenses) * 100) / 100;
   const net_cashflow = Math.round((total_income - total_expenses) * 100) / 100;
   return {
     start_date: start,
@@ -344,8 +414,8 @@ export function computeCashflowSummary(
     scheduled_expenses,
     scheduled_net_cashflow,
     combined_outlook_net_cashflow: net_cashflow,
-    possible_income_overlap: observed_income > 0 && scheduled_income > 0,
-    possible_expense_overlap: observed_expenses > 0 && scheduled_expenses > 0,
+    possible_income_overlap: incomeStreamsMatch(observed_income, scheduled_income),
+    possible_expense_overlap: counted_occurrences.length < fixedOccurrences.length + subscriptionOccurrences.length,
     total_income,
     total_expenses,
     net_cashflow,
@@ -353,6 +423,7 @@ export function computeCashflowSummary(
     average_daily_spend: total_expenses / daysInRange,
     fixed_occurrences: fixedOccurrences.sort((a, b) => a.date.localeCompare(b.date)),
     subscription_occurrences: subscriptionOccurrences.sort((a, b) => a.date.localeCompare(b.date)),
+    counted_occurrences,
   };
 }
 
@@ -377,7 +448,7 @@ export function monthlyCashflowSeries(
   jobIncomes: JobIncome[],
   fixedExpenses: FixedExpense[],
   subscriptions: Subscription[],
-  view: 'recorded' | 'scheduled' | 'combined' = 'recorded'
+  view: 'unified' | 'recorded' | 'scheduled' = 'unified'
 ): { month: string; income: number; expense: number; net: number }[] {
   return months.map(month => {
     const summary = computeCashflowSummary(

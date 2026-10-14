@@ -2,15 +2,18 @@
   @if (label()) {
     <label class="ui-field__label" [for]="resolvedId()">{{ label() }}</label>
   }
-  <select
-    class="ui-field__control"
-    [id]="resolvedId()"
-    [disabled]="disabled()"
-    [required]="required()"
-    [value]="value()"
-    (change)="value.set($any($event.target).value)">
-    @for (opt of options(); track opt.value) {
-      <option [value]="opt.value" [selected]="opt.value === value()" [disabled]="opt.disabled ?? false">{{ opt.label }}</option>
-    }
-  </select>
+  <div class="ui-field__control-wrap">
+    <select
+      class="ui-field__control"
+      [id]="resolvedId()"
+      [disabled]="disabled()"
+      [required]="required()"
+      [value]="value()"
+      (change)="value.set($any($event.target).value)">
+      @for (opt of options(); track opt.value) {
+        <option [value]="opt.value" [selected]="opt.value === value()" [disabled]="opt.disabled ?? false">{{ opt.label }}</option>
+      }
+    </select>
+    <span class="ui-field__chevron" aria-hidden="true"></span>
+  </div>
 </div>

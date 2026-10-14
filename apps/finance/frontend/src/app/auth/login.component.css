@@ -1,11 +1,14 @@
 .login-shell {
   box-sizing: border-box;
+  width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: max(var(--space-6), env(safe-area-inset-top)) var(--space-4)
-    max(var(--space-6), env(safe-area-inset-bottom));
+  place-items: safe center;
+  padding: max(var(--space-6), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-6), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+  overflow-x: clip;
   background: var(--bg);
 }
 .auth-layout {
@@ -46,10 +49,17 @@
   line-height: 1.5;
 }
 .mode-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   width: 100%;
+  min-height: 44px;
   margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: 0;
+  border-radius: var(--radius-md);
+  appearance: none;
   background: transparent;
   color: var(--accent);
   font: inherit;
@@ -59,3 +69,35 @@
   cursor: pointer;
 }
 .mode-link:hover { text-decoration: underline; }
+.mode-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px), (max-height: 700px) {
+  .login-shell {
+    align-items: start;
+    justify-items: center;
+  }
+
+  .login-form ::ng-deep .ui-field__control,
+  .login-form ::ng-deep .ui-btn,
+  .login-form ::ng-deep .ui-btn.ui-btn--sm {
+    min-height: 44px;
+    max-width: 100%;
+  }
+
+  .login-form ::ng-deep .ui-field__control {
+    font-size: 1rem;
+  }
+
+  .login-form ::ng-deep .ui-btn,
+  .login-form ::ng-deep .ui-btn.ui-btn--sm {
+    width: 100%;
+  }
+
+  .login-form ::ng-deep .ui-field__password-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

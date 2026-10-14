@@ -44,7 +44,8 @@
 
       <a routerLink="/spending" class="home-tile home-tile--activity">
         <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
-        <span class="home-tile__metric-name">Recorded activity</span>
+        <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet < 0 ? '−' : '' }}${{ (monthNet < 0 ? -monthNet : monthNet) | number: '1.2-2' }}</span>
+        <span class="home-tile__metric-name">Pay and spending, counted once</span>
         <span class="home-split">
           <span>
             <small>Income</small>
@@ -53,21 +54,6 @@
           <span>
             <small>Spending</small>
             <strong class="money negative">${{ monthSpend | number: '1.2-2' }}</strong>
-          </span>
-        </span>
-      </a>
-
-      <a routerLink="/recurring" class="home-tile home-tile--scheduled">
-        <span class="home-tile__topline">What repeats <span class="home-tile__arrow" aria-hidden="true">→</span></span>
-        <span class="home-tile__metric-name">Scheduled estimate</span>
-        <span class="home-split">
-          <span>
-            <small>Pay</small>
-            <strong class="money">${{ repeatPay | number: '1.2-2' }}</strong>
-          </span>
-          <span>
-            <small>Costs</small>
-            <strong class="money negative">${{ repeatSpend | number: '1.2-2' }}</strong>
           </span>
         </span>
       </a>

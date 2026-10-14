@@ -1,11 +1,19 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .ui-data-table {
   position: relative;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   background: var(--card-bg);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -60,29 +68,49 @@
 
 @media (max-width: 768px) {
   .ui-data-table {
-    overflow: visible;
+    overflow: hidden;
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
   }
 
-  .ui-data-table__table {
+  .ui-data-table__caption {
     display: block;
-    min-width: 0;
+    padding-inline: 0;
   }
 
-  .ui-data-table__table ::ng-deep thead {
+  .ui-data-table__table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0 !important;
+  }
+
+  /* display:none is not enough in every engine; also take thead out of table sizing. */
+  .ui-data-table__table ::ng-deep thead,
+  .ui-data-table__table ::ng-deep thead tr,
+  .ui-data-table__table ::ng-deep colgroup {
     display: none !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
   }
 
   .ui-data-table__table ::ng-deep tbody {
     display: block !important;
+    width: 100%;
+    min-width: 0;
   }
 
   .ui-data-table__table ::ng-deep tbody tr {
     display: grid !important;
+    box-sizing: border-box;
     width: 100% !important;
+    max-width: 100%;
+    min-width: 0;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: var(--space-3) var(--space-4);
     margin: 0 0 var(--space-3);
@@ -101,9 +129,12 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.15rem;
-    min-width: 0;
+    width: auto;
+    min-width: 0 !important;
+    max-width: 100%;
     padding: 0;
     border: 0;
+    white-space: normal;
     overflow-wrap: anywhere;
   }
 
@@ -123,7 +154,10 @@
 
   .ui-data-table__table ::ng-deep tbody td:first-child,
   .ui-data-table__table ::ng-deep tbody td.actions,
-  .ui-data-table__table ::ng-deep tbody td[data-label=""] {
+  .ui-data-table__table ::ng-deep tbody td.actions--row,
+  .ui-data-table__table ::ng-deep tbody td.row-actions,
+  .ui-data-table__table ::ng-deep tbody td[data-label=""],
+  .ui-data-table__table ::ng-deep tbody td[data-label="Actions"] {
     grid-column: 1 / -1;
   }
 
@@ -131,14 +165,45 @@
     font-weight: 650;
   }
 
-  .ui-data-table__table ::ng-deep tbody td.actions {
+  .ui-data-table__table ::ng-deep tbody td.actions,
+  .ui-data-table__table ::ng-deep tbody td.actions--row,
+  .ui-data-table__table ::ng-deep tbody td.row-actions,
+  .ui-data-table__table ::ng-deep tbody td:has(> ui-button) {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
+    white-space: normal;
   }
 
-  .ui-data-table__table ::ng-deep tbody td.actions::before {
+  .ui-data-table__table ::ng-deep tbody td.actions::before,
+  .ui-data-table__table ::ng-deep tbody td.actions--row::before,
+  .ui-data-table__table ::ng-deep tbody td.row-actions::before {
     flex: 1 0 100%;
+  }
+
+  .ui-data-table__table ::ng-deep tbody td .ui-btn,
+  .ui-data-table__table ::ng-deep tbody td .ui-btn.ui-btn--sm,
+  .ui-data-table__table ::ng-deep tbody td input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  .ui-data-table__table ::ng-deep tbody td select,
+  .ui-data-table__table ::ng-deep tbody td textarea {
+    min-height: 44px;
+    max-width: 100%;
+  }
+
+  .ui-data-table__table ::ng-deep tbody td input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  .ui-data-table__table ::ng-deep tbody td select,
+  .ui-data-table__table ::ng-deep tbody td textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    font-size: 1rem;
+  }
+
+  .ui-data-table__table ::ng-deep tbody td input[type='checkbox'],
+  .ui-data-table__table ::ng-deep tbody td input[type='radio'] {
+    width: 1.25rem;
+    min-width: 1.25rem;
+    min-height: 1.25rem;
   }
 }

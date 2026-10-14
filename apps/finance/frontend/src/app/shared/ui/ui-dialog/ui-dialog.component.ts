@@ -33,13 +33,16 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
   private focusedOpen = false;
   private lockedScroll: HTMLElement | null = null;
   private previousOverflow = '';
+  private viewportCleanups: Array<() => void> = [];
 
   ngAfterViewChecked(): void {
     if (this.open() && !this.focusedOpen) {
       this.lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       this.focusedOpen = true;
       this.lockBackgroundScroll();
+      this.bindVisualViewport();
       queueMicrotask(() => {
+        this.applyVisualViewport();
         const root = this.panel?.nativeElement;
         if (!root) return;
         const preferred =
@@ -86,18 +89,58 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
   }
 
   private lockBackgroundScroll(): void {
-    const target = document.querySelector('.main-content') instanceof HTMLElement
-      ? document.querySelector('.main-content') as HTMLElement
-      : document.body;
+    const main = document.querySelector('.main-content');
+    const target = main instanceof HTMLElement ? main : document.body;
     this.lockedScroll = target;
     this.previousOverflow = target.style.overflow;
     target.style.overflow = 'hidden';
   }
 
   private unlockBackgroundScroll(): void {
+    this.unbindVisualViewport();
+    const backdrop = this.panel?.nativeElement.parentElement;
+    backdrop?.style.removeProperty('--ui-dialog-vv-top');
+    backdrop?.style.removeProperty('--ui-dialog-vv-height');
     if (!this.lockedScroll) return;
     this.lockedScroll.style.overflow = this.previousOverflow;
     this.lockedScroll = null;
+  }
+
+  /** Sheet tracks the visual viewport (keyboard / browser chrome) without pinning document.body. */
+  private bindVisualViewport(): void {
+    this.unbindVisualViewport();
+    const onChange = () => this.applyVisualViewport();
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', onChange);
+      vv.addEventListener('scroll', onChange);
+      this.viewportCleanups.push(() => {
+        vv.removeEventListener('resize', onChange);
+        vv.removeEventListener('scroll', onChange);
+      });
+    }
+    window.addEventListener('resize', onChange);
+    this.viewportCleanups.push(() => window.removeEventListener('resize', onChange));
+    onChange();
+  }
+
+  private unbindVisualViewport(): void {
+    for (const cleanup of this.viewportCleanups) cleanup();
+    this.viewportCleanups = [];
+  }
+
+  private applyVisualViewport(): void {
+    const backdrop = this.panel?.nativeElement.parentElement;
+    if (!backdrop) return;
+    const narrow = window.matchMedia?.('(max-width: 768px)')?.matches ?? false;
+    const vv = window.visualViewport;
+    if (!narrow || !vv || vv.height <= 0) {
+      backdrop.style.removeProperty('--ui-dialog-vv-top');
+      backdrop.style.removeProperty('--ui-dialog-vv-height');
+      return;
+    }
+    backdrop.style.setProperty('--ui-dialog-vv-top', `${vv.offsetTop}px`);
+    backdrop.style.setProperty('--ui-dialog-vv-height', `${vv.height}px`);
   }
 
   private restoreFocus(): void {

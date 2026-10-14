@@ -1,38 +1,58 @@
-.portfolio-breakdown {
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.nickname-input {
-  width: 11rem;
+:host {
+  display: block;
+  min-width: 0;
   max-width: 100%;
 }
 
-.account-label ui-button {
-  margin-left: 0.25rem;
-  vertical-align: middle;
+.page,
+.embed,
+:host ::ng-deep ui-card,
+.account-section,
+.table-scroll,
+.summary-card {
+  min-width: 0;
+  max-width: 100%;
 }
 
+h3 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg);
+  letter-spacing: -0.02em;
+}
+
+.scope-note,
+.hint,
 .company-sub,
-.refresh-note,
-.price-check-result {
+.price-check-result,
+.import-summary,
+.file-name,
+.resume-stage p {
   color: var(--text-secondary);
   font-size: var(--text-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.scope-note,
+.hint {
+  margin: 0;
+}
+
+.summary .hint,
+.summary + .hint {
+  margin-top: var(--space-3);
 }
 
 .holdings-tip {
-  margin: 0.25rem 0 0.5rem;
-}
-
-.refresh-note {
-  margin: calc(-1 * var(--space-4)) 0 var(--space-4);
+  margin: 0 0 var(--space-3);
 }
 
 .resume-stage {
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
+}
+
+.resume-stage p {
+  margin: 0 0 var(--space-3);
 }
 
 .holdings-load-error {
@@ -41,7 +61,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--space-3);
-  margin: var(--space-3) 0;
+  margin: 0 0 var(--space-3);
   padding: var(--space-3) var(--space-4);
   border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
   border-radius: var(--radius-lg);
@@ -49,65 +69,19 @@
   background: color-mix(in srgb, var(--danger) 8%, var(--card-bg));
 }
 
-.resume-stage p {
-  margin-top: 0;
-  color: var(--text-secondary);
-}
-
-.symbol-check {
-  display: flex;
-  gap: var(--space-3);
-  align-items: stretch;
-}
-
-.symbol-check input {
-  flex: 1;
-}
-
-.price-check-result {
-  margin: var(--space-2) 0 0;
-}
-
-.as-of-small {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--text-tertiary);
-}
-
-.actions {
-  white-space: nowrap;
-}
-
-.fidelity-preview-table {
-  max-height: 220px;
-  overflow: auto;
-  margin: 0.75rem 0;
-}
-
-@media (max-width: 768px) {
-  .fidelity-preview-table {
-    max-height: none;
-    overflow: visible;
-  }
-}
-
-.replacement-preview {
-  margin: 1rem 0;
-}
-
-.replacement-preview h4 {
-  margin-bottom: 0.5rem;
-  font-size: var(--text-sm);
-}
-
-.position-cell {
-  min-width: 8rem;
-}
-
 .summary {
-  display: flex;
-  gap: var(--space-10);
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.summary > div {
+  min-width: 0;
+}
+
+.summary > div + div {
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .summary .label {
@@ -116,29 +90,81 @@
   margin-bottom: var(--space-2);
 }
 
-.summary small {
-  display: block;
-  margin-top: 0.15rem;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
-
 .big-number {
   font-size: var(--text-xl);
-  font-weight: 700;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
 
-.symbol {
+.source-dates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.source-dates p {
+  margin: 0;
+}
+
+.source-dates strong {
+  color: var(--text);
   font-weight: 600;
 }
 
+.portfolio-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+}
+
+.portfolio-breakdown > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.breakdown-key {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.portfolio-breakdown strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-actions--toolbar {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.search-input {
+  flex: 1 1 10rem;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .account-section {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--card-bg);
   overflow: hidden;
+}
+
+.account-section:last-child {
+  margin-bottom: 0;
 }
 
 .section-header,
@@ -146,22 +172,27 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  cursor: pointer;
+  flex-wrap: wrap;
   list-style: none;
   background: var(--surface-2);
-  font-weight: 600;
 }
 
 .section-header {
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-base);
+  cursor: default;
+}
+
+summary.section-header,
+.account-sub summary {
+  cursor: pointer;
+  user-select: none;
 }
 
 .account-sub summary {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
   font-weight: 500;
-  user-select: none;
 }
 
 .section-header::-webkit-details-marker,
@@ -169,7 +200,7 @@
   display: none;
 }
 
-.section-header::before,
+summary.section-header::before,
 .account-sub > summary::before {
   content: '';
   display: inline-block;
@@ -179,17 +210,22 @@
   border-bottom: 2px solid var(--text-secondary);
   transform: rotate(-45deg);
   transition: transform var(--motion-fast) var(--ease-standard);
-  flex-shrink: 0;
+  flex: 0 0 auto;
 }
 
-details.account-section[open] > .section-header::before,
+details.account-section[open] > summary.section-header::before,
 details.account-sub[open] > summary::before {
   transform: rotate(45deg);
 }
 
-.section-header .section-total {
+.section-header .section-total,
+.account-sub .sub-total {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.section-header .section-total {
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -206,84 +242,422 @@ details.account-sub[open] > summary::before {
   background: var(--card-bg);
 }
 
-.account-sub .account-label {
-  flex: 1;
+.account-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .account-sub .sub-total {
-  font-variant-numeric: tabular-nums;
   color: var(--accent);
   font-weight: 600;
 }
 
 .account-sub .toggle-hint {
-  font-size: 10px;
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-left: var(--space-2);
 }
 
 .account-sub .sub-table {
-  padding: var(--space-2);
+  padding: var(--space-3);
   background: var(--card-bg);
 }
 
-.price-cell {
-  max-width: 11rem;
+.nickname-input {
+  width: min(100%, 16rem);
+  max-width: 100%;
+  min-width: 0;
 }
 
-.price-cell .price-hint {
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.symbol {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.company-sub {
+  font-weight: 400;
+}
+
+.price-cell,
+.position-cell {
+  min-width: 0;
+  max-width: none;
+  white-space: normal;
+}
+
+.price-cell .as-of-small,
+.price-cell .price-hint,
+.position-cell .as-of-small {
   display: block;
   margin-top: var(--space-1);
-  font-size: var(--text-xs);
-  line-height: 1.3;
   color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.position-cell .as-of-small {
+  margin-top: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.actions {
+  white-space: normal;
+}
+
+.holding-form,
+.import-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.holding-form .form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.holding-form .symbol-row {
+  grid-column: 1 / -1;
+}
+
+.holding-form .form-group,
+.import-sheet .form-group {
+  min-width: 0;
+  margin: 0;
+}
+
+.holding-form label,
+.import-sheet .form-group > label {
+  margin-bottom: var(--space-2);
+}
+
+.holding-form input,
+.import-sheet input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.symbol-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.symbol-check input {
+  flex: 1 1 12rem;
+  width: auto;
+  min-width: 0;
+}
+
+.symbol-check ui-button {
+  flex: 0 0 auto;
+}
+
+.price-check-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+}
+
+.price-check-result .as-of-small {
+  margin: 0;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
 }
 
 .import-warning {
-  margin: 0 0 var(--space-4);
-  font-size: 0.85rem;
+  margin: 0;
+  font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--warning);
+  overflow-wrap: anywhere;
 }
 
-@media (max-width: 760px) {
+.import-summary {
+  margin: 0;
+}
+
+.file-name {
+  margin: var(--space-2) 0 0;
+}
+
+.import-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: auto;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.account-chip input {
+  width: 1.125rem;
+  height: 1.125rem;
+  min-width: 1.125rem;
+  min-height: 0;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.account-chip:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+}
+
+.replacement-preview {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.replacement-preview h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.fidelity-preview-table,
+.replacement-preview {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fidelity-preview-table {
+  max-height: min(40vh, 22rem);
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+:host ::ng-deep .ui-card .ui-card__header {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+:host ::ng-deep .ui-card .ui-card__actions {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+:host ::ng-deep .fidelity-preview-table .ui-data-table,
+:host ::ng-deep .replacement-preview .ui-data-table {
+  overflow: visible;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+:host ::ng-deep .ui-data-table__table thead th {
+  white-space: normal;
+}
+
+:host ::ng-deep .ui-data-table__table thead th.num,
+:host ::ng-deep .ui-data-table__table tbody td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+:host ::ng-deep .price-cell .ui-badge {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+}
+
+:host ::ng-deep .ui-empty__action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+@media (min-width: 769px) {
+  :host ::ng-deep .ui-data-table__table tbody td.num {
+    white-space: nowrap;
+  }
+
+  :host ::ng-deep .ui-data-table__table thead th,
+  :host ::ng-deep .ui-data-table__table tbody td {
+    padding: var(--space-2) var(--space-3);
+  }
+}
+
+@media (max-width: 768px) {
   .summary {
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-4);
   }
 
-  .summary > div {
-    flex: 1 1 100%;
+  .summary > div + div {
+    padding: var(--space-4) 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
   }
 
-  .symbol-check {
-    flex-direction: column;
+  .portfolio-breakdown {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .nickname-input {
+  .table-actions--toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-input {
     width: 100%;
+  }
+
+  .account-section {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .section-header,
   .account-sub summary {
     align-items: flex-start;
-    flex-wrap: wrap;
+    min-height: 44px;
+    padding: var(--space-3) 0;
+    background: transparent;
   }
 
-  .section-header .section-total,
-  .account-sub .sub-total {
-    margin-left: 0;
-    width: 100%;
+  .account-sub {
+    border-top: 0;
+  }
+
+  .account-sub .sub-table {
+    padding: 0;
+    background: transparent;
   }
 
   .account-sub .toggle-hint {
     display: none;
   }
 
-  .price-cell {
-    max-width: none;
+  .nickname-input {
+    width: 100%;
   }
 
-  .actions {
-    white-space: normal;
+  .table-scroll {
+    overflow: visible;
+  }
+
+  .holding-form .form-row,
+  .symbol-check,
+  .import-accounts {
+    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .symbol-check ui-button,
+  .account-chip {
+    width: 100%;
+  }
+
+  .fidelity-preview-table,
+  .replacement-preview {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .import-sheet .form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin-top: 0;
+    padding-top: var(--space-3);
+    background: var(--card-bg);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .form-actions,
+  .actions,
+  td.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  td.actions ui-button,
+  .form-actions ui-button,
+  .symbol-check ui-button,
+  .resume-stage ui-button {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  td.actions ::ng-deep .ui-btn,
+  .form-actions ::ng-deep .ui-btn,
+  .symbol-check ::ng-deep .ui-btn,
+  .resume-stage ::ng-deep .ui-btn,
+  .account-label ::ng-deep .ui-btn,
+  :host ::ng-deep .ui-empty__action .ui-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  :host ::ng-deep .ui-data-table .ui-data-table__table tbody tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :host ::ng-deep .ui-data-table .ui-data-table__table tbody td {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+
+  :host ::ng-deep .ui-data-table__table tbody td.num {
+    text-align: left;
+    font-weight: 650;
   }
 }

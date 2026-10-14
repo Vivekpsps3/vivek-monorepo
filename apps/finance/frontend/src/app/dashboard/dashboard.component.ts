@@ -97,19 +97,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   get monthPay(): number {
-    return this.cashflow?.observed_income ?? 0;
+    return this.cashflow?.total_income ?? 0;
   }
 
   get monthSpend(): number {
-    return this.cashflow?.observed_expenses ?? 0;
+    return this.cashflow?.total_expenses ?? 0;
   }
 
-  get repeatPay(): number {
-    return this.cashflow?.scheduled_income ?? 0;
-  }
-
-  get repeatSpend(): number {
-    return this.cashflow?.scheduled_expenses ?? 0;
+  get monthNet(): number {
+    return this.cashflow?.net_cashflow ?? 0;
   }
 
   get portfolioValue(): number {

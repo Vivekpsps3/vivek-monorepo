@@ -1,10 +1,16 @@
 @if (importsOnly) {
-  <div class="page imports-page">
-    <ui-page-header [title]="'Imports'" subtitle="Confirmed statement coverage, saved outcomes, and safe recovery actions.">
+  <div [class.page]="!embedded" [class.embed]="embedded" class="imports-page">
+    <ui-page-header
+      [embedded]="embedded"
+      [title]="'Imports'"
+      subtitle="Confirmed statement coverage, saved outcomes, and safe recovery actions.">
       <div uiPageActions class="header-actions">
         <ui-button variant="primary" (clicked)="openImportModal()">Import from bank</ui-button>
       </div>
     </ui-page-header>
+    @if (embedded) {
+      <p class="imports-lead">Confirmed statement coverage, saved outcomes, and safe recovery actions.</p>
+    }
     @if (importReceipts.length) {
       <ui-card [title]="'Import receipts'">
         @for (receipt of importReceipts; track receipt.id) {
@@ -84,17 +90,19 @@
   <section class="month-hero">
     <p class="section-eyebrow">{{ summaryMonth ? 'This month' : 'Matching activity' }}</p>
     <div class="month-summary-row">
-      <label class="month-picker">
-        <input
-          type="month"
-          [(ngModel)]="summaryMonth"
-          (ngModelChange)="onSummaryMonthChange()"
-          aria-label="Filter by month" />
-        <span class="month-picker__caption">{{ summaryMonthLabel }}</span>
-      </label>
-      @if (summaryMonth) {
-        <ui-button variant="ghost" size="sm" (clicked)="clearMonthFilter()">All months</ui-button>
-      }
+      <div class="month-picker-tools">
+        <label class="month-picker">
+          <span class="month-picker__caption">Month</span>
+          <input
+            type="month"
+            [(ngModel)]="summaryMonth"
+            (ngModelChange)="onSummaryMonthChange()"
+            aria-label="Filter by month" />
+        </label>
+        @if (summaryMonth) {
+          <ui-button variant="ghost" size="sm" (clicked)="clearMonthFilter()">All months</ui-button>
+        }
+      </div>
       <div class="month-totals">
         @if (typeFilter !== 'income') {
           <div class="month-total month-total--expense">
@@ -110,7 +118,7 @@
         }
         @if (typeFilter === 'all') {
           <div class="month-total month-total--net">
-            <span class="month-total__label">Recorded net</span>
+            <span class="month-total__label">Net</span>
             <strong class="money">${{ monthIncomeTotal - monthExpenseTotal | number: '1.2-2' }}</strong>
           </div>
         }
@@ -119,7 +127,7 @@
   </section>
 
   <ui-card [title]="'History'">
-    <div uiCardActions class="table-actions table-actions--toolbar">
+    <div class="table-actions table-actions--toolbar">
       <input
         type="search"
         [(ngModel)]="searchTerm"
@@ -370,14 +378,18 @@
       @if (!loading && !listLoading && !listError) {
         @if (hasActiveFilters) {
           <ui-empty-state [title]="'No activity matches these filters'" message="Try clearing one filter or changing the date range.">
-            <ui-button variant="secondary" (clicked)="clearFilters()">Clear filters</ui-button>
+            <div class="empty-actions">
+              <ui-button variant="secondary" (clicked)="clearFilters()">Clear filters</ui-button>
+            </div>
           </ui-empty-state>
         } @else {
         <ui-empty-state [title]="'No transactions yet'">
           <ui-icon name="transactions" size="lg" style="margin-bottom: 8px; opacity: 0.6;" />
           <p class="empty-import-copy">Start with a bank CSV if you want the fastest and most accurate history.</p>
-          <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
-          <ui-button variant="primary" (clicked)="openAddModal()">Add income or expense</ui-button>
+          <div class="empty-actions">
+            <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
+            <ui-button variant="primary" (clicked)="openAddModal()">Add income or expense</ui-button>
+          </div>
         </ui-empty-state>
         }
       }
@@ -386,7 +398,7 @@
 </div>
 }
 
-<ui-dialog [open]="showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeImportModal()">
+<ui-dialog [open]="showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide tx-sheet" (closed)="closeImportModal()">
     <h3 id="import-modal-title">Import from bank</h3>
 
     @if (importStep === 'upload') {
@@ -619,7 +631,7 @@
     }
 </ui-dialog>
 
-<ui-dialog [open]="showModal" labelledBy="tx-modal-title" (closed)="closeModal()">
+<ui-dialog [open]="showModal" labelledBy="tx-modal-title" panelClass="tx-sheet" (closed)="closeModal()">
     <h3 id="tx-modal-title">{{ editingTxId ? 'Edit transaction' : 'Add transaction' }}</h3>
     <form (ngSubmit)="saveTransaction()" #txForm="ngForm">
       <div class="form-row">

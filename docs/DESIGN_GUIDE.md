@@ -16,11 +16,10 @@ clear graphs.
 
 ## Dashboard Standard
 
-Home starts with three clickable blocks, followed by a first-steps checklist for an empty vault and charts:
+Home starts with two clickable blocks, followed by a first-steps checklist for an empty vault and charts:
 
 - current net worth with a holdings / assets / debts split
-- recorded pay and spend for this month
-- scheduled recurring pay and spend
+- this month's pay, spending, and net, with card activity and repeating pay and bills counted once
 - portfolio summary with source dates and a portfolio allocation chart; detailed holdings remain on What you have
 - embedded cashflow, category, and allocation charts
 
@@ -36,7 +35,7 @@ Each major subpage should have page-level metrics at the top:
 - Balance sheet: total assets, liabilities, net worth, stale balances.
 - Portfolio: market value, account allocation, largest holdings, price freshness.
 - Investment insights: portfolio value, growth assumptions, projected value, withdrawal-rate income (client-side; speculative).
-- Calendar: monthly posted spending, income, net cashflow, active days, plus separately marked upcoming recurring due dates. Highest-purchase and selected-day rows preserve month/date and open the chosen Activity editor; keep the calendar Add action's selected date.
+- Calendar: one month of pay and spending. Posted transactions and repeating bills share the same days; a bill that already matches a posted amount is not shown twice. Highest-purchase and selected-day transaction rows preserve month/date and open the chosen Activity editor; repeating rows open Recurring. Keep the calendar Add action's selected date.
 - Planning: current balance-sheet/cashflow facts with source links, then a clear question selector, scenario success rate, median ending value, risk bands, and assumptions.
 - Stock Lab: primary ticker price, price return, total return, dividend income, purchase scenario value, scorecard warnings, and comparison tickers.
 
@@ -61,7 +60,7 @@ Label the selected period and data coverage so a short import is not mistaken fo
 
 ## Recurring and planning estimates
 
-Display recurring due dates as future scheduled events, distinct from posted ledger activity. Use `due_day` for fixed-expense scheduling and `next_bill_date` for subscription schedules. Cashflow and calendar views label scheduled amounts as estimates; posted totals remain based on posted transactions by default.
+Use `due_day` for fixed-expense dates and `next_bill_date` for subscription dates. Cashflow, Home, and Calendar treat posted activity and those repeating amounts as one stream: a paycheck close to job pay (within 20%) counts once, and a bill within four days and 2% (or $1) of a posted purchase counts once. Repeating amounts with no matching post still count. Jobs, bills, and subscriptions remain the editors; Activity remains the ledger editor. Neither changes net worth.
 
 Planning separates fixed, variable, and irregular annual spending, identifies the source and period for each estimate, and lets users exclude recurring charges already represented in schedules. Show the live net-worth, holdings, income, and scheduled-cost owners near the question selector; use genuine balance, position, and quote dates, and label missing or future dates unknown. Warn when fixed schedules omit variable card costs. Offer a three-completed-month suggestion only when selected accounts and categories have complete confirmed coverage; require explicit acceptance and refuse the estimate when coverage is incomplete. Preserve manual saved values while live-source fields follow refreshed facts. Goals start with $0 saved and debt starts with $0 manual balance; only an explicitly selected single liability may fill the debt calculator. Scope annual cashflow events to baseline, scenario, or both, and offer zero-amount starting templates for purchases and time off so users provide their own values. Keep advanced assumptions expandable. A new total annual cashflow replaces calculated income less spending and any legacy add-on; absent that override, preserve the older additive contribution behavior. Data edits mark existing results stale instead of rerunning them. The retirement timeline labels its straight-line approximation and excludes investment growth. Portfolio projections compare the existing monthly contribution with a user-entered dollar increase. Advanced percentage inputs display percentages while storing decimal rates.
 
@@ -71,7 +70,7 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 - Use token-based colors from `apps/finance/frontend/src/theme/chart-colors.ts`.
 - Every chart needs a meaningful empty state.
 - Every chart needs a nearby numeric summary. Do not add hover tooltips.
-- Cashflow charts keep Recorded activity and Scheduled cashflow as separate views; do not combine them into one total.
+- Cashflow charts show one monthly series: posted activity plus repeating pay and bills that are not already posted. Month links open Activity.
 - Category charts use transaction-kind effects over the full ledger, independent of transaction-list paging.
 - Recorded monthly/category chart values have accessible drilldown links and matching chart-click behavior. Scheduled values go to Recurring. A collapsed synthetic `Other` tail expands categories instead of pretending to be a real category named `Other`.
 - Keep net worth charts sourced from the current balance-sheet formula, never
@@ -87,11 +86,10 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 - Keep content width near 72rem. Use alignment, type, spacing, and thin dividers
   to establish hierarchy. Reserve bordered surfaces for related content and
   shadows for overlays.
-- Use modest 6–10px control and surface radii. Buttons are rectangular; use
-  rounded shapes only where they carry familiar meaning, such as dates or status.
-- Group the three Home summary links in one section with fine dividers. Keep
-  balances, recorded cashflow, and scheduled cashflow separate and label source
-  dates near the balance figures.
+- Use 8–20px radii. Phone controls can be slightly rounder than dense desktop
+  tables. Reserve strong shadows for overlays; cards use a soft shadow.
+- Group Home's net worth and this month's cashflow in one section with a fine
+  divider. Label source dates near the balance figures.
 - Keep forms focused and concise. State the passphrase recovery limit beside
   the sign-in fields. Use content-first rows for trips and portfolio work.
 - Cards group real data. Avoid decorative icon badges, nested card layouts,

@@ -19,6 +19,9 @@
       <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
     </div>
   </ui-page-header>
+  @if (embedded) {
+    <p class="scope-note">Market value counts toward net worth. Transactions do not.</p>
+  }
   @for (stage of resumableFidelityStages; track stage.id) {
     <ui-card class="resume-stage" [title]="'Fidelity replacement needs attention'">
       <p>{{ stage.filename }} · {{ stage.expected_row_count }} staged position(s) · {{ stage.account_masks.length }} account(s)</p>
@@ -35,17 +38,19 @@
       <div>
         <div class="label">{{ hasMissingValues ? 'Known Portfolio Value' : 'Total Portfolio Value' }}</div>
         <div class="big-number stat-display">${{ getTotalValue() | number: '1.2-2' }}</div>
-        <small>Position dates: {{ positionDateSummary() }}</small>
-        <small>Quote dates: {{ quoteDateSummary() }}</small>
+        <div class="source-dates">
+          <p>Position dates <strong>{{ positionDateSummary() }}</strong></p>
+          <p>Quote dates <strong>{{ quoteDateSummary() }}</strong></p>
+        </div>
         @if (provisionalPositionCount) {
-          <small>{{ provisionalPositionCount }} position(s) currently use provisional cost-basis values.</small>
+          <p class="hint">{{ provisionalPositionCount }} position(s) currently use provisional cost-basis values.</p>
         }
       </div>
       <div>
         <div class="label">Total Unrealized Gain/Loss</div>
         @if (getTotalGain() == null) {
           <div class="big-number stat-display">Unavailable</div>
-          <small>At least one position has an unknown basis or market value.</small>
+          <p class="hint">At least one position has an unknown basis or market value.</p>
         } @else {
           <div class="big-number stat-display" [class.positive]="totalGainIsPositive()" [class.negative]="totalGainIsNegative()">
             {{ totalGainDisplay() }}
@@ -54,12 +59,12 @@
       </div>
     </div>
     @if (hasMissingValues) {
-      <p class="text-sm text-secondary">{{ missingValueCount }} position(s) have no market value; the displayed portfolio value is incomplete.</p>
+      <p class="hint">{{ missingValueCount }} position(s) have no market value; the displayed portfolio value is incomplete.</p>
     }
     @if (netWorth?.portfolio_breakdown) {
       <div class="portfolio-breakdown">
         @for (entry of (netWorth!.portfolio_breakdown | keyvalue); track entry.key) {
-          <span>{{ entry.key }}: <strong>${{ entry.value | number:'1.0-0' }}</strong></span>
+          <span><span class="breakdown-key">{{ entry.key }}</span><strong>${{ entry.value | number:'1.0-0' }}</strong></span>
         }
       </div>
     }
@@ -78,7 +83,7 @@
         />
         <ui-button variant="secondary" size="sm" (clicked)="exportToCsv()">Export CSV</ui-button>
     </div>
-    <p class="text-sm text-secondary holdings-tip">
+    <p class="hint holdings-tip">
       Tip: Use <strong>Edit</strong> on a holding to change its ticker symbol (useful for imported CUSIPs or funds).
     </p>
 
@@ -113,6 +118,9 @@
                       type="text"
                       class="nickname-input"
                       [(ngModel)]="nicknameDraft"
+                      aria-label="Account nickname"
+                      (click)="$event.stopPropagation()"
+                      (keydown)="$event.stopPropagation()"
                       (keyup.enter)="saveNickname()"
                       (blur)="saveNickname()"
                     />
@@ -144,12 +152,12 @@
                   <thead>
                     <tr>
                       <th scope="col">Symbol</th>
-                      <th scope="col">Shares</th>
-                      <th scope="col">Cost Basis</th>
-                      <th scope="col">Current</th>
-                      <th scope="col">Value</th>
-                      <th scope="col">Gain</th>
-                      <th scope="col">%</th>
+                      <th scope="col" class="num">Shares</th>
+                      <th scope="col" class="num">Cost Basis</th>
+                      <th scope="col" class="num">Current</th>
+                      <th scope="col" class="num">Value</th>
+                      <th scope="col" class="num">Gain</th>
+                      <th scope="col" class="num">%</th>
                       <th scope="col">Price</th>
                       <th scope="col">Position date</th>
                       <th scope="col">Actions</th>
@@ -164,12 +172,12 @@
                             <br><small class="company-sub">{{ h.company_name }}</small>
                           }
                         </td>
-                        <td>{{ h.shares }}</td>
-                        <td>{{ h.purchase_price == null ? 'Unknown' : ('$' + (h.purchase_price | number: '1.2-2')) }}</td>
-                        <td>{{ h.current_price == null ? 'Unavailable' : ('$' + (h.current_price | number: '1.2-2')) }}</td>
-                        <td>{{ h.value == null ? 'Unavailable' : ('$' + (h.value | number: '1.2-2')) }}</td>
-                        <td [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
-                        <td [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
+                        <td class="num">{{ h.shares }}</td>
+                        <td class="num">{{ h.purchase_price == null ? 'Unknown' : ('$' + (h.purchase_price | number: '1.2-2')) }}</td>
+                        <td class="num">{{ h.current_price == null ? 'Unavailable' : ('$' + (h.current_price | number: '1.2-2')) }}</td>
+                        <td class="num">{{ h.value == null ? 'Unavailable' : ('$' + (h.value | number: '1.2-2')) }}</td>
+                        <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
+                        <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
                         <td class="price-cell">
                           <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
                           <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
@@ -208,12 +216,12 @@
               <thead>
                 <tr>
                   <th scope="col">Symbol</th>
-                  <th scope="col">Shares</th>
-                  <th scope="col">Cost Basis</th>
-                  <th scope="col">Current</th>
-                  <th scope="col">Value</th>
-                  <th scope="col">Gain</th>
-                  <th scope="col">%</th>
+                  <th scope="col" class="num">Shares</th>
+                  <th scope="col" class="num">Cost Basis</th>
+                  <th scope="col" class="num">Current</th>
+                  <th scope="col" class="num">Value</th>
+                  <th scope="col" class="num">Gain</th>
+                  <th scope="col" class="num">%</th>
                   <th scope="col">Price</th>
                   <th scope="col">Position date</th>
                   <th scope="col">Actions</th>
@@ -228,12 +236,12 @@
                         <br><small class="company-sub">{{ h.company_name }}</small>
                       }
                     </td>
-                    <td>{{ h.shares }}</td>
-                    <td>{{ h.purchase_price == null ? 'Unknown' : ('$' + (h.purchase_price | number: '1.2-2')) }}</td>
-                    <td>{{ h.current_price == null ? 'Unavailable' : ('$' + (h.current_price | number: '1.2-2')) }}</td>
-                    <td>{{ h.value == null ? 'Unavailable' : ('$' + (h.value | number: '1.2-2')) }}</td>
-                    <td [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
-                    <td [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
+                    <td class="num">{{ h.shares }}</td>
+                    <td class="num">{{ h.purchase_price == null ? 'Unknown' : ('$' + (h.purchase_price | number: '1.2-2')) }}</td>
+                    <td class="num">{{ h.current_price == null ? 'Unavailable' : ('$' + (h.current_price | number: '1.2-2')) }}</td>
+                    <td class="num">{{ h.value == null ? 'Unavailable' : ('$' + (h.value | number: '1.2-2')) }}</td>
+                    <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
+                    <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
                     <td class="price-cell">
                       <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
                       <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
@@ -272,7 +280,7 @@
 
 <ui-dialog [open]="showModal" labelledBy="holding-modal-title" (closed)="closeModal()">
     <h3 id="holding-modal-title">{{ editingId ? 'Edit holding' : 'Add holding' }}</h3>
-    <form (ngSubmit)="addOrUpdateHolding()" #holdingForm="ngForm">
+    <form class="holding-form" (ngSubmit)="addOrUpdateHolding()" #holdingForm="ngForm">
       <div class="form-row">
         <div class="form-group symbol-row">
           <label for="h-symbol">Symbol</label>
@@ -326,6 +334,7 @@
 <!-- Fidelity Import Modal -->
 <ui-dialog [open]="showFidelityImportModal" labelledBy="fidelity-import-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeFidelityImportModal()">
     <h3 id="fidelity-import-modal-title">Import from Fidelity (replaces positions)</h3>
+    <div class="import-sheet">
 
     <p class="import-warning">
       Replacement positions are staged and verified first. Existing positions stay active until each selected account switches to the verified replacement.
@@ -370,16 +379,16 @@
       <div class="replacement-preview" *ngIf="fidelityAccountReplacements.length">
         <h4>Account-level replacement preview</h4>
         <ui-data-table ariaLabel="Fidelity account replacement values">
-          <thead><tr><th>Account</th><th>Existing value</th><th>Replacement value</th><th>Change</th><th>Unvalued</th><th>Provisional</th></tr></thead>
+          <thead><tr><th scope="col">Account</th><th scope="col" class="num">Existing value</th><th scope="col" class="num">Replacement value</th><th scope="col" class="num">Change</th><th scope="col" class="num">Unvalued</th><th scope="col" class="num">Provisional</th></tr></thead>
           <tbody>
             @for (account of fidelityAccountReplacements; track account.account_mask) {
               <tr>
                 <td>{{ account.account_display }}</td>
-                <td>{{ account.existing_market_value == null ? 'Incomplete' : ('$' + (account.existing_market_value | number:'1.2-2')) }}</td>
-                <td>{{ account.replacement_market_value == null ? 'Incomplete' : ('$' + (account.replacement_market_value | number:'1.2-2')) }}</td>
-                <td>{{ account.change == null ? 'Unavailable' : ((account.change >= 0 ? '+' : '') + '$' + (account.change | number:'1.2-2')) }}</td>
-                <td>{{ account.replacement_unvalued_positions }}</td>
-                <td>{{ account.replacement_provisional_positions }}</td>
+                <td class="num">{{ account.existing_market_value == null ? 'Incomplete' : ('$' + (account.existing_market_value | number:'1.2-2')) }}</td>
+                <td class="num">{{ account.replacement_market_value == null ? 'Incomplete' : ('$' + (account.replacement_market_value | number:'1.2-2')) }}</td>
+                <td class="num">{{ account.change == null ? 'Unavailable' : ((account.change >= 0 ? '+' : '') + '$' + (account.change | number:'1.2-2')) }}</td>
+                <td class="num">{{ account.replacement_unvalued_positions }}</td>
+                <td class="num">{{ account.replacement_provisional_positions }}</td>
               </tr>
             }
           </tbody>
@@ -388,15 +397,15 @@
 
       <div class="fidelity-preview-table">
         <ui-data-table ariaLabel="Fidelity import preview">
-          <thead><tr><th>Account</th><th>Symbol</th><th>Shares</th><th>Cost basis</th><th>Market value</th><th>Value source</th><th>Position date</th></tr></thead>
+          <thead><tr><th scope="col">Account</th><th scope="col">Symbol</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Cost basis</th><th scope="col" class="num">Market value</th><th scope="col">Value source</th><th scope="col">Position date</th></tr></thead>
           <tbody>
             @for (row of fidelityImportPreview.rows; track $index) {
               <tr>
                 <td>{{ row.account_display }}</td>
-                <td>{{ row.symbol }}</td>
-                <td>{{ row.shares }}</td>
-                <td>{{ row.avg_cost_basis == null ? 'Unknown' : ('$' + (row.avg_cost_basis | number:'1.2-2')) }}</td>
-                <td>{{ row.market_value == null ? 'Unavailable' : ('$' + (row.market_value | number:'1.2-2')) }}</td>
+                <td class="symbol">{{ row.symbol }}</td>
+                <td class="num">{{ row.shares }}</td>
+                <td class="num">{{ row.avg_cost_basis == null ? 'Unknown' : ('$' + (row.avg_cost_basis | number:'1.2-2')) }}</td>
+                <td class="num">{{ row.market_value == null ? 'Unavailable' : ('$' + (row.market_value | number:'1.2-2')) }}</td>
                 <td>{{ row.valuation_source }}</td>
                 <td>{{ dateLabel(row.position_as_of) }}</td>
               </tr>
@@ -415,4 +424,5 @@
         <ui-button variant="secondary" (clicked)="closeFidelityImportModal()">Cancel</ui-button>
       </div>
     }
+    </div>
 </ui-dialog>

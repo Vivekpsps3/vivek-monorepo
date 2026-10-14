@@ -2,7 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Calendar'"
-    subtitle="Activity by day. This view does not change net worth." />
+    subtitle="Pay and spending by day, counted once. This view does not change net worth." />
 
   <div class="calendar-toolbar">
     <ui-button variant="secondary" size="sm" ariaLabel="Previous month" (clicked)="prevMonth()"><ui-icon name="chevron-left" size="sm" /></ui-button>
@@ -117,10 +117,10 @@
   @if (selectedDate) {
     <ui-card>
       <div class="selected-header">
-        <h3>Transactions on {{ selectedDate }}</h3>
+        <h3>{{ selectedDate }}</h3>
         <a class="calendar-cta" [routerLink]="['/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction</a>
       </div>
-      @if (selectedTransactions.length) {
+      @if (selectedTransactions.length || selectedPlans.length) {
         <p class="day-net">
           Net for day:
           <span [class.positive]="dayTotal() >= 0" [class.negative]="dayTotal() < 0">
@@ -128,7 +128,7 @@
           </span>
         </p>
       }
-      @if (selectedTransactions.length > 0) {
+      @if (selectedTransactions.length || selectedPlans.length) {
         @for (tx of selectedTransactions; track tx.id) {
           <a class="tx-item tx-item-link" [routerLink]="['/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.category || 'transaction') + ' from ' + tx.date">
             <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ tx.kind || tx.type }}</ui-badge>
@@ -140,8 +140,17 @@
             <span class="calendar-edit-hint">Edit</span>
           </a>
         }
+        @for (item of selectedPlans; track item.name + item.date + item.amount) {
+          <a class="tx-item tx-item-link" [routerLink]="['/recurring']" [queryParams]="{ t: 'spend' }" [attr.aria-label]="'Edit repeating ' + item.name">
+            <ui-badge variant="default">Repeats</ui-badge>
+            <span class="category">{{ item.category }}</span>
+            <span class="amount">−${{ item.amount | number: '1.2-2' }}</span>
+            <span class="desc">{{ item.name }}</span>
+            <span class="calendar-edit-hint">Edit</span>
+          </a>
+        }
       } @else {
-        <ui-empty-state message="No transactions on this day." />
+        <ui-empty-state message="Nothing on this day." />
       }
     </ui-card>
   }

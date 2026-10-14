@@ -44,17 +44,17 @@ export interface CommitmentRow {
           <header class="commitments__header">
             <div>
               <h2 id="commitments-title">Bills &amp; subscriptions</h2>
-              <p>Scheduled costs only. Editing these does not add a transaction or change your balances.</p>
+              <p>Bills and subscriptions that repeat. Editing them does not add a transaction or change your balances.</p>
             </div>
             <div class="commitments__actions">
               <ui-button variant="secondary" (clicked)="addBill()">Add bill</ui-button>
               <ui-button variant="primary" (clicked)="addSubscription()">Add subscription</ui-button>
             </div>
           </header>
-          <div class="commitment-totals" aria-label="Active scheduled costs">
+          <div class="commitment-totals" aria-label="Bills and subscriptions totals">
             <div><span>Active monthly equivalent</span><strong class="money">{{ activeMonthlyTotal | currency:'USD':'symbol':'1.2-2' }}</strong></div>
             <div><span>Active annual equivalent</span><strong class="money">{{ activeAnnualTotal | currency:'USD':'symbol':'1.2-2' }}</strong></div>
-            <div><span>Recorded items</span><strong>{{ rows.length }}</strong></div>
+            <div><span>Repeating</span><strong>{{ rows.length }}</strong></div>
           </div>
           <div class="commitment-filters" aria-label="Filter commitments">
             <label><span>Type</span><select name="commitment_type" [(ngModel)]="typeFilter" (ngModelChange)="filterChanged()"><option value="all">All types</option><option value="bill">Bills</option><option value="subscription">Subscriptions</option></select></label>
@@ -91,13 +91,13 @@ export interface CommitmentRow {
               @for (item of filteredRows; track item.kind + ':' + item.id) {
                 <article class="commitment-card">
                   <div class="commitment-card__heading"><div><strong>{{ item.name }}</strong><span>{{ item.kind === 'bill' ? item.category : 'Subscription' }} · {{ item.active ? 'Active' : 'Inactive' }}</span></div><strong class="money">{{ item.amount | currency:'USD':'symbol':'1.2-2' }}</strong></div>
-                  <dl><div><dt>Next due</dt><dd>{{ item.date ? (item.date | date:'mediumDate':'UTC') : 'No date' }}</dd></div><div><dt>Account</dt><dd>{{ item.account || 'Not recorded' }}</dd></div><div><dt>Autopay</dt><dd>{{ item.autopay == null ? 'Not recorded' : item.autopay ? 'Yes' : 'No' }}</dd></div><div><dt>Frequency</dt><dd>{{ frequencyLabel(item.frequency) }}</dd></div></dl>
+                  <dl><div><dt>Next due</dt><dd>{{ item.date ? (item.date | date:'mediumDate':'UTC') : 'No date' }}</dd></div><div><dt>Account</dt><dd>{{ item.account || 'Not recorded' }}</dd></div><div><dt>Autopay</dt><dd>{{ item.autopay == null ? 'Not recorded' : item.autopay ? 'Autopay' : 'Manual' }}</dd></div><div><dt>Frequency</dt><dd>{{ frequencyLabel(item.frequency) }}</dd></div></dl>
                   <div class="commitment-card__actions"><ui-button variant="secondary" (clicked)="edit(item)">Edit</ui-button><ui-button variant="danger" (clicked)="remove(item)">Delete</ui-button></div>
                 </article>
               }
             </div>
           } @else if (rows.length) {
-            <p class="commitment-empty">No items match these filters. Choose “All types” and “Active and inactive” to see every recorded bill and subscription.</p>
+            <p class="commitment-empty">No items match these filters. Choose “All types” and “Active and inactive” to see every bill and subscription.</p>
           } @else if (!loadError) {
             <div class="commitment-empty"><strong>No bills or subscriptions yet.</strong><p>Add rent, utilities, insurance, debt payments, or a subscription. You can enter items without a due date and include paused obligations.</p></div>
           }
@@ -115,46 +115,56 @@ export interface CommitmentRow {
     </div>
   `,
   styles: [`
-    :host { display:block; }
-    .recurring-page { display:grid; gap:var(--space-5, 1.25rem); }
-    .commitments { display:grid; gap:1rem; padding:clamp(1rem,2vw,1.5rem); border:1px solid var(--border-subtle); border-radius:var(--radius-lg,1rem); background:var(--card-bg); }
-    .commitments__header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+    :host { display:block; min-width:0; max-width:100%; }
+    .recurring-page { display:grid; gap:var(--space-5, 1.25rem); min-width:0; max-width:100%; }
+    .recurring-page > * { min-width:0; max-width:100%; }
+    .commitments { display:grid; gap:1rem; box-sizing:border-box; min-width:0; max-width:100%; padding:clamp(1rem,2vw,1.5rem); border:1px solid var(--border-subtle); border-radius:var(--radius-lg,1rem); background:var(--card-bg); }
+    .commitments__header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; min-width:0; }
+    .commitments__header > div { min-width:0; }
     .commitments h2 { margin:0; font-size:1.25rem; }
-    .commitments__header p, .compensation-history > p { margin:.35rem 0 0; color:var(--text-secondary); }
+    .commitments__header p, .compensation-history > p { margin:.35rem 0 0; color:var(--text-secondary); overflow-wrap:anywhere; }
     .commitments__actions, .commitment-card__actions { display:flex; flex-wrap:wrap; gap:.5rem; }
-    .commitment-totals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
-    .commitment-totals > div { display:grid; gap:.25rem; padding:.8rem; border-radius:.75rem; background:var(--surface-2); }
-    .commitment-totals span, .commitment-table small, .commitment-card span { color:var(--text-secondary); font-size:.82rem; }
-    .commitment-filters { display:flex; flex-wrap:wrap; gap:.75rem; }
-    .commitment-filters label { display:grid; gap:.3rem; min-width:10rem; }
-    .commitment-filters select { min-height:2.5rem; padding:.4rem .65rem; border:1px solid var(--border); border-radius:.5rem; background:var(--card-bg); color:inherit; }
-    .commitment-table-wrap { overflow-x:auto; }
+    .commitment-totals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; min-width:0; }
+    .commitment-totals > div { display:grid; gap:.25rem; min-width:0; padding:.8rem; border-radius:.75rem; background:var(--surface-2); }
+    .commitment-totals span, .commitment-table small, .commitment-card span { color:var(--text-secondary); font-size:.82rem; overflow-wrap:anywhere; }
+    .commitment-totals strong, .commitment-card__heading .money { overflow-wrap:anywhere; }
+    .commitment-filters { display:flex; flex-wrap:wrap; gap:.75rem; min-width:0; }
+    .commitment-filters label { display:grid; gap:.3rem; flex:1 1 10rem; min-width:min(100%, 10rem); }
+    .commitment-filters select { width:100%; min-width:0; box-sizing:border-box; min-height:2.5rem; padding:.4rem .65rem; border:1px solid var(--border); border-radius:.5rem; background:var(--card-bg); color:inherit; }
+    .commitment-table-wrap { min-width:0; max-width:100%; overflow-x:auto; }
     .commitment-table { width:100%; border-collapse:collapse; }
-    .commitment-table th,.commitment-table td { padding:.75rem .65rem; text-align:left; vertical-align:middle; border-bottom:1px solid var(--border-subtle); }
+    .commitment-table th,.commitment-table td { padding:.75rem .65rem; text-align:left; vertical-align:middle; border-bottom:1px solid var(--border-subtle); overflow-wrap:anywhere; }
     .commitment-table small { display:block; margin-top:.2rem; }
     .commitment-row-actions { white-space:nowrap; }
     .commitment-row-actions ui-button + ui-button { margin-left:.25rem; }
     .status-chip { display:inline-flex; padding:.2rem .55rem; border-radius:99px; background:color-mix(in srgb, var(--success) 16%, var(--card-bg)); color:var(--success); font-size:.78rem; }
     .status-chip--inactive { background:var(--surface-2); color:var(--text-secondary); }
-    .commitment-empty,.commitment-status,.commitment-error { padding:1rem; border-radius:.7rem; background:var(--surface-2); }
-    .commitment-error { display:flex; align-items:center; justify-content:space-between; gap:1rem; background:color-mix(in srgb, var(--danger) 12%, var(--card-bg)); color:var(--danger); }
+    .commitment-empty,.commitment-status,.commitment-error { padding:1rem; border-radius:.7rem; background:var(--surface-2); overflow-wrap:anywhere; }
+    .commitment-error { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; background:color-mix(in srgb, var(--danger) 12%, var(--card-bg)); color:var(--danger); }
     .commitment-cards { display:none; }
-    .compensation-history { padding:1rem; border:1px solid var(--border-subtle); border-radius:.8rem; background:var(--card-bg); }
-    .compensation-history summary { cursor:pointer; font-weight:650; }
+    .compensation-history { box-sizing:border-box; min-width:0; max-width:100%; padding:1rem; border:1px solid var(--border-subtle); border-radius:.8rem; background:var(--card-bg); }
+    .compensation-history summary { cursor:pointer; font-weight:650; min-height:44px; display:flex; align-items:center; }
     .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    @media (max-width:760px) {
-      .commitments__header { display:grid; }
-      .commitment-totals { grid-template-columns:1fr; }
+    @media (max-width:768px) {
+      .commitments__header, .commitment-error { display:grid; }
+      .commitments__actions { display:grid; grid-template-columns:1fr; }
+      .commitments__actions ::ng-deep .ui-btn,
+      .commitment-card__actions ::ng-deep .ui-btn,
+      .commitment-error ::ng-deep .ui-btn { width:100%; min-height:44px; }
+      .commitment-totals, .commitment-filters { grid-template-columns:1fr; }
+      .commitment-filters { display:grid; }
+      .commitment-filters label { min-width:0; }
+      .commitment-filters select { min-height:44px; }
       .commitment-table-wrap { display:none; }
       .commitment-cards { display:grid; gap:.75rem; }
-      .commitment-card { padding:.85rem; border:1px solid var(--border-subtle); border-radius:.75rem; }
-      .commitment-card__heading { display:flex; justify-content:space-between; gap:.75rem; }
-      .commitment-card__heading div { display:grid; gap:.2rem; }
-      .commitment-card dl { display:grid; grid-template-columns:1fr 1fr; gap:.6rem .9rem; margin:.8rem 0; }
+      .commitment-card { box-sizing:border-box; min-width:0; padding:.85rem; border:1px solid var(--border-subtle); border-radius:.75rem; }
+      .commitment-card__heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:.75rem; }
+      .commitment-card__heading div { display:grid; gap:.2rem; flex:1 1 8rem; min-width:0; }
+      .commitment-card dl { display:grid; grid-template-columns:1fr; gap:.6rem; margin:.8rem 0; }
       .commitment-card dl div { min-width:0; }
       .commitment-card dt { color:var(--text-secondary); font-size:.75rem; }
       .commitment-card dd { margin:.15rem 0 0; overflow-wrap:anywhere; }
-      .commitment-card__actions ui-button { flex:1; }
+      .commitment-card__actions { display:grid; grid-template-columns:1fr; }
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,

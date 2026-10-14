@@ -13,11 +13,13 @@
 }
 
 .ui-dialog-panel {
+  box-sizing: border-box;
   background: var(--card-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   padding: var(--space-6);
   width: 100%;
+  min-width: 0;
   max-width: 560px;
   box-shadow: var(--shadow-lg);
   animation: ui-dialog-in var(--motion-base) var(--ease-emphasized);
@@ -45,6 +47,13 @@
 @media (max-width: 768px) {
   .ui-dialog-backdrop {
     align-items: flex-end;
+    justify-content: center;
+    top: var(--ui-dialog-vv-top, 0px);
+    bottom: auto;
+    height: 100%;
+    height: var(--ui-dialog-vv-height, 100dvh);
+    max-height: 100%;
+    max-height: var(--ui-dialog-vv-height, 100dvh);
     padding: 0;
     overflow: hidden;
   }
@@ -52,15 +61,54 @@
   .ui-dialog-panel,
   .ui-dialog-panel--wide {
     box-sizing: border-box;
-    max-width: none;
+    flex: 0 1 auto;
     width: 100%;
-    margin: 0;
-    border-radius: 16px 16px 0 0;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
     max-height: 100%;
+    max-height: min(100%, var(--ui-dialog-vv-height, 100dvh));
+    margin: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    animation-name: ui-dialog-sheet-in;
     padding: var(--space-5) max(var(--space-4), env(safe-area-inset-right))
       max(var(--space-6), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
   }
+
+  .ui-dialog-panel ::ng-deep .form-actions,
+  .ui-dialog-panel ::ng-deep .modal-actions {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .ui-dialog-panel ::ng-deep .ui-btn,
+  .ui-dialog-panel ::ng-deep .ui-btn.ui-btn--sm,
+  .ui-dialog-panel ::ng-deep .ui-field__control,
+  .ui-dialog-panel ::ng-deep input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  .ui-dialog-panel ::ng-deep select,
+  .ui-dialog-panel ::ng-deep textarea {
+    min-height: 44px;
+    max-width: 100%;
+  }
+
+  .ui-dialog-panel ::ng-deep .ui-field__control,
+  .ui-dialog-panel ::ng-deep input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  .ui-dialog-panel ::ng-deep select,
+  .ui-dialog-panel ::ng-deep textarea {
+    font-size: 1rem;
+  }
+
+  .ui-dialog-panel ::ng-deep .ui-field__password-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@keyframes ui-dialog-sheet-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

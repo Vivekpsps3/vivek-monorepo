@@ -79,22 +79,39 @@
   font-weight: 600;
 }
 
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .native-select,
 .table-select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-elevated);
   color: var(--text);
+  font: inherit;
+  font-size: 1rem;
 }
 
 .native-select,
 .table-select {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 var(--space-3);
 }
 
+.native-select:focus-visible,
+.table-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .table-select {
-  min-width: 92px;
+  min-width: 0;
 }
 
 .form-actions {
@@ -126,7 +143,8 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--space-2);
-  min-width: 320px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 @media (max-width: 980px) {
@@ -145,7 +163,11 @@
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .section-heading {
     display: grid;
   }
@@ -158,8 +180,22 @@
     justify-content: stretch;
   }
 
+  .form-actions ::ng-deep .ui-btn,
+  .section-heading ::ng-deep .ui-btn,
+  .section-heading ::ng-deep .ui-btn.ui-btn--sm,
+  .row-actions ::ng-deep .ui-btn,
+  .row-actions ::ng-deep .ui-btn.ui-btn--sm {
+    min-height: 44px;
+  }
+
+  .form-actions ::ng-deep .ui-btn {
+    width: 100%;
+  }
+
   .row-actions {
     justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
     min-width: 0;
     width: 100%;
   }

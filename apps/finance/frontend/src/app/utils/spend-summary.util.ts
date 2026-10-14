@@ -1,5 +1,5 @@
 import { transactionEffects } from '../crypto/client-finance';
-import { Transaction } from '../models/transaction.model';
+import { CashflowOccurrence, Transaction } from '../models/transaction.model';
 
 export interface SpendCategoryRow {
   label: string;
@@ -36,20 +36,27 @@ export function inMonth(date: string, monthKey: string): boolean {
 export function summarizeMonthSpend(
   transactions: Array<Pick<Transaction, 'id' | 'date' | 'type' | 'category' | 'description' | 'amount' | 'kind'>>,
   monthKey: string,
-  topN = 5
+  topN = 5,
+  repeating: CashflowOccurrence[] = [],
 ): MonthSpendSummary {
   const rows = (monthKey ? transactions.filter(tx => inMonth(tx.date, monthKey)) : transactions)
     .filter(tx => {
       const effect = transactionEffects(tx as Transaction);
       return effect.income !== 0 || effect.spending !== 0;
     });
+  const extras = monthKey ? repeating.filter(row => inMonth(row.date, monthKey)) : repeating;
   const expenses = rows.filter(tx => transactionEffects(tx as Transaction).spending !== 0);
   const incomeTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).income, 0);
-  const expenseTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).spending, 0);
+  const expenseTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).spending, 0)
+    + extras.reduce((sum, row) => sum + row.amount, 0);
   const byCategory = new Map<string, number>();
   for (const tx of expenses) {
     const label = tx.category.trim() || 'Uncategorized';
     byCategory.set(label, (byCategory.get(label) || 0) + transactionEffects(tx as Transaction).spending);
+  }
+  for (const row of extras) {
+    const label = row.category.trim() || 'Uncategorized';
+    byCategory.set(label, (byCategory.get(label) || 0) + row.amount);
   }
   const categories = [...byCategory.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -73,7 +80,7 @@ export function summarizeMonthSpend(
     expenseTotal,
     incomeTotal,
     net: incomeTotal - expenseTotal,
-    activeDays: new Set(rows.map(tx => tx.date)).size,
+    activeDays: new Set([...rows.map(tx => tx.date), ...extras.map(row => row.date)]).size,
     categories,
     topPurchases,
   };

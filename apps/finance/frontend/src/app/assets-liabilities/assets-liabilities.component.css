@@ -1,79 +1,240 @@
-.net-worth-hero .stat-display {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin-bottom: var(--space-4);
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
-.breakdown-row {
-  margin-top: var(--space-2);
+.page,
+.embed,
+:host ::ng-deep ui-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+h3 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg);
+  letter-spacing: -0.02em;
+}
+
+.net-worth-hero .stat-display {
+  margin: 0;
+  font-size: clamp(1.75rem, 2.4vw, 2.125rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.summary-card .summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .breakdown-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.breakdown-item ui-icon {
+.breakdown-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
   color: var(--text-tertiary);
 }
 
-.summary-card .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
+.breakdown-item .summary-label {
+  margin: 0;
 }
 
 .summary-label {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.25rem;
 }
 
-.summary-grid .hero {
-  font-size: 1.25rem;
+.breakdown-item .money {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .hint {
-  margin-top: 0.75rem;
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.source-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin-top: var(--space-3);
+}
+
+.source-dates p {
+  margin: 0;
   font-size: var(--text-sm);
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.source-dates strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.name-cell {
+  overflow-wrap: anywhere;
 }
 
 .actions {
-  white-space: nowrap;
+  white-space: normal;
+}
+
+.sheet-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sheet-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.sheet-form input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.sheet-form ui-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.form-card label {
-  display: block;
-  margin-bottom: 0.75rem;
+:host ::ng-deep .ui-card .ui-card__header {
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
-.form-card input {
-  width: 100%;
-  margin-top: 0.25rem;
+:host ::ng-deep .ui-data-table__table thead th {
+  white-space: normal;
 }
 
-@media (max-width: 720px) {
+:host ::ng-deep .ui-data-table__table thead th.num,
+:host ::ng-deep .ui-data-table__table tbody td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+:host ::ng-deep .ui-empty__action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+@media (min-width: 769px) {
+  :host ::ng-deep .ui-data-table__table tbody td.num {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 768px) {
   .summary-card .summary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-top: var(--space-3);
+  }
+
+  .breakdown-item {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .breakdown-item:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .source-dates {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  :host ::ng-deep .ui-data-table .ui-data-table__table tbody tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :host ::ng-deep .ui-data-table .ui-data-table__table tbody td {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+
+  :host ::ng-deep .ui-data-table__table tbody td.num {
+    text-align: left;
+    font-size: var(--text-base);
+    font-weight: 650;
+  }
+
+  .actions,
+  td.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  td.actions ui-button {
+    flex: 1 1 8rem;
+  }
+
+  td.actions ::ng-deep .ui-btn,
+  .modal-actions ::ng-deep .ui-btn,
+  :host ::ng-deep .ui-empty__action .ui-btn {
+    width: 100%;
+    min-height: 44px;
   }
 
   .modal-actions {
     flex-direction: column-reverse;
+    align-items: stretch;
   }
 
-  .modal-actions ui-button,
-  .modal-actions ::ng-deep .ui-btn {
+  .modal-actions ui-button {
     width: 100%;
   }
 }

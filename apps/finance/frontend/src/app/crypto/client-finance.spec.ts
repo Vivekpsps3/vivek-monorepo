@@ -296,9 +296,44 @@ describe('client-finance', () => {
     expect(summary.scheduled_expenses).toBe(1000);
     expect(summary.scheduled_net_cashflow).toBeCloseTo(2055.44, 2);
     expect(summary.combined_outlook_net_cashflow).toBeCloseTo(2955.44, 2);
-    // Both observed and scheduled income present → additive combined can double-count pay.
+    // $1,000 posted against ~$3,055 of job pay is other income, so both stay.
+    // $100 of food does not match the $1,000 rent bill, so the bill stays too.
+    expect(summary.possible_income_overlap).toBe(false);
+    expect(summary.possible_expense_overlap).toBe(false);
+    expect(summary.counted_occurrences.map(row => ({ name: row.name, amount: row.amount, date: row.date }))).toEqual([
+      { name: 'Rent', amount: 1000, date: '2026-01-01' },
+    ]);
+  });
+
+  it('counts matching pay and bills once', () => {
+    const txs: Transaction[] = [
+      { id: 1, date: '2026-01-15', type: 'income', category: 'pay', amount: 3000 },
+      { id: 2, date: '2026-01-03', type: 'expense', category: 'housing', amount: 1000 },
+      { id: 3, date: '2026-01-12', type: 'expense', category: 'food', amount: 40 },
+    ];
+    const incomes = [
+      enrichJobIncome({
+        id: 1, employer: 'Acme', pay_frequency: 'monthly', base_pay: 3000,
+        annual_bonus: 0, annual_equity: 0, annual_other: 0, annual_taxes: 0, annual_deductions: 0,
+        taxes_per_period: 0, deductions_per_period: 0, effective_date: '2026-01-01', is_active: true,
+        pay_periods_per_year: 12, annual_base_pay: 0, annual_gross: 0, monthly_gross: 0,
+        period_gross: 0, period_net: 0, annual_net: 0, monthly_net: 0, created_at: '', updated_at: '',
+      } as JobIncome),
+    ];
+    const fixed = [
+      enrichFixedExpense({
+        id: 1, name: 'Rent', category: 'housing', amount: 1000, frequency: 'monthly',
+        start_date: '2026-01-01', autopay: true, is_active: true, next_due_date: '2026-02-01',
+        monthly_amount: 0, annual_amount: 0, created_at: '', updated_at: '',
+      } as FixedExpense),
+    ];
+    const summary = computeCashflowSummary('2026-01-01', '2026-01-31', txs, incomes, fixed, []);
     expect(summary.possible_income_overlap).toBe(true);
     expect(summary.possible_expense_overlap).toBe(true);
+    expect(summary.total_income).toBeCloseTo(3055.44, 2);
+    expect(summary.total_expenses).toBe(1040);
+    expect(summary.counted_occurrences).toEqual([]);
+    expect(summary.net_cashflow).toBeCloseTo(2015.44, 2);
   });
 
   it('flags no income overlap when only one plane has income', () => {

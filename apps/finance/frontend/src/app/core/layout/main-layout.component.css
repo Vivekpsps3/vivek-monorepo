@@ -657,7 +657,10 @@
     text-decoration: none;
   }
 
-  .mobile-tab.active { color: var(--accent); }
+  .mobile-tab.active {
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
 
   .account-menu {
     width: auto;

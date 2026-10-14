@@ -76,10 +76,14 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
     </div>
   `,
   styles: [`
+    :host { display: block; min-width: 0; max-width: 100%; }
+    h1 { margin: 0; }
+    app-transactions, app-calendar { display: block; min-width: 0; max-width: 100%; }
     .activity-switch {
       display: inline-flex;
+      max-width: 100%;
       gap: 2px;
-      margin: 0 0 var(--space-3);
+      margin: 0;
       padding: 3px;
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
@@ -111,7 +115,13 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
     }
     @media (max-width: 768px) {
       .activity-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
-      .activity-switch button { min-width: 0; padding-inline: var(--space-2); }
+      .activity-switch button {
+        min-width: 0;
+        min-height: 2.75rem;
+        padding-inline: var(--space-2);
+        white-space: normal;
+        line-height: 1.2;
+      }
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,

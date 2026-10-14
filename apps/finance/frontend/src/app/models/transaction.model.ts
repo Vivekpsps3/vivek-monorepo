@@ -376,17 +376,11 @@ export interface CashflowSummary {
   scheduled_income: number;
   scheduled_expenses: number;
   scheduled_net_cashflow: number;
-  /** Blended observed activity and scheduled assumptions; not an actual-only total. */
+  /** Same figure as net_cashflow: one cashflow, with posted rows standing in for matching bills and pay. */
   combined_outlook_net_cashflow: number;
-  /**
-   * True when both observed and scheduled income are non-zero.
-   * Combined totals always sum both; if imported pay overlaps job schedules, income is double-counted.
-   */
+  /** True when posted pay and job pay are close enough to count once. */
   possible_income_overlap: boolean;
-  /**
-   * True when both observed expenses and scheduled bills/subs are non-zero.
-   * Combined expenses always sum both; reimbursed or mirrored bills can double-count.
-   */
+  /** True when at least one repeating bill matched a posted transaction and was not added again. */
   possible_expense_overlap: boolean;
   total_income: number;
   total_expenses: number;
@@ -395,6 +389,8 @@ export interface CashflowSummary {
   average_daily_spend: number;
   fixed_occurrences: CashflowOccurrence[];
   subscription_occurrences: CashflowOccurrence[];
+  /** Repeating bills in the period that are not already a posted transaction. */
+  counted_occurrences: CashflowOccurrence[];
 }
 
 export interface Holding {

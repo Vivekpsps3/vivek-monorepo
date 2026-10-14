@@ -100,89 +100,105 @@ type McDisplayRow = {
   `,
   styles: [
     `
+      :host {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+      }
       .mc-chart-panel {
         display: flex;
         flex-direction: column;
         gap: var(--space-2, 0.5rem);
+        min-width: 0;
+        max-width: 100%;
       }
       .mc-year-controls {
         display: flex;
-        gap: 0.5rem;
+        gap: var(--space-2, 0.5rem);
         flex-wrap: wrap;
+        min-width: 0;
       }
       .mc-year-btn {
         appearance: none;
-        border: 1px solid var(--border, #333);
-        background: var(--surface-2, #16161a);
-        color: var(--text-primary, #f5f5f5);
-        border-radius: 0.5rem;
-        min-height: 2.5rem;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
+        border-radius: var(--radius-sm, 0.5rem);
+        min-height: 44px;
         padding: 0.4rem 0.75rem;
         cursor: pointer;
         font: inherit;
+        white-space: normal;
       }
       .mc-year-btn:disabled {
         opacity: 0.45;
         cursor: not-allowed;
       }
       .mc-chart-hover {
+        min-width: 0;
         font-size: var(--text-sm, 0.875rem);
-        color: var(--text-secondary, #b8b8b8);
+        color: var(--text-secondary);
         min-height: 1.25rem;
       }
       .mc-chart-hover__head {
         font-weight: 700;
-        color: var(--text, #f5f5f5);
+        color: var(--text);
         margin-bottom: 0.35rem;
-      }
-      .mc-chart-hover__goal {
-        margin-bottom: 0.35rem;
-        color: var(--success, #22c55e);
-        font-weight: 600;
+        overflow-wrap: anywhere;
       }
       .mc-chart-hover__grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
         gap: 0.2rem 1rem;
         margin: 0;
+        min-width: 0;
       }
       .mc-chart-hover__row {
         display: flex;
         justify-content: space-between;
+        align-items: baseline;
         gap: 0.75rem;
+        min-width: 0;
         margin: 0;
       }
       .mc-chart-hover__row dt {
+        min-width: 0;
         margin: 0;
+        overflow-wrap: anywhere;
         font-weight: 500;
       }
       .mc-chart-hover__row dd {
+        flex: 0 0 auto;
         margin: 0;
         font-weight: 600;
-        color: var(--text, #f5f5f5);
+        color: var(--text);
         font-variant-numeric: tabular-nums;
+        text-align: right;
       }
       .mc-chart-hover__row--sample dt,
       .mc-chart-hover__row--sample dd {
-        color: var(--accent, #3b82f6);
+        color: var(--accent);
       }
       .mc-chart-hover__row--median dt,
       .mc-chart-hover__row--median dd {
         font-weight: 700;
-        color: var(--text, #f5f5f5);
+        color: var(--text);
       }
       .mc-chart-hover__row--goal dt,
       .mc-chart-hover__row--goal dd {
-        color: var(--success, #22c55e);
+        color: var(--success);
       }
       .mc-chart-hover--empty .mc-chart-hover__hint {
-        color: var(--text-tertiary, #888);
+        color: var(--text-tertiary);
       }
       .mc-chart-wrap {
         position: relative;
         width: 100%;
-        min-height: 320px;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 280px;
         height: min(42vh, 420px);
+        overflow: hidden;
       }
       @media (max-width: 768px) {
         .mc-chart-wrap {
@@ -194,14 +210,17 @@ type McDisplayRow = {
         }
         .mc-year-controls {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         }
         .mc-year-btn {
           width: 100%;
         }
       }
+      /* Chart.js writes an inline pixel size; keep the canvas inside the wrapper. */
       canvas {
+        display: block;
         width: 100% !important;
+        max-width: 100% !important;
         height: 100% !important;
       }
     `,

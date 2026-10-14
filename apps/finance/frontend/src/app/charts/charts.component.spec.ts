@@ -55,7 +55,7 @@ describe('ChartsComponent', () => {
     expect(component.allCategoryRows).toEqual([{ label: 'Returned item', value: -10, pct: null }]);
   });
 
-  it('drills recorded chart points into Activity and scheduled points into Recurring', () => {
+  it('drills chart points into Activity', () => {
     const router = jasmine.createSpyObj('Router', ['navigate']);
     const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any, router as any);
     component.monthlyRows = [{ month: '2026-09', label: 'Sep 26', income: 20, expense: 12, net: 8 }];
@@ -64,15 +64,12 @@ describe('ChartsComponent', () => {
     expect(router.navigate.calls.mostRecent().args).toEqual([
       ['/spending'], { queryParams: { t: 'activity', v: 'spending', month: '2026-09' } },
     ]);
-
-    component.cashflowView = 'scheduled';
-    component.monthlyRows = [{ month: '2026-09', label: 'Sep 26', income: 20, expense: 12, net: 8 }];
-    component.openMonthlyDrilldown(0, 1);
-    expect(router.navigate.calls.mostRecent().args).toEqual([
-      ['/recurring'], { queryParams: { t: 'spend' } },
-    ]);
-    expect(component.monthlyRowQuery(component.monthlyRows[0], 0)).toEqual({ t: 'pay' });
-    expect(component.monthlyRowQuery(component.monthlyRows[0], 1)).toEqual({ t: 'spend' });
+    expect(component.monthlyRowQuery(component.monthlyRows[0], 0)).toEqual({
+      t: 'activity', v: 'income', month: '2026-09',
+    });
+    expect(component.monthlyRowQuery(component.monthlyRows[0], 1)).toEqual({
+      t: 'activity', v: 'spending', month: '2026-09',
+    });
   });
 
   it('keeps a real Other category drillable while the synthetic Other tail only expands', () => {

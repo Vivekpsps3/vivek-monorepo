@@ -17,14 +17,14 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../sh
         [title]="'Unlock vault'"
         subtitle="Decrypt your finance data in this browser session. Nothing sensitive is sent to the server." />
       <ui-card [title]="'Vault passphrase'">
+        <p class="muted">
+          Signed in as <strong>{{ username || '…' }}</strong>. Remember this username for other browsers.
+          A lost passphrase cannot be reset, and encrypted data cannot be recovered.
+        </p>
         <label>
           Vault passphrase
           <input type="password" [(ngModel)]="passphrase" autocomplete="current-password" />
         </label>
-        <p class="muted">
-          Signed in as <strong>{{ username || '…' }}</strong>. Remember this username for other browsers.
-          If you forget your passphrase, encrypted data cannot be recovered.
-        </p>
         @if (error) {
           <p class="error" role="alert">{{ error }}</p>
         }
@@ -37,10 +37,15 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../sh
   styles: [
     `
       .vault-page {
-        max-width: 42rem;
+        box-sizing: border-box;
+        width: min(100%, 26.5rem);
+        max-width: 26.5rem;
         min-height: 100dvh;
-        align-content: center;
-        padding-block: var(--space-8);
+        justify-content: center;
+        justify-content: safe center;
+        margin-inline: auto;
+        padding: max(var(--space-6), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+          max(var(--space-6), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
       }
       label {
         display: grid;
@@ -53,13 +58,15 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../sh
       input {
         box-sizing: border-box;
         width: 100%;
-        min-height: 48px;
+        max-width: 100%;
+        min-height: 44px;
         padding: var(--space-3) var(--space-4);
         border: 1px solid var(--border);
         border-radius: var(--radius-md);
         background: var(--card-bg);
         color: var(--text);
         font: inherit;
+        font-size: 1rem;
       }
       input:focus-visible {
         outline: 2px solid var(--accent);
@@ -70,9 +77,18 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../sh
         font-size: var(--text-sm);
       }
       .muted {
+        margin: 0;
         color: var(--text-secondary);
         font-size: var(--text-sm);
         line-height: 1.55;
+      }
+      .form-actions {
+        display: flex;
+        margin-top: var(--space-4);
+      }
+      .form-actions ::ng-deep .ui-btn {
+        width: 100%;
+        min-height: 44px;
       }
     `,
   ],

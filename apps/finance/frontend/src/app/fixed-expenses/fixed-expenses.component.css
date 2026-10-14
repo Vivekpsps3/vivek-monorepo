@@ -1,8 +1,18 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .fixed-summary {
   display: flex;
   justify-content: space-between;
   gap: var(--space-6);
   align-items: flex-end;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   background: var(--card-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
@@ -12,6 +22,8 @@
 
 .fixed-summary .stat-display {
   font-size: clamp(2rem, 5vw, 3rem);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .summary-caption {
@@ -21,13 +33,14 @@
 .summary-pill {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   padding: var(--space-2) var(--space-3);
   color: var(--text-secondary);
   background: var(--surface-2);
-  white-space: nowrap;
 }
 
 .block {
@@ -45,9 +58,57 @@
 
 .checkbox-field input {
   width: auto;
+  min-height: 1.25rem;
 }
 
-@media (max-width: 760px) {
+.fixed-summary > div,
+form,
+.form-row,
+.form-group {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  align-items: end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.form-row > *,
+ui-select,
+:host ::ng-deep .ui-card,
+:host ::ng-deep .ui-page-header,
+:host ::ng-deep .ui-page-header__actions,
+:host ::ng-deep .header-actions,
+:host ::ng-deep .ui-data-table {
+  min-width: 0;
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:host ::ng-deep .ui-data-table td {
+  overflow-wrap: anywhere;
+}
+
+:host ::ng-deep .ui-dialog-panel {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: min(560px, 100%);
+  overflow-x: auto;
+}
+
+@media (max-width: 768px) {
   .fixed-summary {
     flex-direction: column;
     align-items: stretch;
@@ -56,5 +117,35 @@
 
   .summary-pill {
     align-self: flex-start;
+    width: fit-content;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .checkbox-field {
+    align-self: stretch;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-actions ::ng-deep .ui-btn,
+  :host ::ng-deep .header-actions .ui-btn,
+  :host ::ng-deep td.actions .ui-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  :host ::ng-deep .ui-data-table tbody td {
+    grid-column: 1 / -1 !important;
+  }
+
+  :host ::ng-deep .ui-dialog-panel {
+    width: 100%;
+    max-width: 100%;
   }
 }

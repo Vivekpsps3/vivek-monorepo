@@ -35,10 +35,13 @@ export class UiDataTableComponent implements AfterViewInit, OnDestroy {
     const headers = Array.from(table.querySelectorAll('thead th'), (cell: Element) =>
       (cell.textContent || '').replace(/\s+/g, ' ').trim());
     table.querySelectorAll('tbody tr').forEach((row: Element) => {
-      Array.from(row.children).forEach((cell: Element, index: number) => {
+      let index = 0;
+      Array.from(row.children).forEach((cell: Element) => {
         if (!(cell instanceof HTMLTableCellElement) || cell.tagName !== 'TD') return;
-        const label = headers[index] || '';
+        const spans = cell.colSpan > 1;
+        const label = spans ? '' : headers[index] || '';
         if (cell.getAttribute('data-label') !== label) cell.setAttribute('data-label', label);
+        index += cell.colSpan || 1;
       });
     });
   }

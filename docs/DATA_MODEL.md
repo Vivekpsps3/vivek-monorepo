@@ -98,12 +98,10 @@ Separate from the transaction ledger and balance sheet. Code: `models.py`, `apps
 | `fixed_expenses` | Named recurring bills (rent, utilities, etc.) with frequency and date range |
 | `subscriptions` | Recurring subscription amounts with `next_bill_date` |
 
-The cashflow summary is computed client-side after vault unlock (`apps/finance/frontend/src/app/crypto/client-finance.ts`):
-it combines period **transaction** totals with pro-rated/planned job income and scheduled
-fixed-expense/subscription occurrences for the selected range. There is no cashflow-summary
-HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, or net worth.
+The cashflow summary is computed client-side after vault unlock (`apps/finance/frontend/src/app/crypto/client-finance.ts`).
+`total_income`, `total_expenses`, and `net_cashflow` are one stream: posted transaction effects plus job pay and bill/subscription occurrences that are not already posted. Job pay and posted income within 20% count once, keeping the larger figure. A bill within four days and 2% (or $1) of a posted purchase counts once. `observed_*` remains the ledger alone and `scheduled_*` remains the full repeating projection. There is no cashflow-summary HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, or net worth.
 
-`fixed_expenses.due_day` places upcoming occurrences on the configured day within each period when present; `start_date` and frequency define the schedule, and `end_date` bounds it. Subscriptions use `next_bill_date` as their schedule anchor. Recurring and calendar views show the next scheduled dates. Scheduled occurrences remain estimates until reflected by actual ledger transactions.
+`fixed_expenses.due_day` places occurrences on the configured day within each period when present; `start_date` and frequency define the schedule, and `end_date` bounds it. Subscriptions use `next_bill_date` as their schedule anchor. Recurring shows the next dates for editing. Home, charts, and Calendar include occurrences that do not already match a posted purchase.
 
 Job records retain `effective_date` as the employment start date and add optional
 `end_date`, `promotions` (date, replacement annual base pay, optional role), and

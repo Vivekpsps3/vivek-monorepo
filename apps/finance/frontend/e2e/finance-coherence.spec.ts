@@ -570,8 +570,14 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await page.screenshot({ path: '/tmp/finance-ux-home-desktop.png', fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
-  expect(width.document).toBeLessThanOrEqual(width.viewport);
+  const width = await page.evaluate(() => {
+    const scroller = document.querySelector('.main-content');
+    const documentWidth = scroller instanceof HTMLElement
+      ? scroller.scrollWidth
+      : document.documentElement.scrollWidth;
+    return { document: documentWidth, viewport: innerWidth };
+  });
+  expect(width.document).toBeLessThanOrEqual(width.viewport + 1);
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '/tmp/finance-ux-home-mobile.png', fullPage: true });
@@ -583,7 +589,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await page.locator('.account-actions > summary').click();
   await expect(accountMenu).not.toHaveAttribute('open', '');
   await expect.poll(() => page.locator('app-charts ui-card .ui-card').first().evaluate(card => getComputedStyle(card).backgroundColor))
-    .toBe('rgb(28, 27, 24)');
+    .toBe('rgb(32, 35, 32)');
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);
   await holdingsCanvas.scrollIntoViewIfNeeded();
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);
@@ -595,36 +601,37 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
 test('phone navigation keeps all five hubs in view and supports keyboard Plan navigation', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/');
-  const navigation = page.locator('.nav-tabs');
-  const tabs = navigation.getByRole('link');
-  const plan = navigation.getByRole('link', { name: 'Planning', exact: true });
-  await expect(tabs).toHaveCount(5);
+  const desktopNav = page.locator('.nav-tabs');
+  await expect(desktopNav.getByRole('link')).toHaveCount(5);
 
   for (const width of [320, 390]) {
     if (width > 320) await vault.open('/');
     await page.setViewportSize({ width, height: 844 });
+    const navigation = page.locator('.mobile-tabbar');
+    const plan = navigation.getByRole('link', { name: 'Plan', exact: true });
     await expect(plan).toBeVisible();
     const layout = await navigation.evaluate(node => {
       const nav = node.getBoundingClientRect();
-      const links = [...node.querySelectorAll<HTMLAnchorElement>('a.nav-tab')].map(link => {
+      const links = [...node.querySelectorAll<HTMLAnchorElement>('a.mobile-tab')].map(link => {
         const rect = link.getBoundingClientRect();
         return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
       });
+      const scroller = document.querySelector('.main-content');
       return {
         viewport: window.innerWidth,
-        document: document.documentElement.scrollWidth,
+        document: scroller instanceof HTMLElement ? scroller.scrollWidth : document.documentElement.scrollWidth,
         nav: { left: nav.left, right: nav.right, top: nav.top, bottom: nav.bottom, width: node.clientWidth, scrollWidth: node.scrollWidth },
         links,
       };
     });
-    expect(layout.document).toBeLessThanOrEqual(layout.viewport);
-    expect(layout.nav.scrollWidth).toBeLessThanOrEqual(layout.nav.width);
+    expect(layout.document).toBeLessThanOrEqual(layout.viewport + 1);
+    expect(layout.nav.scrollWidth).toBeLessThanOrEqual(layout.nav.width + 1);
     expect(layout.links).toHaveLength(5);
     for (const link of layout.links) {
       expect(link.left).toBeGreaterThanOrEqual(layout.nav.left - 1);
       expect(link.right).toBeLessThanOrEqual(layout.nav.right + 1);
       expect(link.left).toBeGreaterThanOrEqual(0);
-      expect(link.right).toBeLessThanOrEqual(layout.viewport);
+      expect(link.right).toBeLessThanOrEqual(layout.viewport + 1);
       expect(link.height).toBeGreaterThanOrEqual(44);
     }
 

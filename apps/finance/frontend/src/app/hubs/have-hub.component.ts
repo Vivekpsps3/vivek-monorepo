@@ -21,6 +21,29 @@ import { PortfolioComponent } from '../portfolio/portfolio.component';
       }
     </div>
   `,
+  styles: [`
+    :host {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .page {
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0;
+      letter-spacing: -0.03em;
+    }
+
+    app-assets-liabilities,
+    app-portfolio {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+    }
+  `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HaveHubComponent implements OnInit {

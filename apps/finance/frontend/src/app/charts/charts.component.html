@@ -15,18 +15,15 @@
         <span>Monthly cashflow</span>
         <span>{{ sectionOpen.cashflow ? 'Hide' : 'Show' }}</span>
       </button>
-      <div class="view-switch" role="group" aria-label="Cashflow view">
-        <button type="button" [attr.aria-pressed]="cashflowView === 'recorded'" (click)="setCashflowView('recorded')">Recorded</button>
-        <button type="button" [attr.aria-pressed]="cashflowView === 'scheduled'" (click)="setCashflowView('scheduled')">Scheduled</button>
-      </div>
       @if (sectionOpen.cashflow && monthlyRows.length) {
         <div class="chart-wrap tall" [class.chart-dim]="chartDimmed">
-          <canvas #incomeExpenseChart role="img" [attr.aria-label]="cashflowView === 'recorded' ? 'Monthly recorded cashflow chart. Select a month to open matching Activity.' : 'Monthly scheduled cashflow chart. Select a month to open Recurring.'"></canvas>
+          <canvas #incomeExpenseChart role="img" aria-label="Monthly cashflow chart. Select a month to open matching Activity."></canvas>
         </div>
         <p class="chart-note">
           Income <strong>${{ incomeTotal | number:'1.2-2' }}</strong>
           · Spending <strong>${{ expenseTotal | number:'1.2-2' }}</strong>
           · Net <strong>${{ netCashflow | number:'1.2-2' }}</strong>
+          <span class="muted">Card activity and repeating pay and bills, counted once.</span>
         </p>
         <details class="chart-data">
           <summary>Data</summary>
@@ -37,9 +34,9 @@
                 @for (row of monthlyRows; track row.label) {
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td><a [routerLink]="cashflowView === 'recorded' ? ['/spending'] : ['/recurring']" [queryParams]="monthlyRowQuery(row, 0)" [attr.aria-label]="'Open ' + row.label + (cashflowView === 'recorded' ? ' recorded income in Activity' : ' scheduled income in Recurring')">${{ row.income | number:'1.2-2' }}</a></td>
-                    <td><a [routerLink]="cashflowView === 'recorded' ? ['/spending'] : ['/recurring']" [queryParams]="monthlyRowQuery(row, 1)" [attr.aria-label]="'Open ' + row.label + (cashflowView === 'recorded' ? ' recorded spending in Activity' : ' scheduled costs in Recurring')">${{ row.expense | number:'1.2-2' }}</a></td>
-                    <td [class.positive]="row.net >= 0"><a [routerLink]="cashflowView === 'recorded' ? ['/spending'] : ['/recurring']" [queryParams]="monthlyRowQuery(row, 2)" [attr.aria-label]="'Open ' + row.label + (cashflowView === 'recorded' ? ' recorded activity' : ' scheduled items')">{{ row.net >= 0 ? '+' : '−' }}${{ (row.net < 0 ? -row.net : row.net) | number:'1.2-2' }}</a></td>
+                    <td><a [routerLink]="['/spending']" [queryParams]="monthlyRowQuery(row, 0)" [attr.aria-label]="'Open ' + row.label + ' income in Activity'">${{ row.income | number:'1.2-2' }}</a></td>
+                    <td><a [routerLink]="['/spending']" [queryParams]="monthlyRowQuery(row, 1)" [attr.aria-label]="'Open ' + row.label + ' spending in Activity'">${{ row.expense | number:'1.2-2' }}</a></td>
+                    <td [class.positive]="row.net >= 0"><a [routerLink]="['/spending']" [queryParams]="monthlyRowQuery(row, 2)" [attr.aria-label]="'Open ' + row.label + ' activity'">{{ row.net >= 0 ? '+' : '−' }}${{ (row.net < 0 ? -row.net : row.net) | number:'1.2-2' }}</a></td>
                   </tr>
                 }
               </tbody>
@@ -53,7 +50,7 @@
 
     <ui-card>
       <button type="button" class="section-toggle" (click)="toggleSection('category')">
-        <span>Recorded category amounts · full history</span>
+        <span>Spending by category</span>
         <span>{{ sectionOpen.category ? 'Hide' : 'Show' }}</span>
       </button>
       @if (sectionOpen.category && categoryRows.length) {

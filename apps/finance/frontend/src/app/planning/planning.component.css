@@ -1,3 +1,41 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.planning-page {
+  min-width: 0;
+  max-width: 100%;
+}
+
+ui-card,
+ui-button,
+ui-data-table,
+app-monte-carlo-fan-chart {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+:host ::ng-deep .ui-card,
+:host ::ng-deep .ui-card__body,
+:host ::ng-deep .ui-card__header,
+:host ::ng-deep .ui-card__title,
+:host ::ng-deep .ui-page-header,
+:host ::ng-deep .ui-page-header__title,
+:host ::ng-deep .ui-page-header__subtitle,
+:host ::ng-deep .ui-data-table {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:host ::ng-deep .ui-card__title,
+:host ::ng-deep .ui-page-header__title,
+:host ::ng-deep .ui-page-header__subtitle {
+  overflow-wrap: anywhere;
+}
+
 .evidence-list {
   list-style: none;
   margin: 0;
@@ -10,6 +48,11 @@
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
+  min-width: 0;
+}
+
+.evidence-list li > div {
+  min-width: 0;
 }
 
 .evidence-list p {
@@ -20,7 +63,7 @@
 
 .planning-facts-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: var(--space-3);
 }
 
@@ -46,22 +89,35 @@
 .planning-facts-grid strong {
   font-size: 1.15rem;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .planning-facts-grid a {
   color: var(--accent);
   font-size: 0.8rem;
+  overflow-wrap: anywhere;
 }
 
 .planning-facts-grid small {
   color: var(--text-tertiary);
   font-size: 0.72rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .planning-question {
-  margin: var(--space-4) 0;
-  max-width: 36rem;
+  margin: 0;
+  min-width: 0;
+  max-width: none;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+}
+
+.planning-question .mc-field {
+  max-width: 40rem;
+  margin-bottom: 0;
 }
 
 .planning-evidence-details,
@@ -72,7 +128,11 @@
 }
 
 .planning-evidence-details > summary,
-.planning-advanced-controls > summary {
+.planning-advanced-controls > summary,
+.spending-suggestion-details > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--text);
   font-weight: 650;
   cursor: pointer;
@@ -111,7 +171,9 @@
 
 .mc-callout p,
 .mc-help {
+  min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: 0.875rem;
   line-height: 1.55;
   color: var(--text-secondary);
@@ -129,10 +191,11 @@
 }
 
 .mc-profiles-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto auto;
   gap: var(--space-3);
-  align-items: flex-end;
+  align-items: end;
+  min-width: 0;
 }
 
 .mc-saved-hint {
@@ -143,8 +206,7 @@
 }
 
 .mc-field--grow {
-  flex: 1 1 12rem;
-  min-width: 10rem;
+  min-width: 0;
 }
 
 .mc-error {
@@ -175,12 +237,12 @@
   margin-bottom: var(--space-5);
 }
 
-.mc-summary-band {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.mc-summary-band,
+.mc-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11.5rem), 1fr));
 }
 
 .mc-kpis {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-bottom: 0;
 }
 
@@ -203,9 +265,11 @@
 .tool-results-grid span {
   display: block;
   margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+  line-height: 1.35;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
@@ -235,9 +299,10 @@
 
 .mc-workbench {
   display: grid;
-  grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
+  grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
   gap: var(--space-5);
   align-items: start;
+  min-width: 0;
 }
 
 .mc-panel,
@@ -252,7 +317,11 @@
 .mc-panel {
   gap: var(--space-4);
   position: sticky;
-  top: var(--space-4);
+  top: 5.5rem;
+  max-height: calc(100dvh - 6.5rem);
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .mc-panel ui-button {
@@ -277,21 +346,33 @@
 
 .mc-seed-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
+  min-width: 0;
 }
 
-.mc-seed-row ui-button {
+.mc-seed-row ui-button,
+.mc-seed-row ::ng-deep .ui-btn {
   width: auto;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .mc-field {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
+  max-width: 100%;
   margin-bottom: var(--space-3);
+}
+
+.mc-control-grid > .mc-field,
+.mc-editor-row > .mc-field,
+.tool-form-grid > .mc-field,
+.mc-profiles-row > .mc-field,
+.planning-question .mc-field {
+  margin-bottom: 0;
 }
 
 .mc-field span,
@@ -301,11 +382,14 @@
   color: var(--text-secondary);
 }
 
-.mc-field input {
+.mc-field input,
+.mc-field select {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
-  height: 38px;
-  padding: 0 var(--space-3);
+  min-height: 44px;
+  height: auto;
+  padding: var(--space-2) var(--space-3);
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -313,12 +397,14 @@
   outline: none;
 }
 
-.mc-field input:focus {
+.mc-field input:focus,
+.mc-field select:focus {
   border-color: color-mix(in srgb, var(--accent) 75%, var(--border));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.mc-field input:disabled {
+.mc-field input:disabled,
+.mc-field select:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -362,7 +448,10 @@
 }
 
 .mc-secondary-action-wrap {
+  display: grid;
+  gap: var(--space-2);
   width: 100%;
+  min-width: 0;
   margin-top: var(--space-3);
 }
 
@@ -378,12 +467,12 @@
 .mc-empty-state {
   display: grid;
   place-items: center;
-  min-height: 420px;
+  align-content: center;
+  gap: var(--space-2);
+  min-height: 16rem;
   padding: var(--space-6);
   text-align: center;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent),
-    var(--card-bg);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
 }
@@ -432,15 +521,15 @@
 .mc-results td {
   padding: var(--space-3);
   text-align: left;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 768px) {
+@media (min-width: 769px) {
   .mc-results th,
-  .mc-results td,
-  .mc-seed-row ui-button {
-    white-space: normal;
+  .mc-results td {
+    white-space: nowrap;
   }
 }
 
@@ -482,12 +571,14 @@
 
 .planning-tools-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   gap: var(--space-4);
+  min-width: 0;
 }
 
 .tool-metric {
   margin: 0 0 var(--space-3);
+  overflow-wrap: anywhere;
   font-size: var(--text-2xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -507,9 +598,10 @@
 
 .tool-form-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: var(--space-3);
   align-items: end;
+  min-width: 0;
 }
 
 .tool-check {
@@ -519,9 +611,10 @@
 
 .tool-results-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
   gap: var(--space-3);
   margin-top: var(--space-4);
+  min-width: 0;
 }
 
 .spending-suggestion-details {
@@ -530,17 +623,12 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-.spending-suggestion-details > summary {
-  color: var(--text);
-  font-weight: 650;
-  cursor: pointer;
-}
-
 .spending-choice-group {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
   gap: var(--space-2) var(--space-4);
   margin: var(--space-4) 0;
+  min-width: 0;
   padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -562,40 +650,29 @@
   color: var(--text);
 }
 
-@media (max-width: 1100px) {
-  .planning-facts-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .mc-summary-band,
-  .mc-kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+@media (max-width: 960px) {
   .mc-workbench {
     grid-template-columns: 1fr;
   }
 
   .mc-panel {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
 }
 
-@media (max-width: 900px) {
-  .planning-tools-grid,
-  .tool-form-grid,
-  .tool-results-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 680px) {
-  .planning-facts-grid {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 768px) {
+  .planning-facts-grid,
   .mc-summary-band,
   .mc-kpis,
   .mc-control-grid,
-  .mc-editor-row {
+  .mc-editor-row,
+  .planning-tools-grid,
+  .tool-form-grid,
+  .tool-results-grid,
+  .spending-choice-group,
+  .mc-profiles-row {
     grid-template-columns: 1fr;
   }
 
@@ -604,23 +681,50 @@
   }
 
   .mc-metric strong,
-  .mc-kpi strong {
-    font-size: 1.1rem;
+  .mc-kpi strong,
+  .tool-results-grid strong {
+    font-size: 1.15rem;
   }
 
   .mc-callout,
-  .mc-empty-state {
-    padding: var(--space-5);
+  .mc-empty-state,
+  .planning-question {
+    padding: var(--space-4);
   }
 
   .mc-seed-row {
     grid-template-columns: 1fr;
   }
 
+  .mc-check {
+    min-height: 44px;
+  }
+
+  .tool-check,
+  .mc-check--compact {
+    align-self: stretch;
+    min-height: 44px;
+  }
+
+  .planning-retry {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-left: var(--space-1);
+    padding: 0 var(--space-2);
+  }
+
+  .mc-profiles-row ui-button,
+  .mc-profiles-row ::ng-deep .ui-btn,
   .mc-row-action,
   .mc-row-action ::ng-deep .ui-btn,
   .mc-seed-row ui-button,
-  .mc-seed-row ::ng-deep .ui-btn {
+  .mc-seed-row ::ng-deep .ui-btn,
+  .mc-panel ::ng-deep .ui-btn,
+  .spending-suggestion-details ::ng-deep .ui-btn {
     width: 100%;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
   }
 }

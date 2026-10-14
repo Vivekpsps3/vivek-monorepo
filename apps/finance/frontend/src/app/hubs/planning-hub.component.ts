@@ -25,6 +25,16 @@ import { PlanningToolId } from '../models/planning.model';
       }
     </div>
   `,
+  styles: [`
+    :host { display: block; min-width: 0; max-width: 100%; }
+    .page { min-width: 0; max-width: 100%; }
+    h1 { overflow-wrap: anywhere; }
+    app-planning, app-investment-insights, app-stock-lab {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+    }
+  `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PlanningHubComponent implements OnInit {

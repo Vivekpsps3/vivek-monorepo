@@ -52,16 +52,32 @@
   flex-shrink: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .release-notice {
     top: max(var(--space-2), env(safe-area-inset-top));
     align-items: stretch;
     flex-direction: column;
     gap: var(--space-3);
+    width: min(52rem, calc(100% - 1.5rem));
+    max-height: calc(100dvh - 2 * var(--space-4));
+    overflow: auto;
     padding: var(--space-4);
   }
 
   .release-notice__actions {
-    justify-content: flex-end;
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .release-notice__actions ::ng-deep .ui-btn,
+  .release-notice__actions ::ng-deep .ui-btn.ui-btn--sm,
+  .toast-actions ::ng-deep .ui-btn,
+  .toast-actions ::ng-deep .ui-btn.ui-btn--sm {
+    min-height: 44px;
+  }
+
+  .toast {
+    box-sizing: border-box;
+    max-width: 100%;
   }
 }

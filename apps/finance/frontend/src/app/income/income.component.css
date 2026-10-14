@@ -1,8 +1,18 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .income-summary {
   display: flex;
   justify-content: space-between;
   gap: var(--space-6);
   align-items: flex-end;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   background: var(--card-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
@@ -12,6 +22,8 @@
 
 .income-summary .stat-display {
   font-size: clamp(2rem, 5vw, 3rem);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .summary-caption {
@@ -21,20 +33,24 @@
 .summary-pill {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   padding: var(--space-2) var(--space-3);
   color: var(--text-secondary);
   background: var(--surface-2);
-  white-space: nowrap;
 }
 
 .income-summary-metrics {
   display: flex;
+  flex: 1 1 16rem;
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .summary-pill strong {
@@ -43,9 +59,10 @@
 
 .net-preview {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
   gap: var(--space-3);
   margin: var(--space-4) 0;
+  min-width: 0;
 }
 
 .net-preview div {
@@ -72,10 +89,10 @@
 }
 
 .income-guidance {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
-  align-items: center;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .income-guidance p,
@@ -84,15 +101,13 @@
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
   font-size: var(--text-sm);
+  overflow-wrap: anywhere;
 }
 
-.income-guidance > div:last-child {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  white-space: nowrap;
+.income-guidance__note {
+  margin: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .tax-helper {
@@ -149,31 +164,23 @@
 
 .checkbox-field input {
   width: auto;
+  min-height: 1.25rem;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .income-summary {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .summary-pill,
-  .income-guidance > div:last-child {
-    white-space: normal;
-  }
-
   .summary-pill {
     align-self: flex-start;
+    width: fit-content;
   }
 
   .income-summary-metrics,
   .net-preview {
     justify-content: flex-start;
-  }
-
-  .income-guidance {
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .income-summary,
@@ -182,18 +189,40 @@
     padding: var(--space-5);
   }
 
-  .tax-helper__result {
-    align-items: flex-start;
+  .tax-helper__header,
+  .tax-helper__result,
+  .history-heading,
+  .form-actions,
+  .stock-quote-controls__actions {
+    align-items: stretch;
     flex-direction: column;
   }
 
   .tax-helper__actions ui-button,
-  .tax-helper__actions ::ng-deep .ui-btn {
+  .tax-helper__actions ::ng-deep .ui-btn,
+  .form-actions ::ng-deep .ui-btn,
+  .history-heading ::ng-deep .ui-btn,
+  .stock-quote-controls__actions ::ng-deep .ui-btn,
+  :host ::ng-deep .header-actions .ui-btn,
+  :host ::ng-deep td.actions .ui-btn {
     width: 100%;
+    min-height: 44px;
   }
 
-  .net-preview {
+  .net-preview,
+  .form-row,
+  .stock-quote-controls__inputs {
     grid-template-columns: 1fr;
+  }
+
+  :host ::ng-deep .ui-data-table tbody td {
+    grid-column: 1 / -1 !important;
+  }
+
+  :host ::ng-deep .ui-dialog-panel,
+  :host ::ng-deep .ui-dialog-panel.ui-dialog-panel--wide {
+    width: 100%;
+    max-width: 100%;
   }
 }
 
@@ -209,6 +238,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .history-heading h4 { margin: 0; }
@@ -244,8 +274,9 @@
 
 .stock-quote-controls__inputs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .stock-quote-controls__actions {
@@ -278,4 +309,76 @@
 
 .job-history > * + * {
   margin-top: var(--space-2);
+}
+
+.income-summary > div,
+.net-preview,
+.tax-helper,
+.pay-disclosure,
+.job-history,
+.compensation-history,
+.history-entry,
+.stock-grant-entry,
+.stock-quote-controls,
+.stock-preview,
+form {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  align-items: end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  min-width: 0;
+}
+
+.form-row > *,
+.form-group,
+ui-select,
+:host ::ng-deep .ui-card,
+:host ::ng-deep .ui-page-header,
+:host ::ng-deep .ui-page-header__actions,
+:host ::ng-deep .header-actions,
+:host ::ng-deep .ui-data-table {
+  min-width: 0;
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:host ::ng-deep .ui-data-table td {
+  overflow-wrap: anywhere;
+}
+
+:host ::ng-deep .ui-dialog-panel {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: min(560px, 100%);
+  overflow-x: auto;
+}
+
+:host ::ng-deep .ui-dialog-panel.ui-dialog-panel--wide {
+  max-width: min(52rem, 100%);
+}
+
+@media (max-width: 768px) {
+  .form-row,
+  .net-preview,
+  .stock-quote-controls__inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .checkbox-field {
+    align-self: stretch;
+  }
 }

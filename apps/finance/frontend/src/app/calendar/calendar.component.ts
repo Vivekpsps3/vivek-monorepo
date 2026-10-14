@@ -11,11 +11,11 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, combineLatest, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { FinanceService } from '../services/finance.service';
-import { Transaction } from '../models/transaction.model';
-import { transactionEffects } from '../crypto/client-finance';
+import { CashflowOccurrence, FixedExpense, JobIncome, Subscription, Transaction } from '../models/transaction.model';
+import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
 import { todayIsoDate } from '../utils/date.util';
 import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
@@ -64,8 +64,13 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('categoryChart') categoryCanvas?: ElementRef<HTMLCanvasElement>;
   currentDate = new Date();
   transactions: Transaction[] = [];
+  jobIncomes: JobIncome[] = [];
+  fixedExpenses: FixedExpense[] = [];
+  subscriptions: Subscription[] = [];
+  countedOccurrences: CashflowOccurrence[] = [];
   selectedDate: string | null = null;
   selectedTransactions: Transaction[] = [];
+  selectedPlans: CashflowOccurrence[] = [];
   daysInMonth: CalendarDay[] = [];
   weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   monthSummary: MonthSpendSummary = summarizeMonthSpend([], monthKeyFromDate(new Date()));
@@ -81,8 +86,16 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.financeService.transactions$.pipe(takeUntil(this.destroy$)).subscribe(data => {
-      this.transactions = data;
+    combineLatest([
+      this.financeService.transactions$,
+      this.financeService.jobIncomes$,
+      this.financeService.fixedExpenses$,
+      this.financeService.subscriptions$,
+    ]).pipe(takeUntil(this.destroy$)).subscribe(([transactions, jobIncomes, fixedExpenses, subscriptions]) => {
+      this.transactions = transactions;
+      this.jobIncomes = jobIncomes;
+      this.fixedExpenses = fixedExpenses;
+      this.subscriptions = subscriptions;
       this.generateCalendar();
       this.cdr.markForCheck();
     });
@@ -131,11 +144,24 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const today = todayIsoDate();
+    const monthKey = this.monthKey;
+    const summary = computeCashflowSummary(
+      `${monthKey}-01`,
+      monthEnd(monthKey),
+      this.transactions,
+      this.jobIncomes,
+      this.fixedExpenses,
+      this.subscriptions,
+    );
+    this.countedOccurrences = summary.counted_occurrences;
     const spendByDay = new Map<string, number>();
     for (const tx of this.transactions) {
       const spending = transactionEffects(tx).spending;
       if (!spending) continue;
       spendByDay.set(tx.date, (spendByDay.get(tx.date) || 0) + spending);
+    }
+    for (const row of this.countedOccurrences) {
+      spendByDay.set(row.date, (spendByDay.get(row.date) || 0) + row.amount);
     }
 
     this.daysInMonth = [];
@@ -146,12 +172,19 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       this.daysInMonth.push({
         date: dateStr,
-        hasTransactions: this.transactions.some(t => t.date === dateStr),
+        hasTransactions: this.transactions.some(t => t.date === dateStr) || this.countedOccurrences.some(row => row.date === dateStr),
         expense: spendByDay.get(dateStr) || 0,
         isToday: dateStr === today,
       });
     }
-    this.monthSummary = summarizeMonthSpend(this.transactions, this.monthKey);
+    const posted = summarizeMonthSpend(this.transactions, monthKey, 5, this.countedOccurrences);
+    this.monthSummary = {
+      ...posted,
+      incomeTotal: summary.total_income,
+      expenseTotal: summary.total_expenses,
+      net: summary.net_cashflow,
+    };
+    if (this.selectedDate) this.applySelectedDay(this.selectedDate);
     this.cdr.markForCheck();
     setTimeout(() => void this.paintCategoryChart());
   }
@@ -203,9 +236,14 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
 
   selectDay(day: CalendarDay) {
     if (!day.date) return;
-    this.selectedDate = day.date;
-    this.selectedTransactions = this.transactions.filter(t => t.date === day.date);
+    this.applySelectedDay(day.date);
     this.cdr.markForCheck();
+  }
+
+  private applySelectedDay(date: string) {
+    this.selectedDate = date;
+    this.selectedTransactions = this.transactions.filter(t => t.date === date);
+    this.selectedPlans = this.countedOccurrences.filter(row => row.date === date);
   }
 
   onDayKeydown(event: KeyboardEvent, day: CalendarDay, index: number) {
@@ -252,6 +290,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     this.generateCalendar();
     this.selectedDate = null;
     this.selectedTransactions = [];
+    this.selectedPlans = [];
     this.cdr.markForCheck();
   }
 
@@ -260,6 +299,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     this.generateCalendar();
     this.selectedDate = null;
     this.selectedTransactions = [];
+    this.selectedPlans = [];
     this.cdr.markForCheck();
   }
 
@@ -268,9 +308,11 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   dayTotal(): number {
-    return this.selectedTransactions.reduce(
+    const posted = this.selectedTransactions.reduce(
       (sum, t) => sum + transactionEffects(t).income - transactionEffects(t).spending,
       0
     );
+    const repeating = this.selectedPlans.reduce((sum, row) => sum + row.amount, 0);
+    return posted - repeating;
   }
 }

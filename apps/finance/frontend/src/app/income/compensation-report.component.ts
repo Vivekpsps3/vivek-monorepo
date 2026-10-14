@@ -67,7 +67,22 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '..
       <p class="muted">Annual pay and bonuses use the same daily estimate as cashflow. Dated payments and awards count only when they are additional to annual estimates. Equity awards include grant value and gains in the grant year; later years count only gains or losses. ESPP compensation is stock value less employee purchase contributions, which are listed separately. Sold shares use locked proceeds, while unsold shares use the latest valid price on or before the selected date (or grant/purchase price until then). Future-dated prices do not affect earlier snapshots. Stock values do not change recurring pay, retirement income, or net worth.</p>
     </ui-card>
   `,
-  styles: [`:host { display: grid; gap: var(--space-6); } .job-count { display: block; } .stat-display { margin-bottom: 0; }`],
+  styles: [`
+    :host { display: block; min-width: 0; max-width: 100%; }
+    :host ::ng-deep .ui-card,
+    :host ::ng-deep .ui-data-table { min-width: 0; max-width: 100%; }
+    :host ::ng-deep .ui-data-table td { overflow-wrap: anywhere; }
+    p, .stat-display { overflow-wrap: anywhere; max-width: 100%; }
+    .job-count { display: block; }
+    .stat-display { margin-bottom: 0; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--space-4); min-width: 0; }
+    .form-group, input, select { min-width: 0; max-width: 100%; box-sizing: border-box; }
+    @media (max-width: 768px) {
+      .form-row { grid-template-columns: 1fr; }
+      input, select { min-height: 44px; }
+      :host ::ng-deep .ui-data-table tbody td { grid-column: 1 / -1 !important; }
+    }
+  `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CompensationReportComponent implements OnInit, OnDestroy {

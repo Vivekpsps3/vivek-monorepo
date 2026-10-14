@@ -52,7 +52,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   subscriptions: Subscription[] = [];
   loading = true;
   collapsedCategories = true;
-  cashflowView: 'recorded' | 'scheduled' = 'recorded';
+
   sectionOpen = { cashflow: true, category: true, allocation: true };
 
   incomeTotal = 0;
@@ -208,13 +208,6 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  setCashflowView(view: 'recorded' | 'scheduled'): void {
-    this.cashflowView = view;
-    this.computeDerived();
-    this.render$.next();
-    this.cdr.markForCheck();
-  }
-
   toggleSection(name: keyof ChartsComponent['sectionOpen']): void {
     this.sectionOpen[name] = !this.sectionOpen[name];
     this.cdr.markForCheck();
@@ -226,11 +219,6 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   openMonthlyDrilldown(index: number, datasetIndex = 0): void {
     const row = this.monthlyRows[index];
     if (!row) return;
-    if (this.cashflowView === 'scheduled') {
-      const tab = datasetIndex === 0 ? 'pay' : 'spend';
-      void this.router.navigate(['/recurring'], { queryParams: { t: tab } });
-      return;
-    }
     const view = datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all';
     void this.router.navigate(['/spending'], {
       queryParams: { t: 'activity', v: view, month: row.month },
@@ -252,7 +240,6 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   monthlyRowQuery(row: { month: string }, datasetIndex = 0): { [key: string]: string } {
-    if (this.cashflowView === 'scheduled') return { t: datasetIndex === 0 ? 'pay' : 'spend' };
     return { t: 'activity', v: datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all', month: row.month };
   }
 
@@ -267,8 +254,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       txs,
       this.jobIncomes,
       this.fixedExpenses,
-      this.subscriptions,
-      this.cashflowView
+      this.subscriptions
     );
     this.incomeTotal = series.reduce((sum, row) => sum + row.income, 0);
     this.expenseTotal = series.reduce((sum, row) => sum + row.expense, 0);

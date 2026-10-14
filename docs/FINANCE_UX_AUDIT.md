@@ -23,12 +23,12 @@ browser; the server stores ciphertext and public market data.
 | `/login` | First administrator setup, username/passphrase login, bounded legacy migration | Auth keys, sessions, vault wraps; no finance edits |
 | `/signup`, `/enroll` | Enrollment; `/enroll` redirects to signup | Auth and initial vault |
 | `/vault/setup`, `/vault/unlock` | Create or unlock browser-owned vault | Vault wraps / browser key |
-| `/` Home | Net worth tile, recorded current-month income/spend tile, scheduled current-month income/spend tile; review queue; six largest holdings with gains; cashflow, category, allocation charts | Derived balance sheet, ledger, schedules, receipts; no direct record editors |
+| `/` Home | Net worth tile and one current-month cashflow tile (posted activity plus unmatched repeating pay and bills); review queue; six largest holdings with gains; cashflow, category, allocation charts | Derived balance sheet, ledger, schedules, receipts; no direct record editors |
 | `/have?t=assets` | Asset/debt totals and lists; create/edit/delete; bulk changed/unchanged balance review, source dates and review intervals | `assets`, `liabilities`; current net worth facts |
 | `/have?t=holdings` | Holding totals/list, account labels, prices/gains/source dates, manual positions, Fidelity preview/staged replacement/resume, explicit quotes | `holdings`, `brokerage_accounts`, holding import stages |
 | `/spending?t=review` (default) | Category/merchant comparisons for equal elapsed periods, confirmed account selection, coverage gaps, transaction drilldown | Complete `transactions`, `bank_accounts`, receipts; analysis only |
 | `/spending?t=activity&v=all|spending|income` | Month/scope, totals, search/category/review filters, dense desktop and expandable phone rows; transaction editor, review flags, bulk categorization/merchant/category cleanup, export | `transactions`; original imported descriptions retained |
-| `/spending?t=calendar` | Recorded monthly/day activity, income/spend/category summaries, highest purchases, Add transaction handoff | Ledger analysis; add navigates to Activity |
+| `/spending?t=calendar` | One monthly cashflow: posted days plus repeating bills that are not already posted, income/spend/category summaries, highest purchases, Add transaction handoff | Ledger and repeating rows; add navigates to Activity, repeating rows open Recurring |
 | `/spending?t=imports` | Multi-file bank CSV selection, per-file explicit confirmed account identity, coverage confirmation, purchase/refund/excluded/ambiguous preview; commit/resume/undo receipts | `transactions`, `bank_accounts`, `import_batches`; neither balances nor schedules |
 | `/recurring?t=pay` (default) | Current annual/monthly net pay; job list, employer/dates/base/frequency/taxes/deductions, promotions, dated bonuses, stock grants/ESPP/sales/valuations; full editor, automatic configured employer ticker lookup and manual price controls | `job_incomes`; scheduled cashflow facts and compensation history |
 | `/recurring?t=spend` | Combined Upcoming commitments table; separate fixed-bill totals/list/editor and subscription totals/cards/editor below | `fixed_expenses`, `subscriptions`; scheduled costs, no balance changes |
@@ -253,8 +253,8 @@ no tab coordination. Keep drafts safe and never silently reload a dirty page.
    links for unreviewed rows, ambiguous credits and imports without duplicating
    the Activity editor or the Imports workflow.
 4. Move Activity's import action to the canonical Imports destination. Add
-   actionable recorded chart/table drilldowns, labeled time scopes and coverage
-   limitations. Scheduled drilldowns go to schedule owners, not posted activity.
+   actionable chart/table drilldowns into Activity, labeled time scopes and coverage
+   limitations. Repeating rows on the calendar still open Recurring.
 5. Preserve phone expandable rows, keyboard controls, filters and draft edits
    through failures. Use clear inline save/load errors. Update Guide, navigation
    and headings to use consistent task language; show username in account menu.

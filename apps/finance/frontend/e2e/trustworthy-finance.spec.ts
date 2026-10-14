@@ -146,7 +146,7 @@ test('Spending opens on Activity without review controls and Home has no review 
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
 });
 
-test('Charts switch between recorded totals and scheduled commitments without changing financial records', async ({ page }) => {
+test('Charts show one cashflow and do not change financial records', async ({ page }) => {
   const now = new Date();
   const monthStart = dateAtOffset(now, 0, 1);
   const vault = await syntheticVault(page, {
@@ -176,17 +176,15 @@ test('Charts switch between recorded totals and scheduled commitments without ch
   const mutationCount = vault.mutations.length;
 
   const charts = page.locator('app-charts');
-  const recorded = charts.locator('.chart-note');
-  await expect(charts.getByRole('button', { name: 'Recorded', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(recorded).toContainText('Income $200.00');
-  await expect(recorded).toContainText('Spending $75.00');
-
-  await charts.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await expect(charts.locator('.chart-note')).toContainText('Income $0.00');
-  await expect(charts.locator('.chart-note')).toContainText('Spending $130.00');
+  const note = charts.locator('.chart-note');
+  await expect(charts.getByRole('button', { name: 'Recorded', exact: true })).toHaveCount(0);
+  await expect(charts.getByRole('button', { name: 'Scheduled', exact: true })).toHaveCount(0);
+  await expect(note).toContainText('Income $200.00');
+  await expect(note).toContainText('Spending $205.00');
+  await expect(note).toContainText('counted once');
   await charts.getByText('Data', { exact: true }).click();
   const currentMonthRow = charts.getByRole('table', { name: 'Monthly cashflow data table' }).getByRole('row').last();
-  await expect(currentMonthRow).toContainText('$130.00');
+  await expect(currentMonthRow).toContainText('$205.00');
   expect(vault.mutations).toHaveLength(mutationCount);
   expect(vault.quoteRequests).toHaveLength(quoteRequestCount);
   expect(vault.data('assets')).toEqual(refreshedData.assets);
