@@ -1,0 +1,21 @@
+# Travel app for the local network. Do not put this behind a public proxy.
+# From the repo root:
+#   docker compose -f apps/travel/docker-compose.yml up --build
+# Open http://<this-machine>:8090 from another device on your LAN.
+
+services:
+  travel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      additional_contexts:
+        tokens: ../../packages/ui
+    ports:
+      - "8090:8000"
+    volumes:
+      - ../../data:/data
+    environment:
+      TRAVEL_DATABASE_URL: sqlite:////data/travel.db
+      FLIGHTAWARE_API_KEY: ${FLIGHTAWARE_API_KEY:-}
+      TRAVEL_ACCESS_TOKEN: ${TRAVEL_ACCESS_TOKEN:-}
+    restart: unless-stopped

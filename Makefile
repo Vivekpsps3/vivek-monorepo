@@ -11,11 +11,16 @@ UVICORN := $(VENV)/bin/uvicorn
 
 API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
+TRAVEL_DIR := apps/travel/backend
+TRAVEL_VENV := $(TRAVEL_DIR)/.venv
+TRAVEL_HOST ?= 0.0.0.0
+TRAVEL_PORT ?= 8090
 # WEB_HOST 0.0.0.0 exposes the dev UI on your LAN (SEC-011); API stays on API_HOST by default.
 WEB_HOST ?= 0.0.0.0
 WEB_PORT ?= 4200
 
 .PHONY: help install install-backend install-frontend dev backend frontend \
+        travel-install travel-dev travel-test \
         test test-backend test-frontend test-fast test-finance test-security test-full test-doc-paths \
         build build-frontend clean reset-db check \
         docker-up docker-down docker-build docker-rebuild docker-logs docker-ps docker-config reset-docker-db
@@ -40,6 +45,11 @@ help:
 	@echo "  make clean            Remove caches, dist, __pycache__, *.bak"
 	@echo "  make reset-db         Delete backend/finance.db (fresh schema on next API start)"
 	@echo "  make reset-docker-db  Delete data/finance.db for Docker stack"
+	@echo ""
+	@echo "Travel (separate app, LAN port $(TRAVEL_PORT)):"
+	@echo "  make travel-install   Python venv for apps/travel"
+	@echo "  make travel-dev       UI + API → http://0.0.0.0:$(TRAVEL_PORT)"
+	@echo "  make travel-test      Travel pytest"
 	@echo ""
 	@echo "First time: make install && make dev"
 	@echo "Open: http://localhost:$(WEB_PORT)"
@@ -168,3 +178,17 @@ clean:
 
 check: test-backend test-frontend build-frontend
 	@echo "check OK"
+
+travel-install:
+	@test -d $(TRAVEL_VENV) || python3 -m venv $(TRAVEL_VENV)
+	$(TRAVEL_VENV)/bin/pip install -q -U pip
+	$(TRAVEL_VENV)/bin/pip install -q -r $(TRAVEL_DIR)/requirements-dev.txt
+	@echo "Travel venv: $(TRAVEL_VENV)"
+
+travel-dev:
+	@test -x $(TRAVEL_VENV)/bin/uvicorn || (echo "Run: make travel-install" && exit 1)
+	cd $(TRAVEL_DIR) && .venv/bin/uvicorn main:app --host $(TRAVEL_HOST) --port $(TRAVEL_PORT)
+
+travel-test:
+	@test -x $(TRAVEL_VENV)/bin/python || (echo "Run: make travel-install" && exit 1)
+	cd $(TRAVEL_DIR) && .venv/bin/python -m pytest -q

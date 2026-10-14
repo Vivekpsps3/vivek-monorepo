@@ -45,6 +45,7 @@ Details: **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 vivek-monorepo/
   apps/finance/backend      # FastAPI
   apps/finance/frontend     # Angular finance UI
+  apps/travel/              # LAN trip planner (separate DB)
   apps/site/                # vivekpanchagnula.com
   packages/auth             # shared passwordless crypto
   packages/ui               # shared ink+dust CSS
@@ -79,6 +80,10 @@ Adding banks: **[docs/ADDING_A_BANK_IMPORT.md](docs/ADDING_A_BANK_IMPORT.md)**. 
 - **Planning** — speculative; does not mutate balance sheet or transactions.
 
 Local database: `apps/finance/backend/finance.db` (not committed; see `.gitignore`). Docker default: `data/finance.db`.
+
+## Travel
+
+Trip planner in `apps/travel/`: one trip from the day you leave through the day you come back, with flights, drives, a calendar, day plans, parking, budget, and a PTO projection. It does not share the finance database. `make travel-install && make travel-dev` serves it on port 8090 for your LAN. See [docs/TRAVEL.md](docs/TRAVEL.md).
 
 ## Tests & CI-style check
 

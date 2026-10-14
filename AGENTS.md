@@ -128,3 +128,9 @@ cd frontend && npx ng build --configuration development
 
 If frontend tests need Chrome and fail due environment setup, report that
 explicitly.
+
+## Other apps
+
+Travel lives in `apps/travel/` and is documented in `docs/TRAVEL.md`. It does
+not share the finance database, vault, or net-worth formulas. Do not store
+trip plans or PTO in finance tables.

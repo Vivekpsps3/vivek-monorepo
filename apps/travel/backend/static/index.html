@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Travel</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/static/vendor/leaflet.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <a class="skip" href="#app">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/">Travel</a>
+      <nav class="nav" aria-label="Travel">
+        <a href="#/" data-nav="home">Upcoming</a>
+        <a href="#/calendar" data-nav="calendar">Calendar</a>
+        <a href="#/pto" data-nav="pto">PTO</a>
+      </nav>
+      <div class="topbar-actions">
+        <a class="btn btn-primary btn-sm" href="#/trips/new">New trip</a>
+        <button class="btn btn-ghost btn-sm" type="button" data-action="theme">Dark</button>
+        <a class="btn btn-ghost btn-sm" href="#/settings" data-nav="settings">Settings</a>
+      </div>
+    </div>
+  </header>
+  <main id="app" class="shell"></main>
+  <footer class="footer">
+    <p>Trip plans stay in this app’s database. Flight lookup sends a flight number and date to FlightAware. Map search sends an address to OpenStreetMap Nominatim. Tile images load from OpenStreetMap.</p>
+  </footer>
+  <script src="/static/vendor/leaflet.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

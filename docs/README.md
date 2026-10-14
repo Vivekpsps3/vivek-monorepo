@@ -13,6 +13,7 @@
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | One-page system architecture |
 | [LIFECYCLE.md](./LIFECYCLE.md) | Active/retired/reserved surface ownership |
 | [VERIFICATION.md](./VERIFICATION.md) | Test tiers, backup drill, privacy gate |
+| [TRAVEL.md](./TRAVEL.md) | Travel app: trips, calendar, flights, PTO |
 | [../AGENTS.md](../AGENTS.md) | Fast handoff for future AI agents |
 
 Project overview: [../README.md](../README.md).
