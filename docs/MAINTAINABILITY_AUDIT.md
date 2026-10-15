@@ -15,9 +15,9 @@ This pass addressed the identified shared-code, oversized-module, protocol, and 
 
 ## Verification
 
-`make test-full` is the integrated local gate: it runs Finance, Travel Python and Node, and site Flask tests; both Angular browser test suites and development builds; the release-manifest fixture; the Docker Compose build; and the Docker-backed suite-route integration. CI runs the same app test/build categories in separate jobs and runs suite-route integration after the Docker build. `make test-release-cache` remains an optional production Nginx/Chromium check because it requires Docker and a Playwright browser; setup instructions are in [DEPLOY.md](./DEPLOY.md).
+`make test-full` passed with Finance backend (65), Travel backend (55) and static Node (3), Media backend (10) and static Node (3), site backend (26), Finance browser (278), and site browser (7) tests. The coverage gate and release-manifest checks passed, as did the Finance production and site development Angular builds, the Docker build for all four services, and suite-route integration. The separate Finance development build also passed. `make test-fast` and `git diff --check` passed. Runtime `npm audit --omit=dev` reported zero vulnerabilities for both frontends. CI covers app tests and builds in separate jobs, including Media backend and static Node tests, and runs suite-route integration after the Docker build. `make test-release-cache` remains an optional production Nginx/Chromium check because it requires Docker and a Playwright browser; setup instructions are in [DEPLOY.md](./DEPLOY.md).
 
-The final integrated test counts and results are pending the repository owner's verification run. The site provider tests use deterministic fakes and do not contact external model services. The audit closes the listed findings; it is not a proof that no unrelated defects exist.
+The site provider tests use deterministic fakes and do not contact external model services. The audit closes the listed findings; it is not a proof that no unrelated defects exist.
 
 ## Architecture boundary
 

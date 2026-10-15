@@ -11,7 +11,7 @@
 From the repo root:
 
 ```bash
-make install   # once: Finance, Travel, site Flask, and both Angular dependencies
+make install   # once: Finance, Travel, Media, site Flask, and both Angular dependencies
 make dev       # Finance API + UI
 ```
 
@@ -36,9 +36,9 @@ See `make help`. Common:
 
 - `make backend` / `make frontend` — run one side only
 - `make test` — Finance pytest + `ng test` (frontend needs a browser; set `CHROME_BIN` if ChromeHeadless is missing)
-- `make test-full` — Finance, Travel, and site backend suites; both Angular suites and builds; Docker build
-- `make travel-install` / `make site-install` — install one optional backend environment without `make install`
-- `make travel-test` / `make site-test` — run the corresponding Python backend suite
+- `make test-full` — Finance, Travel, Media, and site backend suites; both Angular suites and builds; Docker build and suite-route integration
+- `make travel-install` / `make media-install` / `make site-install` — install one optional backend environment without `make install`
+- `make travel-test` / `make media-test` / `make site-test` — run the corresponding backend test suites
 - `make test-site-frontend` / `make build-site-frontend` — site browser tests and development build
 - `cd apps/finance/frontend && npm run e2e` — Playwright smoke (start `make dev` first, or let Playwright reuse an existing dev server on :4200)
 - `make docker-up` — full website on http://127.0.0.1:8080 with API private behind the web proxy (see [DEPLOY.md](./DEPLOY.md))
@@ -120,12 +120,14 @@ make test-backend
 cd apps/finance/frontend && npx ng build --configuration development
 ```
 
-`make install` creates separate Python environments for Finance, Travel, and the
-site Flask backend, and installs npm dependencies for both Angular apps. To set
-up only the extra Python backends, run `make travel-install site-install`.
+`make install` creates separate Python environments for Finance, Travel, Media,
+and the site Flask backend, and installs npm dependencies for both Angular apps.
+To set up only the extra Python backends, run
+`make travel-install media-install site-install`.
 `make test-full` expects those environments, both frontend dependency trees, and
-a ChromeHeadless-compatible browser; it runs all three backend suites, both
-Angular test suites and builds, and the Docker build.
+a ChromeHeadless-compatible browser; it runs all four backend suites, Travel
+and Media static-module Node tests, both Angular test suites and builds, the
+release-manifest fixture, and the Docker build with suite-route integration.
 
 ## More docs
 
