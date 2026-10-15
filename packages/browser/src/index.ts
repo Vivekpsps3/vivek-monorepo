@@ -10,4 +10,6 @@ export {
   encodeBase64,
   encryptPackedAesGcm,
   randomBytes,
+  toArrayBuffer,
 } from './crypto';
+export type { CryptoBytes } from './crypto';

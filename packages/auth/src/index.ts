@@ -5,6 +5,7 @@ import {
   encodeBase64,
   encryptPackedAesGcm,
   randomBytes,
+  toArrayBuffer,
   DEFAULT_PBKDF2_ITERATIONS,
 } from '@vivek/browser';
 
@@ -24,7 +25,7 @@ async function encryptPrivateKey(privateKey: ArrayBuffer, wrappingKey: CryptoKey
 
 async function importWrappedPrivateKey(wrappedB64: string, wrappingKey: CryptoKey): Promise<CryptoKey> {
   const privateKey = await decryptPackedAesGcm(wrappedB64, wrappingKey);
-  return crypto.subtle.importKey('pkcs8', privateKey, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  return crypto.subtle.importKey('pkcs8', toArrayBuffer(privateKey), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
 }
 
 export async function createSigningKey(
@@ -57,5 +58,5 @@ export async function signChallenge(
     wrapped.wrapped_private_key_b64,
     await derivePbkdf2AesGcmKey(passphrase, decodeBase64(wrapped.kdf_salt_b64), wrapped.kdf_iterations)
   );
-  return encodeBase64(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, encoder.encode(message)));
+  return encodeBase64(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, toArrayBuffer(encoder.encode(message))));
 }

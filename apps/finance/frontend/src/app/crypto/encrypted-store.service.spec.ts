@@ -285,7 +285,7 @@ describe('EncryptedStoreService', () => {
 
     await expectAsync(update).toBeRejectedWithError('Vault session changed');
     const persisted = harness.database.find(row => row.collection === 'assets');
-    expect(await (harness.store as any).vault.decryptPayload(persisted.ciphertext_b64)).toEqual(
+    expect(await harness.vault.decryptPayload(persisted.ciphertext_b64, 'assets', persisted.client_id, 2, 1)).toEqual(
       jasmine.objectContaining({ name: 'New user cash', current_value: 900 })
     );
   });

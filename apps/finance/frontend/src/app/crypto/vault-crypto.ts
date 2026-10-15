@@ -5,6 +5,7 @@ import {
   encodeBase64 as bufToB64,
   encryptPackedAesGcm,
   randomBytes,
+  toArrayBuffer,
   DEFAULT_PBKDF2_ITERATIONS,
 } from '@vivek/browser';
 
@@ -42,7 +43,7 @@ export async function generateDataKey(): Promise<CryptoKey> {
 
 async function importAesKey(raw: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
   const material = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
-  return crypto.subtle.importKey('raw', material, { name: 'AES-GCM' }, true, [
+  return crypto.subtle.importKey('raw', toArrayBuffer(material), { name: 'AES-GCM' }, true, [
     'encrypt',
     'decrypt',
   ]);
@@ -111,7 +112,7 @@ export async function rewrapDekWithPassphrase(
 export async function encryptJson(
   dek: CryptoKey,
   value: unknown,
-  additionalData?: BufferSource
+  additionalData?: ArrayBuffer | Uint8Array
 ): Promise<string> {
   const plain = new TextEncoder().encode(JSON.stringify(value));
   return encryptPackedAesGcm(plain, dek, additionalData);
@@ -120,7 +121,7 @@ export async function encryptJson(
 export async function decryptJson<T>(
   dek: CryptoKey,
   ciphertextB64: string,
-  additionalData?: BufferSource
+  additionalData?: ArrayBuffer | Uint8Array
 ): Promise<T> {
   const plain = await decryptPackedAesGcm(ciphertextB64, dek, additionalData);
   return JSON.parse(textDecoder.decode(plain)) as T;
@@ -149,9 +150,9 @@ export function clearDekLocal(): void {
 export async function hmacBlindIndex(dek: CryptoKey, value: string): Promise<string> {
   // Derive a non-extractable HMAC key from DEK raw material via HKDF-like digest.
   const raw = await exportRawKey(dek);
-  const keyMaterial = await crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, [
+  const keyMaterial = await crypto.subtle.importKey('raw', toArrayBuffer(raw), { name: 'HMAC', hash: 'SHA-256' }, false, [
     'sign',
   ]);
-  const sig = await crypto.subtle.sign('HMAC', keyMaterial, textEncoder.encode(value));
+  const sig = await crypto.subtle.sign('HMAC', keyMaterial, toArrayBuffer(textEncoder.encode(value)));
   return bufToB64(sig);
 }

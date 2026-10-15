@@ -1,5 +1,5 @@
 import { InjectionToken, Injectable, inject } from '@angular/core';
-import { deriveHkdfBits } from '@vivek/browser';
+import { deriveHkdfBits, toArrayBuffer } from '@vivek/browser';
 import { io, type Socket } from 'socket.io-client';
 
 export type EcdhSocketFactory = (url: string) => Socket;
@@ -159,7 +159,7 @@ export class EcdhService {
     const serverPublicKeyBytes = bytesFromHex(serverPublicKeyHex);
     const serverPublicKey = await window.crypto.subtle.importKey(
       'raw',
-      serverPublicKeyBytes,
+      toArrayBuffer(serverPublicKeyBytes),
       { name: 'ECDH', namedCurve: 'P-256' },
       false,
       []
@@ -178,9 +178,9 @@ export class EcdhService {
     if (!this.sharedKey) throw new Error('Key exchange not complete');
 
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const key = await window.crypto.subtle.importKey('raw', this.sharedKey, { name: 'AES-GCM' }, false, ['encrypt']);
+    const key = await window.crypto.subtle.importKey('raw', toArrayBuffer(this.sharedKey), { name: 'AES-GCM' }, false, ['encrypt']);
     const ciphertextWithTag = new Uint8Array(
-      await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext))
+      await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv: toArrayBuffer(iv) }, key, toArrayBuffer(new TextEncoder().encode(plaintext)))
     );
     const tagLength = 16;
     return {
