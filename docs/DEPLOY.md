@@ -260,6 +260,8 @@ sudo ./svc.sh start
 | `SESSION_COOKIE_SECURE` | `1` for HTTPS, `0` only for local HTTP |
 | `SESSION_COOKIE_SAMESITE` | Cookie SameSite setting, default `lax` |
 | `FLIGHTAWARE_API_KEY` | Optional. Passed into the travel container for flight lookup. |
+| `TMDB_API_KEY` | Optional. Passed into the media container for movie and series search. |
+| `MEDIA_SCRAPE_MODE` | Optional. `1` also searches TVMaze and the iTunes Search API. Off when unset. |
 
 ## Logging (OPS-011)
 

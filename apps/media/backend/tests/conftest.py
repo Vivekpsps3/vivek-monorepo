@@ -12,6 +12,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("MEDIA_DATABASE_URL", f"sqlite:///{tmp_path}/media.db")
     monkeypatch.delenv("TMDB_API_KEY", raising=False)
     monkeypatch.delenv("RAWG_API_KEY", raising=False)
+    monkeypatch.delenv("MEDIA_SCRAPE_MODE", raising=False)
     monkeypatch.delenv("MEDIA_TODAY", raising=False)
     from app import create_app
     from deps import AuthResult, Principal

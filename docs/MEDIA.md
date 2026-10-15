@@ -21,12 +21,16 @@ Release dates keep the precision they were given. A month or a year is not shown
 | Provider | Needs a key | Used for |
 | --- | --- | --- |
 | TMDB | `TMDB_API_KEY` | Movies and series. Poster and vote average on TMDB’s 0–10 scale. |
+| TVMaze | No, and only when `MEDIA_SCRAPE_MODE` is on | Series. Summary and average on TVMaze’s 0–10 scale. |
+| iTunes Search | No, and only when `MEDIA_SCRAPE_MODE` is on | Movies. Artwork and description. No critic score. |
 | MusicBrainz | No | Songs and albums. |
 | Cover Art Archive | No | Album artwork, addressed by MusicBrainz release id. |
 | Open Library | No | Books and covers. |
 | RAWG | `RAWG_API_KEY` | Games. Rating stays on RAWG’s 0–5 scale. |
 
 Keys stay on the server. The browser never receives them. Provider failures leave saved entries readable. Rotten Tomatoes, Metacritic, Spotify, and IGDB are not used.
+
+`MEDIA_SCRAPE_MODE=1` is optional and off by default. When it is on, movie and series search also calls TVMaze and the iTunes Search API. Those are public catalog APIs, not page scrapers. A TMDB result for the same title and year is kept and the public duplicate is dropped. Turning the flag off leaves manual entry and the other providers unchanged.
 
 ## Local run
 

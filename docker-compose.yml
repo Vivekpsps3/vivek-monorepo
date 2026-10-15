@@ -69,6 +69,7 @@ services:
       FINANCE_API_URL: http://api:8000
       TMDB_API_KEY: ${TMDB_API_KEY:-}
       RAWG_API_KEY: ${RAWG_API_KEY:-}
+      MEDIA_SCRAPE_MODE: ${MEDIA_SCRAPE_MODE:-}
     expose:
       - "8000"
     restart: unless-stopped

@@ -9,7 +9,7 @@ EXPERIENCE_KINDS = {"watch", "rewatch", "read", "reread", "listen", "replay", "p
 PROGRESS_UNITS = {"page", "percent", "episode", "hour"}
 PRECISIONS = {"day", "month", "year", "unknown"}
 RELEASE_STATUSES = {"scheduled", "released", "postponed", "unknown"}
-SOURCES = {"manual", "tmdb", "musicbrainz", "openlibrary", "rawg"}
+SOURCES = {"manual", "tmdb", "musicbrainz", "openlibrary", "rawg", "tvmaze", "itunes"}
 
 
 def fail(detail: str) -> None:

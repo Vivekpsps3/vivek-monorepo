@@ -287,6 +287,112 @@ def test_search_uses_a_cache_and_marks_saved_items(client, monkeypatch):
     assert marked["results"][0]["already_saved"] is True
 
 
+def test_scrape_mode_stays_off_until_asked(client, monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("public catalog was called")
+
+    monkeypatch.setattr("services.providers.itunes_search", forbidden)
+    monkeypatch.setattr("services.providers.tvmaze_search", forbidden)
+    found = client.get("/api/search", params={"q": "inception", "kind": "movie"})
+    assert found.status_code == 200
+    body = found.json()
+    assert body["results"] == []
+    assert body["providers"]["tmdb"] == "unconfigured"
+    assert "itunes" not in body["providers"]
+    assert "tvmaze" not in body["providers"]
+
+
+def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_SCRAPE_MODE", "1")
+    monkeypatch.setenv("TMDB_API_KEY", "test-key")
+
+    def tmdb(*_args, **_kwargs):
+        return [{
+            "source": "tmdb",
+            "source_id": "movie:27205",
+            "kind": "movie",
+            "title": "Inception",
+            "creator": None,
+            "year": 2010,
+            "overview": "A dream.",
+            "artwork_url": None,
+            "genres": [],
+            "external_ratings": [],
+            "extra": {},
+            "releases": [{"released_on": "2010-07-16", "precision": "day", "status": "released"}],
+            "episodes": [],
+        }]
+
+    def itunes(*_args, **_kwargs):
+        return [{
+            "source": "itunes",
+            "source_id": "413416",
+            "kind": "movie",
+            "title": "Inception",
+            "creator": "Christopher Nolan",
+            "year": 2010,
+            "overview": "From the store.",
+            "artwork_url": None,
+            "genres": ["Action"],
+            "external_ratings": [],
+            "extra": {},
+            "releases": [],
+            "episodes": [],
+        }, {
+            "source": "itunes",
+            "source_id": "99",
+            "kind": "movie",
+            "title": "Inception: The App",
+            "creator": None,
+            "year": 2010,
+            "overview": None,
+            "artwork_url": None,
+            "genres": [],
+            "external_ratings": [],
+            "extra": {},
+            "releases": [],
+            "episodes": [],
+        }]
+
+    monkeypatch.setattr("services.providers.tmdb_search", tmdb)
+    monkeypatch.setattr("services.providers.itunes_search", itunes)
+    found = client.get("/api/search", params={"q": "inception", "kind": "movie"}).json()
+    assert [item["source"] for item in found["results"]] == ["tmdb", "itunes"]
+    assert found["results"][1]["title"] == "Inception: The App"
+    assert found["providers"]["itunes"] == "ok"
+    saved = client.post("/api/library/from-provider", json={**found["results"][1], "status": "want"}).json()
+    assert saved["catalog"]["source"] == "itunes"
+    assert saved["catalog"]["title"] == "Inception: The App"
+
+
+def test_tvmaze_summary_is_plain_text():
+    import httpx
+    from services.providers import tvmaze_search
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "api.tvmaze.com"
+        return httpx.Response(200, json=[{
+            "show": {
+                "id": 169,
+                "name": "Breaking Bad",
+                "premiered": "2008-01-20",
+                "summary": "<p>A <b>teacher</b> &amp; a student.</p>",
+                "image": {"medium": "https://static.tvmaze.com/uploads/images/medium_portrait/0/2400.jpg"},
+                "genres": ["Drama"],
+                "rating": {"average": 9.2},
+                "network": {"name": "AMC"},
+            }
+        }])
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        rows = tvmaze_search(http, "breaking bad")
+    assert rows[0]["overview"] == "A teacher & a student."
+    assert rows[0]["external_ratings"][0]["label"] == "TVMaze"
+    assert rows[0]["external_ratings"][0]["scale"] == "0–10"
+    assert rows[0]["creator"] == "AMC"
+    assert rows[0]["artwork_url"].startswith("https://")
+
+
 def test_home_page_and_tokens_render_without_private_rows(client):
     html = client.get("/").text
     assert "Media" in html

@@ -1,7 +1,9 @@
 """Public metadata adapters. Personal listening and watching history is never sent."""
 
+import html
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -11,15 +13,25 @@ from models import ProviderCache, utc_now
 
 UA = "VivekMedia/1.0 (personal media journal)"
 TTL = timedelta(hours=24)
+TAG = re.compile(r"<[^>]+>")
+SPACE = re.compile(r"\s+")
+
+
+def scrape_mode() -> bool:
+    return os.getenv("MEDIA_SCRAPE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def provider_status() -> dict[str, str]:
-    return {
+    status = {
         "tmdb": "ok" if os.getenv("TMDB_API_KEY", "").strip() else "unconfigured",
         "musicbrainz": "ok",
         "openlibrary": "ok",
         "rawg": "ok" if os.getenv("RAWG_API_KEY", "").strip() else "unconfigured",
     }
+    if scrape_mode():
+        status["tvmaze"] = "ok"
+        status["itunes"] = "ok"
+    return status
 
 
 def search(db: Session, query: str, kind: str | None, client: httpx.Client | None = None) -> dict:
@@ -31,6 +43,10 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
         jobs = []
         if kind in (None, "", "movie", "tv"):
             jobs.append(("tmdb", lambda: tmdb_search(http, query, kind)))
+            if scrape_mode() and kind in (None, "", "tv"):
+                jobs.append(("tvmaze", lambda: tvmaze_search(http, query)))
+            if scrape_mode() and kind in (None, "", "movie"):
+                jobs.append(("itunes", lambda: itunes_search(http, query)))
         if kind in (None, "", "track", "album"):
             jobs.append(("musicbrainz", lambda: musicbrainz_search(http, query, kind)))
         if kind in (None, "", "book"):
@@ -48,7 +64,30 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
     finally:
         if own_client:
             http.close()
-    return {"query": query, "results": results[:40], "providers": status}
+    return {"query": query, "results": prefer_unique(results)[:40], "providers": status}
+
+
+def prefer_unique(results: list[dict]) -> list[dict]:
+    seen = set()
+    unique = []
+    for item in results:
+        title = " ".join((item.get("title") or "").casefold().split())
+        year = item.get("year")
+        creator = " ".join((item.get("creator") or "").casefold().split())
+        key = (item.get("kind"), title, year if isinstance(year, int) else creator)
+        if title and key in seen:
+            continue
+        if title:
+            seen.add(key)
+        unique.append(item)
+    return unique
+
+
+def plain_text(value, limit: int = 400) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = SPACE.sub(" ", html.unescape(TAG.sub(" ", value))).strip()
+    return text[:limit] or None
 
 
 def as_utc(value: datetime) -> datetime:
@@ -211,6 +250,89 @@ def openlibrary_search(http: httpx.Client, query: str) -> list[dict]:
             "episodes": [],
         })
     return [item for item in found if item["source_id"]]
+
+
+def tvmaze_search(http: httpx.Client, query: str) -> list[dict]:
+    response = http.get("https://api.tvmaze.com/search/shows", params={"q": query})
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, list):
+        return []
+    found = []
+    for row in payload[:8]:
+        show = row.get("show") if isinstance(row, dict) else None
+        if not isinstance(show, dict) or not show.get("id"):
+            continue
+        premiered = show.get("premiered") or ""
+        year = int(premiered[:4]) if len(premiered) >= 4 and premiered[:4].isdigit() else None
+        image = show.get("image") if isinstance(show.get("image"), dict) else {}
+        artwork = image.get("medium") or image.get("original")
+        rating = show.get("rating") if isinstance(show.get("rating"), dict) else {}
+        average = rating.get("average")
+        ratings = []
+        if isinstance(average, (int, float)) and average > 0:
+            ratings.append({
+                "provider": "tvmaze",
+                "label": "TVMaze",
+                "value": round(float(average), 1),
+                "scale": "0–10",
+                "votes": None,
+            })
+        channel = show.get("network") if isinstance(show.get("network"), dict) else show.get("webChannel")
+        creator = channel.get("name") if isinstance(channel, dict) else None
+        found.append({
+            "source": "tvmaze",
+            "source_id": str(show.get("id")),
+            "kind": "tv",
+            "title": show.get("name") or "Untitled",
+            "creator": creator,
+            "year": year,
+            "overview": plain_text(show.get("summary")),
+            "artwork_url": artwork if isinstance(artwork, str) and artwork.startswith("https://") else None,
+            "genres": [genre for genre in show.get("genres") or [] if isinstance(genre, str)],
+            "external_ratings": ratings,
+            "extra": {},
+            "releases": release_from_day(premiered) if len(premiered) >= 10 else (
+                [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}] if year else []
+            ),
+            "episodes": [],
+        })
+    return found
+
+
+def itunes_search(http: httpx.Client, query: str) -> list[dict]:
+    response = http.get(
+        "https://itunes.apple.com/search",
+        params={"term": query, "media": "movie", "entity": "movie", "limit": 8},
+    )
+    response.raise_for_status()
+    found = []
+    for item in response.json().get("results", [])[:8]:
+        track_id = item.get("trackId")
+        if not track_id:
+            continue
+        released = item.get("releaseDate") or ""
+        year = int(released[:4]) if len(released) >= 4 and released[:4].isdigit() else None
+        artwork = item.get("artworkUrl100") or ""
+        if isinstance(artwork, str) and "100x100bb" in artwork:
+            artwork = artwork.replace("100x100bb", "300x300bb")
+        genre = item.get("primaryGenreName")
+        found.append({
+            "source": "itunes",
+            "source_id": str(track_id),
+            "kind": "movie",
+            "title": item.get("trackName") or "Untitled",
+            "creator": item.get("artistName"),
+            "year": year,
+            "overview": plain_text(item.get("longDescription") or item.get("shortDescription")),
+            "artwork_url": artwork if isinstance(artwork, str) and artwork.startswith("https://") else None,
+            "genres": [genre] if isinstance(genre, str) and genre else [],
+            "external_ratings": [],
+            "extra": {},
+            "releases": release_from_day(released[:10]) if len(released) >= 10 else [],
+            "episodes": [],
+        })
+    return found
 
 
 def rawg_search(http: httpx.Client, query: str) -> list[dict]:

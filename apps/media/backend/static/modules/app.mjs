@@ -194,7 +194,7 @@ function viewSearch(params) {
 }
 
 function providerLine(providers) {
-  const names = { tmdb: "TMDB", musicbrainz: "MusicBrainz", openlibrary: "Open Library", rawg: "RAWG" };
+  const names = { tmdb: "TMDB", musicbrainz: "MusicBrainz", openlibrary: "Open Library", rawg: "RAWG", tvmaze: "TVMaze", itunes: "iTunes" };
   const states = { ok: "available", unconfigured: "not configured", error: "unavailable" };
   const bits = Object.entries(providers).map(([name, state]) => `${names[name] || name} ${states[state] || state}`);
   return `<p class="quiet">${esc(bits.join(" · "))}. Your notes are not sent to these services.</p>`;
