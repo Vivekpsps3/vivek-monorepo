@@ -1,11 +1,10 @@
-import { Component, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { ViewportScroller } from '@angular/common';
 import { Meta } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
-
-type Theme = 'light' | 'dark';
+import { bindSystemTheme, readThemeChoice, setThemePreference, type ThemeChoice } from '@vivek/ui';
 
 @Component({
   selector: 'app-root',
@@ -15,7 +14,7 @@ type Theme = 'light' | 'dark';
   styleUrls: ['./app.component.css'],
 })
 export class AppComponent {
-  readonly theme = signal<Theme>(this.readTheme());
+  readonly choice = signal<ThemeChoice>(readThemeChoice('vw-theme'));
 
   get skipLinkHref(): string {
     const currentUrl = this.router.url.split('#')[0] || '/home';
@@ -28,6 +27,9 @@ export class AppComponent {
     private readonly activatedRoute: ActivatedRoute,
     private readonly meta: Meta,
   ) {
+    const destroyRef = inject(DestroyRef);
+    setThemePreference(this.choice(), 'vw-theme');
+    destroyRef.onDestroy(bindSystemTheme('vw-theme', () => this.choice.set('system')));
     this.viewportScroller.setOffset(() => {
       const nav = typeof document === 'undefined' ? null : document.querySelector('.vivek-nav');
       return [0, (nav?.getBoundingClientRect().height ?? 0) + 12];
@@ -54,18 +56,8 @@ export class AppComponent {
     this.meta.updateTag({ property: 'og:description', content: description });
   }
 
-  private readTheme(): Theme {
-    if (typeof document === 'undefined') return 'light';
-    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  }
-
-  setTheme(theme: Theme): void {
-    this.theme.set(theme);
-    try {
-      localStorage.setItem('vw-theme', theme);
-    } catch {
-      /* private mode */
-    }
-    document.documentElement.setAttribute('data-theme', theme);
+  setTheme(theme: ThemeChoice): void {
+    this.choice.set(theme);
+    setThemePreference(theme, 'vw-theme');
   }
 }

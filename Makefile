@@ -15,28 +15,38 @@ TRAVEL_DIR := apps/travel/backend
 TRAVEL_VENV := $(TRAVEL_DIR)/.venv
 TRAVEL_HOST ?= 0.0.0.0
 TRAVEL_PORT ?= 8090
+MEDIA_DIR := apps/media/backend
+MEDIA_VENV := $(MEDIA_DIR)/.venv
+MEDIA_PORT ?= 8091
+SITE_FLASK_DIR := apps/site/flask
+SITE_VENV := $(SITE_FLASK_DIR)/.venv
+SITE_FRONTEND_DIR := apps/site
 # WEB_HOST 0.0.0.0 exposes the dev UI on your LAN (SEC-011); API stays on API_HOST by default.
 WEB_HOST ?= 0.0.0.0
 WEB_PORT ?= 4200
 
 .PHONY: help install install-backend install-frontend dev backend frontend \
-        travel-install travel-dev travel-test \
-        test test-backend test-frontend test-fast test-finance test-security test-full test-doc-paths \
-        build build-frontend clean reset-db check \
+        travel-install travel-dev travel-test media-install media-dev media-test site-install site-test \
+        test test-backend test-frontend test-fast test-finance test-security test-full test-doc-paths test-shared-boundaries \
+        test-site-frontend test-release-manifest test-release-cache test-suite-routes \
+        build-site-frontend build build-frontend clean reset-db check \
         docker-up docker-down docker-build docker-rebuild docker-logs docker-ps docker-config reset-docker-db
 
 help:
 	@echo "Finance Tracker"
 	@echo ""
-	@echo "  make install          Create venv, pip + npm dependencies"
+	@echo "  make install          Install Finance, Travel, site backend + frontend dependencies"
 	@echo "  make dev              Run API + Angular dev server (parallel)"
 	@echo "  make backend          API only  → http://$(API_HOST):$(API_PORT)"
 	@echo "  make frontend         UI only   → http://localhost:$(WEB_PORT) (proxy → API)"
 	@echo "  make test             Backend + frontend unit tests"
-	@echo "  make test-fast        Doc path checks (OPS-002)"
+	@echo "  make test-fast        Doc path and shared-boundary checks"
 	@echo "  make test-finance     Finance invariants + migration matrix"
 	@echo "  make test-security    Vault/auth/openapi + client-finance/evidence-label specs"
-	@echo "  make test-full        Full unit tests + frontend build + docker build"
+	@echo "  make test-full        All app tests + builds + Docker and suite-route checks"
+	@echo "  make test-release-manifest  Finance release manifest fixtures"
+	@echo "  make test-release-cache     Finance Nginx/browser cache rollover (Docker + Chromium)"
+	@echo "  make test-suite-routes      Suite Nginx route integration (Docker)"
 	@echo "  make build            Production Angular build"
 	@echo "  make docker-up        Build/start suite → http://127.0.0.1:8080/finance/ and /travel/"
 	@echo "  make docker-down      Stop Docker stack"
@@ -50,11 +60,18 @@ help:
 	@echo "  make travel-install   Python venv for apps/travel"
 	@echo "  make travel-dev       Direct UI at / on :$(TRAVEL_PORT). Shared sign-in is the suite at /travel/."
 	@echo "  make travel-test      Travel pytest"
+	@echo "  make media-install    Python venv for the private media journal"
+	@echo "  make media-dev        Media UI at / on :$(MEDIA_PORT). Shared sign-in is the suite at /media/."
+	@echo "  make media-test       Media pytest"
+	@echo "  make site-install     Python venv for site Flask Socket.IO backend"
+	@echo "  make site-test        Site Flask/Socket.IO pytest suite"
+	@echo "  make test-site-frontend Site Angular unit tests"
+	@echo "  make build-site-frontend Site Angular development build"
 	@echo ""
 	@echo "First time: make install && make dev"
 	@echo "Open: http://localhost:$(WEB_PORT)"
 
-install: install-backend install-frontend
+install: install-backend travel-install media-install site-install install-frontend
 	@echo "Install complete."
 
 install-backend:
@@ -65,7 +82,8 @@ install-backend:
 
 install-frontend:
 	cd $(FRONTEND_DIR) && npm install
-	@echo "Frontend deps: $(FRONTEND_DIR)/node_modules"
+	cd $(SITE_FRONTEND_DIR) && npm install
+	@echo "Frontend deps: $(FRONTEND_DIR)/node_modules and $(SITE_FRONTEND_DIR)/node_modules"
 
 # Run both; Ctrl+C stops both job groups
 dev:
@@ -103,7 +121,10 @@ test-frontend:
 test-doc-paths:
 	./scripts/check-doc-paths.sh
 
-test-fast: test-doc-paths
+test-shared-boundaries:
+	python3 ./scripts/check-shared-boundaries.py
+
+test-fast: test-doc-paths test-shared-boundaries
 
 test-finance:
 	@if [ -x $(PY) ]; then \
@@ -126,13 +147,35 @@ test-security:
 		--include='**/client-finance.spec.ts' \
 		--include='**/evidence-labels.util.spec.ts'; fi
 
-test-full: test-fast test-backend test-frontend build-frontend docker-build
+test-full: test-fast test-backend travel-test media-test site-test test-frontend test-site-frontend \
+	test-release-manifest build-frontend build-site-frontend docker-build
+	$(MAKE) test-suite-routes
 	@echo "test-full OK"
 
 build: build-frontend
 
 build-frontend:
 	cd $(FRONTEND_DIR) && npm run build
+
+test-site-frontend:
+	@if [ "$(SKIP_FRONTEND_TESTS)" = "1" ]; then \
+		echo "Skipping site frontend tests because SKIP_FRONTEND_TESTS=1"; \
+	else \
+		cd $(SITE_FRONTEND_DIR) && npm test -- --watch=false --browsers=ChromeHeadless; \
+	fi
+
+build-site-frontend:
+	cd $(SITE_FRONTEND_DIR) && npx ng build --configuration development
+
+test-release-manifest:
+	cd $(FRONTEND_DIR) && npm run test:release-manifest
+
+# Requires Docker and a Playwright Chromium installation; intentionally excluded from test-full/CI.
+test-release-cache:
+	cd $(FRONTEND_DIR) && npm run test:release-cache
+
+test-suite-routes:
+	node apps/finance/frontend/scripts/test-suite-routes.mjs
 
 docker-up:
 	docker compose up --build
@@ -192,3 +235,29 @@ travel-dev:
 travel-test:
 	@test -x $(TRAVEL_VENV)/bin/python || (echo "Run: make travel-install" && exit 1)
 	cd $(TRAVEL_DIR) && .venv/bin/python -m pytest -q
+	node --test apps/travel/backend/static/tests/*.test.mjs
+
+media-install:
+	@test -d $(MEDIA_VENV) || python3 -m venv $(MEDIA_VENV)
+	$(MEDIA_VENV)/bin/pip install -q -U pip
+	$(MEDIA_VENV)/bin/pip install -q -r $(MEDIA_DIR)/requirements-dev.txt
+	@echo "Media venv: $(MEDIA_VENV)"
+
+media-dev:
+	@test -x $(MEDIA_VENV)/bin/uvicorn || (echo "Run: make media-install" && exit 1)
+	cd $(MEDIA_DIR) && .venv/bin/uvicorn main:app --host $(TRAVEL_HOST) --port $(MEDIA_PORT)
+
+media-test:
+	@test -x $(MEDIA_VENV)/bin/python || (echo "Run: make media-install" && exit 1)
+	cd $(MEDIA_DIR) && .venv/bin/python -m pytest -q
+	node --test apps/media/backend/static/tests/*.test.mjs
+
+site-install:
+	@test -d $(SITE_VENV) || python3 -m venv $(SITE_VENV)
+	$(SITE_VENV)/bin/pip install -q -U pip
+	$(SITE_VENV)/bin/pip install -q -r $(SITE_FLASK_DIR)/requirements-dev.txt
+	@echo "Site Flask venv: $(SITE_VENV)"
+
+site-test:
+	@test -x $(SITE_VENV)/bin/python || (echo "Run: make site-install" && exit 1)
+	cd $(SITE_FLASK_DIR) && .venv/bin/python -m pytest -q

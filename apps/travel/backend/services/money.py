@@ -1,7 +1,7 @@
 """Money is stored as integer cents so SQLite does not turn amounts into floats."""
 
 import re
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 MONEY_STEP = Decimal("0.01")
 DAY_STEP = Decimal("0.0001")
@@ -18,7 +18,24 @@ def clean_currency(value: str | None) -> str:
 def parse_money(value) -> int | None:
     if value is None or value == "":
         return None
-    amount = Decimal(str(value)).quantize(MONEY_STEP, rounding=ROUND_HALF_UP)
+
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("Enter a valid amount.") from exc
+    if not amount.is_finite():
+        raise ValueError("Enter a finite amount.")
+
+    # Reject values far beyond the supported range before quantize(), whose
+    # default decimal context can raise InvalidOperation for very large input.
+    if amount > MAX_MONEY + MONEY_STEP:
+        raise ValueError("That amount is larger than this app accepts.")
+    if amount < -(MAX_MONEY + MONEY_STEP):
+        raise ValueError("Use a zero or positive amount.")
+    try:
+        amount = amount.quantize(MONEY_STEP, rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ValueError("Enter a valid amount.") from exc
     if amount < 0:
         raise ValueError("Use a zero or positive amount.")
     if amount > MAX_MONEY:
@@ -35,7 +52,23 @@ def fmt_money(cents: int | None) -> str | None:
 
 
 def parse_days(value, *, allow_zero: bool = True) -> Decimal:
-    amount = Decimal(str(value)).quantize(DAY_STEP, rounding=ROUND_HALF_UP)
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("Enter a valid number of days.") from exc
+    if not amount.is_finite():
+        raise ValueError("Enter a finite number of days.")
+
+    # Values this far outside the accepted range cannot round back into it.
+    # Checking first also keeps huge exponents from failing inside quantize().
+    if amount > Decimal("366") + DAY_STEP:
+        raise ValueError("Keep days at 366 or less.")
+    if amount < -Decimal("366") - DAY_STEP:
+        raise ValueError("Days cannot be negative.")
+    try:
+        amount = amount.quantize(DAY_STEP, rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ValueError("Enter a valid number of days.") from exc
     if amount < 0 or (amount == 0 and not allow_zero):
         raise ValueError("Days cannot be negative.")
     if amount > Decimal("366"):

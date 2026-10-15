@@ -21,7 +21,7 @@ domain / LAN / VPN
 | Step | Action |
 |------|--------|
 | 1 | Put TLS in front of the web container and keep the API private to Compose or loopback. |
-| 2 | Open `/finance/login` on a fresh database and create the first admin with a username and vault passphrase (lost passphrase = lost vault data). Open self-signup is at `/finance/signup`. Older `/login` and `/have` links redirect under `/finance/`. |
+| 2 | Open `/auth/login` on a fresh database and create the first admin with a username and vault passphrase (lost passphrase = lost vault data). Open self-signup is at `/auth/signup`. `/finance/login` redirects there. Older `/have` links redirect under `/finance/`. |
 | 3 | Set **`CORS_ORIGINS`** to your UI origin(s) only (comma-separated). Avoid `*`. |
 | 4 | Keep **`allow_credentials=True`** and explicit origins because browser auth uses cookies. |
 | 5 | Set **`SESSION_COOKIE_SECURE=1`** for HTTPS deployments. Use `0` only for local HTTP development. |
@@ -43,9 +43,10 @@ docker compose up --build
 ```
 
 Finance: http://127.0.0.1:8080/finance/ by default. Travel: http://127.0.0.1:8080/travel/.
-Production currently uses http://127.0.0.1:8085 because host nginx routes
-`finance.vivekpanchagnula.com` to that loopback port. Host nginx forwards every
-path; the web container chooses `/finance/`, `/travel/`, and `/api/`.
+Production publishes the suite on https://vivekpanchagnula.com at `/finance/`,
+`/travel/`, `/auth/login`, and `/api/`. The portfolio at `/` stays offline.
+Host nginx proxies those paths to http://127.0.0.1:8085.
+`finance.vivekpanchagnula.com` redirects to the apex paths.
 
 The finance API is private to the Compose network and is reached through the web
 container at `/api`. `GET /api/health` stays on that path. `/finance/api/` is the
@@ -125,12 +126,23 @@ still a normal file on the host.
 Run Compose on the host, then proxy HTTPS traffic to the loopback web port. Finance Tracker uses username plus vault-passphrase challenge login inside the app; the server receives the public key and challenge signature, never the passphrase or browser-held private key.
 
 ```caddyfile
-finance.vivekpanchagnula.com {
-  reverse_proxy 127.0.0.1:8085
+vivekpanchagnula.com {
+  handle /finance* {
+    reverse_proxy 127.0.0.1:8085
+  }
+  handle /travel* {
+    reverse_proxy 127.0.0.1:8085
+  }
+  handle /auth* {
+    reverse_proxy 127.0.0.1:8085
+  }
+  handle /api/* {
+    reverse_proxy 127.0.0.1:8085
+  }
 }
 ```
 
-Create the first admin by opening `/finance/login` after the API starts, or use open self-signup at `/finance/signup`. Admins cannot reset another user's vault access. Travel at `/travel/` uses the same session cookie.
+Create the first admin at `/auth/login` after the API starts, or use open self-signup at `/auth/signup`. Admins cannot reset another user's vault access. Finance and Travel both use that sign-in and the same session cookie.
 
 ## GitHub Actions production deployment
 
@@ -168,8 +180,9 @@ There is no `.env.production` and no `docker-compose.prod.yml`; runtime
 configuration comes from the repo root `.env` (plus the `production`
 GitHub environment's protection rules). The web container publishes on
 `127.0.0.1:8085`; keep this aligned with
-`/home/vivek/Deployments/nginx/conf/conf.d/finance.vivekpanchagnula.com.conf`,
-which proxies the public domain to `http://127.0.0.1:8085`.
+`/home/vivek/Deployments/nginx/conf/conf.d/vivekpanchagnula.com.conf`,
+which proxies `/finance/`, `/travel/`, `/auth/`, and `/api/` to `http://127.0.0.1:8085`.
+The portfolio response at `/` stays offline.
 
 This host currently expects passwordless sudo for Docker. Verify that before
 running the deployment:

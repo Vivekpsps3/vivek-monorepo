@@ -1,11 +1,11 @@
 # Frontend conventions
 
-Angular 19 standalone app under `apps/finance/frontend/src/app/`.
+Angular 21 standalone app under `apps/finance/frontend/src/app/`.
 
 ## Stack
 
 - **Plain CSS** with shared design tokens from `packages/ui/tokens.css` (near-neutral light default; explicit light/dark choice)
-- **Shared UI** — finance-local `shared/ui/*` (selector prefix `ui-`) plus primitives re-exported from `@vivek/ui` (`packages/ui`)
+- **Shared UI** — generic Angular components, confirmation/toast services, theme preference helpers, and chart colors live in `@vivek/ui` (`packages/ui`); Finance imports them from the package API
 - **State** — `FinanceService` over `EncryptedStoreService` after vault unlock (RxJS `BehaviorSubject`s for ledger, balance sheet, recurring cashflow); `PlanningService`; `AuthService`
 - Stock Lab uses `MarketResearchService` for explicit ticker lookups and `EncryptedStoreService` for encrypted `stock_lab_scenarios`.
 - **Charts** — Chart.js via dynamic `import('chart.js/auto')` (dashboard/charts components and planning fan chart)
@@ -30,11 +30,11 @@ Angular 19 standalone app under `apps/finance/frontend/src/app/`.
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
-Shell: `MainLayoutComponent` (five hubs plus a Travel link to `/travel/`, `#main-content`). Admin and account actions live in the account menu. Dev API: `apiUrl: '/api'` + `proxy.conf.js` (`/api/**` → FastAPI). `ng serve` stays at `/`. The production image uses `<base href="/finance/">`, so these router paths are served under `/finance/` and `router.navigateByUrl('/have')` must stay unprefixed.
+Shell: `MainLayoutComponent` (five hubs plus a Travel link to `/travel/`, `#main-content`). Admin and account actions live in the account menu. Dev API: `apiUrl: '/api'` + `proxy.conf.js` (`/api/**` → FastAPI). `ng serve` stays at `/`. The production image uses `<base href="/finance/">`, so these router paths are served under `/finance/` and `router.navigateByUrl('/have')` must stay unprefixed. Shared sign-in is `/auth/login` and `/auth/signup` on the suite origin, outside the `/finance/` base. `/login` remains the in-app route for `ng serve`.
 
 ## Design tokens
 
-Source of truth: `packages/ui/tokens.css`. The Finance path under `src/theme/` remains a compatibility mirror.
+Source of truth: `packages/ui/tokens.css`.
 
 | CSS variable | Role |
 |--------------|------|
@@ -47,7 +47,7 @@ Source of truth: `packages/ui/tokens.css`. The Finance path under `src/theme/` r
 | `--border` | Borders |
 | `--success` / `--danger` / `--warning` | Status |
 
-Charts: `src/theme/chart-colors.ts` (prefer CSS vars for axes; segment palette in `CHART_COLORS`). Chart hover tooltips are off. Values sit in the table or readout beside the chart.
+Charts: shared palette and Chart.js options live in `@vivek/ui` (`packages/ui/src/chart-theme.ts`; prefer CSS vars for axes). Chart hover tooltips are off. Values sit in the table or readout beside the chart.
 
 **Appearance:** light is the default token set (canvas `#F7F7F5`, white
 surfaces, graphite `#222522`, restrained green `#3F6658`). Grouped surfaces use
@@ -56,8 +56,8 @@ thin borders and no shadow; overlays may use elevation. Dark is
 Light / Dark split. Choice is stored in `localStorage` key `ft-theme`. Controls
 use rectangular 8px corners; status and date shapes retain familiar forms.
 Reduced transparency and increased contrast media queries are honored.
-Typography prefers the system stack (no remote font fetch). Locale money/date
-helpers live in `utils/format.util.ts`.
+Typography prefers the system stack (no remote font fetch). Locale money and
+local-date helpers live in `@vivek/browser` (`packages/browser`).
 
 ## Viewport presentation matrix
 
@@ -73,9 +73,11 @@ Do **not** add a service worker that caches decrypted finance plaintext.
 
 ## Shared components
 
-Primitives (`ui-button`, `ui-card`, `ui-input`, `ui-page-header`, `ui-icon`,
-`ui-empty-state`) live in `packages/ui` (`@vivek/ui`) and are re-exported by
-`shared/ui/index.ts`. Finance-local components live under `shared/ui/`.
+Generic components (`ui-button`, `ui-card`, `ui-input`, `ui-page-header`,
+`ui-icon`, `ui-empty-state`, `ui-badge`, `ui-select`, `ui-skeleton`,
+`ui-data-table`, `ui-dialog`, and `ui-confirm-dialog`) live in `packages/ui`
+(`@vivek/ui`). Finance imports these directly; feature-specific presentation
+and finance domain behavior remain in the app.
 
 | Selector | Notes |
 |----------|--------|

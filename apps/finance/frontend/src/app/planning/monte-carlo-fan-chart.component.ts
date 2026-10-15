@@ -19,7 +19,7 @@ import {
   chartColorAt,
   chartLegendBottom,
   chartSuccessColor,
-} from '../../theme/chart-colors';
+} from '@vivek/ui';
 import { PlanningCheckpointResult } from '../models/planning.model';
 
 export interface McChartData {

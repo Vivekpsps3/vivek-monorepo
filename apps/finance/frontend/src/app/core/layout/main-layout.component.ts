@@ -4,12 +4,12 @@ import { ApiHealthService } from '../../services/api-health.service';
 import { AuthUser } from '../../auth/auth.models';
 import { AuthService } from '../../auth/auth.service';
 import { Subject, filter, takeUntil } from 'rxjs';
-import { UiButtonComponent, UiCardComponent, UiIconComponent, UiIconName } from '../../shared/ui';
-import { ConfirmService } from '../../services/confirm.service';
+import { UiButtonComponent, UiCardComponent, UiIconComponent, UiIconName } from '@vivek/ui';
+import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceService } from '../../services/finance.service';
 import { Theme, ThemeService } from '../../services/theme.service';
-import { ToastService } from '../../services/toast.service';
+import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
 
 export interface NavItem {
@@ -104,7 +104,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       this.syncMarketSession();
       this.cdr.markForCheck();
     });
-    this.themeService.theme$.pipe(takeUntil(this.destroy$)).subscribe(theme => {
+    this.themeService.choice$.pipe(takeUntil(this.destroy$)).subscribe(theme => {
       this.theme = theme;
       this.cdr.markForCheck();
     });

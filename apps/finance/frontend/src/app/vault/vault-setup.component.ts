@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { VaultService } from '../crypto/vault.service';
-import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../shared/ui';
+import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-vault-setup',

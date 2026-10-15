@@ -1,8 +1,8 @@
 # Travel
 
-Travel is a separate app in `apps/travel/`. The suite hosts it at `/travel/` and Finance at `/finance/` on the same origin. Travel checks the finance session cookie by calling the finance API. It does not open `finance.db`, the encrypted vault, or net worth. Trip costs stay in the travel database.
+Travel is a separate app in `apps/travel/`. The suite hosts it at `/travel/`, Finance at `/finance/`, and the Hub at `/hub` on the same origin. Travel checks the finance session cookie by calling the finance API. It does not open `finance.db`, the encrypted vault, or net worth. Trip costs stay in the travel database. `GET /api/summary` returns only the next trip's destination, dates, and a next action for the Hub.
 
-Sign-in happens in Finance. The browser sends `finance_session` to both `/finance/` and `/travel/`. Travel reads call `GET /api/auth/me`. Changes call `POST /api/auth/session` and send the finance CSRF token. Rows are stored under that finance user id. `make travel-dev` serves this app at `/` on port 8090, so its sign-in link (`/finance/login`) is not the Finance app. Use the compose origin for the shared session.
+Sign-in is `/auth/login` on the suite origin. The browser sends `finance_session` to both `/finance/` and `/travel/`. Travel reads call `GET /api/auth/me`. Changes call `POST /api/auth/session` and send the finance CSRF token. Rows are stored under that finance user id. `make travel-dev` serves this app at `/` on port 8090, so its sign-in link (`/auth/login`) is not served by that process. Use the compose origin for the shared session.
 
 ## Run
 
@@ -12,7 +12,7 @@ The supported host is the repo-root compose stack:
 docker compose up --build
 ```
 
-Finance: `http://127.0.0.1:8080/finance/`. Travel: `http://127.0.0.1:8080/travel/`. Health: `http://127.0.0.1:8080/api/health`.
+Hub: `http://127.0.0.1:8080/hub`. Finance: `http://127.0.0.1:8080/finance/`. Travel: `http://127.0.0.1:8080/travel/`. Health: `http://127.0.0.1:8080/api/health`.
 
 `make travel-install && make travel-dev` still serves the travel UI on port 8090 for debugging. Use the compose origin when you want the finance session.
 

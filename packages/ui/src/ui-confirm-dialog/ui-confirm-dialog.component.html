@@ -1,0 +1,21 @@
+@if (state$ | async; as s) {
+  <ui-dialog
+    [open]="true"
+    [scrollTarget]="scrollTarget()"
+    labelledBy="confirm-title"
+    describedBy="confirm-message"
+    panelClass="ui-confirm-dialog__panel"
+    [closeOnBackdrop]="false"
+    (closed)="close(false)">
+    <h2 id="confirm-title" class="confirm-title">{{ s.title }}</h2>
+    <p id="confirm-message" class="confirm-message">{{ s.message }}</p>
+    <div class="confirm-actions">
+      <ui-button variant="secondary" (clicked)="close(false)">
+        {{ s.cancelLabel || 'Cancel' }}
+      </ui-button>
+      <ui-button variant="danger" (clicked)="close(true)">
+        {{ s.confirmLabel || 'Confirm' }}
+      </ui-button>
+    </div>
+  </ui-dialog>
+}

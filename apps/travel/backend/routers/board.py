@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from services.assemble import build_calendar, build_home
+from services.assemble import build_calendar, build_home, build_summary
 
 router = APIRouter()
 
@@ -14,6 +14,11 @@ router = APIRouter()
 @router.get("/home")
 def home(db: Session = Depends(get_db)):
     return build_home(db)
+
+
+@router.get("/summary")
+def summary(db: Session = Depends(get_db)):
+    return build_summary(db)
 
 
 @router.get("/calendar")

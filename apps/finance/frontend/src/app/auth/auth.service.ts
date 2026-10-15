@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap } from 'rxjs';
-import { Router } from '@angular/router';
 import { apiUrl } from '../core/api-url';
+import { authNavigation } from './after-auth';
 import { AuthUser, LoginResponse, MeResponse } from './auth.models';
 import { FinanceService } from '../services/finance.service';
 import { createSigningKey, signChallenge, WrappedSigningKey } from '@vivek/auth';
@@ -12,7 +12,6 @@ import { VaultService } from '../crypto/vault.service';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
-  private router = inject(Router);
   private finance = inject(FinanceService);
   private vault = inject(VaultService);
   private userSubject = new BehaviorSubject<AuthUser | null>(null);
@@ -280,7 +279,7 @@ export class AuthService {
 
   private finishLogout(): void {
     this.clearLocalSession();
-    this.router.navigate(['/login']);
+    authNavigation.goToLogin(false);
   }
 }
 

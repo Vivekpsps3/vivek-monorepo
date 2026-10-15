@@ -11,8 +11,8 @@
 From the repo root:
 
 ```bash
-make install   # once
-make dev       # API + UI
+make install   # once: Finance, Travel, site Flask, and both Angular dependencies
+make dev       # Finance API + UI
 ```
 
 | URL | Purpose |
@@ -35,8 +35,12 @@ The UI calls the API at **`/api/...`** (see `environment.development.ts` `apiUrl
 See `make help`. Common:
 
 - `make backend` / `make frontend` — run one side only
-- `make test` — pytest + `ng test` (frontend needs a browser; set `CHROME_BIN` if ChromeHeadless is missing)
-- `cd frontend && npm run e2e` — Playwright smoke (start `make dev` first, or let Playwright reuse an existing dev server on :4200)
+- `make test` — Finance pytest + `ng test` (frontend needs a browser; set `CHROME_BIN` if ChromeHeadless is missing)
+- `make test-full` — Finance, Travel, and site backend suites; both Angular suites and builds; Docker build
+- `make travel-install` / `make site-install` — install one optional backend environment without `make install`
+- `make travel-test` / `make site-test` — run the corresponding Python backend suite
+- `make test-site-frontend` / `make build-site-frontend` — site browser tests and development build
+- `cd apps/finance/frontend && npm run e2e` — Playwright smoke (start `make dev` first, or let Playwright reuse an existing dev server on :4200)
 - `make docker-up` — full website on http://127.0.0.1:8080 with API private behind the web proxy (see [DEPLOY.md](./DEPLOY.md))
 - `make docker-down` / `make docker-logs` / `make docker-config` — common Docker operations
 - `make reset-db` — delete `apps/finance/backend/finance.db` only
@@ -115,6 +119,13 @@ See `.env.example` for the full template. Never commit your real `.env` file.
 make test-backend
 cd apps/finance/frontend && npx ng build --configuration development
 ```
+
+`make install` creates separate Python environments for Finance, Travel, and the
+site Flask backend, and installs npm dependencies for both Angular apps. To set
+up only the extra Python backends, run `make travel-install site-install`.
+`make test-full` expects those environments, both frontend dependency trees, and
+a ChromeHeadless-compatible browser; it runs all three backend suites, both
+Angular test suites and builds, and the Docker build.
 
 ## More docs
 

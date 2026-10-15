@@ -5,13 +5,23 @@ import { vaultGuard } from './crypto/vault.guard';
 
 export const routes: Routes = [
   {
+    path: 'auth/login',
+    title: 'Sign in',
+    loadComponent: () => import('./auth/login.component').then(m => m.LoginComponent),
+  },
+  {
+    path: 'auth/signup',
+    title: 'Create account',
+    loadComponent: () => import('./auth/signup.component').then(m => m.SignupComponent),
+  },
+  {
     path: 'login',
-    title: 'Sign in · Finance',
+    title: 'Sign in',
     loadComponent: () => import('./auth/login.component').then(m => m.LoginComponent),
   },
   {
     path: 'signup',
-    title: 'Sign up · Finance',
+    title: 'Create account',
     loadComponent: () => import('./auth/signup.component').then(m => m.SignupComponent),
   },
   {
@@ -30,6 +40,12 @@ export const routes: Routes = [
     title: 'Unlock vault · Finance',
     canActivate: [authGuard],
     loadComponent: () => import('./vault/vault-unlock.component').then(m => m.VaultUnlockComponent),
+  },
+  {
+    path: 'hub',
+    title: 'Hub',
+    canActivate: [authGuard],
+    loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent),
   },
   {
     path: 'embed',

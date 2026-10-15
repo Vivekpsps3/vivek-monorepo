@@ -1,9 +1,9 @@
 <main class="login-shell">
   <section class="auth-layout" aria-labelledby="signup-title">
     <div class="auth-intro">
-      <a class="brand-lockup" routerLink="/login">Finance</a>
+      <a class="brand-lockup" [href]="pageHref('login')">Account</a>
       <h1 id="signup-title">Create account</h1>
-      <p class="privacy-note">A lost passphrase cannot be reset or used to recover your encrypted data.</p>
+      <p class="privacy-note">This account signs in to your Hub, Finance, Travel, and Media. A lost passphrase cannot be reset or used to recover your encrypted finance data.</p>
     </div>
 
     <div class="login-panel">
@@ -31,7 +31,7 @@
             {{ loading ? 'Creating account' : 'Sign up' }}
           </ui-button>
         </form>
-        <a class="mode-link" routerLink="/login">Sign in</a>
+        <a class="mode-link" [href]="pageHref('login')">Sign in</a>
       </ui-card>
     </div>
   </section>

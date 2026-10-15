@@ -1,0 +1,252 @@
+"""Public metadata adapters. Personal listening and watching history is never sent."""
+
+import json
+import os
+from datetime import datetime, timedelta, timezone
+
+import httpx
+from sqlalchemy.orm import Session
+
+from models import ProviderCache, utc_now
+
+UA = "VivekMedia/1.0 (personal media journal)"
+TTL = timedelta(hours=24)
+
+
+def provider_status() -> dict[str, str]:
+    return {
+        "tmdb": "ok" if os.getenv("TMDB_API_KEY", "").strip() else "unconfigured",
+        "musicbrainz": "ok",
+        "openlibrary": "ok",
+        "rawg": "ok" if os.getenv("RAWG_API_KEY", "").strip() else "unconfigured",
+    }
+
+
+def search(db: Session, query: str, kind: str | None, client: httpx.Client | None = None) -> dict:
+    status = provider_status()
+    results = []
+    own_client = client is None
+    http = client or httpx.Client(timeout=4.0, headers={"User-Agent": UA, "Accept": "application/json"})
+    try:
+        jobs = []
+        if kind in (None, "", "movie", "tv"):
+            jobs.append(("tmdb", lambda: tmdb_search(http, query, kind)))
+        if kind in (None, "", "track", "album"):
+            jobs.append(("musicbrainz", lambda: musicbrainz_search(http, query, kind)))
+        if kind in (None, "", "book"):
+            jobs.append(("openlibrary", lambda: openlibrary_search(http, query)))
+        if kind in (None, "", "game"):
+            jobs.append(("rawg", lambda: rawg_search(http, query)))
+        for name, job in jobs:
+            if status[name] == "unconfigured":
+                continue
+            try:
+                results.extend(cached_call(db, f"{name}:{kind or 'all'}:{query.lower()}", job))
+                status[name] = "ok"
+            except Exception:
+                status[name] = "error"
+    finally:
+        if own_client:
+            http.close()
+    return {"query": query, "results": results[:40], "providers": status}
+
+
+def as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def cached_call(db: Session, key: str, job):
+    row = db.get(ProviderCache, key)
+    if row is not None and as_utc(row.fetched_at) >= datetime.now(timezone.utc) - TTL:
+        return json.loads(row.payload)
+    payload = job()
+    if row is None:
+        row = ProviderCache(cache_key=key, payload=json.dumps(payload), fetched_at=utc_now())
+        db.add(row)
+    else:
+        row.payload = json.dumps(payload)
+        row.fetched_at = utc_now()
+    db.flush()
+    return payload
+
+
+def tmdb_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
+    key = os.getenv("TMDB_API_KEY", "").strip()
+    if not key:
+        return []
+    kinds = ["movie", "tv"] if kind in (None, "") else [kind]
+    found = []
+    for media in kinds:
+        response = http.get(
+            f"https://api.themoviedb.org/3/search/{media}",
+            params={"query": query, "include_adult": "false", "api_key": key},
+        )
+        response.raise_for_status()
+        for item in response.json().get("results", [])[:8]:
+            poster = item.get("poster_path")
+            date_text = item.get("release_date") or item.get("first_air_date") or ""
+            year = int(date_text[:4]) if len(date_text) >= 4 and date_text[:4].isdigit() else None
+            creator = item.get("name") if media == "tv" else None
+            found.append({
+                "source": "tmdb",
+                "source_id": f"{media}:{item.get('id')}",
+                "kind": media,
+                "title": item.get("title") or item.get("name") or "Untitled",
+                "creator": creator,
+                "year": year,
+                "overview": (item.get("overview") or "")[:400],
+                "artwork_url": f"https://image.tmdb.org/t/p/w342{poster}" if poster else None,
+                "genres": [],
+                "external_ratings": tmdb_rating(item),
+                "extra": {},
+                "releases": release_from_day(date_text),
+                "episodes": [],
+            })
+    return found
+
+
+def tmdb_rating(item: dict) -> list[dict]:
+    value = item.get("vote_average")
+    if not isinstance(value, (int, float)) or value <= 0:
+        return []
+    return [{
+        "provider": "tmdb",
+        "label": "TMDB",
+        "value": round(float(value), 1),
+        "scale": "0–10",
+        "votes": item.get("vote_count") if isinstance(item.get("vote_count"), int) else None,
+    }]
+
+
+def release_from_day(text: str) -> list[dict]:
+    if len(text) >= 10:
+        return [{"released_on": text[:10], "precision": "day", "status": "scheduled"}]
+    return []
+
+
+def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
+    found = []
+    if kind in (None, "", "track"):
+        response = http.get(
+            "https://musicbrainz.org/ws/2/recording",
+            params={"query": query, "fmt": "json", "limit": 8},
+        )
+        response.raise_for_status()
+        for item in response.json().get("recordings", []):
+            artist = artist_name(item.get("artist-credit"))
+            found.append(music_result("track", item.get("id"), item.get("title"), artist, item.get("first-release-date")))
+    if kind in (None, "", "album"):
+        response = http.get(
+            "https://musicbrainz.org/ws/2/release",
+            params={"query": f"{query} AND primarytype:album", "fmt": "json", "limit": 8},
+        )
+        response.raise_for_status()
+        for item in response.json().get("releases", []):
+            artist = artist_name(item.get("artist-credit"))
+            mbid = item.get("id")
+            result = music_result("album", mbid, item.get("title"), artist, item.get("date"))
+            result["artwork_url"] = f"https://coverartarchive.org/release/{mbid}/front-250" if mbid else None
+            found.append(result)
+    return found
+
+
+def artist_name(credit) -> str | None:
+    if not isinstance(credit, list) or not credit:
+        return None
+    name = credit[0].get("name") or (credit[0].get("artist") or {}).get("name")
+    return name or None
+
+
+def music_result(kind: str, source_id: str | None, title: str | None, artist: str | None, released: str | None) -> dict:
+    year = int(released[:4]) if isinstance(released, str) and len(released) >= 4 and released[:4].isdigit() else None
+    precision = "day" if isinstance(released, str) and len(released) >= 10 else "year" if year else "unknown"
+    releases = []
+    if year:
+        releases.append({
+            "released_on": released[:10] if precision == "day" else f"{year}-01-01",
+            "precision": precision,
+            "status": "released",
+        })
+    return {
+        "source": "musicbrainz",
+        "source_id": source_id,
+        "kind": kind,
+        "title": title or "Untitled",
+        "creator": artist,
+        "year": year,
+        "overview": None,
+        "artwork_url": None,
+        "genres": [],
+        "external_ratings": [],
+        "extra": {},
+        "releases": releases,
+        "episodes": [],
+    }
+
+
+def openlibrary_search(http: httpx.Client, query: str) -> list[dict]:
+    response = http.get("https://openlibrary.org/search.json", params={"q": query, "limit": 8})
+    response.raise_for_status()
+    found = []
+    for item in response.json().get("docs", []):
+        work = (item.get("key") or "").removeprefix("/works/")
+        cover = item.get("cover_i")
+        year = item.get("first_publish_year")
+        authors = item.get("author_name") or []
+        found.append({
+            "source": "openlibrary",
+            "source_id": work or item.get("cover_edition_key"),
+            "kind": "book",
+            "title": item.get("title") or "Untitled",
+            "creator": authors[0] if authors else None,
+            "year": year if isinstance(year, int) else None,
+            "overview": None,
+            "artwork_url": f"https://covers.openlibrary.org/b/id/{cover}-M.jpg" if cover else None,
+            "genres": [],
+            "external_ratings": [],
+            "extra": {"pages": item.get("number_of_pages_median")},
+            "releases": [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}] if isinstance(year, int) else [],
+            "episodes": [],
+        })
+    return [item for item in found if item["source_id"]]
+
+
+def rawg_search(http: httpx.Client, query: str) -> list[dict]:
+    key = os.getenv("RAWG_API_KEY", "").strip()
+    if not key:
+        return []
+    response = http.get("https://api.rawg.io/api/games", params={"key": key, "search": query, "page_size": 8})
+    response.raise_for_status()
+    found = []
+    for item in response.json().get("results", []):
+        released = item.get("released") or ""
+        year = int(released[:4]) if len(released) >= 4 and released[:4].isdigit() else None
+        rating = item.get("rating")
+        ratings = []
+        if isinstance(rating, (int, float)) and rating > 0:
+            ratings.append({
+                "provider": "rawg",
+                "label": "RAWG",
+                "value": round(float(rating), 2),
+                "scale": "0–5",
+                "votes": item.get("ratings_count") if isinstance(item.get("ratings_count"), int) else None,
+            })
+        platforms = [row.get("platform", {}).get("name") for row in item.get("platforms") or [] if isinstance(row, dict)]
+        found.append({
+            "source": "rawg",
+            "source_id": str(item.get("id")),
+            "kind": "game",
+            "title": item.get("name") or "Untitled",
+            "creator": None,
+            "year": year,
+            "overview": None,
+            "artwork_url": item.get("background_image"),
+            "genres": [genre.get("name") for genre in item.get("genres") or [] if isinstance(genre, dict) and genre.get("name")],
+            "external_ratings": ratings,
+            "extra": {"platforms": [name for name in platforms if name]},
+            "releases": release_from_day(released) if len(released) >= 10 else [],
+            "episodes": [],
+        })
+    return found

@@ -11,7 +11,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { annualBasePayAt, jobCompensationBetween, stockSalesProceedsBetween } from '../utils/job-compensation.util';
-import { todayIsoDate } from '../utils/date.util';
+import { todayIsoDate } from '@vivek/browser';
 
 export function computeNetWorth(
   assets: Asset[],

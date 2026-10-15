@@ -75,6 +75,26 @@
 .topbar-actions { margin-left: auto; display: flex; gap: var(--space-2); flex-wrap: nowrap; align-items: center; }
 .topbar-actions > * { flex: 0 0 auto; white-space: nowrap; }
 .topbar-actions svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.theme-switch .btn {
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: var(--text-xs);
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+.theme-switch .btn[aria-pressed="true"] {
+  background: var(--card-bg);
+  color: var(--text);
+}
 
 .shell { padding: clamp(var(--space-6), 4vw, var(--space-10)) 0 var(--space-12); }
 .footer {
@@ -297,7 +317,7 @@ textarea { min-height: 96px; resize: vertical; }
     border-top: 1px solid var(--border-subtle);
   }
   .nav a { min-height: 38px; padding-inline: var(--space-3); }
-  .topbar-actions { margin-left: 0; justify-content: flex-end; gap: var(--space-1); flex-wrap: nowrap; }
+  .topbar-actions { margin-left: 0; justify-content: flex-end; gap: var(--space-1); flex-wrap: wrap; }
   .topbar-actions .btn { padding-inline: var(--space-3); }
   .metrics, .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .day { grid-template-columns: 1fr; }

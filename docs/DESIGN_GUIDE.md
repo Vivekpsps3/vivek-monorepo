@@ -67,7 +67,7 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 ## Chart Rules
 
 - Use Chart.js through existing chart utilities.
-- Use token-based colors from `apps/finance/frontend/src/theme/chart-colors.ts`.
+- Use the shared chart palette and Chart.js options from `packages/ui/src/chart-theme.ts`.
 - Every chart needs a meaningful empty state.
 - Every chart needs a nearby numeric summary. Do not add hover tooltips.
 - Cashflow charts show one monthly series: posted activity plus repeating pay and bills that are not already posted. Month links open Activity.
@@ -80,9 +80,14 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 
 ## Visual Style
 
-- Use a near-neutral light canvas (`#F7F7F5`), white surfaces, graphite text
-  (`#222522`), and a restrained evergreen accent (`#3F6658`). Dark mode uses
-  the same hierarchy with charcoal surfaces and a muted green accent.
+- Light mode is a cool paper surface (`#F4F6F8`), white cards, ink text
+  (`#14181D`), and a deep teal accent (`#0F6E6A`). Dark mode is a separate
+  quiet panel: `#0E1116` canvas, `#161B22` cards, luminous text, and a soft
+  teal accent (`#8FD0C8`). Do not invert one palette to invent the other.
+- Theme choices are System, Light, and Dark. System follows the operating
+  system and stays selected when the OS theme changes. The choice is stored
+  per app (`ft-theme` in Finance and the Hub, `travel-theme`, `media-theme`,
+  `vw-theme` on the public site) and applied before first paint.
 - Keep content width near 72rem. Use alignment, type, spacing, and thin dividers
   to establish hierarchy. Reserve bordered surfaces for related content and
   shadows for overlays.

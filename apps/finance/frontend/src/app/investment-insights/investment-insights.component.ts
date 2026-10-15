@@ -21,7 +21,7 @@ import {
   UiEmptyStateComponent,
   UiIconComponent,
   UiPageHeaderComponent,
-} from '../shared/ui';
+} from '@vivek/ui';
 import { totalPortfolioValue } from '../utils/portfolio.util';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import {
@@ -29,7 +29,7 @@ import {
   chartCartesianScales,
   chartLegendBottom,
   chartSuccessColor,
-} from '../../theme/chart-colors';
+} from '@vivek/ui';
 
 interface PeriodRow {
   label: string;

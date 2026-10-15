@@ -113,7 +113,7 @@
   </ui-card>
 </div>
 
-<ui-dialog [open]="showAssetModal" labelledBy="asset-modal-title" (closed)="closeModals()">
+<ui-dialog scrollTarget=".main-content" [open]="showAssetModal" labelledBy="asset-modal-title" (closed)="closeModals()">
   <h3 id="asset-modal-title">{{ editingAssetId ? 'Edit asset' : 'Add asset' }}</h3>
   <div class="sheet-form">
     <label>Name <input [(ngModel)]="assetForm.name" data-dialog-initial-focus /></label>
@@ -127,7 +127,7 @@
     </div>
   </div>
 </ui-dialog>
-<ui-dialog [open]="showLiabilityModal" labelledBy="liability-modal-title" (closed)="closeModals()">
+<ui-dialog scrollTarget=".main-content" [open]="showLiabilityModal" labelledBy="liability-modal-title" (closed)="closeModals()">
   <h3 id="liability-modal-title">{{ editingLiabilityId ? 'Edit liability' : 'Add liability' }}</h3>
   <div class="sheet-form">
     <label>Name <input [(ngModel)]="liabilityForm.name" data-dialog-initial-focus /></label>

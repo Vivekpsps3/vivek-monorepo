@@ -10,8 +10,9 @@
     </div>
     <div class="vivek-nav__end">
       <div class="vivek-nav__theme" role="group" aria-label="Color mode">
-        <button type="button" [class.on]="theme() === 'light'" [attr.aria-pressed]="theme() === 'light'" aria-label="Use light theme" (click)="setTheme('light')">Light</button>
-        <button type="button" [class.on]="theme() === 'dark'" [attr.aria-pressed]="theme() === 'dark'" aria-label="Use dark theme" (click)="setTheme('dark')">Dark</button>
+        <button type="button" [class.on]="choice() === 'system'" [attr.aria-pressed]="choice() === 'system'" aria-label="Use the system color theme" (click)="setTheme('system')">System</button>
+        <button type="button" [class.on]="choice() === 'light'" [attr.aria-pressed]="choice() === 'light'" aria-label="Use light theme" (click)="setTheme('light')">Light</button>
+        <button type="button" [class.on]="choice() === 'dark'" [attr.aria-pressed]="choice() === 'dark'" aria-label="Use dark theme" (click)="setTheme('dark')">Dark</button>
       </div>
     </div>
   </div>

@@ -1,5 +1,6 @@
 """Finance session checks. These tests do not call a live finance server."""
 
+import asyncio
 import httpx
 import pytest
 from fastapi import HTTPException
@@ -88,6 +89,65 @@ def test_finance_rejection_and_outage_map_to_travel_errors(monkeypatch):
     assert outage.value.status_code == 503
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        [],
+        {"user": None},
+        {"user": []},
+        {"user": {}},
+        {"user": {"id": "7"}},
+        {"user": {"id": 7.5}},
+        {"user": {"id": True}},
+        {"user": {"id": 0}},
+        {"user": {"id": -1}},
+        {"user": {"id": 7, "username": []}},
+        {"user": {"id": 7, "display_name": {}}},
+    ],
+)
+def test_malformed_finance_principal_responses_become_503(monkeypatch, payload):
+    from deps import fetch_principal
+
+    monkeypatch.setattr(httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, json=payload))
+    with pytest.raises(HTTPException) as unavailable:
+        fetch_principal(_request("GET"))
+    assert unavailable.value.status_code == 503
+
+
+def test_non_json_finance_principal_response_becomes_503(monkeypatch):
+    from deps import fetch_principal
+
+    monkeypatch.setattr(httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, content=b"not json"))
+    with pytest.raises(HTTPException) as unavailable:
+        fetch_principal(_request("GET"))
+    assert unavailable.value.status_code == 503
+
+
+def test_principal_checker_offloads_sync_work_and_accepts_async_checkers():
+    import threading
+
+    from deps import AuthResult, Principal, check_principal
+
+    async def exercise():
+        event_loop_thread = threading.get_ident()
+
+        def sync_checker(_request):
+            assert threading.get_ident() != event_loop_thread
+            return AuthResult(Principal(7, "vivek", "Vivek"), [])
+
+        sync_result = await check_principal(_request("GET"), sync_checker)
+        assert sync_result.principal.id == 7
+
+        async def async_checker(_request):
+            return AuthResult(Principal(8, "other", "Other"), [])
+
+        async_result = await check_principal(_request("GET"), async_checker)
+        assert async_result.principal.id == 8
+
+    asyncio.run(exercise())
+
+
 def test_mount_path_prefixes_browser_urls(client, monkeypatch):
     monkeypatch.setenv("TRAVEL_MOUNT_PATH", "/travel")
     page = client.get("/")
@@ -102,6 +162,13 @@ def test_direct_server_keeps_root_urls(client, monkeypatch):
     page = client.get("/")
     assert 'window.TRAVEL_ROOT = ""' in page.text
     assert "__TRAVEL_ROOT__" not in page.text
+    assert 'type="module"' in page.text
+
+
+def test_shared_browser_runtime_is_served_for_direct_and_mounted_imports(client):
+    response = client.get("/shared-browser/dom.mjs")
+    assert response.status_code == 200
+    assert "export function escapeHtml" in response.text
 
 
 def test_sliding_finance_cookies_reach_the_browser(client):

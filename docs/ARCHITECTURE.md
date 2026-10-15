@@ -1,6 +1,6 @@
 # Architecture (one page)
 
-Local-first personal finance: **Angular 19** UI, **FastAPI** API, **SQLite** persistence, app-native user accounts, and a browser-owned encrypted finance vault.
+Local-first personal finance: **Angular 21** UI, **FastAPI** API, **SQLite** persistence, app-native user accounts, and a browser-owned encrypted finance vault.
 
 ## Active API surface
 
@@ -33,6 +33,20 @@ These additions preserve the existing financial data planes:
 
 Current implementation status for fields and flows is documented in [DATA_MODEL.md](./DATA_MODEL.md) and [FRONTEND.md](./FRONTEND.md).
 
+## Shared packages
+
+`packages/` holds app-neutral reusable code. The source-only `@vivek/browser`
+package provides browser and crypto primitives; `@vivek/ui` provides generic
+Angular presentation components, services, theme preferences, and chart
+colors. Finance and site resolve these package APIs through their own TypeScript
+configuration and compile the shared source with the owning app. Travel serves
+the browser runtime from `packages/browser/runtime` to its static modules.
+Packages must
+not import app code, and one app must not import another app's source. Finance,
+Travel, and site routes, security policy, and domain behavior stay in their
+respective `apps/` directories. The `make test-fast` boundary check guards these
+rules.
+
 Tax document storage was removed. Do not add document vault/BLOB storage back without a fresh product/security decision.
 
 Recurring cashflow (job income, rent/utilities-style fixed expenses, subscriptions) is a budget/plan plane. It can appear in cashflow summaries and planning inputs but does **not** change assets, liabilities, holdings, or net worth. Planning spending estimates distinguish fixed, variable, and irregular annual amounts; ledger-derived suggestions require confirmed import coverage and explicit acceptance. Stock grants and dated valuations stay in the encrypted job record. Dated stock-sale proceeds count as cashflow when sold; compensation analysis is available from the Recurring hub and does not turn job valuation history into net worth or recurring income.
@@ -49,6 +63,7 @@ never the browser's calculation time. See [SECURITY_MODEL.md](./SECURITY_MODEL.m
 
 ```
 Browser (:4200 dev proxy, or :8080 Docker web)
+  -> /hub after sign-in, unless a deep link asked for a specific app
   -> login page / session cookie / CSRF token
   -> /api/*  ->  FastAPI app.py
         → routers: health, auth/admin, vault, market
@@ -57,13 +72,16 @@ Browser (:4200 dev proxy, or :8080 Docker web)
   → SQLite finance.db
 ```
 
+The Hub is a route in the finance Angular app because net worth exists only after the browser unlocks the vault. Travel (`/travel/api/summary`) and Media (`/media/api/summary`) expose small authenticated summaries. Those endpoints do not read the finance vault. The public portfolio site stays a separate app and is not part of the private Hub.
+
 Docker production-like topology:
 
 ```
 Browser/domain proxy
-  -> web (Nginx static Angular + /api reverse proxy)
-  -> api (FastAPI, private Compose network)
-  -> SQLite finance.db
+  -> web (Nginx: /hub and /finance/ from the Angular build, /api to finance, /travel/ and /media/)
+  -> api (FastAPI, private Compose network) -> finance.db
+  -> travel -> travel.db
+  -> media -> media.db
 ```
 
 ## Auth And Users

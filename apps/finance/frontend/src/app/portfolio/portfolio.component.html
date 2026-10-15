@@ -278,7 +278,7 @@
   </ui-card>
 </div>
 
-<ui-dialog [open]="showModal" labelledBy="holding-modal-title" (closed)="closeModal()">
+<ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="holding-modal-title" (closed)="closeModal()">
     <h3 id="holding-modal-title">{{ editingId ? 'Edit holding' : 'Add holding' }}</h3>
     <form class="holding-form" (ngSubmit)="addOrUpdateHolding()" #holdingForm="ngForm">
       <div class="form-row">
@@ -332,7 +332,7 @@
 </ui-dialog>
 
 <!-- Fidelity Import Modal -->
-<ui-dialog [open]="showFidelityImportModal" labelledBy="fidelity-import-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeFidelityImportModal()">
+<ui-dialog scrollTarget=".main-content" [open]="showFidelityImportModal" labelledBy="fidelity-import-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeFidelityImportModal()">
     <h3 id="fidelity-import-modal-title">Import from Fidelity (replaces positions)</h3>
     <div class="import-sheet">
 

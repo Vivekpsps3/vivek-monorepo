@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { continueAfterAuth } from '../auth/after-auth';
 import { AuthService } from '../auth/auth.service';
 import { VaultService } from '../crypto/vault.service';
-import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '../shared/ui';
+import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-vault-unlock',

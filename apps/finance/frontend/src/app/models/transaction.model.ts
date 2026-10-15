@@ -535,11 +535,3 @@ export interface MarketPriceQuote {
   quote_date?: string | null;
   valid: boolean;
 }
-
-export type ToastKind = 'success' | 'error' | 'info';
-
-export interface ToastPayload {
-  message: string;
-  kind: ToastKind;
-  undo?: () => void;
-}

@@ -1,16 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './services/theme.service';
-import { ToastService } from './services/toast.service';
-import { ConfirmDialogComponent } from './shared/confirm-dialog.component';
-import { UiButtonComponent } from '@vivek/ui';
-import { ToastPayload } from './models/transaction.model';
+import { ToastService, UiButtonComponent, UiConfirmDialogComponent, type ToastPayload } from '@vivek/ui';
 import { ReleaseFreshnessService } from './services/release-freshness.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, ConfirmDialogComponent, UiButtonComponent],
+  imports: [RouterOutlet, UiConfirmDialogComponent, UiButtonComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })

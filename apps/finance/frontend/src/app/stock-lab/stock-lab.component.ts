@@ -7,8 +7,8 @@ import { MarketResearchResponse, StockLabScenario } from '../models/stock-lab.mo
 import { FinanceService } from '../services/finance.service';
 import { MarketResearchService } from '../services/market-research.service';
 import { StockLabScenarioService } from '../services/stock-lab-scenario.service';
-import { ToastService } from '../services/toast.service';
-import { UiButtonComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '../shared/ui';
+import { ToastService } from '@vivek/ui';
+import { UiButtonComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
 import { buildScorecard, calculatePurchasePlan, calculateReturnPeriods, detectDividendCadence, trailingTwelveMonthDividend } from '../utils/stock-lab.util';
 import {
   EvidenceCard,

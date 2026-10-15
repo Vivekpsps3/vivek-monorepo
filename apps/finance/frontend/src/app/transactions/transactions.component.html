@@ -398,47 +398,47 @@
 </div>
 }
 
-<ui-dialog [open]="showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide tx-sheet" (closed)="closeImportModal()">
+<ui-dialog scrollTarget=".main-content" [open]="importWorkflow.showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide tx-sheet" (closed)="importWorkflow.closeImportModal()">
     <h3 id="import-modal-title">Import from bank</h3>
 
-    @if (importStep === 'upload') {
+    @if (importWorkflow.importStep === 'upload') {
       <div class="import-instructions">
         <strong>Import multiple bank CSVs</strong>
         <ol>
           <li>Export posted transactions as CSV from each bank.</li>
-          <li>Choose one or more files, then select the matching bank for each file. Supported banks: {{ supportedImporterNames }}.</li>
+          <li>Choose one or more files, then select the matching bank for each file. Supported banks: {{ importWorkflow.supportedImporterNames }}.</li>
           <li>Preview all files. Nothing is saved until you confirm selected rows.</li>
           <li>Check duplicates, transfers, card payments, refunds, and account labels before importing.</li>
         </ol>
       </div>
-      @if (activeImportReceiptId && reattachReceiptFilename) {
-        <p class="import-hint" role="status">Replacing the parse attempt for {{ reattachReceiptFilename }} in receipt #{{ activeImportReceiptId }}. Valid rows from other files in that receipt will be kept; choose the same bank and account for the corrected file.</p>
+      @if (importWorkflow.activeImportReceiptId && importWorkflow.reattachReceiptFilename) {
+        <p class="import-hint" role="status">Replacing the parse attempt for {{ importWorkflow.reattachReceiptFilename }} in receipt #{{ importWorkflow.activeImportReceiptId }}. Valid rows from other files in that receipt will be kept; choose the same bank and account for the corrected file.</p>
       }
       <div class="form-group">
         <label for="import-file">Add CSV files</label>
-        <input id="import-file" type="file" accept=".csv" multiple [disabled]="importParsing" (change)="onImportFileSelected($event)" />
+        <input id="import-file" type="file" accept=".csv" multiple [disabled]="importWorkflow.importParsing" (change)="onImportFileSelected($event)" />
       </div>
       <div class="import-file-list">
-        @for (entry of importFiles; track entry.id) {
+        @for (entry of importWorkflow.importFiles; track entry.id) {
           <div class="import-file-entry">
             <div class="import-file-heading">
               <strong class="file-name">{{ entry.file.name }}</strong>
-              <ui-button variant="ghost" size="sm" [disabled]="importParsing" (clicked)="removeImportFile(entry.id)">Remove {{ entry.file.name }}</ui-button>
+              <ui-button variant="ghost" size="sm" [disabled]="importWorkflow.importParsing" (clicked)="removeImportFile(entry.id)">Remove {{ entry.file.name }}</ui-button>
             </div>
             <ui-select
               [selectId]="'import-bank-' + entry.id"
               [label]="'Bank for ' + entry.file.name"
               [(value)]="entry.bank_slug"
               [options]="importBankSelectOptions"
-              [disabled]="importParsing"
-              (valueChange)="onImportBankSelectionChange(entry, $event)" />
-            @if (importBank(entry.bank_slug); as bank) {
+              [disabled]="importWorkflow.importParsing"
+              (valueChange)="importWorkflow.onImportBankSelectionChange(entry, $event)" />
+            @if (importWorkflow.importBank(entry.bank_slug); as bank) {
               <p class="import-hint">{{ bank.hint }}</p>
               <label class="form-group import-account-picker">
                 <span>Account identity for this file</span>
-                <select [value]="entry.bank_account_id || ''" [disabled]="importParsing" (change)="onImportAccountChange(entry, $any($event.target).value)">
+                <select [value]="entry.bank_account_id || ''" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onImportAccountChange(entry, $any($event.target).value)">
                   <option value="">Enter a new account identity…</option>
-                  @for (account of accountOptionsFor(entry); track account.id) {
+                  @for (account of importWorkflow.accountOptionsFor(entry); track account.id) {
                     <option [value]="account.id">{{ account.display_name }}</option>
                   }
                 </select>
@@ -446,13 +446,13 @@
               @if (!entry.bank_account_id) {
                 <label class="form-group import-account-picker">
                   <span>Account name</span>
-                  <input type="text" [(ngModel)]="entry.new_account_label" [name]="'account-label-' + entry.id" placeholder="e.g. Chase Sapphire" [disabled]="importParsing" (ngModelChange)="onNewAccountLabelChange(entry)" />
+                  <input type="text" [(ngModel)]="entry.new_account_label" [name]="'account-label-' + entry.id" placeholder="e.g. Chase Sapphire" [disabled]="importWorkflow.importParsing" (ngModelChange)="importWorkflow.onNewAccountLabelChange(entry)" />
                 </label>
               }
               @if (entry.account_key) {
                 <div class="import-legacy-mapping">
                   <label class="check-label">
-                    <input type="checkbox" [checked]="entry.map_legacy_account === true" [name]="'map-legacy-account-' + entry.id" [disabled]="importParsing" (change)="onLegacyAccountMappingChange(entry, $any($event.target).checked)" />
+                    <input type="checkbox" [checked]="entry.map_legacy_account === true" [name]="'map-legacy-account-' + entry.id" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onLegacyAccountMappingChange(entry, $any($event.target).checked)" />
                     Map matching legacy transactions to this account
                   </label>
                   <p class="import-hint">Matches only unassigned transactions from this bank with the same date, amount, and description. Other account identities stay separate.</p>
@@ -461,10 +461,10 @@
               <div class="import-coverage">
                 <strong>Statement coverage</strong>
                 <span>Coverage counts after you confirm the statement dates.</span>
-                <label>From <input type="date" [(ngModel)]="entry.coverage_start" [name]="'coverage-start-' + entry.id" [disabled]="importParsing" /></label>
-                <label>Through <input type="date" [(ngModel)]="entry.coverage_end" [name]="'coverage-end-' + entry.id" [disabled]="importParsing" /></label>
+                <label>From <input type="date" [(ngModel)]="entry.coverage_start" [name]="'coverage-start-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
+                <label>Through <input type="date" [(ngModel)]="entry.coverage_end" [name]="'coverage-end-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
                 <label class="check-label">
-                  <input type="checkbox" [(ngModel)]="entry.confirm_coverage" [name]="'coverage-confirm-' + entry.id" [disabled]="importParsing || !entry.coverage_start || !entry.coverage_end || entry.coverage_end < entry.coverage_start" />
+                  <input type="checkbox" [(ngModel)]="entry.confirm_coverage" [name]="'coverage-confirm-' + entry.id" [disabled]="importWorkflow.importParsing || !entry.coverage_start || !entry.coverage_end || entry.coverage_end < entry.coverage_start" />
                   I confirm these dates are the statement's covered period
                 </label>
               </div>
@@ -472,21 +472,21 @@
           </div>
         }
       </div>
-      @if (importError) {
-        <p class="import-error" role="alert">{{ importError }}</p>
+      @if (importWorkflow.importError) {
+        <p class="import-error" role="alert">{{ importWorkflow.importError }}</p>
       }
       <div class="form-actions">
-        <ui-button variant="primary" (clicked)="runImportPreview()" [disabled]="!canPreviewImport || importParsing">
-          {{ importParsing ? 'Preparing previews…' : 'Preview all files' }}
+        <ui-button variant="primary" (clicked)="importWorkflow.runImportPreview()" [disabled]="!importWorkflow.canPreviewImport || importWorkflow.importParsing">
+          {{ importWorkflow.importParsing ? 'Preparing previews…' : 'Preview all files' }}
         </ui-button>
-        <ui-button variant="secondary" (clicked)="closeImportModal()">Cancel</ui-button>
+        <ui-button variant="secondary" (clicked)="importWorkflow.closeImportModal()">Cancel</ui-button>
       </div>
     } @else {
       <p class="import-summary">
-        {{ importFiles.length }} file(s) · {{ importSummary.new }} new,
-        {{ importSummary.duplicate }} duplicate ({{ importSummary.total_parsed }} parsed).
-        {{ importSummary.skipped }} skipped; {{ importSummary.errors }} row(s) need fixing.
-        Selected {{ selectedImportCount }} · ${{ selectedImportExpenseTotal | number: '1.2-2' }}.
+        {{ importWorkflow.importFiles.length }} file(s) · {{ importWorkflow.importSummary.new }} new,
+        {{ importWorkflow.importSummary.duplicate }} duplicate ({{ importWorkflow.importSummary.total_parsed }} parsed).
+        {{ importWorkflow.importSummary.skipped }} skipped; {{ importWorkflow.importSummary.errors }} row(s) need fixing.
+        Selected {{ importWorkflow.selectedImportCount }} · ${{ importWorkflow.selectedImportExpenseTotal | number: '1.2-2' }}.
       </p>
       <p class="import-hint">Duplicates include transactions already saved and overlapping rows across these files. Files with errors stay listed below; valid rows can still be imported.</p>
       @if (importReceipts.length > 0) {
@@ -505,26 +505,26 @@
               </div>
               <div class="import-history-actions">
                 @if (receipt.status === 'staged' || receipt.status === 'partial' || receipt.status === 'undoing') {
-                  <ui-button variant="secondary" size="sm" (clicked)="resumeImport(receipt)">Resume</ui-button>
+                  <ui-button variant="secondary" size="sm" (clicked)="importWorkflow.resumeImport(receipt)">Resume</ui-button>
                 }
                 @if (receipt.status !== 'withdrawn') {
-                  <ui-button variant="danger" size="sm" (clicked)="undoImport(receipt)">Undo</ui-button>
+                  <ui-button variant="danger" size="sm" (clicked)="importWorkflow.undoImport(receipt)">Undo</ui-button>
                 }
               </div>
             </div>
           }
         </details>
       }
-      @if (importError) {
-        <p class="import-error" role="alert">{{ importError }}</p>
+      @if (importWorkflow.importError) {
+        <p class="import-error" role="alert">{{ importWorkflow.importError }}</p>
       }
       <div class="import-preview-actions">
-        <ui-button variant="secondary" size="sm" [disabled]="importCommitting" (clicked)="selectAllNewImportRows()">Select all new</ui-button>
-        <ui-button variant="ghost" size="sm" [disabled]="importCommitting" (clicked)="clearImportSelection()">Clear selection</ui-button>
+        <ui-button variant="secondary" size="sm" [disabled]="importWorkflow.importCommitting" (clicked)="importWorkflow.selectAllNewImportRows()">Select all new</ui-button>
+        <ui-button variant="ghost" size="sm" [disabled]="importWorkflow.importCommitting" (clicked)="importWorkflow.clearImportSelection()">Clear selection</ui-button>
       </div>
-      @for (entry of importPreviews; track entry.id) {
+      @for (entry of importWorkflow.importPreviews; track entry.id) {
         <section class="import-file-preview" [attr.aria-label]="entry.filename + ' preview'">
-          <h4>{{ entry.filename }} · {{ importBank(entry.bank_slug)?.name }}</h4>
+          <h4>{{ entry.filename }} · {{ importWorkflow.importBank(entry.bank_slug)?.name }}</h4>
           @if (entry.error) {
             <p class="import-error" role="alert">{{ entry.error }}</p>
           }
@@ -546,10 +546,10 @@
                 </thead>
                 <tbody>
                   @for (row of preview.rows; track $index) {
-                    <tr [class.duplicate-row]="row.status === 'duplicate'" [class.classification-row]="row.kind === 'ambiguous_credit'" (click)="toggleImportRow(row)">
+                    <tr [class.duplicate-row]="row.status === 'duplicate'" [class.classification-row]="row.kind === 'ambiguous_credit'" (click)="importWorkflow.toggleImportRow(row)">
                       <td>
                         @if (row.status !== 'duplicate') {
-                          <input type="checkbox" [checked]="isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importCommitting || row.kind === 'ambiguous_credit'" (change)="toggleImportRow(row)" />
+                          <input type="checkbox" [checked]="importWorkflow.isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importWorkflow.importCommitting || row.kind === 'ambiguous_credit'" (change)="importWorkflow.toggleImportRow(row)" />
                         }
                       </td>
                       <td>{{ row.date }}</td>
@@ -558,7 +558,7 @@
                       <td>
                         <input type="text" [(ngModel)]="row.merchant" [name]="'merchant-' + entry.id + '-' + $index" placeholder="Merchant" aria-label="Merchant name" (click)="$event.stopPropagation()" />
                         @if (!row.merchant && row.merchant_suggestion) {
-                          <button type="button" class="suggestion-button" (click)="$event.stopPropagation(); useMerchantSuggestion(row)">Use {{ row.merchant_suggestion }}</button>
+                          <button type="button" class="suggestion-button" (click)="$event.stopPropagation(); importWorkflow.useMerchantSuggestion(row)">Use {{ row.merchant_suggestion }}</button>
                         }
                       </td>
                       <td>{{ row.description }}</td>
@@ -567,7 +567,7 @@
                         @if (row.status === 'review') {
                           <label class="form-group import-classification">
                             <span>Classify credit</span>
-                            <select [value]="row.kind" (click)="$event.stopPropagation()" (change)="$event.stopPropagation(); setImportKind(row, $any($event.target).value)">
+                            <select [value]="row.kind" (click)="$event.stopPropagation()" (change)="$event.stopPropagation(); importWorkflow.setImportKind(row, $any($event.target).value)">
                               <option value="ambiguous_credit">Choose…</option>
                               <option value="purchase">Purchase</option>
                               <option value="refund">Refund</option>
@@ -622,26 +622,26 @@
         </section>
       }
       <div class="form-actions">
-        <ui-button variant="secondary" [disabled]="importCommitting" (clicked)="backToImportFiles()">Back</ui-button>
-        <ui-button variant="primary" (clicked)="commitImport()" [disabled]="importCommitting || !canSaveImport">
-          {{ importCommitting ? 'Saving…' : importActionLabel }}
+        <ui-button variant="secondary" [disabled]="importWorkflow.importCommitting" (clicked)="importWorkflow.backToImportFiles()">Back</ui-button>
+        <ui-button variant="primary" (clicked)="importWorkflow.commitImport()" [disabled]="importWorkflow.importCommitting || !importWorkflow.canSaveImport">
+          {{ importWorkflow.importCommitting ? 'Saving…' : importWorkflow.importActionLabel }}
         </ui-button>
-        <ui-button variant="secondary" [disabled]="importCommitting" (clicked)="closeImportModal()">Cancel</ui-button>
+        <ui-button variant="secondary" [disabled]="importWorkflow.importCommitting" (clicked)="importWorkflow.closeImportModal()">Cancel</ui-button>
       </div>
     }
 </ui-dialog>
 
-<ui-dialog [open]="showModal" labelledBy="tx-modal-title" panelClass="tx-sheet" (closed)="closeModal()">
-    <h3 id="tx-modal-title">{{ editingTxId ? 'Edit transaction' : 'Add transaction' }}</h3>
-    <form (ngSubmit)="saveTransaction()" #txForm="ngForm">
+<ui-dialog scrollTarget=".main-content" [open]="transactionEditor.showModal" labelledBy="tx-modal-title" panelClass="tx-sheet" (closed)="transactionEditor.closeModal()">
+    <h3 id="tx-modal-title">{{ transactionEditor.editingTxId ? 'Edit transaction' : 'Add transaction' }}</h3>
+    <form (ngSubmit)="transactionEditor.saveTransaction()" #txForm="ngForm">
       <div class="form-row">
         <div class="form-group">
           <label for="tx-date">Date</label>
-          <input id="tx-date" type="date" [(ngModel)]="newTx.date" name="date" required data-dialog-initial-focus />
+          <input id="tx-date" type="date" [(ngModel)]="transactionEditor.newTx.date" name="date" required data-dialog-initial-focus />
         </div>
         <div class="form-group">
           <label for="tx-type">Type</label>
-          <select id="tx-type" [(ngModel)]="newTx.type" name="type">
+          <select id="tx-type" [(ngModel)]="transactionEditor.newTx.type" name="type">
             <option value="income">Income</option>
             <option value="expense">Expense</option>
           </select>
@@ -650,25 +650,25 @@
       <div class="form-row">
         <div class="form-group">
           <label for="tx-category">Category</label>
-          <input id="tx-category" type="text" [(ngModel)]="newTx.category" name="category" required />
+          <input id="tx-category" type="text" [(ngModel)]="transactionEditor.newTx.category" name="category" required />
         </div>
         <div class="form-group">
           <label for="tx-amount">Amount</label>
-          <input id="tx-amount" type="number" [(ngModel)]="newTx.amount" name="amount" step="0.01" min="0.01" required />
+          <input id="tx-amount" type="number" [(ngModel)]="transactionEditor.newTx.amount" name="amount" step="0.01" min="0.01" required />
         </div>
       </div>
       <div class="form-group">
         <label for="tx-desc">Description (optional)</label>
-        <input id="tx-desc" type="text" [(ngModel)]="newTx.description" name="description" [readonly]="editingImported" />
+        <input id="tx-desc" type="text" [(ngModel)]="transactionEditor.newTx.description" name="description" [readonly]="transactionEditor.editingImported" />
       </div>
       <div class="form-row">
         <div class="form-group">
           <label for="tx-merchant">Merchant (optional)</label>
-          <input id="tx-merchant" type="text" [(ngModel)]="newTx.merchant" name="merchant" list="merchant-options" />
+          <input id="tx-merchant" type="text" [(ngModel)]="transactionEditor.newTx.merchant" name="merchant" list="merchant-options" />
         </div>
         <div class="form-group">
           <label for="tx-kind">Activity kind</label>
-          <select id="tx-kind" [(ngModel)]="newTx.kind" name="kind">
+          <select id="tx-kind" [(ngModel)]="transactionEditor.newTx.kind" name="kind">
             <option [ngValue]="undefined">Use income / expense</option>
             <option value="ambiguous_credit">Credit type needed</option>
             <option value="purchase">Purchase</option>
@@ -680,8 +680,8 @@
         </div>
       </div>
       <div class="form-actions">
-        <ui-button type="submit" variant="primary" [disabled]="!txForm.form.valid || saving">Save</ui-button>
-        <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
+        <ui-button type="submit" variant="primary" [disabled]="!txForm.form.valid || transactionEditor.saving">Save</ui-button>
+        <ui-button variant="secondary" (clicked)="transactionEditor.closeModal()">Cancel</ui-button>
       </div>
     </form>
 </ui-dialog>

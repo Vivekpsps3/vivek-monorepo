@@ -16,7 +16,7 @@ import { FixedExpense, Holding, JobIncome, Subscription, Transaction } from '../
 import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '../crypto/client-finance';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
-import { UiCardComponent, UiEmptyStateComponent } from '../shared/ui';
+import { UiCardComponent, UiEmptyStateComponent } from '@vivek/ui';
 import {
   chartColorAt,
   chartCartesianScales,
@@ -24,7 +24,7 @@ import {
   chartSuccessColor,
   chartDangerColor,
   chartAccentColor,
-} from '../../theme/chart-colors';
+} from '@vivek/ui';
 type ChartConstructor = new (
   item: ChartItem,
   config: unknown

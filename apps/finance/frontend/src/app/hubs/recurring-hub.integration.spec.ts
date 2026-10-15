@@ -5,8 +5,8 @@ import { BehaviorSubject, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { RecurringHubComponent } from './recurring-hub.component';
 import { FinanceService } from '../services/finance.service';
-import { ConfirmService } from '../services/confirm.service';
-import { ToastService } from '../services/toast.service';
+import { ConfirmService } from '@vivek/ui';
+import { ToastService } from '@vivek/ui';
 import { FixedExpense, Subscription } from '../models/transaction.model';
 
 describe('RecurringHubComponent editor handoff', () => {

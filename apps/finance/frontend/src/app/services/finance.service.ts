@@ -19,6 +19,8 @@ import {
 } from 'rxjs';
 import { apiUrl } from '../core/api-url';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
+import { FinanceImportService } from './finance-import.service';
+import { FinanceMarketCoordinator } from './finance-market-coordinator';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import {
@@ -55,22 +57,7 @@ import {
   Transaction,
   TransactionCreate,
 } from '../models/transaction.model';
-import {
-  buildBankImportPreview,
-  buildBankImportPreviews,
-  commitBankImportRows,
-  listClientBankImports,
-  resumeBankImportReceipt,
-} from '../utils/bank-import.util';
-import {
-  buildFidelityImportPreview,
-  commitFidelityImportRows,
-  getResumableFidelityStages,
-  listClientBrokerageImports,
-  resumeFidelityImportStage as resumeStagedFidelityImport,
-  BrokerageAccountRecord,
-  FidelityStageRecord,
-} from '../utils/fidelity-import.util';
+import { BrokerageAccountRecord, FidelityStageRecord } from '../utils/fidelity-import.util';
 
 export type DashboardLoadResult = [
   Transaction[],
@@ -126,12 +113,24 @@ export class FinanceService {
   isLoading$ = this.isLoading.asObservable();
 
   private dashboardLoad$: Observable<DashboardLoadResult> | null = null;
+  private market: FinanceMarketCoordinator;
 
   constructor(
     private http: HttpClient,
     private vault: VaultService,
-    private encStore: EncryptedStoreService
+    private encStore: EncryptedStoreService,
+    private financeImports: FinanceImportService
   ) {
+    this.market = new FinanceMarketCoordinator(this.encStore, {
+      sessionToken: () => this.encStore.sessionToken,
+      dataEpoch: collections => this.dataEpoch(collections),
+      publishHoldings: rows => this._holdings.next(rows),
+      publishJobIncomes: rows => this._jobIncomes.next(rows),
+      afterQuoteChanges: () => {
+        this.invalidateDashboardCache();
+        this.refreshDerivedMetrics();
+      },
+    });
     this.encStore.changes$?.subscribe(change => {
       this.snapshotEpoch += 1;
       this.bumpCollectionEpoch(change.collection);
@@ -160,88 +159,16 @@ export class FinanceService {
     return `${this.encStore.sessionToken}::${versions}`;
   }
 
-  async getConfiguredMarketSymbols(): Promise<string[]> {
-    const [holdings, jobs] = await Promise.all([
-      this.encStore.getHoldings(),
-      this.encStore.getJobIncomes(),
-    ]);
-    const symbols = [
-      ...holdings.map(row => row.symbol),
-      ...jobs.map(row => row.stock_symbol || ''),
-    ].map(value => value.trim().toUpperCase()).filter(value => /^[A-Z][A-Z0-9.-]*$/.test(value));
-    return [...new Set(symbols)].sort();
+  getConfiguredMarketSymbols(): Promise<string[]> {
+    return this.market.getConfiguredSymbols();
   }
 
-  async applyMarketQuoteForSymbol(
+  applyMarketQuoteForSymbol(
     symbol: string,
     quote: MarketPriceQuote,
     expectedSessionToken: number
   ): Promise<MarketQuoteApplyResult> {
-    const requested = symbol.trim().toUpperCase();
-    this.assertUsableMarketQuote(quote, requested);
-    if (expectedSessionToken !== this.encStore.sessionToken) throw new Error('Vault session changed');
-    const [holdings, jobs] = await Promise.all([
-      this.encStore.getHoldings(),
-      this.encStore.getJobIncomes(),
-    ]);
-    if (expectedSessionToken !== this.encStore.sessionToken) throw new Error('Vault session changed');
-    const holdingTargets = holdings.filter(row => row.symbol.trim().toUpperCase() === requested);
-    const jobTargets = jobs.filter(row => row.stock_symbol?.trim().toUpperCase() === requested);
-    let holdingsUpdated = 0;
-    let employerValuationsUpdated = 0;
-    const failedRecords: string[] = [];
-    await Promise.all([
-      ...holdingTargets.map(async row => {
-        try {
-          await this.encStore.updateHoldingPrice(row.id, quote, expectedSessionToken);
-          holdingsUpdated += 1;
-        } catch (error) {
-          if (expectedSessionToken !== this.encStore.sessionToken) throw error;
-          failedRecords.push(`holding ${row.id}`);
-        }
-      }),
-      ...jobTargets.map(async row => {
-        try {
-          await this.encStore.updateJobIncomeMarketQuote(row.id, requested, quote, expectedSessionToken);
-          employerValuationsUpdated += 1;
-        } catch (error) {
-          if (expectedSessionToken !== this.encStore.sessionToken) throw error;
-          failedRecords.push(`employer valuation ${row.id}`);
-        }
-      }),
-    ]);
-    if (expectedSessionToken !== this.encStore.sessionToken) throw new Error('Vault session changed');
-    const changedCollections: EncryptedCollection[] = [];
-    const holdingsEpoch = this.dataEpoch(['holdings']);
-    const incomesEpoch = this.dataEpoch(['job_incomes']);
-    if (holdingsUpdated) {
-      const latest = await this.encStore.getHoldings();
-      if (holdingsEpoch === this.dataEpoch(['holdings']) && expectedSessionToken === this.encStore.sessionToken) this._holdings.next(latest);
-      changedCollections.push('holdings');
-    }
-    if (employerValuationsUpdated) {
-      const latest = await this.encStore.getJobIncomes();
-      if (incomesEpoch === this.dataEpoch(['job_incomes']) && expectedSessionToken === this.encStore.sessionToken) this._jobIncomes.next(latest);
-      changedCollections.push('job_incomes');
-    }
-    if (changedCollections.length) {
-      this.invalidateDashboardCache();
-      this.refreshDerivedMetrics();
-    }
-    return { holdingsUpdated, employerValuationsUpdated, failedRecords };
-  }
-
-  private assertUsableMarketQuote(quote: MarketPriceQuote, requestedSymbol: string): void {
-    const date = quote?.quote_date || '';
-    if (!quote?.valid || quote.symbol?.trim().toUpperCase() !== requestedSymbol) {
-      throw new Error('Market quote did not match the requested ticker.');
-    }
-    if (!Number.isFinite(quote.price) || quote.price <= 0) {
-      throw new Error('Market quote price must be a positive finite number.');
-    }
-    if (!isValidMarketDate(date) || date > new Date().toISOString().slice(0, 10)) {
-      throw new Error('Market quote has an invalid or future trading date.');
-    }
+    return this.market.applyQuoteForSymbol(symbol, quote, expectedSessionToken);
   }
 
   /** Replaces only clean encrypted snapshots after another tab reports a scoped invalidation. */
@@ -787,44 +714,23 @@ export class FinanceService {
   }
 
   getImportBanks(): Observable<BankImportOption[]> {
-    return of(listClientBankImports());
+    return of(this.financeImports.listBanks());
   }
 
   previewBankImport(bankSlug: string, file: File): Observable<ImportPreviewResult> {
-    return from(
-      (async () => {
-        const [content, transactions] = await Promise.all([
-          file.text(),
-          this.encStore.getTransactions(),
-        ]);
-        const existing = new Set(
-          transactions.map(tx => String((tx as Transaction & { dedupe_key?: string }).dedupe_key || '')).filter(Boolean)
-        );
-        return buildBankImportPreview(bankSlug, file.name, content, existing);
-      })()
-    );
+    return from(this.financeImports.previewBank(bankSlug, file));
   }
 
   previewBankImports(files: BankImportFile[]): Observable<BankImportFilePreview[]> {
-    return from((async () => {
-      const transactions = await this.encStore.getTransactions();
-      const existing = new Set(
-        transactions.map(tx => String((tx as Transaction & { dedupe_key?: string }).dedupe_key || '')).filter(Boolean)
-      );
-      const legacy = new Set(transactions
-        .filter(tx => tx.source === 'import' && !tx.bank_account_key)
-        .map(tx => String((tx as Transaction & { dedupe_key?: string }).dedupe_key || ''))
-        .filter(Boolean));
-      return buildBankImportPreviews(files, existing, legacy);
-    })());
+    return from(this.financeImports.previewBanks(files));
   }
 
   getBankAccounts(): Observable<BankAccountRecord[]> {
-    return from(this.encStore.getBankAccounts());
+    return from(this.financeImports.getBankAccounts());
   }
 
   getImportReceipts(): Observable<ImportReceipt[]> {
-    return from(this.encStore.getImportReceipts());
+    return from(this.financeImports.getReceipts());
   }
 
   commitBankImports(
@@ -839,15 +745,15 @@ export class FinanceService {
       confirmed_bank_accounts?: Array<Omit<BankAccountRecord, 'id'> & { id?: number }>;
     }
   ): Observable<ImportCommitResult> {
-    return from(commitBankImportRows(this.encStore, rows, context)).pipe(tap(() => this.refreshAfterImport()));
+    return from(this.financeImports.commitBanks(rows, context)).pipe(tap(() => this.refreshAfterImport()));
   }
 
   resumeBankImport(receiptId: number): Observable<ImportCommitResult> {
-    return from(resumeBankImportReceipt(this.encStore, receiptId)).pipe(tap(() => this.refreshAfterImport()));
+    return from(this.financeImports.resumeBankReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
   }
 
   undoBankImport(receiptId: number): Observable<{ removed: number; edited: number; missing: number }> {
-    return from(this.encStore.undoImportReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
+    return from(this.financeImports.undoBankReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
   }
 
   commitBankImport(
@@ -855,17 +761,15 @@ export class FinanceService {
     _filename: string,
     rows: ImportPreviewRow[]
   ): Observable<ImportCommitResult> {
-    return from(commitBankImportRows(this.encStore, rows)).pipe(
-      tap(() => this.refreshAfterImport())
-    );
+    return from(this.financeImports.commitBank(rows)).pipe(tap(() => this.refreshAfterImport()));
   }
 
   getBrokerageImports(): Observable<FidelityImportOption[]> {
-    return of(listClientBrokerageImports());
+    return of(this.financeImports.listBrokerages());
   }
 
   previewFidelityImport(file: File): Observable<FidelityPreviewResult> {
-    return from(file.text().then(content => buildFidelityImportPreview(file.name, content)));
+    return from(this.financeImports.previewFidelity(file));
   }
 
   commitFidelityImport(
@@ -873,7 +777,7 @@ export class FinanceService {
     rows: FidelityPreviewRow[],
     selectedAccountMasks?: string[],
   ): Observable<FidelityCommitResult> {
-    return from(commitFidelityImportRows(this.encStore, rows, selectedAccountMasks, filename)).pipe(
+    return from(this.financeImports.commitFidelity(filename, rows, selectedAccountMasks)).pipe(
       tap(() => {
         this.invalidateDashboardCache();
         this.getHoldings().pipe(take(1)).subscribe();
@@ -883,15 +787,15 @@ export class FinanceService {
   }
 
   getBrokerageAccounts(): Observable<BrokerageAccountRecord[]> {
-    return from(this.encStore.getBrokerageAccounts());
+    return from(this.financeImports.getBrokerageAccounts());
   }
 
   getHoldingImportStages(): Observable<FidelityStageRecord[]> {
-    return from(getResumableFidelityStages(this.encStore));
+    return from(this.financeImports.getHoldingStages());
   }
 
   resumeFidelityImportStage(stageId: number): Observable<FidelityCommitResult> {
-    return from(resumeStagedFidelityImport(this.encStore, stageId)).pipe(
+    return from(this.financeImports.resumeHoldingStage(stageId)).pipe(
       tap(() => {
         this.invalidateDashboardCache();
         this.getHoldings().pipe(take(1)).subscribe();
@@ -901,7 +805,7 @@ export class FinanceService {
   }
 
   setAccountNickname(accountId: number, nickname: string | null): Observable<unknown> {
-    return from(this.encStore.setBrokerageAccountNickname(accountId, nickname)).pipe(
+    return from(this.financeImports.setAccountNickname(accountId, nickname)).pipe(
       tap(() => {
         this.invalidateDashboardCache();
         this.getHoldings().pipe(take(1)).subscribe();
@@ -909,10 +813,5 @@ export class FinanceService {
       })
     );
   }
-}
 
-function isValidMarketDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

@@ -187,7 +187,7 @@
   </ui-card>
 </div>
 
-<ui-dialog [open]="showModal" labelledBy="income-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeModal()">
+<ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="income-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeModal()">
       <h3 id="income-modal-title">{{ editingId ? 'Edit job' : 'Add job' }}</h3>
       <form (ngSubmit)="saveIncome()" #incomeForm="ngForm">
         <div class="form-row">

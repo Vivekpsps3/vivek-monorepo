@@ -11,25 +11,30 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { EMPTY, Subject, Subscription, catchError, debounceTime, filter, forkJoin, of, startWith, switchMap, takeUntil } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
+import { TransactionsImportWorkflow } from './transactions-import-workflow';
+import { TransactionsEditorWorkflow } from './transactions-editor-workflow';
+import {
+  filterTransactionActivity,
+  paginateTransactionActivity,
+  sortTransactionActivity,
+  transactionActivityTotals,
+} from './transactions-activity-query';
 import { transactionEffects } from '../crypto/client-finance';
 import {
   BankImportOption,
   BankAccountRecord,
-  ImportCommitResult,
   BankImportFile,
   BankImportFilePreview,
   ImportPreviewRow,
   ImportReceipt,
-  ImportRowNote,
   Transaction,
   TransactionCreate,
 } from '../models/transaction.model';
-import { ToastService } from '../services/toast.service';
-import { ConfirmService } from '../services/confirm.service';
-import { todayIsoDate } from '../utils/date.util';
-import { downloadCsv } from '../utils/export.util';
+import { ToastService } from '@vivek/ui';
+import { ConfirmService } from '@vivek/ui';
+import { downloadCsv } from '@vivek/browser';
 import {
   normalizeSpendingLabel,
   spendingGroupKey,
@@ -48,7 +53,7 @@ import {
   UiSelectOption,
   UiDataTableComponent,
   UiDialogComponent,
-} from '../shared/ui';
+} from '@vivek/ui';
 
 @Component({
   selector: 'app-transactions',
@@ -69,6 +74,7 @@ import {
   templateUrl: './transactions.component.html',
   styleUrl: './transactions.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [TransactionsImportWorkflow, TransactionsEditorWorkflow],
 })
 export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   readonly transactionEffects = transactionEffects;
@@ -91,34 +97,43 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   /** YYYY-MM — drives monthly totals on this page */
   summaryMonth = this.currentMonthKey();
 
-  showModal = false;
-  showImportModal = false;
-  importBanks: BankImportOption[] = [];
-  bankAccounts: BankAccountRecord[] = [];
-  importReceipts: ImportReceipt[] = [];
-
+  get showModal(): boolean { return this.transactionEditor.showModal; }
+  set showModal(value: boolean) { this.transactionEditor.showModal = value; }
+  get newTx(): TransactionCreate { return this.transactionEditor.newTx; }
+  set newTx(value: TransactionCreate) { this.transactionEditor.newTx = value; }
+  get editingTxId(): number | null { return this.transactionEditor.editingTxId; }
+  get editingImported(): boolean { return this.transactionEditor.editingImported; }
+  get saving(): boolean { return this.transactionEditor.saving; }
+  get transactionSaveError(): string { return this.transactionEditor.transactionSaveError; }
+  get showImportModal(): boolean { return this.importWorkflow.showImportModal; }
+  set showImportModal(value: boolean) { this.importWorkflow.showImportModal = value; }
+  get importBanks(): BankImportOption[] { return this.importWorkflow.importBanks; }
+  set importBanks(value: BankImportOption[]) { this.importWorkflow.importBanks = value; }
+  get bankAccounts(): BankAccountRecord[] { return this.importWorkflow.bankAccounts; }
+  set bankAccounts(value: BankAccountRecord[]) { this.importWorkflow.bankAccounts = value; }
+  get importReceipts(): ImportReceipt[] { return this.importWorkflow.importReceipts; }
+  set importReceipts(value: ImportReceipt[]) { this.importWorkflow.importReceipts = value; }
   get importBankSelectOptions(): UiSelectOption[] {
     return [{ value: '', label: 'Select bank' }, ...this.importBanks.map(b => ({ value: b.slug, label: b.name }))];
   }
-  importStep: 'upload' | 'preview' = 'upload';
-  importFiles: BankImportFile[] = [];
-  importPreviews: BankImportFilePreview[] = [];
-  private nextImportFileId = 1;
-  private importPreviewRequest?: Subscription;
-  importSelected = new Set<string>();
-  importParsing = false;
-  importCommitting = false;
-  importError = '';
-  saving = false;
-  transactionSaveError = '';
+  get importStep(): 'upload' | 'preview' { return this.importWorkflow.importStep; }
+  set importStep(value: 'upload' | 'preview') { this.importWorkflow.importStep = value; }
+  get importFiles(): BankImportFile[] { return this.importWorkflow.importFiles; }
+  set importFiles(value: BankImportFile[]) { this.importWorkflow.importFiles = value; }
+  get importPreviews(): BankImportFilePreview[] { return this.importWorkflow.importPreviews; }
+  set importPreviews(value: BankImportFilePreview[]) { this.importWorkflow.importPreviews = value; }
+  get importSelected(): Set<string> { return this.importWorkflow.importSelected; }
+  get importParsing(): boolean { return this.importWorkflow.importParsing; }
+  get importCommitting(): boolean { return this.importWorkflow.importCommitting; }
+  get importError(): string { return this.importWorkflow.importError; }
+  set importError(value: string) { this.importWorkflow.importError = value; }
+  get activeImportReceiptId(): number | null { return this.importWorkflow.activeImportReceiptId; }
+  set activeImportReceiptId(value: number | null) { this.importWorkflow.activeImportReceiptId = value; }
+  get reattachReceiptFilename(): string | null { return this.importWorkflow.reattachReceiptFilename; }
+  set reattachReceiptFilename(value: string | null) { this.importWorkflow.reattachReceiptFilename = value; }
   loading = false;
   listError = '';
-  newTx: TransactionCreate = this.emptyTx();
-  editingTxId: number | null = null;
-  editingImported = false;
-  activeImportReceiptId: number | null = null;
   reattachReceiptId: number | null = null;
-  reattachReceiptFilename: string | null = null;
   selectedCalendarDate: string | null = null;
 
   monthExpenseTotal = 0;
@@ -137,7 +152,6 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   listLoading = false;
 
   private destroy$ = new Subject<void>();
-  private importContextRefresh$ = new Subject<void>();
   private allTransactionsLoaded = false;
   private queryInitialized = false;
   private lastDeepLinkedEdit = '';
@@ -148,22 +162,14 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     private confirmService: ConfirmService,
     private cdr: ChangeDetectorRef,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    readonly importWorkflow: TransactionsImportWorkflow,
+    readonly transactionEditor: TransactionsEditorWorkflow,
   ) {}
 
   private currentMonthKey(): string {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  }
-
-  private emptyTx(): TransactionCreate {
-    return {
-      date: todayIsoDate(),
-      type: 'expense',
-      category: '',
-      amount: 0,
-      description: '',
-    };
   }
 
   private emptyBulkRenameRow(): { fromCategory: string; toCategory: string } {
@@ -206,28 +212,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private connectImportContextRefresh(): void {
-    this.importContextRefresh$.pipe(
-      startWith(undefined),
-      debounceTime(60),
-      switchMap(() => forkJoin({
-        bankAccounts: this.financeService.getBankAccounts().pipe(catchError(() => of(null))),
-        importReceipts: this.financeService.getImportReceipts().pipe(catchError(() => of(null))),
-      })),
-      takeUntil(this.destroy$),
-    ).subscribe(result => {
-      if (result.bankAccounts) this.bankAccounts = result.bankAccounts;
-      if (result.importReceipts) this.importReceipts = result.importReceipts;
-      this.cdr.markForCheck();
-    });
-
-    (this.financeService.dataChanges$ || EMPTY).pipe(
-      filter(change => change.collections.some(collection =>
-        collection === 'bank_accounts' || collection === 'import_batches')),
-      debounceTime(60),
-      takeUntil(this.destroy$),
-    ).subscribe(() => {
-      this.importContextRefresh$.next();
-    });
+    this.importWorkflow.connectImportContextRefresh();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -260,8 +245,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.selectedCalendarDate = /^\d{4}-\d{2}-\d{2}$/.test(calendarDate) ? calendarDate : null;
     if (this.importsOnly && params.get('add') === '1' && !this.showImportModal) this.startImportWizard();
     if (!this.importsOnly && this.selectedCalendarDate && params.get('add') === '1' && !this.showModal) {
-      this.newTx = { ...this.emptyTx(), date: this.selectedCalendarDate };
-      this.showModal = true;
+      this.transactionEditor.openAddModal(this.selectedCalendarDate);
     }
     const editId = params.get('edit') || '';
     if (editId !== this.lastDeepLinkedEdit) {
@@ -335,42 +319,15 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.importPreviewRequest?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
   }
 
-  importBank(slug: string): BankImportOption | undefined {
-    return this.importBanks.find(bank => bank.slug === slug);
-  }
-
-  get canPreviewImport(): boolean {
-    return this.importFiles.length > 0 && this.importFiles.every(entry =>
-      !!this.importBank(entry.bank_slug) && (!!entry.bank_account_id || !!entry.new_account_label?.trim())
-    );
-  }
-
-  get canSaveImport(): boolean {
-    const confirmedCoverage = this.importFiles.some(file => file.confirm_coverage && !!file.account_key
-      && !!file.coverage_start && !!file.coverage_end && file.coverage_end >= file.coverage_start);
-    const durableDiagnostics = this.importPreviews.some(file => !!file.error || !!file.preview?.errors.length);
-    return this.selectedImportCount > 0 || confirmedCoverage || durableDiagnostics;
-  }
-
-  get importRows(): ImportPreviewRow[] {
-    return this.importPreviews.flatMap(entry => entry.preview?.rows || []);
-  }
-
-  get importSummary() {
-    return this.importPreviews.reduce((total, entry) => {
-      if (entry.preview) {
-        for (const field of ['total_parsed', 'new', 'duplicate', 'skipped', 'errors'] as const) {
-          total[field] += entry.preview.summary[field] || 0;
-        }
-      }
-      return total;
-    }, { total_parsed: 0, new: 0, duplicate: 0, skipped: 0, errors: 0 });
-  }
+  importBank(slug: string): BankImportOption | undefined { return this.importWorkflow.importBank(slug); }
+  get canPreviewImport(): boolean { return this.importWorkflow.canPreviewImport; }
+  get canSaveImport(): boolean { return this.importWorkflow.canSaveImport; }
+  get importRows(): ImportPreviewRow[] { return this.importWorkflow.importRows; }
+  get importSummary() { return this.importWorkflow.importSummary; }
 
   get summaryMonthLabel(): string {
     if (!this.summaryMonth) return 'All months';
@@ -435,48 +392,28 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     return [...labels.values()].sort((a, b) => a.localeCompare(b));
   }
 
+  private get activityFilters() {
+    return {
+      searchTerm: this.searchTerm,
+      typeFilter: this.typeFilter,
+      summaryMonth: this.summaryMonth,
+      fromDate: this.fromDate,
+      throughDate: this.throughDate,
+      selectedCalendarDate: this.selectedCalendarDate,
+      accountFilter: this.accountFilter,
+      categoryFilter: this.categoryFilter,
+      merchantFilter: this.merchantFilter,
+      receiptFilter: this.receiptFilter,
+    };
+  }
+
   get matchingTransactions(): Transaction[] {
     const source = this.allTransactionsLoaded ? this.allTransactions : (this.allTransactions.length ? this.allTransactions : this.transactions);
-    return source.filter(row => this.matchesTransactionFilters(row));
+    return filterTransactionActivity(source, this.activityFilters);
   }
 
   get sortedMatchingTransactions(): Transaction[] {
-    return [...this.matchingTransactions].sort((a, b) => {
-      let valA: string | number;
-      let valB: string | number;
-      if (this.sortColumn === 'date') {
-        valA = a.date;
-        valB = b.date;
-      } else if (this.sortColumn === 'amount') {
-        valA = a.amount;
-        valB = b.amount;
-      } else {
-        valA = a.category;
-        valB = b.category;
-      }
-      if (valA < valB) return this.sortDirection === 'asc' ? -1 : 1;
-      if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
-
-  private matchesTransactionFilters(row: Transaction): boolean {
-    const query = this.searchTerm.trim().toLocaleLowerCase();
-    if (query && ![row.description, row.category, row.merchant, row.account_display, row.kind]
-      .some(value => String(value || '').toLocaleLowerCase().includes(query))) return false;
-    if (this.typeFilter !== 'all' && (this.typeFilter === 'income'
-      ? transactionEffects(row).income === 0
-      : transactionEffects(row).spending === 0 && row.kind !== 'ambiguous_credit')) return false;
-    if (this.summaryMonth && !row.date.startsWith(`${this.summaryMonth}-`)) return false;
-    if (this.fromDate && row.date < this.fromDate) return false;
-    if (this.throughDate && row.date > this.throughDate) return false;
-    if (this.selectedCalendarDate && row.date !== this.selectedCalendarDate) return false;
-    if (this.accountFilter === UNASSIGNED_ACCOUNT_FILTER && String(row.bank_account_key || '').trim()) return false;
-    if (this.accountFilter && this.accountFilter !== UNASSIGNED_ACCOUNT_FILTER && row.bank_account_key !== this.accountFilter) return false;
-    if (this.categoryFilter && spendingGroupKey(row, 'category') !== this.categoryFilter) return false;
-    if (this.merchantFilter && spendingGroupKey(row, 'merchant') !== this.merchantFilter) return false;
-    if (this.receiptFilter && Number(row.import_receipt_id) !== Number(this.receiptFilter)) return false;
-    return true;
+    return sortTransactionActivity(this.matchingTransactions, this.sortColumn, this.sortDirection);
   }
 
   get sortPreset(): string {
@@ -524,14 +461,9 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     return this.validBulkRenameRows.length > 0 && !this.categoryMergeSaving;
   }
 
-  private computeMonthTotals(matching = this.matchingTransactions) {
-    const included = matching.filter(t => !['payment', 'transfer', 'ambiguous_credit'].includes(t.kind || ''));
-    this.monthExpenseTotal = included.reduce((sum, t) => sum + transactionEffects(t).spending, 0);
-    this.monthIncomeTotal = included.reduce((sum, t) => sum + transactionEffects(t).income, 0);
-  }
 
   openImportModal() {
-    if (this.importCommitting) return;
+    if (this.importWorkflow.importCommitting) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { t: 'imports', add: '1' },
@@ -573,348 +505,49 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     return (receipt.unresolved || []).find(note => !/^Unclassified credit from /.test(note.reason))?.filename || receipt.filenames[0] || '';
   }
 
-  private startImportWizard() {
-    if (this.importCommitting) return;
-    this.activeImportReceiptId = this.reattachReceiptId;
-    this.showImportModal = true;
-    this.cdr.markForCheck();
-    this.financeService.getImportBanks().pipe(takeUntil(this.destroy$)).subscribe({
-      next: banks => {
-        this.importBanks = banks;
-        this.cdr.markForCheck();
-      },
-    });
-    this.importContextRefresh$.next();
+  private startImportWizard(): void {
+    this.importWorkflow.startImportWizard(this.reattachReceiptId);
   }
 
-  onImportBankChange() {
-    this.importPreviews = [];
-    this.importStep = 'upload';
-    this.importSelected.clear();
-    this.importError = '';
-    this.cdr.markForCheck();
-  }
+  onImportBankChange(): void { this.importWorkflow.onImportBankChange(); }
+  onImportBankSelectionChange(entry: BankImportFile, value: string): void { this.importWorkflow.onImportBankSelectionChange(entry, value); }
+  accountOptionsFor(entry: BankImportFile): BankAccountRecord[] { return this.importWorkflow.accountOptionsFor(entry); }
+  onImportAccountChange(entry: BankImportFile, value: string): void { this.importWorkflow.onImportAccountChange(entry, value); }
+  onNewAccountLabelChange(entry: BankImportFile): void { this.importWorkflow.onNewAccountLabelChange(entry); }
+  onLegacyAccountMappingChange(entry: BankImportFile, checked: boolean): void { this.importWorkflow.onLegacyAccountMappingChange(entry, checked); }
+  closeImportModal(): void { this.importWorkflow.closeImportModal(); }
+  onImportFileSelected(event: Event): void { this.importWorkflow.onImportFileSelected(event); }
+  removeImportFile(id: number): void { this.importWorkflow.removeImportFile(id); }
+  backToImportFiles(): void { this.importWorkflow.backToImportFiles(); }
+  runImportPreview(): void { this.importWorkflow.runImportPreview(); }
+  toggleImportRow(row: ImportPreviewRow): void { this.importWorkflow.toggleImportRow(row); }
+  isImportRowSelected(row: ImportPreviewRow): boolean { return this.importWorkflow.isImportRowSelected(row); }
+  selectAllNewImportRows(): void { this.importWorkflow.selectAllNewImportRows(); }
+  clearImportSelection(): void { this.importWorkflow.clearImportSelection(); }
+  get selectedImportCount(): number { return this.importWorkflow.selectedImportCount; }
+  get legacyMappingCount(): number { return this.importWorkflow.legacyMappingCount; }
+  get importActionLabel(): string { return this.importWorkflow.importActionLabel; }
+  get selectedImportExpenseTotal(): number { return this.importWorkflow.selectedImportExpenseTotal; }
+  setImportKind(row: ImportPreviewRow, value: string): void { this.importWorkflow.setImportKind(row, value); }
+  useMerchantSuggestion(row: ImportPreviewRow): void { this.importWorkflow.useMerchantSuggestion(row); }
+  get supportedImporterNames(): string { return this.importWorkflow.supportedImporterNames; }
+  commitImport(): void { this.importWorkflow.commitImport(); }
+  resumeImport(receipt: ImportReceipt): void { this.importWorkflow.resumeImport(receipt); }
+  undoImport(receipt: ImportReceipt): Promise<void> { return this.importWorkflow.undoImport(receipt); }
 
-  onImportBankSelectionChange(entry: BankImportFile, value: string): void {
-    entry.bank_slug = value;
-    entry.bank_account_id = null;
-    entry.account_display = '';
-    entry.new_account_label = '';
-    entry.account_key = undefined;
-    entry.account_mask_override = undefined;
-    entry.map_legacy_account = false;
-    this.onImportBankChange();
-  }
-
-  accountOptionsFor(entry: BankImportFile): BankAccountRecord[] {
-    return this.bankAccounts.filter(account => account.bank_slug === entry.bank_slug);
-  }
-
-  onImportAccountChange(entry: BankImportFile, value: string): void {
-    const accountId = Number(value) || null;
-    entry.bank_account_id = accountId;
-    if (accountId) {
-      const account = this.bankAccounts.find(row => row.id === accountId);
-      entry.account_display = account?.display_name || '';
-      entry.account_key = account?.account_key || `legacy-bank-account:${account!.id}`;
-      entry.account_mask_override = account?.account_mask || '';
-      entry.new_account_label = '';
-      entry.map_legacy_account = false;
-    } else {
-      entry.account_display = '';
-      entry.account_key = undefined;
-      entry.account_mask_override = undefined;
-      entry.new_account_label = '';
-      entry.map_legacy_account = false;
-    }
-    this.onImportBankChange();
-  }
-
-  onNewAccountLabelChange(entry: BankImportFile): void {
-    entry.account_display = entry.new_account_label?.trim() || '';
-    if (entry.account_display && !entry.account_key) entry.account_key = this.createImportAccountKey();
-    if (!entry.account_display) entry.account_key = undefined;
-    this.onImportBankChange();
-  }
-
-  onLegacyAccountMappingChange(entry: BankImportFile, checked: boolean): void {
-    entry.map_legacy_account = checked;
-    this.onImportBankChange();
-  }
-
-  closeImportModal() {
-    if (this.importCommitting) return;
-    this.importPreviewRequest?.unsubscribe();
-    this.importParsing = false;
-    this.showImportModal = false;
-    this.importStep = 'upload';
-    this.importFiles = [];
-    this.importPreviews = [];
-    this.importSelected.clear();
-    this.importError = '';
-    this.activeImportReceiptId = null;
-    this.cdr.markForCheck();
-    if (this.route.snapshot.queryParamMap.get('add') === '1') {
-      void this.router.navigate([], {
-        relativeTo: this.route,
-        queryParams: { add: null, reattach: null, reattach_file: null },
-        queryParamsHandling: 'merge',
-        replaceUrl: true,
-      });
-    }
-  }
-
-  onImportFileSelected(event: Event) {
-    if (this.importParsing || this.importCommitting) return;
-    const input = event.target as HTMLInputElement;
-    for (const file of Array.from(input.files || [])) {
-      this.importFiles.push({ id: this.nextImportFileId++, bank_slug: '', file, account_key: undefined });
-    }
-    input.value = '';
-    this.onImportBankChange();
-  }
-
-  removeImportFile(id: number) {
-    if (this.importParsing || this.importCommitting) return;
-    this.importFiles = this.importFiles.filter(entry => entry.id !== id);
-    this.onImportBankChange();
-  }
-
-  backToImportFiles() {
-    if (this.importCommitting) return;
-    this.onImportBankChange();
-  }
-
-  runImportPreview() {
-    if (this.importParsing || this.importCommitting) return;
-    if (!this.canPreviewImport) {
-      this.toastService.error('Choose CSV files and select a bank for every file.');
-      return;
-    }
-    this.importParsing = true;
-    this.importError = '';
-    this.importPreviewRequest = this.financeService
-      .previewBankImports(this.importFiles.map(entry => ({
-        ...entry,
-        account_display: entry.account_display || entry.new_account_label?.trim() || '',
-        account_key: entry.account_key,
-        account_mask_override: entry.account_mask_override,
-        map_legacy_account: entry.map_legacy_account === true,
-      })))
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: previews => {
-          this.importParsing = false;
-          this.importPreviews = previews;
-          this.importStep = 'preview';
-          this.importSelected = new Set(this.importRows.filter(row => row.status === 'new').map(row => row.dedupe_key));
-          this.cdr.markForCheck();
-        },
-        error: (err: any) => {
-          this.importParsing = false;
-          this.importError = this.importFailureMessage(err, 'Could not preview the files. Please try again.');
-          this.cdr.markForCheck();
-        },
-      });
-  }
-
-  toggleImportRow(row: ImportPreviewRow) {
-    if (this.importCommitting || row.status === 'duplicate' || row.kind === 'ambiguous_credit') return;
-    if (this.importSelected.has(row.dedupe_key)) {
-      this.importSelected.delete(row.dedupe_key);
-    } else {
-      this.importSelected.add(row.dedupe_key);
-    }
-    this.cdr.markForCheck();
-  }
-
-  isImportRowSelected(row: ImportPreviewRow): boolean {
-    return row.status !== 'duplicate' && (row.kind === 'ambiguous_credit' || this.importSelected.has(row.dedupe_key));
-  }
-
-  selectAllNewImportRows() {
-    if (this.importCommitting) return;
-    for (const row of this.importRows) {
-      if (row.status !== 'duplicate' && row.kind !== 'ambiguous_credit') {
-        this.importSelected.add(row.dedupe_key);
-      }
-    }
-    this.cdr.markForCheck();
-  }
-
-  clearImportSelection() {
-    if (this.importCommitting) return;
-    this.importSelected.clear();
-    this.cdr.markForCheck();
-  }
-
-  get selectedImportCount(): number {
-    return this.importSelected.size
-      + this.importRows.filter(row => row.status !== 'duplicate' && row.kind === 'ambiguous_credit').length
-      + this.legacyMappingCount;
-  }
-
-  get legacyMappingCount(): number {
-    return this.importRows.filter(row => row.status === 'duplicate' && !!row.legacy_dedupe_key).length;
-  }
-
-  get importActionLabel(): string {
-    if (!this.selectedImportCount) return 'Save receipt';
-    if (this.legacyMappingCount && !this.importSelected.size) return `Map ${this.legacyMappingCount} legacy transaction(s)`;
-    if (this.legacyMappingCount) return `Import and map ${this.selectedImportCount} row(s)`;
-    return `Import ${this.selectedImportCount} transaction(s)`;
-  }
-
-  get selectedImportExpenseTotal(): number {
-    return this.importRows
-      .filter(row => row.status !== 'duplicate' && this.importSelected.has(row.dedupe_key))
-      .reduce((sum, row) => sum + (row.kind === 'refund' ? -Math.abs(Number(row.amount) || 0) : row.kind === 'purchase' ? Math.abs(Number(row.amount) || 0) : 0), 0);
-  }
-
-  setImportKind(row: ImportPreviewRow, value: string): void {
-    row.kind = value as Transaction['kind'];
-    row.review_reason = row.kind === 'ambiguous_credit' ? 'Credit type is unclear. Classify it after import.' : null;
-    if (row.kind !== 'ambiguous_credit') {
-      this.importSelected.add(row.dedupe_key);
-    }
-    this.cdr.markForCheck();
-  }
-
-  useMerchantSuggestion(row: ImportPreviewRow): void {
-    row.merchant = row.merchant_suggestion || null;
-    this.cdr.markForCheck();
-  }
-
-  get supportedImporterNames(): string {
-    return this.importBanks.map(bank => bank.name).join(', ') || 'the listed banks';
-  }
-
-  commitImport() {
-    if (this.importCommitting || this.importParsing) return;
-    const rows = this.importRows.filter(row =>
-      (row.status !== 'duplicate' && (row.kind === 'ambiguous_credit' || this.importSelected.has(row.dedupe_key)))
-      || (row.status === 'duplicate' && !!row.legacy_dedupe_key)
-    );
-    if (!rows.length && !this.canSaveImport) {
-      this.toastService.error('Select a transaction or confirm statement coverage.');
-      return;
-    }
-    this.importCommitting = true;
-    this.importError = '';
-    this.financeService
-      .commitBankImports(rows, {
-        bank_slugs: Array.from(new Set(this.importFiles.map(file => file.bank_slug))),
-        filenames: this.importFiles.map(file => file.file.name),
-        unresolved: this.importPreviews.flatMap(file => [
-          ...(file.preview?.errors || []).map(note => ({ ...note, filename: file.filename })),
-          ...(file.error ? [{ line: 0, filename: file.filename, reason: file.error }] : []),
-        ]),
-        account_displays: Array.from(new Set(rows.map(row => row.account_display))),
-        resume_receipt_id: this.activeImportReceiptId || undefined,
-        replace_filename: this.reattachReceiptFilename || undefined,
-        coverage: this.importFiles.filter(file => {
-          const preview = this.importPreviews.find(row => row.id === file.id);
-          return file.confirm_coverage && file.coverage_start && file.coverage_end && !!preview?.preview
-            && !preview.error && !preview.preview.errors.length;
-        }).map(file => ({
-          account_display: file.account_display || file.new_account_label?.trim() || '',
-          account_key: file.account_key,
-          bank_account_id: file.bank_account_id,
-          start_date: file.coverage_start!, end_date: file.coverage_end!, confirmed: true as const,
-        })),
-        confirmed_bank_accounts: this.importPreviews.flatMap(preview => {
-          const file = this.importFiles.find(row => row.id === preview.id);
-          if (!file?.account_key) return [];
-          const display_name = file?.account_display || file?.new_account_label?.trim() || '';
-          const account_mask = file.account_mask_override?.trim() || preview.preview?.rows[0]?.account_mask || '';
-          return [{
-            id: file.bank_account_id || undefined,
-            bank_slug: preview.bank_slug, account_mask,
-            account_key: file.account_key, display_name, confirmed: true,
-          }];
-        }),
-      } as any)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (res: ImportCommitResult) => {
-          this.importCommitting = false;
-          this.activeImportReceiptId = null;
-          this.closeImportModal();
-          this.refreshImportReceipts();
-          this.toastService.success(`Imported ${res.inserted} transaction(s)${res.skipped ? `; skipped ${res.skipped} duplicate(s)` : ''}`);
-          this.cdr.markForCheck();
-        },
-        error: (err: any) => {
-          this.importCommitting = false;
-          this.activeImportReceiptId = Number(err?.receipt_id || err?.error?.receipt_id) || this.activeImportReceiptId;
-          this.importError = this.importFailureMessage(err, 'Import failed.') + ' Some rows may already be saved. Retry safely skips those duplicates.';
-          this.cdr.markForCheck();
-        },
-      });
-  }
-
-  private refreshImportReceipts(): void {
-    this.importContextRefresh$.next();
-  }
-
-  resumeImport(receipt: ImportReceipt): void {
-    if (receipt.status === 'undoing') {
-      this.financeService.undoBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
-        next: result => {
-          this.toastService.success(`Undo resumed: removed ${result.removed}; kept ${result.edited} edited transaction(s)`);
-          this.refreshImportReceipts();
-        },
-        error: err => this.toastService.error(this.importFailureMessage(err, 'Could not resume undo.')),
-      });
-      return;
-    }
-    this.financeService.resumeBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: result => {
-        this.toastService.success(`Resumed import: ${result.inserted} transaction(s) added`);
-        this.refreshImportReceipts();
-      },
-      error: err => this.toastService.error(this.importFailureMessage(err, 'Could not resume this import.')),
-    });
-  }
-
-  async undoImport(receipt: ImportReceipt): Promise<void> {
-    const ok = await this.confirmService.ask(
-      'Undo this import?',
-      'Remove only import-created transactions that still match their saved values. Edited rows stay in the ledger, and this receipt no longer counts as coverage.',
-      'Undo import', 'Cancel'
-    );
-    if (!ok) return;
-    this.financeService.undoBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: result => {
-        this.toastService.success(`Removed ${result.removed}; kept ${result.edited} edited transaction(s)`);
-        this.refreshImportReceipts();
-      },
-      error: err => this.toastService.error(this.importFailureMessage(err, 'Could not undo this import.')),
-    });
-  }
-
-  private importFailureMessage(err: any, fallback: string): string {
-    const detail = err?.error?.detail ?? err?.message;
-    return typeof detail === 'string' && detail.trim() ? detail : fallback;
-  }
-
-  private createImportAccountKey(): string {
-    return `bank-account:${crypto.randomUUID()}`;
-  }
-
-  openAddModal() {
-    this.editingTxId = null;
-    this.editingImported = false;
-    this.newTx = { ...this.emptyTx(), ...(this.selectedCalendarDate ? { date: this.selectedCalendarDate } : {}) };
-    this.showModal = true;
+  openAddModal(): void {
+    this.transactionEditor.openAddModal(this.selectedCalendarDate);
   }
 
   applyFilterAndSort() {
     const result = this.sortedMatchingTransactions;
+    const page = paginateTransactionActivity(result, this.visibleRowCount);
+    const totals = transactionActivityTotals(result);
 
-    this.hasMore = result.length > this.visibleRowCount;
-    this.filteredTransactions = result.slice(0, this.visibleRowCount);
-    this.computeMonthTotals(result);
+    this.hasMore = page.hasMore;
+    this.filteredTransactions = page.rows;
+    this.monthExpenseTotal = totals.monthExpenseTotal;
+    this.monthIncomeTotal = totals.monthIncomeTotal;
     this.cdr.markForCheck();
   }
 
@@ -1136,43 +769,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     return this.sortDirection === 'asc' ? '↑' : '↓';
   }
 
-  saveTransaction() {
-    if (this.saving) return;
-    if (!this.newTx.category?.trim() || this.newTx.amount <= 0) {
-      this.toastService.error('Category and a positive amount are required.');
-      return;
-    }
-
-    this.saving = true;
-    this.transactionSaveError = '';
-    const payload: TransactionCreate = {
-      ...this.newTx,
-      category: this.newTx.category.trim(),
-      amount: Math.round(this.newTx.amount * 100) / 100,
-    };
-
-    const req =
-      this.editingTxId !== null
-        ? this.financeService.updateTransaction(this.editingTxId, payload)
-        : this.financeService.addTransaction(payload);
-
-    req.pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => {
-        this.saving = false;
-        const wasEditing = this.editingTxId !== null;
-        this.closeModal();
-        this.toastService.success(
-          wasEditing ? 'Transaction updated' : 'Transaction added'
-        );
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.saving = false;
-        this.transactionSaveError = 'Could not save this transaction. Your changes are still here; try again.';
-        this.toastService.error('Could not save transaction. Your changes are still here; try again.');
-        this.cdr.markForCheck();
-      },
-    });
+  saveTransaction(): void {
+    this.transactionEditor.saveTransaction();
   }
 
   editTransaction(tx: Transaction) {
@@ -1180,21 +778,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private openTransactionEditor(tx: Transaction, updateUrl: boolean): void {
-    this.editingTxId = tx.id;
-    this.editingImported = tx.source === 'import';
-    this.transactionSaveError = '';
-    this.newTx = {
-      date: tx.date,
-      type: tx.type,
-      category: tx.category,
-      amount: tx.amount,
-      description: tx.description || '',
-      merchant: tx.merchant || null,
-      kind: tx.kind || (tx.type === 'income' ? 'income' : 'purchase'),
-      // Keep legacy encrypted metadata intact without exposing its old workflow.
-      ...(tx.reviewed !== undefined ? { reviewed: tx.reviewed } : {}),
-    };
-    this.showModal = true;
+    this.transactionEditor.openTransactionEditor(tx);
     if (updateUrl) {
       this.lastDeepLinkedEdit = String(tx.id);
       void this.router.navigate([], {
@@ -1203,26 +787,10 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
         queryParamsHandling: 'merge',
       });
     }
-    this.cdr.markForCheck();
   }
 
-  closeModal() {
-    this.showModal = false;
-    this.editingTxId = null;
-    this.editingImported = false;
-    this.transactionSaveError = '';
-    this.newTx = this.emptyTx();
-    this.lastDeepLinkedEdit = '';
-    const params = this.route.snapshot.queryParamMap;
-    if (params.get('add') === '1' || params.has('edit')) {
-      void this.router.navigate([], {
-        relativeTo: this.route,
-        queryParams: { add: null, edit: null },
-        queryParamsHandling: 'merge',
-        replaceUrl: true,
-      });
-    }
-    this.cdr.markForCheck();
+  closeModal(): void {
+    this.transactionEditor.closeModal();
   }
 
   async deleteTransaction(tx: Transaction) {

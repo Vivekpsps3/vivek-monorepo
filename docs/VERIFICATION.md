@@ -4,10 +4,10 @@ Named quality gates for local development and CI (TEST-001).
 
 | Tier | Command | Covers | Owner |
 |------|---------|--------|-------|
-| **fast** | `make test-fast` | Doc path/lifecycle checks (OPS-002) | docs |
+| **fast** | `make test-fast` | Doc paths (OPS-002) and shared-package/app import boundaries | docs/packages |
 | **finance** | `make test-finance` | Balance sheet, planning non-mutation, client-finance, migrations matrix | finance |
 | **security** | `make test-security` | Vault/openapi/auth + client-finance and evidence-labels specs | privacy |
-| **full** | `make test-full` | Backend + frontend unit tests + frontend build + Docker compose build | release |
+| **full** | `make test-full` | Finance, Travel (Python and static-module Node tests), and site backend tests; both Angular unit suites and builds; release-manifest fixtures; Docker Compose build and suite-route integration | release |
 
 ## Migration matrix (BE-002)
 
@@ -39,5 +39,20 @@ Speculative surfaces must not mutate holdings or net worth; Stock Lab discloses 
 
 ## CI mapping
 
-`.github/workflows/ci.yml` runs backend pytest, frontend unit tests + build, and
-`docker compose build`. Local `make test-full` mirrors that set plus `test-fast`.
+`.github/workflows/ci.yml` runs separate Finance, Travel, and site backend
+pytest jobs, Travel static-module Node tests, the fast documentation/package
+boundary gate, Finance and site browser tests and development builds, and a
+Docker build followed by the suite-route integration check. Local
+`make test-full` covers those app test suites and builds plus `test-fast` and
+Finance release-manifest fixtures.
+
+The optional `make test-release-cache` exercises production Nginx cache headers
+and release rollover in a real Chromium context. It requires Docker, the
+Finance frontend npm dependencies, and Playwright Chromium, so it is not part
+of the default full tier or CI.
+
+Install the full local test dependencies with `make install`. It creates
+separate `.venv` environments for Finance, Travel, and the site Flask backend,
+and installs npm dependencies for both Angular apps. The focused setup commands
+are `make travel-install` and `make site-install`; their test targets require
+those environments to exist.

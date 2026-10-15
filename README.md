@@ -1,6 +1,6 @@
 # vivek-monorepo
 
-Personal finance app: balance-sheet net worth (assets & liabilities), portfolio with cached/live prices, transactions and bank CSV import, recurring cashflow (income / fixed expenses / subscriptions), planning (Monte Carlo + Stock Lab), and app-native multi-user auth—Angular 19 + FastAPI + SQLite.
+Personal finance app: balance-sheet net worth (assets & liabilities), portfolio with cached/live prices, transactions and bank CSV import, recurring cashflow (income / fixed expenses / subscriptions), planning (Monte Carlo + Stock Lab), and app-native multi-user auth—Angular 21 + FastAPI + SQLite.
 
 ## Quick start
 
@@ -35,7 +35,7 @@ Details: **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 
 | Layer | Stack |
 |-------|--------|
-| Frontend | Angular 19, plain CSS design tokens, Chart.js, RxJS |
+| Frontend | Angular 21, plain CSS design tokens, Chart.js, RxJS |
 | Backend | FastAPI, SQLAlchemy, SQLite, Alembic |
 | Prices | Memory → SQLite EOD → yfinance |
 
@@ -44,11 +44,12 @@ Details: **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 ```
 vivek-monorepo/
   apps/finance/backend      # FastAPI
-  apps/finance/frontend     # Angular finance UI
-  apps/travel/              # LAN trip planner (separate DB)
+  apps/finance/frontend     # Angular finance UI and the private Hub
+  apps/travel/              # trip planner (separate DB)
+  apps/media/               # private media journal (separate DB)
   apps/site/                # vivekpanchagnula.com
   packages/auth             # shared passwordless crypto
-  packages/ui               # shared ink+dust CSS
+  packages/ui               # shared light/dark CSS and components
   .env.example              # finance runtime configuration
   docs/
 ```
@@ -85,11 +86,15 @@ Local database: `apps/finance/backend/finance.db` (not committed; see `.gitignor
 
 Trip planner in `apps/travel/`: one trip from the day you leave through the day you come back, with flights, drives, a calendar, day plans, parking, budget, and a PTO projection. It keeps its own SQLite file. On the suite it is served at `/travel/` and accepts the finance session cookie. See [docs/TRAVEL.md](docs/TRAVEL.md).
 
+## Media
+
+Private journal in `apps/media/` for movies, series, books, songs, albums, and games. Ratings, reviews, and progress stay in `media.db`. Search can use public metadata, and a title can always be added by hand. On the suite it is served at `/media/`. See [docs/MEDIA.md](docs/MEDIA.md).
+
 ## Tests & CI-style check
 
 ```bash
 make test-backend
-cd frontend && npx ng build --configuration development
+cd apps/finance/frontend && npx ng build --configuration development
 ```
 
 ## Docker website
@@ -98,10 +103,10 @@ cd frontend && npx ng build --configuration development
 docker compose up --build
 ```
 
-Open http://127.0.0.1:8080/finance/. Travel is http://127.0.0.1:8080/travel/.
-The `web` container serves both and proxies `/api` to the private finance API.
-`/api/health` stays on that path. Docker stores finance at `data/finance.db`
-and travel at `data/travel.db`. Local finance dev defaults to
+Open http://127.0.0.1:8080/hub. Finance is http://127.0.0.1:8080/finance/. Travel is http://127.0.0.1:8080/travel/. Media is http://127.0.0.1:8080/media/.
+The `web` container serves the Hub and Finance and proxies `/api`, `/travel/`, and `/media/`.
+`/api/health` stays on that path. Docker stores finance at `data/finance.db`,
+travel at `data/travel.db`, and media at `data/media.db`. Local finance dev defaults to
 `apps/finance/backend/finance.db`. Override finance with `DATABASE_URL` and a
 matching Compose volume when needed.
 

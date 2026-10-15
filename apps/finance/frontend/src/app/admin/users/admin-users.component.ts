@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { apiUrl } from '../../core/api-url';
 import { AuthService } from '../../auth/auth.service';
 import { AuthUser, UserRole } from '../../auth/auth.models';
-import { UiButtonComponent, UiDataTableComponent, UiInputComponent, UiPageHeaderComponent } from '../../shared/ui';
+import { UiButtonComponent, UiDataTableComponent, UiInputComponent, UiPageHeaderComponent } from '@vivek/ui';
 
 interface AdminMetrics {
   totals: Record<string, number>;
@@ -96,7 +96,7 @@ export class AdminUsersComponent implements OnInit {
         this.username = '';
         this.displayName = '';
         this.role = 'user';
-        this.createMessage = `Invitation created. Share /signup?token=${user.enrollment_token} (or the token alone) securely.`;
+        this.createMessage = `Invitation created. Share /auth/signup?token=${user.enrollment_token} (or the token alone) securely.`;
         this.loadMetrics();
         this.cdr.markForCheck();
       },

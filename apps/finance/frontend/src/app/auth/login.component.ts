@@ -1,14 +1,14 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
-import { continueAfterAuth } from './after-auth';
+import { Router } from '@angular/router';
+import { authPath, continueAfterAuth } from './after-auth';
 import { AuthService } from './auth.service';
-import { UiButtonComponent, UiCardComponent, UiInputComponent } from '../shared/ui';
+import { UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterLink, UiButtonComponent, UiCardComponent, UiInputComponent],
+  imports: [FormsModule, UiButtonComponent, UiCardComponent, UiInputComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -28,6 +28,10 @@ export class LoginComponent {
   legacyMode = false;
   loading = false;
   error = '';
+
+  pageHref(page: 'login' | 'signup'): string {
+    return authPath(page);
+  }
 
   ngOnInit(): void {
     this.auth.bootstrapStatus().subscribe({

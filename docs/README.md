@@ -7,13 +7,17 @@
 | [DEPLOY.md](./DEPLOY.md) | Production checklist, GitHub Actions deployment, auth, CORS, Docker |
 | [DATA_MODEL.md](./DATA_MODEL.md) | Net worth, tables, cashflow, planning |
 | [FRONTEND.md](./FRONTEND.md) | Angular routes, tokens, shared UI, page rules |
+| [MAINTAINABILITY_AUDIT.md](./MAINTAINABILITY_AUDIT.md) | Shared package boundaries, audit findings, fixes, and remaining hotspots |
 | [DESIGN_GUIDE.md](./DESIGN_GUIDE.md) | Product/UI metrics, charts, and page standards |
 | [SECURITY_MODEL.md](./SECURITY_MODEL.md) | Server-blind encryption threat model |
 | [ADDING_A_BANK_IMPORT.md](./ADDING_A_BANK_IMPORT.md) | New bank CSV importer |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | One-page system architecture |
 | [LIFECYCLE.md](./LIFECYCLE.md) | Active/retired/reserved surface ownership |
+| [FINANCE_UX_AUDIT.md](./FINANCE_UX_AUDIT.md) | One editing destination per financial fact and user journeys |
 | [VERIFICATION.md](./VERIFICATION.md) | Test tiers, backup drill, privacy gate |
 | [TRAVEL.md](./TRAVEL.md) | Travel app: trips, calendar, flights, PTO |
-| [../AGENTS.md](../AGENTS.md) | Fast handoff for future AI agents |
+| [MEDIA.md](./MEDIA.md) | Private media journal: library, reviews, releases |
+| [../AGENTS.md](../AGENTS.md) | Root handoff and user preferences |
+| [Finance backend guidance](../apps/finance/backend/AGENTS.md) · [Finance frontend guidance](../apps/finance/frontend/AGENTS.md) · [Travel guidance](../apps/travel/AGENTS.md) · [Media guidance](../apps/media/AGENTS.md) · [Site guidance](../apps/site/AGENTS.md) · [Shared packages guidance](../packages/AGENTS.md) | Scoped agent handoffs |
 
 Project overview: [../README.md](../README.md).

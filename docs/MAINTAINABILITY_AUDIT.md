@@ -1,0 +1,24 @@
+# Maintainability and bug audit
+
+This pass addressed the identified shared-code, oversized-module, protocol, and validation findings across Finance, Travel, and the public site. App-neutral browser and presentation code lives in `packages/`; each app owns its routes, data, security policy, and domain behavior. Apps do not import another app's source. The `make test-fast` boundary check enforces the package/app rule.
+
+## Completed changes
+
+- Moved generic Angular components and confirmation/toast services, theme preferences, chart colors, and design tokens into `packages/ui` (`@vivek/ui`). Moved browser date/money formatting, CSV download, and low-level crypto helpers into `packages/browser` (`@vivek/browser`). These are source-only packages compiled by their app consumers through package-name TypeScript aliases; app-specific vault, business, route, and request rules remain in their owning app.
+- Split Finance encrypted-store responsibilities into `encrypted-store.persistence.ts` for collection persistence, migration, cache, and revisions; `encrypted-store.bank-imports.ts` for encrypted bank receipt chunks and undo; and `encrypted-store.brokerage-stages.ts` for Fidelity staging and verification. `EncryptedStoreService` retains the public facade and preserves the stored format, associated data, migration ordering, staging semantics, and conflict/session protections.
+- Split Finance CSV parsing and workflows into `bank-import.parsers.ts` and `finance-import.service.ts`, with `bank-import.util.ts` retaining its existing orchestration exports. Quote application moved to `finance-market-coordinator.ts`; shared parsing and orchestration remain Finance-owned.
+- Split Finance planning assumptions and workflow/tool presentation into `planning-assumptions.util.ts`, `planning-workflow.ts`, `planning-tools.util.ts`, and `planning-quick-tools.component.*`. Transaction editing and import behavior now have separate `transactions-editor-workflow.ts` and `transactions-import-workflow.ts` collaborators.
+- Fixed Finance edge cases: replacing a pending confirmation now resolves the earlier caller as cancelled; CSV download quotes headers as well as values; and restoring a corrupt local DEK handles asynchronous key import failure through the existing recovery result. Generic date/money helpers preserve finite-number validation.
+- Hardened the site encryption demo: the browser no longer sends the shared AES key with decrypt requests; each Socket.IO session owns its key. Request IDs correlate key-exchange and decrypt replies, stale handshakes are invalidated, disconnect clears key material, reconnect negotiates again, and handshake timeouts and generic server errors are handled. Flask and Socket.IO origins use a validated explicit allowlist; `SITE_DEBUG` is off by default. The OpenAI-compatible adapter initializes its provider lazily and isolates overlapping model requests.
+- Split Travel's static UI into app/state/router/API/helpers, page views, and action modules under `apps/travel/backend/static/modules/`. Validation rejects non-finite coordinates and malformed trip/PTO patch values, and very large decimal inputs become validation errors instead of runtime failures.
+- Added in-process site Flask/Socket.IO integration tests using test clients and deterministic provider fakes, Finance and site browser regressions, Travel validation and static-module tests, and shared-boundary checks. Docker route integration covers the shared login paths, Finance and Travel mounts, API cache policy, hashed assets, and legacy route redirects.
+
+## Verification
+
+`make test-full` is the integrated local gate: it runs Finance, Travel Python and Node, and site Flask tests; both Angular browser test suites and development builds; the release-manifest fixture; the Docker Compose build; and the Docker-backed suite-route integration. CI runs the same app test/build categories in separate jobs and runs suite-route integration after the Docker build. `make test-release-cache` remains an optional production Nginx/Chromium check because it requires Docker and a Playwright browser; setup instructions are in [DEPLOY.md](./DEPLOY.md).
+
+The final integrated test counts and results are pending the repository owner's verification run. The site provider tests use deterministic fakes and do not contact external model services. The audit closes the listed findings; it is not a proof that no unrelated defects exist.
+
+## Architecture boundary
+
+Keep reusable code in `packages/` only when it is app-neutral. Finance's encrypted vault, CSV import rules, account identities, and financial calculations; Travel's trip and PTO rules; and the site's encryption/session protocol remain app-owned. Source-only package consumers must import public package names such as `@vivek/ui` or `@vivek/browser`, not reach into a sibling app or rely on installed `node_modules` links from another app.

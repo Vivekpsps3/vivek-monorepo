@@ -1,9 +1,9 @@
 <main class="login-shell">
   <section class="auth-layout" aria-labelledby="login-title">
     <div class="auth-intro">
-      <a class="brand-lockup" routerLink="/login">Finance</a>
-      <h1 id="login-title">{{ setupMode ? 'Set up Finance' : 'Sign in' }}</h1>
-      <p class="privacy-note">Finance records are encrypted in your browser before they reach the server. A lost passphrase cannot be reset or recovered.</p>
+      <a class="brand-lockup" [href]="pageHref('login')">Account</a>
+      <h1 id="login-title">{{ setupMode ? 'Create the first account' : 'Sign in' }}</h1>
+      <p class="privacy-note">This session opens your Hub, Finance, Travel, and Media. Finance records are encrypted in this browser before they reach the server. A lost passphrase cannot be reset.</p>
     </div>
 
     <div class="login-panel">
@@ -28,7 +28,7 @@
           </ui-button>
         </form>
         @if (!setupMode) {
-          <a class="mode-link" routerLink="/signup">Create an account</a>
+          <a class="mode-link" [href]="pageHref('signup')">Create an account</a>
           <button type="button" class="mode-link" (click)="toggleLegacyMode()">
             {{ legacyMode ? 'Back to sign in' : 'Migrate old account' }}
           </button>

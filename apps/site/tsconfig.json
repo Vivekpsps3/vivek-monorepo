@@ -20,7 +20,9 @@
     "baseUrl": ".",
     "paths": {
       "@angular/*": ["./node_modules/@angular/*"],
+      "rxjs": ["./node_modules/rxjs"],
       "tslib": ["./node_modules/tslib"],
+      "@vivek/browser": ["../../packages/browser/src/index.ts"],
       "@vivek/auth": ["../../packages/auth/src/index.ts"],
       "@vivek/ui": ["../../packages/ui/src/public-api.ts"]
     }

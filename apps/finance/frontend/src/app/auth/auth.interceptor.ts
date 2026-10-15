@@ -1,12 +1,11 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
+import { authNavigation } from './after-auth';
 import { AuthService } from './auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
-  const router = inject(Router);
   const mutating = !['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase());
   const headers = mutating && auth.csrfToken ? req.headers.set('X-CSRF-Token', auth.csrfToken) : req.headers;
   const authReq = req.clone({ withCredentials: true, headers });
@@ -21,7 +20,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         req.url.includes('/health');
       if (err.status === 401 && !isAuthAttempt) {
         auth.clearLocalSession();
-        router.navigate(['/login']);
+        authNavigation.goToLogin();
       }
       return throwError(() => err);
     })

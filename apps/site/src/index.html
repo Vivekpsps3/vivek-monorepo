@@ -12,12 +12,16 @@
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <script>
     (function () {
-      var t = null;
-      try { t = localStorage.getItem('vw-theme'); } catch (e) {}
-      if (t !== 'light' && t !== 'dark') {
+      var choice = null;
+      try { choice = localStorage.getItem('vw-theme'); } catch (e) {}
+      var t = choice;
+      if (choice !== 'light' && choice !== 'dark') {
+        choice = 'system';
         t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
       document.documentElement.setAttribute('data-theme', t);
+      document.documentElement.setAttribute('data-theme-choice', choice);
+      document.documentElement.style.colorScheme = t;
     })();
   </script>
 </head>

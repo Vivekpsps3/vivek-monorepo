@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
+import { authNavigation } from '../auth/after-auth';
 import { AuthService } from '../auth/auth.service';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
@@ -385,7 +386,7 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     this.finance.clearSessionState();
     if (message.kind === 'signout') {
       this.auth.clearLocalSession();
-      await this.router.navigateByUrl('/login');
+      authNavigation.goToLogin(false);
     } else {
       await this.router.navigateByUrl('/vault/unlock');
     }

@@ -30,9 +30,9 @@
           <span class="nav-link__short">{{ group.shortLabel }}</span>
         </a>
       }
-      <a class="nav-tab" href="/travel/">
-        <svg class="nav-external-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
-        <span>Travel</span>
+      <a class="nav-tab" routerLink="/hub">
+        <ui-icon name="spark" size="sm" />
+        <span>Hub</span>
       </a>
     </div>
     <div class="account-menu">
@@ -47,8 +47,9 @@
             <p class="account-popover__email">{{ user.username || user.email }}</p>
           }
           <div class="theme-split" role="group" aria-label="Color mode">
-            <button type="button" [class.on]="theme === 'light'" (click)="setTheme('light')">Light</button>
-            <button type="button" [class.on]="theme === 'dark'" (click)="setTheme('dark')">Dark</button>
+            <button type="button" [class.on]="theme === 'system'" [attr.aria-pressed]="theme === 'system'" (click)="setTheme('system')">System</button>
+            <button type="button" [class.on]="theme === 'light'" [attr.aria-pressed]="theme === 'light'" (click)="setTheme('light')">Light</button>
+            <button type="button" [class.on]="theme === 'dark'" [attr.aria-pressed]="theme === 'dark'" (click)="setTheme('dark')">Dark</button>
           </div>
           @if (isAdmin) {
             <a routerLink="/admin/users">Users</a>
@@ -74,9 +75,9 @@
       <span>{{ group.shortLabel }}</span>
     </a>
   }
-  <a class="mobile-tab" href="/travel/">
-    <svg class="nav-external-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
-    <span>Travel</span>
+  <a class="mobile-tab" routerLink="/hub">
+    <ui-icon name="spark" size="sm" />
+    <span>Hub</span>
   </a>
 </nav>
 

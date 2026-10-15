@@ -6,8 +6,8 @@ import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { JobIncome } from '../models/transaction.model';
 import { compensationByEmployer, EmployerCompensation, isValidIsoDate } from '../utils/job-compensation.util';
-import { todayIsoDate } from '../utils/date.util';
-import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '../shared/ui';
+import { todayIsoDate } from '@vivek/browser';
+import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-compensation-report',

@@ -17,7 +17,11 @@ from routers import board, integrations, pto, trips
 
 BACKEND_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BACKEND_DIR / "static"
-REPO_ROOT = BACKEND_DIR.parents[2]
+# Checkout layout is apps/travel/backend. The image copies this directory to /app.
+REPO_ROOT = BACKEND_DIR.parents[2] if len(BACKEND_DIR.parents) > 2 else BACKEND_DIR
+SHARED_BROWSER_DIR = REPO_ROOT / "packages" / "browser" / "runtime"
+if not SHARED_BROWSER_DIR.is_dir():
+    SHARED_BROWSER_DIR = BACKEND_DIR / "shared-browser"
 
 
 def tokens_path() -> Path:
@@ -57,7 +61,7 @@ def create_app() -> FastAPI:
         if not _open_path(request.url.path):
             checker = request.app.state.principal_checker
             try:
-                result = checker(request) if checker is not None else deps.fetch_principal(request)
+                result = await deps.check_principal(request, checker)
             except HTTPException as exc:
                 return JSONResponse(
                     status_code=exc.status_code,
@@ -100,6 +104,12 @@ def create_app() -> FastAPI:
 
     if STATIC_DIR.is_dir():
         application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    if SHARED_BROWSER_DIR.is_dir():
+        application.mount(
+            "/shared-browser",
+            StaticFiles(directory=SHARED_BROWSER_DIR),
+            name="shared-browser-runtime",
+        )
 
     @application.get("/")
     def index():

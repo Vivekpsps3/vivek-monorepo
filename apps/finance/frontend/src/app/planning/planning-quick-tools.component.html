@@ -1,0 +1,135 @@
+@if (activeTool === 'retirement-target') {
+  <ui-card [title]="'Retirement target'" class="tool-card-wide">
+    <p class="mc-help">A quick estimate based on your selected spending, withdrawal rate, portfolio, and current annual cashflow.</p>
+    <div class="tool-form-grid">
+      <label class="mc-field">
+        <span>Withdrawal rate (%)</span>
+        <input type="number" min="1" max="12" step="0.25" [ngModel]="asPercent(fire.withdrawalRate)" (ngModelChange)="fire.withdrawalRate = fromPercent($event)" />
+      </label>
+      <label class="mc-field">
+        <span>Extra annual expenses</span>
+        <input type="number" step="1000" [(ngModel)]="fire.extraAnnualExpenses" />
+      </label>
+      <label class="mc-check tool-check">
+        <input type="checkbox" [(ngModel)]="fire.includeRecurringExpenses" />
+        <span>Include fixed expenses and subscriptions</span>
+      </label>
+    </div>
+    <section class="tool-results-grid">
+      <div>
+        <span>Annual spending basis</span>
+        <strong>{{ formatMoney(fireAnnualSpending()) }}</strong>
+      </div>
+      <div>
+        <span>FI target</span>
+        <strong>{{ formatMoney(fireNumber()) }}</strong>
+      </div>
+      <div>
+        <span>Portfolio gap</span>
+        <strong>{{ formatMoney(fireGap()) }}</strong>
+      </div>
+      <div>
+        <span>Years at current cashflow</span>
+        <strong>{{ yearsToFire() ?? 'Not reachable' }}</strong>
+        <small>{{ fireEstimateDescription() }}</small>
+      </div>
+    </section>
+  </ui-card>
+}
+@if (activeTool === 'savings-goal') {
+  <ui-card [title]="'Savings goal'" class="tool-card-wide">
+    <p class="mc-help">Enter only money already set aside for this goal. This starts at $0 and does not assume your full net worth is available.</p>
+    <div class="tool-form-grid">
+      <label class="mc-field">
+        <span>Goal name</span>
+        <input type="text" [(ngModel)]="goal.name" />
+      </label>
+      <label class="mc-field">
+        <span>Target amount</span>
+        <input type="number" min="0" step="1000" [(ngModel)]="goal.targetAmount" />
+      </label>
+      <label class="mc-field">
+        <span>Already saved</span>
+        <input type="number" min="0" step="1000" [(ngModel)]="goal.currentSaved" />
+      </label>
+      <label class="mc-field">
+        <span>Years</span>
+        <input type="number" min="0.1" max="80" step="0.5" [(ngModel)]="goal.years" />
+      </label>
+      <label class="mc-field">
+        <span>Expected return (%)</span>
+        <input type="number" min="-50" max="50" step="0.5" [ngModel]="asPercent(goal.expectedReturn)" (ngModelChange)="goal.expectedReturn = fromPercent($event)" />
+      </label>
+    </div>
+    <section class="tool-results-grid">
+      <div>
+        <span>Monthly needed</span>
+        <strong>{{ formatMoney(monthlyGoalContribution()) }}</strong>
+      </div>
+      <div>
+        <span>Projected value</span>
+        <strong>{{ formatMoney(goalProjectedValue()) }}</strong>
+      </div>
+      <div>
+        <span>Target</span>
+        <strong>{{ formatMoney(goal.targetAmount) }}</strong>
+      </div>
+    </section>
+  </ui-card>
+}
+@if (activeTool === 'debt-payoff') {
+  <ui-card [title]="'Debt payoff'" class="tool-card-wide">
+    <p class="mc-help">This calculator starts with a $0 manual estimate. Select one liability to use its saved balance, or enter a hypothetical amount.</p>
+    <div class="tool-form-grid">
+      <label class="mc-field mc-field--wide">
+        <span>Use a saved liability (optional)</span>
+        <select [value]="selectedDebtLiabilityId ?? ''" (change)="selectDebtLiability($any($event.target).value)">
+          <option value="">Manual debt estimate</option>
+          @for (liability of inputs?.liability_sources || []; track liability.id) {
+            <option [value]="liability.id">{{ liability.name }} · {{ formatMoney(liability.balance_owed) }} · as of {{ liability.as_of_date || 'undated' }}</option>
+          }
+        </select>
+        <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open saved liabilities</a>
+      </label>
+      <label class="mc-field">
+        <span>Debt name</span>
+        <input type="text" [(ngModel)]="debt.name" [disabled]="selectedDebtLiabilityId != null" />
+      </label>
+      <label class="mc-field">
+        <span>Balance</span>
+        <input type="number" min="0" step="100" [(ngModel)]="debt.balance" [disabled]="selectedDebtLiabilityId != null" />
+      </label>
+      <label class="mc-field">
+        <span>APR (%)</span>
+        <input type="number" min="0" max="100" step="0.5" [ngModel]="asPercent(debt.apr)" (ngModelChange)="debt.apr = fromPercent($event)" />
+      </label>
+      <label class="mc-field">
+        <span>Minimum payment</span>
+        <input type="number" min="0" step="25" [(ngModel)]="debt.minimumPayment" />
+      </label>
+      <label class="mc-field">
+        <span>Extra payment</span>
+        <input type="number" min="0" step="25" [(ngModel)]="debt.extraPayment" />
+      </label>
+    </div>
+    @if (debtSourceMessage) { <p class="mc-help" role="status">{{ debtSourceMessage }}</p> }
+    <section class="tool-results-grid">
+      <div>
+        <span>Monthly payment</span>
+        <strong>{{ formatMoney(debtMonthlyPayment()) }}</strong>
+      </div>
+      <div>
+        <span>Payoff timeline</span>
+        <strong>{{ debtPayoffMonths() ?? 'No estimate' }} months</strong>
+      </div>
+      <div>
+        <span>Payoff date</span>
+        <strong>{{ debtPayoffDate() }}</strong>
+      </div>
+      <div>
+        <span>Total interest</span>
+        <strong>{{ formatMoney(debtTotalInterest()) }}</strong>
+      </div>
+    </section>
+  </ui-card>
+}

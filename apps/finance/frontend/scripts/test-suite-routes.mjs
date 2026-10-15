@@ -13,6 +13,7 @@ const runId = `${process.pid}-${Date.now()}`;
 const networkName = `finance-suite-${runId}`;
 const apiName = `finance-suite-api-${runId}`;
 const travelName = `finance-suite-travel-${runId}`;
+const mediaName = `finance-suite-media-${runId}`;
 const webName = `finance-suite-web-${runId}`;
 const image = process.env.RELEASE_CACHE_NGINX_IMAGE ?? 'nginx:1.27-alpine';
 
@@ -69,6 +70,25 @@ try {
     '--mount', `type=bind,source=${travelConfig},target=/etc/nginx/conf.d/default.conf,readonly`,
     image,
   ]);
+  const mediaConfig = join(fixtureRoot, 'media.conf');
+  await writeFile(mediaConfig, `server {
+  listen 8000;
+  location = /api/health {
+    default_type application/json;
+    return 200 '{"status":"ok","app":"media"}';
+  }
+  location / {
+    default_type text/plain;
+    return 200 'media-root';
+  }
+}
+`);
+  docker([
+    'run', '--detach', '--rm', '--name', mediaName,
+    '--network', networkName, '--network-alias', 'media',
+    '--mount', `type=bind,source=${mediaConfig},target=/etc/nginx/conf.d/default.conf,readonly`,
+    image,
+  ]);
   docker([
     'run', '--detach', '--rm', '--name', webName,
     '--network', networkName,
@@ -83,12 +103,30 @@ try {
 
   const root = await fetch(`${baseUrl}/`);
   assert.equal(root.status, 200);
-  assert.match(await root.text(), /\/finance\//);
+  assert.match(await root.text(), /\/hub/);
   assert.match(root.headers.get('cache-control') ?? '', /no-store/);
 
   const oldBookmark = await fetch(`${baseUrl}/have`, { redirect: 'manual' });
   assert.equal(oldBookmark.status, 302);
   assert.equal(oldBookmark.headers.get('location'), '/finance/have');
+
+  const sharedLogin = await fetch(`${baseUrl}/auth/login?next=%2Ftravel%2F`);
+  assert.equal(sharedLogin.status, 200);
+  assert.match(sharedLogin.headers.get('content-type') ?? '', /text\/html/);
+  assert.match(await sharedLogin.text(), /<app-root>/);
+  assert.match(sharedLogin.headers.get('cache-control') ?? '', /no-store/);
+
+  const sharedSignup = await fetch(`${baseUrl}/auth/signup`);
+  assert.equal(sharedSignup.status, 200);
+  assert.match(await sharedSignup.text(), /<app-root>/);
+
+  const financeLogin = await fetch(`${baseUrl}/finance/login?next=%2Ftravel%2F`, { redirect: 'manual' });
+  assert.equal(financeLogin.status, 302);
+  assert.equal(financeLogin.headers.get('location'), '/auth/login?next=%2Ftravel%2F');
+
+  const prefixedLogin = await fetch(`${baseUrl}/finance/auth/login?next=%2Ftravel%2F`, { redirect: 'manual' });
+  assert.equal(prefixedLogin.status, 302);
+  assert.equal(prefixedLogin.headers.get('location'), '/auth/login?next=%2Ftravel%2F');
 
   const financeHome = await fetch(`${baseUrl}/finance/have`);
   assert.equal(financeHome.status, 200);
@@ -137,9 +175,22 @@ try {
   assert.equal(travelScript.status, 200);
   assert.match(await travelScript.text(), /console\.log\("travel"\)/);
 
+  const hub = await fetch(`${baseUrl}/hub`);
+  assert.equal(hub.status, 200);
+  assert.match(await hub.text(), /<app-root>/);
+  assert.match(hub.headers.get('cache-control') ?? '', /no-store/);
+
+  const mediaHome = await fetch(`${baseUrl}/media/`);
+  assert.equal(mediaHome.status, 200);
+  assert.equal(await mediaHome.text(), 'media-root');
+
+  const mediaHealth = await fetch(`${baseUrl}/media/api/health`);
+  assert.equal(mediaHealth.status, 200);
+  assert.deepEqual(await mediaHealth.json(), { status: 'ok', app: 'media' });
+
   console.log('suite routes: OK');
 } finally {
-  docker(['rm', '--force', webName, travelName, apiName], true);
+  docker(['rm', '--force', webName, mediaName, travelName, apiName], true);
   docker(['network', 'rm', networkName], true);
   await rm(fixtureRoot, { recursive: true, force: true });
 }

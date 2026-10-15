@@ -3,8 +3,8 @@ import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { BehaviorSubject, from, of, Subject, throwError } from 'rxjs';
 import { TransactionsComponent } from './transactions.component';
 import { FinanceService } from '../services/finance.service';
-import { ToastService } from '../services/toast.service';
-import { ConfirmService } from '../services/confirm.service';
+import { ToastService } from '@vivek/ui';
+import { ConfirmService } from '@vivek/ui';
 import { BankImportFilePreview } from '../models/transaction.model';
 import { buildBankImportPreview, buildBankImportPreviews, listClientBankImports } from '../utils/bank-import.util';
 

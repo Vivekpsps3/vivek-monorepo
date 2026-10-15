@@ -9,7 +9,7 @@ import { CompensationReportComponent } from '../income/compensation-report.compo
 import { FixedExpensesComponent } from '../fixed-expenses/fixed-expenses.component';
 import { SubscriptionsComponent } from '../subscriptions/subscriptions.component';
 import { FinanceService } from '../services/finance.service';
-import { UiButtonComponent } from '../shared/ui';
+import { UiButtonComponent } from '@vivek/ui';
 import { FixedExpense, Subscription } from '../models/transaction.model';
 
 export interface CommitmentRow {

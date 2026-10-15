@@ -13,6 +13,7 @@ import {
   rewrapDekWithPassphrase,
   unlockWithPassphrase,
 } from './vault-crypto';
+import { encodeBase64 } from '@vivek/browser';
 
 describe('vault-crypto', () => {
   const fastIterations = 120_000;
@@ -39,6 +40,15 @@ describe('vault-crypto', () => {
     expect(await decryptJson<typeof payload>(restored!, ct)).toEqual(payload);
     clearDekLocal();
     expect(await restoreDekLocal()).toBeNull();
+  });
+
+  it('treats a stored value with an invalid AES key length as an unusable DEK', async () => {
+    clearDekLocal();
+    localStorage.setItem('finance-dek', btoa('short'));
+
+    await expectAsync(restoreDekLocal()).toBeResolvedTo(null);
+
+    clearDekLocal();
   });
 
   it('encrypts and decrypts JSON with a DEK', async () => {
@@ -94,6 +104,54 @@ describe('vault-crypto', () => {
     const ct = await encryptJson(material.dek, message);
     const roundTrip = await decryptJson<typeof message>(unlocked, ct);
     expect(roundTrip).toEqual(message);
+  });
+
+  it('unlocks the existing base64(iv || AES-GCM ciphertext) DEK wrap format', async () => {
+    const passphrase = 'legacy-vault-passphrase';
+    const salt = new Uint8Array(16).fill(7);
+    const rawDek = new Uint8Array(32).fill(11);
+    const wrapIv = new Uint8Array(12).fill(13);
+    const iterations = fastIterations;
+
+    const passphraseMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(passphrase),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+    const wrappingKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+      passphraseMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+    const wrapCiphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: wrapIv }, wrappingKey, rawDek));
+    const packedWrap = new Uint8Array(wrapIv.length + wrapCiphertext.length);
+    packedWrap.set(wrapIv);
+    packedWrap.set(wrapCiphertext, wrapIv.length);
+
+    const unlocked = await unlockWithPassphrase(
+      passphrase,
+      encodeBase64(salt),
+      iterations,
+      encodeBase64(packedWrap)
+    );
+    const legacyDek = await crypto.subtle.importKey('raw', rawDek, { name: 'AES-GCM' }, false, ['encrypt']);
+    const recordIv = new Uint8Array(12).fill(17);
+    const recordCiphertext = new Uint8Array(
+      await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: recordIv },
+        legacyDek,
+        new TextEncoder().encode(JSON.stringify({ legacy: true }))
+      )
+    );
+    const packedRecord = new Uint8Array(recordIv.length + recordCiphertext.length);
+    packedRecord.set(recordIv);
+    packedRecord.set(recordCiphertext, recordIv.length);
+
+    expect(await decryptJson<{ legacy: boolean }>(unlocked, encodeBase64(packedRecord))).toEqual({ legacy: true });
   });
 
   it('rejects wrong passphrase', async () => {

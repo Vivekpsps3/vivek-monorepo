@@ -446,6 +446,24 @@ def snapshot_pto(policy, usages, today: date) -> dict:
     }
 
 
+def _days_until(start: date, today: date) -> int:
+    return max((start - today).days, 0)
+
+
+def _choose_next(in_progress: list[dict], upcoming: list[dict]) -> dict | None:
+    return (in_progress or upcoming or [None])[0]
+
+
+def _next_action(phase: str, days_until: int) -> str:
+    if phase == "in_progress":
+        return "Open today's plan"
+    if days_until == 0:
+        return "Leaves today"
+    if days_until == 1:
+        return "Leaves tomorrow"
+    return "Review the plan"
+
+
 def attention_for(detail: dict) -> list[dict]:
     items = []
     if detail["phase"] == "past":
@@ -504,16 +522,15 @@ def build_home(db, today: date | None = None) -> dict:
     for item in in_progress + upcoming:
         attention.extend(attention_for(item))
     next_trip = None
-    chosen = (in_progress or upcoming or [None])[0]
+    chosen = _choose_next(in_progress, upcoming)
     if chosen is not None:
-        days_until = (chosen["start_date"] - today).days
         next_trip = {
             "id": chosen["id"],
             "title": chosen["title"],
             "start_date": chosen["start_date"],
             "end_date": chosen["end_date"],
             "phase": chosen["phase"],
-            "days_until": max(days_until, 0),
+            "days_until": _days_until(chosen["start_date"], today),
         }
     pto = snapshot_pto(policy, usages, today)
     next_pto = None
@@ -545,6 +562,32 @@ def build_home(db, today: date | None = None) -> dict:
         "in_progress": in_progress,
         "upcoming": upcoming,
         "past": past[:4],
+    }
+
+
+def build_summary(db, today: date | None = None) -> dict:
+    """Small next-trip card for the Hub. No budgets, notes, or PTO."""
+    today = today or date.today()
+    home = build_home(db, today)
+    card = home["metrics"]["next_trip"]
+    if card is None:
+        return {"today": today, "next_trip": None}
+    detail = next(item for item in (*home["in_progress"], *home["upcoming"]) if item["id"] == card["id"])
+    cities = detail["cities"]
+    return {
+        "today": today,
+        "next_trip": {
+            "id": card["id"],
+            "title": card["title"],
+            "destination": cities[0] if cities else None,
+            "origin_label": detail.get("origin_label") or None,
+            "start_date": card["start_date"],
+            "end_date": card["end_date"],
+            "phase": card["phase"],
+            "days_until": card["days_until"],
+            "next_action": _next_action(card["phase"], card["days_until"]),
+            "href": f"/travel/#/trips/{card['id']}",
+        },
     }
 
 

@@ -589,7 +589,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await page.locator('.account-actions > summary').click();
   await expect(accountMenu).not.toHaveAttribute('open', '');
   await expect.poll(() => page.locator('app-charts ui-card .ui-card').first().evaluate(card => getComputedStyle(card).backgroundColor))
-    .toBe('rgb(32, 35, 32)');
+    .toBe('rgb(22, 27, 34)');
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);
   await holdingsCanvas.scrollIntoViewIfNeeded();
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);
@@ -603,7 +603,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
   await vault.open('/');
   const desktopNav = page.locator('.nav-tabs');
   await expect(desktopNav.getByRole('link')).toHaveCount(6);
-  await expect(desktopNav.getByRole('link', { name: 'Travel', exact: true })).toHaveAttribute('href', '/travel/');
+  await expect(desktopNav.getByRole('link', { name: 'Hub', exact: true })).toHaveAttribute('href', '/hub');
 
   for (const width of [320, 390]) {
     if (width > 320) await vault.open('/');

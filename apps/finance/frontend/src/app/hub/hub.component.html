@@ -1,0 +1,161 @@
+<a class="skip-link" href="#hub-main">Skip to content</a>
+<div class="hub">
+  <header class="hub-bar">
+    <a class="hub-mark" href="/hub" aria-label="Hub home">
+      <span class="hub-mark__glyph" aria-hidden="true"></span>
+      Hub
+    </a>
+    <div class="hub-bar__actions">
+      <div class="theme-split" role="group" aria-label="Color mode">
+        <button type="button" [class.on]="choice === 'system'" [attr.aria-pressed]="choice === 'system'" (click)="setTheme('system')">System</button>
+        <button type="button" [class.on]="choice === 'light'" [attr.aria-pressed]="choice === 'light'" (click)="setTheme('light')">Light</button>
+        <button type="button" [class.on]="choice === 'dark'" [attr.aria-pressed]="choice === 'dark'" (click)="setTheme('dark')">Dark</button>
+      </div>
+      <button type="button" class="text-button" (click)="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <main id="hub-main">
+    <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
+    <h1>{{ name }}</h1>
+    <p class="lede">Finance, travel, and the media you are keeping. Each opens on its own, and each returns here.</p>
+
+    <section class="finance-panel" aria-labelledby="finance-heading">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Finance</p>
+          <h2 id="finance-heading">Net worth</h2>
+        </div>
+        <a class="open-link" routerLink="/">Open Finance</a>
+      </div>
+
+      @if (financeState === 'locked') {
+        <p class="figure-note">Your balances stay encrypted in this browser.</p>
+        <a class="open-link" routerLink="/vault/unlock" [queryParams]="{ next: '/hub' }">Unlock vault</a>
+      } @else if (financeState === 'loading') {
+        <p class="figure-note" role="status">Reading this browser’s vault…</p>
+      } @else if (financeState === 'error') {
+        <p class="figure-note" role="alert">Finance could not be read from this browser. Open Finance to retry.</p>
+      } @else if (netWorth) {
+        <p class="figure">{{ netWorth.total | currency:'USD':'symbol':'1.0-0' }}</p>
+        <p class="figure-note">{{ freshness }}</p>
+        <dl class="split">
+          <div><dt>Assets</dt><dd>{{ netWorth.other_assets | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+          <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+          <div><dt>Debts</dt><dd>{{ netWorth.liabilities | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+        </dl>
+        @if (fidelityAccounts().length) {
+          <h3>Fidelity</h3>
+          <ul class="rows">
+            @for (account of fidelityAccounts(); track account.label) {
+              <li><span>{{ account.label }}</span><strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+            }
+          </ul>
+        }
+        @if (otherAccounts().length) {
+          <h3>Other investments</h3>
+          <ul class="rows">
+            @for (account of otherAccounts(); track account.label) {
+              <li>
+                <span>{{ account.label }} <em>{{ account.positions }} {{ account.positions === 1 ? 'position' : 'positions' }}</em></span>
+                <strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong>
+              </li>
+            }
+          </ul>
+        }
+        @if (positions.length) {
+          <h3>Largest positions</h3>
+          <ul class="rows">
+            @for (position of positions; track position.symbol) {
+              <li><span>{{ position.symbol }} <em>{{ position.account }}</em></span><strong>{{ position.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+            }
+          </ul>
+          <p class="figure-note">Positions are already included in the portfolio total.</p>
+        }
+        @if (cashOverlap) {
+          <p class="figure-note">A manual cash asset and brokerage holdings are both in this net worth. Brokerage cash sweeps can overlap with cash you entered by hand. Change either one in Finance.</p>
+        }
+      }
+    </section>
+
+    <div class="pair">
+      <section class="side-panel" aria-labelledby="travel-heading">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Travel</p>
+            <h2 id="travel-heading">Next trip</h2>
+          </div>
+          <a class="open-link" href="/travel/">Open Travel</a>
+        </div>
+        @if (travelState === 'loading') {
+          <p class="figure-note" role="status">Checking trips…</p>
+        } @else if (travelState === 'unavailable') {
+          <p class="figure-note">Travel is not available from here right now.</p>
+        } @else if (!trip) {
+          <p class="quiet-title">Nothing on the calendar</p>
+          <p class="figure-note">When you add a trip, the next departure shows up here.</p>
+          <a class="open-link" href="/travel/#/trips/new">Plan a trip</a>
+        } @else {
+          <p class="when">{{ tripWhen(trip) }}</p>
+          <p class="quiet-title">{{ tripPlace(trip) }}</p>
+          @if (trip.destination && trip.title !== trip.destination) {
+            <p class="figure-note">{{ trip.title }}</p>
+          }
+          <p class="figure-note">{{ formatDay(trip.start_date) }} – {{ formatDay(trip.end_date) }}</p>
+          <a class="open-link" [href]="trip.href || '/travel/'">{{ trip.next_action }}</a>
+        }
+      </section>
+
+      <section class="side-panel" aria-labelledby="media-heading">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Media</p>
+            <h2 id="media-heading">In progress</h2>
+          </div>
+          <a class="open-link" href="/media/">Open Media</a>
+        </div>
+        @if (mediaState === 'loading') {
+          <p class="figure-note" role="status">Checking your journal…</p>
+        } @else if (mediaState === 'unavailable') {
+          <p class="figure-note">Media is not available from here right now. You can still open the journal when the app is running.</p>
+        } @else if (media) {
+          @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length) {
+            <p class="quiet-title">Your journal is empty</p>
+            <p class="figure-note">Save a film, book, album, song, show, or game when you want to remember it.</p>
+          }
+          @if (media.currently.length) {
+            <ul class="rows">
+              @for (item of media.currently.slice(0, 3); track item.id) {
+                <li><span>{{ item.title }} <em>{{ item.kind }}</em></span><strong>{{ item.progress_label || 'In progress' }}</strong></li>
+              }
+            </ul>
+          }
+          @if (media.next_episodes.length) {
+            <h3>Next episode</h3>
+            <ul class="rows">
+              @for (item of media.next_episodes.slice(0, 2); track item.show_title + item.season + item.episode) {
+                <li><span>{{ item.show_title }}</span><strong>S{{ item.season }} E{{ item.episode }}</strong></li>
+              }
+            </ul>
+          }
+          @if (media.upcoming.length) {
+            <h3>Coming up</h3>
+            <ul class="rows">
+              @for (item of media.upcoming.slice(0, 3); track item.id) {
+                <li><span>{{ item.title }}</span><strong>{{ mediaWhen(item) }}</strong></li>
+              }
+            </ul>
+          }
+          @if (!media.currently.length && media.recent_reviews.length) {
+            <h3>Recent notes</h3>
+            <ul class="rows">
+              @for (item of media.recent_reviews.slice(0, 2); track item.id) {
+                <li><span>{{ item.title }}</span><strong>{{ item.rating == null ? 'Unrated' : item.rating + '/10' }}</strong></li>
+              }
+            </ul>
+          }
+        }
+      </section>
+    </div>
+  </main>
+</div>

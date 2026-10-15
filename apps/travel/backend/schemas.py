@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
+from math import isfinite
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -48,6 +49,8 @@ def _blank(value: str | None, limit: int) -> str | None:
 def _coord(value: float | None, low: float, high: float, label: str) -> float | None:
     if value is None:
         return None
+    if not isfinite(value):
+        raise ValueError(f"{label} must be a finite number.")
     if value < low or value > high:
         raise ValueError(f"{label} must be between {low:g} and {high:g}.")
     return value
@@ -237,8 +240,11 @@ class TripCreate(BaseModel):
     def dates_ok(self):
         if self.end_date < self.start_date:
             raise ValueError("The return date has to be on or after the day you leave.")
-        if self.pto_days is not None and (self.pto_days < 0 or self.pto_days > 366):
-            raise ValueError("PTO days have to be between 0 and 366.")
+        if self.pto_days is not None:
+            if not self.pto_days.is_finite():
+                raise ValueError("PTO days have to be a finite number.")
+            if self.pto_days < 0 or self.pto_days > 366:
+                raise ValueError("PTO days have to be between 0 and 366.")
         return self
 
 
@@ -264,12 +270,26 @@ class TripPatch(BaseModel):
             raise ValueError("Keep the name under 200 characters.")
         return text
 
-    @field_validator("origin_label", "notes")
+    @field_validator("origin_label")
     @classmethod
-    def optional_text(cls, value: str | None) -> str | None:
+    def origin_ok(cls, value: str | None) -> str | None:
+        return _blank(value, 200)
+
+    @field_validator("notes")
+    @classmethod
+    def notes_ok(cls, value: str | None) -> str | None:
+        return _blank(value, 8000)
+
+    @field_validator("pto_days")
+    @classmethod
+    def pto_days_ok(cls, value: Decimal | None) -> Decimal | None:
         if value is None:
             return None
-        return value.strip()
+        if not value.is_finite():
+            raise ValueError("PTO days have to be a finite number.")
+        if value < 0 or value > 366:
+            raise ValueError("PTO days have to be between 0 and 366.")
+        return value
 
 
 class PlanIn(BaseModel):
@@ -499,6 +519,13 @@ class PtoPolicyIn(BaseModel):
     balance_as_of: date
     annual_cap_days: Decimal | None = None
 
+    @field_validator("accrual_amount", "hours_per_day", "balance_days", "annual_cap_days")
+    @classmethod
+    def finite_values(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and not value.is_finite():
+            raise ValueError("Enter a finite PTO value.")
+        return value
+
     @model_validator(mode="after")
     def bounds(self):
         if self.accrual_amount < 0 or self.accrual_amount > 1000:
@@ -533,6 +560,13 @@ class PtoEntryIn(BaseModel):
     @classmethod
     def notes_ok(cls, value: str | None) -> str | None:
         return _blank(value, 4000)
+
+    @field_validator("days")
+    @classmethod
+    def days_finite(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and not value.is_finite():
+            raise ValueError("Days have to be a finite number.")
+        return value
 
     @model_validator(mode="after")
     def dates_ok(self):

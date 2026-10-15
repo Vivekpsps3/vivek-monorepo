@@ -1,6 +1,6 @@
-import { todayIsoDate } from './date.util';
+import { todayIsoDate } from '@vivek/browser';
 
-describe('date.util', () => {
+describe('browser date utilities', () => {
   it('todayIsoDate returns YYYY-MM-DD in local time', () => {
     expect(todayIsoDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const now = new Date();

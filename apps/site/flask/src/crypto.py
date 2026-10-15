@@ -53,6 +53,18 @@ def decrypt_message(key, iv, tag, ciphertext):
     
     return decryptor.update(ciphertext) + decryptor.finalize()
 
+
+def decrypt_message_for_session(session, data):
+    """Decrypt a browser prompt with this socket session's negotiated key."""
+    key = session.get("shared_key") if session else None
+    if key is None:
+        raise ValueError("Key exchange is not complete")
+
+    iv = bytes.fromhex(data["iv"])
+    ciphertext = bytes.fromhex(data["ciphertext"])
+    tag = bytes.fromhex(data["tag"])
+    return decrypt_message(key, iv, tag, ciphertext)
+
 # Simulate communication between Alice and Bob
 def main():
     # Generate key pairs for Alice and Bob

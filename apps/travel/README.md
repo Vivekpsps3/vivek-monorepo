@@ -21,7 +21,7 @@ make travel-install
 make travel-dev
 ```
 
-That listens on `0.0.0.0:8090` at `/`. Its sign-in link points at `/finance/login` on that same port, which is not the Finance app. Do not port-forward it to the public internet.
+That listens on `0.0.0.0:8090` at `/`. Its sign-in link points at `/auth/login` on that same port, which this process does not serve. Do not port-forward it to the public internet.
 
 Set `FLIGHTAWARE_API_KEY` or save a key in Settings for flight lookup. Without a key, type the flight yourself.
 

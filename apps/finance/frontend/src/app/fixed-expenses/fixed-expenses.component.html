@@ -79,7 +79,7 @@
 </div>
 }
 
-<ui-dialog [open]="showModal" labelledBy="fixed-expense-modal-title" (closed)="closeModal()">
+<ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="fixed-expense-modal-title" (closed)="closeModal()">
       <h3 id="fixed-expense-modal-title">{{ editingId ? 'Edit bill' : 'Add bill' }}</h3>
       @if (saveError) { <p role="alert" class="form-error">{{ saveError }}</p> }
       <form (ngSubmit)="saveExpense()" #expenseForm="ngForm">

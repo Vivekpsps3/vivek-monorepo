@@ -15,7 +15,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
-import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '../shared/ui';
+import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
   actualQuoteDate,
   hasUnvaluedPositions,

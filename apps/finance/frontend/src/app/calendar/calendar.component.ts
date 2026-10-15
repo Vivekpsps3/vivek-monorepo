@@ -16,13 +16,13 @@ import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { FinanceService } from '../services/finance.service';
 import { CashflowOccurrence, FixedExpense, JobIncome, Subscription, Transaction } from '../models/transaction.model';
 import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
-import { todayIsoDate } from '../utils/date.util';
+import { todayIsoDate } from '@vivek/browser';
 import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
   chartColorAt,
   chartLegendBottom,
-} from '../../theme/chart-colors';
+} from '@vivek/ui';
 import {
   UiBadgeComponent,
   UiButtonComponent,
@@ -30,7 +30,7 @@ import {
   UiEmptyStateComponent,
   UiPageHeaderComponent,
   UiIconComponent,
-} from '../shared/ui';
+} from '@vivek/ui';
 
 interface CalendarDay {
   date: string;

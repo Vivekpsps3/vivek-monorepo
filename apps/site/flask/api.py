@@ -1,36 +1,36 @@
+import logging
+import os
 import time
 import uuid
-from typing import List, Optional, Any
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from fastapi.middleware.cors import CORSMiddleware
+from src.config import configured_allowed_origins
 
-from src import chat
-
-copilot_chatter = chat.GitHubCopilotChat()
-
-app = FastAPI(title="Dummy OpenAI Compatible Server")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+logger = logging.getLogger(__name__)
+MODEL_IDS = (
+    "gpt-4o",
+    "o1",
+    "gemini-2.0-flash-001",
+    "claude-3.5-sonnet",
+    "claude-3.7-sonnet",
+    "claude-3.7-sonnet-thought",
+    "o3-mini",
 )
-
-
 class ModelInfo(BaseModel):
     id: str
     object: str = "model"
     created: int = Field(default_factory=lambda: int(time.time()))
-    owned_by: str = "dummy-owner"
+    owned_by: str = "copilot"
 
 
 class ModelList(BaseModel):
     object: str = "list"
-    data: List[ModelInfo]
+    data: list[ModelInfo]
 
 
 class OpenAiCompatibleChatMessage(BaseModel):
@@ -39,8 +39,8 @@ class OpenAiCompatibleChatMessage(BaseModel):
 
 
 class OpenAiCompatibleChatCompletionRequest(BaseModel):
-    model: str = "dummy-gpt-4o"
-    messages: List[OpenAiCompatibleChatMessage]
+    model: str = "gpt-4o"
+    messages: list[OpenAiCompatibleChatMessage]
     max_tokens: Optional[int] = 1024
     temperature: Optional[float] = 0.7
     stream: Optional[bool] = False
@@ -64,7 +64,7 @@ class OpenAiCompatibleChatCompletionResponse(BaseModel):
     object: str = "chat.completion"
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
-    choices: List[OpenAiCompatibleChoice]
+    choices: list[OpenAiCompatibleChoice]
     usage: OpenAiCompatibleUsage = Field(default_factory=OpenAiCompatibleUsage)
     system_fingerprint: Optional[str] = None
 
@@ -86,55 +86,84 @@ class OpenAiCompatibleChatCompletionChunk(BaseModel):
     object: str = "chat.completion.chunk"
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
-    choices: List[OpenAiCompatibleChunkChoice]
+    choices: list[OpenAiCompatibleChunkChoice]
     system_fingerprint: Optional[str] = None
 
 
-REAL_MODELS = [
-    ModelInfo(id=i, owned_by="copilot") for i in copilot_chatter.get_models_list()
-]
+def create_app(
+    chatter_factory: Callable[[str], Any] | None = None,
+    allowed_origins: str | Sequence[str] | None = None,
+) -> FastAPI:
+    """Create the OpenAI-compatible adapter without loading credentials or models."""
+    api_app = FastAPI(title="OpenAI Compatible Chat Adapter")
+    api_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(configured_allowed_origins(allowed_origins)),
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+    chatters: dict[str, Any] = {}
 
+    def get_chatter(model_id: str):
+        if model_id not in chatters:
+            if chatter_factory is None:
+                # The optional GitHub-backed adapter is imported and initialized only
+                # after a chat request arrives, never while importing this module.
+                from src.chat import GitHubCopilotChat
 
-@app.get("/models", response_model=ModelList)
-async def list_models(authorization: Optional[str] = Header(None)):
-    print(f"Received request for /v1/models (Auth: {authorization is not None})")
-    return ModelList(data=REAL_MODELS)
+                chatters[model_id] = GitHubCopilotChat(model=model_id)
+            else:
+                chatters[model_id] = chatter_factory(model_id)
+        return chatters[model_id]
 
+    async def chat_response(model_id: str, messages: list[OpenAiCompatibleChatMessage]) -> str:
+        if model_id not in MODEL_IDS:
+            raise HTTPException(status_code=400, detail="Unknown model")
+        formatted_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+        try:
+            return await get_chatter(model_id).chat(formatted_messages, model=model_id)
+        except Exception as error:
+            logger.warning("Chat provider request failed (%s)", type(error).__name__)
+            raise HTTPException(status_code=502, detail="The chat provider request failed.") from None
 
-@app.post("/chat/completions")
-async def create_chat_completion(
-    request: OpenAiCompatibleChatCompletionRequest,
-    authorization: Optional[str] = Header(None),
-):
-    api_key = authorization.split(" ")[1] if authorization and authorization.startswith("Bearer ") else None
-    print(f"Received request for /v1/chat/completions (Auth: {api_key is not None}, Stream: {request.stream})")
-    print(f"Model: {request.model}, Messages: {request.messages}")
+    @api_app.get("/models", response_model=ModelList)
+    async def list_models(authorization: Optional[str] = Header(None)):
+        logger.info("Models requested (authenticated=%s)", authorization is not None)
+        return ModelList(data=[ModelInfo(id=model_id) for model_id in MODEL_IDS])
 
-    if request.stream:
-        stream_id = f"chatcmpl-{uuid.uuid4()}"
-        return StreamingResponse(
-            stream_real_response(request.model, stream_id, request.messages),
-            media_type="text/event-stream",
+    @api_app.post("/chat/completions")
+    async def create_chat_completion(
+        request: OpenAiCompatibleChatCompletionRequest,
+        authorization: Optional[str] = Header(None),
+    ):
+        logger.info(
+            "Chat completion requested (authenticated=%s, stream=%s, model=%s)",
+            authorization is not None,
+            request.stream,
+            request.model,
         )
-    return await create_real_response(request.model, request.messages)
+        if request.model not in MODEL_IDS:
+            raise HTTPException(status_code=400, detail="Unknown model")
+        if request.stream:
+            stream_id = f"chatcmpl-{uuid.uuid4()}"
+            response_content = await chat_response(request.model, request.messages)
+            return StreamingResponse(
+                stream_real_response(request.model, stream_id, response_content),
+                media_type="text/event-stream",
+            )
+        response_content = await chat_response(request.model, request.messages)
+        response_message = OpenAiCompatibleChatMessage(role="assistant", content=response_content)
+        return OpenAiCompatibleChatCompletionResponse(
+            model=request.model,
+            choices=[OpenAiCompatibleChoice(message=response_message)],
+        )
+
+    return api_app
 
 
-async def create_real_response(model_id: str, messages: List[OpenAiCompatibleChatMessage]) -> OpenAiCompatibleChatCompletionResponse:
-    copilot_chatter.set_model(model_id)
-    formatted_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
-    response_content = await copilot_chatter.chat(message=formatted_messages)
-    response_message = OpenAiCompatibleChatMessage(role="assistant", content=response_content)
-    choice = OpenAiCompatibleChoice(message=response_message)
-    return OpenAiCompatibleChatCompletionResponse(model=model_id, choices=[choice])
-
-
-async def stream_real_response(model_id: str, stream_id: str, messages: List[OpenAiCompatibleChatMessage]):
-    copilot_chatter.set_model(model_id)
-    formatted_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
-    text = await copilot_chatter.chat(formatted_messages)
+async def stream_real_response(model_id, stream_id, text):
     words = text.split(" ")
     created_time = int(time.time())
-
     first_chunk_data = OpenAiCompatibleChatCompletionChunk(
         id=stream_id,
         model=model_id,
@@ -142,9 +171,8 @@ async def stream_real_response(model_id: str, stream_id: str, messages: List[Ope
         choices=[OpenAiCompatibleChunkChoice(delta=OpenAiCompatibleDelta(role="assistant"), index=0)],
     )
     yield f"data: {first_chunk_data.model_dump_json(exclude_unset=True)}\n\n"
-
-    for i, word in enumerate(words):
-        delta_content = word + (" " if i < len(words) - 1 else "")
+    for index, word in enumerate(words):
+        delta_content = word + (" " if index < len(words) - 1 else "")
         chunk_data = OpenAiCompatibleChatCompletionChunk(
             id=stream_id,
             model=model_id,
@@ -152,7 +180,6 @@ async def stream_real_response(model_id: str, stream_id: str, messages: List[Ope
             choices=[OpenAiCompatibleChunkChoice(delta=OpenAiCompatibleDelta(content=delta_content), index=0)],
         )
         yield f"data: {chunk_data.model_dump_json(exclude_unset=True)}\n\n"
-
     final_chunk_data = OpenAiCompatibleChatCompletionChunk(
         id=stream_id,
         model=model_id,
@@ -163,7 +190,10 @@ async def stream_real_response(model_id: str, stream_id: str, messages: List[Ope
     yield "data: [DONE]\n\n"
 
 
+app = create_app()
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8085)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("SITE_API_PORT", "8085")))

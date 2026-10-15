@@ -1,9 +1,11 @@
-import { formatCompactMoney, formatMoney } from './format.util';
+import { formatCompactMoney, formatMoney } from '@vivek/browser';
 
-describe('format.util', () => {
+describe('browser money formatting utilities', () => {
   it('formats money with locale currency', () => {
     expect(formatMoney(1234.5, 'USD', 'en-US')).toBe('$1,234.50');
     expect(formatMoney(null)).toBe('—');
+    expect(formatMoney(Number.POSITIVE_INFINITY)).toBe('—');
+    expect(formatCompactMoney(Number.NaN)).toBe('—');
   });
 
   it('formats compact money', () => {

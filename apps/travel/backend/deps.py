@@ -5,11 +5,13 @@ creates and revokes that token.
 """
 
 import os
+from inspect import isawaitable, iscoroutinefunction
 from contextvars import ContextVar
 from dataclasses import dataclass
 
 import httpx
 from fastapi import HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from services.flights import lookup_flights
 from services.places import nominatim_search
@@ -62,6 +64,18 @@ def flightaware_key(db) -> tuple[str | None, str | None]:
     return None, None
 
 
+async def check_principal(request: Request, checker=None) -> AuthResult:
+    """Resolve Finance auth without blocking Travel's async middleware."""
+    check = checker or fetch_principal
+    if iscoroutinefunction(check):
+        result = await check(request)
+    else:
+        result = await run_in_threadpool(check, request)
+        if isawaitable(result):
+            result = await result
+    return result
+
+
 def fetch_principal(request: Request) -> AuthResult:
     """Ask Finance whether this browser's session cookie is still valid."""
     base = os.getenv("FINANCE_API_URL", "http://127.0.0.1:8000").rstrip("/")
@@ -87,11 +101,25 @@ def fetch_principal(request: Request) -> AuthResult:
     if response.status_code >= 400:
         raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.")
     try:
-        user = (response.json() or {}).get("user") or {}
-    except ValueError as exc:
+        payload = response.json()
+    except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.") from exc
-    if not user.get("id"):
-        raise HTTPException(status_code=401, detail="Sign in through Finance.")
-    name = user.get("display_name") or user.get("username") or "You"
-    principal = Principal(id=int(user["id"]), username=user.get("username"), display_name=name)
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.")
+    user = payload.get("user")
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.")
+
+    user_id = user.get("id")
+    username = user.get("username")
+    display_name = user.get("display_name")
+    if type(user_id) is not int or user_id <= 0:
+        raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.")
+    if username is not None and not isinstance(username, str):
+        raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.")
+    if display_name is not None and not isinstance(display_name, str):
+        raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.")
+
+    name = display_name or username or "You"
+    principal = Principal(id=user_id, username=username, display_name=name)
     return AuthResult(principal, response.headers.get_list("set-cookie"))

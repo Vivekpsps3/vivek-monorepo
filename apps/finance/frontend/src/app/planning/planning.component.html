@@ -202,162 +202,34 @@
   @if (loading) {
     <ui-skeleton height="320px" />
   } @else {
-    @if (activeTool !== 'simulation') {
-      <section class="planning-tools-grid">
-        @if (activeTool === 'overview') {
-          <ui-card [title]="'Planning snapshot'">
-            <p class="tool-metric">{{ formatMoney(inputs?.net_worth_total) }}</p>
-            <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} annual cashflow using your selected assumptions.</p>
-            <div class="tool-breakdown">
-              <span>Net worth source: {{ inputs?.net_worth_source || 'balance-sheet' }}</span>
-              <span>Income source: {{ inputs?.annual_income_source || 'active-job-income' }}</span>
-              <span>Spending source: {{ inputs?.annual_spending_source || 'active-recurring-schedules' }}</span>
-              <span>Annual spending: {{ formatMoney(effectiveAnnualSpending()) }}</span>
-              <span>Fixed expenses: {{ formatMoney(inputs?.annual_fixed_expenses) }}</span>
-              <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>
-            </div>
-          </ui-card>
-          <ui-card [title]="'Useful tools'">
-            <p>FIRE, goal funding, debt payoff, and Monte Carlo use the selected spending basis. Saved manual totals remain available in legacy profiles.</p>
-          </ui-card>
-        }
-        @if (activeTool === 'retirement-target') {
-          <ui-card [title]="'Retirement target'" class="tool-card-wide">
-            <p class="mc-help">A quick estimate based on your selected spending, withdrawal rate, portfolio, and current annual cashflow.</p>
-            <div class="tool-form-grid">
-              <label class="mc-field">
-                <span>Withdrawal rate (%)</span>
-                <input type="number" min="1" max="12" step="0.25" [ngModel]="asPercent(fire.withdrawalRate)" (ngModelChange)="fire.withdrawalRate = fromPercent($event)" />
-              </label>
-              <label class="mc-field">
-                <span>Extra annual expenses</span>
-                <input type="number" step="1000" [(ngModel)]="fire.extraAnnualExpenses" />
-              </label>
-              <label class="mc-check tool-check">
-                <input type="checkbox" [(ngModel)]="fire.includeRecurringExpenses" />
-                <span>Include fixed expenses and subscriptions</span>
-              </label>
-            </div>
-            <section class="tool-results-grid">
-              <div>
-                <span>Annual spending basis</span>
-                <strong>{{ formatMoney(fireAnnualSpending()) }}</strong>
-              </div>
-              <div>
-                <span>FI target</span>
-                <strong>{{ formatMoney(fireNumber()) }}</strong>
-              </div>
-              <div>
-                <span>Portfolio gap</span>
-                <strong>{{ formatMoney(fireGap()) }}</strong>
-              </div>
-              <div>
-                <span>Years at current cashflow</span>
-                <strong>{{ yearsToFire() ?? 'Not reachable' }}</strong>
-                <small>{{ fireEstimateDescription() }}</small>
-              </div>
-            </section>
-          </ui-card>
-        }
-        @if (activeTool === 'savings-goal') {
-          <ui-card [title]="'Savings goal'" class="tool-card-wide">
-            <p class="mc-help">Enter only money already set aside for this goal. This starts at $0 and does not assume your full net worth is available.</p>
-            <div class="tool-form-grid">
-              <label class="mc-field">
-                <span>Goal name</span>
-                <input type="text" [(ngModel)]="goal.name" />
-              </label>
-              <label class="mc-field">
-                <span>Target amount</span>
-                <input type="number" min="0" step="1000" [(ngModel)]="goal.targetAmount" />
-              </label>
-              <label class="mc-field">
-                <span>Already saved</span>
-                <input type="number" min="0" step="1000" [(ngModel)]="goal.currentSaved" />
-              </label>
-              <label class="mc-field">
-                <span>Years</span>
-                <input type="number" min="0.1" max="80" step="0.5" [(ngModel)]="goal.years" />
-              </label>
-              <label class="mc-field">
-                <span>Expected return (%)</span>
-                <input type="number" min="-50" max="50" step="0.5" [ngModel]="asPercent(goal.expectedReturn)" (ngModelChange)="goal.expectedReturn = fromPercent($event)" />
-              </label>
-            </div>
-            <section class="tool-results-grid">
-              <div>
-                <span>Monthly needed</span>
-                <strong>{{ formatMoney(monthlyGoalContribution()) }}</strong>
-              </div>
-              <div>
-                <span>Projected value</span>
-                <strong>{{ formatMoney(goalProjectedValue()) }}</strong>
-              </div>
-              <div>
-                <span>Target</span>
-                <strong>{{ formatMoney(goal.targetAmount) }}</strong>
-              </div>
-            </section>
-          </ui-card>
-        }
-        @if (activeTool === 'debt-payoff') {
-          <ui-card [title]="'Debt payoff'" class="tool-card-wide">
-            <p class="mc-help">This calculator starts with a $0 manual estimate. Select one liability to use its saved balance, or enter a hypothetical amount.</p>
-            <div class="tool-form-grid">
-              <label class="mc-field mc-field--wide">
-                <span>Use a saved liability (optional)</span>
-                <select [value]="selectedDebtLiabilityId ?? ''" (change)="selectDebtLiability($any($event.target).value)">
-                  <option value="">Manual debt estimate</option>
-                  @for (liability of inputs?.liability_sources || []; track liability.id) {
-                    <option [value]="liability.id">{{ liability.name }} · {{ formatMoney(liability.balance_owed) }} · as of {{ liability.as_of_date || 'undated' }}</option>
-                  }
-                </select>
-                <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open saved liabilities</a>
-              </label>
-              <label class="mc-field">
-                <span>Debt name</span>
-                <input type="text" [(ngModel)]="debt.name" [disabled]="selectedDebtLiabilityId != null" />
-              </label>
-              <label class="mc-field">
-                <span>Balance</span>
-                <input type="number" min="0" step="100" [(ngModel)]="debt.balance" [disabled]="selectedDebtLiabilityId != null" />
-              </label>
-              <label class="mc-field">
-                <span>APR (%)</span>
-                <input type="number" min="0" max="100" step="0.5" [ngModel]="asPercent(debt.apr)" (ngModelChange)="debt.apr = fromPercent($event)" />
-              </label>
-              <label class="mc-field">
-                <span>Minimum payment</span>
-                <input type="number" min="0" step="25" [(ngModel)]="debt.minimumPayment" />
-              </label>
-              <label class="mc-field">
-                <span>Extra payment</span>
-                <input type="number" min="0" step="25" [(ngModel)]="debt.extraPayment" />
-              </label>
-            </div>
-            @if (debtSourceMessage) { <p class="mc-help" role="status">{{ debtSourceMessage }}</p> }
-            <section class="tool-results-grid">
-              <div>
-                <span>Monthly payment</span>
-                <strong>{{ formatMoney(debtMonthlyPayment()) }}</strong>
-              </div>
-              <div>
-                <span>Payoff timeline</span>
-                <strong>{{ debtPayoffMonths() ?? 'No estimate' }} months</strong>
-              </div>
-              <div>
-                <span>Payoff date</span>
-                <strong>{{ debtPayoffDate() }}</strong>
-              </div>
-              <div>
-                <span>Total interest</span>
-                <strong>{{ formatMoney(debtTotalInterest()) }}</strong>
-              </div>
-            </section>
-          </ui-card>
-        }
-      </section>
-    } @else {
+    <section class="planning-tools-grid" [hidden]="activeTool === 'simulation'">
+      @if (activeTool === 'overview') {
+        <ui-card [title]="'Planning snapshot'">
+          <p class="tool-metric">{{ formatMoney(inputs?.net_worth_total) }}</p>
+          <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} annual cashflow using your selected assumptions.</p>
+          <div class="tool-breakdown">
+            <span>Net worth source: {{ inputs?.net_worth_source || 'balance-sheet' }}</span>
+            <span>Income source: {{ inputs?.annual_income_source || 'active-job-income' }}</span>
+            <span>Spending source: {{ inputs?.annual_spending_source || 'active-recurring-schedules' }}</span>
+            <span>Annual spending: {{ formatMoney(effectiveAnnualSpending()) }}</span>
+            <span>Fixed expenses: {{ formatMoney(inputs?.annual_fixed_expenses) }}</span>
+            <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>
+          </div>
+        </ui-card>
+        <ui-card [title]="'Useful tools'">
+          <p>FIRE, goal funding, debt payoff, and Monte Carlo use the selected spending basis. Saved manual totals remain available in legacy profiles.</p>
+        </ui-card>
+      }
+      <app-planning-quick-tools
+        [activeTool]="activeTool"
+        [inputs]="inputs"
+        [annualSpending]="effectiveAnnualSpending()"
+        [annualCashflow]="effectiveNetCashflow()"
+        [spendingMode]="spendingMode"
+        [spendingComponents]="effectiveSpendingComponents" />
+    </section>
+
+    @if (activeTool === 'simulation') {
     <ui-card [title]="'Saved inputs'">
       <p class="mc-saved-hint">Name and save your assumption set. Simulations are not stored—only these input presets.</p>
       <div class="mc-profiles-row">
@@ -747,142 +619,11 @@
         </ui-button>
       </aside>
 
-      <main class="mc-results" aria-label="Simulation results">
-        @if (!lastRun) {
-          <div class="mc-empty-state">
-            <ui-icon name="trending" size="lg" />
-            <h2>Scenario ready</h2>
-            <p>
-              Run the model to generate percentile bands, dated goal odds, depletion risk, and a
-              projection table from your current planning assumptions.
-            </p>
-          </div>
-        } @else {
-          <ui-card [title]="'Baseline vs scenario'">
-            <p class="mc-help">Both runs use the same starting balances, assumptions, horizon, and random seed. Only annual events assigned to each case differ.</p>
-            <section class="tool-results-grid" aria-label="Baseline scenario comparison">
-              <div>
-                <span>Baseline median ending net worth</span>
-                <strong>{{ formatMoney(baselineRun?.result_summary?.terminal_p50) }}</strong>
-              </div>
-              <div>
-                <span>Scenario median ending net worth</span>
-                <strong>{{ formatMoney(scenarioRun?.result_summary?.terminal_p50) }}</strong>
-              </div>
-              <div>
-                <span>Scenario difference</span>
-                <strong>{{ formatSignedMoney((scenarioRun?.result_summary?.terminal_p50 ?? 0) - (baselineRun?.result_summary?.terminal_p50 ?? 0)) }}</strong>
-              </div>
-            </section>
-          </ui-card>
-          <section class="mc-kpis" aria-label="Monte Carlo result summary">
-            <div class="mc-kpi">
-              <span>Horizon survival</span>
-              <strong [class]="'mc-kpi__value mc-kpi__value--' + successVariant()">
-                {{ formatPct(lastRun.result_summary.success_rate_pct, 'percent') }}
-              </strong>
-              <small>{{ formatPct(lastRun.result_summary.pct_depleted_before_horizon, 'percent') }} depletion risk</small>
-            </div>
-            <div class="mc-kpi">
-              <span>Median ending net worth</span>
-              <strong>{{ formatMoney(lastRun.result_summary.terminal_p50) }}</strong>
-              <small>
-                P10 {{ formatMoney(lastRun.result_summary.terminal_p10) }} · P90
-                {{ formatMoney(lastRun.result_summary.terminal_p90) }}
-              </small>
-            </div>
-            <div class="mc-kpi">
-              <span>Beats starting point</span>
-              <strong>{{ formatPct(lastRun.result_summary.chance_ending_above_start_pct, 'percent') }}</strong>
-              <small>Growth allocation {{ formatPct(lastRun.result_summary.starting_growth_allocation) }}</small>
-            </div>
-          </section>
-
-          <ui-card [title]="'Net worth fan chart'">
-            @if (fanPathCaption(); as caption) {
-              <p class="mc-help">{{ caption }}</p>
-            }
-            <app-monte-carlo-fan-chart
-              [data]="chartData"
-              [checkpoints]="checkpointRows()"
-            />
-          </ui-card>
-
-          @if (checkpointRows().length) {
-            <ui-card [title]="'Checkpoint goals'">
-              <ui-data-table ariaLabel="Checkpoint goal results">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Goal</th>
-                      <th>When</th>
-                      <th>Target</th>
-                      <th>P10</th>
-                      <th>P50</th>
-                      <th>P90</th>
-                      <th>Odds</th>
-                      <th>Gap</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (row of checkpointRows(); track row.label) {
-                      <tr>
-                        <td>{{ row.label }}</td>
-                        <td>Year {{ row.year }}</td>
-                        <td>{{ formatMoney(row.target_net_worth) }}</td>
-                        <td>{{ formatMoney(row.p10) }}</td>
-                        <td>{{ formatMoney(row.p50) }}</td>
-                        <td>{{ formatMoney(row.p90) }}</td>
-                        <td>{{ formatPct(row.success_probability_pct, 'percent') }}</td>
-                        <td [class.positive]="(row.gap_to_goal_p50 ?? 0) >= 0" [class.negative]="(row.gap_to_goal_p50 ?? 0) < 0">
-                          {{ formatSignedMoney(row.gap_to_goal_p50) }}
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </ui-data-table>
-            </ui-card>
-          }
-
-          <ui-card [title]="'Projection table'">
-            <ui-data-table ariaLabel="Projection percentile table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Milestone</th>
-                    <th>P10</th>
-                    <th>P50</th>
-                    <th>P90</th>
-                    <th>Goal odds</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (row of projectionRows(); track row.year) {
-                    <tr>
-                      <td>{{ row.label }}</td>
-                      <td>{{ formatMoney(row.p10) }}</td>
-                      <td>{{ formatMoney(row.p50) }}</td>
-                      <td>{{ formatMoney(row.p90) }}</td>
-                      <td>{{ formatPct(row.success_probability_pct, 'percent') }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </ui-data-table>
-          </ui-card>
-
-          @if (lastRun.result_summary.narrative?.length) {
-            <ui-card [title]="'Readout'">
-              <ul class="mc-narrative">
-                @for (line of lastRun.result_summary.narrative; track line) {
-                  <li>{{ line }}</li>
-                }
-              </ul>
-            </ui-card>
-          }
-        }
-      </main>
+      <app-planning-results
+        [lastRun]="lastRun"
+        [baselineRun]="baselineRun"
+        [scenarioRun]="scenarioRun"
+        [chartData]="chartData" />
     </div>
     }
   }

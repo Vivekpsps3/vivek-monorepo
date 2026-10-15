@@ -1,0 +1,133 @@
+:host {
+  display: contents;
+}
+
+.tool-card-wide {
+  grid-column: 1 / -1;
+}
+
+.mc-help {
+  min-width: 0;
+  margin: 0 0 var(--space-3);
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-tertiary);
+}
+
+.tool-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-3);
+  align-items: end;
+  min-width: 0;
+}
+
+.mc-field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: var(--space-3);
+}
+
+.mc-field--wide {
+  grid-column: 1 / -1;
+}
+
+.mc-field span,
+.mc-check span {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+
+.mc-field input,
+.mc-field select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  height: auto;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.mc-field input:focus,
+.mc-field select:focus {
+  border-color: color-mix(in srgb, var(--accent) 75%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.mc-field input:disabled,
+.mc-field select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mc-check {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0 0 var(--space-3);
+  color: var(--text);
+}
+
+.mc-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.tool-check {
+  min-height: 38px;
+  align-self: end;
+}
+
+.tool-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  min-width: 0;
+}
+
+.tool-results-grid > div {
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.tool-results-grid span {
+  display: block;
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.tool-results-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 1.2rem;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.tool-results-grid small {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}

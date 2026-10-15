@@ -1,33 +1,34 @@
 /**
- * Quiet neutral. Light default. Dark via [data-theme="dark"] or first-visit OS preference.
+ * Cool precision. Light is an editorial paper surface. Dark is a quiet instrument panel.
+ * Same names, same hierarchy. [data-theme="dark"] switches the dark palette.
  */
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #f7f7f5;
+  --bg: #f4f6f8;
   --bg-elevated: #ffffff;
   --card-bg: #ffffff;
-  --surface-2: #f1f2ef;
-  --surface-hover: #e9ebe7;
-  --text: #222522;
-  --text-secondary: #626862;
-  --text-tertiary: #737a73;
-  --accent: #3f6658;
-  --accent-hover: #345648;
-  --accent-glow: rgba(63, 102, 88, 0.1);
-  --border: #daddd8;
-  --border-subtle: #e7e9e5;
+  --surface-2: #eef1f4;
+  --surface-hover: #e6eaee;
+  --text: #14181d;
+  --text-secondary: #52606d;
+  --text-tertiary: #6b7785;
+  --accent: #0f6e6a;
+  --accent-hover: #0c5b58;
+  --accent-glow: rgba(15, 110, 106, 0.1);
+  --border: #d5dbe2;
+  --border-subtle: #e6ebf0;
   --surface-elevated: #ffffff;
-  --surface-soft: #f1f2ef;
-  --text-primary: #222522;
-  --success: #4e6a4b;
-  --danger: #914d43;
-  --danger-hover: #7a4038;
-  --warning: #806b3f;
+  --surface-soft: #eef1f4;
+  --text-primary: #14181d;
+  --success: #2f6b4f;
+  --danger: #8d433c;
+  --danger-hover: #74362f;
+  --warning: #8a6232;
   --on-accent: #ffffff;
-  --border-strong: #aeb4ac;
+  --border-strong: #b7c0ca;
   --backdrop-blur: 8px;
-  --navbar-bg: color-mix(in srgb, var(--bg) 96%, transparent);
+  --navbar-bg: color-mix(in srgb, var(--bg) 92%, white);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -52,18 +53,19 @@
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
-  --shadow-sm: 0 1px 2px rgba(25, 30, 26, 0.05);
-  --shadow-card: 0 1px 2px rgba(25, 30, 26, 0.04), 0 12px 32px rgba(25, 30, 26, 0.05);
-  --shadow-lg: 0 12px 28px rgba(25, 30, 26, 0.14), 0 2px 6px rgba(25, 30, 26, 0.08);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 32, 0.05);
+  --shadow-card: 0 1px 2px rgba(16, 24, 32, 0.04), 0 14px 36px rgba(16, 24, 32, 0.06);
+  --shadow-lg: 0 18px 44px rgba(16, 24, 32, 0.14), 0 2px 6px rgba(16, 24, 32, 0.06);
 
-  --chart-1: #416c5a;
-  --chart-2: #a27747;
-  --chart-3: #9a5b50;
-  --chart-4: #68829a;
-  --chart-5: #7b755f;
-  --chart-6: #aaa397;
+  --chart-1: #0f6e6a;
+  --chart-2: #b8884a;
+  --chart-3: #a15c54;
+  --chart-4: #3d6f8f;
+  --chart-5: #6e6a5e;
+  --chart-6: #b7b1a6;
 
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --motion-fast: 120ms;
   --motion-base: 180ms;
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
@@ -75,38 +77,45 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
-    --bg: #171917;
-    --bg-elevated: #202320;
-    --card-bg: #202320;
-    --surface-2: #292d29;
-    --surface-hover: #323732;
-    --surface-soft: #282c28;
-    --text: #f0f2ed;
-    --text-secondary: #c0c6bf;
-    --text-tertiary: #a1aaa1;
-    --accent: #9bc0ab;
-    --accent-hover: #b1d0bd;
-    --accent-glow: rgba(155, 192, 171, 0.12);
-    --border: #424842;
-    --border-subtle: #303630;
-    --surface-elevated: #202320;
-    --text-primary: #f0f2ed;
-    --success: #a2bd91;
-    --danger: #d29a90;
-    --danger-hover: #e1aca2;
-    --warning: #d1bc85;
-    --on-accent: #171917;
-    --border-strong: #5c645c;
-    --navbar-bg: color-mix(in srgb, var(--bg) 94%, transparent);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24), 0 16px 40px rgba(0, 0, 0, 0.28);
-    --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.48), 0 4px 12px rgba(0, 0, 0, 0.2);
-    --chart-1: #9ac3a7;
-    --chart-2: #d3ab75;
-    --chart-3: #d29084;
-    --chart-4: #94b3cc;
-    --chart-5: #bdb58d;
-    --chart-6: #807d74;
+    --bg: #0e1116;
+    --bg-elevated: #161b22;
+    --card-bg: #161b22;
+    --surface-2: #1c232d;
+    --surface-hover: #24303c;
+    --surface-soft: #1a212b;
+    --text: #e7edf4;
+    --text-secondary: #b7c2ce;
+    --text-tertiary: #8b98a8;
+    --accent: #8fd0c8;
+    --accent-hover: #b7e4de;
+    --accent-glow: rgba(143, 208, 200, 0.14);
+    --border: #2c3846;
+    --border-subtle: #232c38;
+    --surface-elevated: #1b222c;
+    --text-primary: #e7edf4;
+    --success: #9dceaf;
+    --danger: #e0aaa3;
+    --danger-hover: #f0c4be;
+    --warning: #e3c48a;
+    --on-accent: #0e1116;
+    --border-strong: #445266;
+    --navbar-bg: color-mix(in srgb, var(--bg) 88%, #161b22);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px rgba(0, 0, 0, 0.28);
+    --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.46), 0 4px 12px rgba(0, 0, 0, 0.24);
+    --chart-1: #8fd0c8;
+    --chart-2: #e0b56a;
+    --chart-3: #e0a49a;
+    --chart-4: #8eb6d4;
+    --chart-5: #c8c0a4;
+    --chart-6: #7d8794;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {

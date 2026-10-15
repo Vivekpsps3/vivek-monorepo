@@ -1,6 +1,6 @@
-# Suite on one origin: Finance at /finance/, Travel at /travel/, finance API at /api/.
+# Suite on one origin: Hub at /hub, Finance at /finance/, Travel at /travel/, Media at /media/.
 # Usage: docker compose --env-file .env up --build
-# Open: http://127.0.0.1:8080/finance/
+# Open: http://127.0.0.1:8080/hub
 
 services:
   api:
@@ -34,6 +34,7 @@ services:
       dockerfile: Dockerfile
       additional_contexts:
         tokens: ./packages/ui
+        browser: ./packages/browser
     volumes:
       - ${FINANCE_DATA_DIR:-./data}:/data
     environment:
@@ -41,6 +42,33 @@ services:
       TRAVEL_MOUNT_PATH: /travel
       FINANCE_API_URL: http://api:8000
       FLIGHTAWARE_API_KEY: ${FLIGHTAWARE_API_KEY:-}
+    expose:
+      - "8000"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  media:
+    build:
+      context: ./apps/media
+      dockerfile: Dockerfile
+      additional_contexts:
+        tokens: ./packages/ui
+    volumes:
+      - ${FINANCE_DATA_DIR:-./data}:/data
+    environment:
+      MEDIA_DATABASE_URL: sqlite:////data/media.db
+      MEDIA_MOUNT_PATH: /media
+      FINANCE_API_URL: http://api:8000
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      RAWG_API_KEY: ${RAWG_API_KEY:-}
     expose:
       - "8000"
     restart: unless-stopped
@@ -63,6 +91,8 @@ services:
       api:
         condition: service_healthy
       travel:
+        condition: service_started
+      media:
         condition: service_started
     ports:
       - "127.0.0.1:${WEB_PORT:-8080}:80"

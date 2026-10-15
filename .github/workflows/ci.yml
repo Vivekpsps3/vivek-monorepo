@@ -24,7 +24,42 @@ jobs:
       - run: python -m pip install -r apps/finance/backend/requirements.txt
       - working-directory: apps/finance/backend
         run: python -m pytest -q
-      - run: ./scripts/check-doc-paths.sh
+      - run: make test-fast
+
+  travel-backend:
+    name: Travel Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            apps/travel/backend/requirements.txt
+            apps/travel/backend/requirements-dev.txt
+      - run: python -m pip install -r apps/travel/backend/requirements-dev.txt
+      - working-directory: apps/travel/backend
+        run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: node --test apps/travel/backend/static/tests/*.test.mjs
+
+  site-backend:
+    name: Site Flask Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            apps/site/flask/requirements.txt
+            apps/site/flask/requirements-dev.txt
+      - run: python -m pip install -r apps/site/flask/requirements-dev.txt
+      - run: python -m pytest -q apps/site/flask/tests
 
   frontends:
     name: Frontend Builds
@@ -44,8 +79,7 @@ jobs:
           cache-dependency-path: ${{ matrix.app.lock }}
       - working-directory: ${{ matrix.app.dir }}
         run: npm ci
-      - if: matrix.app.dir == 'apps/finance/frontend'
-        working-directory: apps/finance/frontend
+      - working-directory: ${{ matrix.app.dir }}
         run: npm test -- --watch=false --browsers=ChromeHeadless
       - working-directory: ${{ matrix.app.dir }}
         run: npx ng build --configuration development
@@ -55,4 +89,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - run: docker compose build
+      - run: make test-suite-routes

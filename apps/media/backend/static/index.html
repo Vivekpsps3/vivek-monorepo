@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Media</title>
+  <script>
+    (function () {
+      var choice = "system";
+      try {
+        var stored = localStorage.getItem("media-theme");
+        if (stored === "light" || stored === "dark" || stored === "system") choice = stored;
+      } catch (error) {}
+      var theme = choice;
+      if (choice !== "light" && choice !== "dark") {
+        var dark = false;
+        try { dark = window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (error) {}
+        theme = dark ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.setAttribute("data-theme-choice", choice);
+    })();
+  </script>
+  <script>window.MEDIA_ROOT = "__MEDIA_ROOT__";</script>
+  <link rel="icon" href="__MEDIA_ROOT__/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="__MEDIA_ROOT__/tokens.css">
+  <link rel="stylesheet" href="__MEDIA_ROOT__/static/app.css">
+</head>
+<body>
+  <a class="skip" href="#app">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/">Media</a>
+      <nav class="nav" aria-label="Media">
+        <a href="#/" data-nav="home">Now</a>
+        <a href="#/library" data-nav="library">Library</a>
+        <a href="#/search" data-nav="search">Search</a>
+        <a href="#/new" data-nav="new">Add</a>
+      </nav>
+      <div class="topbar-actions">
+        <a class="btn" href="/hub">Hub</a>
+        <div class="theme-switch" role="group" aria-label="Color mode">
+          <button class="btn" type="button" data-theme-value="system" aria-pressed="true">System</button>
+          <button class="btn" type="button" data-theme-value="light" aria-pressed="false">Light</button>
+          <button class="btn" type="button" data-theme-value="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <p id="notice" class="notice" role="status"></p>
+  <main id="app" class="shell"></main>
+  <footer class="footer">
+    <p>Ratings, reviews, and progress stay in this journal. Search can ask TMDB, MusicBrainz, the Cover Art Archive, Open Library, or RAWG for public titles and artwork. Listening and watching history is not collected from those services.</p>
+  </footer>
+  <dialog id="quick-add" aria-labelledby="quick-title">
+    <form data-action="quick-add">
+      <p class="eyebrow">Add to your library</p>
+      <h2 id="quick-title"></h2>
+      <p id="quick-meta" class="meta"></p>
+      <label>Status <select name="status"></select></label>
+      <label>Your rating <input name="rating" type="number" min="0" max="10" step="0.5" placeholder="Unrated"></label>
+      <label>Thought <textarea name="review" rows="4" placeholder="Optional"></textarea></label>
+      <div class="dialog-actions">
+        <button class="btn btn-primary" type="submit">Save</button>
+        <button class="btn" type="button" data-action="close-quick">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <script type="module" src="__MEDIA_ROOT__/static/modules/app.mjs"></script>
+</body>
+</html>

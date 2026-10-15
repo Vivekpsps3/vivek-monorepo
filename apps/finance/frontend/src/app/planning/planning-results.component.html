@@ -1,0 +1,133 @@
+<main class="mc-results" aria-label="Simulation results">
+  @if (!lastRun) {
+    <div class="mc-empty-state">
+      <ui-icon name="trending" size="lg" />
+      <h2>Scenario ready</h2>
+      <p>
+        Run the model to generate percentile bands, dated goal odds, depletion risk, and a
+        projection table from your current planning assumptions.
+      </p>
+    </div>
+  } @else {
+    <ui-card [title]="'Baseline vs scenario'">
+      <p class="mc-help">Both runs use the same starting balances, assumptions, horizon, and random seed. Only annual events assigned to each case differ.</p>
+      <section class="tool-results-grid" aria-label="Baseline scenario comparison">
+        <div>
+          <span>Baseline median ending net worth</span>
+          <strong>{{ formatMoney(baselineRun?.result_summary?.terminal_p50) }}</strong>
+        </div>
+        <div>
+          <span>Scenario median ending net worth</span>
+          <strong>{{ formatMoney(scenarioRun?.result_summary?.terminal_p50) }}</strong>
+        </div>
+        <div>
+          <span>Scenario difference</span>
+          <strong>{{ formatSignedMoney((scenarioRun?.result_summary?.terminal_p50 ?? 0) - (baselineRun?.result_summary?.terminal_p50 ?? 0)) }}</strong>
+        </div>
+      </section>
+    </ui-card>
+    <section class="mc-kpis" aria-label="Monte Carlo result summary">
+      <div class="mc-kpi">
+        <span>Horizon survival</span>
+        <strong [class]="'mc-kpi__value mc-kpi__value--' + successVariant()">
+          {{ formatPct(lastRun.result_summary.success_rate_pct, 'percent') }}
+        </strong>
+        <small>{{ formatPct(lastRun.result_summary.pct_depleted_before_horizon, 'percent') }} depletion risk</small>
+      </div>
+      <div class="mc-kpi">
+        <span>Median ending net worth</span>
+        <strong>{{ formatMoney(lastRun.result_summary.terminal_p50) }}</strong>
+        <small>
+          P10 {{ formatMoney(lastRun.result_summary.terminal_p10) }} · P90
+          {{ formatMoney(lastRun.result_summary.terminal_p90) }}
+        </small>
+      </div>
+      <div class="mc-kpi">
+        <span>Beats starting point</span>
+        <strong>{{ formatPct(lastRun.result_summary.chance_ending_above_start_pct, 'percent') }}</strong>
+        <small>Growth allocation {{ formatPct(lastRun.result_summary.starting_growth_allocation) }}</small>
+      </div>
+    </section>
+
+    <ui-card [title]="'Net worth fan chart'">
+      @if (fanPathCaption(); as caption) {
+        <p class="mc-help">{{ caption }}</p>
+      }
+      <app-monte-carlo-fan-chart [data]="chartData" [checkpoints]="checkpointRows()" />
+    </ui-card>
+
+    @if (checkpointRows().length) {
+      <ui-card [title]="'Checkpoint goals'">
+        <ui-data-table ariaLabel="Checkpoint goal results">
+          <table>
+            <thead>
+              <tr>
+                <th>Goal</th>
+                <th>When</th>
+                <th>Target</th>
+                <th>P10</th>
+                <th>P50</th>
+                <th>P90</th>
+                <th>Odds</th>
+                <th>Gap</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of checkpointRows(); track row.label) {
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td>Year {{ row.year }}</td>
+                  <td>{{ formatMoney(row.target_net_worth) }}</td>
+                  <td>{{ formatMoney(row.p10) }}</td>
+                  <td>{{ formatMoney(row.p50) }}</td>
+                  <td>{{ formatMoney(row.p90) }}</td>
+                  <td>{{ formatPct(row.success_probability_pct, 'percent') }}</td>
+                  <td [class.positive]="(row.gap_to_goal_p50 ?? 0) >= 0" [class.negative]="(row.gap_to_goal_p50 ?? 0) < 0">
+                    {{ formatSignedMoney(row.gap_to_goal_p50) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </ui-data-table>
+      </ui-card>
+    }
+
+    <ui-card [title]="'Projection table'">
+      <ui-data-table ariaLabel="Projection percentile table">
+        <table>
+          <thead>
+            <tr>
+              <th>Milestone</th>
+              <th>P10</th>
+              <th>P50</th>
+              <th>P90</th>
+              <th>Goal odds</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of projectionRows(); track row.year) {
+              <tr>
+                <td>{{ row.label }}</td>
+                <td>{{ formatMoney(row.p10) }}</td>
+                <td>{{ formatMoney(row.p50) }}</td>
+                <td>{{ formatMoney(row.p90) }}</td>
+                <td>{{ formatPct(row.success_probability_pct, 'percent') }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </ui-data-table>
+    </ui-card>
+
+    @if (lastRun.result_summary.narrative?.length) {
+      <ui-card [title]="'Readout'">
+        <ul class="mc-narrative">
+          @for (line of lastRun.result_summary.narrative; track line) {
+            <li>{{ line }}</li>
+          }
+        </ul>
+      </ui-card>
+    }
+  }
+</main>

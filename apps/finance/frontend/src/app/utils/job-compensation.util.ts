@@ -5,7 +5,7 @@ import {
   JobStockPurchase,
   JobStockValuation,
 } from '../models/transaction.model';
-import { todayIsoDate } from './date.util';
+import { todayIsoDate } from '@vivek/browser';
 
 type JobPay = Pick<JobIncomeCreate, 'pay_frequency' | 'base_pay' | 'hours_per_week' | 'effective_date' | 'end_date' | 'promotions' | 'compensation_payments' | 'annual_bonus' | 'annual_equity' | 'annual_other' | 'annual_taxes' | 'annual_deductions'>;
 type JobStocks = Pick<JobIncomeCreate, 'effective_date' | 'stock_symbol' | 'stock_grants' | 'stock_purchases' | 'stock_valuations'>;

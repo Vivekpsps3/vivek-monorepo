@@ -1,13 +1,23 @@
+import {
+  decodeBase64 as b64ToBuf,
+  decryptPackedAesGcm,
+  derivePbkdf2AesGcmKey,
+  encodeBase64 as bufToB64,
+  encryptPackedAesGcm,
+  randomBytes,
+  DEFAULT_PBKDF2_ITERATIONS,
+} from '@vivek/browser';
+
+export { DEFAULT_PBKDF2_ITERATIONS, randomBytes };
+
 /**
  * Browser-only crypto for server-blind storage.
  * Backend never receives passphrases or unwrapped DEKs.
  * Access is vault passphrase only (no recovery-key path).
  */
 
-const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-
-export const DEFAULT_PBKDF2_ITERATIONS = 310_000;
+const textEncoder = new TextEncoder();
 
 export function recordAad(
   collection: string,
@@ -16,26 +26,6 @@ export function recordAad(
   keyVersion: number
 ): Uint8Array {
   return textEncoder.encode(JSON.stringify([collection, clientId, schemaVersion, keyVersion]));
-}
-
-function bufToB64(buf: ArrayBuffer | Uint8Array): string {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-function b64ToBuf(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-export function randomBytes(length: number): Uint8Array {
-  const out = new Uint8Array(length);
-  crypto.getRandomValues(out);
-  return out;
 }
 
 export function randomClientId(prefix = 'rec'): string {
@@ -62,51 +52,21 @@ async function exportRawKey(key: CryptoKey): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.exportKey('raw', key));
 }
 
-async function deriveWrapKey(
-  passphrase: string,
-  salt: Uint8Array,
-  iterations: number
-): Promise<CryptoKey> {
-  const base = await crypto.subtle.importKey('raw', textEncoder.encode(passphrase), 'PBKDF2', false, [
-    'deriveKey',
-  ]);
-  return crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations,
-      hash: 'SHA-256',
-    },
-    base,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-}
-
 /** Wrap format: base64(iv || ciphertext) where iv is 12 bytes. */
 async function wrapKey(dek: CryptoKey, wrapKeyMaterial: CryptoKey): Promise<string> {
-  const iv = randomBytes(12);
   const raw = await exportRawKey(dek);
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrapKeyMaterial, raw);
-  const out = new Uint8Array(iv.length + ct.byteLength);
-  out.set(iv, 0);
-  out.set(new Uint8Array(ct), iv.length);
-  return bufToB64(out);
+  return encryptPackedAesGcm(raw, wrapKeyMaterial);
 }
 
 async function unwrapKey(wrappedB64: string, wrapKeyMaterial: CryptoKey): Promise<CryptoKey> {
-  const packed = b64ToBuf(wrappedB64);
-  const iv = packed.slice(0, 12);
-  const ct = packed.slice(12);
-  const raw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, wrapKeyMaterial, ct);
+  const raw = await decryptPackedAesGcm(wrappedB64, wrapKeyMaterial);
   return importAesKey(raw);
 }
 
 export async function createVaultMaterial(passphrase: string, iterations = DEFAULT_PBKDF2_ITERATIONS) {
   const dek = await generateDataKey();
   const salt = randomBytes(16);
-  const passKey = await deriveWrapKey(passphrase, salt, iterations);
+  const passKey = await derivePbkdf2AesGcmKey(passphrase, salt, iterations);
   const wrappedDek = await wrapKey(dek, passKey);
   return {
     dek,
@@ -129,7 +89,7 @@ export async function unlockWithPassphrase(
   wrappedDekB64: string
 ): Promise<CryptoKey> {
   const salt = b64ToBuf(kdfSaltB64);
-  const passKey = await deriveWrapKey(passphrase, salt, kdfIterations);
+  const passKey = await derivePbkdf2AesGcmKey(passphrase, salt, kdfIterations);
   return unwrapKey(wrappedDekB64, passKey);
 }
 
@@ -139,7 +99,7 @@ export async function rewrapDekWithPassphrase(
   iterations = DEFAULT_PBKDF2_ITERATIONS
 ) {
   const salt = randomBytes(16);
-  const passKey = await deriveWrapKey(passphrase, salt, iterations);
+  const passKey = await derivePbkdf2AesGcmKey(passphrase, salt, iterations);
   return {
     kdf_salt_b64: bufToB64(salt),
     kdf_iterations: iterations,
@@ -153,17 +113,8 @@ export async function encryptJson(
   value: unknown,
   additionalData?: BufferSource
 ): Promise<string> {
-  const iv = randomBytes(12);
-  const plain = textEncoder.encode(JSON.stringify(value));
-  const ct = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv, ...(additionalData ? { additionalData } : {}) },
-    dek,
-    plain
-  );
-  const out = new Uint8Array(iv.length + ct.byteLength);
-  out.set(iv, 0);
-  out.set(new Uint8Array(ct), iv.length);
-  return bufToB64(out);
+  const plain = new TextEncoder().encode(JSON.stringify(value));
+  return encryptPackedAesGcm(plain, dek, additionalData);
 }
 
 export async function decryptJson<T>(
@@ -171,14 +122,7 @@ export async function decryptJson<T>(
   ciphertextB64: string,
   additionalData?: BufferSource
 ): Promise<T> {
-  const packed = b64ToBuf(ciphertextB64);
-  const iv = packed.slice(0, 12);
-  const ct = packed.slice(12);
-  const plain = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv, ...(additionalData ? { additionalData } : {}) },
-    dek,
-    ct
-  );
+  const plain = await decryptPackedAesGcm(ciphertextB64, dek, additionalData);
   return JSON.parse(textDecoder.decode(plain)) as T;
 }
 
@@ -192,7 +136,7 @@ export async function restoreDekLocal(): Promise<CryptoKey | null> {
   try {
     const raw = localStorage.getItem(DEK_STORE);
     if (!raw) return null;
-    return importAesKey(b64ToBuf(raw));
+    return await importAesKey(b64ToBuf(raw));
   } catch {
     return null;
   }

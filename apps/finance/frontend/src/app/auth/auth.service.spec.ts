@@ -1,6 +1,5 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { FinanceService } from '../services/finance.service';
 import { VaultService } from '../crypto/vault.service';
@@ -28,7 +27,6 @@ describe('AuthService passwordless login', () => {
         AuthService,
         { provide: VaultService, useValue: vault },
         { provide: FinanceService, useValue: finance },
-        { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
       ],
     });
     service = TestBed.inject(AuthService);
