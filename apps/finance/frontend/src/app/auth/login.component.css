@@ -11,6 +11,14 @@
   overflow-x: clip;
   background: var(--bg);
 }
+
+.login-shell,
+.auth-layout,
+.login-panel,
+.login-form {
+  min-width: 0;
+  max-width: 100%;
+}
 .auth-layout {
   box-sizing: border-box;
   width: min(100%, 420px);

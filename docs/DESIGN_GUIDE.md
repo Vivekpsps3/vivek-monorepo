@@ -80,9 +80,9 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 
 ## Visual Style
 
-- Light mode is a cool paper surface (`#F4F6F8`), white cards, ink text
-  (`#14181D`), and a deep teal accent (`#0F6E6A`). Dark mode is a separate
-  quiet panel: `#0E1116` canvas, `#161B22` cards, luminous text, and a soft
+- Light mode is a warm paper surface (`#F6F3EE`), warm-white cards, ink text
+  (`#1C1916`), and a deep teal accent (`#0F6E6A`). Dark mode is a separate
+  warm ink panel: `#141311` canvas, `#1E1C19` cards, luminous text, and a soft
   teal accent (`#8FD0C8`). Do not invert one palette to invent the other.
 - Theme choices are System, Light, and Dark. System follows the operating
   system and stays selected when the OS theme changes. The choice is stored

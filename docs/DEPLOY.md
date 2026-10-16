@@ -43,8 +43,8 @@ docker compose up --build
 ```
 
 Finance: http://127.0.0.1:8080/finance/ by default. Travel: http://127.0.0.1:8080/travel/.
-Production publishes the suite on https://vivekpanchagnula.com at `/finance/`,
-`/travel/`, `/auth/login`, and `/api/`. The portfolio at `/` stays offline.
+Production publishes the suite on https://vivekpanchagnula.com at `/hub`,
+`/finance/`, `/travel/`, `/media/`, `/auth/login`, and `/api/`. The portfolio at `/` stays offline.
 Host nginx proxies those paths to http://127.0.0.1:8085.
 `finance.vivekpanchagnula.com` redirects to the apex paths.
 
@@ -127,10 +127,16 @@ Run Compose on the host, then proxy HTTPS traffic to the loopback web port. Fina
 
 ```caddyfile
 vivekpanchagnula.com {
+  handle /hub {
+    reverse_proxy 127.0.0.1:8085
+  }
   handle /finance* {
     reverse_proxy 127.0.0.1:8085
   }
   handle /travel* {
+    reverse_proxy 127.0.0.1:8085
+  }
+  handle /media* {
     reverse_proxy 127.0.0.1:8085
   }
   handle /auth* {
@@ -181,7 +187,7 @@ configuration comes from the repo root `.env` (plus the `production`
 GitHub environment's protection rules). The web container publishes on
 `127.0.0.1:8085`; keep this aligned with
 `/home/vivek/Deployments/nginx/conf/conf.d/vivekpanchagnula.com.conf`,
-which proxies `/finance/`, `/travel/`, `/auth/`, and `/api/` to `http://127.0.0.1:8085`.
+which proxies `/hub`, `/finance/`, `/travel/`, `/media/`, `/auth/`, and `/api/` to `http://127.0.0.1:8085`.
 The portfolio response at `/` stays offline.
 
 This host currently expects passwordless sudo for Docker. Verify that before
