@@ -18,65 +18,7 @@
   <main id="hub-main">
     <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
     <h1>{{ name }}</h1>
-    <p class="lede">Finance, travel, and the media you are keeping. Each opens on its own, and each returns here.</p>
-
-    <section class="finance-panel" aria-labelledby="finance-heading">
-      <div class="panel-head">
-        <div>
-          <p class="eyebrow">Finance</p>
-          <h2 id="finance-heading">Net worth</h2>
-        </div>
-        <a class="open-link" routerLink="/">Open Finance</a>
-      </div>
-
-      @if (financeState === 'locked') {
-        <p class="figure-note">Your balances stay encrypted in this browser.</p>
-        <a class="open-link" routerLink="/vault/unlock" [queryParams]="{ next: '/hub' }">Unlock vault</a>
-      } @else if (financeState === 'loading') {
-        <p class="figure-note" role="status">Reading this browser’s vault…</p>
-      } @else if (financeState === 'error') {
-        <p class="figure-note" role="alert">Finance could not be read from this browser. Open Finance to retry.</p>
-      } @else if (netWorth) {
-        <p class="figure">{{ netWorth.total | currency:'USD':'symbol':'1.0-0' }}</p>
-        <p class="figure-note">{{ freshness }}</p>
-        <dl class="split">
-          <div><dt>Assets</dt><dd>{{ netWorth.other_assets | currency:'USD':'symbol':'1.0-0' }}</dd></div>
-          <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | currency:'USD':'symbol':'1.0-0' }}</dd></div>
-          <div><dt>Debts</dt><dd>{{ netWorth.liabilities | currency:'USD':'symbol':'1.0-0' }}</dd></div>
-        </dl>
-        @if (fidelityAccounts().length) {
-          <h3>Fidelity</h3>
-          <ul class="rows">
-            @for (account of fidelityAccounts(); track account.label) {
-              <li><span>{{ account.label }}</span><strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
-            }
-          </ul>
-        }
-        @if (otherAccounts().length) {
-          <h3>Other investments</h3>
-          <ul class="rows">
-            @for (account of otherAccounts(); track account.label) {
-              <li>
-                <span>{{ account.label }} <em>{{ account.positions }} {{ account.positions === 1 ? 'position' : 'positions' }}</em></span>
-                <strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong>
-              </li>
-            }
-          </ul>
-        }
-        @if (positions.length) {
-          <h3>Largest positions</h3>
-          <ul class="rows">
-            @for (position of positions; track position.symbol) {
-              <li><span>{{ position.symbol }} <em>{{ position.account }}</em></span><strong>{{ position.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
-            }
-          </ul>
-          <p class="figure-note">Positions are already included in the portfolio total.</p>
-        }
-        @if (cashOverlap) {
-          <p class="figure-note">A manual cash asset and brokerage holdings are both in this net worth. Brokerage cash sweeps can overlap with cash you entered by hand. Change either one in Finance.</p>
-        }
-      }
-    </section>
+    <p class="lede">Travel and the media you are keeping. Each opens on its own, and each returns here.</p>
 
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading">
@@ -157,5 +99,65 @@
         }
       </section>
     </div>
+
+    <section class="finance-quiet" aria-labelledby="finance-heading">
+      <div class="finance-quiet__row">
+        <h2 id="finance-heading">Finance</h2>
+        @if (financeState === 'locked') {
+          <p>Balances stay encrypted in this browser. <a routerLink="/vault/unlock" [queryParams]="{ next: '/hub' }">Unlock</a></p>
+        } @else if (financeState === 'loading') {
+          <p role="status">Reading this browser’s vault…</p>
+        } @else if (financeState === 'error') {
+          <p role="alert">Finance could not be read. <a routerLink="/">Retry in Finance</a></p>
+        } @else if (netWorth) {
+          <p class="finance-quiet__amount"><span>Net worth</span> {{ netWorth.total | currency:'USD':'symbol':'1.0-0' }}</p>
+          @if (freshness) {
+            <p>{{ freshness }}</p>
+          }
+        }
+        <a class="open-link" routerLink="/">Open</a>
+      </div>
+      @if (financeState === 'ready' && netWorth) {
+        <details class="finance-more">
+          <summary>Breakdown</summary>
+          <dl class="split">
+            <div><dt>Assets</dt><dd>{{ netWorth.other_assets | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+            <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+            <div><dt>Debts</dt><dd>{{ netWorth.liabilities | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+          </dl>
+          @if (fidelityAccounts().length) {
+            <h3>Fidelity</h3>
+            <ul class="rows">
+              @for (account of fidelityAccounts(); track account.label) {
+                <li><span>{{ account.label }}</span><strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+              }
+            </ul>
+          }
+          @if (otherAccounts().length) {
+            <h3>Other investments</h3>
+            <ul class="rows">
+              @for (account of otherAccounts(); track account.label) {
+                <li>
+                  <span>{{ account.label }} <em>{{ account.positions }} {{ account.positions === 1 ? 'position' : 'positions' }}</em></span>
+                  <strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong>
+                </li>
+              }
+            </ul>
+          }
+          @if (positions.length) {
+            <h3>Largest positions</h3>
+            <ul class="rows">
+              @for (position of positions; track position.symbol) {
+                <li><span>{{ position.symbol }} <em>{{ position.account }}</em></span><strong>{{ position.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+              }
+            </ul>
+            <p class="figure-note">Positions are already included in the portfolio total.</p>
+          }
+          @if (cashOverlap) {
+            <p class="figure-note">A manual cash asset and brokerage holdings are both in this net worth. Brokerage cash sweeps can overlap with cash you entered by hand. Change either one in Finance.</p>
+          }
+        </details>
+      }
+    </section>
   </main>
 </div>
