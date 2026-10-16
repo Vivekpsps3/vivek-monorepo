@@ -77,9 +77,13 @@ def patch_entry(entry_id: int, body: dict, db: Session = Depends(get_db)):
 def delete_entry(entry_id: int, db: Session = Depends(get_db)):
     entry = records.owned_entry(db, require_actor().id, entry_id)
     db.query(Experience).filter(Experience.entry_id == entry.id, Experience.user_id == entry.user_id).delete()
+    from models import EpisodeProgress, SeasonProgress
+    db.query(SeasonProgress).filter(
+        SeasonProgress.user_id == entry.user_id,
+        SeasonProgress.entry_id == entry.id,
+    ).delete(synchronize_session=False)
     episode_ids = [row.id for row in db.query(Episode.id).filter(Episode.catalog_id == entry.catalog_id)]
     if episode_ids:
-        from models import EpisodeProgress
         db.query(EpisodeProgress).filter(
             EpisodeProgress.user_id == entry.user_id,
             EpisodeProgress.episode_id.in_(episode_ids),
@@ -117,6 +121,17 @@ def delete_experience(entry_id: int, experience_id: int, db: Session = Depends(g
     if row is None or row.entry_id != entry.id or row.user_id != entry.user_id:
         raise HTTPException(status_code=404, detail="That experience is not on this item.")
     db.delete(row)
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/seasons")
+def save_season(entry_id: int, body: dict, db: Session = Depends(get_db)):
+    entry = records.owned_entry(db, require_actor().id, entry_id)
+    before = (entry.rating, entry.review)
+    records.save_season(db, entry, body)
+    db.refresh(entry)
+    if (entry.rating, entry.review) != before:
+        raise HTTPException(status_code=500, detail="A season changed the overall review.")
     return records.detail(db, entry)
 
 

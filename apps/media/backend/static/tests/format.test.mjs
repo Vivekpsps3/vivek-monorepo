@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dayLabel, draftKey, escapeHtml, monthCells, monthLabel, ratingText, releaseLabel, safeUrl, shiftMonth, statusLabel, whenLabel } from "../modules/format.mjs";
+import { dayLabel, draftKey, escapeHtml, monthCells, monthLabel, ratingText, releaseLabel, safeUrl, seasonLabel, shiftMonth, statusLabel, whenLabel } from "../modules/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
@@ -9,6 +9,8 @@ test("escapes review text and rejects unsafe artwork urls", () => {
 });
 
 test("keeps unrated distinct from zero and labels statuses by medium", () => {
+  assert.equal(seasonLabel(0), "Specials");
+  assert.equal(seasonLabel(2), "Season 2");
   assert.equal(ratingText(null), "Unrated");
   assert.equal(ratingText(0), "0/10");
   assert.equal(ratingText(7.5), "7.5/10");

@@ -65,6 +65,12 @@ export function experienceLabel(kind) {
   return kind;
 }
 
+export function seasonLabel(number) {
+  const value = Number(number);
+  if (value === 0) return "Specials";
+  return `Season ${value}`;
+}
+
 export function ratingText(value) {
   if (value === null || value === undefined || value === "") return "Unrated";
   const number = Number(value);

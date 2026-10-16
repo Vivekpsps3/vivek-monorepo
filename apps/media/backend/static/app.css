@@ -273,6 +273,29 @@ dialog form { display: grid; gap: var(--space-3); }
   .calendar-agenda { display: grid; gap: var(--space-3); }
 }
 
+.plain li.season-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+}
+.season-main, .season-name { min-width: 0; }
+.season-name { display: block; overflow-wrap: anywhere; }
+.season-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.season-rating { width: 8rem; }
+.season-controls input[type="number"] { width: 100%; }
+
+@media (max-width: 800px) {
+  .plain li.season-row { grid-template-columns: minmax(0, 1fr); }
+  .season-controls, .season-rating { width: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
 }

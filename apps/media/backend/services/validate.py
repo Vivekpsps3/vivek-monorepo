@@ -31,6 +31,35 @@ def clean_text(value, limit: int, field: str, required: bool = False) -> str | N
     return text or None
 
 
+def season_number(value) -> int:
+    if isinstance(value, bool):
+        fail("Season needs a whole number.")
+    if isinstance(value, float):
+        if not value.is_integer():
+            fail("Season needs a whole number.")
+        number = int(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        negative = text.startswith("-")
+        digits = text[1:] if negative else text
+        if not digits.isdigit():
+            fail("Season needs a whole number.")
+        number = -int(digits) if negative else int(digits)
+    elif isinstance(value, int):
+        number = value
+    else:
+        fail("Season needs a whole number.")
+    if number < 0 or number > 200:
+        fail("Season numbers run from 0 to 200.")
+    return number
+
+
+def watched_flag(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    fail("Watched must be yes or no.")
+
+
 def rating_value(value) -> float | None:
     if value is None or value == "":
         return None

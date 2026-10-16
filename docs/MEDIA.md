@@ -2,7 +2,7 @@
 
 Media is a separate app in `apps/media/`. The suite hosts it at `/media/`. It checks the finance session cookie by calling the finance API. It does not open `finance.db`, the encrypted vault, or travel data.
 
-Personal data is private to the signed-in user: library entries, the one overall rating and review, optional experiences, episode progress, favorites, tags, and anticipation. Catalog rows hold public metadata and can be shared by provider id. There is no public profile, feed, or social action.
+Personal data is private to the signed-in user: library entries, the one overall rating and review, optional experiences, episode progress, season watched marks and season ratings, favorites, tags, and anticipation. Catalog rows hold public metadata and can be shared by provider id. There is no public profile, feed, or social action.
 
 `GET /api/summary` returns a short authenticated snapshot for the Hub: items in progress, recent review excerpts, anticipated releases, and the next episode of a followed show. It does not include the full review text.
 
@@ -14,7 +14,7 @@ Manual entry is enough. From the journal: search, or Add, then set a status, a r
 
 An experience (a viewing, reread, listen, or replay) has its own date, notes, and optional score. Saving one does not change the overall rating or review.
 
-TV progress is manual. Mark the next aired episode, or toggle a single episode. Future episodes stay upcoming. Book and game progress is an optional page, percent, or hour value.
+TV progress is manual. Mark the next aired episode, or toggle a single episode. Future episodes stay upcoming. On a series, each season also has its own watched checkbox and rating. Those scores do not change the show rating, the summary, the review, or any episode mark. The summary and review stay the one written opinion for the whole show. A season does not have its own description. A season with no stored episodes can still be added. Clearing that season, when it is not watched and has no rating, removes it. Book and game progress is an optional page, percent, or hour value.
 
 Release dates keep the precision they were given. A month or a year is not shown as a specific day. `MEDIA_TODAY=YYYY-MM-DD` overrides the clock in tests.
 

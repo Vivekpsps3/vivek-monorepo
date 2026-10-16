@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from models import CatalogItem, Episode, EpisodeProgress, Experience, Release, UserEntry, utc_now
+from models import CatalogItem, Episode, EpisodeProgress, Experience, Release, SeasonProgress, UserEntry, utc_now
 from services.clock import today
 from services.validate import (
     EXPERIENCE_KINDS,
@@ -22,6 +22,8 @@ from services.validate import (
     http_url,
     parse_date,
     rating_value,
+    season_number,
+    watched_flag,
 )
 
 
@@ -469,6 +471,11 @@ def episode_state(db: Session, user_id: int, catalog: CatalogItem) -> dict:
         if not watched and episode.air_date and episode.air_date > current:
             upcoming.append(item)
     watched_count = sum(1 for item in serialized if item["watched"])
+    entry = (
+        db.query(UserEntry)
+        .filter(UserEntry.user_id == user_id, UserEntry.catalog_id == catalog.id)
+        .one_or_none()
+    )
     return {
         "episodes": serialized,
         "watched_count": watched_count,
@@ -476,7 +483,69 @@ def episode_state(db: Session, user_id: int, catalog: CatalogItem) -> dict:
         "next_episode": next_episode,
         "upcoming_episodes": upcoming[:4],
         "caught_up": bool(serialized) and next_episode is None,
+        "seasons": season_views(db, user_id, entry.id if entry is not None else None, episodes),
     }
+
+
+def season_views(db: Session, user_id: int, entry_id: int | None, episodes: list[Episode]) -> list[dict]:
+    counts: dict[int, int] = {}
+    for episode in episodes:
+        counts[episode.season_number] = counts.get(episode.season_number, 0) + 1
+    progress: dict[int, SeasonProgress] = {}
+    if entry_id is not None:
+        rows = db.query(SeasonProgress).filter(
+            SeasonProgress.user_id == user_id,
+            SeasonProgress.entry_id == entry_id,
+        )
+        progress = {row.season_number: row for row in rows}
+    views = []
+    for number in sorted(set(counts) | set(progress)):
+        row = progress.get(number)
+        views.append({
+            "season_number": number,
+            "episode_count": counts.get(number, 0),
+            "watched": bool(row.watched) if row is not None else False,
+            "rating": None if row is None else row.rating,
+        })
+    return views
+
+
+def save_season(db: Session, entry: UserEntry, body: dict) -> None:
+    if entry.catalog.kind != "tv":
+        fail("Seasons belong on a show.")
+    if any(key in body for key in ("notes", "review", "summary", "description")):
+        fail("A season does not have its own description. The show review is the overall opinion.")
+    number = season_number(body.get("season_number"))
+    row = (
+        db.query(SeasonProgress)
+        .filter(
+            SeasonProgress.user_id == entry.user_id,
+            SeasonProgress.entry_id == entry.id,
+            SeasonProgress.season_number == number,
+        )
+        .one_or_none()
+    )
+    if "watched" in body:
+        watched = watched_flag(body.get("watched"))
+    else:
+        watched = bool(row.watched) if row is not None else False
+    if "rating" in body:
+        rating = rating_value(body.get("rating"))
+    else:
+        rating = None if row is None else row.rating
+    if not watched and rating is None:
+        if row is not None:
+            db.delete(row)
+            entry.updated_at = utc_now()
+            db.flush()
+        return
+    if row is None:
+        row = SeasonProgress(user_id=entry.user_id, entry_id=entry.id, season_number=number)
+        db.add(row)
+    row.watched = watched
+    row.rating = rating
+    entry.updated_at = utc_now()
+    db.flush()
 
 
 def mark_watched(db: Session, user_id: int, episode: Episode, watched: bool, watched_on: date | None) -> None:

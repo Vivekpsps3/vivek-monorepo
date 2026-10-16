@@ -1,7 +1,8 @@
 """Media journal tables.
 
-Catalog rows are shared public metadata. Ratings, reviews, progress, and
-experiences are private to the finance user id that created them.
+Catalog rows are shared public metadata. Ratings, reviews, progress,
+season scores, and experiences are private to the finance user id that
+created them.
 """
 
 from datetime import date, datetime, timezone
@@ -75,6 +76,7 @@ class UserEntry(Base):
 
     catalog: Mapped[CatalogItem] = relationship(back_populates="entries")
     experiences: Mapped[list["Experience"]] = relationship(cascade="all, delete-orphan", order_by="Experience.id")
+    seasons: Mapped[list["SeasonProgress"]] = relationship(cascade="all, delete-orphan")
 
 
 class Experience(Base):
@@ -104,6 +106,20 @@ class Episode(Base):
     air_date: Mapped[date | None] = mapped_column(Date)
     overview: Mapped[str | None] = mapped_column(Text)
     source_id: Mapped[str | None] = mapped_column(String(120))
+
+
+class SeasonProgress(Base):
+    """Which seasons this user watched, and the score for each. No written opinion."""
+
+    __tablename__ = "season_progress"
+    __table_args__ = (UniqueConstraint("user_id", "entry_id", "season_number", name="uq_season_progress"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    entry_id: Mapped[int] = mapped_column(ForeignKey("user_entries.id", ondelete="CASCADE"), nullable=False, index=True)
+    season_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    watched: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    rating: Mapped[float | None] = mapped_column(Float)
 
 
 class EpisodeProgress(Base):
