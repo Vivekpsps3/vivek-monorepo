@@ -48,6 +48,7 @@ def test_private_routes_reject_a_signed_out_browser(client, monkeypatch):
     assert client.get("/api/health").status_code == 200
     assert client.get("/api/library").status_code == 401
     assert client.get("/api/summary").status_code == 401
+    assert client.get("/api/calendar").status_code == 401
     assert client.post("/api/library", json={"kind": "movie", "title": "Nope"}).status_code == 403
 
 
@@ -397,5 +398,6 @@ def test_home_page_and_tokens_render_without_private_rows(client):
     html = client.get("/").text
     assert "Media" in html
     assert "media-theme" in html
+    assert 'href="#/calendar"' in html
     assert client.get("/tokens.css").status_code == 200
     assert client.get("/favicon.svg").status_code == 200

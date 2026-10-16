@@ -1,3 +1,4 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -5,6 +6,8 @@ from database import get_db
 from deps import require_actor
 from models import Episode, Experience
 from services import providers, records
+from services.calendar import build_calendar
+from services.providers import UA
 from services.summary import build_summary
 from services.validate import clean_text
 
@@ -14,6 +17,19 @@ router = APIRouter()
 @router.get("/summary")
 def summary(db: Session = Depends(get_db)):
     return build_summary(db, require_actor().id)
+
+
+@router.get("/calendar")
+def calendar(month: str | None = None, db: Session = Depends(get_db)):
+    user_id = require_actor().id
+    http = httpx.Client(
+        timeout=8.0,
+        headers={"User-Agent": UA, "Accept": "application/sparql-results+json, application/json"},
+    )
+    try:
+        return build_calendar(db, user_id, month, http)
+    finally:
+        http.close()
 
 
 @router.get("/library")

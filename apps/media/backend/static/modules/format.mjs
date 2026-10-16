@@ -104,3 +104,42 @@ export function whenLabel(item) {
 export function draftKey(entryId) {
   return `media-review-draft:${entryId}`;
 }
+
+export function monthLabel(month) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
+  if (!match) return "";
+  const name = MONTHS[Number(match[2]) - 1];
+  return name ? `${name} ${match[1]}` : "";
+}
+
+export function shiftMonth(month, delta) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
+  if (!match) return "";
+  const shifted = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1 + delta, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function monthCells(month) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
+  if (!match) return [];
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const offset = (new Date(Date.UTC(year, monthIndex, 1)).getUTCDay() + 6) % 7;
+  const count = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  const cells = Array.from({ length: offset }, () => null);
+  for (let day = 1; day <= count; day += 1) {
+    cells.push(`${match[1]}-${match[2]}-${String(day).padStart(2, "0")}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
+export function dayLabel(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const weekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getUTCDay()];
+  const month = MONTHS[Number(match[2]) - 1];
+  if (!weekday || !month) return "";
+  return `${weekday}, ${month} ${Number(match[3])}`;
+}

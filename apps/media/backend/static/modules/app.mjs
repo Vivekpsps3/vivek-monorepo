@@ -1,13 +1,17 @@
 import { api, loginHref } from "./api.mjs";
 import {
+  dayLabel,
   draftKey,
   escapeHtml as esc,
   experienceLabel,
   experienceOptions,
   kindLabel,
+  monthCells,
+  monthLabel,
   ratingText,
   releaseLabel,
   safeUrl,
+  shiftMonth,
   statusLabel,
   statusOptions,
   whenLabel,
@@ -25,6 +29,7 @@ function route() {
   const item = path.match(/^\/item\/(\d+)$/);
   if (item) return { name: "item", id: Number(item[1]), params };
   if (path === "/library") return { name: "library", params };
+  if (path === "/calendar") return { name: "calendar", params };
   if (path === "/search") return { name: "search", params };
   if (path === "/new") return { name: "new", params };
   return { name: "home", params };
@@ -98,8 +103,85 @@ async function viewHome() {
     ${episodeSection(summary.next_episodes)}
     ${releaseSection(summary.upcoming)}
     ${reviewSection(summary.recent_reviews)}
-    <p class="footnote"><a href="#/library">Open the full library</a></p>
+    <p class="footnote"><a href="#/calendar">Episode calendar</a> · <a href="#/library">Open the full library</a></p>
   `;
+}
+
+async function viewCalendar(params) {
+  const requested = params.get("month") || "";
+  const query = requested ? `?month=${encodeURIComponent(requested)}` : "";
+  const data = await api(`/api/calendar${query}`);
+  const label = monthLabel(data.month) || "Calendar";
+  const [year] = String(data.month || "").split("-");
+  const byDay = new Map((data.days || []).map(day => [day.date, day.events || []]));
+  const cells = monthCells(data.month);
+  const heads = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    .map(name => `<div class="cal-head">${name}</div>`)
+    .join("");
+  const grid = cells.map(day => {
+    if (!day) return `<div class="cal-day is-outside"></div>`;
+    const events = byDay.get(day) || [];
+    const today = day === data.today ? " is-today" : "";
+    const chips = events.map(event => eventChip(event, true)).join("");
+    return `<div class="cal-day${today}"><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${chips}</div>`;
+  }).join("");
+  const agendaDays = (data.days || []).filter(day => (day.events || []).length);
+  const agenda = agendaDays.length
+    ? `<ul class="calendar-agenda">${agendaDays.map(day => `<li><time datetime="${esc(day.date)}">${esc(dayLabel(day.date))}</time><div class="cal-events">${(day.events || []).map(event => eventChip(event, false)).join("")}</div></li>`).join("")}</ul>`
+    : `<ul class="calendar-agenda"><li><p class="quiet">Nothing on a specific day this month.</p></li></ul>`;
+  const empty = !agendaDays.length && !(data.month_band || []).length && !(data.year_band || []).length && !(data.unknown || []).length;
+  app.innerHTML = `
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Calendar</p>
+        <h1>${esc(label)}</h1>
+        <p class="lede">Episodes from series you added, movies you are anticipating, and sequels or spin-offs of movies you watched.</p>
+      </div>
+      <div class="hero-actions">
+        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, -1))}">Previous</a>
+        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, 1))}">Next</a>
+      </div>
+    </section>
+    <p class="calendar-legend">
+      <span><span class="swatch cal-episode"></span> Episode</span>
+      <span><span class="swatch cal-anticipated"></span> Anticipated</span>
+      <span><span class="swatch cal-sequel"></span> Sequel</span>
+      <span><span class="swatch cal-spinoff"></span> Spin-off</span>
+    </p>
+    ${data.partial ? `<p class="quiet">Some episode dates and follow-ups could not be loaded yet. What you already saved is still here.</p>` : ""}
+    <div class="calendar-grid" aria-label="${esc(label)}">${heads}${grid}</div>
+    ${agenda}
+    ${band(`Sometime in ${label}`, data.month_band)}
+    ${band(`Sometime in ${year || "this year"}`, data.year_band)}
+    ${band("Date not set", data.unknown)}
+    ${empty ? `<p class="quiet">Nothing lands in this month yet. Add a series, mark a movie as anticipating, or log a movie you watched so its sequels and spin-offs can show up.</p>` : ""}
+    <p class="footnote">Episode dates refresh for series saved from TVMaze or TMDB. Sequels and spin-offs come from Wikidata, or from a TMDB collection when a key is set. A movie you have not watched is left out of that lookup. Nothing here is added to your library automatically.</p>
+  `;
+}
+
+function eventChip(event, compact) {
+  const type = ["episode", "anticipated", "sequel", "spinoff"].includes(event.type) ? event.type : "anticipated";
+  const className = `cal-event cal-${type}${event.watched ? " is-watched" : ""}`;
+  const text = chipText(event, compact);
+  const id = Number(event.entry_id);
+  if (Number.isInteger(id) && id > 0) return `<a class="${className}" href="#/item/${id}">${esc(text)}</a>`;
+  return `<span class="${className}">${esc(text)}</span>`;
+}
+
+function chipText(event, compact) {
+  if (event.type === "episode") {
+    const name = event.title && event.title !== event.short ? `${event.short} ${event.title}` : (event.short || event.title || "Episode");
+    return [event.detail, name].filter(Boolean).join(" · ");
+  }
+  if (compact && event.because) return `${event.title} · ${event.because}`;
+  if (compact) return event.short || event.title || "";
+  return [event.detail, event.title, event.because].filter(Boolean).join(" · ");
+}
+
+function band(title, events) {
+  if (!events || !events.length) return "";
+  const items = events.map(event => `<li>${eventChip(event, false)}</li>`).join("");
+  return `<section><h2>${esc(title)}</h2><ul class="plain">${items}</ul></section>`;
 }
 
 function section(title, items, empty) {
@@ -451,6 +533,7 @@ async function render() {
   app.innerHTML = `<p class="quiet" role="status">Loading…</p>`;
   try {
     if (current.name === "home") await viewHome();
+    else if (current.name === "calendar") await viewCalendar(current.params);
     else if (current.name === "library") await viewLibrary(current.params);
     else if (current.name === "search") viewSearch(current.params);
     else if (current.name === "new") viewNew(current.params);
