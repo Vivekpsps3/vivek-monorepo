@@ -105,10 +105,35 @@
 
 .day-amt {
   font-size: 0.65rem;
-  color: var(--danger);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
+.day-amt--expense { color: var(--danger); }
+.day-amt--income { color: var(--success); }
+.day-amt--negative { color: var(--danger); }
+.month-income-note {
+  margin: var(--space-3) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.calendar-income-sources { margin-top: var(--space-3); }
+.calendar-income-sources summary { cursor: pointer; color: var(--accent); font-size: var(--text-sm); font-weight: 600; }
+.calendar-income-sources__list { margin-top: var(--space-2); }
+.calendar-income-sources__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+}
+.calendar-income-sources__row span { min-width: 0; }
+.calendar-income-sources__row span strong,
+.calendar-income-sources__row small { display: block; }
+.calendar-income-sources__row small { margin-top: var(--space-1); color: var(--text-secondary); line-height: 1.4; }
+.calendar-income-sources__row > strong { flex: none; font-variant-numeric: tabular-nums; }
+.calendar-income-sources__row > strong.negative { color: var(--danger); }
 
 .calendar-cta {
   display: inline-flex;

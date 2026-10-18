@@ -12,14 +12,18 @@ import { firstValueFrom, from, Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
-import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation } from '../models/transaction.model';
+import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation, PaydayFrequency } from '../models/transaction.model';
 import {
   annualBasePayAt,
   isCurrentJob,
   isValidIsoDate,
   jobHistoryError,
   latestStockValuationOnOrBefore,
+  estimatedPaycheckNet,
+  hasPaydaySchedule,
+  paydayDatesBetween,
   replaceStockValuation,
+  salaryPeriodsPerYear,
   stockGrantSnapshot,
   stockPurchaseSnapshot,
   stockSnapshotAt,
@@ -100,6 +104,14 @@ export class IncomeComponent implements OnInit, OnDestroy {
     { value: 'hourly', label: 'Hourly' },
   ];
 
+  readonly paydayFrequencyOptions: UiSelectOption[] = [
+    { value: '', label: 'Not set · use an undated estimate' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'biweekly', label: 'Every two weeks' },
+    { value: 'semimonthly', label: 'Twice a month' },
+    { value: 'monthly', label: 'Monthly' },
+  ];
+
   readonly filingStatusOptions: UiSelectOption[] = [
     { value: 'single', label: 'Single' },
     { value: 'married_joint', label: 'Married filing jointly' },
@@ -117,7 +129,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private refreshingStockSymbols = new Set<string>();
   private jobUpdateQueues = new Map<number, Promise<unknown>>();
-  private editBaseStockValuations: JobStockValuation[] = [];
   private editingJobSnapshot: JobIncome | null = null;
   private destroyed = false;
 
@@ -245,6 +256,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
       employer: '',
       role_title: '',
       pay_frequency: 'annual',
+      payday_frequency: null,
+      first_pay_date: null,
+      second_pay_day: null,
       base_pay: 0,
       hours_per_week: null,
       annual_bonus: 0,
@@ -269,7 +283,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
 
   openAddModal(): void {
     this.editingId = null;
-    this.editBaseStockValuations = [];
     this.editingJobSnapshot = null;
     this.form = this.emptyForm();
     this.taxEstimator = { state: 'average', filingStatus: 'single', preTaxDeductionsPerPeriod: 0 };
@@ -286,11 +299,13 @@ export class IncomeComponent implements OnInit, OnDestroy {
       stock_purchases: (row.stock_purchases || []).map(item => ({ ...item, sales: (item.sales || []).map(sale => ({ ...sale })) })),
       stock_valuations: (row.stock_valuations || []).map(item => ({ ...item })),
     };
-    this.editBaseStockValuations = (row.stock_valuations || []).map(item => ({ ...item }));
     this.form = {
       employer: row.employer,
       role_title: row.role_title || '',
       pay_frequency: row.pay_frequency as IncomePayFrequency,
+      payday_frequency: row.payday_frequency || null,
+      first_pay_date: row.first_pay_date || null,
+      second_pay_day: row.second_pay_day ?? null,
       base_pay: row.base_pay,
       hours_per_week: row.hours_per_week ?? null,
       annual_bonus: row.annual_bonus,
@@ -330,10 +345,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.form.stock_purchases!.push({ date: '', label: '', quantity: 0, price_paid_per_share: 0, market_price_at_purchase: null, sales: [] });
   }
 
-  addStockValuation(): void {
-    this.form.stock_valuations!.push({ date: '', price_per_share: 0 });
-  }
-
   addStockSale(grant: JobStockGrant): void {
     grant.sales = grant.sales || [];
     grant.sales.push({ date: '', shares: 0, cash_proceeds: 0 });
@@ -349,12 +360,35 @@ export class IncomeComponent implements OnInit, OnDestroy {
     return this.stockPriceDrafts[row.id];
   }
 
-  latestStockPrice(row: JobIncome, cutoff = todayIsoDate()): JobStockValuation | undefined {
-    return latestStockValuationOnOrBefore(row.stock_valuations || [], cutoff, row.effective_date, row.stock_symbol);
+  paydaySummary(row: JobIncome): string {
+    if (!row.is_active) return 'Inactive job · no projected paychecks';
+    if (!hasPaydaySchedule(row)) return 'Pay dates not set · monthly income is an estimate';
+    const today = todayIsoDate();
+    const from = [today, row.first_pay_date!, row.effective_date].sort().at(-1)!;
+    const horizon = new Date(Date.parse(`${from}T00:00:00Z`) + 370 * 86_400_000).toISOString().slice(0, 10);
+    const next = paydayDatesBetween(row, from, horizon)[0];
+    return next
+      ? `Next paycheck ${next} · about $${estimatedPaycheckNet(row, next).toFixed(2)} net`
+      : 'No upcoming paycheck date before this job ends';
   }
 
-  isMarketStockValuation(valuation: JobStockValuation): boolean {
-    return Boolean(valuation.symbol) && valuation.source !== 'manual';
+  paydayScheduleChanged(): void {
+    if (!this.form.payday_frequency) {
+      this.form.first_pay_date = null;
+      this.form.second_pay_day = null;
+    } else if (this.form.payday_frequency !== 'semimonthly') {
+      this.form.second_pay_day = null;
+    }
+    this.cdr.markForCheck();
+  }
+
+  setPaydayFrequency(value: string): void {
+    this.form.payday_frequency = value ? value as PaydayFrequency : null;
+    this.paydayScheduleChanged();
+  }
+
+  latestStockPrice(row: JobIncome, cutoff = todayIsoDate()): JobStockValuation | undefined {
+    return latestStockValuationOnOrBefore(row.stock_valuations || [], cutoff, row.effective_date, row.stock_symbol);
   }
 
   stockQuoteStatus(row: JobIncome): string {
@@ -399,9 +433,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
       const symbol = this.normalizeStockSymbol(saved.stock_symbol || row.stock_symbol || '');
       if (symbol) this.stockQuoteStatuses[symbol] = {
           state: 'updated',
-          message: `Saved manual price $${price.toFixed(4)} per share for ${draft.date}. Earlier and later dated values remain available for their own snapshots.`,
+          message: `Saved manual price $${price.toFixed(4)} per share as of ${draft.date}. This replaces the prior manual price.`,
       };
-      this.toastService.success('Dated share price saved');
+      this.toastService.success('Current manual share price saved');
       this.cdr.markForCheck();
     }).catch(() => {
       if (!this.destroyed) {
@@ -413,7 +447,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
             ? `Manual price could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
             : 'Manual price could not be saved. Grant and ESPP purchase prices remain the valuation fallback.',
         };
-        this.toastService.error('Could not save the dated share price.');
+        this.toastService.error('Could not save the current manual share price.');
       }
     }).finally(() => {
       this.savingStockPriceIds.delete(row.id);
@@ -508,34 +542,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
     }
   }
 
-  private mergeStockValuationEdits(
-    base: JobStockValuation[],
-    edited: JobStockValuation[],
-    latest: JobStockValuation[]
-  ): JobStockValuation[] {
-    const byDate = (items: JobStockValuation[]) => new Map(items.map(item => [item.date, item]));
-    const original = byDate(base);
-    const form = byDate(edited);
-    const current = byDate(latest);
-    const dates = [...new Set([...original.keys(), ...form.keys(), ...current.keys()])].sort();
-    const comparable = (item?: JobStockValuation) => item ? JSON.stringify({
-      date: item.date,
-      price_per_share: Number(item.price_per_share),
-      source: item.source || 'manual',
-      price_as_of: item.price_as_of || null,
-      observed_date: item.observed_date || null,
-      symbol: item.symbol || null,
-    }) : undefined;
-    const merged: JobStockValuation[] = [];
-    for (const date of dates) {
-      const before = original.get(date);
-      const changedInForm = comparable(form.get(date)) !== comparable(before);
-      const chosen = changedInForm ? form.get(date) : current.get(date) || before;
-      if (chosen) merged.push({ ...chosen });
-    }
-    return merged;
-  }
-
   private markQuoteUnavailable(symbol: string, reason: string): void {
     const latest = this.incomes
       .filter(row => this.normalizeStockSymbol(row.stock_symbol || '') === symbol)
@@ -604,6 +610,11 @@ export class IncomeComponent implements OnInit, OnDestroy {
       ...this.form,
       employer: this.form.employer.trim(),
       end_date: this.form.end_date || null,
+      payday_frequency: this.form.payday_frequency || null,
+      first_pay_date: this.form.first_pay_date || null,
+      second_pay_day: this.form.payday_frequency === 'semimonthly' && this.form.second_pay_day != null
+        ? Number(this.form.second_pay_day)
+        : null,
       stock_symbol: this.normalizeStockSymbol(this.form.stock_symbol || '') || null,
       promotions: [...(this.form.promotions || [])]
         .map(item => ({ ...item, annual_base_pay: this.roundMoney(item.annual_base_pay), role_title: item.role_title?.trim() || '' }))
@@ -636,9 +647,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
             .sort((a, b) => a.date.localeCompare(b.date)),
         }))
         .sort((a, b) => a.date.localeCompare(b.date)),
-      stock_valuations: [...(this.form.stock_valuations || [])]
-        .map(item => ({ ...item, source: item.source || 'manual', price_as_of: item.price_as_of || null, price_per_share: Number(item.price_per_share) }))
-        .sort((a, b) => a.date.localeCompare(b.date)),
       role_title: this.form.role_title?.trim() || '',
       notes: this.form.notes?.trim() || '',
       base_pay: this.roundMoney(this.form.base_pay),
@@ -652,13 +660,11 @@ export class IncomeComponent implements OnInit, OnDestroy {
       annual_deductions: this.roundMoney((this.form.deductions_per_period || 0) * this.payPeriodsPerYear),
     };
     const saveId = this.editingId;
-    const editBaseValuations = this.editBaseStockValuations.map(item => ({ ...item }));
-    const editedValuations = payload.stock_valuations || [];
     const request =
       saveId !== null
         ? from(this.enqueueJobIncomeUpdate(saveId, latest => ({
             ...payload,
-            stock_valuations: this.mergeStockValuationEdits(editBaseValuations, editedValuations, latest.stock_valuations || []),
+            stock_valuations: [...(latest.stock_valuations || [])],
           }), this.editingJobSnapshot || undefined))
         : this.financeService.addJobIncome(payload);
 
@@ -704,11 +710,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
   }
 
   private periodsPerYear(frequency: IncomePayFrequency): number {
-    if (frequency === 'monthly') return 12;
-    if (frequency === 'semimonthly') return 24;
-    if (frequency === 'biweekly') return 26;
-    if (frequency === 'weekly' || frequency === 'hourly') return 52;
-    return 1;
+    return salaryPeriodsPerYear(frequency);
   }
 
   private estimatedFederalEffectiveRate(annualIncome: number, filingStatus: string): number {

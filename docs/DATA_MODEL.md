@@ -96,12 +96,12 @@ Separate from the transaction ledger and balance sheet. Code: `apps/finance/fron
 
 | Encrypted collection | Purpose |
 |-------|---------|
-| `job_incomes` | Employer/pay configuration (frequency, base pay, bonus/equity, taxes/deductions) |
+| `job_incomes` | Employer/pay configuration (base-pay unit, optional paycheck schedule, bonus/equity, taxes/deductions) |
 | `fixed_expenses` | Named recurring bills (rent, utilities, etc.) with frequency and date range |
 | `subscriptions` | Recurring subscription amounts with `next_bill_date` |
 
 The cashflow summary is computed client-side after vault unlock (`apps/finance/frontend/src/app/crypto/client-finance.ts`).
-`total_income`, `total_expenses`, and `net_cashflow` are one stream: posted transaction effects plus job pay and bill/subscription occurrences that are not already posted. Job pay and posted income within 20% count once, keeping the larger figure. A bill within four days and 2% (or $1) of a posted purchase counts once. `observed_*` remains the ledger alone and `scheduled_*` remains the full repeating projection. There is no cashflow-summary HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, or net worth.
+`total_income`, `total_expenses`, and `net_cashflow` are one stream: posted transaction effects plus projected job pay, dated compensation payments, stock-sale proceeds, and bill/subscription occurrences that are not already posted. Job pay and posted income within 20% count once, keeping the larger figure; the smaller side appears as a negative, undated aggregate adjustment. That adjustment is not matched to a specific paycheck or deposit. A bill within four days and 2% (or $1) of a posted purchase counts once. `observed_*` remains the ledger alone and `scheduled_*` remains the full repeating projection. Home and Calendar show each income source and its date, or explicitly mark timing as unknown; those rows add to `total_income`. There is no cashflow-summary HTTP endpoint. This is a cashflow view only: it does **not** write assets, liabilities, holdings, or net worth.
 
 `fixed_expenses.due_day` places occurrences on the configured day within each period when present; `start_date` and frequency define the schedule, and `end_date` bounds it. Subscriptions use `next_bill_date` as their schedule anchor. Recurring shows the next dates for editing. Home, charts, and Calendar include occurrences that do not already match a posted purchase.
 
@@ -116,15 +116,29 @@ and partial sales). Employee-paid amounts are funding basis; stock compensation 
 shares' economic value less those contributions. Existing equity-grant basis remains
 unchanged. A job may have an optional public `stock_symbol`; quote refresh sends only
 that ticker to the public market endpoint. A job-level `stock_valuations` list stores
-dated manual prices and saved market quotes, including quote source and fetch time when
-available. Market date is stored separately from fetch time. A new price replaces the
-same-day price, preserving other dates.
+dated market quotes, including quote source and fetch time when available, and the one
+current manual share price. Market date is stored separately from fetch time. Saving a
+manual price replaces prior manual marks and any market quote for the same date, while
+retaining market quotes from other dates. Older encrypted records with multiple manual
+marks remain readable until the user saves a manual price; that save keeps only the new
+manual mark. There is no manual price history.
 These fields live inside the existing encrypted `job_incomes` collection; no plaintext
 schema or server API migration is needed. Older records with no history retain their
 prior calculation behavior.
 
-Valuations can be entered manually for private or unsupported shares, or refreshed from
-a public ticker. A historical cutoff uses only the latest valid price dated on or before
+Paycheck timing is optional and separate from `pay_frequency`, which describes the
+unit used to enter base pay and per-period withholding. `payday_frequency` can be
+weekly, biweekly, semimonthly, or monthly; `first_pay_date` anchors projected paychecks
+forward, and semimonthly schedules also store `second_pay_day` (1–31, clamped to the
+month's last day). The app does not infer paydays before the anchor. Without a schedule,
+base salary remains a monthly accrual estimate with unknown dates. With a schedule,
+base salary appears as dated estimated net paychecks; annual bonus/equity/other amounts
+remain separate undated estimates. Dated payments are additional amounts; clear an annual
+estimate when it represents the same payout to avoid counting it twice.
+
+The current manual price can be entered for private or unsupported shares; public ticker
+quotes are refreshed separately. Manual prices have an as-of date and apply to snapshots
+on or after that date. A historical cutoff uses the latest valid mark dated on or before
 that cutoff; a market quote fetched after a lot was acquired can mark that lot from its
 observed date. A quote's market date may precede the job start, but the quote is not used
 for a lot until the quote has been observed and that lot has been acquired. A future-dated
@@ -147,11 +161,14 @@ unchanged. Stock grants, sales, and valuations do not update assets, holdings,
 transactions, or net worth.
 
 Current income and Path inputs only include enabled jobs whose start/end dates
-contain today. Scheduled cashflow prorates recurring pay across inclusive job
-boundaries and applies each promotion from its date. Dated payments count once
-in their selected period, including final payments after employment ends.
-Annual taxes/deductions remain recurring estimates; dated payments do not carry
-an additional withholding estimate.
+contain today. Without a payday schedule, cashflow prorates base and annual pay
+estimates across inclusive job boundaries and applies each promotion from its date.
+With a schedule, projected base pay appears only on configured dates after the anchor;
+annual bonus/equity/other estimates remain date-unknown and are prorated across eligible
+job days. For enabled jobs, dated payments count once in their selected period, including final payments
+after employment ends. Annual taxes/deductions remain estimates; a scheduled paycheck
+spreads the existing annualized withholding across its payday cadence, and dated payments
+do not carry an additional withholding estimate.
 
 Recurring → Jobs & pay compensation history groups gross compensation
 by employer (trimmed, case insensitive), including inactive/past jobs. Its range

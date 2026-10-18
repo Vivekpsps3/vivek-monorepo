@@ -79,7 +79,7 @@ label {
   gap: var(--space-1);
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]),
 textarea,
 select {
   width: 100%;

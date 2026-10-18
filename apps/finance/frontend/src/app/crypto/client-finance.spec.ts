@@ -305,6 +305,79 @@ describe('client-finance', () => {
     ]);
   });
 
+  it('breaks income into recorded, estimated, dated compensation, and stock-sale sources that reconcile after overlap', () => {
+    const job = {
+      id: 41,
+      employer: 'Acme',
+      pay_frequency: 'annual',
+      base_pay: 36525,
+      annual_bonus: 0,
+      annual_equity: 0,
+      annual_other: 0,
+      annual_taxes: 3652.5,
+      annual_deductions: 0,
+      effective_date: '2026-01-01',
+      is_active: true,
+      compensation_payments: [{ date: '2026-01-15', kind: 'bonus', amount: 500, label: 'Q4 bonus' }],
+      stock_symbol: 'ACME',
+      stock_grants: [{
+        date: '2025-01-01', origin: 'equity', label: 'Vesting lot', quantity: 10, price_at_grant: 10,
+        sales: [{ date: '2026-01-20', shares: 2, cash_proceeds: 200 }],
+      }],
+      stock_purchases: [{
+        date: '2025-01-01', label: 'ESPP 2025', quantity: 10, price_paid_per_share: 10,
+        sales: [{ date: '2026-01-24', shares: 3, cash_proceeds: 300 }],
+      }],
+    } as JobIncome;
+    const transactions: Transaction[] = [{
+      id: 12, date: '2026-01-16', type: 'income', category: 'pay', amount: 3800,
+      merchant: 'Payroll', source: 'import',
+    }];
+    const summary = computeCashflowSummary('2026-01-01', '2026-01-31', transactions, [job], [], []);
+
+    expect(summary.scheduled_income).toBe(3790);
+    expect(summary.observed_income).toBe(3800);
+    expect(summary.income_overlap_adjustment).toBe(-3790);
+    expect(summary.total_income).toBe(3800);
+    expect(summary.income_occurrences.reduce((sum, row) => sum + row.amount, 0)).toBe(summary.total_income);
+    expect(summary.income_occurrences).toEqual(jasmine.arrayContaining([
+      jasmine.objectContaining({ date: '2026-01-16', kind: 'posted', name: 'Payroll', amount: 3800 }),
+      jasmine.objectContaining({ date: null, kind: 'estimate', label: 'Base pay estimate', amount: 3100 }),
+      jasmine.objectContaining({ date: null, kind: 'estimate', label: 'Estimated taxes and deductions', amount: -310 }),
+      jasmine.objectContaining({ date: '2026-01-15', kind: 'compensation', label: 'Dated bonus payment', amount: 500 }),
+      jasmine.objectContaining({ date: '2026-01-20', kind: 'stock_sale', label: 'Stock grant sale', amount: 200 }),
+      jasmine.objectContaining({ date: '2026-01-24', kind: 'stock_sale', label: 'ESPP sale', amount: 300 }),
+      jasmine.objectContaining({ date: null, kind: 'overlap', amount: -3790 }),
+    ]));
+    expect(summary.income_occurrences.find(row => row.kind === 'overlap')?.detail).toContain('within 20%');
+  });
+
+  it('shows only explicit paycheck dates from the first configured payday onward', () => {
+    const job = {
+      id: 51,
+      employer: 'Northwind',
+      pay_frequency: 'annual',
+      base_pay: 52000,
+      annual_bonus: 0,
+      annual_equity: 0,
+      annual_other: 0,
+      annual_taxes: 0,
+      annual_deductions: 0,
+      effective_date: '2026-01-01',
+      payday_frequency: 'weekly',
+      first_pay_date: '2026-01-08',
+      is_active: true,
+    } as JobIncome;
+    const beforeAnchor = computeCashflowSummary('2026-01-01', '2026-01-07', [], [job], [], []);
+    const month = computeCashflowSummary('2026-01-01', '2026-01-31', [], [job], [], []);
+    expect(beforeAnchor.income_occurrences.filter(row => row.kind === 'paycheck')).toEqual([]);
+    expect(month.scheduled_income).toBe(4000);
+    expect(month.income_occurrences.filter(row => row.kind === 'paycheck').map(row => row.date)).toEqual([
+      '2026-01-08', '2026-01-15', '2026-01-22', '2026-01-29',
+    ]);
+    expect(month.income_occurrences.reduce((sum, row) => sum + row.amount, 0)).toBe(month.total_income);
+  });
+
   it('counts matching pay and bills once', () => {
     const txs: Transaction[] = [
       { id: 1, date: '2026-01-15', type: 'income', category: 'pay', amount: 3000 },

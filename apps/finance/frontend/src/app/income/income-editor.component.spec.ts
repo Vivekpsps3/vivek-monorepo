@@ -112,23 +112,40 @@ describe('Jobs and pay editor regressions', () => {
     expect(finance.updateJobIncome.calls.mostRecent().args[1].compensation_payments).toEqual([jasmine.objectContaining({ date: '2026-01-31', amount: 1000 })]);
   });
 
-  it('records a stock bonus, valuation, and sale through the rendered editor and updates annual compensation', async () => {
+  it('shows the next configured payday for active jobs and keeps inactive jobs out of the projection', async () => {
+    const scheduledJob = enrichJobIncome({
+      ...job,
+      id: 9,
+      end_date: null,
+      payday_frequency: 'biweekly',
+      first_pay_date: '2026-10-15',
+      second_pay_day: null,
+    } as JobIncome);
+    incomes.next([scheduledJob]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Next paycheck 2026-10-15');
+    expect(fixture.componentInstance.paydaySummary({ ...scheduledJob, is_active: false })).toContain('Inactive job');
+    button('Edit', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[name="first_pay_date"]').value).toBe('2026-10-15');
+  });
+
+  it('records a stock bonus and sale through the rendered editor and updates annual compensation', async () => {
     button('Edit', fixture).click();
     fixture.detectChanges();
     expandEditorDetails();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    button('Add valuation', fixture).click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
     button('Add stock grant', fixture).click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    enter(stockInputByLabel('Valuation date'), '2026-01-31');
-    enter(stockInputByLabel('Share price'), '200');
     enter(stockInputByLabel('Grant date'), '2026-01-01');
     const origin = stockSelectByLabel('Award type');
     origin.value = 'bonus';
@@ -156,7 +173,7 @@ describe('Jobs and pay editor regressions', () => {
         date: '2026-01-01', origin: 'bonus', quantity: 200, price_at_grant: 100,
         sales: [{ date: '2026-01-20', shares: 100, cash_proceeds: 15000 }],
       })],
-      stock_valuations: [jasmine.objectContaining({ date: '2026-01-31', price_per_share: 200, source: 'manual', price_as_of: null })],
+      stock_valuations: [],
     }));
     expect(fixture.nativeElement.textContent).toContain('100 shares converted to cash on 2026-01-20');
   });
@@ -215,11 +232,7 @@ describe('Jobs and pay editor regressions', () => {
     expandEditorDetails();
     await fixture.whenStable();
     fixture.detectChanges();
-    const quoteInForm = incomeComponent.form.stock_valuations![0];
-    expect(quoteInForm.date).toBe('2026-10-08');
-    expect(incomeComponent.isMarketStockValuation(quoteInForm)).toBeTrue();
-    const quoteDateInput = stockInputByLabel('Valuation date');
-    expect(quoteDateInput.getAttribute('min')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Add valuation');
     incomeComponent.form.notes = 'Future role';
     incomeComponent.saveIncome();
     fixture.detectChanges();
@@ -247,14 +260,14 @@ describe('Jobs and pay editor regressions', () => {
     expect(Array.from(controls.querySelectorAll('button')).some(button => (button.textContent || '').includes('Refresh market price'))).toBeFalse();
     expect((TestBed.inject(MarketRefreshCoordinatorService) as any).refreshSymbol).not.toHaveBeenCalled();
 
-    quickPriceInputByLabel('Manual price date').value = '2026-10-09';
-    quickPriceInputByLabel('Manual price date').dispatchEvent(new Event('input'));
+    quickPriceInputByLabel('Manual price as of').value = '2026-10-09';
+    quickPriceInputByLabel('Manual price as of').dispatchEvent(new Event('input'));
     const priceInput = quickPriceInputByLabel('Manual price per share');
     priceInput.value = '12.5';
     priceInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     Array.from(controls.querySelectorAll('button'))
-      .find(button => (button.textContent || '').trim() === 'Save dated manual price')!.click();
+      .find(button => (button.textContent || '').trim() === 'Save current manual price')!.click();
     fixture.detectChanges();
     await fixture.whenStable();
     for (let i = 0; i < 8; i += 1) await Promise.resolve();
@@ -264,13 +277,15 @@ describe('Jobs and pay editor regressions', () => {
     }));
   });
 
-  it('saves a manual price from a rendered number input and replaces only the same date', async () => {
+  it('saves one manual current price, replaces earlier manual history and preserves market quote rows', async () => {
     const tickerJob = enrichJobIncome({
       ...job, id: 3, stock_symbol: 'MSFT',
       stock_grants: [{ date: '2026-01-01', origin: 'equity', quantity: 10, price_at_grant: 80 }],
       stock_valuations: [
         { date: '2026-10-08', price_per_share: 90, source: 'manual' },
-        { date: '2026-10-09', price_per_share: 100, source: 'manual' },
+        { date: '2026-10-07', price_per_share: 100, source: 'manual' },
+        { date: '2026-10-08', price_per_share: 110, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-09' },
+        { date: '2026-10-09', price_per_share: 115, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-09' },
       ],
     } as JobIncome);
     incomes.next([tickerJob, priorJob]);
@@ -278,35 +293,54 @@ describe('Jobs and pay editor regressions', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const dateInput = quickPriceInputByLabel('Manual price date');
+    const dateInput = quickPriceInputByLabel('Manual price as of');
     const priceInput = quickPriceInputByLabel('Manual price per share');
     expect(dateInput.value).toBe('2026-10-09');
     priceInput.value = '120';
     priceInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     const savePrice = Array.from(fixture.nativeElement.querySelectorAll('button'))
-      .find((node: any) => node.textContent.trim() === 'Save dated manual price') as HTMLButtonElement;
+      .find((node: any) => node.textContent.trim() === 'Save current manual price') as HTMLButtonElement;
     savePrice.click();
     fixture.detectChanges();
     await fixture.whenStable();
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    fixture.detectChanges();
+    dateInput.value = '2026-10-10';
+    dateInput.dispatchEvent(new Event('input'));
+    priceInput.value = '125';
+    priceInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    savePrice.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
     fixture.detectChanges();
 
-    const saved = finance.updateJobIncome.calls.allArgs().find(([id]) => id === 3)?.[1].stock_valuations;
+    const saved = finance.updateJobIncome.calls.mostRecent().args[1].stock_valuations;
+    expect(finance.updateJobIncome.calls.allArgs().filter(([id]) => id === 3)).toHaveSize(2);
     expect(saved).toHaveSize(2);
-    expect(saved?.find(item => item.date === '2026-10-08')).toEqual(jasmine.objectContaining({
-      date: '2026-10-08', price_per_share: 90, source: 'manual',
+    expect(saved?.filter(item => item.source === 'manual')).toEqual([jasmine.objectContaining({
+      date: '2026-10-10', price_per_share: 125, source: 'manual', price_as_of: null,
+    })]);
+    expect(saved?.find(item => item.date === '2026-10-08' && item.source === 'live_eod')).toEqual(jasmine.objectContaining({
+      date: '2026-10-08', price_per_share: 110, source: 'live_eod', symbol: 'MSFT',
     }));
-    expect(saved?.find(item => item.date === '2026-10-09')).toEqual(jasmine.objectContaining({
-      date: '2026-10-09', price_per_share: 120, source: 'manual', price_as_of: null,
+    expect(saved?.some(item => item.date === '2026-10-09' && item.source === 'live_eod')).toBeFalse();
+    expect(saved?.find(item => item.date === '2026-10-10')).toEqual(jasmine.objectContaining({
+      date: '2026-10-10', price_per_share: 125, source: 'manual', price_as_of: null,
     }));
-    expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('Saved manual price $120.0000');
+    expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('Saved manual price $125.0000');
   });
 
   it('keeps a quote added after the editor opened when the job is saved later', async () => {
     const tickerJob = enrichJobIncome({
       ...job, id: 3, stock_symbol: 'MSFT', notes: '',
       stock_grants: [{ date: '2026-01-01', origin: 'equity', quantity: 10, price_at_grant: 80 }],
-      stock_valuations: [{ date: '2026-10-08', price_per_share: 90 }],
+      stock_valuations: [
+        { date: '2026-10-07', price_per_share: 80, source: 'manual' },
+        { date: '2026-10-08', price_per_share: 90, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-09' },
+      ],
     } as JobIncome);
     incomes.next([tickerJob, priorJob]);
     fixture.detectChanges();
@@ -324,7 +358,11 @@ describe('Jobs and pay editor regressions', () => {
       date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
       price_as_of: '2026-10-09T12:00:00Z', observed_date: '2026-10-09',
     };
-    incomes.next([enrichJobIncome({ ...tickerJob, stock_valuations: [...tickerJob.stock_valuations!, quoteAddedWhileEditing] }), priorJob]);
+    incomes.next([enrichJobIncome({ ...tickerJob, stock_valuations: [
+      { date: '2026-10-09', price_per_share: 120, source: 'manual' },
+      ...tickerJob.stock_valuations!.filter(item => item.source !== 'manual' && item.date !== quoteAddedWhileEditing.date),
+      quoteAddedWhileEditing,
+    ] }), priorJob]);
     fixture.detectChanges();
     const notes = fixture.nativeElement.querySelector('input[name="notes"]') as HTMLInputElement;
     notes.value = 'Keep current quote';
@@ -337,7 +375,10 @@ describe('Jobs and pay editor regressions', () => {
 
     const saved = finance.updateJobIncome.calls.allArgs().find(([id]) => id === 3)?.[1];
     expect(saved?.notes).toBe('Keep current quote');
-    expect(saved?.stock_valuations).toHaveSize(1);
-    expect(saved?.stock_valuations?.[0]).toEqual(jasmine.objectContaining(quoteAddedWhileEditing));
+    expect(saved?.stock_valuations).toHaveSize(2);
+    expect(saved?.stock_valuations?.filter(item => item.source === 'manual')).toEqual([
+      jasmine.objectContaining({ date: '2026-10-09', price_per_share: 120, source: 'manual' }),
+    ]);
+    expect(saved?.stock_valuations).toContain(jasmine.objectContaining(quoteAddedWhileEditing));
   });
 });

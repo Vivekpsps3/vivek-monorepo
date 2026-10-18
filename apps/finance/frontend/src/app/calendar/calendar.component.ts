@@ -14,7 +14,15 @@ import { RouterLink } from '@angular/router';
 import { Subject, combineLatest, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { FinanceService } from '../services/finance.service';
-import { CashflowOccurrence, FixedExpense, JobIncome, Subscription, Transaction } from '../models/transaction.model';
+import {
+  CashflowOccurrence,
+  CashflowSummary,
+  FixedExpense,
+  IncomeCashflowOccurrence,
+  JobIncome,
+  Subscription,
+  Transaction,
+} from '../models/transaction.model';
 import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
 import { todayIsoDate } from '@vivek/browser';
 import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
@@ -36,6 +44,7 @@ interface CalendarDay {
   date: string;
   hasTransactions: boolean;
   expense: number;
+  income: number;
   isToday?: boolean;
 }
 
@@ -68,9 +77,11 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   fixedExpenses: FixedExpense[] = [];
   subscriptions: Subscription[] = [];
   countedOccurrences: CashflowOccurrence[] = [];
+  cashflowSummary: CashflowSummary | null = null;
   selectedDate: string | null = null;
   selectedTransactions: Transaction[] = [];
   selectedPlans: CashflowOccurrence[] = [];
+  selectedIncomeOccurrences: IncomeCashflowOccurrence[] = [];
   daysInMonth: CalendarDay[] = [];
   weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   monthSummary: MonthSpendSummary = summarizeMonthSpend([], monthKeyFromDate(new Date()));
@@ -123,6 +134,12 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.monthSummary.topPurchases[0]?.amount || 1;
   }
 
+  get undatedEstimateTotal(): number {
+    return this.cashflowSummary?.income_occurrences
+      .filter(row => row.date == null && row.kind === 'estimate')
+      .reduce((sum, row) => sum + row.amount, 0) || 0;
+  }
+
   transactionActivityQuery(transactionId: number): Record<string, string | number> {
     const tx = this.transactions.find(row => row.id === transactionId);
     if (!tx) return { t: 'activity', v: 'spending', month: this.monthKey };
@@ -153,8 +170,14 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       this.fixedExpenses,
       this.subscriptions,
     );
+    this.cashflowSummary = summary;
     this.countedOccurrences = summary.counted_occurrences;
     const spendByDay = new Map<string, number>();
+    const incomeByDay = new Map<string, number>();
+    const datedIncome = summary.income_occurrences.filter(row => row.date && row.kind !== 'overlap');
+    for (const row of datedIncome) {
+      incomeByDay.set(row.date!, (incomeByDay.get(row.date!) || 0) + row.amount);
+    }
     for (const tx of this.transactions) {
       const spending = transactionEffects(tx).spending;
       if (!spending) continue;
@@ -166,14 +189,17 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.daysInMonth = [];
     for (let i = 0; i < firstDay; i++) {
-      this.daysInMonth.push({ date: '', hasTransactions: false, expense: 0 });
+      this.daysInMonth.push({ date: '', hasTransactions: false, expense: 0, income: 0 });
     }
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       this.daysInMonth.push({
         date: dateStr,
-        hasTransactions: this.transactions.some(t => t.date === dateStr) || this.countedOccurrences.some(row => row.date === dateStr),
+        hasTransactions: this.transactions.some(t => t.date === dateStr)
+          || this.countedOccurrences.some(row => row.date === dateStr)
+          || incomeByDay.has(dateStr),
         expense: spendByDay.get(dateStr) || 0,
+        income: incomeByDay.get(dateStr) || 0,
         isToday: dateStr === today,
       });
     }
@@ -244,6 +270,8 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedDate = date;
     this.selectedTransactions = this.transactions.filter(t => t.date === date);
     this.selectedPlans = this.countedOccurrences.filter(row => row.date === date);
+    this.selectedIncomeOccurrences = this.cashflowSummary?.income_occurrences
+      .filter(row => row.date === date && row.kind !== 'posted' && row.kind !== 'overlap') || [];
   }
 
   onDayKeydown(event: KeyboardEvent, day: CalendarDay, index: number) {
@@ -291,6 +319,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedDate = null;
     this.selectedTransactions = [];
     this.selectedPlans = [];
+    this.selectedIncomeOccurrences = [];
     this.cdr.markForCheck();
   }
 
@@ -300,6 +329,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedDate = null;
     this.selectedTransactions = [];
     this.selectedPlans = [];
+    this.selectedIncomeOccurrences = [];
     this.cdr.markForCheck();
   }
 
@@ -313,6 +343,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       0
     );
     const repeating = this.selectedPlans.reduce((sum, row) => sum + row.amount, 0);
-    return posted - repeating;
+    const projected = this.selectedIncomeOccurrences.reduce((sum, row) => sum + row.amount, 0);
+    return posted + projected - repeating;
   }
 }

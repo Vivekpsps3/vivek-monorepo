@@ -45,7 +45,7 @@
       <a routerLink="/spending" class="home-tile home-tile--activity">
         <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet < 0 ? '−' : '' }}${{ (monthNet < 0 ? -monthNet : monthNet) | number: '1.2-2' }}</span>
-        <span class="home-tile__metric-name">Pay and spending, counted once</span>
+        <span class="home-tile__metric-name">Income and spending, counted once</span>
         <span class="home-split">
           <span>
             <small>Income</small>
@@ -58,6 +58,31 @@
         </span>
       </a>
     </nav>
+
+    @if (cashflow) {
+      <ui-card [title]="'Monthly income sources'">
+        <p class="income-breakdown-note">
+          These source amounts add to the monthly income total above. Recorded income, projected pay, dated compensation, and stock-sale proceeds are shown separately; unknown dates stay marked as estimates.
+        </p>
+        @if (incomeOccurrences.length) {
+          <div class="income-breakdown" aria-label="Monthly income breakdown">
+            @for (item of incomeOccurrences; track item.id) {
+              <div class="income-breakdown__row">
+                <div class="income-breakdown__source">
+                  <strong>{{ item.label }} · {{ item.name }}</strong>
+                  <span>{{ item.date || 'Date unknown' }} · {{ item.detail }}</span>
+                </div>
+                <strong class="money" [class.negative]="item.amount < 0">
+                  {{ item.amount < 0 ? '−$' : '$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}
+                </strong>
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="muted">No income sources were recorded or estimated for this month.</p>
+        }
+      </ui-card>
+    }
 
     @if (isStarterState) {
       <section class="starter-card" aria-labelledby="starter-title">

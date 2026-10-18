@@ -1,5 +1,6 @@
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { EncryptedStoreService } from './encrypted-store.service';
+import { replaceStockValuation } from '../utils/job-compensation.util';
 import { VaultService } from './vault.service';
 
 describe('EncryptedStoreService', () => {
@@ -99,9 +100,16 @@ describe('EncryptedStoreService', () => {
         date: '2026-09-15', label: 'ESPP', quantity: 10, price_paid_per_share: 80,
         market_price_at_purchase: 100, sales: [{ date: '2026-10-15', shares: 2, cash_proceeds: 250 }],
       }],
-      stock_valuations: [{ date: '2026-10-01', price_per_share: 200, source: 'live_eod', symbol: 'MSFT', price_as_of: '2026-10-01T16:00:00Z', observed_date: '2026-10-02' }],
+      stock_valuations: [
+        { date: '2026-09-20', price_per_share: 180, source: 'manual' },
+        { date: '2026-09-25', price_per_share: 190, source: 'manual' },
+        { date: '2026-10-01', price_per_share: 200, source: 'live_eod', symbol: 'MSFT', price_as_of: '2026-10-01T16:00:00Z', observed_date: '2026-10-02' },
+      ],
     });
-    await store.updateJobIncome(created.id, { notes: 'History retained' });
+    const currentMarks = replaceStockValuation(created.stock_valuations, {
+      date: '2026-10-03', price_per_share: 205, source: 'manual', price_as_of: null,
+    });
+    await store.updateJobIncome(created.id, { notes: 'History retained', stock_valuations: currentMarks });
     store.clear();
     const [reloaded] = await store.getJobIncomes();
     expect(reloaded.end_date).toBe('2026-12-31');
@@ -116,10 +124,13 @@ describe('EncryptedStoreService', () => {
       date: '2026-09-15', label: 'ESPP', quantity: 10, price_paid_per_share: 80,
       market_price_at_purchase: 100, sales: [{ date: '2026-10-15', shares: 2, cash_proceeds: 250 }],
     }]);
-    expect(reloaded.stock_valuations).toEqual([{
-      date: '2026-10-01', price_per_share: 200, source: 'live_eod', symbol: 'MSFT',
-      price_as_of: '2026-10-01T16:00:00Z', observed_date: '2026-10-02',
-    }]);
+    expect(reloaded.stock_valuations).toEqual([
+      {
+        date: '2026-10-01', price_per_share: 200, source: 'live_eod', symbol: 'MSFT',
+        price_as_of: '2026-10-01T16:00:00Z', observed_date: '2026-10-02',
+      },
+      { date: '2026-10-03', price_per_share: 205, source: 'manual', price_as_of: null },
+    ]);
     expect(reloaded.base_pay).toBe(36525);
     expect(JSON.stringify(records)).not.toContain('Acme');
     expect(records[0].schema_version).toBe(2);

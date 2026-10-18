@@ -100,6 +100,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.cashflow?.total_income ?? 0;
   }
 
+  get incomeOccurrences() {
+    return this.cashflow?.income_occurrences ?? [];
+  }
+
   get monthSpend(): number {
     return this.cashflow?.total_expenses ?? 0;
   }

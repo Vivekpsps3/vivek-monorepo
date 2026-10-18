@@ -4,6 +4,7 @@ import {
   JobStockGrant,
   JobStockPurchase,
   JobStockValuation,
+  PaydayFrequency,
 } from '../models/transaction.model';
 import { todayIsoDate } from '@vivek/browser';
 
@@ -28,6 +29,81 @@ export function annualBasePayAt(row: JobPay, date = todayIsoDate()): number {
     .filter(item => item.date >= row.effective_date && item.date <= date && (!row.end_date || item.date <= row.end_date))
     .sort((a, b) => b.date.localeCompare(a.date))[0];
   return promotion ? Number(promotion.annual_base_pay) : initialAnnualBasePay(row);
+}
+
+export function salaryPeriodsPerYear(frequency: JobIncome['pay_frequency']): number {
+  if (frequency === 'monthly') return 12;
+  if (frequency === 'semimonthly') return 24;
+  if (frequency === 'biweekly') return 26;
+  if (frequency === 'weekly' || frequency === 'hourly') return 52;
+  return 1;
+}
+
+export function paydayPeriodsPerYear(frequency: PaydayFrequency): number {
+  if (frequency === 'weekly') return 52;
+  if (frequency === 'biweekly') return 26;
+  if (frequency === 'semimonthly') return 24;
+  return 12;
+}
+
+export function estimatedPaycheckNet(row: JobIncome, date: string): number {
+  if (!row.payday_frequency) return 0;
+  const periods = paydayPeriodsPerYear(row.payday_frequency);
+  const enteredWithholding = (Number(row.taxes_per_period) || 0) + (Number(row.deductions_per_period) || 0);
+  const annualizedEnteredWithholding = enteredWithholding * salaryPeriodsPerYear(row.pay_frequency);
+  const storedAnnualWithholding = (Number(row.annual_taxes) || 0) + (Number(row.annual_deductions) || 0);
+  const annualWithholding = annualizedEnteredWithholding || storedAnnualWithholding;
+  return Math.round((annualBasePayAt(row, date) - annualWithholding) / periods * 100) / 100;
+}
+
+type PaySchedule = Pick<JobIncome, 'payday_frequency' | 'first_pay_date' | 'second_pay_day' | 'effective_date' | 'end_date'>;
+
+export function hasPaydaySchedule(row: PaySchedule): boolean {
+  if (!['weekly', 'biweekly', 'semimonthly', 'monthly'].includes(row.payday_frequency || '')
+    || !isValidIsoDate(row.first_pay_date || '')) return false;
+  return row.payday_frequency !== 'semimonthly'
+    || (Number.isInteger(row.second_pay_day) && Number(row.second_pay_day) >= 1 && Number(row.second_pay_day) <= 31
+      && Number(row.second_pay_day) !== Number(row.first_pay_date!.slice(-2)));
+}
+
+/** Generate only explicit pay dates on or after the configured anchor; no past dates are inferred. */
+export function paydayDatesBetween(row: PaySchedule, start: string, end: string): string[] {
+  if (!hasPaydaySchedule(row) || !isValidIsoDate(start) || !isValidIsoDate(end) || end < start) return [];
+  const anchor = row.first_pay_date!;
+  const from = [start, row.effective_date, anchor].filter(Boolean).sort().at(-1)!;
+  const to = row.end_date && row.end_date < end ? row.end_date : end;
+  if (to < from) return [];
+  const step = row.payday_frequency === 'weekly' ? 7 : row.payday_frequency === 'biweekly' ? 14 : 0;
+  if (step) {
+    const dayMs = 86_400_000;
+    const anchorMs = Date.parse(`${anchor}T00:00:00Z`);
+    const fromMs = Date.parse(`${from}T00:00:00Z`);
+    let index = Math.max(0, Math.ceil((fromMs - anchorMs) / (step * dayMs)));
+    const result: string[] = [];
+    for (let ms = anchorMs + index * step * dayMs; ms <= Date.parse(`${to}T00:00:00Z`); ms += step * dayMs) {
+      result.push(new Date(ms).toISOString().slice(0, 10));
+    }
+    return result;
+  }
+  const anchorDate = new Date(`${anchor}T00:00:00Z`);
+  const startMonth = new Date(`${from.slice(0, 7)}-01T00:00:00Z`);
+  const endMonth = new Date(`${to.slice(0, 7)}-01T00:00:00Z`);
+  const dayCount = (year: number, month: number) => new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const makeDate = (year: number, month: number, requestedDay: number) =>
+    `${year}-${String(month + 1).padStart(2, '0')}-${String(Math.min(requestedDay, dayCount(year, month))).padStart(2, '0')}`;
+  const result: string[] = [];
+  for (let cursor = startMonth; cursor <= endMonth; cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))) {
+    const year = cursor.getUTCFullYear();
+    const month = cursor.getUTCMonth();
+    const days = row.payday_frequency === 'semimonthly'
+      ? [anchorDate.getUTCDate(), Number(row.second_pay_day)]
+      : [anchorDate.getUTCDate()];
+    for (const day of [...new Set(days)].sort((a, b) => a - b)) {
+      const date = makeDate(year, month, day);
+      if (date >= from && date >= anchor && date <= to) result.push(date);
+    }
+  }
+  return result.sort();
 }
 
 export function isCurrentJob(row: Pick<JobIncome, 'is_active' | 'effective_date' | 'end_date'>, date = todayIsoDate()): boolean {
@@ -120,13 +196,13 @@ export function latestStockValuationOnOrBefore(
     .at(-1);
 }
 
-/** Replaces every same-day mark so one date has exactly one effective price. */
+/** Replaces the saved manual price while keeping dated market quote history. */
 export function replaceStockValuation(
   valuations: JobStockValuation[] = [],
   valuation: JobStockValuation
 ): JobStockValuation[] {
   return [
-    ...valuations.filter(item => item.date !== valuation.date),
+    ...valuations.filter(item => Boolean(item.symbol) && item.source !== 'manual' && item.date !== valuation.date),
     valuation,
   ].sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -308,6 +384,12 @@ export function isValidIsoDate(date: string): boolean {
 export function jobHistoryError(row: JobIncomeCreate): string | null {
   if (!isValidIsoDate(row.effective_date)) return 'A valid start date is required.';
   if (row.end_date && (!isValidIsoDate(row.end_date) || row.end_date < row.effective_date)) return 'End date must be on or after the start date.';
+  if (row.payday_frequency && !['weekly', 'biweekly', 'semimonthly', 'monthly'].includes(row.payday_frequency)) return 'Choose a valid payday schedule.';
+  if (row.payday_frequency && !isValidIsoDate(row.first_pay_date || '')) return 'Enter the first scheduled payday.';
+  if (row.payday_frequency === 'semimonthly') {
+    if (!Number.isInteger(row.second_pay_day) || Number(row.second_pay_day) < 1 || Number(row.second_pay_day) > 31) return 'Enter the second semimonthly payday day from 1 to 31.';
+    if (Number(row.second_pay_day) === Number(row.first_pay_date?.slice(-2))) return 'Semimonthly paydays must use different days.';
+  }
   const stockSymbol = row.stock_symbol?.trim();
   if (stockSymbol && !/^[A-Z0-9.\-]{1,10}$/i.test(stockSymbol)) return 'Stock ticker must be 1–10 letters, numbers, dots, or hyphens.';
   const dates = new Set<string>();

@@ -169,6 +169,8 @@ export type IncomePayFrequency =
   | 'weekly'
   | 'hourly';
 
+export type PaydayFrequency = 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
+
 export interface JobPromotion {
   date: string;
   annual_base_pay: number;
@@ -228,6 +230,12 @@ export interface JobIncome {
   employer: string;
   role_title?: string | null;
   pay_frequency: IncomePayFrequency;
+  /** Optional dates when cash salary is paid; separate from how base_pay is entered. */
+  payday_frequency?: PaydayFrequency | null;
+  /** First scheduled payday; dates before this anchor are not projected. */
+  first_pay_date?: string | null;
+  /** Second day of month for semimonthly schedules; long months clamp to month end. */
+  second_pay_day?: number | null;
   base_pay: number;
   hours_per_week?: number | null;
   annual_bonus: number;
@@ -265,6 +273,9 @@ export interface JobIncomeCreate {
   employer: string;
   role_title?: string;
   pay_frequency: IncomePayFrequency;
+  payday_frequency?: PaydayFrequency | null;
+  first_pay_date?: string | null;
+  second_pay_day?: number | null;
   base_pay: number;
   hours_per_week?: number | null;
   annual_bonus: number;
@@ -360,6 +371,19 @@ export interface CashflowOccurrence {
   amount: number;
 }
 
+export type IncomeOccurrenceKind = 'posted' | 'paycheck' | 'estimate' | 'compensation' | 'stock_sale' | 'overlap';
+
+/** A visible source line in the monthly income total. Null dates mean timing is unknown. */
+export interface IncomeCashflowOccurrence {
+  id: string;
+  date: string | null;
+  kind: IncomeOccurrenceKind;
+  label: string;
+  name: string;
+  detail: string;
+  amount: number;
+}
+
 export interface CashflowSummary {
   start_date: string;
   end_date: string;
@@ -380,9 +404,13 @@ export interface CashflowSummary {
   combined_outlook_net_cashflow: number;
   /** True when posted pay and job pay are close enough to count once. */
   possible_income_overlap: boolean;
+  /** Negative monthly adjustment applied when posted and projected income look like the same stream. */
+  income_overlap_adjustment: number;
   /** True when at least one repeating bill matched a posted transaction and was not added again. */
   possible_expense_overlap: boolean;
   total_income: number;
+  /** Dated sources, undated estimates, and the aggregate overlap adjustment; sums to total_income. */
+  income_occurrences: IncomeCashflowOccurrence[];
   total_expenses: number;
   net_cashflow: number;
   savings_rate: number | null;

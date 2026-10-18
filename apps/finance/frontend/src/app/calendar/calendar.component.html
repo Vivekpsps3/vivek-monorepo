@@ -2,7 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Calendar'"
-    subtitle="Pay and spending by day, counted once. This view does not change net worth." />
+    subtitle="Income and spending by day. Pay dates appear only when you set a schedule. This view does not change net worth." />
 
   <div class="calendar-toolbar">
     <ui-button variant="secondary" size="sm" ariaLabel="Previous month" (clicked)="prevMonth()"><ui-icon name="chevron-left" size="sm" /></ui-button>
@@ -11,7 +11,7 @@
     <ui-button variant="secondary" size="sm" (clicked)="goToday()">Today</ui-button>
   </div>
 
-  <section class="month-hero" aria-label="Month spend summary">
+  <section class="month-hero" aria-label="Month income and spend summary">
     <p class="section-eyebrow">This month</p>
     <div class="month-totals">
       <div class="month-total month-total--expense">
@@ -19,7 +19,7 @@
         <strong class="money">${{ monthSummary.expenseTotal | number: '1.2-2' }}</strong>
       </div>
       <div class="month-total">
-        <span class="month-total__label">Pay</span>
+        <span class="month-total__label">Income</span>
         <strong class="money">${{ monthSummary.incomeTotal | number: '1.2-2' }}</strong>
       </div>
       <div class="month-total">
@@ -31,6 +31,32 @@
         <strong>{{ monthSummary.activeDays }}</strong>
       </div>
     </div>
+    <p class="month-income-note">
+      Calendar dates show recorded deposits, configured paycheck dates, dated compensation, and stock-sale proceeds. Day net shows these source amounts before the monthly aggregate overlap adjustment.
+      @if (undatedEstimateTotal) {
+        Undated job estimates: {{ undatedEstimateTotal < 0 ? '−$' : '$' }}{{ (undatedEstimateTotal < 0 ? -undatedEstimateTotal : undatedEstimateTotal) | number: '1.2-2' }}.
+      }
+      @if (cashflowSummary?.income_overlap_adjustment) {
+        The monthly total includes an aggregate possible-overlap adjustment of
+        {{ cashflowSummary!.income_overlap_adjustment < 0 ? '−' : '+' }}${{ (cashflowSummary!.income_overlap_adjustment < 0 ? -cashflowSummary!.income_overlap_adjustment : cashflowSummary!.income_overlap_adjustment) | number: '1.2-2' }}; it is not assigned to a specific date.
+      }
+    </p>
+    @if (cashflowSummary; as summary) {
+      <details class="calendar-income-sources">
+        <summary>Income sources contributing to this month</summary>
+        <div class="calendar-income-sources__list">
+          @for (item of summary.income_occurrences; track item.id) {
+            <div class="calendar-income-sources__row">
+              <span>
+                <strong>{{ item.label }} · {{ item.name }}</strong>
+                <small>{{ item.date || 'Date unknown' }} · {{ item.detail }}</small>
+              </span>
+              <strong [class.negative]="item.amount < 0">{{ item.amount < 0 ? '−$' : '$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}</strong>
+            </div>
+          }
+        </div>
+      </details>
+    }
   </section>
 
   <div class="month-charts">
@@ -98,15 +124,18 @@
           [class.has-tx]="day.hasTransactions"
           [class.selected]="day.date === selectedDate"
           [class.today]="day.isToday"
-          [attr.aria-label]="day.date + (day.hasTransactions ? ', has transactions' : '')"
+          [attr.aria-label]="day.date + (day.hasTransactions ? ', has income or spending activity' : '')"
           [attr.aria-selected]="day.date === selectedDate"
           (click)="selectDay(day)"
           (keydown)="onDayKeydown($event, day, i)"
         >
           <span class="day-number">{{ day.date.split('-')[2] }}</span>
+          @if (day.income !== 0) {
+            <span class="day-amt" [class.day-amt--income]="day.income > 0" [class.day-amt--negative]="day.income < 0">{{ day.income < 0 ? '−$' : '+$' }}{{ (day.income < 0 ? -day.income : day.income) | number: '1.0-0' }}</span>
+          }
           @if (day.expense > 0) {
-            <span class="day-amt">${{ day.expense | number: '1.0-0' }}</span>
-          } @else if (day.hasTransactions) {
+            <span class="day-amt day-amt--expense">−${{ day.expense | number: '1.0-0' }}</span>
+          } @else if (day.hasTransactions && day.income === 0) {
             <span class="dot" aria-hidden="true"></span>
           }
         </button>
@@ -120,15 +149,23 @@
         <h3>{{ selectedDate }}</h3>
         <a class="calendar-cta" [routerLink]="['/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction</a>
       </div>
-      @if (selectedTransactions.length || selectedPlans.length) {
+      @if (selectedTransactions.length || selectedPlans.length || selectedIncomeOccurrences.length) {
         <p class="day-net">
-          Net for day:
+          Source net for day, before monthly overlap adjustment:
           <span [class.positive]="dayTotal() >= 0" [class.negative]="dayTotal() < 0">
             {{ dayTotal() >= 0 ? '+' : '' }}${{ dayTotal() | number: '1.2-2' }}
           </span>
         </p>
       }
-      @if (selectedTransactions.length || selectedPlans.length) {
+      @if (selectedTransactions.length || selectedPlans.length || selectedIncomeOccurrences.length) {
+        @for (item of selectedIncomeOccurrences; track item.id) {
+          <div class="tx-item income-event">
+            <ui-badge variant="success">{{ item.label }}</ui-badge>
+            <span class="category">{{ item.name }}</span>
+            <span class="amount" [class.positive]="item.amount > 0" [class.negative]="item.amount < 0">{{ item.amount < 0 ? '−$' : '+$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}</span>
+            <span class="desc">{{ item.detail }}</span>
+          </div>
+        }
         @for (tx of selectedTransactions; track tx.id) {
           <a class="tx-item tx-item-link" [routerLink]="['/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.category || 'transaction') + ' from ' + tx.date">
             <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ tx.kind || tx.type }}</ui-badge>

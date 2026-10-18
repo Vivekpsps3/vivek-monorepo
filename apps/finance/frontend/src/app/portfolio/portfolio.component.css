@@ -347,8 +347,8 @@ details.account-sub[open] > summary::before {
   margin-bottom: var(--space-2);
 }
 
-.holding-form input,
-.import-sheet input {
+.holding-form input:not([type="checkbox"]):not([type="radio"]),
+.import-sheet input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
   max-width: 100%;
   min-width: 0;

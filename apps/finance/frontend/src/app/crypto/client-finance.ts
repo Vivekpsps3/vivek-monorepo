@@ -4,13 +4,20 @@ import {
   CashflowSummary,
   FixedExpense,
   Holding,
+  IncomeCashflowOccurrence,
   JobIncome,
   Liability,
   NetWorth,
   Subscription,
   Transaction,
 } from '../models/transaction.model';
-import { annualBasePayAt, jobCompensationBetween, stockSalesProceedsBetween } from '../utils/job-compensation.util';
+import {
+  annualBasePayAt,
+  estimatedPaycheckNet,
+  hasPaydaySchedule,
+  jobCompensationBetween,
+  paydayDatesBetween,
+} from '../utils/job-compensation.util';
 import { todayIsoDate } from '@vivek/browser';
 
 export function computeNetWorth(
@@ -356,21 +363,116 @@ export function computeCashflowSummary(
   fixedExpenses: FixedExpense[],
   subscriptions: Subscription[]
 ): CashflowSummary {
+  const income_occurrences: IncomeCashflowOccurrence[] = [];
   let transaction_income = 0;
   let transaction_expenses = 0;
+  const money = (value: number) => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
+  const pushIncome = (
+    id: string,
+    date: string | null,
+    kind: IncomeCashflowOccurrence['kind'],
+    label: string,
+    name: string,
+    detail: string,
+    amount: number,
+  ) => {
+    const rounded = money(amount);
+    if (rounded !== 0) income_occurrences.push({ id, date, kind, label, name, detail, amount: rounded });
+  };
   for (const tx of transactions) {
     if (tx.date < start || tx.date > end) continue;
     const effect = transactionEffects(tx);
     transaction_income += effect.income;
     transaction_expenses += effect.spending;
+    if (effect.income > 0) {
+      pushIncome(
+        `posted:${tx.id}`,
+        tx.date,
+        'posted',
+        'Recorded income',
+        tx.merchant?.trim() || tx.description?.trim() || tx.category || 'Income transaction',
+        [tx.category, tx.source === 'import' ? 'Imported transaction' : 'Recorded transaction'].filter(Boolean).join(' · '),
+        effect.income,
+      );
+    }
   }
   const daysInRange = Math.max(1, (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1);
-  const scheduledEmploymentIncome = jobIncomes
-    .filter(row => row.is_active)
-    .reduce((sum, row) => sum + jobCompensationBetween(row, start, end).net, 0);
-  // A recorded share sale is a dated cash event, even when the former job is disabled.
-  const stockSaleIncome = jobIncomes.reduce((sum, row) => sum + stockSalesProceedsBetween(row, start, end), 0);
-  const planned_income = scheduledEmploymentIncome + stockSaleIncome;
+  for (const row of jobIncomes) {
+    if (row.is_active) {
+      const compensation = jobCompensationBetween(row, start, end);
+      const employmentStart = start > row.effective_date ? start : row.effective_date;
+      const employmentEnd = row.end_date && row.end_date < end ? row.end_date : end;
+      const employmentDays = employmentStart <= employmentEnd
+        ? (Date.parse(`${employmentEnd}T00:00:00Z`) - Date.parse(`${employmentStart}T00:00:00Z`)) / 86_400_000 + 1
+        : 0;
+      const employer = row.employer || 'Job';
+      const payments = (row.compensation_payments || []).filter(payment => payment.date >= start && payment.date <= end);
+
+      if (hasPaydaySchedule(row)) {
+        paydayDatesBetween(row, start, end).forEach((date, index) => {
+          pushIncome(
+            `paycheck:${row.id}:${date}:${index}`,
+            date,
+            'paycheck',
+            'Projected paycheck',
+            employer,
+            `${row.payday_frequency} pay schedule · estimated net`,
+            estimatedPaycheckNet(row, date),
+          );
+        });
+        const proratedDays = employmentDays / 365.25;
+        pushIncome(`estimate:${row.id}:bonus`, null, 'estimate', 'Annual bonus estimate', employer,
+          'Undated estimate; no payout date recorded', (Number(row.annual_bonus) || 0) * proratedDays);
+        pushIncome(`estimate:${row.id}:equity`, null, 'estimate', 'Annual equity estimate', employer,
+          'Undated estimate; no payout or vesting date recorded', (Number(row.annual_equity) || 0) * proratedDays);
+        pushIncome(`estimate:${row.id}:other`, null, 'estimate', 'Other annual pay estimate', employer,
+          'Undated estimate; no payout date recorded', (Number(row.annual_other) || 0) * proratedDays);
+      } else {
+        const proratedDays = employmentDays / 365.25;
+        pushIncome(`estimate:${row.id}:base`, null, 'estimate', 'Base pay estimate', employer,
+          'Pay dates not set · accrued estimate with unknown timing', compensation.base);
+        pushIncome(`estimate:${row.id}:bonus`, null, 'estimate', 'Annual bonus estimate', employer,
+          'Undated estimate; no payout date recorded', (Number(row.annual_bonus) || 0) * proratedDays);
+        pushIncome(`estimate:${row.id}:equity`, null, 'estimate', 'Annual equity estimate', employer,
+          'Undated estimate; no payout or vesting date recorded', (Number(row.annual_equity) || 0) * proratedDays);
+        pushIncome(`estimate:${row.id}:other`, null, 'estimate', 'Other annual pay estimate', employer,
+          'Undated estimate; no payout date recorded', (Number(row.annual_other) || 0) * proratedDays);
+        pushIncome(`estimate:${row.id}:withholding`, null, 'estimate', 'Estimated taxes and deductions', employer,
+          'Undated estimate deducted from projected job pay', -((Number(row.annual_taxes) || 0) + (Number(row.annual_deductions) || 0)) * proratedDays);
+      }
+
+      payments.forEach((payment, index) => pushIncome(
+        `compensation:${row.id}:${payment.date}:${payment.kind}:${index}`,
+        payment.date,
+        'compensation',
+        payment.kind === 'bonus' ? 'Dated bonus payment' : payment.kind === 'equity' ? 'Dated equity payment' : 'Dated other payment',
+        employer,
+        payment.label?.trim() || 'Recorded payment',
+        Number(payment.amount) || 0,
+      ));
+    }
+
+    // Sale proceeds are dated cash events even after a job is disabled.
+    (row.stock_grants || []).forEach((grant, grantIndex) => (grant.sales || []).forEach((sale, saleIndex) => {
+      if (sale.date < start || sale.date > end) return;
+      const symbol = row.stock_symbol?.trim();
+      const shares = Number(sale.shares) || 0;
+      pushIncome(`grant-sale:${row.id}:${grantIndex}:${saleIndex}`, sale.date, 'stock_sale', 'Stock grant sale', row.employer || 'Former employer',
+        `${grant.label?.trim() || (grant.origin === 'bonus' ? 'Stock bonus' : 'Equity grant')}${symbol ? ` · ${symbol}` : ''} · ${shares} shares sold`,
+        Number(sale.cash_proceeds) || 0);
+    }));
+    (row.stock_purchases || []).forEach((purchase, purchaseIndex) => (purchase.sales || []).forEach((sale, saleIndex) => {
+      if (sale.date < start || sale.date > end) return;
+      const symbol = row.stock_symbol?.trim();
+      const shares = Number(sale.shares) || 0;
+      pushIncome(`espp-sale:${row.id}:${purchaseIndex}:${saleIndex}`, sale.date, 'stock_sale', 'ESPP sale', row.employer || 'Former employer',
+        `${purchase.label?.trim() || 'Employee share plan'}${symbol ? ` · ${symbol}` : ''} · ${shares} shares sold`,
+        Number(sale.cash_proceeds) || 0);
+    }));
+  }
+  const planned_income = money(income_occurrences
+    .filter(row => row.kind !== 'posted' && row.kind !== 'overlap')
+    .reduce((sum, row) => sum + row.amount, 0));
   const fixedOccurrences = fixedExpenses
     .filter(row => row.is_active)
     .flatMap(row => occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date, row.due_day).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
@@ -379,10 +481,14 @@ export function computeCashflowSummary(
     .flatMap(row => occurrencesBetween(row.next_bill_date, row.frequency, start, end, row.end_date).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
   const fixed_total = fixedOccurrences.reduce((sum, row) => sum + row.amount, 0);
   const sub_total = subscriptionOccurrences.reduce((sum, row) => sum + row.amount, 0);
-  const roundedIncome = Math.round(planned_income * 100) / 100;
+  const roundedIncome = planned_income;
   const roundedFixed = Math.round(fixed_total * 100) / 100;
   const roundedSubscriptions = Math.round(sub_total * 100) / 100;
-  const observed_income = Math.round(transaction_income * 100) / 100;
+  // Use the same per-row rounding shown in Home so the visible source lines
+  // reconcile exactly with the ledger side of the monthly total.
+  const observed_income = money(income_occurrences
+    .filter(row => row.kind === 'posted')
+    .reduce((sum, row) => sum + row.amount, 0));
   const observed_expenses = Math.round(transaction_expenses * 100) / 100;
   const observed_net_cashflow = Math.round((observed_income - observed_expenses) * 100) / 100;
   const scheduled_income = roundedIncome;
@@ -397,6 +503,19 @@ export function computeCashflowSummary(
   const repeatingExpenses = Math.round(counted_occurrences.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
   // One cashflow: posted activity plus repeating pay and bills that are not already posted.
   const total_income = unifyIncome(observed_income, scheduled_income);
+  const income_overlap_adjustment = money(total_income - observed_income - scheduled_income);
+  if (income_overlap_adjustment !== 0) {
+    income_occurrences.push({
+      id: 'income-overlap-adjustment',
+      date: null,
+      kind: 'overlap',
+      label: 'Possible income overlap adjustment',
+      name: 'Monthly aggregate adjustment',
+      detail: 'Recorded and projected totals are within 20%; the larger total is used and the smaller is subtracted. This is not matched to a specific deposit.',
+      amount: income_overlap_adjustment,
+    });
+  }
+  income_occurrences.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31') || a.label.localeCompare(b.label));
   const total_expenses = Math.round((observed_expenses + repeatingExpenses) * 100) / 100;
   const net_cashflow = Math.round((total_income - total_expenses) * 100) / 100;
   return {
@@ -415,8 +534,10 @@ export function computeCashflowSummary(
     scheduled_net_cashflow,
     combined_outlook_net_cashflow: net_cashflow,
     possible_income_overlap: incomeStreamsMatch(observed_income, scheduled_income),
+    income_overlap_adjustment,
     possible_expense_overlap: counted_occurrences.length < fixedOccurrences.length + subscriptionOccurrences.length,
     total_income,
+    income_occurrences,
     total_expenses,
     net_cashflow,
     savings_rate: total_income > 0 ? (net_cashflow / total_income) * 100 : null,

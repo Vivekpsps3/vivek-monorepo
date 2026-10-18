@@ -2,6 +2,8 @@ import { JobIncome, JobIncomeCreate } from '../models/transaction.model';
 import {
   annualBasePayAt,
   compensationByEmployer,
+  estimatedPaycheckNet,
+  hasPaydaySchedule,
   initialAnnualBasePay,
   isCurrentJob,
   jobCompensationBetween,
@@ -14,6 +16,7 @@ import {
   stockPurchaseSnapshot,
   stockSalesProceedsBetween,
   stockSnapshotAt,
+  paydayDatesBetween,
 } from './job-compensation.util';
 import { computeCashflowSummary, enrichJobIncome } from '../crypto/client-finance';
 
@@ -109,6 +112,39 @@ describe('job compensation history', () => {
     expect(jobCompensationBetween(row, '2026-02-01', '2026-01-01').gross).toBe(0);
   });
 
+  it('generates only forward scheduled paydays and preserves both semimonthly occurrences at a short-month boundary', () => {
+    const weekly = job({
+      base_pay: 52000,
+      annual_taxes: 5200,
+      payday_frequency: 'weekly',
+      first_pay_date: '2026-01-08',
+    });
+    expect(hasPaydaySchedule(weekly)).toBeTrue();
+    expect(paydayDatesBetween(weekly, '2026-01-01', '2026-01-31')).toEqual([
+      '2026-01-08', '2026-01-15', '2026-01-22', '2026-01-29',
+    ]);
+    expect(paydayDatesBetween(weekly, '2025-12-01', '2026-01-07')).toEqual([]);
+    expect(estimatedPaycheckNet(weekly, '2026-01-08')).toBe(900);
+
+    const biweekly = job({ payday_frequency: 'biweekly', first_pay_date: '2026-01-02' });
+    expect(paydayDatesBetween(biweekly, '2026-01-01', '2026-01-31')).toEqual([
+      '2026-01-02', '2026-01-16', '2026-01-30',
+    ]);
+    const monthly31 = job({ payday_frequency: 'monthly', first_pay_date: '2026-01-31' });
+    expect(paydayDatesBetween(monthly31, '2026-02-01', '2026-02-28')).toEqual(['2026-02-28']);
+
+    const semimonthly = job({
+      payday_frequency: 'semimonthly',
+      first_pay_date: '2026-01-30',
+      second_pay_day: 31,
+    });
+    expect(paydayDatesBetween(semimonthly, '2026-02-01', '2026-02-28')).toEqual([
+      '2026-02-28', '2026-02-28',
+    ]);
+    expect(hasPaydaySchedule({ ...weekly, payday_frequency: 'monthly' as any })).toBeTrue();
+    expect(hasPaydaySchedule({ ...weekly, payday_frequency: 'every-so-often' as any })).toBeFalse();
+  });
+
   it('limits current pay to enabled jobs within employment dates', () => {
     expect(isCurrentJob(job(), '2026-01-01')).toBeTrue();
     expect(isCurrentJob(job({ effective_date: '2026-02-01' }), '2026-01-01')).toBeFalse();
@@ -121,6 +157,8 @@ describe('job compensation history', () => {
     const check = (changes: Partial<JobIncomeCreate>) => jobHistoryError({ ...job(), ...changes } as JobIncomeCreate);
     expect(check({})).toBeNull();
     expect(check({ end_date: '2025-12-31' })).toContain('End date');
+    expect(check({ payday_frequency: 'weekly', first_pay_date: null })).toContain('first scheduled payday');
+    expect(check({ payday_frequency: 'semimonthly', first_pay_date: '2026-01-30', second_pay_day: 30 })).toContain('different days');
     expect(check({ effective_date: '2026-02-30' })).toContain('start date');
     expect(check({ promotions: [{ date: '2026-01-01', annual_base_pay: 10 }] })).toContain('Promotion dates');
     expect(check({ end_date: '2026-01-10', promotions: [{ date: '2026-01-11', annual_base_pay: 10 }] })).toContain('Promotion dates');
@@ -258,15 +296,20 @@ describe('job compensation history', () => {
     expect(stockSnapshotAt(startsLater, '2026-10-20').remainingValue).toBe(800);
   });
 
-  it('ignores invalid or future marks and replaces same-day values without losing other dates', () => {
+  it('keeps market quote history while replacing all prior manual prices with one current mark', () => {
     const marks = [
-      { date: '2026-02-01', price_per_share: 20 },
+      { date: '2026-01-01', price_per_share: 18, source: 'manual' },
+      { date: '2026-01-15', price_per_share: 19, source: 'live_eod', symbol: 'MSFT' },
+      { date: '2026-02-01', price_per_share: 20, source: 'live_eod', symbol: 'MSFT' },
       { date: '2026-03-01', price_per_share: Number.NaN },
       { date: '2026-12-01', price_per_share: 50 },
-      { date: '2026-02-01', price_per_share: 30 },
+      { date: '2026-02-01', price_per_share: 30, source: 'manual' },
     ];
     const replaced = replaceStockValuation(marks, { date: '2026-02-01', price_per_share: 25, source: 'manual' });
-    expect(replaced.filter(mark => mark.date === '2026-02-01')).toEqual([{ date: '2026-02-01', price_per_share: 25, source: 'manual' }]);
+    expect(replaced.filter(mark => mark.source === 'manual')).toEqual([{ date: '2026-02-01', price_per_share: 25, source: 'manual' }]);
+    expect(replaced).toContain(jasmine.objectContaining({ date: '2026-01-15', price_per_share: 19, source: 'live_eod', symbol: 'MSFT' }));
+    expect(replaced.some(mark => mark.date === '2026-02-01' && mark.source === 'live_eod')).toBeFalse();
+    expect(replaced.some(mark => mark.date === '2026-12-01')).toBeFalse();
     expect(latestStockValuationOnOrBefore(replaced, '2026-06-01')?.price_per_share).toBe(25);
     expect(latestStockValuationOnOrBefore(replaced, '2026-11-30')?.price_per_share).toBe(25);
   });

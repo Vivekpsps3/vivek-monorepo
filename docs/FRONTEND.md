@@ -103,16 +103,16 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Home behavior
 
-- Home begins with two clickable summaries in one divided section: current net worth, and this month's cashflow. It then shows a first-steps list for an empty vault and charts. Detailed holdings stay on What you have; Home keeps the holdings / assets / debts split and compact balance, position, and quote source dates, and retains the allocation chart.
+- Home begins with two clickable summaries in one divided section: current net worth, and this month's income and spending. The income summary is followed by a source list that adds to the monthly total, including recorded deposits, projected paychecks, dated compensation and stock-sale proceeds, undated estimates, and the aggregate overlap adjustment. It then shows a first-steps list for an empty vault and charts. Detailed holdings stay on What you have; Home keeps the holdings / assets / debts split and compact balance, position, and quote source dates, and retains the allocation chart.
 - **What you have** is the current net worth total.
-- **This month** is one cashflow total: card and other posted activity, plus repeating job pay and bills that are not already posted. A paycheck within 20% of job pay counts once. A bill within four days and 2% (or $1) of a posted purchase counts once.
+- **This month** is one cashflow total: posted activity, job pay and recorded share-sale proceeds, plus bills that are not already posted. Posted and projected income within 20% count once; the visible negative adjustment explains the amount removed and is not assigned to a specific deposit or payday. A bill within four days and 2% (or $1) of a posted purchase counts once. Without a payday schedule, job pay remains a date-unknown estimate; configured schedules show paycheck dates only from the saved first payday forward.
 - Transactions do not change net worth. Jobs, bills, and subscriptions stay editable on Recurring and still do not change net worth.
-- Home charts use that same single cashflow series. Spending categories use purchase/refund effects across the full encrypted ledger, independent of the visible transaction page.
+- Home charts use that same single cashflow series. Calendar shows posted deposits, configured paycheck dates, dated compensation and stock-sale sources on their dates, plus a monthly source list. Day net shows dated source amounts before the month-level overlap adjustment, which is intentionally not attributed to a particular day. Spending categories use purchase/refund effects across the full encrypted ledger, independent of the visible transaction page.
 
 ## Recurring cashflow pages
 
 - `/income`, `/fixed-expenses`, `/subscriptions` manage encrypted recurring rows via `FinanceService`.
-- These do **not** change net worth. They feed cashflow summary and can influence planning spending inputs.
+- These do **not** change net worth. They feed cashflow summary and can influence planning spending inputs. Jobs & pay is the owner for optional payday cadence and its first payday anchor; no paycheck dates are inferred if that schedule is absent. Salary-entry frequency remains separate from paycheck cadence, and annual bonus/equity/other estimates remain undated. Dated payments are additional; clear the annual estimate if it represents the same payout.
 - Prefer the dedicated pages over inventing parallel recurring models on the transactions table.
 
 ## Bank CSV Import
