@@ -8,7 +8,6 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
-from migrations import run_sqlite_migrations
 
 
 def _backend_dir() -> Path:
@@ -44,7 +43,7 @@ def test_alembic_upgrade_head_on_legacy_holdings_sqlite():
         prev_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = url
         try:
-            command.upgrade(cfg, "head")
+            command.upgrade(cfg, "b7c9d2e4f601")
         finally:
             if prev_db_url is None:
                 os.environ.pop("DATABASE_URL", None)
@@ -166,8 +165,8 @@ def test_vault_migration_is_idempotent_after_create_all():
         prev_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = url
         try:
-            command.upgrade(cfg, "head")
-            command.upgrade(cfg, "head")  # second pass must be a no-op
+            command.upgrade(cfg, "b7c9d2e4f601")
+            command.upgrade(cfg, "b7c9d2e4f601")  # second pass must be a no-op
         finally:
             if prev_db_url is None:
                 os.environ.pop("DATABASE_URL", None)
@@ -231,8 +230,8 @@ def test_passwordless_migration_recovers_partial_sqlite_state():
         prev_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = url
         try:
-            command.upgrade(cfg, "head")
-            command.upgrade(cfg, "head")
+            command.upgrade(cfg, "b7c9d2e4f601")
+            command.upgrade(cfg, "b7c9d2e4f601")
         finally:
             if prev_db_url is None:
                 os.environ.pop("DATABASE_URL", None)
@@ -270,7 +269,7 @@ def test_password_hash_migration_allows_passwordless_users():
         prev_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = url
         try:
-            command.upgrade(cfg, "head")
+            command.upgrade(cfg, "b7c9d2e4f601")
         finally:
             if prev_db_url is None:
                 os.environ.pop("DATABASE_URL", None)
@@ -282,34 +281,6 @@ def test_password_hash_migration_allows_passwordless_users():
         with engine.begin() as conn:
             assert conn.execute(text("SELECT password_hash FROM users WHERE id = 1")).scalar_one() == "legacy-hash"
             conn.execute(text("INSERT INTO users (id, password_hash) VALUES (2, NULL)"))
-        engine.dispose()
-
-
-def test_run_sqlite_migrations_adds_transaction_columns_on_legacy_table():
-    with tempfile.TemporaryDirectory() as tmp:
-        url = f"sqlite:///{Path(tmp) / 'legacy.db'}"
-        engine = create_engine(url, connect_args={"check_same_thread": False})
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE transactions (
-                        id INTEGER PRIMARY KEY,
-                        date DATE,
-                        type VARCHAR,
-                        category VARCHAR,
-                        amount FLOAT,
-                        description VARCHAR
-                    )
-                    """
-                )
-            )
-        run_sqlite_migrations(engine)
-        cols = {c["name"] for c in inspect(engine).get_columns("transactions")}
-        assert "source" in cols
-        assert "bank_account_id" in cols
-        assert "dedupe_key" in cols
-        assert "import_batch_id" in cols
         engine.dispose()
 
 
@@ -332,18 +303,3 @@ def test_market_research_cache_create_all_has_expected_columns():
         "fetched_at",
         "expires_at",
     }.issubset(columns)
-
-
-def test_market_research_startup_migration_is_idempotent():
-    from sqlalchemy import create_engine, inspect
-
-    from models import Base
-
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-
-    run_sqlite_migrations(engine)
-    run_sqlite_migrations(engine)
-
-    inspector = inspect(engine)
-    assert inspector.has_table("market_research_cache")

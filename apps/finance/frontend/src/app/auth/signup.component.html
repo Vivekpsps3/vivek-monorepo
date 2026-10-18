@@ -8,7 +8,7 @@
 
     <div class="login-panel">
       <ui-card>
-        <form class="login-form" (ngSubmit)="submit()">
+        <form class="login-form" novalidate (ngSubmit)="submit()">
           <ui-input
             label="Username"
             autocomplete="username"
@@ -27,7 +27,7 @@
           @if (error) {
             <p class="login-error" role="alert">{{ error }}</p>
           }
-          <ui-button type="submit" [disabled]="!canSubmit">
+          <ui-button type="submit" [disabled]="loading">
             {{ loading ? 'Creating account' : 'Sign up' }}
           </ui-button>
         </form>

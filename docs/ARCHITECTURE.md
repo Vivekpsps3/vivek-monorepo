@@ -4,7 +4,7 @@ Local-first personal finance: **Angular 21** UI, **FastAPI** API, **SQLite** per
 
 ## Active API surface
 
-- Active browser finance storage is `/api/vault/*`: the backend stores ciphertext, sync revisions, and blind indexes only.
+- Active browser finance storage uses `/api/vault/*`: the backend stores encrypted key wraps, ciphertext, sync revisions, and optional blind indexes.
 - Active non-finance plaintext surfaces are auth/admin account management, health, and public market quote/research cache.
 - Plaintext finance HTTP is gone. Full surface ownership: [LIFECYCLE.md](./LIFECYCLE.md).
 
@@ -12,12 +12,21 @@ Local-first personal finance: **Angular 21** UI, **FastAPI** API, **SQLite** per
 
 | Plane | What it is | Writes | Reads for |
 |-------|------------|--------|-----------|
-| **Balance sheet** | per-user `assets`, `liabilities`, `holdings` + market prices | CRUD + Fidelity CSV (holdings per brokerage account) | **Net worth** (computed client-side in `client-finance.ts` after vault unlock) |
-| **Transactions ledger** | encrypted per-user transactions; legacy income/expense direction plus a typed kind | Browser CRUD + client-side staged bank CSV import | Activity, calendar, observed cashflow summaries |
-| **Recurring cashflow** | per-user `job_incomes`, `fixed_expenses`, `subscriptions` | CRUD on those tables only | Income / fixed-expense / subscription pages; cashflow summary computed client-side; planning spending inputs |
+| **Balance sheet** | encrypted per-user `assets`, `liabilities`, `holdings` collections + market prices | Browser CRUD + Fidelity CSV (holdings per brokerage account) | **Net worth** (computed client-side in `client-finance.ts` after vault unlock) |
+| **Transactions ledger** | encrypted per-user `transactions` collection; legacy income/expense direction plus a typed kind | Browser CRUD + client-side staged bank CSV import | Activity, calendar, observed cashflow summaries |
+| **Recurring cashflow** | encrypted per-user `job_incomes`, `fixed_expenses`, `subscriptions` collections | Browser CRUD in the vault | Income / fixed-expense / subscription pages; cashflow summary computed client-side; planning spending inputs |
 | **Planning (speculative)** | Encrypted `planning_profiles` and `stock_lab_scenarios`; public market research cache | Browser-side profile CRUD and Monte Carlo; Stock Lab scenarios via vault; market research by symbol | Monte Carlo `/planning`, Stock Lab `/stock-lab` |
 
 **Invariant:** Net worth is always balance-sheet based: manual assets + portfolio market value − liabilities. Transactions, recurring cashflow rows, and simulations **never** update net worth.
+
+These names describe logical encrypted collections, not SQL tables. The active
+SQL schema holds auth/session data, vault wraps, ciphertext and sync metadata,
+blind indexes, and public market caches. Startup checks for legacy plaintext
+rows and password-only users before any schema mutation. A clean new database
+creates the current ORM schema and stamps Alembic head `e0f6a2b3c4d5`; an
+existing database upgrades through Alembic, whose final revision removes empty
+legacy plaintext tables. See [LIFECYCLE.md](./LIFECYCLE.md) and
+[SECURITY_MODEL.md](./SECURITY_MODEL.md#migration-ordering).
 
 ## Finance UX and data behavior
 
@@ -91,9 +100,9 @@ Browser/domain proxy
 - Legacy password login exists only for a bounded, unenrolled-account migration endpoint. Enrollment registers the public key, stores only encrypted wraps, and clears the password hash.
 - All non-health finance APIs require a valid session. Mutating requests require `X-CSRF-Token`.
 - Optional legacy `API_KEY` / `FINANCE_API_KEY` middleware can also gate `/api/*` (except health) for non-browser clients.
-- `users`, `user_sessions`, and `audit_events` live in the same SQLite database as finance data.
+- Auth/session/audit metadata, vault wraps, encrypted records, optional blind indexes, and public market caches live in SQLite.
 - Admin UI route: `/admin/users`. Admins create invitations, disable, reset contents, delete, and manage users, and view metrics. They cannot reset a vault passphrase or recover a user's keys. The raw SQL console is disabled. Self-delete and deleting or disabling the final active admin are blocked.
-- User-owned finance tables include `user_id`; market quote cache and provider registries stay global.
+- Finance facts are user-scoped encrypted vault collections, not user-owned plaintext SQL tables.
 
 There is no active plaintext analytics or planning router. Monte Carlo inputs and calculations run in the browser after vault unlock; saved profiles use encrypted vault collection `planning_profiles`, and runs are ephemeral. Stock Lab market research is under `/api/market/research/*`. Retired and reserved APIs are listed in [LIFECYCLE.md](./LIFECYCLE.md).
 

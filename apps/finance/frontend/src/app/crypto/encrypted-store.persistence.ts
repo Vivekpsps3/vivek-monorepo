@@ -187,7 +187,6 @@ export class EncryptedRecordPersistence {
     this.loaded = true;
     await this.rewriteLegacyRecords(generation);
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
-    await this.migrateLegacyPlaintext(generation);
   }
 
   allocateId(): number {
@@ -382,39 +381,14 @@ export class EncryptedRecordPersistence {
   }
 
   private async rewriteLegacyRecords(generation: number): Promise<void> {
-    const migrated: Array<{ collection: string; client_id: string }> = [];
     for (const collection of Object.keys(this.bags) as CollectionName[]) {
       for (const envelope of this.bags[collection].values()) {
-        // Version 1 records did not authenticate their server-owned identity.
-        // Rewrite them once with version 2 AAD after successful local decryption.
+        // Older ciphertext needs authenticated-record AAD; plaintext tables are retired.
         if (envelope.schema_version < CURRENT_RECORD_SCHEMA_VERSION) {
           await this.upsert(collection, envelope.data, envelope.client_id, generation);
-          migrated.push({ collection, client_id: envelope.client_id });
         }
       }
     }
-    // Plaintext migration owns completion while legacy database rows still exist.
-    if (migrated.length && this.vault.currentStatus?.migration_status !== 'vault_ready') {
-      const counts = migrated.reduce<Record<string, number>>((out, record) => {
-        out[record.collection] = (out[record.collection] ?? 0) + 1;
-        return out;
-      }, {});
-      await firstValueFrom(this.vault.completeLegacyMigration(counts, migrated));
-    }
-  }
-
-  private async migrateLegacyPlaintext(generation: number): Promise<void> {
-    if (this.vault.currentStatus?.migration_status !== 'vault_ready') return;
-    const exported = await firstValueFrom(this.vault.exportLegacyRecords());
-    if (generation !== this.getSessionToken()) return;
-    const migrated: Array<{ collection: string; client_id: string }> = [];
-    for (const record of exported.records) {
-      if (!this.bags[record.collection]) throw new Error(`Unsupported legacy collection: ${record.collection}`);
-      const clientId = `legacy:${record.collection}:${record.data['id']}`;
-      await this.upsert(record.collection as CollectionName, record.data as { id?: number }, clientId, generation);
-      migrated.push({ collection: record.collection, client_id: clientId });
-    }
-    await firstValueFrom(this.vault.completeLegacyMigration(exported.counts, migrated));
   }
 
   async remove(collection: CollectionName, id: number): Promise<void> {

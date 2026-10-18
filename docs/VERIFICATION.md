@@ -11,11 +11,12 @@ Named quality gates for local development and CI (TEST-001).
 
 ## Migration matrix (BE-002)
 
-Supported DB generations and fixtures: [LIFECYCLE.md](./LIFECYCLE.md) and the
-migration fixture tests in `apps/finance/backend/tests/test_migrations.py`
-(`test_alembic_upgrade_head_on_legacy_holdings_sqlite`,
-`test_passwordless_migration_recovers_partial_sqlite_state`,
-`test_password_hash_migration_allows_passwordless_users`).
+Supported DB generations and fixtures: [LIFECYCLE.md](./LIFECYCLE.md). The
+historical holdings-only upgrade fixture intentionally stops at the previous
+head `b7c9d2e4f601`. Current-head cleanup tests prove that empty legacy tables
+are dropped, populated plaintext tables/password-only users block before
+changes, and restart/fresh initialization do not recreate retired tables.
+Historical passwordless migration fixtures remain covered.
 
 ## Backup and restore (OPS-001)
 

@@ -27,16 +27,15 @@ export class SignupComponent {
     return authPath(page);
   }
 
-  get canSubmit(): boolean {
-    return (
-      !this.loading &&
-      /^[a-zA-Z0-9_.-]{3,64}$/.test(this.username.trim()) &&
-      this.password.length >= 12
-    );
-  }
-
   submit(): void {
-    if (!this.canSubmit) return;
+    if (this.loading) return;
+    const validationError = this.validationError();
+    if (validationError) {
+      this.error = validationError;
+      this.cdr.markForCheck();
+      return;
+    }
+
     this.loading = true;
     this.error = '';
     this.cdr.markForCheck();
@@ -52,6 +51,18 @@ export class SignupComponent {
         this.cdr.markForCheck();
       }
     );
+  }
+
+  private validationError(): string | null {
+    const username = this.username.trim();
+    if (!username) return 'Enter a username.';
+    if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username)) {
+      return 'Username must be 3–64 letters, numbers, dots, underscores, or hyphens.';
+    }
+    if (this.password.length < 12) {
+      return 'Vault passphrase must be at least 12 characters.';
+    }
+    return null;
   }
 
   private errorMessage(err: any): string {

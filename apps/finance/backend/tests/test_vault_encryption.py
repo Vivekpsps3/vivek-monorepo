@@ -8,7 +8,7 @@ from sqlalchemy import delete
 
 from conftest import authenticated_client
 from main import Base, app, engine
-from models import Asset, AssetCategory, UserRole
+from models import UserRole
 
 
 @pytest.fixture(autouse=True)
@@ -58,8 +58,6 @@ def test_vault_setup_and_record_roundtrip():
     )
     assert setup.status_code == 200, setup.text
     assert setup.json()["exists"] is True
-    assert setup.json()["migrated"] is True
-    assert setup.json()["migration_status"] == "completed"
 
     upsert = client.post(
         "/api/vault/records/upsert",
@@ -147,7 +145,6 @@ def test_vault_setup_accepts_browser_packed_recovery_wrap():
     )
     assert setup.status_code == 200, setup.text
     assert setup.json()["exists"] is True
-    assert setup.json()["migrated"] is True
 
 
 def test_vault_rejects_malformed_base64():
@@ -245,177 +242,10 @@ def test_vault_upsert_requires_explicit_revision_and_preserves_key_version():
     assert rewritten.json()[0]["key_version"] == 7
 
 
-def test_migration_completion_requires_schema2_owned_replacements_and_is_idempotent():
-    client = authenticated_client(app, email="vault-migration@example.com")
-    user_id = client.get("/api/auth/me").json()["user"]["id"]
-    from main import engine
-    from sqlalchemy.orm import Session
-    from datetime import date
-
-    with Session(engine) as db:
-        db.add(
-            Asset(
-                user_id=user_id,
-                name="legacy plaintext marker",
-                category=AssetCategory.cash,
-                current_value=10,
-                as_of_date=date(2026, 1, 1),
-            )
-        )
-        db.commit()
-
-    setup = client.post(
-        "/api/vault/setup",
-        json={
-            "kdf_salt_b64": _b64(16),
-            "wrapped_dek_b64": _b64(48),
-            "recovery_wrapped_dek_b64": _b64(48),
-        },
-    )
-    assert setup.status_code == 200
-    assert setup.json()["migration_status"] == "vault_ready"
-
-    mismatch = client.post(
-        "/api/vault/migration/complete",
-        json={"counts": {"assets": 1}, "records": []},
-    )
-    assert mismatch.status_code == 409
-
-    other_client = authenticated_client(app, email="vault-migration-other@example.com")
-    assert other_client.post(
-        "/api/vault/setup",
-        json={
-            "kdf_salt_b64": _b64(16),
-            "wrapped_dek_b64": _b64(48),
-            "recovery_wrapped_dek_b64": _b64(48),
-        },
-    ).status_code == 200
-    assert other_client.post(
-        "/api/vault/records/upsert",
-        json={
-            "records": [
-                {
-                    "collection": "assets",
-                    "client_id": "foreign-asset",
-                    "ciphertext_b64": _b64(64),
-                    "schema_version": 2,
-                }
-            ]
-        },
-    ).status_code == 200
-    foreign = client.post(
-        "/api/vault/migration/complete",
-        json={
-            "counts": {"assets": 1},
-            "records": [{"collection": "assets", "client_id": "foreign-asset"}],
-        },
-    )
-    assert foreign.status_code == 409
-
-    encrypted = client.post(
-        "/api/vault/records/upsert",
-        json={
-            "records": [
-                {
-                    "collection": "assets",
-                    "client_id": "asset-migrated",
-                    "ciphertext_b64": _b64(64),
-                    "schema_version": 1,
-                    "key_version": 1,
-                }
-            ]
-        },
-    )
-    assert encrypted.status_code == 200
-    schema1 = client.post(
-        "/api/vault/migration/complete",
-        json={
-            "counts": {"assets": 1},
-            "records": [{"collection": "assets", "client_id": "asset-migrated"}],
-        },
-    )
-    assert schema1.status_code == 409
-    assert client.post(
-        "/api/vault/records/upsert",
-        json={
-            "records": [
-                {
-                    "collection": "assets",
-                    "client_id": "asset-migrated",
-                    "ciphertext_b64": _b64(64),
-                    "schema_version": 2,
-                    "expected_revision": 1,
-                }
-            ]
-        },
-    ).status_code == 200
-    completed = client.post(
-        "/api/vault/migration/complete",
-        json={
-            "counts": {"assets": 1},
-            "records": [{"collection": "assets", "client_id": "asset-migrated"}],
-        },
-    )
-    assert completed.status_code == 200
-    assert completed.json()["status"] == "completed"
-
-    with Session(engine) as db:
-        assert db.query(Asset).filter(Asset.user_id == user_id).count() == 0
-
-    retry = client.post(
-        "/api/vault/migration/complete", json={"counts": {}, "records": []}
-    )
-    assert retry.status_code == 200
-    assert retry.json()["status"] == "completed"
-
-
-def test_vault_ready_user_can_export_plaintext_only_for_client_side_migration():
-    client = authenticated_client(app, email="vault-export@example.com")
-    user_id = client.get("/api/auth/me").json()["user"]["id"]
-    from datetime import date
-    from sqlalchemy.orm import Session
-
-    with Session(engine) as db:
-        db.add(
-            Asset(
-                user_id=user_id,
-                name="legacy export cash",
-                category=AssetCategory.cash,
-                current_value=42,
-                as_of_date=date(2026, 1, 1),
-            )
-        )
-        db.commit()
-
-    assert client.post(
-        "/api/vault/setup",
-        json={
-            "kdf_salt_b64": _b64(16),
-            "wrapped_dek_b64": _b64(48),
-            "recovery_wrapped_dek_b64": _b64(48),
-        },
-    ).status_code == 200
-
-    exported = client.get("/api/vault/migration/export")
-
-    assert exported.status_code == 200, exported.text
-    assert exported.json()["counts"] == {"assets": 1}
-    assert exported.json()["records"] == [
-        {"collection": "assets", "data": {
-            "id": 1,
-            "name": "legacy export cash",
-            "category": "cash",
-            "current_value": 42.0,
-            "as_of_date": "2026-01-01",
-            "notes": None,
-            "created_at": exported.json()["records"][0]["data"]["created_at"],
-            "updated_at": exported.json()["records"][0]["data"]["updated_at"],
-        }}
-    ]
-
-    assert client.post(
-        "/api/vault/migration/complete", json={"counts": {}, "records": []}
-    ).status_code == 409
+def test_plaintext_migration_endpoints_are_retired():
+    client = authenticated_client(app, email="retired-migration@example.com")
+    assert client.get("/api/vault/migration/export").status_code == 404
+    assert client.post("/api/vault/migration/complete", json={"counts": {}, "records": []}).status_code == 404
 
 
 def test_vault_rejects_stale_record_delete():

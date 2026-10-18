@@ -103,12 +103,25 @@ No client-side signal/detector code currently ships; these rules bind any future
 
 ## Migration ordering
 
-Schema-v1 ciphertext is decrypted locally only after account authentication and
-rewritten as schema-v2 records with authenticated-record AAD. Verify the
-encrypted replacement before deleting legacy plaintext rows, then checkpoint the
-SQLite WAL and run `VACUUM`. Password migration follows the same ordering: a
-legacy password session can enroll a signing key only after the vault is
-available; enrollment clears the password hash without uploading any vault secret.
+Existing schema-v1 ciphertext is decrypted locally only after account
+authentication and rewritten as schema-v2 records with authenticated-record
+AAD. This browser-side format upgrade remains supported.
+
+The former server-side plaintext Finance schema and its browser-to-server
+row-copy migration have been retired. Before creating or upgrading any schema,
+startup checks that every legacy finance table is empty and that no user still
+has only password authentication. If data remains, startup stops before
+changing the database. Open the previous app version, migrate the account into
+its browser vault, verify the encrypted records, then retry the deployment.
+Alembic revision `e0f6a2b3c4d5` drops the empty legacy tables and migration
+bookkeeping; it preserves users, vault wraps, encrypted records, blind indexes,
+and public market caches. The backend never decrypts finance records. Back up
+the SQLite file before deploying this cleanup (see [DEPLOY.md](./DEPLOY.md)).
+
+Password-only auth migration is an account-enrollment path in the previous
+release. The current release's preflight blocks startup while a password-only
+account remains, so restore the previous release to complete enrollment; it
+clears the password hash without uploading vault secrets.
 
 ## Admin tooling
 

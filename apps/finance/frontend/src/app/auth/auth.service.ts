@@ -202,8 +202,6 @@ export class AuthService {
     // Lookup returns public wraps only; mark the vault as present so unlock works on a new browser.
     this.vault.loadPublicStatus({
       exists: true,
-      migration_status: lookup.vault.migration_status ?? 'complete',
-      migrated: lookup.vault.migrated ?? true,
       kdf_algorithm: lookup.vault.kdf_algorithm ?? 'PBKDF2',
       kdf_salt_b64: lookup.vault.kdf_salt_b64,
       kdf_iterations: lookup.vault.kdf_iterations,

@@ -35,14 +35,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_database() -> None:
+    from legacy_schema_guard import assert_safe_to_remove_legacy_schema
+    from sqlalchemy import inspect
+
+    # Check before create_all or any historical upgrade can change the source DB.
+    with engine.connect() as connection:
+        assert_safe_to_remove_legacy_schema(connection)
+        existing_tables = {
+            name for name in inspect(connection).get_table_names() if not name.startswith("sqlite_")
+        }
+    is_fresh_database = not existing_tables
+
     Base.metadata.create_all(bind=engine)
 
-    # Legacy SQLite migrations for very old column additions (transactions etc.)
-    from migrations import run_sqlite_migrations
-    run_sqlite_migrations(engine)
-
-    # Automatic Alembic upgrade at startup (for new tables like brokerages, column adds, drops)
-    # The migration uses inspector guards so it is safe even if create_all already created tables.
+    # A clean file database gets the current schema directly. Historical migrations
+    # remain available for existing databases that need the guarded cleanup revision.
     if ":memory:" not in SQLALCHEMY_DATABASE_URL:
         from alembic.config import Config
         from alembic import command
@@ -55,7 +62,10 @@ def init_database() -> None:
             alembic_cfg = Config(os.path.join(here, "alembic.ini"))
             alembic_cfg.set_main_option("script_location", os.path.join(here, "alembic"))
             alembic_cfg.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)
-            command.upgrade(alembic_cfg, "head")
+            if is_fresh_database:
+                command.stamp(alembic_cfg, "head")
+            else:
+                command.upgrade(alembic_cfg, "head")
         except Exception as e:
             if strict:
                 log.error("Alembic upgrade failed (ALEMBIC_STRICT=1): %s", e)

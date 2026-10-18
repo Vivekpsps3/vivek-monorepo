@@ -153,41 +153,7 @@ describe('EncryptedStoreService', () => {
     expect((summary.subscription_occurrences as any[]).map(event => event.date)).toEqual(['2026-01-20']);
   });
 
-  it('exports vault-ready legacy records to encrypt locally before completing migration', async () => {
-    const completeLegacyMigration = jasmine.createSpy('completeLegacyMigration').and.returnValue(of({ status: 'completed' }));
-    const upsertRecords = jasmine.createSpy('upsertRecords').and.callFake((records: any[]) =>
-      of(records.map(record => ({ ...record, revision: 1, updated_at: '' })))
-    );
-    const vault = {
-      isUnlocked: true,
-      currentStatus: { exists: true, migration_status: 'vault_ready' },
-      listRecords: () => of([]),
-      exportLegacyRecords: () => of({
-        counts: { assets: 1 },
-        records: [{ collection: 'assets', data: { id: 7, name: 'Legacy cash' } }],
-      }),
-      decryptPayload: async () => ({}),
-      encryptPayload: async () => 'ciphertext',
-      blindIndex: async () => 'index',
-      upsertRecords,
-      completeLegacyMigration,
-    } as unknown as VaultService;
-    const store = new EncryptedStoreService(vault);
-
-    expect(await store.getAssets()).toEqual([jasmine.objectContaining({ id: 7, name: 'Legacy cash' })]);
-    expect(upsertRecords).toHaveBeenCalledWith([
-      jasmine.objectContaining({ collection: 'assets', schema_version: 2, key_version: 1 }),
-    ]);
-    expect(completeLegacyMigration).toHaveBeenCalledWith(
-      { assets: 1 },
-      [jasmine.objectContaining({ collection: 'assets' })]
-    );
-  });
-
-  it('rewrites schema-1 records with their key version and revision before completing migration', async () => {
-    const completeLegacyMigration = jasmine.createSpy('completeLegacyMigration').and.returnValue(
-      of({ status: 'completed' })
-    );
+  it('rewrites schema-1 records with their key version and revision without plaintext migration bookkeeping', async () => {
     const vault = {
       isUnlocked: true,
       listRecords: () =>
@@ -217,15 +183,11 @@ describe('EncryptedStoreService', () => {
         ]);
         return of([{ ...records[0], revision: 5, updated_at: '' }]);
       },
-      completeLegacyMigration,
     } as unknown as VaultService;
     const store = new EncryptedStoreService(vault);
 
     await store.getAssets();
-    expect(completeLegacyMigration).toHaveBeenCalledWith(
-      { assets: 1 },
-      [{ collection: 'assets', client_id: 'asset-001' }]
-    );
+    expect(await store.getAssets()).toEqual([jasmine.objectContaining({ id: 1, name: 'Cash' })]);
   });
 
   it('serializes a manual holding edit with its quote and preserves the edited position facts', async () => {

@@ -36,6 +36,19 @@ domain / LAN / VPN
 - Copy the DB before upgrades or `make reset-db`.
 - **OPS-009:** Single SQLite file = no built-in HA or replication; use file backups and one writer process.
 
+### Retiring the plaintext Finance schema
+
+Before deploying the schema-retirement release, take and verify a SQLite backup.
+Startup checks legacy plaintext finance tables and password-only accounts before
+running `create_all` or Alembic. If either still contains data, startup refuses
+without modifying those rows or tables. Restore the previous app version and
+complete its browser-side account enrollment/data migration into the encrypted
+vault; verify the encrypted data, back up again, then redeploy. On a clean legacy
+database, Alembic revision `e0f6a2b3c4d5` removes empty plaintext tables and
+records the new head. Restart and health-check the service, then keep the
+pre-upgrade backup until the deployment is verified. Cleanup runs once during
+API startup and does not decrypt or rewrite vault records.
+
 ## Docker website (localhost)
 
 ```bash

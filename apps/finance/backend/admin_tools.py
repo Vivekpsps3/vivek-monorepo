@@ -10,13 +10,10 @@ from models import (
     AuditEvent,
     EncryptedRecord,
     User,
-    UserCryptoMigration,
     UserSession,
     UserVault,
 )
-from services.encrypted_storage import LEGACY_DELETE_ORDER, wipe_encrypted_user_data
-
-USER_OWNED_MODELS = LEGACY_DELETE_ORDER
+from services.encrypted_storage import wipe_encrypted_user_data
 
 
 def admin_metrics(db: Session) -> dict[str, Any]:
@@ -31,27 +28,20 @@ def admin_metrics(db: Session) -> dict[str, Any]:
         "active_sessions": db.query(UserSession).filter(UserSession.revoked_at.is_(None)).count(),
         "audit_events": db.query(AuditEvent).count(),
     }
-    finance_rows = {model.__tablename__: db.query(model).count() for model in USER_OWNED_MODELS}
+    finance_rows = {}
     finance_rows["encrypted_records"] = db.query(EncryptedRecord).count()
     finance_rows["user_vaults"] = db.query(UserVault).count()
     per_user = []
     for user in users:
-        migration = (
-            db.query(UserCryptoMigration)
-            .filter(UserCryptoMigration.user_id == user.id)
-            .one_or_none()
-        )
         row = {
             "id": user.id,
             "email": user.email,
             "display_name": user.display_name,
             "role": role_str(user.role),
             "is_active": user.is_active,
-            "crypto_migration_status": migration.status if migration else "none",
             "has_vault": db.query(UserVault).filter(UserVault.user_id == user.id).count() > 0,
             "encrypted_records": db.query(EncryptedRecord).filter(EncryptedRecord.user_id == user.id).count(),
         }
-        row.update({model.__tablename__: db.query(model).filter(model.user_id == user.id).count() for model in USER_OWNED_MODELS})
         per_user.append(row)
     inspector = inspect(db.bind)
     tables = []
@@ -65,8 +55,6 @@ def admin_metrics(db: Session) -> dict[str, Any]:
 
 
 def reset_user_contents(db: Session, user: User, *, actor_user_id: int, revoke_sessions: bool = True) -> None:
-    for model in USER_OWNED_MODELS:
-        db.query(model).filter(model.user_id == user.id).delete(synchronize_session=False)
     wipe_encrypted_user_data(db, user.id)
     if revoke_sessions:
         db.query(UserSession).filter(UserSession.user_id == user.id).delete(synchronize_session=False)
@@ -80,8 +68,6 @@ def reset_user_contents(db: Session, user: User, *, actor_user_id: int, revoke_s
 
 
 def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
-    for model in USER_OWNED_MODELS:
-        db.query(model).filter(model.user_id == user.id).delete(synchronize_session=False)
     wipe_encrypted_user_data(db, user.id)
     db.query(UserSession).filter(UserSession.user_id == user.id).delete(synchronize_session=False)
     db.query(AuditEvent).filter(AuditEvent.actor_user_id == user.id).update(

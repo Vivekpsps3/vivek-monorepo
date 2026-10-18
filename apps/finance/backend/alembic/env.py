@@ -21,6 +21,7 @@ if config.config_file_name is not None:
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from models import Base
+from legacy_schema_guard import assert_safe_to_remove_legacy_schema
 
 target_metadata = Base.metadata
 
@@ -77,6 +78,9 @@ def run_migrations_online() -> None:
             connection=connection, target_metadata=target_metadata
         )
 
+        target = context.get_revision_argument()
+        if target in ("head", "heads", "e0f6a2b3c4d5"):
+            assert_safe_to_remove_legacy_schema(connection)
         with context.begin_transaction():
             context.run_migrations()
 

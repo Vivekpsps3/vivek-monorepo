@@ -97,7 +97,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Privacy and migration
 
-- Vault finance records are schema-v2 authenticated-record ciphertext. The browser migrates schema-v1 records after login, verifies encrypted replacements, then removes legacy plaintext rows.
+- Vault finance records are schema-v2 authenticated-record ciphertext. After login, the browser can locally decrypt existing schema-v1 ciphertext records and rewrite them as schema-v2. The former plaintext-row copy flow is retired; schema cleanup is guarded and performed by Alembic only when legacy tables are empty.
 - Manual/imported Portfolio prices stay local. After authenticated vault unlock, the browser automatically refreshes deduplicated holding and configured employer tickers with bounded concurrency. The shell does not show a ticker countdown. A quiet mark means prices are updating. The account menu discloses that ticker symbols are sent to the market service. Failures stay on screen with retry. Explicit retry, typed lookup, and Stock Lab research also send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
 - Login unwraps a browser-held signing key with the vault passphrase and signs a single-use challenge. Admins issue invitations but cannot reset a user's vault passphrase or recover encrypted data.
 

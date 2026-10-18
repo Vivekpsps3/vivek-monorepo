@@ -5,17 +5,19 @@ Code truth: `apps/finance/backend/models.py`, `apps/finance/frontend/src/app/cry
 
 ## Users and ownership
 
-App-native auth uses three security tables:
+App-native auth and vault metadata use SQL tables:
 
 | Table | Purpose |
 |-------|---------|
 | `users` | Email, display name, role, active flag, password hash, timestamps |
+| `auth_challenges`, `auth_enrollments` | Hashed, expiring, single-use login challenges and admin enrollment invitations |
 | `user_sessions` | Hashed session tokens, CSRF token hashes, expiry/revocation metadata |
 | `audit_events` | Login, logout, user create/update, password reset, and related account events |
+| `user_vaults` | Browser-generated public key and encrypted key wraps |
 
-The first account created by the app setup flow is an admin. All finance data that belongs to a person is scoped by `user_id`: transactions, bank accounts, import batches, assets, liabilities, holdings, brokerage accounts, job incomes, fixed expenses, subscriptions, planning profiles, and planning runs. Provider tables (`banks`, `brokerages`) and ticker quote cache are global. Admin metrics read from the same SQLite database.
+The first account created by the app setup flow is an admin. Auth and sync metadata live in SQL tables (`users`, `auth_challenges`, `auth_enrollments`, `user_sessions`, `audit_events`, and `user_vaults`). Finance facts are browser-owned encrypted records in `encrypted_records`, scoped by `user_id` and a logical collection name. The logical collections include `transactions`, `bank_accounts`, `import_batches`, `assets`, `liabilities`, `holdings`, `brokerage_accounts`, `job_incomes`, `fixed_expenses`, `subscriptions`, and `planning_profiles`; these names are not SQL tables. Optional blind-index tokens live in `encrypted_record_indexes`. Public ticker data lives in global `ticker_quotes` and `market_research_cache` tables.
 
-Deleting an account is destructive: the admin API removes that user, their sessions, and all rows in user-owned finance tables. It does not delete global provider/cache tables. The API refuses self-delete and refuses deleting an account only when that account is the final active admin. Inactive admins can be deleted when at least one other active admin remains.
+Deleting an account is destructive: the admin API removes that user, sessions, vault wraps, encrypted records, and their blind-index rows. It does not delete global market caches. The API refuses self-delete and refuses deleting an account only when that account is the final active admin. Inactive admins can be deleted when at least one other active admin remains.
 
 ## Net worth
 
@@ -55,7 +57,7 @@ asset/liability value is updated.
 
 ## Manual balance sheet
 
-| Table | Purpose |
+| Encrypted collection | Purpose |
 |-------|---------|
 | `assets` | Cash accounts, property, vehicles, other (`AssetCategory` enum) |
 | `liabilities` | Mortgages, loans, credit cards (`LiabilityCategory` enum) |
@@ -90,9 +92,9 @@ SimpleFIN is the likely future aggregation path. Plaid placeholders may exist in
 
 ## Recurring cashflow (not net worth)
 
-Separate from the transaction ledger and balance sheet. Code: `models.py`, `apps/finance/frontend/src/app/crypto/client-finance.ts`.
+Separate from the transaction ledger and balance sheet. Code: `apps/finance/frontend/src/app/crypto/client-finance.ts`. These are logical encrypted collections, not SQL tables.
 
-| Table | Purpose |
+| Encrypted collection | Purpose |
 |-------|---------|
 | `job_incomes` | Employer/pay configuration (frequency, base pay, bonus/equity, taxes/deductions) |
 | `fixed_expenses` | Named recurring bills (rent, utilities, etc.) with frequency and date range |
@@ -117,7 +119,7 @@ that ticker to the public market endpoint. A job-level `stock_valuations` list s
 dated manual prices and saved market quotes, including quote source and fetch time when
 available. Market date is stored separately from fetch time. A new price replaces the
 same-day price, preserving other dates.
-These fields live inside the existing encrypted `job_incomes` payload; no plaintext
+These fields live inside the existing encrypted `job_incomes` collection; no plaintext
 schema or server API migration is needed. Older records with no history retain their
 prior calculation behavior.
 
@@ -173,16 +175,16 @@ Annual cashflow events can be scoped to the baseline, scenario, or both; legacy 
 
 ## Planning lab (speculative)
 
-Separate from net worth and the transaction ledger. Code: `apps/finance/backend/models.py`, `apps/finance/frontend/src/app/services/planning.service.ts`.
+Separate from net worth and the transaction ledger. Code: `apps/finance/frontend/src/app/services/planning.service.ts`. Profiles use encrypted vault collections; the retired plaintext SQL tables are not part of the active schema.
 
-| Table | Purpose |
+| Encrypted collection | Purpose |
 |-------|---------|
-| `planning_assumption_profiles` | Named assumption sets (`payload_json`: returns, spending, tax ids, retirement age, etc.) |
-| `planning_scenario_runs` | Schema reserved for persisted runs; **current** `POST /api/planning/v1/runs` returns results with `id=None` and does **not** insert rows |
+| `planning_profiles` | Named assumption sets (returns, spending, tax ids, retirement age, etc.) |
+| — | Scenario runs are ephemeral in the browser and are not persisted |
 
-- **Does not** update `assets`, `liabilities`, `holdings`, `transactions`, or recurring cashflow tables.
+- **Does not** update balance-sheet, transaction, or recurring cashflow collections.
 - **Does not** affect net worth.
-- API: `/api/planning/v1/*` — all responses include speculative disclaimers.
+- Monte Carlo runs in the browser and are not sent to a planning API.
 - Only tool wired: `mc_net_worth_paths`.
 
 The browser builds the current planning facts from the encrypted balance sheet and recurring schedules. Net worth uses current assets + holdings market value − liabilities; active job income and scheduled fixed expenses/subscriptions provide the default annual pay and cost inputs. Transactions remain a separate card ledger: they can support a user-accepted variable-spend suggestion, but do not silently become the spending assumption. The displayed source dates are the record dates (`as_of_date`, holding `quote_date`, and `position_as_of`); calculation time and market fetch time do not establish source freshness. Missing or future source dates are reported as unknown.

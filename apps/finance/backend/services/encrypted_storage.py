@@ -1,33 +1,13 @@
 from __future__ import annotations
 
 import base64
-import json
 import re
 from typing import Any
 
 from fastapi import HTTPException
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
-from models import (
-    Asset,
-    BankAccount,
-    BrokerageAccount,
-    EncryptedRecord,
-    EncryptedRecordIndex,
-    FixedExpense,
-    Holding,
-    ImportBatch,
-    JobIncome,
-    Liability,
-    PlanningAssumptionProfile,
-    PlanningScenarioRun,
-    Subscription,
-    Transaction,
-    UserCryptoMigration,
-    UserVault,
-    utc_now,
-)
+from models import EncryptedRecord, EncryptedRecordIndex, UserVault, utc_now
 
 ALLOWED_COLLECTIONS = frozenset(
     {
@@ -50,36 +30,6 @@ CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,128}$")
 MAX_CIPHERTEXT_BYTES = 512_000
 MAX_BATCH = 200
 CURRENT_RECORD_SCHEMA_VERSION = 2
-
-LEGACY_COLLECTIONS = {
-    "transactions": Transaction,
-    "bank_accounts": BankAccount,
-    "import_batches": ImportBatch,
-    "assets": Asset,
-    "liabilities": Liability,
-    "holdings": Holding,
-    "brokerage_accounts": BrokerageAccount,
-    "job_incomes": JobIncome,
-    "fixed_expenses": FixedExpense,
-    "subscriptions": Subscription,
-    "planning_profiles": PlanningAssumptionProfile,
-}
-
-# Delete dependent rows first so this remains valid on databases enforcing foreign keys.
-LEGACY_DELETE_ORDER = (
-    Transaction,
-    Holding,
-    PlanningScenarioRun,
-    BankAccount,
-    ImportBatch,
-    BrokerageAccount,
-    Asset,
-    Liability,
-    JobIncome,
-    FixedExpense,
-    Subscription,
-    PlanningAssumptionProfile,
-)
 
 
 def _b64_decode(value: str) -> bytes:
@@ -116,16 +66,6 @@ def get_vault(db: Session, user_id: int) -> UserVault | None:
     return db.query(UserVault).filter(UserVault.user_id == user_id).one_or_none()
 
 
-def get_or_create_migration(db: Session, user_id: int) -> UserCryptoMigration:
-    row = db.query(UserCryptoMigration).filter(UserCryptoMigration.user_id == user_id).one_or_none()
-    if row:
-        return row
-    row = UserCryptoMigration(user_id=user_id, status="none")
-    db.add(row)
-    db.flush()
-    return row
-
-
 def create_vault(
     db: Session,
     user_id: int,
@@ -157,14 +97,6 @@ def create_vault(
         key_version=key_version,
     )
     db.add(vault)
-    legacy_counts = legacy_collection_counts(db, user_id)
-    set_migration_status(
-        db,
-        user_id,
-        status="vault_ready" if legacy_counts else "completed",
-        legacy_counts=legacy_counts,
-        encrypted_counts=collection_counts(db, user_id),
-    )
     return vault
 
 
@@ -372,122 +304,6 @@ def collection_counts(db: Session, user_id: int) -> dict[str, int]:
     return counts
 
 
-def legacy_collection_counts(db: Session, user_id: int) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for collection, model in LEGACY_COLLECTIONS.items():
-        count = db.query(model).filter(model.user_id == user_id).count()
-        if count:
-            counts[collection] = count
-    return counts
-
-
-def export_legacy_records(db: Session, user_id: int) -> tuple[dict[str, int], list[dict[str, Any]]]:
-    """Return plaintext only while the browser is replacing it with encrypted records."""
-    migration = get_or_create_migration(db, user_id)
-    if migration.status != "vault_ready":
-        raise HTTPException(status_code=409, detail="Legacy export is available only while migration is vault_ready")
-
-    records: list[dict[str, Any]] = []
-    for collection, model in LEGACY_COLLECTIONS.items():
-        rows = db.query(model).filter(model.user_id == user_id).order_by(model.id).all()
-        for row in rows:
-            data = {
-                column.name: getattr(row, column.name)
-                for column in model.__table__.columns
-                if column.name != "user_id"
-            }
-            records.append({"collection": collection, "data": jsonable_encoder(data)})
-    return legacy_collection_counts(db, user_id), records
-
-
-def complete_legacy_migration(
-    db: Session,
-    user_id: int,
-    *,
-    counts: dict[str, int],
-    records: list[dict[str, str]],
-) -> UserCryptoMigration:
-    migration = get_or_create_migration(db, user_id)
-    if migration.status == "completed":
-        return migration
-
-    actual_counts = legacy_collection_counts(db, user_id)
-    normalized_counts: dict[str, int] = {}
-    for collection, count in counts.items():
-        validate_collection(collection)
-        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
-            raise HTTPException(status_code=400, detail="Invalid migration counts")
-        if count:
-            normalized_counts[collection] = count
-    if normalized_counts != actual_counts:
-        raise HTTPException(status_code=409, detail="Legacy migration count mismatch")
-
-    expected = {(item["collection"], item["client_id"]) for item in records}
-    if len(expected) != len(records):
-        raise HTTPException(status_code=400, detail="Duplicate migration record identity")
-    record_counts: dict[str, int] = {}
-    for collection, client_id in expected:
-        validate_collection(collection)
-        validate_client_id(client_id)
-        record_counts[collection] = record_counts.get(collection, 0) + 1
-    if record_counts != actual_counts:
-        raise HTTPException(status_code=409, detail="Encrypted migration count mismatch")
-
-    for collection, client_id in expected:
-        replacement = (
-            db.query(EncryptedRecord.id)
-            .filter(
-                EncryptedRecord.user_id == user_id,
-                EncryptedRecord.collection == collection,
-                EncryptedRecord.client_id == client_id,
-                EncryptedRecord.schema_version == CURRENT_RECORD_SCHEMA_VERSION,
-            )
-            .one_or_none()
-        )
-        if not replacement:
-            raise HTTPException(status_code=409, detail="Encrypted migration replacement mismatch")
-
-    for model in LEGACY_DELETE_ORDER:
-        db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
-    set_migration_status(
-        db,
-        user_id,
-        status="completed",
-        legacy_counts=actual_counts,
-        encrypted_counts=collection_counts(db, user_id),
-    )
-    return migration
-
-
-def set_migration_status(
-    db: Session,
-    user_id: int,
-    *,
-    status: str,
-    legacy_counts: dict[str, int] | None = None,
-    encrypted_counts: dict[str, int] | None = None,
-    error_message: str | None = None,
-) -> UserCryptoMigration:
-    allowed = {"none", "vault_ready", "in_progress", "verified", "completed", "failed"}
-    if status not in allowed:
-        raise HTTPException(status_code=400, detail="Invalid migration status")
-    row = get_or_create_migration(db, user_id)
-    row.status = status
-    row.updated_at = utc_now()
-    if legacy_counts is not None:
-        row.legacy_counts_json = json.dumps(legacy_counts)
-    if encrypted_counts is not None:
-        row.encrypted_counts_json = json.dumps(encrypted_counts)
-    if error_message is not None:
-        row.error_message = error_message
-    if status == "verified":
-        row.verified_at = utc_now()
-    if status == "completed":
-        row.completed_at = utc_now()
-        row.error_message = None
-    return row
-
-
 def wipe_encrypted_user_data(db: Session, user_id: int) -> None:
     db.query(EncryptedRecordIndex).filter(EncryptedRecordIndex.user_id == user_id).delete(
         synchronize_session=False
@@ -496,6 +312,3 @@ def wipe_encrypted_user_data(db: Session, user_id: int) -> None:
         synchronize_session=False
     )
     db.query(UserVault).filter(UserVault.user_id == user_id).delete(synchronize_session=False)
-    db.query(UserCryptoMigration).filter(UserCryptoMigration.user_id == user_id).delete(
-        synchronize_session=False
-    )

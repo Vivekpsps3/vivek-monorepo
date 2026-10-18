@@ -1,8 +1,9 @@
 # Surface Lifecycle Map
 
 Canonical ownership for API routers, schema modules, and schema authorities.
-Do not delete Alembic history. Plaintext finance tables stay until encrypted
-replacement is verified per user and WAL checkpoint + `VACUUM` complete.
+Alembic history is retained. The active schema is server-blind; empty legacy
+plaintext Finance tables are retired at head `e0f6a2b3c4d5` after a preflight
+guard confirms they contain no rows and no password-only users remain.
 
 ## Lifecycle labels
 
@@ -18,9 +19,10 @@ replacement is verified per user and WAL checkpoint + `VACUUM` complete.
 |---------|--------|-----------|-------|
 | Health | `routers/health.py` | active | ops |
 | Auth / admin users | `routers/auth_routes.py` | active | auth |
-| Password → passwordless enroll | `auth_routes` migrate path | migration-only | auth |
+| Password → passwordless enroll | `auth_routes` migrate path | migration-only; legacy accounts require previous release because current startup preflight blocks password-only users | auth |
 | Vault ciphertext API | `routers/vault.py` | active | vault |
 | Market quotes / research | `routers/market.py` | active | market |
+| Plaintext Finance migration API | — | retired | — |
 
 Plaintext finance HTTP (transactions, assets, holdings, imports, planning, cashflow) is unmounted.
 
@@ -36,11 +38,15 @@ Plaintext finance HTTP (transactions, assets, holdings, imports, planning, cashf
 
 | Authority | Path | Role |
 |-----------|------|------|
-| ORM `create_all` | `database.py` | Creates missing tables from models on startup |
-| Lightweight SQLite | `migrations.py` | Column backfills for old DBs |
-| Alembic | `alembic/versions/*` | Versioned upgrades to head `b7c9d2e4f601` |
+| Startup preflight | `legacy_schema_guard.py` | Refuses schema changes if legacy plaintext finance rows or password-only users remain |
+| ORM `create_all` | `database.py` | Creates active model tables after preflight |
+| Alembic | `alembic/versions/*` | Versioned upgrades to head `e0f6a2b3c4d5`; retires empty plaintext tables |
 
-Startup order: `create_all` → `run_sqlite_migrations` → Alembic `upgrade head`.
+Startup order: inspect existing DB and run the preflight guard → `create_all` →
+fresh DBs stamp current head; existing DBs run Alembic `upgrade head`. The
+guard runs before any schema mutation. A blocked upgrade leaves the original
+database tables and rows untouched. Startup no longer runs lightweight
+plaintext-table backfills, and `create_all` cannot recreate the retired tables.
 
 ## Encrypted collections
 
@@ -66,20 +72,22 @@ Named generations with fixture coverage in `apps/finance/backend/tests/test_migr
 
 | Generation ID | Starting state | Fixture |
 |---------------|----------------|---------|
-| `legacy-holdings` | Pre-brokerage `holdings` only | `test_alembic_upgrade_head_on_legacy_holdings_sqlite` |
+| `legacy-holdings-history` | Historical holdings-only fixture upgraded through prior revision `b7c9d2e4f601` | `test_alembic_upgrade_head_on_legacy_holdings_sqlite` |
 | `vault-present-f2d8` | Vault tables + alembic `f2d8c6a4b913` | `test_vault_migration_is_idempotent_after_create_all` |
-| `partial-passwordless-d4e5` | Partial passwordless at `d4e5f6a7b8c9` | `test_passwordless_migration_recovers_partial_sqlite_state` |
-| `lightweight-tx-columns` | Bare `transactions` table | `test_run_sqlite_migrations_adds_transaction_columns_on_legacy_table` |
+| `partial-passwordless-history` | Partial historical auth schema upgraded through prior revision `b7c9d2e4f601` | `test_passwordless_migration_recovers_partial_sqlite_state` |
+| `legacy-blocked` | Any retired plaintext table with rows, or password-only accounts | guard and cleanup refusal tests |
+| `clean-current` | Empty legacy tables and passwordless users; cleanup removes old tables and restart does not recreate them | cleanup and fresh-database startup tests |
 
-Head revision: `b7c9d2e4f601`.
+The previous migration head `b7c9d2e4f601` remains available for historical
+fixture setup; current head is `e0f6a2b3c4d5`.
 
-Vault schema-v1 → schema-v2 ciphertext replacement is browser-owned; do not delete
-plaintext source tables until encrypted replacement is verified per user and WAL
-checkpoint + `VACUUM` complete (see [SECURITY_MODEL.md](./SECURITY_MODEL.md)).
+Vault schema-v1 → schema-v2 ciphertext replacement remains browser-owned. The
+server-side plaintext Finance migration path has been removed; the final
+revision drops empty legacy tables only after preflight (see
+[SECURITY_MODEL.md](./SECURITY_MODEL.md#migration-ordering)).
 
 ## Preserve
 
 - Alembic revision history
 - Schema-v1 → schema-v2 vault record migration in browser
-- Source plaintext tables until generation fixtures prove ciphertext replacement
 - No reintroduction of tax-document BLOB storage

@@ -18,7 +18,7 @@ function persistence() {
   const key = (row: any) => row.collection + '/' + row.client_id;
   const vault = {
     isUnlocked: true,
-    currentStatus: { exists: true, migration_status: 'completed' },
+    currentStatus: { exists: true },
     listRecords: () => of([...records.values()]),
     decryptPayload: async (cipher: string) => structuredClone(payloads.get(cipher)),
     encryptPayload: async (payload: any) => {
@@ -80,7 +80,7 @@ describe('encrypted import persistence recovery', () => {
   it('shares a pending load and rejects it when the vault session changes', async () => {
     const loading = new Subject<any[]>();
     const listRecords = jasmine.createSpy('listRecords').and.returnValues(loading, of([]));
-    const vault = { isUnlocked: true, currentStatus: { migration_status: 'completed' }, listRecords } as unknown as VaultService;
+    const vault = { isUnlocked: true, currentStatus: { exists: true }, listRecords } as unknown as VaultService;
     const store = new EncryptedStoreService(vault);
     const assets = store.getAssets();
     const liabilities = store.getLiabilities();

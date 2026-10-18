@@ -81,13 +81,17 @@ make backend    # creates empty tables via init_database()
 
 On API startup, `init_database()` in `database.py` runs in order:
 
-1. **`Base.metadata.create_all`** — creates tables from current SQLAlchemy models.
-2. **`migrations.run_sqlite_migrations`** — legacy idempotent column backfills for older local DBs.
-3. **Alembic `upgrade head`** — file-backed DBs only (`:memory:` skips Alembic). Revision scripts use inspector guards so reruns are safe if `create_all` already applied schema.
+1. **Legacy preflight** — before any schema mutation, refuses startup if retired plaintext finance tables contain rows or password-only users remain.
+2. **`Base.metadata.create_all`** — creates only tables from the current server-blind SQLAlchemy models.
+3. **Alembic** — a fresh file database is stamped at current head `e0f6a2b3c4d5`; an existing file database upgrades to that head, including dropping empty retired plaintext tables. `:memory:` skips Alembic.
 
 If Alembic fails, the API fails startup by default (`ALEMBIC_STRICT=1`). Set
 `ALEMBIC_STRICT=0` only for local recovery/debugging when you understand the
 schema risk.
+
+For a blocked legacy database, back it up and use the previous app release to
+finish browser-side account enrollment/data migration before restarting with
+the current release. See [DEPLOY.md](./DEPLOY.md#retiring-the-plaintext-finance-schema).
 
 ## Frontend layout
 

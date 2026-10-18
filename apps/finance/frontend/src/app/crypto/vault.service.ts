@@ -23,8 +23,6 @@ export interface VaultStatus {
   wrapped_dek_b64?: string | null;
   recovery_wrapped_dek_b64?: string | null;
   key_version?: number | null;
-  migration_status: string;
-  migrated: boolean;
 }
 
 export interface EncryptedRecordDto {
@@ -35,11 +33,6 @@ export interface EncryptedRecordDto {
   key_version: number;
   revision: number;
   updated_at: string;
-}
-
-export interface LegacyMigrationExport {
-  counts: Record<string, number>;
-  records: Array<{ collection: string; data: Record<string, unknown> }>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -85,12 +78,10 @@ export class VaultService {
     return status;
   }
 
-  loadPublicStatus(status: VaultStatus | Omit<VaultStatus, 'exists' | 'migration_status' | 'migrated'> & Partial<VaultStatus>): void {
+  loadPublicStatus(status: VaultStatus | Omit<VaultStatus, 'exists'> & Partial<VaultStatus>): void {
     const hasWraps = !!(status.kdf_salt_b64 && status.wrapped_dek_b64 && status.kdf_iterations);
     this.statusSubject.next({
       exists: status.exists ?? hasWraps,
-      migration_status: status.migration_status ?? (hasWraps ? 'complete' : 'none'),
-      migrated: status.migrated ?? hasWraps,
       kdf_algorithm: status.kdf_algorithm ?? null,
       kdf_salt_b64: status.kdf_salt_b64 ?? null,
       kdf_iterations: status.kdf_iterations ?? null,
@@ -211,16 +202,5 @@ export class VaultService {
 
   getCounts(): Observable<{ counts: Record<string, number> }> {
     return this.http.get<{ counts: Record<string, number> }>(apiUrl('/vault/counts'));
-  }
-
-  exportLegacyRecords(): Observable<LegacyMigrationExport> {
-    return this.http.get<LegacyMigrationExport>(apiUrl('/vault/migration/export'));
-  }
-
-  completeLegacyMigration(
-    counts: Record<string, number>,
-    records: Array<{ collection: string; client_id: string }>
-  ): Observable<{ status: string }> {
-    return this.http.post<{ status: string }>(apiUrl('/vault/migration/complete'), { counts, records });
   }
 }

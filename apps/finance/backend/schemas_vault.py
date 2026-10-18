@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 
@@ -31,8 +29,6 @@ class VaultResponse(BaseModel):
     wrapped_dek_b64: str | None = None
     recovery_wrapped_dek_b64: str | None = None
     key_version: int | None = None
-    migration_status: str
-    migrated: bool
 
 
 class BlindIndexInput(BaseModel):
@@ -78,32 +74,3 @@ class BlindIndexLookupRequest(BaseModel):
     collection: str
     index_name: str
     index_value_b64: str
-
-
-class MigrationStatusResponse(BaseModel):
-    status: str
-    legacy_counts: dict[str, Any] | None = None
-    encrypted_counts: dict[str, Any] | None = None
-    error_message: str | None = None
-    verified_at: str | None = None
-    completed_at: str | None = None
-
-
-class MigrationRecordIdentity(BaseModel):
-    collection: str
-    client_id: str
-
-
-class MigrationCompleteRequest(BaseModel):
-    counts: dict[str, int]
-    records: list[MigrationRecordIdentity]
-
-
-class LegacyMigrationRecord(BaseModel):
-    collection: str
-    data: dict[str, Any]
-
-
-class LegacyMigrationExportResponse(BaseModel):
-    counts: dict[str, int]
-    records: list[LegacyMigrationRecord]
