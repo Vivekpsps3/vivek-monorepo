@@ -61,7 +61,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'"
-    subtitle="Card and bank activity. This list does not change net worth.">
+    [subtitle]="typeFilter === 'income' ? 'Recorded deposits and scheduled work income for the selected period. This view does not change net worth.' : 'Card and bank activity. This list does not change net worth.'">
     <div uiPageActions class="header-actions">
       <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
       <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
@@ -112,7 +112,9 @@
         }
         @if (typeFilter !== 'expense') {
           <div class="month-total month-total--income">
-            <span class="month-total__label">Income · {{ matchingTransactions.length }} matching row(s)</span>
+            <span class="month-total__label">
+              {{ typeFilter === 'income' ? 'Recorded income' : 'Income' }} · {{ matchingTransactions.length }} matching row(s)
+            </span>
             <strong class="money">${{ monthIncomeTotal | number: '1.2-2' }}</strong>
           </div>
         }
@@ -125,6 +127,64 @@
       </div>
     </div>
   </section>
+
+  @if (typeFilter === 'income') {
+    <ui-card [title]="'Work income'">
+      @let cashflow = workIncomeSummary;
+      @if (workIncomeLoading) {
+        <p class="work-income-note" role="status">Loading job income and recorded activity for this period…</p>
+      } @else if (jobIncomeLoadError || listError) {
+        <p class="work-income-note" role="alert">Work income could not be calculated because job or activity records failed to load. Try again to refresh the data.</p>
+      } @else if (cashflow) {
+        <p class="work-income-note">
+          Read-only cashflow for {{ workIncomePeriod?.label }}. These figures follow the date scope and include all recorded income for that period, independent of transaction search, account, merchant, or category filters.
+        </p>
+        <div class="work-income-totals" aria-label="Work income reconciliation">
+          <div class="work-income-total">
+            <span>Recorded income</span>
+            <strong class="money">${{ cashflow.observed_income | number: '1.2-2' }}</strong>
+          </div>
+          <div class="work-income-total">
+            <span>Scheduled work income</span>
+            <strong class="money">${{ cashflow.scheduled_income | number: '1.2-2' }}</strong>
+          </div>
+          <div class="work-income-total">
+            <span>Overlap adjustment</span>
+            <strong class="money" [class.negative]="cashflow.income_overlap_adjustment < 0">
+              {{ cashflow.income_overlap_adjustment < 0 ? '−$' : '$' }}{{ (cashflow.income_overlap_adjustment < 0 ? -cashflow.income_overlap_adjustment : cashflow.income_overlap_adjustment) | number: '1.2-2' }}
+            </strong>
+          </div>
+          <div class="work-income-total work-income-total--combined">
+            <span>Combined income</span>
+            <strong class="money">${{ cashflow.total_income | number: '1.2-2' }}</strong>
+          </div>
+        </div>
+        <p class="work-income-note">
+          Combined income = recorded income + scheduled work income + overlap adjustment. The period-level adjustment is used when recorded and projected income are within 20%; it is not assigned to a specific paycheck.
+        </p>
+        @if (workIncomeSources.length) {
+          <div class="work-income-source-list" aria-label="Scheduled work income sources">
+            @for (item of workIncomeSources; track item.id) {
+              <div class="work-income-source">
+                <span>
+                  <strong>{{ item.label }} · {{ item.name }}</strong>
+                  <small>{{ item.date || 'Date unknown' }} · {{ item.detail }}</small>
+                </span>
+                <strong class="money" [class.negative]="item.amount < 0">
+                  {{ item.amount < 0 ? '−$' : '$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}
+                </strong>
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="work-income-note">No scheduled work income is recorded for this period. Check the job dates and pay details if you expected to see pay here.</p>
+        }
+      } @else {
+        <p class="work-income-note">Choose a month, one calendar date, or both From and Through dates to see work income. All months and an open-ended date range do not have a single period total.</p>
+      }
+      <a class="work-income-owner-link" [routerLink]="['/recurring']" [queryParams]="{ t: 'pay' }">Manage jobs and pay in Recurring</a>
+    </ui-card>
+  }
 
   <ui-card [title]="'History'">
     <div class="table-actions table-actions--toolbar">

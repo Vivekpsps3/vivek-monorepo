@@ -14,15 +14,18 @@ describe('Transactions multi-file import UI', () => {
   let finance: jasmine.SpyObj<FinanceService>;
   let routeQuery: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
   let dataChanges$: Subject<any>;
+  let jobIncomeResults$: BehaviorSubject<any[]>;
   let previewPromise: Promise<BankImportFilePreview[]> | undefined;
   const chaseFile = () => new File(['Transaction Date,Post Date,Description,Category,Type,Amount,Memo\n01/02/2026,01/03/2026,Coffee,Food,Sale,-10.00,'], 'chase.csv');
   const amexFile = () => new File(['Date,Description,Account #,Amount,Category\n01/02/2026,Lunch,-1001,20.00,Food'], 'amex.csv');
 
   beforeEach(async () => {
     dataChanges$ = new Subject<any>();
-    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getImportReceipts', 'getBankAccounts', 'getImportBanks', 'previewBankImports', 'commitBankImports', 'addTransaction'], { isLoading$: of(false), transactions$: of([]), dataChanges$ });
+    jobIncomeResults$ = new BehaviorSubject<any[]>([]);
+    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getJobIncomes', 'getImportReceipts', 'getBankAccounts', 'getImportBanks', 'previewBankImports', 'commitBankImports', 'addTransaction'], { isLoading$: of(false), transactions$: of([]), jobIncomes$: of([]), dataChanges$ });
     finance.getTransactions.and.returnValue(of([]));
     finance.getAllTransactions.and.returnValue(of([]));
+    finance.getJobIncomes.and.returnValue(jobIncomeResults$.asObservable());
     finance.getImportReceipts.and.returnValue(of([]));
     finance.getBankAccounts.and.returnValue(of([]));
     finance.getImportBanks.and.returnValue(of(listClientBankImports()));
@@ -40,7 +43,12 @@ describe('Transactions multi-file import UI', () => {
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
         { provide: ConfirmService, useValue: {} },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) }, queryParamMap: routeQuery.asObservable() } },
-        { provide: Router, useValue: { navigate: () => Promise.resolve(true) } },
+        { provide: Router, useValue: {
+          events: new Subject(),
+          navigate: () => Promise.resolve(true),
+          createUrlTree: () => ({}),
+          serializeUrl: () => '/recurring?t=pay',
+        } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(TransactionsComponent);
@@ -352,5 +360,98 @@ describe('Transactions multi-file import UI', () => {
     expect(component.summaryMonth).toBe('');
     expect(component.matchingTransactions.map(row => row.id)).toEqual([801, 802]);
     expect(component.monthExpenseTotal).toBe(30);
+  });
+
+  it('shows scheduled work income beside recorded income and reconciles the aggregate overlap', () => {
+    component.closeImportModal();
+    component.typeFilter = 'income';
+    routeQuery.next(convertToParamMap({ t: 'activity', v: 'income', month: '2026-01' }));
+    const job = {
+      id: 31,
+      employer: 'Acme',
+      pay_frequency: 'annual',
+      payday_frequency: 'weekly',
+      first_pay_date: '2026-01-08',
+      base_pay: 52_000,
+      annual_bonus: 0,
+      annual_equity: 0,
+      annual_other: 0,
+      annual_taxes: 0,
+      annual_deductions: 0,
+      effective_date: '2026-01-01',
+      is_active: true,
+    };
+    jobIncomeResults$.next([job]);
+    finance.getAllTransactions.and.returnValue(of([{
+      id: 77, date: '2026-01-15', type: 'income', category: 'pay', amount: 3_800, merchant: 'Payroll',
+    }] as any));
+    component.retryActivityLoad();
+    fixture.detectChanges();
+
+    const summary = component.workIncomeSummary!;
+    expect(component.workIncomePeriod).toEqual({ start: '2026-01-01', end: '2026-01-31', label: '2026-01-01–2026-01-31' });
+    expect(summary.observed_income).toBe(3_800);
+    expect(summary.scheduled_income).toBe(4_000);
+    expect(summary.income_overlap_adjustment).toBe(-3_800);
+    expect(summary.total_income).toBe(4_000);
+    expect(summary.income_occurrences.reduce((sum, row) => sum + row.amount, 0)).toBe(summary.total_income);
+    expect(component.workIncomeSources.filter(row => row.kind === 'paycheck').length).toBe(4);
+    expect(component.workIncomeSources.some(row => row.kind === 'overlap')).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain('Scheduled work income');
+    expect(fixture.nativeElement.textContent).toContain('Combined income');
+    expect(fixture.nativeElement.textContent).toContain('period-level adjustment');
+    expect(fixture.nativeElement.textContent).toContain('Manage jobs and pay in Recurring');
+  });
+
+  it('shows undated base-pay estimates when there is no posted deposit or configured payday schedule', () => {
+    component.closeImportModal();
+    component.typeFilter = 'income';
+    routeQuery.next(convertToParamMap({ t: 'activity', v: 'income', month: '2026-01' }));
+    jobIncomeResults$.next([{
+      id: 32,
+      employer: 'Northwind',
+      pay_frequency: 'annual',
+      base_pay: 52_000,
+      annual_bonus: 0,
+      annual_equity: 0,
+      annual_other: 0,
+      annual_taxes: 0,
+      annual_deductions: 0,
+      effective_date: '2026-01-01',
+      is_active: true,
+    }]);
+    finance.getAllTransactions.and.returnValue(of([]));
+    component.retryActivityLoad();
+    fixture.detectChanges();
+
+    const summary = component.workIncomeSummary!;
+    expect(summary.observed_income).toBe(0);
+    expect(summary.scheduled_income).toBeCloseTo(52_000 * 31 / 365.25, 2);
+    expect(summary.total_income).toBe(summary.scheduled_income);
+    expect(component.workIncomeSources).toEqual(jasmine.arrayContaining([
+      jasmine.objectContaining({ kind: 'estimate', label: 'Base pay estimate', date: null, name: 'Northwind' }),
+    ]));
+    expect(fixture.nativeElement.textContent).toContain('Pay dates not set');
+  });
+
+  it('requires a finite work-income date scope and intersects it with Activity filters', () => {
+    component.summaryMonth = '2026-01';
+    component.selectedCalendarDate = '2026-02-01';
+    expect(component.workIncomePeriod).toBeNull();
+
+    component.selectedCalendarDate = '2026-01-15';
+    component.fromDate = '2026-01-16';
+    expect(component.workIncomePeriod).toBeNull();
+
+    component.selectedCalendarDate = null;
+    component.summaryMonth = '';
+    component.fromDate = '2026-01-10';
+    component.throughDate = '2026-01-20';
+    expect(component.workIncomePeriod).toEqual({ start: '2026-01-10', end: '2026-01-20', label: '2026-01-10–2026-01-20' });
+
+    component.throughDate = '';
+    expect(component.workIncomePeriod).toBeNull();
+    component.fromDate = '';
+    expect(component.workIncomePeriod).toBeNull();
   });
 });

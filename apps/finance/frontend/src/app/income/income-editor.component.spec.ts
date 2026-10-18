@@ -244,6 +244,37 @@ describe('Jobs and pay editor regressions', () => {
     expect(editorWrite.stock_valuations).toEqual([jasmine.objectContaining(quote)]);
   });
 
+  it('allows unrelated job edits when a saved market quote has no optional observation date', async () => {
+    const quote = { date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'AAPL' };
+    const legacyQuoteJob = enrichJobIncome({
+      ...job, id: 7, effective_date: '2026-01-01', end_date: null, promotions: [], compensation_payments: [],
+      stock_symbol: 'AAPL', stock_valuations: [quote], notes: '',
+    } as JobIncome);
+    incomes.next([legacyQuoteJob]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    button('Edit', fixture).click();
+    fixture.detectChanges();
+    expandEditorDetails();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const notes = fixture.nativeElement.querySelector('input[name="notes"]') as HTMLInputElement;
+    notes.value = 'Updated role notes';
+    notes.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    button('Save', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(finance.updateJobIncome).toHaveBeenCalledWith(7, jasmine.objectContaining({
+      notes: 'Updated role notes',
+      stock_valuations: [jasmine.objectContaining(quote)],
+    }));
+  });
+
   it('allows a private employer stock lot to save a dated manual price without a ticker', async () => {
     const privateStockJob = enrichJobIncome({
       ...job, id: 5, stock_symbol: undefined,

@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { TransactionsImportWorkflow } from './transactions-import-workflow';
@@ -21,7 +21,7 @@ import {
   sortTransactionActivity,
   transactionActivityTotals,
 } from './transactions-activity-query';
-import { transactionEffects } from '../crypto/client-finance';
+import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
 import {
   BankImportOption,
   BankAccountRecord,
@@ -29,6 +29,8 @@ import {
   BankImportFilePreview,
   ImportPreviewRow,
   ImportReceipt,
+  IncomeCashflowOccurrence,
+  JobIncome,
   Transaction,
   TransactionCreate,
 } from '../models/transaction.model';
@@ -70,6 +72,7 @@ import {
     UiSelectComponent,
     UiDataTableComponent,
     UiDialogComponent,
+    RouterLink,
   ],
   templateUrl: './transactions.component.html',
   styleUrl: './transactions.component.css',
@@ -84,6 +87,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   transactions: Transaction[] = [];
   filteredTransactions: Transaction[] = [];
   allTransactions: Transaction[] = [];
+  jobIncomes: JobIncome[] = [];
   searchTerm = '';
   categoryFilter = '';
   merchantFilter = '';
@@ -133,6 +137,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   set reattachReceiptFilename(value: string | null) { this.importWorkflow.reattachReceiptFilename = value; }
   loading = false;
   listError = '';
+  jobIncomeLoading = true;
+  jobIncomeLoadError = false;
   reattachReceiptId: number | null = null;
   selectedCalendarDate: string | null = null;
 
@@ -188,6 +194,25 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.financeService.isLoading$.pipe(takeUntil(this.destroy$)).subscribe(l => {
       this.loading = l;
       this.cdr.markForCheck();
+    });
+
+    this.financeService.jobIncomes$.pipe(takeUntil(this.destroy$)).subscribe(rows => {
+      this.jobIncomes = rows;
+      this.cdr.markForCheck();
+    });
+
+    this.financeService.getJobIncomes().pipe(takeUntil(this.destroy$)).subscribe({
+      next: rows => {
+        this.jobIncomes = rows;
+        this.jobIncomeLoading = false;
+        this.jobIncomeLoadError = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.jobIncomeLoading = false;
+        this.jobIncomeLoadError = true;
+        this.cdr.markForCheck();
+      },
     });
 
     this.financeService.transactions$.pipe(takeUntil(this.destroy$)).subscribe(data => {
@@ -410,6 +435,59 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   get matchingTransactions(): Transaction[] {
     const source = this.allTransactionsLoaded ? this.allTransactions : (this.allTransactions.length ? this.allTransactions : this.transactions);
     return filterTransactionActivity(source, this.activityFilters);
+  }
+
+  /** Scheduled work income is only summarized over an explicit, finite date scope. */
+  get workIncomePeriod(): { start: string; end: string; label: string } | null {
+    const hasMonth = /^\d{4}-\d{2}$/.test(this.summaryMonth);
+    const hasSelectedDate = /^\d{4}-\d{2}-\d{2}$/.test(this.selectedCalendarDate || '');
+    const hasFromDate = /^\d{4}-\d{2}-\d{2}$/.test(this.fromDate);
+    const hasThroughDate = /^\d{4}-\d{2}-\d{2}$/.test(this.throughDate);
+    let start: string;
+    let end: string;
+    if (hasSelectedDate) {
+      start = this.selectedCalendarDate!;
+      end = this.selectedCalendarDate!;
+    } else if (hasMonth) {
+      start = `${this.summaryMonth}-01`;
+      end = monthEnd(this.summaryMonth);
+    } else if (hasFromDate && hasThroughDate) {
+      start = this.fromDate;
+      end = this.throughDate;
+    } else {
+      return null;
+    }
+
+    // Activity filters can combine a month, date, and range. Keep this summary
+    // on the same date intersection as the ledger table.
+    if (hasMonth) {
+      const monthStart = `${this.summaryMonth}-01`;
+      const monthLastDay = monthEnd(this.summaryMonth);
+      if (monthStart > start) start = monthStart;
+      if (monthLastDay < end) end = monthLastDay;
+    }
+    if (hasFromDate && this.fromDate > start) start = this.fromDate;
+    if (hasThroughDate && this.throughDate < end) end = this.throughDate;
+    if (start > end) return null;
+    return {
+      start,
+      end,
+      label: start === end ? start : `${start}–${end}`,
+    };
+  }
+
+  get workIncomeSummary() {
+    const period = this.workIncomePeriod;
+    if (!period || !this.allTransactionsLoaded || this.listError || this.jobIncomeLoading || this.jobIncomeLoadError) return null;
+    return computeCashflowSummary(period.start, period.end, this.allTransactions, this.jobIncomes, [], []);
+  }
+
+  get workIncomeLoading(): boolean {
+    return !this.allTransactionsLoaded || this.jobIncomeLoading;
+  }
+
+  get workIncomeSources(): IncomeCashflowOccurrence[] {
+    return this.workIncomeSummary?.income_occurrences.filter(row => row.kind !== 'posted') || [];
   }
 
   get sortedMatchingTransactions(): Transaction[] {

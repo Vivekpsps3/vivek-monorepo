@@ -161,6 +161,86 @@
 .month-total--income strong { color: var(--success); }
 .month-total--net strong { color: var(--text); }
 
+.work-income-note {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.work-income-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-3) 0;
+}
+
+.work-income-total {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.work-income-total > span,
+.work-income-source small {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.work-income-total strong {
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+
+.work-income-total--combined {
+  border-left: 2px solid var(--accent);
+  padding-left: var(--space-3);
+}
+
+.work-income-source-list {
+  display: grid;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--space-3);
+}
+
+.work-income-source {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.work-income-source > span {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.work-income-source strong {
+  overflow-wrap: anywhere;
+}
+
+.work-income-source > strong {
+  white-space: nowrap;
+}
+
+.work-income-source small {
+  overflow-wrap: anywhere;
+}
+
+.work-income-owner-link {
+  display: inline-block;
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.work-income-source .negative,
+.work-income-total .negative {
+  color: var(--danger);
+}
+
 .month-picker-tools ::ng-deep .ui-btn {
   min-height: 44px;
 }
@@ -841,6 +921,16 @@ label.form-group,
   .month-totals {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
     gap: var(--space-3);
+  }
+
+  .work-income-total--combined {
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
+    padding: var(--space-2) 0 0;
+  }
+
+  .work-income-source {
+    gap: var(--space-2);
   }
 
   .import-guide-card {

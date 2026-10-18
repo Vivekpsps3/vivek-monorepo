@@ -408,7 +408,11 @@ export function jobHistoryError(row: JobIncomeCreate): string | null {
     if (!isValidIsoDate(valuation.date)) return 'Stock valuation dates must be valid calendar dates.';
     const isTaggedMarketQuote = Boolean(valuation.symbol) && valuation.source !== 'manual';
     if (isTaggedMarketQuote) {
-      const observedDate = valuation.observed_date || '';
+      // Older quote records may not have an observation date. Use the fetch
+      // date when available, otherwise the trading date remains authoritative.
+      const observedDate = valuation.observed_date
+        || valuation.price_as_of?.slice(0, 10)
+        || valuation.date;
       if (!/^[A-Z0-9.\-]{1,10}$/i.test(valuation.symbol || '')
         || !isValidIsoDate(observedDate)
         || observedDate > todayIsoDate()

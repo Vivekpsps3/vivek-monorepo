@@ -427,9 +427,19 @@ describe('job compensation history', () => {
       date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
       price_as_of: '2026-10-09T12:00:00Z', observed_date: '2026-10-09',
     }] })).toBeNull();
+    expect(check({ stock_symbol: 'MSFT', stock_valuations: [{
+      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
+    }] })).toBeNull();
+    expect(check({ stock_symbol: 'MSFT', stock_valuations: [{
+      date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
+      price_as_of: '2026-10-09T12:00:00Z',
+    }] })).toBeNull();
     expect(check({ effective_date: '2026-10-09', stock_valuations: [{ date: '2026-10-08', price_per_share: 100 }] })).toContain('on or after the job start');
     expect(check({ effective_date: '2026-10-09', stock_symbol: 'MSFT', stock_valuations: [{
       date: '2026-10-10', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: '2026-10-09',
+    }] })).toContain('cannot be in the future');
+    expect(check({ effective_date: '2026-10-09', stock_symbol: 'MSFT', stock_valuations: [{
+      date: futureDate, price_per_share: 100, source: 'live_eod', symbol: 'MSFT',
     }] })).toContain('cannot be in the future');
     expect(check({ effective_date: '2026-10-09', stock_symbol: 'MSFT', stock_valuations: [{
       date: '2026-10-08', price_per_share: 100, source: 'live_eod', symbol: 'MSFT', observed_date: futureDate,

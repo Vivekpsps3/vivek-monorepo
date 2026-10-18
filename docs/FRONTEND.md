@@ -109,6 +109,12 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 - Transactions do not change net worth. Jobs, bills, and subscriptions stay editable on Recurring and still do not change net worth.
 - Home charts use that same single cashflow series. Calendar shows posted deposits, configured paycheck dates, dated compensation and stock-sale sources on their dates, plus a monthly source list. Day net shows dated source amounts before the month-level overlap adjustment, which is intentionally not attributed to a particular day. Spending categories use purchase/refund effects across the full encrypted ledger, independent of the visible transaction page.
 
+## Spending income view
+
+- Spending → Activity → Income keeps the recorded-income transaction list and adds a read-only work-income source summary for the selected month, calendar date, or complete From/Through range. The summary follows that date scope and includes all recorded income for the period, independent of Activity search, account, merchant, and category filters.
+- Recorded income, scheduled work income, the same period-level overlap adjustment used by Home and Calendar, and combined income are shown together so the total reconciles. The adjustment is not assigned to a specific paycheck. All months and open-ended date ranges ask for a finite period instead of extending current pay assumptions over an arbitrary history.
+- Work records remain editable only in Recurring → Jobs & pay. This view does not add transactions or change net worth.
+
 ## Recurring cashflow pages
 
 - `/income`, `/fixed-expenses`, `/subscriptions` manage encrypted recurring rows via `FinanceService`.
