@@ -97,7 +97,7 @@ Browser/domain proxy
 
 - Login is passwordless: the browser uses a username and vault passphrase to unwrap a browser-held signing key, then signs a server-issued single-use challenge. Successful verification sets an HttpOnly session cookie and readable CSRF cookie.
 - First-run setup generates the first admin's browser-held auth key and vault (`/api/auth/bootstrap-status`, `/api/auth/bootstrap/passwordless`). Passwordless self-signup is open; admins can also issue invitation/enrollment records.
-- Legacy password login exists only for a bounded, unenrolled-account migration endpoint. Enrollment registers the public key, stores only encrypted wraps, and clears the password hash.
+- Legacy password-to-passwordless enrollment remains migration-only. A database with a password-only account must use the previous app release to complete enrollment because current startup preflight refuses that state.
 - All non-health finance APIs require a valid session. Mutating requests require `X-CSRF-Token`.
 - Optional legacy `API_KEY` / `FINANCE_API_KEY` middleware can also gate `/api/*` (except health) for non-browser clients.
 - Auth/session/audit metadata, vault wraps, encrypted records, optional blind indexes, and public market caches live in SQLite.

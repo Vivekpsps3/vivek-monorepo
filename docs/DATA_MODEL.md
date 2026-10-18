@@ -13,7 +13,7 @@ App-native auth and vault metadata use SQL tables:
 | `auth_challenges`, `auth_enrollments` | Hashed, expiring, single-use login challenges and admin enrollment invitations |
 | `user_sessions` | Hashed session tokens, CSRF token hashes, expiry/revocation metadata |
 | `audit_events` | Login, logout, user create/update, password reset, and related account events |
-| `user_vaults` | Browser-generated public key and encrypted key wraps |
+| `user_vaults` | Encrypted key wraps; public-key auth metadata is stored on `users` |
 
 The first account created by the app setup flow is an admin. Auth and sync metadata live in SQL tables (`users`, `auth_challenges`, `auth_enrollments`, `user_sessions`, `audit_events`, and `user_vaults`). Finance facts are browser-owned encrypted records in `encrypted_records`, scoped by `user_id` and a logical collection name. The logical collections include `transactions`, `bank_accounts`, `import_batches`, `assets`, `liabilities`, `holdings`, `brokerage_accounts`, `job_incomes`, `fixed_expenses`, `subscriptions`, and `planning_profiles`; these names are not SQL tables. Optional blind-index tokens live in `encrypted_record_indexes`. Public ticker data lives in global `ticker_quotes` and `market_research_cache` tables.
 

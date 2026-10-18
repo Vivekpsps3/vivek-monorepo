@@ -68,15 +68,15 @@ plaintext-table backfills, and `create_all` cannot recreate the retired tables.
 
 ## Supported database generations (BE-002)
 
-Named generations with fixture coverage in `apps/finance/backend/tests/test_migrations.py`:
+Named generations have fixture coverage in `apps/finance/backend/tests/test_migrations.py` and `test_legacy_schema_guard.py`:
 
 | Generation ID | Starting state | Fixture |
 |---------------|----------------|---------|
 | `legacy-holdings-history` | Historical holdings-only fixture upgraded through prior revision `b7c9d2e4f601` | `test_alembic_upgrade_head_on_legacy_holdings_sqlite` |
 | `vault-present-f2d8` | Vault tables + alembic `f2d8c6a4b913` | `test_vault_migration_is_idempotent_after_create_all` |
 | `partial-passwordless-history` | Partial historical auth schema upgraded through prior revision `b7c9d2e4f601` | `test_passwordless_migration_recovers_partial_sqlite_state` |
-| `legacy-blocked` | Any retired plaintext table with rows, or password-only accounts | guard and cleanup refusal tests |
-| `clean-current` | Empty legacy tables and passwordless users; cleanup removes old tables and restart does not recreate them | cleanup and fresh-database startup tests |
+| `legacy-blocked` | Any retired plaintext table with rows, or password-only accounts | `test_head_upgrade_refuses_legacy_data_before_any_schema_changes` and guard tests |
+| `clean-current` | Empty legacy tables and passwordless users; cleanup removes old tables and restart does not recreate them | `test_cleanup_preserves_ciphertext_and_keys_and_stays_clean_on_restart`; `test_fresh_file_startup_creates_only_current_schema` |
 
 The previous migration head `b7c9d2e4f601` remains available for historical
 fixture setup; current head is `e0f6a2b3c4d5`.

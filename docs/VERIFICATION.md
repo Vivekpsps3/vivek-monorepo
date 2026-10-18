@@ -13,9 +13,10 @@ Named quality gates for local development and CI (TEST-001).
 
 Supported DB generations and fixtures: [LIFECYCLE.md](./LIFECYCLE.md). The
 historical holdings-only upgrade fixture intentionally stops at the previous
-head `b7c9d2e4f601`. Current-head cleanup tests prove that empty legacy tables
-are dropped, populated plaintext tables/password-only users block before
-changes, and restart/fresh initialization do not recreate retired tables.
+head `b7c9d2e4f601`. `test_legacy_schema_guard.py` proves that empty legacy
+tables are dropped while encrypted records and vault wraps remain, populated
+plaintext tables/password-only users block before changes, and restart/fresh
+initialization do not recreate retired tables.
 Historical passwordless migration fixtures remain covered.
 
 ## Backup and restore (OPS-001)
