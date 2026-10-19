@@ -2,12 +2,6 @@
 
 Finance is the primary app. Travel and the public portfolio site are separate apps; keep their data and behavior isolated.
 
-## Collaboration and changes
-- The primary agent delegates implementation to a GPT-6 Luna subagent at xHigh reasoning, then independently inspects and verifies the result. A delegated implementation agent need not re-delegate solely for this preference; higher-priority instructions take precedence.
-- Read the relevant scoped AGENTS.md and canonical docs before editing. Check git status first; preserve existing user changes and keep edits focused.
-- Prefer additive API and schema changes. Update canonical docs when behavior changes; add meaningful tests for financial invariants.
-- For substantial Finance changes, run `make test-backend` and build from `apps/finance/frontend` with `npx ng build --configuration development`. See [verification tiers](docs/VERIFICATION.md). If frontend tests fail because Chrome is unavailable, report that environment issue.
-
 ## Architecture boundaries
 - Put app-neutral reusable code in `packages/`; keep domain behavior and app entry points in their owning `apps/` folder. Packages must never import from apps, and apps must not import source directly from another app.
 
