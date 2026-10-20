@@ -18,7 +18,5 @@
 | [TRAVEL.md](./TRAVEL.md) | Travel app: trips, calendar, flights, PTO |
 | [MEDIA.md](./MEDIA.md) | Private media journal: library, reviews, releases |
 | [Personal operating system brief](../planning/README.md) | Context and implementation evidence for the retained product brief |
-| [../AGENTS.md](../AGENTS.md) | Root handoff and user preferences |
-| [Finance backend guidance](../apps/finance/backend/AGENTS.md) · [Finance frontend guidance](../apps/finance/frontend/AGENTS.md) · [Travel guidance](../apps/travel/AGENTS.md) · [Media guidance](../apps/media/AGENTS.md) · [Site guidance](../apps/site/AGENTS.md) · [Shared packages guidance](../packages/AGENTS.md) | Scoped agent handoffs |
 
 Project overview: [../README.md](../README.md).

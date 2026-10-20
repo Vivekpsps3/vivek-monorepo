@@ -136,4 +136,3 @@ There is no active plaintext analytics or planning router. Monte Carlo inputs an
 | Routes & UI tokens | [FRONTEND.md](./FRONTEND.md) |
 | Setup | [DEVELOPMENT.md](./DEVELOPMENT.md) |
 | Deploy | [DEPLOY.md](./DEPLOY.md) |
-| Agent handoff | [../AGENTS.md](../AGENTS.md) |

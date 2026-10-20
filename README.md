@@ -54,7 +54,7 @@ vivek-monorepo/
   docs/
 ```
 
-Doc index: **[docs/README.md](docs/README.md)** · Agent handoff: **[AGENTS.md](AGENTS.md)**
+Doc index: **[docs/README.md](docs/README.md)**
 
 ## Configuration
 
