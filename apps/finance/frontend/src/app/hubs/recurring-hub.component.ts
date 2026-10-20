@@ -10,6 +10,7 @@ import { FixedExpensesComponent } from '../fixed-expenses/fixed-expenses.compone
 import { SubscriptionsComponent } from '../subscriptions/subscriptions.component';
 import { FinanceService } from '../services/finance.service';
 import { UiButtonComponent } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 import { FixedExpense, Subscription } from '../models/transaction.model';
 
 export interface CommitmentRow {
@@ -31,7 +32,7 @@ export interface CommitmentRow {
 @Component({
   selector: 'app-recurring-hub',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, UiButtonComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, UiButtonComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent, InfoTipComponent],
   template: `
     <div class="page recurring-page">
       <h1>Recurring</h1>
@@ -43,8 +44,7 @@ export interface CommitmentRow {
         <section class="commitments" aria-labelledby="commitments-title">
           <header class="commitments__header">
             <div>
-              <h2 id="commitments-title">Bills &amp; subscriptions</h2>
-              <p>Bills and subscriptions that repeat. Editing them does not add a transaction or change your balances.</p>
+              <h2 id="commitments-title">Bills &amp; subscriptions <app-info-tip label="Bills and balances" text="Editing bills and subscriptions does not add a transaction or change your balances." /></h2>
             </div>
             <div class="commitments__actions">
               <ui-button variant="secondary" (clicked)="addBill()">Add bill</ui-button>
@@ -107,8 +107,7 @@ export interface CommitmentRow {
       } @else {
         <app-income [embedded]="true" />
         <details class="compensation-history" [open]="historyOpen" (toggle)="historyToggled($event)">
-          <summary>View compensation history</summary>
-          <p>Estimated gross compensation by employer, based on the same job records. Update jobs above; this report is read-only.</p>
+          <summary>View compensation history <app-info-tip label="Compensation history" text="Estimated gross compensation by employer, from the same job records. This report is read-only." /></summary>
           <app-compensation-report />
         </details>
       }

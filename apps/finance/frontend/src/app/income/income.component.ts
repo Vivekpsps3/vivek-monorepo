@@ -52,6 +52,7 @@ import {
   UiSelectOption,
   UiDialogComponent,
 } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 
 @Component({
   selector: 'app-income',
@@ -68,6 +69,7 @@ import {
     UiSelectComponent,
     UiBadgeComponent,
     UiDialogComponent,
+    InfoTipComponent,
   ],
   templateUrl: './income.component.html',
   styleUrl: './income.component.css',

@@ -7,6 +7,7 @@ from deps import require_actor
 from models import Episode, Experience
 from services import providers, records
 from services.calendar import build_calendar
+from services import providers
 from services.providers import UA
 from services.summary import build_summary
 from services.validate import clean_text
@@ -55,6 +56,7 @@ def create_manual(body: dict, db: Session = Depends(get_db)):
 @router.post("/library/from-provider")
 def create_from_provider(body: dict, db: Session = Depends(get_db)):
     entry, already = records.create_from_provider(db, require_actor().id, body)
+    _load_artist_catalog(db, entry)
     payload = records.detail(db, entry)
     payload["already_saved"] = already
     return payload
@@ -63,6 +65,7 @@ def create_from_provider(body: dict, db: Session = Depends(get_db)):
 @router.get("/entries/{entry_id}")
 def read_entry(entry_id: int, db: Session = Depends(get_db)):
     entry = records.owned_entry(db, require_actor().id, entry_id)
+    _load_artist_catalog(db, entry)
     return records.detail(db, entry)
 
 
@@ -77,7 +80,7 @@ def patch_entry(entry_id: int, body: dict, db: Session = Depends(get_db)):
 def delete_entry(entry_id: int, db: Session = Depends(get_db)):
     entry = records.owned_entry(db, require_actor().id, entry_id)
     db.query(Experience).filter(Experience.entry_id == entry.id, Experience.user_id == entry.user_id).delete()
-    from models import EpisodeProgress, SeasonProgress
+    from models import AlbumRating, EpisodeProgress, SeasonProgress, TrackRating
     db.query(SeasonProgress).filter(
         SeasonProgress.user_id == entry.user_id,
         SeasonProgress.entry_id == entry.id,
@@ -88,6 +91,14 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db)):
             EpisodeProgress.user_id == entry.user_id,
             EpisodeProgress.episode_id.in_(episode_ids),
         ).delete(synchronize_session=False)
+    db.query(AlbumRating).filter(
+        AlbumRating.user_id == entry.user_id,
+        AlbumRating.entry_id == entry.id,
+    ).delete(synchronize_session=False)
+    db.query(TrackRating).filter(
+        TrackRating.user_id == entry.user_id,
+        TrackRating.entry_id == entry.id,
+    ).delete(synchronize_session=False)
     db.delete(entry)
     return {"deleted": True}
 
@@ -122,6 +133,70 @@ def delete_experience(entry_id: int, experience_id: int, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="That experience is not on this item.")
     db.delete(row)
     return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/albums")
+def add_album(entry_id: int, body: dict, db: Session = Depends(get_db)):
+    entry = records.owned_entry(db, require_actor().id, entry_id)
+    before = (entry.rating, entry.review)
+    records.add_album(db, entry, body)
+    db.refresh(entry)
+    if (entry.rating, entry.review) != before:
+        raise HTTPException(status_code=500, detail="An album changed the artist rating.")
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/albums/{album_id}/tracks")
+def add_track(entry_id: int, album_id: int, body: dict, db: Session = Depends(get_db)):
+    entry = records.owned_entry(db, require_actor().id, entry_id)
+    before = (entry.rating, entry.review)
+    records.add_track(db, entry, album_id, body)
+    db.refresh(entry)
+    if (entry.rating, entry.review) != before:
+        raise HTTPException(status_code=500, detail="A song changed the artist rating.")
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/albums/{album_id}/rating")
+def rate_album(entry_id: int, album_id: int, body: dict, db: Session = Depends(get_db)):
+    entry = records.owned_entry(db, require_actor().id, entry_id)
+    before = (entry.rating, entry.review, entry.summary)
+    records.save_album_rating(db, entry, album_id, body)
+    db.refresh(entry)
+    if (entry.rating, entry.review, entry.summary) != before:
+        raise HTTPException(status_code=500, detail="An album score changed the artist rating.")
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/tracks/{track_id}/rating")
+def rate_track(entry_id: int, track_id: int, body: dict, db: Session = Depends(get_db)):
+    entry = records.owned_entry(db, require_actor().id, entry_id)
+    before = (entry.rating, entry.review, entry.summary)
+    records.save_track_rating(db, entry, track_id, body)
+    db.refresh(entry)
+    if (entry.rating, entry.review, entry.summary) != before:
+        raise HTTPException(status_code=500, detail="A song score changed the artist rating.")
+    return records.detail(db, entry)
+
+
+def _load_artist_catalog(db: Session, entry) -> None:
+    if not records.artist_needs_catalog(entry.catalog):
+        return
+    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
+    try:
+        payload = providers.cached_call(
+            db,
+            f"musicbrainz:artist-catalog:{entry.catalog.source_id}",
+            lambda: providers.musicbrainz_artist_catalog(http, entry.catalog.source_id),
+        )
+    except Exception:
+        return
+    finally:
+        http.close()
+    if not isinstance(payload, dict):
+        return
+    records.store_music_catalog(db, entry.catalog, payload.get("albums") or [])
+    records.mark_catalog_loaded(entry.catalog, bool(payload.get("partial")))
 
 
 @router.post("/entries/{entry_id}/seasons")

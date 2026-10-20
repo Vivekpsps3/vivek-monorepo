@@ -12,17 +12,70 @@ From the repo root:
 
 ```bash
 make install   # once: Finance, Travel, Media, site Flask, and both Angular dependencies
-make dev       # Finance API + UI
+make dev       # Finance API + UI + Media, with local login skipped
 ```
 
 | URL | Purpose |
 |-----|---------|
-| http://localhost:4200 | Angular app (dev proxy → API) |
+| http://127.0.0.1:4200/hub | Hub (no login while local dev auth is on) |
+| http://127.0.0.1:4200/ | Finance app |
+| http://127.0.0.1:8091/ | Media journal |
 | http://127.0.0.1:8000/docs | OpenAPI / Swagger |
 | http://127.0.0.1:8000/api/health | Health check |
 
-On first launch with an empty DB, open `/login`, create the first admin account,
-then create a vault at `/vault/setup`. Normal finance routes require vault unlock.
+`make dev` sets `LOCAL_DEV_AUTH=1` for the Finance API process. On loopback that
+signs the browser in as the deterministic user `local-dev`
+(`local-dev@localhost`, display name Local Dev, admin on this machine only) and
+the development UI unlocks that user's vault. Media reads the same finance
+session, so http://127.0.0.1:8091/ opens without `/auth/login`. Travel is still
+`make travel-dev` and is not started by `make dev`.
+
+The repo `.env` is the Docker file (`DATABASE_URL` under `/data`,
+`SESSION_COOKIE_SECURE=1`). `make dev` does not use that database. It uses
+`apps/finance/backend/finance.db` and non-secure `SameSite=lax` cookies so the
+http dev server can keep the session. Override either on the command line
+(`make dev DATABASE_URL=... SESSION_COOKIE_SECURE=1`). `make backend` by itself
+still loads `.env` as before.
+
+Use real login, including the vault passphrase, with:
+
+```bash
+make dev LOCAL_DEV_AUTH=0
+```
+
+On a fresh database that path still starts at `/login` (or `/auth/login` on the
+suite), then a vault at `/vault/setup`. Finance routes require the vault to be
+unlocked.
+
+### Local dev auth (`LOCAL_DEV_AUTH`)
+
+The flag is read in `apps/finance/backend/local_dev.py`. It defaults **off**.
+Unset, `0`, `false`, `no`, and `off` all leave authentication in place.
+Docker Compose does not pass the variable, and production builds set
+`localDevAuth: false` in `environment.production.ts`.
+
+The bypass turns on only when the flag is explicitly `1`, `true`, `yes`, or
+`on`, **and** one of these is true:
+
+- the request `Host` is `localhost`, `127.0.0.1`, or `::1`, or
+- `apps/finance/backend/.env.development` exists, sets `LOCAL_DEV_AUTH` to an
+  on value, and was loaded at startup (any host). That file is gitignored.
+  Do not copy it onto a deployed host. A file that does not set the flag does
+  not count.
+
+When the bypass is on:
+
+- a missing session becomes the `local-dev` account (no password is stored)
+- the development UI calls `GET /api/auth/local-dev/vault` and runs the normal
+  vault KDF for that account only. The passphrase is generated into
+  `apps/finance/backend/.local-dev/vault-passphrase` (gitignored, mode `0600`).
+  It is not a source-code secret and it cannot unwrap anyone else's vault.
+- Media's actor check uses this finance session, so the journal UI loads
+
+When the flag is off, or the host is not local and `.env.development` is not in
+use, `/api/auth/me` stays 401, the hub and finance app still go to login, vault
+unlock is still required, and Media still answers 401 until you sign in. A real
+session cookie is never replaced by `local-dev`.
 
 ### Optional API key (non-browser clients)
 
@@ -34,7 +87,8 @@ The UI calls the API at **`/api/...`** (see `environment.development.ts` `apiUrl
 
 See `make help`. Common:
 
-- `make backend` / `make frontend` — run one side only
+- `make dev` — Finance API, Finance UI, and Media together. Prints the hub, finance, and media URLs. `LOCAL_DEV_AUTH=1` unless you pass `LOCAL_DEV_AUTH=0`. Uses `apps/finance/backend/finance.db` and http session cookies, not the Docker settings in `.env`.
+- `make backend` / `make frontend` / `make media-dev` — run one side only. These do not set `LOCAL_DEV_AUTH`; login stays required unless you export the flag yourself.
 - `make test` — Finance pytest + `ng test` (frontend needs a browser; set `CHROME_BIN` if ChromeHeadless is missing)
 - `make test-full` — Finance, Travel, Media, and site backend suites; both Angular suites and builds; Docker build and suite-route integration
 - `make travel-install` / `make media-install` / `make site-install` — install one optional backend environment without `make install`

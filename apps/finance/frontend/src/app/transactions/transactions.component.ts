@@ -56,6 +56,7 @@ import {
   UiDataTableComponent,
   UiDialogComponent,
 } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 
 @Component({
   selector: 'app-transactions',
@@ -73,6 +74,7 @@ import {
     UiDataTableComponent,
     UiDialogComponent,
     RouterLink,
+    InfoTipComponent,
   ],
   templateUrl: './transactions.component.html',
   styleUrl: './transactions.component.css',

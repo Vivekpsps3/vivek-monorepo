@@ -17,6 +17,7 @@ test("keeps unrated distinct from zero and labels statuses by medium", () => {
   assert.equal(statusLabel("book", "in_progress"), "Currently Reading");
   assert.equal(statusLabel("game", "in_progress"), "Currently Playing");
   assert.equal(statusLabel("album", "want"), "Want to Listen");
+  assert.equal(statusLabel("artist", "want"), "Following");
 });
 
 test("month and year releases are not shown as a day", () => {

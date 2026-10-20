@@ -133,6 +133,62 @@ class EpisodeProgress(Base):
     watched_on: Mapped[date | None] = mapped_column(Date)
 
 
+class MusicAlbum(Base):
+    """Public album metadata for an artist. Personal scores live on AlbumRating."""
+
+    __tablename__ = "music_albums"
+    __table_args__ = (UniqueConstraint("catalog_id", "source_id", name="uq_music_album_source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    catalog_id: Mapped[int] = mapped_column(ForeignKey("catalog_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    year: Mapped[int | None] = mapped_column(Integer)
+    source_id: Mapped[str | None] = mapped_column(String(120))
+    artwork_url: Mapped[str | None] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    tracks: Mapped[list["MusicTrack"]] = relationship(cascade="all, delete-orphan")
+
+
+class MusicTrack(Base):
+    """A song on an album. Its score is a TrackRating, not the album or artist score."""
+
+    __tablename__ = "music_tracks"
+    __table_args__ = (UniqueConstraint("album_id", "source_id", name="uq_music_track_source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    album_id: Mapped[int] = mapped_column(ForeignKey("music_albums.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_id: Mapped[str | None] = mapped_column(String(120))
+
+
+class AlbumRating(Base):
+    """This user's score for one album. Never copied onto the artist or its songs."""
+
+    __tablename__ = "album_ratings"
+    __table_args__ = (UniqueConstraint("user_id", "entry_id", "album_id", name="uq_album_rating"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    entry_id: Mapped[int] = mapped_column(ForeignKey("user_entries.id", ondelete="CASCADE"), nullable=False, index=True)
+    album_id: Mapped[int] = mapped_column(ForeignKey("music_albums.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating: Mapped[float | None] = mapped_column(Float)
+
+
+class TrackRating(Base):
+    """This user's score for one song. Never copied onto the album or the artist."""
+
+    __tablename__ = "track_ratings"
+    __table_args__ = (UniqueConstraint("user_id", "entry_id", "track_id", name="uq_track_rating"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    entry_id: Mapped[int] = mapped_column(ForeignKey("user_entries.id", ondelete="CASCADE"), nullable=False, index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("music_tracks.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating: Mapped[float | None] = mapped_column(Float)
+
+
 class Release(Base):
     __tablename__ = "releases"
 

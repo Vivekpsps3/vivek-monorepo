@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
-KINDS = {"movie", "tv", "book", "track", "album", "game"}
+KINDS = {"movie", "tv", "book", "track", "album", "artist", "game"}
 STATUSES = {"want", "anticipating", "in_progress", "completed", "paused", "dropped"}
 EXPERIENCE_KINDS = {"watch", "rewatch", "read", "reread", "listen", "replay", "play"}
 PROGRESS_UNITS = {"page", "percent", "episode", "hour"}

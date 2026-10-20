@@ -18,7 +18,7 @@
   <main id="hub-main">
     <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
     <h1>{{ name }}</h1>
-    <p class="lede">Travel and the media you are keeping. Each opens on its own, and each returns here.</p>
+    <p class="lede">Travel, the media you are keeping, and finance. Each opens on its own, and each returns here.</p>
 
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading">
@@ -98,26 +98,31 @@
           }
         }
       </section>
-    </div>
 
-    <section class="finance-quiet" aria-labelledby="finance-heading">
-      <div class="finance-quiet__row">
-        <h2 id="finance-heading">Finance</h2>
+      <section class="side-panel finance-bar" aria-labelledby="finance-heading">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Finance</p>
+            <h2 id="finance-heading">Net worth</h2>
+          </div>
+          <a class="open-link" routerLink="/">Open Finance</a>
+        </div>
         @if (financeState === 'locked') {
-          <p>Balances stay encrypted in this browser. <a routerLink="/vault/unlock" [queryParams]="{ next: '/hub' }">Unlock</a></p>
+          <p class="quiet-title">Vault locked</p>
+          <p class="figure-note">Balances stay encrypted in this browser.</p>
+          <a class="open-link" routerLink="/vault/unlock" [queryParams]="{ next: '/hub' }">Unlock</a>
         } @else if (financeState === 'loading') {
-          <p role="status">Reading this browser’s vault…</p>
+          <p class="figure-note" role="status">Reading this browser’s vault…</p>
         } @else if (financeState === 'error') {
-          <p role="alert">Finance could not be read. <a routerLink="/">Retry in Finance</a></p>
+          <p class="figure-note" role="alert">Finance could not be read.</p>
+          <a class="open-link" routerLink="/">Retry in Finance</a>
         } @else if (netWorth) {
-          <p class="finance-quiet__amount"><span>Net worth</span> {{ netWorth.total | currency:'USD':'symbol':'1.0-0' }}</p>
+          <p class="quiet-title">{{ netWorth.total | currency:'USD':'symbol':'1.0-0' }}</p>
           @if (freshness) {
-            <p>{{ freshness }}</p>
+            <p class="figure-note">{{ freshness }}</p>
           }
         }
-        <a class="open-link" routerLink="/">Open</a>
-      </div>
-      @if (financeState === 'ready' && netWorth) {
+        @if (financeState === 'ready' && netWorth) {
         <details class="finance-more">
           <summary>Breakdown</summary>
           <dl class="split">
@@ -157,7 +162,8 @@
             <p class="figure-note">A manual cash asset and brokerage holdings are both in this net worth. Brokerage cash sweeps can overlap with cash you entered by hand. Change either one in Finance.</p>
           }
         </details>
-      }
-    </section>
+        }
+      </section>
+    </div>
   </main>
 </div>

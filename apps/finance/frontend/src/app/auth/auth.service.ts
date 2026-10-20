@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, firstValueFrom, from, map, of, switchMap, tap } from 'rxjs';
+import { environment } from '../../environments/environment';
 import { apiUrl } from '../core/api-url';
 import { authNavigation } from './after-auth';
 import { AuthUser, LoginResponse, MeResponse } from './auth.models';
@@ -36,6 +37,11 @@ export class AuthService {
       return of(this.currentUser);
     }
     return this.http.get<MeResponse>(apiUrl('/auth/me'), { withCredentials: true }).pipe(
+      switchMap(res => {
+        // Production builds set localDevAuth false, so they never take this path.
+        if (!res.local_dev || !environment.localDevAuth) return of(res);
+        return from(this.vault.ensureLocalDevUnlocked()).pipe(map(() => res));
+      }),
       tap(res => {
         this.checkedSession = true;
         // A reload still has the session cookie and the saved vault key.

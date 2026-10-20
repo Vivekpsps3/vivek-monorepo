@@ -2,9 +2,11 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="'Bills'"
-    subtitle="Rent, utilities, and other fixed costs. This does not change net worth.">
+    [title]="'Bills'">
     <div uiPageActions class="header-actions">
+      <app-info-tip
+        label="Bills and net worth"
+        text="This does not change net worth." />
       <ui-button variant="primary" (clicked)="openAddModal()">Add bill</ui-button>
     </div>
   </ui-page-header>

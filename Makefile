@@ -36,7 +36,7 @@ help:
 	@echo "Finance Tracker"
 	@echo ""
 	@echo "  make install          Install Finance, Travel, site backend + frontend dependencies"
-	@echo "  make dev              Run API + Angular dev server (parallel)"
+	@echo "  make dev              Finance API + UI + Media. LOCAL_DEV_AUTH=1 skips local login."
 	@echo "  make backend          API only  → http://$(API_HOST):$(API_PORT)"
 	@echo "  make frontend         UI only   → http://localhost:$(WEB_PORT) (proxy → API)"
 	@echo "  make test             Backend + frontend unit tests"
@@ -69,7 +69,8 @@ help:
 	@echo "  make build-site-frontend Site Angular development build"
 	@echo ""
 	@echo "First time: make install && make dev"
-	@echo "Open: http://localhost:$(WEB_PORT)"
+	@echo "Open: http://127.0.0.1:$(WEB_PORT)/hub"
+	@echo "Real login: make dev LOCAL_DEV_AUTH=0"
 
 install: install-backend travel-install media-install site-install install-frontend
 	@echo "Install complete."
@@ -85,18 +86,35 @@ install-frontend:
 	cd $(SITE_FRONTEND_DIR) && npm install
 	@echo "Frontend deps: $(FRONTEND_DIR)/node_modules and $(SITE_FRONTEND_DIR)/node_modules"
 
-# Run both; Ctrl+C stops both job groups
+# Finance API, Finance UI, and Media. Ctrl+C stops all of them.
+# LOCAL_DEV_AUTH defaults on for this target only. The API still ignores it unless the
+# request host is loopback or apps/finance/backend/.env.development enables it.
+# The repo .env is the Docker/production file (Secure cookies, DATABASE_URL under /data).
+# This target pins a local http session and the backend finance.db unless overridden.
 dev:
-	@echo "Starting backend (:$(API_PORT)) and frontend (:$(WEB_PORT))…"
+	@echo "Starting Finance API (:$(API_PORT)), Finance UI (:$(WEB_PORT)), and Media (:$(MEDIA_PORT))…"
+	@echo "LOCAL_DEV_AUTH=$(if $(LOCAL_DEV_AUTH),$(LOCAL_DEV_AUTH),1)"
+	@echo "Hub:     http://127.0.0.1:$(WEB_PORT)/hub"
+	@echo "Finance: http://127.0.0.1:$(WEB_PORT)/"
+	@echo "Media:   http://127.0.0.1:$(MEDIA_PORT)/"
+	@echo "API:     http://127.0.0.1:$(API_PORT)/docs"
 	@echo "(Restart required after proxy.conf.js changes.)"
 	@trap 'kill 0' EXIT INT TERM; \
+	LOCAL_DEV_AUTH="$(if $(LOCAL_DEV_AUTH),$(LOCAL_DEV_AUTH),1)" \
+	DATABASE_URL="$(if $(DATABASE_URL),$(DATABASE_URL),sqlite:///./finance.db)" \
+	SESSION_COOKIE_SECURE="$(if $(SESSION_COOKIE_SECURE),$(SESSION_COOKIE_SECURE),0)" \
+	SESSION_COOKIE_SAMESITE="$(if $(SESSION_COOKIE_SAMESITE),$(SESSION_COOKIE_SAMESITE),lax)" \
 	$(MAKE) backend & \
+	API_PROXY_TARGET="http://127.0.0.1:$(API_PORT)" \
+	MEDIA_PROXY_TARGET="http://127.0.0.1:$(MEDIA_PORT)" \
 	$(MAKE) frontend & \
+	FINANCE_API_URL="http://127.0.0.1:$(API_PORT)" \
+	$(MAKE) media-dev & \
 	wait
 
 backend:
-	@if [ -x $(UVICORN) ]; then \
-		cd $(BACKEND_DIR) && .venv/bin/uvicorn main:app --reload --host $(API_HOST) --port $(API_PORT); \
+	@if [ -x $(PY) ]; then \
+		cd $(BACKEND_DIR) && .venv/bin/python -m uvicorn main:app --reload --host $(API_HOST) --port $(API_PORT); \
 	elif command -v uvicorn >/dev/null 2>&1; then \
 		cd $(BACKEND_DIR) && uvicorn main:app --reload --host $(API_HOST) --port $(API_PORT); \
 	else echo "Run: make install-backend"; exit 1; fi

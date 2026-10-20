@@ -2,15 +2,12 @@
   <div [class.page]="!embedded" [class.embed]="embedded" class="imports-page">
     <ui-page-header
       [embedded]="embedded"
-      [title]="'Imports'"
-      subtitle="Confirmed statement coverage, saved outcomes, and safe recovery actions.">
+      [title]="'Imports'">
       <div uiPageActions class="header-actions">
+        <app-info-tip label="Import receipts" text="Confirmed statement coverage, saved outcomes, and recovery for a receipt." />
         <ui-button variant="primary" (clicked)="openImportModal()">Import from bank</ui-button>
       </div>
     </ui-page-header>
-    @if (embedded) {
-      <p class="imports-lead">Confirmed statement coverage, saved outcomes, and safe recovery actions.</p>
-    }
     @if (importReceipts.length) {
       <ui-card [title]="'Import receipts'">
         @for (receipt of importReceipts; track receipt.id) {
@@ -60,32 +57,15 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'"
-    [subtitle]="typeFilter === 'income' ? 'Recorded deposits and scheduled work income for the selected period. This view does not change net worth.' : 'Card and bank activity. This list does not change net worth.'">
+    [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'">
     <div uiPageActions class="header-actions">
+      <app-info-tip
+        label="Activity and net worth"
+        [text]="typeFilter === 'income' ? 'Recorded deposits and scheduled work income for the selected period. This view does not change net worth.' : 'Card and bank activity. This list does not change net worth.'" />
       <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
       <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
     </div>
   </ui-page-header>
-
-  @if (!embedded) {
-  <section class="import-guide-card" aria-labelledby="import-guide-heading">
-    <div>
-      <p class="section-eyebrow">First import</p>
-      <h2 id="import-guide-heading">Bring in card and bank CSVs safely</h2>
-      <p>
-        Download CSV activity from your bank, select a bank for each file, preview every row, then import only the new transactions.
-        This ledger records spending and cashflow; it never changes your current net worth.
-      </p>
-    </div>
-    <div class="import-guide-steps">
-      <span>1. Export CSV</span>
-      <span>2. Preview</span>
-      <span>3. Select rows</span>
-      <span>4. Clean categories</span>
-    </div>
-  </section>
-  }
 
   <section class="month-hero">
     <p class="section-eyebrow">{{ summaryMonth ? 'This month' : 'Matching activity' }}</p>
@@ -130,15 +110,13 @@
 
   @if (typeFilter === 'income') {
     <ui-card [title]="'Work income'">
+      <app-info-tip uiCardActions align="end" label="Work income" text="Read-only for the selected dates. Search, account, merchant, and category filters do not apply. Combined income is recorded income plus scheduled work income plus the overlap adjustment. That adjustment applies when recorded and projected income are within 20%, and it is not assigned to a paycheck." />
       @let cashflow = workIncomeSummary;
       @if (workIncomeLoading) {
         <p class="work-income-note" role="status">Loading job income and recorded activity for this period…</p>
       } @else if (jobIncomeLoadError || listError) {
         <p class="work-income-note" role="alert">Work income could not be calculated because job or activity records failed to load. Try again to refresh the data.</p>
       } @else if (cashflow) {
-        <p class="work-income-note">
-          Read-only cashflow for {{ workIncomePeriod?.label }}. These figures follow the date scope and include all recorded income for that period, independent of transaction search, account, merchant, or category filters.
-        </p>
         <div class="work-income-totals" aria-label="Work income reconciliation">
           <div class="work-income-total">
             <span>Recorded income</span>
@@ -159,9 +137,6 @@
             <strong class="money">${{ cashflow.total_income | number: '1.2-2' }}</strong>
           </div>
         </div>
-        <p class="work-income-note">
-          Combined income = recorded income + scheduled work income + overlap adjustment. The period-level adjustment is used when recorded and projected income are within 20%; it is not assigned to a specific paycheck.
-        </p>
         @if (workIncomeSources.length) {
           <div class="work-income-source-list" aria-label="Scheduled work income sources">
             @for (item of workIncomeSources; track item.id) {
@@ -180,7 +155,7 @@
           <p class="work-income-note">No scheduled work income is recorded for this period. Check the job dates and pay details if you expected to see pay here.</p>
         }
       } @else {
-        <p class="work-income-note">Choose a month, one calendar date, or both From and Through dates to see work income. All months and an open-ended date range do not have a single period total.</p>
+        <p class="work-income-note">Select a month or a from and through date.</p>
       }
       <a class="work-income-owner-link" [routerLink]="['/recurring']" [queryParams]="{ t: 'pay' }">Manage jobs and pay in Recurring</a>
     </ui-card>
@@ -493,7 +468,7 @@
               [disabled]="importWorkflow.importParsing"
               (valueChange)="importWorkflow.onImportBankSelectionChange(entry, $event)" />
             @if (importWorkflow.importBank(entry.bank_slug); as bank) {
-              <p class="import-hint">{{ bank.hint }}</p>
+              <app-info-tip [label]="'About ' + bank.name" [text]="bank.hint" />
               <label class="form-group import-account-picker">
                 <span>Account identity for this file</span>
                 <select [value]="entry.bank_account_id || ''" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onImportAccountChange(entry, $any($event.target).value)">
@@ -514,13 +489,12 @@
                   <label class="check-label">
                     <input type="checkbox" [checked]="entry.map_legacy_account === true" [name]="'map-legacy-account-' + entry.id" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onLegacyAccountMappingChange(entry, $any($event.target).checked)" />
                     Map matching legacy transactions to this account
+                    <app-info-tip label="Legacy account mapping" text="Matches only unassigned transactions from this bank with the same date, amount, and description. Other account identities stay separate." />
                   </label>
-                  <p class="import-hint">Matches only unassigned transactions from this bank with the same date, amount, and description. Other account identities stay separate.</p>
                 </div>
               }
               <div class="import-coverage">
-                <strong>Statement coverage</strong>
-                <span>Coverage counts after you confirm the statement dates.</span>
+                <strong>Statement coverage <app-info-tip label="Statement coverage" text="Coverage counts after you confirm the statement dates." /></strong>
                 <label>From <input type="date" [(ngModel)]="entry.coverage_start" [name]="'coverage-start-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
                 <label>Through <input type="date" [(ngModel)]="entry.coverage_end" [name]="'coverage-end-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
                 <label class="check-label">
@@ -547,8 +521,8 @@
         {{ importWorkflow.importSummary.duplicate }} duplicate ({{ importWorkflow.importSummary.total_parsed }} parsed).
         {{ importWorkflow.importSummary.skipped }} skipped; {{ importWorkflow.importSummary.errors }} row(s) need fixing.
         Selected {{ importWorkflow.selectedImportCount }} · ${{ importWorkflow.selectedImportExpenseTotal | number: '1.2-2' }}.
+        <app-info-tip label="Duplicate rows" text="Duplicates include transactions already saved and overlapping rows across these files. Files with errors stay listed. Valid rows can still be imported." />
       </p>
-      <p class="import-hint">Duplicates include transactions already saved and overlapping rows across these files. Files with errors stay listed below; valid rows can still be imported.</p>
       @if (importReceipts.length > 0) {
         <details class="import-history">
           <summary>Import receipts ({{ importReceipts.length }})</summary>
@@ -672,9 +646,7 @@
                     </ul>
                   </details>
                 }
-                <p class="import-notes-hint">
-                  Valid rows can still be imported. Fix flagged rows in the CSV and use Back to re-preview.
-                </p>
+                <app-info-tip label="Flagged rows" text="Valid rows can still be imported. Fix flagged rows in the CSV and use Back to re-preview." />
               </div>
             }
 

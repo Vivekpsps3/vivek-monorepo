@@ -1,4 +1,4 @@
-<ui-page-header [title]="'Users'" subtitle="Accounts, sessions, and admin tools." />
+<ui-page-header [title]="'Users'" />
 
 @if (error) { <p class="status status--error page-status" role="alert">{{ error }}</p> }
 @if (message) { <p class="status status--ok page-status">{{ message }}</p> }
@@ -17,7 +17,6 @@
   <div class="section-heading">
     <div>
       <h2 id="users-title">All users</h2>
-      <p>View accounts and manage access.</p>
     </div>
     <ui-button variant="secondary" size="sm" (clicked)="loadUsers()" [disabled]="usersLoading">
       {{ usersLoading ? 'Loading' : 'Refresh' }}
@@ -82,8 +81,10 @@
   <form class="user-form" (ngSubmit)="createUser()">
     <div class="section-heading section-heading--compact">
       <div>
-        <h2 id="create-user-title">Create user</h2>
-        <p>Create an invitation and deliver the one-time enrollment token securely.</p>
+        <h2 id="create-user-title">
+          Create user
+          <app-info-tip label="Enrollment token" text="Creates an invitation. Deliver the one-time enrollment token securely." />
+        </h2>
       </div>
     </div>
 

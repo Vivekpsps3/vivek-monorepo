@@ -40,7 +40,6 @@ import { PlanningResultsComponent } from './planning-results.component';
 import {
   UiButtonComponent,
   UiCardComponent,
-  UiIconComponent,
   UiPageHeaderComponent,
   UiSkeletonComponent,
 } from '@vivek/ui';
@@ -57,6 +56,7 @@ import {
 } from '../utils/planning-spending.util';
 import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
 import { PlanningQuickToolsComponent } from './planning-quick-tools.component';
+import { InfoTipComponent } from '../shared/info-tip.component';
 import { PlanningWorkflow } from './planning-workflow';
 import {
   cleanPlanningCheckpoints,
@@ -76,9 +76,9 @@ import {
     UiCardComponent,
     UiButtonComponent,
     UiSkeletonComponent,
-    UiIconComponent,
     PlanningQuickToolsComponent,
     PlanningResultsComponent,
+    InfoTipComponent,
   ],
   templateUrl: './planning.component.html',
   styleUrl: './planning.component.css',

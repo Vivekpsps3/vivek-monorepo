@@ -17,6 +17,7 @@ import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '.
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { UiCardComponent, UiEmptyStateComponent } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 import {
   chartColorAt,
   chartCartesianScales,
@@ -33,7 +34,7 @@ type ChartConstructor = new (
 @Component({
   selector: 'app-charts',
   standalone: true,
-  imports: [CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent],
+  imports: [CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, InfoTipComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

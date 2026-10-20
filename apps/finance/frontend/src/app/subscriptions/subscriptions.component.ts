@@ -18,6 +18,7 @@ import {
   UiSelectOption,
   UiDialogComponent,
 } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 
 @Component({
   selector: 'app-subscriptions',
@@ -33,6 +34,7 @@ import {
     UiSelectComponent,
     UiBadgeComponent,
     UiDialogComponent,
+    InfoTipComponent,
   ],
   templateUrl: './subscriptions.component.html',
   styleUrl: './subscriptions.component.css',

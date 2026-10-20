@@ -349,15 +349,35 @@ def logout(
     return {"ok": True}
 
 
+def _me_body(request: Request, user: User) -> dict:
+    from local_dev import is_local_dev_identity, local_dev_override_active
+
+    return {
+        "user": _user_response(user),
+        "csrf_token": None,
+        "local_dev": bool(local_dev_override_active(request) and is_local_dev_identity(user)),
+    }
+
+
 @router.get("/auth/me", response_model=MeResponse)
-def me(current_user: User = Depends(get_current_user)):
-    return {"user": _user_response(current_user), "csrf_token": None}
+def me(request: Request, current_user: User = Depends(get_current_user)):
+    return _me_body(request, current_user)
+
+
+@router.get("/auth/local-dev/vault")
+def local_dev_vault(request: Request, current_user: User = Depends(get_current_user)):
+    """Passphrase for the local-dev user's vault. 404 for every other account and when the bypass is off."""
+    from local_dev import is_local_dev_identity, local_dev_override_active, local_dev_vault_passphrase
+
+    if not local_dev_override_active(request) or not is_local_dev_identity(current_user):
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"passphrase": local_dev_vault_passphrase()}
 
 
 @router.post("/auth/session", response_model=MeResponse)
-def confirm_session(current_user: User = Depends(get_current_user)):
+def confirm_session(request: Request, current_user: User = Depends(get_current_user)):
     """Same-origin check for Travel writes. CSRF is required; this does not mint a session."""
-    return {"user": _user_response(current_user), "csrf_token": None}
+    return _me_body(request, current_user)
 
 
 @router.post("/auth/reset-data")

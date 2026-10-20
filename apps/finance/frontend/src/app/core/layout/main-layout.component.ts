@@ -5,6 +5,7 @@ import { AuthUser } from '../../auth/auth.models';
 import { AuthService } from '../../auth/auth.service';
 import { Subject, filter, takeUntil } from 'rxjs';
 import { UiButtonComponent, UiCardComponent, UiIconComponent, UiIconName } from '@vivek/ui';
+import { InfoTipComponent } from '../../shared/info-tip.component';
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceService } from '../../services/finance.service';
@@ -31,7 +32,7 @@ interface NavGroup {
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent],
+  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, InfoTipComponent],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

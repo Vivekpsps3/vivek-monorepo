@@ -3,6 +3,9 @@ import sys
 from pathlib import Path
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+# A developer shell or .env.development must not turn the local auth bypass on during tests.
+os.environ["LOCAL_DEV_AUTH"] = "0"
+os.environ.pop("FINANCE_DEV_ENV_FILE", None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

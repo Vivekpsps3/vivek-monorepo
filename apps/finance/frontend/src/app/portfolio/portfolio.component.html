@@ -1,9 +1,11 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="'Holdings'"
-    subtitle="Shares and funds. These values are part of net worth.">
+    [title]="'Holdings'">
     <div uiPageActions class="header-actions">
+      <app-info-tip
+        label="Holdings and net worth"
+        text="Market value counts toward net worth. Transactions do not." />
       <ui-button
         variant="secondary"
         [disabled]="refreshingPrices || holdings.length === 0"
@@ -19,9 +21,6 @@
       <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
     </div>
   </ui-page-header>
-  @if (embedded) {
-    <p class="scope-note">Market value counts toward net worth. Transactions do not.</p>
-  }
   @for (stage of resumableFidelityStages; track stage.id) {
     <ui-card class="resume-stage" [title]="'Fidelity replacement needs attention'">
       <p>{{ stage.filename }} · {{ stage.expected_row_count }} staged position(s) · {{ stage.account_masks.length }} account(s)</p>
@@ -83,9 +82,6 @@
         />
         <ui-button variant="secondary" size="sm" (clicked)="exportToCsv()">Export CSV</ui-button>
     </div>
-    <p class="hint holdings-tip">
-      Tip: Use <strong>Edit</strong> on a holding to change its ticker symbol (useful for imported CUSIPs or funds).
-    </p>
 
     <div *ngIf="loading" class="loading-overlay" role="status">
       <span class="spinner-inline" aria-hidden="true"></span> Loading holdings…
@@ -144,7 +140,6 @@
                   }
                 </span>
                 <span class="sub-total">{{ group.unvaluedCount ? 'Known ' : '' }}${{ group.totalValue | number: '1.2-2' }}</span>
-                <span class="toggle-hint">(click to collapse)</span>
               </summary>
 
               <div class="table-scroll sub-table">

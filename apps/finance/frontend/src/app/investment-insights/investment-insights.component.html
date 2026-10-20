@@ -1,8 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="investment-insights-page">
   <ui-page-header
     [embedded]="embedded"
-    [title]="'Portfolio projection'"
-    subtitle="Growth of holdings. This does not change net worth." />
+    [title]="'Portfolio projection'" />
 
   @if (loading) {
     <ui-card>
@@ -18,7 +17,7 @@
     <section class="insights-answer">
       <div class="answer-copy">
         <p class="section-eyebrow">Projection answer</p>
-        <h2>Projected portfolio</h2>
+        <h2>Projected portfolio <app-info-tip label="Projection scope" text="Growth of holdings. This does not change net worth." /></h2>
         <strong class="answer-value money">${{ projectedValue | number: '1.0-0' }}</strong>
         <p>
           In {{ projectionYears }} years, starting from
@@ -51,9 +50,8 @@
       <aside class="assumptions-panel" aria-label="Projection assumptions">
         <ui-card [title]="'Assumptions'">
           <div class="current-snapshot">
-            <span>Current portfolio</span>
+            <span>Current portfolio <app-info-tip label="Current portfolio" text="From current holdings and saved market prices." /></span>
             <strong class="money">${{ portfolioValue | number: '1.2-2' }}</strong>
-            <small>From current holdings and saved market prices.</small>
           </div>
 
           <div class="preset-block">

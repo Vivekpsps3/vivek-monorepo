@@ -188,7 +188,14 @@ def require_csrf(request: Request, session: UserSession) -> None:
 
 
 def get_current_user(request: Request, response: Response, db: Session = Depends(get_db)) -> User:
-    session, user = _session_from_request(db, request)
+    from local_dev import local_dev_override_active, open_local_dev_session
+
+    try:
+        session, user = _session_from_request(db, request)
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_401_UNAUTHORIZED or not local_dev_override_active(request):
+            raise
+        return open_local_dev_session(db, request, response)
     require_csrf(request, session)
     refresh_session_cookies(request, response, session)
     return user

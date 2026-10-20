@@ -2,15 +2,10 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Planning'"
-    subtitle="What-if only. This does not change real balances."
   />
 
-    <div class="mc-callout">
-    <ui-icon name="spark" size="sm" />
-    <p>{{ disclaimer }}</p>
-  </div>
-
   <ui-card [title]="'Your current facts'">
+    <app-info-tip uiCardActions align="end" label="Planning disclaimer" [text]="disclaimer" />
     <div class="planning-facts-grid">
       <div>
         <span>Current net worth</span>
@@ -81,7 +76,6 @@
 
   @if (showSpendingFallbackBanner()) {
     <div class="mc-callout mc-spending-fallback" role="status">
-      <ui-icon name="spark" size="sm" />
       <p>
         <strong>No recurring spending schedules found.</strong>
         The recurring basis currently includes no scheduled spending. You can enter a manual annual total or use the fixed, variable, and irregular components.
@@ -96,9 +90,7 @@
   @if (!loading) {
     @if (showSpendingPlan()) {
     <ui-card [title]="'Annual spending plan'">
-      <p class="mc-help">
-        Compose fixed scheduled costs, variable spending, and irregular annual costs. A covered ledger estimate is optional and only enters the plan after you accept it.
-      </p>
+      <app-info-tip uiCardActions align="end" label="Spending plan" text="Fixed, variable, and irregular costs. A ledger estimate is optional and enters the plan only after you accept it." />
       @if (showVariableCostWarning()) {
         <p class="mc-callout mc-cost-warning" role="status">This basis may omit variable card purchases. Active recurring schedules cover fixed expenses and subscriptions; they do not include your transaction history. Add a realistic variable amount under “Fixed + variable + irregular components” or enter one manual annual total.</p>
       }
@@ -115,18 +107,16 @@
       @if (spendingMode === 'components') {
         <div class="mc-control-grid">
           <label class="mc-field">
-            <span>Fixed annual spending</span>
+            <span>Fixed annual spending <app-info-tip label="Fixed annual spending" text="Recurring fixed expenses and subscriptions. Editable estimate." /></span>
             <input aria-label="Fixed annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.fixed_annual" (ngModelChange)="setSpendingComponent('fixed_annual', $event)" />
-            <small class="mc-field-hint">Recurring fixed expenses and subscriptions; editable estimate.</small>
           </label>
           <label class="mc-field">
             <span>Variable annual spending</span>
             <input aria-label="Variable annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.variable_annual" (ngModelChange)="setSpendingComponent('variable_annual', $event)" />
           </label>
           <label class="mc-field">
-            <span>Irregular annual spending</span>
+            <span>Irregular annual spending <app-info-tip label="Irregular annual spending" text="Annualized one-off costs such as repairs or travel." /></span>
             <input aria-label="Irregular annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.irregular_annual" (ngModelChange)="setSpendingComponent('irregular_annual', $event)" />
-            <small class="mc-field-hint">Annualized one-off costs such as repairs or travel.</small>
           </label>
         </div>
         <p class="tool-metric" aria-label="Composed annual spending">Composed annual spending: {{ formatMoney(componentAnnualSpending) }}</p>
@@ -138,8 +128,7 @@
       }
 
       <details class="spending-suggestion-details">
-        <summary>Suggest variable spending from the last three completed months</summary>
-        <p class="mc-help">Select confirmed accounts and categories. Every selected account needs confirmed, complete receipt coverage for {{ spendingPeriod.start }} through {{ spendingPeriod.end }}. Partial, staged, failed, and withdrawn imports do not count.</p>
+        <summary>Suggest variable spending from the last three completed months <app-info-tip label="Coverage required" [text]="'Every selected account needs confirmed, complete receipt coverage for ' + spendingPeriod.start + ' through ' + spendingPeriod.end + '. Partial, staged, failed, and withdrawn imports do not count.'" /></summary>
         <fieldset class="spending-choice-group">
           <legend>Accounts</legend>
           @if (!spendingAccounts.length) {
@@ -217,7 +206,7 @@
           </div>
         </ui-card>
         <ui-card [title]="'Useful tools'">
-          <p>FIRE, goal funding, debt payoff, and Monte Carlo use the selected spending basis. Saved manual totals remain available in legacy profiles.</p>
+          <app-info-tip uiCardActions align="end" label="Spending basis" text="These tools use the selected spending basis. Saved manual totals remain in older profiles." />
         </ui-card>
       }
       <app-planning-quick-tools
@@ -231,7 +220,7 @@
 
     @if (activeTool === 'simulation') {
     <ui-card [title]="'Saved inputs'">
-      <p class="mc-saved-hint">Name and save your assumption set. Simulations are not stored—only these input presets.</p>
+      <app-info-tip uiCardActions align="end" label="Saved inputs" text="Simulations are not stored. Only these input presets are saved." />
       <div class="mc-profiles-row">
         <label class="mc-field">
           <span>Load saved inputs</span>
@@ -294,7 +283,7 @@
               <input type="number" min="1" max="80" [(ngModel)]="horizonYears" />
             </label>
             <label class="mc-field">
-              <span>Paths</span>
+              <span>Paths <app-info-tip label="Simulation paths" [text]="'Up to ' + mcNPathsMax + ' paths are simulated. The chart keeps ' + mcFanPathsPersistMax + ' samples.'" /></span>
               <input
                 type="number"
                 [min]="mcNPathsMin"
@@ -302,9 +291,6 @@
                 step="100"
                 [(ngModel)]="nPaths"
               />
-              <small class="mc-field-hint">
-                Up to {{ mcNPathsMax | number }} paths simulated; chart stores {{ mcFanPathsPersistMax }} samples.
-              </small>
             </label>
             <label class="mc-field mc-field--seed">
               <span>Seed</span>
@@ -319,19 +305,18 @@
             <span>Use ledger net worth at start</span>
           </label>
           <label class="mc-field">
-            <span>Starting net worth</span>
+            <span>Starting net worth <app-info-tip label="Starting net worth" text="Simulation only. Does not change your balance sheet." /></span>
             <input
               type="number"
               step="1000"
               [disabled]="useLedgerStartingNetWorth"
               [(ngModel)]="startingNetWorth"
             />
-            <small class="mc-field-hint">Simulation only — does not change your balance sheet.</small>
           </label>
         </ui-card>
 
         <ui-card [title]="'Add a what-if change'">
-          <p class="mc-help">Choose a starting point. The amount begins at $0 so you can enter your own expected purchase cost or missed take-home pay.</p>
+          <app-info-tip uiCardActions align="end" label="What-if amounts" text="Amounts start at $0. Enter the expected cost or missed take-home pay." />
           <div class="mc-secondary-action-wrap">
             <ui-button variant="secondary" (clicked)="addScenarioTemplate('car-purchase')">Car purchase</ui-button>
             <ui-button variant="secondary" (clicked)="addScenarioTemplate('time-off')">Time off</ui-button>
@@ -340,7 +325,7 @@
 
         @if (assumptions.annual_cashflow_events.length) {
           <ui-card [title]="'What-if changes'">
-            <p class="mc-help">Enter costs or missed take-home pay as negative amounts. New changes affect the scenario; detailed timing and scope are under advanced assumptions.</p>
+            <app-info-tip uiCardActions align="end" label="What-if sign" text="Costs and missed pay are negative. New changes affect the scenario. Timing and scope are under advanced assumptions." />
             <div class="mc-list">
               @for (event of assumptions.annual_cashflow_events; track trackByIndex($index)) {
                 <div class="mc-editor-row">
@@ -385,19 +370,17 @@
             <span>Use one total annual cashflow instead</span>
           </label>
           <label class="mc-field">
-            <span>Total annual cashflow</span>
+            <span>Total annual cashflow <app-info-tip label="Total annual cashflow" text="Positive adds to savings. Negative withdraws. Replaces income less spending and any older additional contribution." /></span>
             <input
               type="number"
               step="1000"
               [disabled]="!useNetCashflowOverride"
               [(ngModel)]="assumptions.net_annual_cashflow_override"
             />
-            <small class="mc-field-hint">Positive adds to savings; negative withdraws. Replaces income less spending and any older additional-contribution amount.</small>
           </label>
           <label class="mc-field">
-            <span>Additional annual contribution</span>
+            <span>Additional annual contribution <app-info-tip label="Additional contribution" text="Kept for older saved inputs. Added to income less spending only when the total annual cashflow override is off." /></span>
             <input type="number" step="1000" [(ngModel)]="assumptions.extra_contributions.annual_contribution" />
-            <small class="mc-field-hint">Kept for older saved inputs. Added to income less spending only when the total annual cashflow override is off.</small>
           </label>
 
           <div class="mc-control-grid">
@@ -541,12 +524,7 @@
         </ui-card>
 
         <ui-card [title]="'Future events'">
-          <p class="mc-help">
-            Simulation years: <strong>1</strong> = first year after today, up to your horizon.
-            Amount is <strong>per occurrence</strong>, summed into each simulation year (negative = outflow).
-            Repeating events use <strong>every N years</strong> (0.5 ≈ twice per year, 2 = every two years).
-            Templates start at $0. New event templates are included in the scenario only; the baseline keeps the same shared seed and assumptions.
-          </p>
+          <app-info-tip uiCardActions align="end" label="Future events" text="Year 1 is the first year after today. Amount is per occurrence and sums into that year; negative is an outflow. Every N years: 1 yearly, 2 every two years, 0.5 twice a year. Templates start at $0 and apply to the scenario only." />
           <div class="mc-list">
             @for (event of assumptions.annual_cashflow_events; track trackByIndex($index)) {
               <div class="mc-editor-row">
@@ -579,7 +557,7 @@
                     />
                   </label>
                   <label class="mc-field">
-                    <span>Through year</span>
+                    <span>Through year <app-info-tip label="Through year" text="Leave empty to run through the end of the horizon." /></span>
                     <input
                       type="number"
                       min="1"
@@ -587,10 +565,9 @@
                       [placeholder]="'Horizon (' + horizonYears + ')'"
                       [(ngModel)]="event.end_year"
                     />
-                    <small class="mc-field-hint">Leave empty = through end of horizon</small>
                   </label>
                   <label class="mc-field">
-                    <span>Every N years</span>
+                    <span>Every N years <app-info-tip label="Event interval" text="1 is yearly, 2 is every two years, 0.5 is twice a year." /></span>
                     <input
                       type="number"
                       min="0.25"
@@ -598,7 +575,6 @@
                       step="0.25"
                       [(ngModel)]="event.interval_years"
                     />
-                    <small class="mc-field-hint">1 = yearly, 2 = biennial, 0.5 = semi-annual</small>
                   </label>
                 }
                 <label class="mc-check mc-check--compact">

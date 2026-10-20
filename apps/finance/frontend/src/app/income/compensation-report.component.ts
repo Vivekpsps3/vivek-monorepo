@@ -8,15 +8,15 @@ import { JobIncome } from '../models/transaction.model';
 import { compensationByEmployer, EmployerCompensation, isValidIsoDate } from '../utils/job-compensation.util';
 import { todayIsoDate } from '@vivek/browser';
 import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 
 @Component({
   selector: 'app-compensation-report',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent],
+  imports: [CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, InfoTipComponent],
   template: `
     <ui-card [title]="'Total compensation by employer'">
-      <p>Read-only estimate from the jobs and dated compensation history above. Edit those records in Jobs &amp; pay.</p>
-      <p>Gross compensation from your recorded jobs, including past employers. Base pay and recurring annual estimates are prorated by employment dates and promotions; dated payments count once on their dates. ESPP compensation excludes the money you contributed to buy shares.</p>
+      <app-info-tip uiCardActions align="end" label="Compensation estimate" text="Read-only. Edit jobs in Jobs and pay. Gross pay is prorated by employment dates. Dated payments count once. ESPP excludes your purchase contributions. Equity counts grant value and that year's gain; later years count only the gain or loss. Sold shares use locked proceeds. Unsold shares use the latest price on or before the selected date. Stock values do not change recurring pay or net worth." />
       <div class="form-row">
         <label class="form-group">
           <span>Calendar year</span>
@@ -29,7 +29,7 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@v
           </select>
         </label>
         <label class="form-group">
-          <span>From (blank for all history)</span>
+          <span>From <app-info-tip label="From date" text="Leave blank for all history." /></span>
           <input name="compensation_start" type="date" [(ngModel)]="start" (ngModelChange)="customRangeChanged()" />
         </label>
         <label class="form-group">
@@ -41,7 +41,7 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@v
         <p role="alert">{{ rangeError }}</p>
       } @else if (rows.length) {
         <p class="stat-display money">{{ total | currency:'USD':'symbol':'1.2-2' }}</p>
-        <p class="muted">{{ start || 'All recorded history' }} → {{ end }}{{ isProjection ? ' · Includes projected pay' : '' }}. Estimated gross compensation; not a payroll ledger.</p>
+        <p class="muted">{{ start || 'All recorded history' }} → {{ end }}{{ isProjection ? ' · Includes projected pay' : '' }}</p>
         <ui-data-table ariaLabel="Total compensation by employer">
           <thead><tr><th>Employer</th><th>Base pay</th><th>Cash bonuses</th><th>Equity</th><th>Stock comp this range</th><th>Other</th><th>Employee ESPP contributions</th><th>Sale cash through date</th><th>Unsold stock value at date</th><th>Total compensation</th></tr></thead>
           <tbody>
@@ -64,7 +64,6 @@ import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@v
       } @else {
         <ui-empty-state message="Add or edit a job above to include it in compensation history." />
       }
-      <p class="muted">Annual pay and bonuses use the same daily estimate as cashflow. Dated payments and awards count only when they are additional to annual estimates. Equity awards include grant value and gains in the grant year; later years count only gains or losses. ESPP compensation is stock value less employee purchase contributions, which are listed separately. Sold shares use locked proceeds, while unsold shares use the latest valid price on or before the selected date (or grant/purchase price until then). Future-dated prices do not affect earlier snapshots. Stock values do not change recurring pay, retirement income, or net worth.</p>
     </ui-card>
   `,
   styles: [`

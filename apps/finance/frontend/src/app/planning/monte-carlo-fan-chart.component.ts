@@ -79,8 +79,6 @@ type McDisplayRow = {
               </div>
             }
           </dl>
-        } @else {
-          <span class="mc-chart-hover__hint">Tap the chart or use Previous year and Next year. The numbers for that year stay in this list.</span>
         }
       </div>
       <div class="mc-year-controls" role="group" aria-label="Inspect simulation year">

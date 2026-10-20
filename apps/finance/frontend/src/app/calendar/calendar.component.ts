@@ -39,6 +39,7 @@ import {
   UiPageHeaderComponent,
   UiIconComponent,
 } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 
 interface CalendarDay {
   date: string;
@@ -62,6 +63,7 @@ type ChartConstructor = new (item: ChartItem, config: unknown) => ChartInstance;
     UiBadgeComponent,
     UiEmptyStateComponent,
     UiIconComponent,
+    InfoTipComponent,
   ],
   templateUrl: './calendar.component.html',
   styleUrl: './calendar.component.css',

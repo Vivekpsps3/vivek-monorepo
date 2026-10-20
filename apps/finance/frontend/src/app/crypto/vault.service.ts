@@ -71,6 +71,28 @@ export class VaultService {
     return this.statusSubject.value;
   }
 
+  /**
+   * Unlock only the local-dev account, using the normal passphrase KDF.
+   * The API returns a passphrase solely for that account, and only while the local bypass is on.
+   */
+  async ensureLocalDevUnlocked(): Promise<void> {
+    await this.boot;
+    if (this.isUnlocked) return;
+    const body = await firstValueFrom(
+      this.http.get<{ passphrase: string }>(apiUrl('/auth/local-dev/vault'))
+    );
+    const passphrase = body?.passphrase?.trim() ?? '';
+    if (passphrase.length < 12) {
+      throw new Error('Local dev vault is unavailable');
+    }
+    const status = this.statusSubject.value ?? (await this.refreshStatus());
+    if (!status.exists) {
+      await this.setup(passphrase);
+      return;
+    }
+    await this.unlock(passphrase);
+  }
+
   async refreshStatus(): Promise<VaultStatus> {
     await this.boot;
     const status = await firstValueFrom(this.http.get<VaultStatus>(apiUrl('/vault/status')));

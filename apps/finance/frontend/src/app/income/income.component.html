@@ -1,9 +1,11 @@
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
-    [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'"
-    subtitle="Record who you work for, when, and how you are paid. Add dated pay, stock grants, and sales when you need them. This does not change net worth.">
+    [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'">
     <div uiPageActions class="header-actions">
+      <app-info-tip
+        label="Jobs and net worth"
+        text="Jobs and pay do not add a spending transaction or change net worth." />
       <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
     </div>
   </ui-page-header>
@@ -35,16 +37,6 @@
   }
 
   <ui-card [title]="'Jobs and pay'">
-    <div class="income-guidance">
-      <div>
-        <strong>Start with the basics</strong>
-        <p>
-          Enter your employer, starting salary, pay frequency, and start date. You can add tax estimates, bonuses, and stock history later.
-        </p>
-      </div>
-      <p class="income-guidance__note">Jobs and pay on this page do not add a spending transaction or change net worth.</p>
-    </div>
-
     @if (incomes.length) {
       <ui-data-table ariaLabel="Jobs and pay">
         <thead>
@@ -261,8 +253,7 @@
         </div>
 
         <details class="pay-disclosure">
-          <summary>Annual pay estimates, taxes, and take-home estimate</summary>
-          <p class="muted">Annual bonus, equity, and other pay are estimates added to base pay and prorated over your employment dates. Dated payments are added separately. Clear an annual estimate if it represents the same payout.</p>
+          <summary>Annual pay estimates, taxes, and take-home estimate <app-info-tip label="Annual estimates" text="Bonus, equity, and other pay are estimates added to base pay and prorated over employment dates. Dated payments are added separately. Clear an annual estimate if it is the same payout." /></summary>
         <div class="form-row">
           <label class="form-group">
             <span>Annual bonus</span>
@@ -281,11 +272,12 @@
         <section class="tax-helper" aria-labelledby="tax-helper-title">
           <div class="tax-helper__header">
             <div>
-              <h4 id="tax-helper-title">U.S. tax withholding helper</h4>
-              <p>
-                Use this to fill a reasonable starting estimate, then replace it with your paystub numbers when you have them.
-                It approximates federal income tax, FICA, and a state-tax bucket; it is not tax advice.
-              </p>
+              <h4 id="tax-helper-title">
+                U.S. tax withholding helper
+                <app-info-tip
+                  label="Tax estimate"
+                  text="Starting estimate for federal income tax, FICA, and a state-tax bucket. Replace it with paystub numbers. Not tax advice." />
+              </h4>
             </div>
             <ui-badge variant="warning">Estimate</ui-badge>
           </div>
@@ -299,8 +291,10 @@
               [options]="stateTaxOptions"
               [(value)]="taxEstimator.state" />
             <label class="form-group">
-              <span>Pre-tax deductions per period</span>
-              <small class="muted block">Examples: 401(k), insurance, HSA/FSA, or commuter benefits.</small>
+              <span>
+                Pre-tax deductions per period
+                <app-info-tip label="Pre-tax deductions" text="401(k), insurance, HSA/FSA, or commuter benefits." />
+              </span>
               <input name="pre_tax_deductions" type="number" min="0" step="0.01" [(ngModel)]="taxEstimator.preTaxDeductionsPerPeriod" />
             </label>
           </div>
@@ -317,13 +311,17 @@
 
         <div class="form-row">
           <label class="form-group">
-            <span>{{ payPeriodLabel | titlecase }} taxes</span>
-            <small class="muted block">Use actual paystub withholding when available.</small>
+            <span>
+              {{ payPeriodLabel | titlecase }} taxes
+              <app-info-tip label="Taxes per period" text="Use paystub withholding when you have it." />
+            </span>
             <input name="taxes_per_period" type="number" min="0" step="0.01" [(ngModel)]="form.taxes_per_period" />
           </label>
           <label class="form-group">
-            <span>{{ payPeriodLabel | titlecase }} deductions</span>
-            <small class="muted block">Include recurring deductions such as insurance, retirement, or transit.</small>
+            <span>
+              {{ payPeriodLabel | titlecase }} deductions
+              <app-info-tip label="Deductions per period" text="Recurring deductions such as insurance, retirement, or transit." />
+            </span>
             <input name="deductions_per_period" type="number" min="0" step="0.01" [(ngModel)]="form.deductions_per_period" />
           </label>
         </div>
@@ -355,10 +353,9 @@
           <summary>Promotions, dated payments, stock, and ESPP history</summary>
         <section class="compensation-history" aria-labelledby="promotions-title">
           <div class="history-heading">
-            <h4 id="promotions-title">Promotions and pay changes</h4>
+            <h4 id="promotions-title">Promotions and pay changes <app-info-tip label="Promotions" text="Starting pay stays above. Each promotion replaces annual base pay from its date." /></h4>
             <ui-button variant="secondary" size="sm" (clicked)="addPromotion()">Add promotion</ui-button>
           </div>
-          <p class="muted">Keep starting pay above. Each promotion replaces the annual base pay from its date onward.</p>
           @for (promotion of form.promotions || []; track $index; let i = $index) {
             <div class="history-entry">
               <div class="form-row">
@@ -382,10 +379,9 @@
 
         <section class="compensation-history" aria-labelledby="payments-title">
           <div class="history-heading">
-            <h4 id="payments-title">Dated cash bonuses and payments</h4>
+            <h4 id="payments-title">Dated cash bonuses and payments <app-info-tip label="Dated payments" text="Gross amounts on the payment or vesting date, counted once, including after a job ends. Annual withholding estimates still apply to recurring pay." /></h4>
             <ui-button variant="secondary" size="sm" (clicked)="addCompensationPayment()">Add payment</ui-button>
           </div>
-          <p class="muted">Enter gross amounts on their payment or vesting dates. These are added once, including payments after a job ends. Annual withholding estimates still apply to recurring pay.</p>
           @for (payment of form.compensation_payments || []; track $index; let i = $index) {
             <div class="history-entry">
               <div class="form-row">
@@ -417,18 +413,16 @@
 
         <section class="compensation-history" aria-labelledby="stock-title">
           <div class="history-heading">
-            <h4 id="stock-title">Stock bonuses and equity grants</h4>
+            <h4 id="stock-title">Stock bonuses and equity grants <app-info-tip label="Stock compensation" text="Grant value counts in the grant year; later years count only gains or losses. ESPP compensation is value minus your purchase contributions. Sale proceeds stay fixed. These amounts stay out of recurring pay and net worth." /></h4>
             <ui-button variant="secondary" size="sm" (clicked)="addStockGrant()">Add stock grant</ui-button>
           </div>
-          <p class="muted">Grant shares use their grant value as compensation in the grant year, with later years counting only gains or losses. ESPP shares are employee-funded: compensation is their economic value less your purchase contributions. Sales keep their recorded cash proceeds fixed. These amounts stay out of recurring pay and net worth.</p>
 
           <div class="form-row">
             <label class="form-group">
-              <span>Employer stock ticker (optional)</span>
+              <span>Employer stock ticker (optional) <app-info-tip label="Ticker and price" text="A ticker refreshes a market quote on open and after save. Only the ticker is sent. Leave it blank for private stock. Each manual price replaces the previous one; dated market quotes are kept." /></span>
               <input name="stock_symbol" maxlength="10" autocapitalize="characters" autocomplete="off" [(ngModel)]="form.stock_symbol" placeholder="MSFT or BRK.B" />
             </label>
           </div>
-          <p class="muted">For listed employer stock, enter its ticker to refresh a market quote when this page opens and after you save. Only the ticker is sent to the price provider. Leave it blank for private stock. The job summary holds one manual share price; each save replaces the prior manual price while retaining dated market quotes.</p>
 
           @for (grant of form.stock_grants || []; track $index; let i = $index) {
             <div class="history-entry stock-grant-entry">
@@ -473,10 +467,9 @@
               </p>
 
               <div class="history-heading">
-                <h4>Partial sales</h4>
+                <h4>Partial sales <app-info-tip label="Sale proceeds" text="Enter total cash received. It stays fixed if later share prices change." /></h4>
                 <ui-button variant="secondary" size="sm" (clicked)="addStockSale(grant)">Add sale</ui-button>
               </div>
-              <p class="muted">Enter total cash received for each sale. It stays fixed if later share prices change.</p>
               @for (sale of grant.sales || []; track $index; let si = $index) {
                 <div class="history-entry">
                   <div class="form-row">
@@ -501,10 +494,9 @@
           }
 
           <div class="history-heading stock-valuations-heading">
-            <h4>Employee share plan (ESPP) purchases</h4>
+            <h4>Employee share plan (ESPP) purchases <app-info-tip label="ESPP purchases" text="Record shares and what you paid per share. Only value above that contribution counts as compensation. Sale proceeds stay fixed when later prices change." /></h4>
             <ui-button variant="secondary" size="sm" (clicked)="addStockPurchase()">Add ESPP purchase</ui-button>
           </div>
-          <p class="muted">Record shares and the amount you paid per share. That purchase amount is your funding contribution, so only value above your contributions counts as stock compensation. Sale proceeds stay fixed when later prices change.</p>
           @for (purchase of form.stock_purchases || []; track $index; let i = $index) {
             <div class="history-entry stock-grant-entry">
               <div class="form-row">

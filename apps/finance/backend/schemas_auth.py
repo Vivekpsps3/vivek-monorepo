@@ -104,6 +104,8 @@ class PasswordlessVerifyRequest(BaseModel):
 class MeResponse(BaseModel):
     user: UserPublic
     csrf_token: Optional[str] = None
+    # True only when this response was served through the local dev auth bypass.
+    local_dev: bool = False
 
 
 class AdminUserCreate(BaseModel):

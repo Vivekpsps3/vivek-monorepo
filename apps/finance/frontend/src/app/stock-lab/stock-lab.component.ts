@@ -8,7 +8,8 @@ import { FinanceService } from '../services/finance.service';
 import { MarketResearchService } from '../services/market-research.service';
 import { StockLabScenarioService } from '../services/stock-lab-scenario.service';
 import { ToastService } from '@vivek/ui';
-import { UiButtonComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
+import { UiButtonComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 import { buildScorecard, calculatePurchasePlan, calculateReturnPeriods, detectDividendCadence, trailingTwelveMonthDividend } from '../utils/stock-lab.util';
 import {
   EvidenceCard,
@@ -20,7 +21,7 @@ import {
 @Component({
   selector: 'app-stock-lab',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiIconComponent, UiSkeletonComponent],
+  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent, InfoTipComponent],
   templateUrl: './stock-lab.component.html',
   styleUrl: './stock-lab.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

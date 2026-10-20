@@ -61,9 +61,7 @@
 
     @if (cashflow) {
       <ui-card [title]="'Monthly income sources'">
-        <p class="income-breakdown-note">
-          These source amounts add to the monthly income total above. Recorded income, projected pay, dated compensation, and stock-sale proceeds are shown separately; unknown dates stay marked as estimates.
-        </p>
+        <app-info-tip uiCardActions align="end" label="Income sources" text="These amounts add to the monthly income total. Recorded income, projected pay, dated compensation, and stock-sale proceeds are separate. Unknown dates stay estimates." />
         @if (incomeOccurrences.length) {
           <div class="income-breakdown" aria-label="Monthly income breakdown">
             @for (item of incomeOccurrences; track item.id) {

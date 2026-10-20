@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from local_dev import load_dev_env_file
+
+load_dev_env_file()
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

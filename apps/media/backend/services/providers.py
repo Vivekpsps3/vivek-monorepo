@@ -4,6 +4,7 @@ import html
 import json
 import os
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -47,7 +48,7 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
                 jobs.append(("tvmaze", lambda: tvmaze_search(http, query)))
             if scrape_mode() and kind in (None, "", "movie"):
                 jobs.append(("itunes", lambda: itunes_search(http, query)))
-        if kind in (None, "", "track", "album"):
+        if kind in (None, "", "track", "album", "artist"):
             jobs.append(("musicbrainz", lambda: musicbrainz_search(http, query, kind)))
         if kind in (None, "", "book"):
             jobs.append(("openlibrary", lambda: openlibrary_search(http, query)))
@@ -165,6 +166,9 @@ def release_from_day(text: str) -> list[dict]:
     return []
 
 
+SKIPPED_ALBUM_TYPES = {"compilation", "live", "remix", "soundtrack", "dj-mix", "mixtape/street", "demo", "audiobook", "audio drama"}
+
+
 def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
     found = []
     if kind in (None, "", "track"):
@@ -188,7 +192,172 @@ def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list
             result = music_result("album", mbid, item.get("title"), artist, item.get("date"))
             result["artwork_url"] = f"https://coverartarchive.org/release/{mbid}/front-250" if mbid else None
             found.append(result)
+    if kind in (None, "", "artist"):
+        try:
+            found.extend(musicbrainz_artists(http, query))
+        except Exception:
+            if kind == "artist":
+                raise
     return found
+
+
+def musicbrainz_artists(http: httpx.Client, query: str) -> list[dict]:
+    response = http.get(
+        "https://musicbrainz.org/ws/2/artist",
+        params={"query": query, "fmt": "json", "limit": 8},
+    )
+    response.raise_for_status()
+    found = []
+    for item in response.json().get("artists", []):
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        span = item.get("life-span") if isinstance(item.get("life-span"), dict) else {}
+        begin = span.get("begin") or ""
+        year = int(begin[:4]) if isinstance(begin, str) and len(begin) >= 4 and begin[:4].isdigit() else None
+        disambiguation = item.get("disambiguation") if isinstance(item.get("disambiguation"), str) else None
+        found.append(music_result("artist", item.get("id"), item.get("name"), item.get("type"), begin if year else None))
+        found[-1]["overview"] = (disambiguation or "")[:400] or None
+        found[-1]["releases"] = []
+    return found
+
+
+def musicbrainz_artist_catalog(http: httpx.Client, artist_id: str) -> dict:
+    """Official studio albums and the songs on them. No personal ratings."""
+    groups, groups_partial = _mb_pages(
+        http,
+        "https://musicbrainz.org/ws/2/release-group",
+        {"artist": artist_id, "type": "album", "fmt": "json"},
+        "release-groups",
+        "release-group-count",
+    )
+    releases, releases_partial = _mb_pages(
+        http,
+        "https://musicbrainz.org/ws/2/release",
+        {
+            "artist": artist_id,
+            "type": "album",
+            "status": "official",
+            "inc": "recordings release-groups",
+            "fmt": "json",
+        },
+        "releases",
+        "release-count",
+    )
+    tracks_by_group: dict[str, list[dict]] = {}
+    for release in releases:
+        if not isinstance(release, dict):
+            continue
+        group = release.get("release-group") if isinstance(release.get("release-group"), dict) else {}
+        group_id = group.get("id")
+        if not isinstance(group_id, str):
+            continue
+        tracks = _tracks_from_release(release)
+        current = tracks_by_group.get(group_id)
+        if current is None or len(tracks) > len(current):
+            tracks_by_group[group_id] = tracks
+    albums = []
+    seen = set()
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get("id"), str):
+            continue
+        if group["id"] in seen or _skipped_album(group):
+            continue
+        seen.add(group["id"])
+        released = group.get("first-release-date") or ""
+        year = int(released[:4]) if isinstance(released, str) and len(released) >= 4 and released[:4].isdigit() else None
+        albums.append({
+            "source_id": group["id"],
+            "title": group.get("title") or "Untitled",
+            "year": year,
+            "artwork_url": f"https://coverartarchive.org/release-group/{group['id']}/front-250",
+            "tracks": list(tracks_by_group.get(group["id"]) or []),
+        })
+    missing = [album for album in albums if not album["tracks"]]
+    for album in missing[:8]:
+        time.sleep(1.05)
+        try:
+            album["tracks"] = _release_group_tracks(http, album["source_id"])
+        except Exception:
+            album["tracks"] = []
+    still_missing = [album for album in albums if not album["tracks"]]
+    albums.sort(key=lambda row: ((row.get("year") or 9999), str(row.get("title") or "").casefold()))
+    return {
+        "albums": albums,
+        "partial": bool(groups_partial or releases_partial or len(missing) > 8 or still_missing),
+    }
+
+
+def _skipped_album(group: dict) -> bool:
+    primary = str(group.get("primary-type") or "Album").casefold()
+    if primary != "album":
+        return True
+    secondary = group.get("secondary-types") or []
+    if not isinstance(secondary, list):
+        return False
+    return any(str(item).casefold() in SKIPPED_ALBUM_TYPES for item in secondary)
+
+
+def _mb_pages(http: httpx.Client, url: str, params: dict, key: str, count_key: str, max_pages: int = 4):
+    found = []
+    offset = 0
+    total = None
+    for page in range(max_pages):
+        if page:
+            time.sleep(1.05)
+        response = http.get(url, params={**params, "limit": 100, "offset": offset})
+        response.raise_for_status()
+        body = response.json()
+        if not isinstance(body, dict):
+            break
+        chunk = body.get(key) or []
+        if not isinstance(chunk, list):
+            break
+        found.extend(chunk)
+        total = body.get(count_key)
+        offset += len(chunk)
+        if not chunk or len(chunk) < 100 or (isinstance(total, int) and offset >= total):
+            break
+    partial = isinstance(total, int) and offset < total
+    return found, partial
+
+
+def _tracks_from_release(release: dict) -> list[dict]:
+    tracks = []
+    seen = set()
+    for medium in release.get("media") or []:
+        if not isinstance(medium, dict):
+            continue
+        for track in medium.get("tracks") or []:
+            if not isinstance(track, dict):
+                continue
+            recording = track.get("recording") if isinstance(track.get("recording"), dict) else {}
+            title = track.get("title") or recording.get("title")
+            if not isinstance(title, str) or not title.strip():
+                continue
+            source_id = recording.get("id") or track.get("id")
+            if isinstance(source_id, str) and source_id in seen:
+                continue
+            if isinstance(source_id, str):
+                seen.add(source_id)
+            position = track.get("position") if isinstance(track.get("position"), int) else len(tracks) + 1
+            tracks.append({"title": title.strip(), "position": position, "source_id": source_id if isinstance(source_id, str) else None})
+    return tracks
+
+
+def _release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
+    response = http.get(
+        "https://musicbrainz.org/ws/2/release",
+        params={"release-group": group_id, "inc": "recordings", "fmt": "json", "limit": 25},
+    )
+    response.raise_for_status()
+    best: list[dict] = []
+    for release in response.json().get("releases") or []:
+        if not isinstance(release, dict):
+            continue
+        tracks = _tracks_from_release(release)
+        if len(tracks) > len(best):
+            best = tracks
+    return best
 
 
 def artist_name(credit) -> str | None:

@@ -1,8 +1,7 @@
 <div [class.page]="!embedded" [class.embed]="embedded" class="calendar-page">
   <ui-page-header
     [embedded]="embedded"
-    [title]="'Calendar'"
-    subtitle="Income and spending by day. Pay dates appear only when you set a schedule. This view does not change net worth." />
+    [title]="'Calendar'" />
 
   <div class="calendar-toolbar">
     <ui-button variant="secondary" size="sm" ariaLabel="Previous month" (clicked)="prevMonth()"><ui-icon name="chevron-left" size="sm" /></ui-button>
@@ -12,7 +11,7 @@
   </div>
 
   <section class="month-hero" aria-label="Month income and spend summary">
-    <p class="section-eyebrow">This month</p>
+    <p class="section-eyebrow">This month <app-info-tip label="Calendar dates" text="Dates show recorded deposits, paycheck dates, dated compensation, and stock-sale proceeds. Day net is before the monthly overlap adjustment. Pay dates appear only when a schedule is set. This view does not change net worth." /></p>
     <div class="month-totals">
       <div class="month-total month-total--expense">
         <span class="month-total__label">Spend</span>
@@ -31,8 +30,8 @@
         <strong>{{ monthSummary.activeDays }}</strong>
       </div>
     </div>
+    @if (undatedEstimateTotal || cashflowSummary?.income_overlap_adjustment) {
     <p class="month-income-note">
-      Calendar dates show recorded deposits, configured paycheck dates, dated compensation, and stock-sale proceeds. Day net shows these source amounts before the monthly aggregate overlap adjustment.
       @if (undatedEstimateTotal) {
         Undated job estimates: {{ undatedEstimateTotal < 0 ? '−$' : '$' }}{{ (undatedEstimateTotal < 0 ? -undatedEstimateTotal : undatedEstimateTotal) | number: '1.2-2' }}.
       }
@@ -41,6 +40,7 @@
         {{ cashflowSummary!.income_overlap_adjustment < 0 ? '−' : '+' }}${{ (cashflowSummary!.income_overlap_adjustment < 0 ? -cashflowSummary!.income_overlap_adjustment : cashflowSummary!.income_overlap_adjustment) | number: '1.2-2' }}; it is not assigned to a specific date.
       }
     </p>
+    }
     @if (cashflowSummary; as summary) {
       <details class="calendar-income-sources">
         <summary>Income sources contributing to this month</summary>

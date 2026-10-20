@@ -21,4 +21,6 @@ export interface LoginResponse {
 export interface MeResponse {
   user: AuthUser;
   csrf_token?: string | null;
+  /** Present only when the API served this session through the local dev bypass. */
+  local_dev?: boolean;
 }

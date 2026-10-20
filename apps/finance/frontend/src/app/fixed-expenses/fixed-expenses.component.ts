@@ -30,6 +30,7 @@ import {
   UiSelectOption,
   UiDialogComponent,
 } from '@vivek/ui';
+import { InfoTipComponent } from '../shared/info-tip.component';
 
 @Component({
   selector: 'app-fixed-expenses',
@@ -46,6 +47,7 @@ import {
     UiSelectComponent,
     UiBadgeComponent,
     UiDialogComponent,
+    InfoTipComponent,
   ],
   templateUrl: './fixed-expenses.component.html',
   styleUrl: './fixed-expenses.component.css',

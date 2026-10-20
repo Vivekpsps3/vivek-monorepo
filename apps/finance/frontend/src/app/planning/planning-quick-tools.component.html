@@ -1,6 +1,5 @@
 @if (activeTool === 'retirement-target') {
   <ui-card [title]="'Retirement target'" class="tool-card-wide">
-    <p class="mc-help">A quick estimate based on your selected spending, withdrawal rate, portfolio, and current annual cashflow.</p>
     <div class="tool-form-grid">
       <label class="mc-field">
         <span>Withdrawal rate (%)</span>
@@ -38,7 +37,7 @@
 }
 @if (activeTool === 'savings-goal') {
   <ui-card [title]="'Savings goal'" class="tool-card-wide">
-    <p class="mc-help">Enter only money already set aside for this goal. This starts at $0 and does not assume your full net worth is available.</p>
+    <app-info-tip uiCardActions align="end" label="Already saved" text="Enter only money already set aside for this goal. It starts at $0 and does not use your full net worth." />
     <div class="tool-form-grid">
       <label class="mc-field">
         <span>Goal name</span>
@@ -79,7 +78,7 @@
 }
 @if (activeTool === 'debt-payoff') {
   <ui-card [title]="'Debt payoff'" class="tool-card-wide">
-    <p class="mc-help">This calculator starts with a $0 manual estimate. Select one liability to use its saved balance, or enter a hypothetical amount.</p>
+    <app-info-tip uiCardActions align="end" label="Debt estimate" text="Starts at $0. Select one liability to use its saved balance, or enter a hypothetical amount." />
     <div class="tool-form-grid">
       <label class="mc-field mc-field--wide">
         <span>Use a saved liability (optional)</span>

@@ -5,6 +5,7 @@ import { apiUrl } from '../../core/api-url';
 import { AuthService } from '../../auth/auth.service';
 import { AuthUser, UserRole } from '../../auth/auth.models';
 import { UiButtonComponent, UiDataTableComponent, UiInputComponent, UiPageHeaderComponent } from '@vivek/ui';
+import { InfoTipComponent } from '../../shared/info-tip.component';
 
 interface AdminMetrics {
   totals: Record<string, number>;
@@ -16,7 +17,7 @@ interface AdminMetrics {
 @Component({
   selector: 'app-admin-users',
   standalone: true,
-  imports: [FormsModule, UiButtonComponent, UiDataTableComponent, UiInputComponent, UiPageHeaderComponent],
+  imports: [FormsModule, UiButtonComponent, UiDataTableComponent, UiInputComponent, UiPageHeaderComponent, InfoTipComponent],
   templateUrl: './admin-users.component.html',
   styleUrl: './admin-users.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

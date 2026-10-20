@@ -9,6 +9,7 @@ const STATUS = {
   book: { want: "Want to Read", anticipating: "Anticipating", in_progress: "Currently Reading", completed: "Finished", paused: "Paused", dropped: "Dropped" },
   track: { want: "Want to Listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Finished", paused: "Paused", dropped: "Dropped" },
   album: { want: "Want to Listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Finished", paused: "Paused", dropped: "Dropped" },
+  artist: { want: "Following", anticipating: "Anticipating", in_progress: "Listening", completed: "Finished", paused: "Paused", dropped: "Dropped" },
   game: { want: "Want to Play", anticipating: "Anticipating", in_progress: "Currently Playing", completed: "Finished", paused: "Paused", dropped: "Dropped" },
 };
 
@@ -18,6 +19,7 @@ const EXPERIENCE = {
   book: [["read", "Read"], ["reread", "Reread"]],
   track: [["listen", "Listened"]],
   album: [["listen", "Listened"]],
+  artist: [["listen", "Listened"]],
   game: [["play", "Played"], ["replay", "Replayed"]],
 };
 
@@ -42,7 +44,7 @@ export function safeUrl(value) {
 }
 
 export function kindLabel(kind) {
-  return { movie: "Movie", tv: "Series", book: "Book", track: "Song", album: "Album", game: "Game" }[kind] || "Media";
+  return { movie: "Movie", tv: "Series", book: "Book", track: "Song", album: "Album", artist: "Artist", game: "Game" }[kind] || "Media";
 }
 
 export function statusLabel(kind, status) {

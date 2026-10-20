@@ -32,6 +32,7 @@ import {
   UiIconComponent,
 } from '@vivek/ui';
 import { FormatCategoryPipe } from '../shared/pipes/format-category.pipe';
+import { InfoTipComponent } from '../shared/info-tip.component';
 import { portfolioDateSummary } from '../utils/portfolio.util';
 
 @Component({
@@ -49,6 +50,7 @@ import { portfolioDateSummary } from '../utils/portfolio.util';
     UiDialogComponent,
     UiIconComponent,
     FormatCategoryPipe,
+    InfoTipComponent,
   ],
   templateUrl: './assets-liabilities.component.html',
   styleUrl: './assets-liabilities.component.css',
