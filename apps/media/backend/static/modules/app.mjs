@@ -904,12 +904,12 @@ document.addEventListener("change", async event => {
   if (target instanceof HTMLInputElement && target.name === "rating") {
     const track = target.closest("[data-track-row]");
     if (track) {
-      await saveMusicScore(track, "tracks", track.dataset.track, "Song rating saved.");
+      await saveMusicScore(track, "tracks", track.dataset.track, "Song rating saved.", target);
       return;
     }
     const album = target.closest("[data-album-row]");
     if (album) {
-      await saveMusicScore(album, "albums", album.dataset.album, "Album rating saved.");
+      await saveMusicScore(album, "albums", album.dataset.album, "Album rating saved.", target);
       return;
     }
   }
@@ -937,8 +937,8 @@ document.addEventListener("change", async event => {
   }
 });
 
-async function saveMusicScore(row, kind, itemId, notice) {
-  const rating = row.querySelector('input[name="rating"]');
+async function saveMusicScore(row, kind, itemId, notice, input) {
+  const rating = input instanceof HTMLInputElement ? input : row.querySelector('input[name="rating"]');
   const path = kind === "albums"
     ? `/api/entries/${row.dataset.id}/albums/${itemId}/rating`
     : `/api/entries/${row.dataset.id}/tracks/${itemId}/rating`;

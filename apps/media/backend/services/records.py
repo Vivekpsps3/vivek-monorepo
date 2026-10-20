@@ -1,6 +1,7 @@
 """Personal library reads and writes. Metadata refreshes never touch reviews."""
 
 import json
+import time
 from datetime import date, datetime, timezone
 
 from sqlalchemy import or_
@@ -592,18 +593,51 @@ def mark_next(db: Session, user_id: int, entry: UserEntry) -> dict:
 def artist_needs_catalog(catalog: CatalogItem) -> bool:
     if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
         return False
-    extra = loads(catalog.extra, {})
-    return not (isinstance(extra, dict) and extra.get("catalog_loaded"))
+    extra = _extra(catalog)
+    return not extra.get("catalog_loaded") or bool(extra.get("catalog_partial"))
+
+
+def catalog_list_complete(catalog: CatalogItem) -> bool:
+    extra = _extra(catalog)
+    return bool(extra.get("catalog_loaded")) and not extra.get("catalog_list_partial")
+
+
+def catalog_resume(catalog: CatalogItem) -> tuple[int, int]:
+    extra = _extra(catalog)
+    return _offset(extra.get("catalog_group_offset")), _offset(extra.get("catalog_release_offset"))
+
+
+def remember_catalog_page(catalog: CatalogItem, payload: dict) -> None:
+    extra = _extra(catalog)
+    partial = bool(isinstance(payload, dict) and payload.get("partial"))
+    extra["catalog_loaded"] = True
+    extra["catalog_list_partial"] = partial
+    extra["catalog_group_offset"] = _offset(payload.get("group_offset")) if partial else 0
+    extra["catalog_release_offset"] = _offset(payload.get("release_offset")) if partial else 0
+    _save_extra(catalog, extra)
 
 
 def mark_catalog_loaded(catalog: CatalogItem, partial: bool) -> None:
-    extra = loads(catalog.extra, {})
-    if not isinstance(extra, dict):
-        extra = {}
+    extra = _extra(catalog)
     extra["catalog_loaded"] = True
     extra["catalog_partial"] = bool(partial)
+    _save_extra(catalog, extra)
+
+
+def _extra(catalog: CatalogItem) -> dict:
+    extra = loads(catalog.extra, {})
+    return extra if isinstance(extra, dict) else {}
+
+
+def _save_extra(catalog: CatalogItem, extra: dict) -> None:
     catalog.extra = dumps(extra)
     catalog.updated_at = utc_now()
+
+
+def _offset(value) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 0
+    return value if value > 0 else 0
 
 
 def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None:
@@ -634,6 +668,60 @@ def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None
             row.artwork_url = artwork[:1000]
         db.flush()
         _store_tracks(db, row, item.get("tracks"))
+    _rerank_albums(db, catalog)
+
+
+def backfill_missing_tracks(db: Session, catalog: CatalogItem, http, limit: int = 8) -> bool:
+    """Fetch songs for albums the browse left empty. Returns whether any remain.
+
+    Albums that already failed a lookup wait until every other album has been
+    tried, so one empty release group cannot block the rest of the discography.
+    """
+    from services.providers import release_group_tracks
+
+    extra = _extra(catalog)
+    failed = set(extra.get("track_lookup_failed") or [])
+    missing = _albums_without_tracks(db, catalog)
+    pending = [album for album in missing if album.source_id not in failed]
+    retry = [album for album in missing if album.source_id in failed]
+    for album in (pending or retry)[:limit]:
+        time.sleep(1.05)
+        try:
+            tracks = release_group_tracks(http, album.source_id)
+        except Exception:
+            tracks = []
+        if tracks:
+            _store_tracks(db, album, tracks)
+            failed.discard(album.source_id)
+        else:
+            failed.add(album.source_id)
+    extra = _extra(catalog)
+    extra["track_lookup_failed"] = sorted(failed)
+    _save_extra(catalog, extra)
+    return bool(_albums_without_tracks(db, catalog))
+
+
+def _albums_without_tracks(db: Session, catalog: CatalogItem) -> list[MusicAlbum]:
+    albums = (
+        db.query(MusicAlbum)
+        .filter(MusicAlbum.catalog_id == catalog.id, MusicAlbum.source_id.isnot(None))
+        .order_by(MusicAlbum.position, MusicAlbum.id)
+        .all()
+    )
+    missing = []
+    for album in albums:
+        stored = db.query(MusicTrack).filter(MusicTrack.album_id == album.id).count()
+        if stored == 0:
+            missing.append(album)
+    return missing
+
+
+def _rerank_albums(db: Session, catalog: CatalogItem) -> None:
+    albums = db.query(MusicAlbum).filter(MusicAlbum.catalog_id == catalog.id).all()
+    albums.sort(key=lambda row: ((row.year or 9999), row.title.casefold(), row.id))
+    for index, album in enumerate(albums):
+        album.position = index
+    db.flush()
 
 
 def _store_tracks(db: Session, album: MusicAlbum, tracks) -> None:

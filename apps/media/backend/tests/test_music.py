@@ -126,3 +126,65 @@ def test_follow_loads_albums_and_songs_without_scores(client, monkeypatch):
 
     again = client.get(f"/api/entries/{body['id']}").json()
     assert _scores(again) == _scores(body)
+
+
+def test_missing_songs_resume_on_the_next_view(client, monkeypatch):
+    monkeypatch.setattr("services.records.time.sleep", lambda _seconds: None)
+    lookups = []
+
+    def catalog(_http, artist_id, group_offset=0, release_offset=0):
+        assert artist_id == "artist-1"
+        assert group_offset == 0 and release_offset == 0
+        return {
+            "partial": False,
+            "albums": [
+                {
+                    "source_id": f"rg-{number}",
+                    "title": f"Album {number}",
+                    "year": 2000 + number,
+                    "artwork_url": f"https://coverartarchive.org/release-group/rg-{number}/front-250",
+                    "tracks": [],
+                }
+                for number in range(1, 11)
+            ],
+        }
+
+    def tracks(_http, group_id):
+        lookups.append(group_id)
+        return [{"source_id": f"{group_id}-song", "title": "Only Song", "position": 1}]
+
+    monkeypatch.setattr("services.providers.musicbrainz_artist_catalog", catalog)
+    monkeypatch.setattr("services.providers.release_group_tracks", tracks)
+    followed = client.post("/api/library/from-provider", json={
+        "source": "musicbrainz",
+        "source_id": "artist-1",
+        "kind": "artist",
+        "title": "Snail Mail",
+    })
+    assert followed.status_code == 200, followed.text
+    first = followed.json()["music"]
+    assert first["partial"] is True
+    assert [album["title"] for album in first["albums"] if album["tracks"]] == [f"Album {number}" for number in range(1, 9)]
+    assert len(lookups) == 8
+
+    again = client.get(f"/api/entries/{followed.json()['id']}").json()["music"]
+    assert again["partial"] is False
+    assert [album["title"] for album in again["albums"] if album["tracks"]] == [f"Album {number}" for number in range(1, 11)]
+    assert lookups == [f"rg-{number}" for number in range(1, 11)]
+
+
+def test_disc_two_keeps_its_place_in_the_song_order():
+    from services.providers import _tracks_from_release
+
+    tracks = _tracks_from_release({
+        "media": [
+            {"tracks": [
+                {"title": "One", "position": 1, "recording": {"id": "a"}},
+                {"title": "Two", "position": 2, "recording": {"id": "b"}},
+            ]},
+            {"tracks": [
+                {"title": "Three", "position": 1, "recording": {"id": "c"}},
+            ]},
+        ]
+    })
+    assert [(row["title"], row["position"]) for row in tracks] == [("One", 1), ("Two", 2), ("Three", 3)]

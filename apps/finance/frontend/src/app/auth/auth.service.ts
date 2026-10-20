@@ -40,7 +40,11 @@ export class AuthService {
       switchMap(res => {
         // Production builds set localDevAuth false, so they never take this path.
         if (!res.local_dev || !environment.localDevAuth) return of(res);
-        return from(this.vault.ensureLocalDevUnlocked()).pipe(map(() => res));
+        return from(this.vault.ensureLocalDevUnlocked()).pipe(
+          map(() => res),
+          // A vault error still leaves the local-dev session signed in.
+          catchError(() => of(res))
+        );
       }),
       tap(res => {
         this.checkedSession = true;

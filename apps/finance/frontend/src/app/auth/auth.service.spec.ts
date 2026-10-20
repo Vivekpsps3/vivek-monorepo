@@ -18,8 +18,10 @@ describe('AuthService passwordless login', () => {
       'loadAuthWrap',
       'unlock',
       'adoptBootstrapVault',
+      'ensureLocalDevUnlocked',
     ]);
     vault.unlock.and.resolveTo();
+    vault.ensureLocalDevUnlocked.and.resolveTo();
     finance = { clearSessionState: jasmine.createSpy('clearSessionState') };
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -33,7 +35,10 @@ describe('AuthService passwordless login', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    environment.localDevAuth = false;
+    http.verify();
+  });
 
   it('marks lookup wraps as an existing vault so a new browser can unlock with only the passphrase', async () => {
     const loginPromise = service.loginWithVault('vivek', 'correct horse battery staple');
@@ -99,5 +104,27 @@ describe('AuthService passwordless login', () => {
     );
     await expectAsync(session).toBeResolvedTo(null);
     expect(finance.clearSessionState).toHaveBeenCalled();
+  });
+
+  it('keeps the local-dev session when the vault unlock fails', async () => {
+    environment.localDevAuth = true;
+    vault.ensureLocalDevUnlocked.and.rejectWith(new Error('Local dev vault is unavailable'));
+    const session = service.loadSession().toPromise();
+    http.expectOne(`${api}/auth/me`).flush({
+      local_dev: true,
+      user: {
+        id: 1,
+        email: 'local-dev@localhost',
+        username: 'local-dev',
+        display_name: 'Local Dev',
+        role: 'admin',
+        is_active: true,
+        must_change_password: false,
+        created_at: '2026-10-14T00:00:00',
+        updated_at: '2026-10-14T00:00:00',
+      },
+    });
+    await expectAsync(session).toBeResolvedTo(jasmine.objectContaining({ username: 'local-dev' }));
+    expect(finance.clearSessionState).not.toHaveBeenCalled();
   });
 });

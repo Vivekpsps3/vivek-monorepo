@@ -184,19 +184,31 @@ def _load_artist_catalog(db: Session, entry) -> None:
         return
     http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
     try:
-        payload = providers.cached_call(
-            db,
-            f"musicbrainz:artist-catalog:{entry.catalog.source_id}",
-            lambda: providers.musicbrainz_artist_catalog(http, entry.catalog.source_id),
-        )
+        if not records.catalog_list_complete(entry.catalog):
+            group_offset, release_offset = records.catalog_resume(entry.catalog)
+            source_id = entry.catalog.source_id
+
+            def fetch_page():
+                if group_offset or release_offset:
+                    return providers.musicbrainz_artist_catalog(
+                        http, source_id, group_offset=group_offset, release_offset=release_offset
+                    )
+                return providers.musicbrainz_artist_catalog(http, source_id)
+
+            if group_offset or release_offset:
+                payload = fetch_page()
+            else:
+                payload = providers.cached_call(db, f"musicbrainz:artist-catalog:{source_id}", fetch_page)
+            if not isinstance(payload, dict):
+                return
+            records.store_music_catalog(db, entry.catalog, payload.get("albums") or [])
+            records.remember_catalog_page(entry.catalog, payload)
+        remaining = records.backfill_missing_tracks(db, entry.catalog, http)
+        records.mark_catalog_loaded(entry.catalog, (not records.catalog_list_complete(entry.catalog)) or remaining)
     except Exception:
         return
     finally:
         http.close()
-    if not isinstance(payload, dict):
-        return
-    records.store_music_catalog(db, entry.catalog, payload.get("albums") or [])
-    records.mark_catalog_loaded(entry.catalog, bool(payload.get("partial")))
 
 
 @router.post("/entries/{entry_id}/seasons")

@@ -38,6 +38,7 @@ export interface EncryptedRecordDto {
 @Injectable({ providedIn: 'root' })
 export class VaultService {
   private dek: CryptoKey | null = null;
+  private unlockedWrap: string | null = null;
   private statusSubject = new BehaviorSubject<VaultStatus | null>(null);
   private unlockedSubject = new BehaviorSubject<boolean>(false);
   private authWrap: WrappedSigningKey | null = null;
@@ -59,6 +60,7 @@ export class VaultService {
 
   private hold(dek: CryptoKey): void {
     this.dek = dek;
+    this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
     this.unlockedSubject.next(true);
     void persistDekLocal(dek);
   }
@@ -77,7 +79,6 @@ export class VaultService {
    */
   async ensureLocalDevUnlocked(): Promise<void> {
     await this.boot;
-    if (this.isUnlocked) return;
     const body = await firstValueFrom(
       this.http.get<{ passphrase: string }>(apiUrl('/auth/local-dev/vault'))
     );
@@ -85,7 +86,9 @@ export class VaultService {
     if (passphrase.length < 12) {
       throw new Error('Local dev vault is unavailable');
     }
-    const status = this.statusSubject.value ?? (await this.refreshStatus());
+    const status = await this.refreshStatus();
+    if (this.isUnlocked && this.unlockedWrap && this.unlockedWrap === status.wrapped_dek_b64) return;
+    this.lock();
     if (!status.exists) {
       await this.setup(passphrase);
       return;
@@ -119,6 +122,7 @@ export class VaultService {
 
   lock(): void {
     this.dek = null;
+    this.unlockedWrap = null;
     this.unlockedSubject.next(false);
     clearDekLocal();
   }

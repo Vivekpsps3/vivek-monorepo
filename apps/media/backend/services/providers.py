@@ -221,16 +221,27 @@ def musicbrainz_artists(http: httpx.Client, query: str) -> list[dict]:
     return found
 
 
-def musicbrainz_artist_catalog(http: httpx.Client, artist_id: str) -> dict:
-    """Official studio albums and the songs on them. No personal ratings."""
-    groups, groups_partial = _mb_pages(
+def musicbrainz_artist_catalog(
+    http: httpx.Client,
+    artist_id: str,
+    group_offset: int = 0,
+    release_offset: int = 0,
+) -> dict:
+    """Official studio albums and the songs on them. No personal ratings.
+
+    Offsets continue a previous page. Callers look up songs for albums that
+    arrived without a track list, a few at a time, so a long discography can
+    finish on a later view.
+    """
+    groups, groups_partial, group_next = _mb_pages(
         http,
         "https://musicbrainz.org/ws/2/release-group",
         {"artist": artist_id, "type": "album", "fmt": "json"},
         "release-groups",
         "release-group-count",
+        start_offset=group_offset,
     )
-    releases, releases_partial = _mb_pages(
+    releases, releases_partial, release_next = _mb_pages(
         http,
         "https://musicbrainz.org/ws/2/release",
         {
@@ -242,6 +253,7 @@ def musicbrainz_artist_catalog(http: httpx.Client, artist_id: str) -> dict:
         },
         "releases",
         "release-count",
+        start_offset=release_offset,
     )
     tracks_by_group: dict[str, list[dict]] = {}
     for release in releases:
@@ -272,18 +284,12 @@ def musicbrainz_artist_catalog(http: httpx.Client, artist_id: str) -> dict:
             "artwork_url": f"https://coverartarchive.org/release-group/{group['id']}/front-250",
             "tracks": list(tracks_by_group.get(group["id"]) or []),
         })
-    missing = [album for album in albums if not album["tracks"]]
-    for album in missing[:8]:
-        time.sleep(1.05)
-        try:
-            album["tracks"] = _release_group_tracks(http, album["source_id"])
-        except Exception:
-            album["tracks"] = []
-    still_missing = [album for album in albums if not album["tracks"]]
     albums.sort(key=lambda row: ((row.get("year") or 9999), str(row.get("title") or "").casefold()))
     return {
         "albums": albums,
-        "partial": bool(groups_partial or releases_partial or len(missing) > 8 or still_missing),
+        "partial": bool(groups_partial or releases_partial),
+        "group_offset": group_next if groups_partial else 0,
+        "release_offset": release_next if releases_partial else 0,
     }
 
 
@@ -297,10 +303,19 @@ def _skipped_album(group: dict) -> bool:
     return any(str(item).casefold() in SKIPPED_ALBUM_TYPES for item in secondary)
 
 
-def _mb_pages(http: httpx.Client, url: str, params: dict, key: str, count_key: str, max_pages: int = 4):
+def _mb_pages(
+    http: httpx.Client,
+    url: str,
+    params: dict,
+    key: str,
+    count_key: str,
+    max_pages: int = 4,
+    start_offset: int = 0,
+):
     found = []
-    offset = 0
+    offset = start_offset if isinstance(start_offset, int) and start_offset > 0 else 0
     total = None
+    partial = False
     for page in range(max_pages):
         if page:
             time.sleep(1.05)
@@ -310,15 +325,18 @@ def _mb_pages(http: httpx.Client, url: str, params: dict, key: str, count_key: s
         if not isinstance(body, dict):
             break
         chunk = body.get(key) or []
-        if not isinstance(chunk, list):
+        if not isinstance(chunk, list) or not chunk:
             break
         found.extend(chunk)
         total = body.get(count_key)
+        if isinstance(total, str) and total.isdigit():
+            total = int(total)
         offset += len(chunk)
-        if not chunk or len(chunk) < 100 or (isinstance(total, int) and offset >= total):
+        if len(chunk) < 100 or (isinstance(total, int) and offset >= total):
             break
-    partial = isinstance(total, int) and offset < total
-    return found, partial
+    else:
+        partial = not (isinstance(total, int) and offset >= total)
+    return found, partial, offset if partial else 0
 
 
 def _tracks_from_release(release: dict) -> list[dict]:
@@ -339,9 +357,16 @@ def _tracks_from_release(release: dict) -> list[dict]:
                 continue
             if isinstance(source_id, str):
                 seen.add(source_id)
-            position = track.get("position") if isinstance(track.get("position"), int) else len(tracks) + 1
-            tracks.append({"title": title.strip(), "position": position, "source_id": source_id if isinstance(source_id, str) else None})
+            tracks.append({
+                "title": title.strip(),
+                "position": len(tracks) + 1,
+                "source_id": source_id if isinstance(source_id, str) else None,
+            })
     return tracks
+
+
+def release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
+    return _release_group_tracks(http, group_id)
 
 
 def _release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:

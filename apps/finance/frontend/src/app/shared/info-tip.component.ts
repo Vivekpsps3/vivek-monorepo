@@ -16,7 +16,8 @@ let nextInfoTipId = 0;
       class="info-tip__btn"
       [attr.aria-label]="label()"
       [attr.aria-describedby]="tipId"
-      (click)="$event.stopPropagation()"
+      (pointerdown)="$event.stopPropagation()"
+      (click)="$event.preventDefault(); $event.stopPropagation()"
       (keydown.escape)="$any($event.target).blur()">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="8" />
