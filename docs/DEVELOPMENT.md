@@ -23,12 +23,10 @@ make dev       # Finance API + UI + Media, with local login skipped
 | http://127.0.0.1:8000/docs | OpenAPI / Swagger |
 | http://127.0.0.1:8000/api/health | Health check |
 
-`make dev` sets `LOCAL_DEV_AUTH=1` for the Finance API process. On loopback that
+`make dev` sets `LOCAL_DEV_AUTH=1` for the Finance API process and starts Travel and Media behind the Finance dev server, so http://127.0.0.1:4200/hub, `/travel/`, and `/media/` share one session. On loopback that
 signs the browser in as the deterministic user `local-dev`
 (`local-dev@localhost`, display name Local Dev, admin on this machine only) and
-the development UI unlocks that user's vault. Media reads the same finance
-session, so http://127.0.0.1:8091/ opens without `/auth/login`. Travel is still
-`make travel-dev` and is not started by `make dev`.
+the development UI unlocks that user's vault. Hub, Travel, and Media all read that finance session, so none of them send you to the login screen.
 
 The repo `.env` is the Docker file (`DATABASE_URL` under `/data`,
 `SESSION_COOKIE_SECURE=1`). `make dev` does not use that database. It uses

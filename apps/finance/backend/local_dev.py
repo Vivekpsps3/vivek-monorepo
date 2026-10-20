@@ -134,6 +134,9 @@ def ensure_local_dev_user(db: Session) -> User:
         if existing.display_name != LOCAL_DEV_DISPLAY_NAME:
             existing.display_name = LOCAL_DEV_DISPLAY_NAME
             changed = True
+        if existing.role != UserRole.admin:
+            existing.role = UserRole.admin
+            changed = True
         if changed:
             db.commit()
             db.refresh(existing)

@@ -365,6 +365,47 @@ def _tracks_from_release(release: dict) -> list[dict]:
     return tracks
 
 
+def musicbrainz_collaborators(http: httpx.Client, artist_id: str) -> list[dict]:
+    """People and groups linked to this artist. Cached by the journal, not scored."""
+    response = http.get(
+        f"https://musicbrainz.org/ws/2/artist/{artist_id}",
+        params={"inc": "artist-rels", "fmt": "json"},
+    )
+    response.raise_for_status()
+    body = response.json()
+    found = []
+    seen = set()
+    allowed = {
+        "collaboration",
+        "member of band",
+        "supporting musician",
+        "vocal supporting musician",
+        "instrumental supporting musician",
+        "tribute to",
+        "is person",
+    }
+    for rel in body.get("relations") or []:
+        if not isinstance(rel, dict):
+            continue
+        kind = str(rel.get("type") or "").casefold()
+        if kind not in allowed:
+            continue
+        artist = rel.get("artist") if isinstance(rel.get("artist"), dict) else None
+        if not artist:
+            continue
+        name = artist.get("name")
+        source_id = artist.get("id")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        if not isinstance(source_id, str) or source_id in seen or source_id == artist_id:
+            continue
+        seen.add(source_id)
+        found.append({"source_id": source_id, "name": name.strip(), "relation": kind})
+        if len(found) >= 16:
+            break
+    return found
+
+
 def release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
     return _release_group_tracks(http, group_id)
 

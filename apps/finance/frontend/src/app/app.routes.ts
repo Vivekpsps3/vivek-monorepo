@@ -48,6 +48,17 @@ export const routes: Routes = [
     loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent),
   },
   {
+    path: 'admin',
+    title: 'Admin',
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () => import('./admin/suite-admin.component').then(m => m.SuiteAdminComponent),
+  },
+  {
+    path: 'admin/users',
+    redirectTo: 'admin',
+    pathMatch: 'full',
+  },
+  {
     path: 'embed',
     title: 'Net worth · Finance',
     canActivate: [authGuard, vaultGuard],
@@ -95,13 +106,6 @@ export const routes: Routes = [
       { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/planning?t=growth' },
       { path: 'stock-lab', pathMatch: 'full', redirectTo: () => '/planning?t=stocks' },
       { path: 'charts', pathMatch: 'full', redirectTo: '' },
-      {
-        path: 'admin/users',
-        title: 'Users · Finance',
-        canActivate: [adminGuard],
-        loadComponent: () =>
-          import('./admin/users/admin-users.component').then(m => m.AdminUsersComponent),
-      },
       {
         path: '**',
         title: 'Page not found · Finance',

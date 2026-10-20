@@ -292,7 +292,7 @@ sudo ./svc.sh start
 
 Before go-live, confirm:
 
-- First admin exists, can log in, and can open `/admin/users`.
+- First admin exists, can log in, and can open `/admin`.
 - There is no recovery-key path; lost vault passphrase means encrypted data cannot be recovered.
 - `SESSION_COOKIE_SECURE=1` on HTTPS deployments.
 - `CORS_ORIGINS` lists only your UI origin(s).

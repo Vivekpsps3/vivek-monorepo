@@ -1,0 +1,91 @@
+<a class="skip-link" href="#admin-main">Skip to content</a>
+<div class="desk">
+  <header class="desk-bar">
+    <a class="desk-mark" routerLink="/hub" aria-label="Hub">Hub</a>
+    <p class="desk-title">Admin</p>
+  </header>
+
+  <main id="admin-main">
+    @if (notice) { <p class="desk-notice" role="status">{{ notice }}</p> }
+    @if (usersError) { <p class="desk-notice is-error" role="alert">{{ usersError }}</p> }
+
+    <section class="services" aria-label="Apps">
+      @for (service of services; track service.name) {
+        <a class="service" [href]="service.href" [class.is-down]="service.status === 'down'">
+          <span class="pulse" [attr.data-state]="service.status"></span>
+          <strong>{{ service.name }}</strong>
+        </a>
+      }
+    </section>
+
+    <section class="stats" aria-label="Suite">
+      <article><b>{{ stat('users') }}</b><span>People</span></article>
+      <article><b>{{ stat('active_sessions') }}</b><span>Sessions</span></article>
+      <article><b>{{ stat('admins') }}</b><span>Admins</span></article>
+      <article><b>{{ stat('audit_events') }}</b><span>Audit</span></article>
+      <article><b>{{ metrics?.finance_rows?.['encrypted_records'] ?? 0 }}</b><span>Encrypted rows</span></article>
+      <article><b>{{ metrics?.finance_rows?.['user_vaults'] ?? 0 }}</b><span>Vaults</span></article>
+    </section>
+
+    <section aria-label="People">
+      <div class="people">
+        @if (usersLoading) {
+          <p class="quiet">Loading</p>
+        } @else {
+          @for (user of users; track user.id) {
+            <article class="person" [class.is-quiet]="!user.is_active">
+              <button
+                type="button"
+                class="presence"
+                [class.is-on]="user.is_active"
+                [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
+                [attr.aria-pressed]="user.is_active"
+                [attr.aria-label]="user.is_active ? 'Active' : 'Disabled'"
+                (click)="toggleActive(user)"></button>
+              <div class="person-name">
+                <strong>{{ user.display_name || user.username || user.email }}</strong>
+                <span>{{ user.username || user.email }}</span>
+              </div>
+              <button
+                type="button"
+                class="role"
+                [class.is-admin]="user.role === 'admin'"
+                [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
+                [attr.aria-pressed]="user.role === 'admin'"
+                aria-label="Admin"
+                (click)="toggleRole(user)"></button>
+              <span class="record-bar" [style.width.%]="recordsFor(user) ? 100 : 8" [attr.aria-label]="recordsFor(user) + ' encrypted records'"></span>
+              <div class="person-actions">
+                <button type="button" aria-label="Reset finance data" (click)="resetUser(user)">↺</button>
+                <button type="button" aria-label="Delete account" [disabled]="!canDelete(user)" (click)="deleteUser(user)">✕</button>
+              </div>
+            </article>
+          }
+        }
+        @if (inviting) {
+          <form class="person person-new" (submit)="$event.preventDefault(); createUser()">
+            <input [value]="displayName" (input)="displayName = asText($event)" aria-label="Name" placeholder="Name" autocomplete="off">
+            <input [value]="username" (input)="username = asText($event)" aria-label="Username" placeholder="Username" autocomplete="off">
+            <button type="button" class="role" [class.is-admin]="inviteRole === 'admin'" [attr.aria-pressed]="inviteRole === 'admin'" aria-label="Admin" (click)="toggleInviteRole()"></button>
+            <button class="save-invite" type="submit" aria-label="Create account">+</button>
+          </form>
+        } @else {
+          <button type="button" class="person person-add" aria-label="New account" (click)="startInvite()">+</button>
+        }
+      </div>
+      @if (inviteToken) {
+        <p class="token" aria-label="Enrollment token">{{ inviteToken }}</p>
+      }
+    </section>
+
+    <section class="tables" aria-label="Tables">
+      @for (table of metrics?.tables || []; track table.name) {
+        <div class="table-row">
+          <span>{{ table.name }}</span>
+          <span class="table-track"><span class="table-fill" [style.width]="barWidth(table.rows)"></span></span>
+          <b>{{ table.rows ?? '—' }}</b>
+        </div>
+      }
+    </section>
+  </main>
+</div>

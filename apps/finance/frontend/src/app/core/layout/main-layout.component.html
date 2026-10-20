@@ -51,9 +51,6 @@
             <button type="button" [class.on]="theme === 'light'" [attr.aria-pressed]="theme === 'light'" (click)="setTheme('light')">Light</button>
             <button type="button" [class.on]="theme === 'dark'" [attr.aria-pressed]="theme === 'dark'" (click)="setTheme('dark')">Dark</button>
           </div>
-          @if (isAdmin) {
-            <a routerLink="/admin/users">Users</a>
-          }
           <button type="button" (click)="lockVault()">Lock vault</button>
           <button type="button" (click)="logout()">Sign out</button>
           <button type="button" class="danger" [disabled]="isResettingData" (click)="clearMyData()">Clear data</button>

@@ -416,3 +416,51 @@ dialog form { display: grid; gap: var(--space-3); }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
 }
+
+.season-strip, .covers, .episode-tiles { display: flex; gap: var(--space-2); align-items: center; }
+.season-strip { overflow-x: auto; margin-bottom: var(--space-4); }
+.season-chip {
+  flex: 0 0 auto;
+  width: 2.4rem; height: 2.4rem; border-radius: 999px;
+  border: 0; background: var(--surface); color: inherit; cursor: pointer;
+}
+.season-chip.is-current { box-shadow: inset 0 0 0 2px var(--accent); }
+.season-chip.is-done { background: color-mix(in srgb, var(--text) 16%, transparent); color: var(--text-secondary); }
+.season-score { width: 3.2rem; border: 0; background: transparent; color: inherit; font: inherit; }
+.episode-tiles { flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+.episode-tiles li { position: relative; }
+.episode-tile {
+  width: 7.5rem; min-height: 5.5rem; padding: var(--space-3);
+  border: 0; border-radius: 1rem; background: var(--surface); color: inherit;
+  text-align: left; cursor: pointer;
+}
+.episode-tile span { display: block; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.episode-tile strong { display: block; font-weight: 600; }
+.episode-tile.is-watched { background: transparent; color: var(--text-tertiary); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+.episode-open {
+  position: absolute; right: 0.4rem; bottom: 0.4rem;
+  width: 0.7rem; height: 0.7rem; border-radius: 99px; background: var(--text-tertiary);
+}
+.covers { overflow-x: auto; list-style: none; margin: var(--space-4) 0; padding: 0 0 var(--space-2); }
+.cover { flex: 0 0 9rem; }
+.cover-face {
+  width: 9rem; height: 9rem; border: 0; border-radius: 0.8rem;
+  background: var(--surface) center / cover no-repeat; color: inherit; cursor: pointer;
+  display: flex; align-items: flex-end; padding: var(--space-2); text-align: left;
+}
+.cover-face span { font-size: 0.85rem; text-shadow: 0 1px 8px var(--bg); }
+.cover input[name="rating"], .cover-tracks input { width: 3rem; border: 0; background: transparent; color: inherit; }
+.cover-tracks { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
+.cover-add { display: grid; gap: var(--space-2); }
+.cover-add input, .cover-add button { border: 0; background: var(--surface); color: inherit; border-radius: 0.8rem; padding: var(--space-2); }
+.cover-add button { height: 9rem; font-size: 1.8rem; cursor: pointer; }
+.web svg { width: min(100%, 36rem); height: auto; }
+.web line { stroke: var(--border-subtle); }
+.web circle { fill: var(--accent); }
+.web text { fill: var(--text); font-size: 11px; }
+.web a { text-decoration: none; }
+.follow, .followed {
+  width: 2.2rem; height: 2.2rem; border-radius: 999px; border: 0;
+  background: var(--accent); cursor: pointer;
+}
+.followed { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-tertiary); cursor: default; }

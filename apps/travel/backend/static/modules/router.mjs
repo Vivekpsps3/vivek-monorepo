@@ -5,8 +5,9 @@ import { parseHash } from './route-parser.mjs';
 import { renderHome } from './views/home.mjs';
 import { buildCalendar } from './views/calendar.mjs';
 import { renderNewTrip } from './views/new-trip.mjs';
+import { mountComposer } from './views/composer.mjs';
 import { renderTrip, mountMap } from './views/trip.mjs';
-import { renderPto } from './views/pto.mjs';
+import { renderPto, mountPto } from './views/pto.mjs';
 import { renderSettings, renderLogin } from './views/settings.mjs';
 
 export function destroyMap() {
@@ -26,6 +27,8 @@ export function paint(html, nav) {
   const focus = root.querySelector("[data-focus]");
   if (focus) focus.scrollIntoView({ block: "start" });
   mountMap();
+  mountComposer();
+  mountPto();
 }
 export function setTitle(text) {
   document.title = text ? `${text} · Travel` : "Travel";

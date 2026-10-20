@@ -251,6 +251,41 @@ def next_episode(entry_id: int, db: Session = Depends(get_db)):
     return payload
 
 
+@router.get("/entries/{entry_id}/web")
+def entry_web(entry_id: int, db: Session = Depends(get_db)):
+    """Collaborators for an artist, or sequels and spin-offs for a movie."""
+    entry = records.owned_entry(db, require_actor().id, entry_id)
+    catalog = entry.catalog
+    if catalog.kind == "artist":
+        nodes = records.cached_collaborators(catalog)
+        if nodes is None and catalog.source == "musicbrainz" and catalog.source_id:
+            http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
+            try:
+                nodes = records.store_collaborators(catalog, providers.musicbrainz_collaborators(http, catalog.source_id))
+            except Exception:
+                nodes = records.store_collaborators(catalog, [])
+            finally:
+                http.close()
+        return {"kind": "artist", "nodes": nodes or []}
+    if catalog.kind == "movie":
+        from services.followups import Budget, follow_ups
+
+        http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
+        try:
+            rows = follow_ups(db, catalog, http, Budget(limit=2))
+        except Exception:
+            rows = []
+        finally:
+            http.close()
+        nodes = [
+            {"title": row.get("title"), "relation": row.get("relation"), "year": row.get("year")}
+            for row in rows
+            if isinstance(row, dict) and row.get("title")
+        ]
+        return {"kind": "movie", "nodes": nodes}
+    return {"kind": catalog.kind, "nodes": []}
+
+
 @router.get("/search")
 def search(q: str = Query(""), kind: str | None = None, db: Session = Depends(get_db)):
     query = clean_text(q, 120, "Search", required=True)

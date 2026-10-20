@@ -11,6 +11,9 @@
         <button type="button" [class.on]="choice === 'light'" [attr.aria-pressed]="choice === 'light'" (click)="setTheme('light')">Light</button>
         <button type="button" [class.on]="choice === 'dark'" [attr.aria-pressed]="choice === 'dark'" (click)="setTheme('dark')">Dark</button>
       </div>
+      @if (admin) {
+        <a class="hub-admin" routerLink="/admin" aria-label="Admin"></a>
+      }
       <button type="button" class="text-button" (click)="signOut()">Sign out</button>
     </div>
   </header>
@@ -18,7 +21,6 @@
   <main id="hub-main">
     <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
     <h1>{{ name }}</h1>
-    <p class="lede">Travel, the media you are keeping, and finance. Each opens on its own, and each returns here.</p>
 
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading">

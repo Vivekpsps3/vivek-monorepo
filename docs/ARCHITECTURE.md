@@ -101,7 +101,7 @@ Browser/domain proxy
 - All non-health finance APIs require a valid session. Mutating requests require `X-CSRF-Token`.
 - Optional legacy `API_KEY` / `FINANCE_API_KEY` middleware can also gate `/api/*` (except health) for non-browser clients.
 - Auth/session/audit metadata, vault wraps, encrypted records, optional blind indexes, and public market caches live in SQLite.
-- Admin UI route: `/admin/users`. Admins create invitations, disable, reset contents, delete, and manage users, and view metrics. They cannot reset a vault passphrase or recover a user's keys. The raw SQL console is disabled. Self-delete and deleting or disabling the final active admin are blocked.
+- Admin lives at `/admin`, outside Finance. Admins see app health, invitations, disable, reset contents, delete, and table sizes. They cannot reset a vault passphrase or recover a user's keys. The raw SQL console is disabled. Self-delete and deleting or disabling the final active admin are blocked.
 - Finance facts are user-scoped encrypted vault collections, not user-owned plaintext SQL tables.
 
 There is no active plaintext analytics or planning router. Monte Carlo inputs and calculations run in the browser after vault unlock; saved profiles use encrypted vault collection `planning_profiles`, and runs are ephemeral. Stock Lab market research is under `/api/market/research/*`. Retired and reserved APIs are listed in [LIFECYCLE.md](./LIFECYCLE.md).
@@ -122,7 +122,7 @@ There is no active plaintext analytics or planning router. Monte Carlo inputs an
 
 ## Frontend
 
-- Shell: `MainLayoutComponent` (five hubs: Home, What you have, Spending, Recurring, Planning; admin/user actions in the account menu); lazy feature routes in `app.routes.ts`; `authGuard` + `vaultGuard` protect the app shell; `adminGuard` for `/admin/users`.
+- Shell: `MainLayoutComponent` (five hubs: Home, What you have, Spending, Recurring, Planning); lazy feature routes in `app.routes.ts`; `authGuard` + `vaultGuard` protect the app shell. `adminGuard` protects `/admin`, which is outside the Finance shell.
 - Vault routes (auth only, outside shell): `/vault/setup`, `/vault/unlock`.
 - State: `FinanceService` / `PlanningService` use the encrypted client store after vault unlock; `VaultService` / `EncryptedStoreService`; `AuthService`.
 - Prices: manual/imported prices remain local. After authenticated entry and vault unlock, one bounded, nonblocking session refresh sends deduplicated holding and configured employer ticker symbols to `/api/market`; Portfolio retry and Stock Lab/typed lookup also disclose symbols. Shares, values, account details, and other holding fields remain encrypted. See [SECURITY_MODEL.md](./SECURITY_MODEL.md#holdings-price-privacy).

@@ -30,7 +30,7 @@ export function renderHome(home) {
         .join("")}</section>`
     : "";
   const empty = !home.in_progress.length && !home.upcoming.length
-    ? `<section class="empty"><h2>No upcoming trips</h2><p class="lede">Add dates first. Flights and day plans can come later.</p><p class="row-actions"><a class="btn btn-primary" href="#/trips/new">New trip</a></p></section>`
+    ? `<section class="empty"><a class="composer-open" href="#/trips/new" aria-label="New trip"></a></section>`
     : "";
   return `${banner()}${head("Upcoming", "Trips, travel details, and day plans.") }<section class="metrics">${metricHtml}</section>${attention}${empty}${blocks}${past}`;
 }

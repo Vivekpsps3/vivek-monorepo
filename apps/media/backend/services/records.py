@@ -590,6 +590,34 @@ def mark_next(db: Session, user_id: int, entry: UserEntry) -> dict:
     return episode_state(db, user_id, entry.catalog)
 
 
+def needs_collaborators(catalog: CatalogItem) -> bool:
+    if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
+        return False
+    return "collaborators" not in _extra(catalog)
+
+
+def store_collaborators(catalog: CatalogItem, rows) -> list[dict]:
+    clean = []
+    for row in rows or []:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+            continue
+        clean.append({
+            "source_id": row.get("source_id") if isinstance(row.get("source_id"), str) else None,
+            "name": row["name"][:200],
+            "relation": str(row.get("relation") or "collaboration")[:40],
+        })
+    extra = _extra(catalog)
+    extra["collaborators"] = clean[:16]
+    _save_extra(catalog, extra)
+    return extra["collaborators"]
+
+
+def cached_collaborators(catalog: CatalogItem):
+    extra = _extra(catalog)
+    rows = extra.get("collaborators") if "collaborators" in extra else None
+    return rows if isinstance(rows, list) else None
+
+
 def artist_needs_catalog(catalog: CatalogItem) -> bool:
     if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
         return False

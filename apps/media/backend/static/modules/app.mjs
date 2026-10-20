@@ -133,13 +133,11 @@ async function viewCalendar(params) {
   const agenda = agendaDays.length
     ? `<ul class="calendar-agenda">${agendaDays.map(day => `<li><time datetime="${esc(day.date)}">${esc(dayLabel(day.date))}</time><div class="cal-events">${(day.events || []).map(event => eventChip(event, false)).join("")}</div></li>`).join("")}</ul>`
     : `<ul class="calendar-agenda"><li><p class="quiet">Nothing on a specific day this month.</p></li></ul>`;
-  const empty = !agendaDays.length && !(data.month_band || []).length && !(data.year_band || []).length && !(data.unknown || []).length;
   app.innerHTML = `
     <section class="hero">
       <div>
         <p class="eyebrow">Calendar</p>
         <h1>${esc(label)}</h1>
-        <p class="lede">Episodes from series you added, movies you are anticipating, and sequels or spin-offs of movies you watched.</p>
       </div>
       <div class="hero-actions">
         <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, -1))}">Previous</a>
@@ -158,8 +156,6 @@ async function viewCalendar(params) {
     ${band(`Sometime in ${label}`, data.month_band)}
     ${band(`Sometime in ${year || "this year"}`, data.year_band)}
     ${band("Date not set", data.unknown)}
-    ${empty ? `<p class="quiet">Nothing lands in this month yet. Add a series, mark a movie as anticipating, or log a movie you watched so its sequels and spin-offs can show up.</p>` : ""}
-    <p class="footnote">Episode dates refresh for series saved from TVMaze or TMDB. Sequels and spin-offs come from Wikidata, or from a TMDB collection when a key is set. A movie you have not watched is left out of that lookup. Nothing here is added to your library automatically.</p>
   `;
 }
 
@@ -317,7 +313,7 @@ function renderResults(payload) {
         <h2>${esc(item.title)}</h2>
         <p class="meta">${esc([kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · "))}</p>
         ${item.overview ? `<p class="clamp">${esc(item.overview)}</p>` : ""}
-        ${item.already_saved ? `<p class="meta">Already in your library</p>` : `<button class="btn btn-primary" type="button" data-action="open-quick" data-index="${index}">${item.kind === "artist" ? "Follow" : "Add"}</button>`}
+        ${item.already_saved ? `<span class="followed" aria-label="In your library"></span>` : `<button class="follow" type="button" data-action="${item.kind === "artist" ? "follow" : "open-quick"}" data-index="${index}" aria-label="${item.kind === "artist" ? "Follow" : "Add"}"></button>`}
       </div>
     </article>`).join("");
   return `${providerLine(payload.providers)}<div class="results">${rows}</div>`;
@@ -417,6 +413,7 @@ async function viewItem(id, forcedSeason = null) {
         ${externalRatings(entry.catalog.external_ratings)}
         ${releaseLine(entry.releases)}
         ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
+        ${entry.kind === "movie" ? `<div class="web" data-web="${entry.id}" hidden></div>` : ""}
         <form class="stack" data-action="save-entry" data-id="${entry.id}">
           <p class="eyebrow">Overall opinion</p>
           <label>Status <select name="status">${options(statusOptions(entry.kind), entry.status)}</select></label>
@@ -440,6 +437,7 @@ async function viewItem(id, forcedSeason = null) {
       </div>
     </article>
   `;
+  loadWeb(entry);
 }
 
 function progressUnits(kind) {
@@ -490,57 +488,25 @@ function experienceBlock(entry) {
 function showEpisodes(entry, seasonNumber) {
   const show = entry.show || { episodes: [], seasons: [] };
   const seasons = show.seasons || [];
-  const season = seasons.find(item => item.season_number === seasonNumber) || null;
   const episodes = (show.episodes || [])
     .filter(episode => seasonNumber == null || episode.season_number === seasonNumber)
     .sort((a, b) => a.episode_number - b.episode_number || a.id - b.id);
-  const seasonOptions = seasons.map(item => {
-    const selected = item.season_number === seasonNumber ? " selected" : "";
-    return `<option value="${item.season_number}"${selected}>${esc(seasonLabel(item.season_number))}</option>`;
+  const chips = seasons.map(item => {
+    const current = item.season_number === seasonNumber ? " is-current" : "";
+    const done = item.watched ? " is-done" : "";
+    return `<button type="button" class="season-chip${current}${done}" data-season-jump data-id="${entry.id}" data-season="${item.season_number}" data-current="${seasonNumber ?? ""}" aria-pressed="${item.watched ? "true" : "false"}" aria-label="Season ${item.season_number}">${item.season_number}</button>`;
   }).join("");
-  const control = seasons.length
-    ? `<label class="season-control">Season <select id="season-control" data-id="${entry.id}">${seasonOptions}</select></label>`
+  const rating = seasons.find(item => item.season_number === seasonNumber);
+  const score = rating
+    ? `<input class="season-score" name="rating" data-season-row data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${rating.watched ? "true" : "false"}" type="number" min="0" max="10" step="0.5" inputmode="decimal" value="${rating.rating ?? ""}" aria-label="Season score">`
     : "";
-  const rating = season
-    ? `<div class="season-controls" data-season-row data-id="${entry.id}" data-season="${season.season_number}">
-        <label class="check"><input name="watched" type="checkbox"${season.watched ? " checked" : ""} aria-label="Watched ${esc(seasonLabel(season.season_number))}"> Watched</label>
-        <label class="season-rating">Rating
-          <input name="rating" type="number" min="0" max="10" step="0.5" inputmode="decimal" value="${season.rating ?? ""}" placeholder="Unrated" aria-label="Rating for ${esc(seasonLabel(season.season_number))}">
-        </label>
-      </div>`
-    : "";
-  const rows = episodes.map(episode => {
+  const tiles = episodes.map(episode => {
     const label = episodePlace(episode);
-    const state = episode.watched ? "Watched" : "Unwatched";
-    return `<li class="episode-row${episode.watched ? " is-watched" : ""}">
-      <span class="episode-index">${esc(episode.episode_number)}</span>
-      <span class="episode-copy">
-        <span class="episode-name">${esc(episode.title || `Episode ${episode.episode_number}`)}</span>
-        <span class="episode-state">${state}</span>
-      </span>
-      <input class="episode-toggle" type="checkbox"${episode.watched ? " checked" : ""} data-episode-toggle data-id="${entry.id}" data-episode="${episode.id}" aria-label="Watched, ${esc(label)}">
-      <a class="episode-open" href="#/item/${entry.id}/episode/${episode.id}" aria-label="View ${esc(label)}">View</a>
-    </li>`;
+    return `<li><button type="button" class="episode-tile${episode.watched ? " is-watched" : ""}" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}" aria-label="${esc(label)}"><span>${esc(episode.episode_number)}</span><strong>${esc(episode.title || label)}</strong></button><a class="episode-open" href="#/item/${entry.id}/episode/${episode.id}" aria-label="Open ${esc(label)}"></a></li>`;
   }).join("");
-  const watchedHere = episodes.filter(episode => episode.watched).length;
   return `<section class="episodes-section">
-    <h2>Episodes</h2>
-    <div class="episode-toolbar">${control}${rating}</div>
-    ${episodes.length ? `<p class="meta">${watchedHere} of ${episodes.length} watched</p>` : ""}
-    <ol class="episodes">${rows || `<li class="episode-row"><span>No episodes yet.</span></li>`}</ol>
-    <form class="stack" data-action="add-episode" data-id="${entry.id}">
-      <label>Season <input name="season_number" inputmode="numeric" value="${seasonNumber ?? 1}" required></label>
-      <label>Episode <input name="episode_number" inputmode="numeric" required></label>
-      <label>Title <input name="title"></label>
-      <label>Air date <input name="air_date" type="date"></label>
-      <button class="btn" type="submit">Add episode</button>
-    </form>
-    <form class="stack season-add" data-action="add-season" data-id="${entry.id}">
-      <label>Season number <input name="season_number" inputmode="numeric" required></label>
-      <label class="check"><input name="watched" type="checkbox" checked> Watched</label>
-      <label class="season-rating">Rating <input name="rating" type="number" min="0" max="10" step="0.5" inputmode="decimal" placeholder="Unrated"></label>
-      <button class="btn" type="submit">Add season</button>
-    </form>
+    <div class="season-strip">${chips}${score}</div>
+    <ol class="episode-tiles">${tiles}</ol>
   </section>`;
 }
 
@@ -564,47 +530,55 @@ async function viewEpisode(entryId, episodeId) {
 
 function musicBlock(entry) {
   const music = entry.music || { albums: [], partial: false };
-  const albums = music.albums.map(album => {
-    const songs = (album.tracks || []).map(track => `
-      <li class="season-row" data-track-row data-id="${entry.id}" data-track="${track.id}">
-        <div class="season-main">
-          <span class="season-name">${esc(track.title)}</span>
-        </div>
-        <label class="season-rating">Rating
-          <input name="rating" type="number" min="0" max="10" step="0.5" inputmode="decimal" value="${track.rating ?? ""}" placeholder="Unrated" aria-label="Rating for ${esc(track.title)}">
-        </label>
-      </li>`).join("");
-    const count = (album.tracks || []).length;
-    const songLabel = count === 1 ? "1 song" : `${count} songs`;
-    return `
-      <li class="album-block" data-album-row data-id="${entry.id}" data-album="${album.id}">
-        <div class="season-row">
-          <div class="season-main">
-            <span class="season-name">${esc(album.title)}</span>
-            <span class="meta">${esc([album.year, songLabel].filter(Boolean).join(" · "))}</span>
-          </div>
-          <label class="season-rating">Rating
-            <input name="rating" type="number" min="0" max="10" step="0.5" inputmode="decimal" value="${album.rating ?? ""}" placeholder="Unrated" aria-label="Rating for ${esc(album.title)}">
-          </label>
-        </div>
-        <ul class="plain album-tracks">${songs || `<li><span>No songs stored.</span></li>`}</ul>
-        <form class="stack" data-action="add-track" data-id="${entry.id}" data-album="${album.id}">
-          <label>Song <input name="title" required></label>
-          <button class="btn" type="submit">Add song</button>
-        </form>
-      </li>`;
-  }).join("");
+  const albums = music.albums.map(album => `
+    <li class="cover" data-album-row data-id="${entry.id}" data-album="${album.id}">
+      <button type="button" class="cover-face" data-album-open style="${album.artwork_url ? `background-image:url(${esc(album.artwork_url)})` : ""}" aria-label="${esc(album.title)}">
+        <span>${esc(album.title)}</span>
+      </button>
+      <input name="rating" type="number" min="0" max="10" step="0.5" inputmode="decimal" value="${album.rating ?? ""}" aria-label="${esc(album.title)} score">
+      <ol class="cover-tracks" hidden>
+        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><span>${esc(track.title)}</span><input name="rating" type="number" min="0" max="10" step="0.5" inputmode="decimal" value="${track.rating ?? ""}" aria-label="${esc(track.title)} score"></li>`).join("")}
+      </ol>
+    </li>`).join("");
   return `
-    <section>
-      <h2>Albums</h2>
-      ${music.partial ? `<p class="quiet">Some songs could not be loaded.</p>` : ""}
-      <ul class="plain">${albums || `<li><span>No albums yet.</span></li>`}</ul>
-      <form class="stack" data-action="add-album" data-id="${entry.id}">
-        <label>Album <input name="title" required></label>
-        <label>Year <input name="year" inputmode="numeric"></label>
-        <button class="btn" type="submit">Add album</button>
+    <section class="discog">
+      <div class="web" data-web="${entry.id}" hidden></div>
+      <ul class="covers">${albums}</ul>
+      <form class="cover cover-add" data-action="add-album" data-id="${entry.id}">
+        <input name="title" aria-label="Album" placeholder="Album" required>
+        <input name="year" aria-label="Year" inputmode="numeric" placeholder="Year">
+        <button type="submit" aria-label="Add album">+</button>
       </form>
     </section>`;
+}
+
+function paintWeb(center, nodes) {
+  const box = document.querySelector("[data-web]");
+  if (!box || !nodes.length) return;
+  const count = Math.min(nodes.length, 12);
+  const cx = 160;
+  const cy = 118;
+  const radius = 92;
+  const marks = nodes.slice(0, count).map((node, index) => {
+    const angle = (-Math.PI / 2) + (index / count) * Math.PI * 2;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    const label = String(node.name || node.title || "").slice(0, 18);
+    const query = encodeURIComponent(node.name || node.title || "");
+    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"></line><a href="#/search?q=${query}"><text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${esc(label)}</text></a>`;
+  }).join("");
+  box.hidden = false;
+  box.innerHTML = `<svg viewBox="0 0 320 240" role="img" aria-label="Connections"><g>${marks}</g><circle cx="${cx}" cy="${cy}" r="26"></circle><text x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(String(center).slice(0, 16))}</text></svg>`;
+}
+
+async function loadWeb(entry) {
+  if (entry.kind !== "artist" && entry.kind !== "movie") return;
+  try {
+    const web = await api(`/api/entries/${entry.id}/web`);
+    const current = route();
+    if (current.name !== "item" || current.id !== entry.id) return;
+    paintWeb(entry.title, web.nodes || []);
+  } catch { /* the title still stands on its own */ }
 }
 
 function releaseForm(entry) {
@@ -690,11 +664,62 @@ document.addEventListener("click", async event => {
     setTheme(theme.dataset.themeValue);
     return;
   }
+  const tile = event.target.closest("[data-episode-tile]");
+  if (tile) {
+    try {
+      const watched = tile.getAttribute("aria-pressed") !== "true";
+      await api(`/api/entries/${tile.dataset.id}/episodes/${tile.dataset.episode}/watched`, {
+        method: "POST",
+        body: JSON.stringify({ watched }),
+      });
+      await render();
+    } catch (error) {
+      fail(error);
+    }
+    return;
+  }
+  const season = event.target.closest("[data-season-jump]");
+  if (season) {
+    if (String(season.dataset.season) !== String(season.dataset.current)) {
+      location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
+      return;
+    }
+    try {
+      const score = document.querySelector(`.season-score[data-season="${season.dataset.season}"]`);
+      await api(`/api/entries/${season.dataset.id}/seasons`, {
+        method: "POST",
+        body: JSON.stringify({
+          season_number: Number(season.dataset.season),
+          watched: season.getAttribute("aria-pressed") !== "true",
+          rating: score && score.value !== "" ? score.value : null,
+        }),
+      });
+      await render();
+    } catch (error) {
+      fail(error);
+    }
+    return;
+  }
+  const cover = event.target.closest("[data-album-open]");
+  if (cover) {
+    const tracks = cover.parentElement?.querySelector(".cover-tracks");
+    if (tracks) tracks.hidden = !tracks.hidden;
+    return;
+  }
   const button = event.target.closest("[data-action]");
   if (!button) return;
   const action = button.dataset.action;
   try {
     if (action === "open-quick") openQuick(Number(button.dataset.index));
+    if (action === "follow") {
+      const item = searchResults[Number(button.dataset.index)];
+      if (!item) return;
+      const created = await api("/api/library/from-provider", {
+        method: "POST",
+        body: JSON.stringify({ ...item, status: "want" }),
+      });
+      location.hash = `#/item/${created.id}`;
+    }
     if (action === "close-quick") document.querySelector("#quick-add")?.close();
     if (action === "delete-experience") {
       await api(`/api/entries/${button.dataset.id}/experiences/${button.dataset.experience}`, { method: "DELETE" });
@@ -884,23 +909,6 @@ document.addEventListener("input", event => {
 document.addEventListener("change", async event => {
   const target = event.target;
   if (target instanceof HTMLSelectElement && target.id === "search-kind") runSearch();
-  if (target instanceof HTMLSelectElement && target.id === "season-control") {
-    location.hash = `#/item/${target.dataset.id}?season=${target.value}`;
-    return;
-  }
-  if (target instanceof HTMLInputElement && target.hasAttribute("data-episode-toggle")) {
-    try {
-      await api(`/api/entries/${target.dataset.id}/episodes/${target.dataset.episode}/watched`, {
-        method: "POST",
-        body: JSON.stringify({ watched: target.checked }),
-      });
-      setNotice("Episode progress saved.");
-      await render();
-    } catch (error) {
-      fail(error);
-    }
-    return;
-  }
   if (target instanceof HTMLInputElement && target.name === "rating") {
     const track = target.closest("[data-track-row]");
     if (track) {
@@ -913,24 +921,17 @@ document.addEventListener("change", async event => {
       return;
     }
   }
-  const row = target instanceof Element ? target.closest("[data-season-row]") : null;
-  if (!row || !(target instanceof HTMLInputElement)) return;
-  const rating = row.querySelector('input[name="rating"]');
-  const watched = row.querySelector('input[name="watched"]');
+  const row = target instanceof HTMLInputElement ? target.closest("[data-season-row]") : null;
+  if (!row) return;
   try {
-    const saved = await api(`/api/entries/${row.dataset.id}/seasons`, {
+    await api(`/api/entries/${row.dataset.id}/seasons`, {
       method: "POST",
       body: JSON.stringify({
         season_number: Number(row.dataset.season),
-        watched: Boolean(watched?.checked),
-        rating: rating && rating.value !== "" ? rating.value : null,
+        watched: row.dataset.watched === "true",
+        rating: row.value !== "" ? row.value : null,
       }),
     });
-    const number = Number(row.dataset.season);
-    const still = (saved.show?.seasons || []).some(item => item.season_number === number);
-    setNotice(still
-      ? "Season saved. The overall review was left as it is."
-      : "Season cleared. The overall review was left as it is.");
     await render();
   } catch (error) {
     fail(error);

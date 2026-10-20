@@ -36,7 +36,7 @@ help:
 	@echo "Finance Tracker"
 	@echo ""
 	@echo "  make install          Install Finance, Travel, site backend + frontend dependencies"
-	@echo "  make dev              Finance API + UI + Media. LOCAL_DEV_AUTH=1 skips local login."
+	@echo "  make dev              Finance API + UI + Travel + Media. LOCAL_DEV_AUTH=1 skips local login."
 	@echo "  make backend          API only  → http://$(API_HOST):$(API_PORT)"
 	@echo "  make frontend         UI only   → http://localhost:$(WEB_PORT) (proxy → API)"
 	@echo "  make test             Backend + frontend unit tests"
@@ -92,11 +92,12 @@ install-frontend:
 # The repo .env is the Docker/production file (Secure cookies, DATABASE_URL under /data).
 # This target pins a local http session and the backend finance.db unless overridden.
 dev:
-	@echo "Starting Finance API (:$(API_PORT)), Finance UI (:$(WEB_PORT)), and Media (:$(MEDIA_PORT))…"
+	@echo "Starting Finance API (:$(API_PORT)), Finance UI (:$(WEB_PORT)), Travel (:$(TRAVEL_PORT)), and Media (:$(MEDIA_PORT))…"
 	@echo "LOCAL_DEV_AUTH=$(if $(LOCAL_DEV_AUTH),$(LOCAL_DEV_AUTH),1)"
 	@echo "Hub:     http://127.0.0.1:$(WEB_PORT)/hub"
 	@echo "Finance: http://127.0.0.1:$(WEB_PORT)/"
-	@echo "Media:   http://127.0.0.1:$(MEDIA_PORT)/"
+	@echo "Travel:  http://127.0.0.1:$(WEB_PORT)/travel/"
+	@echo "Media:   http://127.0.0.1:$(WEB_PORT)/media/"
 	@echo "API:     http://127.0.0.1:$(API_PORT)/docs"
 	@echo "(Restart required after proxy.conf.js changes.)"
 	@trap 'kill 0' EXIT INT TERM; \
@@ -109,7 +110,11 @@ dev:
 	MEDIA_PROXY_TARGET="http://127.0.0.1:$(MEDIA_PORT)" \
 	$(MAKE) frontend & \
 	FINANCE_API_URL="http://127.0.0.1:$(API_PORT)" \
+	MEDIA_MOUNT_PATH=/media \
 	$(MAKE) media-dev & \
+	FINANCE_API_URL="http://127.0.0.1:$(API_PORT)" \
+	TRAVEL_MOUNT_PATH=/travel \
+	$(MAKE) travel-dev & \
 	wait
 
 backend:

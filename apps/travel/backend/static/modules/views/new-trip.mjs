@@ -1,4 +1,4 @@
-import { state, ROLES, MODES, KINDS, ARRANGEMENTS, NECESSARY, STATUSES } from '../state.mjs';
+import { ROLES, MODES, KINDS, ARRANGEMENTS, NECESSARY } from '../state.mjs';
 import { esc, banner, head, field, area, select, check, actions, labelOf, transportSummary, localInput } from '../helpers.mjs';
 
 export function cityFields() {
@@ -26,24 +26,7 @@ export function legFields(role) {
   </div></fieldset>`;
 }
 export function renderNewTrip() {
-  return `${banner()}${head("New trip", "One trip is the stretch from the day you leave until the day you get back. Add a city for each place you stay, including more than one city.")}
-    <form class="stack" data-form="create-trip">
-      <div class="form-grid">
-        ${field("Trip name", "title", "", "text", true)}
-        ${field("Day you leave", "start_date", "", "date")}
-        ${field("Day you come back", "end_date", "", "date")}
-        ${field("Leaving from", "origin_label", "")}
-        ${select("Status", "status", "planning", STATUSES)}
-        ${check("Count weekdays in this trip as PTO", "counts_as_pto", true)}
-        ${field("PTO days, if you want to override the weekday count", "pto_days", "", "text", true)}
-        ${area("Notes", "notes", "")}
-      </div>
-      <section class="card"><div class="card-head"><h2>Cities</h2><button class="btn btn-secondary btn-sm" type="button" data-action="add-city">Add city</button></div><div id="cities" class="stack">${cityFields()}</div><p class="meta">Leave city dates blank to use the whole trip. A second city makes this a multi-city trip.</p></section>
-      ${legFields("outbound")}
-      <section class="card"><div class="card-head"><h2>Between cities</h2><button class="btn btn-secondary btn-sm" type="button" data-action="add-connection">Add a train, drive, or flight</button></div><div id="connections" class="stack"></div></section>
-      ${legFields("inbound")}
-      <button class="btn btn-primary" type="submit">Save trip</button>
-    </form>`;
+  return `${banner()}<section id="trip-composer" aria-label="Trip dates"></section>`;
 }
 export function connectionFields() {
   return `<div class="form-grid connection-row" data-connection>

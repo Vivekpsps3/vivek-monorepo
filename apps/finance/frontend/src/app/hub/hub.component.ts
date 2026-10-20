@@ -72,6 +72,7 @@ export class HubComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   name = 'Your library of days';
+  admin = false;
   readonly today = new Date();
   choice = this.themeService.current;
   vaultLocked = !this.vault.isUnlocked;
@@ -91,6 +92,7 @@ export class HubComponent implements OnInit {
   ngOnInit(): void {
     this.auth.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
       this.name = user?.display_name || user?.username || 'Your library of days';
+      this.admin = user?.role === 'admin';
       this.cdr.markForCheck();
     });
     this.themeService.choice$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(choice => {

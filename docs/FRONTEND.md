@@ -23,7 +23,7 @@ Angular 21 standalone app under `apps/finance/frontend/src/app/`.
 | `/spending` | Activity (default; `?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?t=imports`); old Review links and legacy `?t=pay` / `?t=spend` links open Activity |
 | `/recurring` | Jobs & pay or bills & subscriptions (`?t=pay`, `?t=spend`) |
 | `/planning` | Retirement & goals (`?t=path&tool=overview|simulation|retirement-target|savings-goal|debt-payoff`), portfolio projection (`?t=growth`), and stock research (`?t=stocks`) |
-| `/admin/users` | Admin user management (admin role only) |
+| `/admin` | Suite admin: app health, people, and table sizes. Not inside Finance. |
 | `/balance-sheet`, `/portfolio` | Redirect to `/have`, with `/portfolio` opening holdings |
 | `/transactions`, `/calendar` | Redirect to `/spending`, with `/calendar` opening Calendar |
 | `/income`, `/fixed-expenses`, `/subscriptions` | Redirect to `/recurring` |
