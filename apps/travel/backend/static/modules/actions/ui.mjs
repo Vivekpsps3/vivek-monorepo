@@ -225,7 +225,8 @@ export function bindEvents(ui) {
   });
 
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target : event.target?.parentElement ?? null;
+    const node = event.target;
+    const target = node instanceof Element ? node : node?.parentElement ?? null;
     const button = target && target.closest("[data-action]");
     if (!button || button.tagName === "A") return;
     if (button.tagName === "BUTTON" && button.getAttribute("type") !== "submit") {

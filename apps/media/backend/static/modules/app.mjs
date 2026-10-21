@@ -637,6 +637,22 @@ function openQuick(index) {
   dialog.querySelector("input[name=rating]").focus();
 }
 
+function clickTarget(event) {
+  const node = event.target;
+  if (node instanceof Element) return node;
+  return node?.parentElement instanceof Element ? node.parentElement : null;
+}
+
+function setPressed(element, pressed, className) {
+  element.setAttribute("aria-pressed", String(pressed));
+  element.classList.toggle(className, pressed);
+}
+
+function keepButtonClick(event, target) {
+  const button = target.closest("button");
+  if (button && button.getAttribute("type") !== "submit") event.preventDefault();
+}
+
 async function render() {
   document.querySelectorAll("[data-nav]").forEach(link => {
     link.setAttribute("aria-current", link.dataset.nav === route().name ? "page" : "false");
@@ -663,41 +679,39 @@ async function render() {
 }
 
 document.addEventListener("click", async event => {
-  const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-  if (!(target instanceof Element)) return;
-  const pressed = target.closest("button");
-  if (pressed && pressed.getAttribute("type") !== "submit") event.preventDefault();
+  const target = clickTarget(event);
+  if (!target) return;
   const theme = target.closest("[data-theme-value]");
   if (theme) {
+    keepButtonClick(event, target);
     setTheme(theme.dataset.themeValue);
     return;
   }
   const tile = target.closest("[data-episode-tile]");
   if (tile) {
+    keepButtonClick(event, target);
     const watched = tile.getAttribute("aria-pressed") !== "true";
-    tile.setAttribute("aria-pressed", String(watched));
-    tile.classList.toggle("is-watched", watched);
+    setPressed(tile, watched, "is-watched");
     try {
       await api(`/api/entries/${tile.dataset.id}/episodes/${tile.dataset.episode}/watched`, {
         method: "POST",
         body: JSON.stringify({ watched }),
       });
     } catch (error) {
-      tile.setAttribute("aria-pressed", String(!watched));
-      tile.classList.toggle("is-watched", !watched);
+      setPressed(tile, !watched, "is-watched");
       fail(error);
     }
     return;
   }
   const season = target.closest("[data-season-jump]");
   if (season) {
+    keepButtonClick(event, target);
     if (String(season.dataset.season) !== String(season.dataset.current)) {
       location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
       return;
     }
     const watched = season.getAttribute("aria-pressed") !== "true";
-    season.setAttribute("aria-pressed", String(watched));
-    season.classList.toggle("is-done", watched);
+    setPressed(season, watched, "is-done");
     try {
       const score = document.querySelector(`.season-score[data-season="${season.dataset.season}"]`);
       await api(`/api/entries/${season.dataset.id}/seasons`, {
@@ -709,20 +723,21 @@ document.addEventListener("click", async event => {
         }),
       });
     } catch (error) {
-      season.setAttribute("aria-pressed", String(!watched));
-      season.classList.toggle("is-done", !watched);
+      setPressed(season, !watched, "is-done");
       fail(error);
     }
     return;
   }
   const cover = target.closest("[data-album-open]");
   if (cover) {
+    keepButtonClick(event, target);
     const tracks = cover.parentElement?.querySelector(".cover-tracks");
     if (tracks) tracks.hidden = !tracks.hidden;
     return;
   }
   const button = target.closest("[data-action]");
   if (!button) return;
+  keepButtonClick(event, target);
   const action = button.dataset.action;
   try {
     if (action === "open-quick") openQuick(Number(button.dataset.index));

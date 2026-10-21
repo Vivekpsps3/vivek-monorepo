@@ -28,33 +28,10 @@
 }
 .skip:focus { top: var(--space-3); }
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: var(--navbar-bg);
-  backdrop-filter: blur(var(--backdrop-blur));
-  border-bottom: 1px solid var(--border-subtle);
-}
-.topbar-inner, .shell, .footer {
-  width: min(72rem, calc(100% - 2rem));
-  margin-inline: auto;
-}
-.topbar-inner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  min-height: 64px;
-}
-.brand {
-  color: var(--text);
-  font-size: var(--text-lg);
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  text-decoration: none;
-  flex-shrink: 0;
-}
-.nav { display: flex; gap: var(--space-1); align-items: center; height: 64px; }
+.topbar { backdrop-filter: blur(var(--backdrop-blur)); }
+.topbar-inner { gap: var(--space-5); }
+.brand { font-size: var(--text-lg); }
+.nav { height: 64px; }
 .nav a {
   display: inline-flex;
   align-items: center;
@@ -74,7 +51,7 @@
   box-shadow: inset 0 -2px var(--accent);
   border-radius: 0;
 }
-.topbar-actions { margin-left: auto; display: flex; gap: var(--space-2); flex-wrap: nowrap; align-items: center; }
+.topbar-actions { flex-wrap: nowrap; }
 .topbar-actions > * { flex: 0 0 auto; white-space: nowrap; }
 .topbar-actions svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .theme-switch {
@@ -203,16 +180,6 @@
 .warn { color: var(--danger); }
 
 label { display: block; margin-bottom: var(--space-1); color: var(--text-secondary); font-size: var(--text-sm); font-weight: 500; }
-input, select, textarea {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 44px;
-  padding: var(--space-3);
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-}
-textarea { min-height: 96px; resize: vertical; }
 .check { display: flex; align-items: center; gap: var(--space-2); color: var(--text); font-weight: 500; }
 .check input { width: auto; min-height: 0; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); }

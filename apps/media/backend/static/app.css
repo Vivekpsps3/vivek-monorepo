@@ -23,42 +23,18 @@ body {
 }
 .skip:focus { top: var(--space-3); z-index: 5; }
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--navbar-bg);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.topbar-inner, .shell, .footer {
-  width: min(72rem, calc(100% - 2rem));
-  margin: 0 auto;
-}
-.topbar-inner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-height: 64px;
-}
-.brand {
-  color: var(--text);
-  font-weight: 650;
-  letter-spacing: -0.04em;
-  text-decoration: none;
-}
+.brand { letter-spacing: -0.04em; }
 .nav, .topbar-actions, .hero, .hero-actions, .filters, .dialog-actions, .plain li, .ratings {
   display: flex;
   gap: var(--space-3);
   align-items: center;
 }
 .nav { flex: 1; }
-.nav a, .footer a, .footnote a, .plain a {
+.footer a, .footnote a, .plain a {
   color: var(--text-secondary);
   text-decoration: none;
 }
-.nav a[aria-current="page"] { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
 .nav a:hover, .plain a:hover, .footnote a:hover { color: var(--accent); }
-.topbar-actions { margin-left: auto; }
 .theme-switch {
   box-sizing: border-box;
   display: grid;

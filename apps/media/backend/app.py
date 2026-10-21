@@ -20,18 +20,18 @@ STATIC_DIR = BACKEND_DIR / "static"
 REPO_ROOT = BACKEND_DIR.parents[2] if len(BACKEND_DIR.parents) > 2 else BACKEND_DIR
 
 
-def tokens_path() -> Path:
-    bundled = STATIC_DIR / "tokens.css"
+def shared_stylesheet(name: str) -> Path:
+    bundled = STATIC_DIR / name
     if bundled.is_file():
         return bundled
-    return REPO_ROOT / "packages" / "ui" / "tokens.css"
+    return REPO_ROOT / "packages" / "ui" / name
 
 
-def controls_path() -> Path:
-    bundled = STATIC_DIR / "controls.css"
-    if bundled.is_file():
-        return bundled
-    return REPO_ROOT / "packages" / "ui" / "controls.css"
+def stylesheet_response(name: str, missing: str):
+    path = shared_stylesheet(name)
+    if not path.is_file():
+        return JSONResponse(status_code=404, content={"detail": missing})
+    return FileResponse(path, media_type="text/css", headers={"Cache-Control": "no-cache"})
 
 
 def mount_path() -> str:
@@ -96,17 +96,11 @@ def create_app() -> FastAPI:
 
     @application.get("/tokens.css")
     def tokens():
-        path = tokens_path()
-        if not path.is_file():
-            return JSONResponse(status_code=404, content={"detail": "Theme tokens are missing."})
-        return FileResponse(path, media_type="text/css", headers={"Cache-Control": "no-cache"})
+        return stylesheet_response("tokens.css", "Theme tokens are missing.")
 
     @application.get("/controls.css")
     def controls():
-        path = controls_path()
-        if not path.is_file():
-            return JSONResponse(status_code=404, content={"detail": "Shared controls are missing."})
-        return FileResponse(path, media_type="text/css", headers={"Cache-Control": "no-cache"})
+        return stylesheet_response("controls.css", "Shared controls are missing.")
 
     @application.get("/favicon.svg")
     def favicon():
