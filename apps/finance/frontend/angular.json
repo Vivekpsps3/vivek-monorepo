@@ -80,6 +80,7 @@
           "defaultConfiguration": "development",
           "options": {
             "proxyConfig": "proxy.conf.js",
+            "prebundle": false,
             "hmr": true,
             "liveReload": true
           }

@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { UiIconComponent, UiIconName } from '@vivek/ui';
 import { apiUrl } from '../core/api-url';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser, UserRole } from '../auth/auth.models';
@@ -17,13 +18,23 @@ interface AdminMetrics {
 interface ServiceHealth {
   name: string;
   href: string;
+  icon: UiIconName;
   status: 'ok' | 'down';
+}
+
+export interface AttentionItem {
+  id: string;
+  icon: UiIconName;
+  title: string;
+  detail: string;
+  href?: string;
+  action?: string;
 }
 
 @Component({
   selector: 'app-suite-admin',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, UiIconComponent],
   templateUrl: './suite-admin.component.html',
   styleUrl: './suite-admin.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -38,9 +49,9 @@ export class SuiteAdminComponent implements OnInit {
   usersError = '';
   metrics: AdminMetrics | null = null;
   services: ServiceHealth[] = [
-    { name: 'Finance', href: '/', status: 'down' },
-    { name: 'Travel', href: '/travel/', status: 'down' },
-    { name: 'Media', href: '/media/', status: 'down' },
+    { name: 'Finance', href: '/', icon: 'wallet', status: 'down' },
+    { name: 'Travel', href: '/travel/', icon: 'calendar', status: 'down' },
+    { name: 'Media', href: '/media/', icon: 'spark', status: 'down' },
   ];
   inviting = false;
   username = '';
@@ -69,9 +80,9 @@ export class SuiteAdminComponent implements OnInit {
         this.usersLoading = false;
         this.usersError = '';
         this.services = [
-          { name: 'Finance', href: '/', status: result.finance?.status === 'ok' ? 'ok' : 'down' },
-          { name: 'Travel', href: '/travel/', status: result.travel?.status === 'ok' ? 'ok' : 'down' },
-          { name: 'Media', href: '/media/', status: result.media?.status === 'ok' ? 'ok' : 'down' },
+          { name: 'Finance', href: '/', icon: 'wallet', status: result.finance?.status === 'ok' ? 'ok' : 'down' },
+          { name: 'Travel', href: '/travel/', icon: 'calendar', status: result.travel?.status === 'ok' ? 'ok' : 'down' },
+          { name: 'Media', href: '/media/', icon: 'spark', status: result.media?.status === 'ok' ? 'ok' : 'down' },
         ];
         this.cdr.markForCheck();
       },
@@ -83,8 +94,94 @@ export class SuiteAdminComponent implements OnInit {
     });
   }
 
-  stat(key: string): number {
-    return this.metrics?.totals?.[key] ?? 0;
+  attention(): AttentionItem[] {
+    const items: AttentionItem[] = [];
+    for (const service of this.services) {
+      if (service.status !== 'down') continue;
+      items.push({
+        id: `down-${service.name}`,
+        icon: 'alert',
+        title: `${service.name} is down`,
+        detail: 'Open it and check that the app is running.',
+        href: service.href,
+        action: `Open ${service.name}`,
+      });
+    }
+
+    const never = this.users.filter(user => !user.last_login_at);
+    if (never.length === 1) {
+      items.push({
+        id: 'never',
+        icon: 'users',
+        title: `${this.label(never[0])} has never signed in`,
+        detail: 'Send them the enrollment token from their row. It works once, for 24 hours.',
+      });
+    } else if (never.length > 1) {
+      items.push({
+        id: 'never',
+        icon: 'users',
+        title: `${never.length} people have never signed in`,
+        detail: never.map(user => this.label(user)).join(', '),
+      });
+    }
+
+    const missingVault = this.users.filter(user => user.is_active && !this.hasVault(user));
+    if (missingVault.length === 1) {
+      items.push({
+        id: 'vault',
+        icon: 'shield',
+        title: `${this.label(missingVault[0])} has no vault`,
+        detail: 'Finance stays empty until they finish enrollment on their own device.',
+      });
+    } else if (missingVault.length > 1) {
+      items.push({
+        id: 'vault',
+        icon: 'shield',
+        title: `${missingVault.length} people have no vault`,
+        detail: missingVault.map(user => this.label(user)).join(', '),
+      });
+    }
+
+    const disabled = this.users.filter(user => !user.is_active);
+    if (disabled.length) {
+      items.push({
+        id: 'disabled',
+        icon: 'users',
+        title: disabled.length === 1 ? `${this.label(disabled[0])} is disabled` : `${disabled.length} accounts are disabled`,
+        detail: 'Disabled accounts cannot sign in. Enable one from their row if they should come back.',
+      });
+    }
+
+    const openSessions = this.metrics?.totals?.['active_sessions'] ?? 0;
+    const activePeople = this.users.filter(user => user.is_active).length;
+    if (activePeople > 0 && openSessions > activePeople) {
+      const extra = openSessions - activePeople;
+      items.push({
+        id: 'sessions',
+        icon: 'alert',
+        title: extra === 1 ? '1 leftover sign-in is still open' : `${extra} leftover sign-ins are still open`,
+        detail: `${openSessions} sessions are open for ${activePeople} ${activePeople === 1 ? 'person' : 'people'}. Resetting an account signs that person out everywhere.`,
+      });
+    }
+
+    return items;
+  }
+
+  label(user: AuthUser): string {
+    return user.display_name || user.username || user.email;
+  }
+
+  handle(user: AuthUser): string {
+    return user.username || user.email;
+  }
+
+  initial(user: AuthUser): string {
+    return (this.label(user).trim().charAt(0) || '?').toUpperCase();
+  }
+
+  hasVault(user: AuthUser): boolean {
+    const row = this.metrics?.per_user?.find(item => item['id'] === user.id);
+    return row?.['has_vault'] === true;
   }
 
   recordsFor(user: AuthUser): number {
@@ -93,9 +190,21 @@ export class SuiteAdminComponent implements OnInit {
     return typeof count === 'number' ? count : 0;
   }
 
-  barWidth(rows: number | null): string {
-    const max = Math.max(...(this.metrics?.tables ?? []).map(table => table.rows || 0), 1);
-    return `${Math.max(4, Math.round(((rows || 0) / max) * 100))}%`;
+  recordsLabel(user: AuthUser): string {
+    const count = this.recordsFor(user);
+    if (count === 0) return 'No finance records';
+    return count === 1 ? '1 finance record' : `${count} finance records`;
+  }
+
+  signedInLabel(user: AuthUser): string {
+    if (!user.last_login_at) return 'Never signed in';
+    const then = new Date(user.last_login_at);
+    if (Number.isNaN(then.getTime())) return 'Never signed in';
+    const days = Math.floor((Date.now() - then.getTime()) / 86_400_000);
+    if (days <= 0) return 'Signed in today';
+    if (days === 1) return 'Signed in yesterday';
+    if (days < 30) return `Signed in ${days} days ago`;
+    return `Last signed in ${then.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
   }
 
   isSelf(user: AuthUser): boolean {
@@ -151,7 +260,7 @@ export class SuiteAdminComponent implements OnInit {
         this.displayName = '';
         this.inviteRole = 'user';
         this.inviting = false;
-        this.notice = '';
+        this.notice = 'Account created. Copy the token and send it to them. It works once, for 24 hours.';
         this.load();
       },
       error: err => {
@@ -161,14 +270,32 @@ export class SuiteAdminComponent implements OnInit {
     });
   }
 
+  copyToken(): void {
+    if (!this.inviteToken) return;
+    const token = this.inviteToken;
+    const done = () => {
+      this.notice = 'Token copied. It works once, for 24 hours.';
+      this.cdr.markForCheck();
+    };
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(token).then(done, () => {
+        this.notice = 'Select the token and copy it.';
+        this.cdr.markForCheck();
+      });
+      return;
+    }
+    this.notice = 'Select the token and copy it.';
+    this.cdr.markForCheck();
+  }
+
   deleteUser(user: AuthUser): void {
     if (!this.canDelete(user)) return;
-    const label = user.username || user.email;
+    const label = this.handle(user);
     if (!window.confirm(`Delete ${label}? Their encrypted finance records go with the account.`)) return;
     this.http.delete<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}`)).subscribe({
       next: () => {
         this.users = this.users.filter(item => item.id !== user.id);
-        this.notice = '';
+        this.notice = `${label} was deleted.`;
         this.load();
       },
       error: err => {
@@ -180,11 +307,11 @@ export class SuiteAdminComponent implements OnInit {
 
   resetUser(user: AuthUser): void {
     const expected = `RESET ${user.email}`;
-    const typed = window.prompt(`Erase finance data for ${user.username || user.email}.\n\nType ${expected}`);
+    const typed = window.prompt(`Erase finance data for ${this.handle(user)}.\n\nType ${expected}`);
     if (typed !== expected) return;
     this.http.post<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}/reset-contents`), { confirm: expected }).subscribe({
       next: () => {
-        this.notice = '';
+        this.notice = `Finance data for ${this.handle(user)} was erased, and their sessions were signed out.`;
         this.load();
       },
       error: err => {
@@ -198,7 +325,7 @@ export class SuiteAdminComponent implements OnInit {
     this.http.patch<AuthUser>(apiUrl(`/admin/users/${user.id}`), patch).subscribe({
       next: updated => {
         this.users = this.users.map(item => item.id === updated.id ? updated : item);
-        this.notice = '';
+        this.notice = `${this.label(updated)} updated.`;
         this.cdr.markForCheck();
       },
       error: err => {

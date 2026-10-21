@@ -1,7 +1,7 @@
 <a class="skip-link" href="#admin-main">Skip to content</a>
 <div class="desk">
   <header class="desk-bar">
-    <a class="desk-mark" routerLink="/hub" aria-label="Hub">Hub</a>
+    <a class="desk-mark" routerLink="/hub">Hub</a>
     <p class="desk-title">Admin</p>
   </header>
 
@@ -12,78 +12,112 @@
     <section class="services" aria-label="Apps">
       @for (service of services; track service.name) {
         <a class="service" [href]="service.href" [class.is-down]="service.status === 'down'">
-          <span class="pulse" [attr.data-state]="service.status"></span>
-          <strong>{{ service.name }}</strong>
+          <ui-icon [name]="service.icon" size="sm" />
+          <span class="service-copy">
+            <strong>{{ service.name }}</strong>
+            <span>{{ service.status === 'ok' ? 'Up' : 'Down' }}</span>
+          </span>
         </a>
       }
     </section>
 
-    <section class="stats" aria-label="Suite">
-      <article><b>{{ stat('users') }}</b><span>People</span></article>
-      <article><b>{{ stat('active_sessions') }}</b><span>Sessions</span></article>
-      <article><b>{{ stat('admins') }}</b><span>Admins</span></article>
-      <article><b>{{ stat('audit_events') }}</b><span>Audit</span></article>
-      <article><b>{{ metrics?.finance_rows?.['encrypted_records'] ?? 0 }}</b><span>Encrypted rows</span></article>
-      <article><b>{{ metrics?.finance_rows?.['user_vaults'] ?? 0 }}</b><span>Vaults</span></article>
-    </section>
-
-    <section aria-label="People">
-      <div class="people">
-        @if (usersLoading) {
-          <p class="quiet">Loading</p>
-        } @else {
-          @for (user of users; track user.id) {
-            <article class="person" [class.is-quiet]="!user.is_active">
-              <button
-                type="button"
-                class="presence"
-                [class.is-on]="user.is_active"
-                [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
-                [attr.aria-pressed]="user.is_active"
-                [attr.aria-label]="user.is_active ? 'Active' : 'Disabled'"
-                (click)="toggleActive(user)"></button>
-              <div class="person-name">
-                <strong>{{ user.display_name || user.username || user.email }}</strong>
-                <span>{{ user.username || user.email }}</span>
+    <section class="attention" aria-labelledby="attention-heading">
+      <h2 id="attention-heading">Needs attention</h2>
+      @if (usersLoading) {
+        <p class="quiet">Checking accounts…</p>
+      } @else if (attention().length === 0) {
+        <p class="quiet">Nothing needs you. The apps are up, and every account can sign in.</p>
+      } @else {
+        <ul class="attention-list">
+          @for (item of attention(); track item.id) {
+            <li>
+              <ui-icon [name]="item.icon" size="sm" />
+              <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.detail }}</p>
+                @if (item.href && item.action) {
+                  <a [href]="item.href">{{ item.action }}</a>
+                }
               </div>
-              <button
-                type="button"
-                class="role"
-                [class.is-admin]="user.role === 'admin'"
-                [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
-                [attr.aria-pressed]="user.role === 'admin'"
-                aria-label="Admin"
-                (click)="toggleRole(user)"></button>
-              <span class="record-bar" [style.width.%]="recordsFor(user) ? 100 : 8" [attr.aria-label]="recordsFor(user) + ' encrypted records'"></span>
-              <div class="person-actions">
-                <button type="button" aria-label="Reset finance data" (click)="resetUser(user)">↺</button>
-                <button type="button" aria-label="Delete account" [disabled]="!canDelete(user)" (click)="deleteUser(user)">✕</button>
-              </div>
-            </article>
+            </li>
           }
-        }
-        @if (inviting) {
-          <form class="person person-new" (submit)="$event.preventDefault(); createUser()">
-            <input [value]="displayName" (input)="displayName = asText($event)" aria-label="Name" placeholder="Name" autocomplete="off">
-            <input [value]="username" (input)="username = asText($event)" aria-label="Username" placeholder="Username" autocomplete="off">
-            <button type="button" class="role" [class.is-admin]="inviteRole === 'admin'" [attr.aria-pressed]="inviteRole === 'admin'" aria-label="Admin" (click)="toggleInviteRole()"></button>
-            <button class="save-invite" type="submit" aria-label="Create account">+</button>
-          </form>
-        } @else {
-          <button type="button" class="person person-add" aria-label="New account" (click)="startInvite()">+</button>
-        }
-      </div>
-      @if (inviteToken) {
-        <p class="token" aria-label="Enrollment token">{{ inviteToken }}</p>
+        </ul>
       }
     </section>
 
-    <section class="tables" aria-label="Tables">
-      @for (table of metrics?.tables || []; track table.name) {
-        <div class="table-row">
-          <span>{{ table.name }}</span>
-          <span class="table-track"><span class="table-fill" [style.width]="barWidth(table.rows)"></span></span>
-          <b>{{ table.rows ?? '—' }}</b>
+    <section aria-labelledby="people-heading">
+      <div class="section-head">
+        <h2 id="people-heading">People</h2>
+        @if (!inviting) {
+          <button type="button" class="text-action" (click)="startInvite()">New account</button>
+        }
+      </div>
+
+      @if (usersLoading) {
+        <p class="quiet">Loading people…</p>
+      } @else if (!users.length) {
+        <p class="quiet">No accounts yet.</p>
+      } @else {
+        <ul class="people">
+          @for (user of users; track user.id) {
+            <li class="person" [class.is-quiet]="!user.is_active">
+              <div class="person-id">
+                <span class="avatar" aria-hidden="true">{{ initial(user) }}</span>
+                <div>
+                  <strong>{{ label(user) }}</strong>
+                  <span class="handle">{{ handle(user) }}@if (isSelf(user)) { <span class="you"> · You</span> }</span>
+                </div>
+              </div>
+              <ul class="facts">
+                <li><ui-icon name="shield" size="sm" /><span>{{ user.role === 'admin' ? 'Admin' : 'Member' }}</span></li>
+                <li><ui-icon name="users" size="sm" /><span>{{ user.is_active ? 'Active' : 'Disabled' }}</span></li>
+                <li><ui-icon name="calendar" size="sm" /><span>{{ signedInLabel(user) }}</span></li>
+                <li><ui-icon name="wallet" size="sm" /><span>{{ hasVault(user) ? 'Vault ready' : 'No vault' }}</span></li>
+                <li><ui-icon name="document" size="sm" /><span>{{ recordsLabel(user) }}</span></li>
+              </ul>
+              @if (isSelf(user) && wouldRemoveFinalActiveAdmin(user)) {
+                <p class="lock-note">This is the only active admin, so the role and access stay as they are.</p>
+              }
+              <div class="person-actions">
+                <button
+                  type="button"
+                  [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
+                  (click)="toggleRole(user)">
+                  {{ user.role === 'admin' ? 'Make member' : 'Make admin' }}
+                </button>
+                <button
+                  type="button"
+                  [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
+                  (click)="toggleActive(user)">
+                  {{ user.is_active ? 'Disable' : 'Enable' }}
+                </button>
+                <button type="button" (click)="resetUser(user)">Reset finance data</button>
+                <button type="button" class="is-danger" [disabled]="!canDelete(user)" (click)="deleteUser(user)">Delete</button>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (inviting) {
+        <form class="invite" (submit)="$event.preventDefault(); createUser()">
+          <label>Name <input [value]="displayName" (input)="displayName = asText($event)" autocomplete="off" required></label>
+          <label>Username <input [value]="username" (input)="username = asText($event)" autocomplete="off" required></label>
+          <button type="button" class="text-action" [attr.aria-pressed]="inviteRole === 'admin'" (click)="toggleInviteRole()">
+            {{ inviteRole === 'admin' ? 'Invite as admin' : 'Invite as member' }}
+          </button>
+          <div class="invite-actions">
+            <button type="submit">Create account</button>
+            <button type="button" (click)="inviting = false">Cancel</button>
+          </div>
+        </form>
+      }
+
+      @if (inviteToken) {
+        <div class="token">
+          <p>Enrollment token</p>
+          <code>{{ inviteToken }}</code>
+          <button type="button" (click)="copyToken()">Copy token</button>
         </div>
       }
     </section>

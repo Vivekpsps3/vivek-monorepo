@@ -309,7 +309,7 @@ dd {
     width: 100%;
   }
 
-  .hub-bar .text-button {
+  .hub-tools {
     grid-area: signout;
     justify-self: end;
   }
@@ -345,16 +345,10 @@ dd {
   }
 }
 
-.hub-admin {
-  width: 1.7rem;
-  height: 1.7rem;
-  border-radius: 0.45rem;
-  background:
-    linear-gradient(var(--text) 0 0) 0 0 / 38% 38% no-repeat,
-    linear-gradient(var(--text) 0 0) 100% 0 / 38% 38% no-repeat,
-    linear-gradient(var(--text) 0 0) 0 100% / 38% 38% no-repeat,
-    linear-gradient(var(--text) 0 0) 100% 100% / 38% 38% no-repeat;
-  opacity: 0.72;
+.hub-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 @media (prefers-reduced-motion: reduce) {

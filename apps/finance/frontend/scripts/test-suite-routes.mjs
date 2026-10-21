@@ -180,6 +180,17 @@ try {
   assert.match(await hub.text(), /<app-root>/);
   assert.match(hub.headers.get('cache-control') ?? '', /no-store/);
 
+  const hubAdmin = await fetch(`${baseUrl}/hub/admin`);
+  assert.equal(hubAdmin.status, 200);
+  assert.match(await hubAdmin.text(), /<app-root>/);
+  assert.match(hubAdmin.headers.get('cache-control') ?? '', /no-store/);
+
+  for (const stale of ['/admin', '/admin/users', '/finance/admin', '/finance/admin/users']) {
+    const redirected = await fetch(`${baseUrl}${stale}`, { redirect: 'manual' });
+    assert.equal(redirected.status, 302, stale);
+    assert.equal(redirected.headers.get('location'), '/hub/admin', stale);
+  }
+
   const mediaHome = await fetch(`${baseUrl}/media/`);
   assert.equal(mediaHome.status, 200);
   assert.equal(await mediaHome.text(), 'media-root');

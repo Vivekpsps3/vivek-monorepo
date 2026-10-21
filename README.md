@@ -29,7 +29,7 @@ Details: **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 - **Spending** (`/spending`) — Card and bank list plus a calendar. Does not change net worth
 - **Recurring** (`/recurring`) — Pay, bills, and subscriptions. Does not change net worth
 - **Planning** (`/planning`) — What-if path, growth, and stocks. Does not change real balances
-- **Auth / vault / admin** — Username plus vault-passphrase challenge login, open self-signup, browser-owned encrypted vault. Suite admin is `/admin` (people, health, table sizes). It is not a Finance page.
+- **Auth / vault / admin** — Username plus vault-passphrase challenge login, open self-signup, browser-owned encrypted vault. Suite admin is `/hub/admin` (people and what needs attention). It is not a Finance page.
 
 ## Tech stack
 

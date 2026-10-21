@@ -15,7 +15,10 @@ export type UiIconName =
   | 'building'
   | 'credit-card'
   | 'document'
-  | 'spark';
+  | 'spark'
+  | 'users'
+  | 'shield'
+  | 'alert';
 
 /** Lucide-style 24×24 stroke icons (currentColor). */
 const PATHS: Record<UiIconName, string> = {
@@ -36,6 +39,9 @@ const PATHS: Record<UiIconName, string> = {
   'credit-card': 'M2 8h20M6 16h4M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   document: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6',
   spark: 'M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  alert: 'M12 8v5M12 17h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
 };
 
 @Component({

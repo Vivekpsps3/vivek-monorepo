@@ -2,8 +2,8 @@ import { APP_BASE_HREF, PathLocationStrategy, PlatformLocation } from '@angular/
 import { Inject, Injectable, Optional } from '@angular/core';
 
 /**
- * Shared sign-in lives at /auth/login, outside the /finance/ base href.
- * Other routes still get that base prefix in the browser URL.
+ * Shared sign-in lives at /auth/login, and the hub (including admin) lives at /hub.
+ * Both stay outside the /finance/ base href. Other routes still get that prefix.
  */
 @Injectable()
 export class SuiteLocationStrategy extends PathLocationStrategy {

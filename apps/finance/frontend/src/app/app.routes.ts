@@ -42,20 +42,26 @@ export const routes: Routes = [
     loadComponent: () => import('./vault/vault-unlock.component').then(m => m.VaultUnlockComponent),
   },
   {
-    path: 'hub',
-    title: 'Hub',
-    canActivate: [authGuard],
-    loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent),
-  },
-  {
-    path: 'admin',
+    path: 'hub/admin',
     title: 'Admin',
     canActivate: [authGuard, adminGuard],
     loadComponent: () => import('./admin/suite-admin.component').then(m => m.SuiteAdminComponent),
   },
   {
+    path: 'hub',
+    title: 'Hub',
+    pathMatch: 'full',
+    canActivate: [authGuard],
+    loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent),
+  },
+  {
+    path: 'admin',
+    redirectTo: 'hub/admin',
+    pathMatch: 'full',
+  },
+  {
     path: 'admin/users',
-    redirectTo: 'admin',
+    redirectTo: 'hub/admin',
     pathMatch: 'full',
   },
   {
