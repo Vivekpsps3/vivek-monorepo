@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { authPath, continueAfterAuth } from './after-auth';
@@ -13,15 +13,35 @@ import { UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui'
   styleUrl: './login.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class SignupComponent {
+export class SignupComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
 
   username = '';
   password = '';
+  inviteName = '';
   loading = false;
   error = '';
+  readonly inviteToken = new URLSearchParams(window.location.search).get('invite') || '';
+
+  ngOnInit(): void {
+    if (!this.inviteToken) return;
+    this.loading = true;
+    this.auth.previewInvitation(this.inviteToken).then(
+      preview => {
+        this.username = preview.username;
+        this.inviteName = preview.display_name;
+        this.loading = false;
+        this.cdr.markForCheck();
+      },
+      () => {
+        this.error = 'This enrollment link is invalid or expired. Ask an admin for a new one.';
+        this.loading = false;
+        this.cdr.markForCheck();
+      },
+    );
+  }
 
   pageHref(page: 'login' | 'signup'): string {
     return authPath(page);
@@ -39,7 +59,10 @@ export class SignupComponent {
     this.loading = true;
     this.error = '';
     this.cdr.markForCheck();
-    this.auth.signupPasswordless(this.username, this.password).then(
+    const pending = this.inviteToken
+      ? this.auth.enrollInvitation(this.inviteToken, this.password)
+      : this.auth.signupPasswordless(this.username, this.password);
+    pending.then(
       () => {
         this.loading = false;
         this.cdr.markForCheck();
@@ -54,8 +77,9 @@ export class SignupComponent {
   }
 
   private validationError(): string | null {
+    if (this.inviteToken && this.error && !this.username) return this.error;
     const username = this.username.trim();
-    if (!username) return 'Enter a username.';
+    if (!username) return this.inviteToken ? 'This enrollment link is invalid or expired. Ask an admin for a new one.' : 'Enter a username.';
     if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username)) {
       return 'Username must be 3–64 letters, numbers, dots, underscores, or hyphens.';
     }

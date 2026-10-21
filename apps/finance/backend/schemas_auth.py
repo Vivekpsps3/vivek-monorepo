@@ -118,6 +118,12 @@ class AdminInvitationResponse(UserPublic):
     enrollment_token: str
 
 
+class InvitationPreview(BaseModel):
+    username: str
+    display_name: str
+    expires_at: datetime
+
+
 class AdminUserUpdate(BaseModel):
     display_name: Optional[str] = Field(None, min_length=1, max_length=160)
     role: Optional[UserRoleValue] = None

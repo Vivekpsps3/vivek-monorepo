@@ -72,6 +72,9 @@ h2 { margin: 0 0 var(--space-3); font-size: 0.8rem; font-weight: 650; letter-spa
 .token { display: grid; gap: var(--space-2); margin-bottom: var(--space-6); }
 .token p { margin: 0; color: var(--text-secondary); font-size: 0.85rem; }
 .token code { font-family: ui-monospace, monospace; font-size: 0.85rem; overflow-wrap: anywhere; user-select: all; }
+.activity ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.activity li { display: flex; justify-content: space-between; gap: var(--space-3); color: var(--text-secondary); font-size: 0.9rem; }
+.activity time { color: var(--text-tertiary); white-space: nowrap; }
 
 @media (max-width: 700px) {
   .services { grid-template-columns: 1fr; }

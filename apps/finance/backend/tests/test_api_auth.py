@@ -230,6 +230,78 @@ def test_public_password_signup_is_unmounted():
     assert res.status_code == 404
 
 
+def test_admin_can_sign_out_other_devices_without_wiping_the_current_one():
+    from database import SessionLocal
+    from models import UserSession
+
+    admin = authenticated_client(app, email="session-admin@example.com", role=UserRole.admin)
+    me = admin.get("/api/auth/me").json()["user"]
+    other = TestClient(app)
+    logged = other.post(
+        "/api/auth/login/migrate",
+        json={"email": "session-admin@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert logged.status_code == 200
+    db = SessionLocal()
+    try:
+        db.query(UserSession).filter(UserSession.user_id == me["id"]).update(
+            {UserSession.migration_only: False}, synchronize_session=False
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    revoked = admin.post(f"/api/admin/users/{me['id']}/revoke-sessions")
+    assert revoked.status_code == 200
+    assert revoked.json()["revoked"] == 1
+    assert admin.get("/api/auth/me").status_code == 200
+    assert other.get("/api/auth/me").status_code == 401
+
+
+def test_enrollment_link_can_be_replaced_and_reset_confirms_the_username():
+    from test_auth_challenge import passwordless_material
+
+    admin = authenticated_client(app, email="invite-admin@example.com", role=UserRole.admin)
+    created = admin.post(
+        "/api/admin/users",
+        json={"username": "ada.lovelace", "display_name": "Ada Lovelace", "role": "user"},
+    ).json()
+    preview = TestClient(app).get(f"/api/auth/invitations/{created['enrollment_token']}")
+    assert preview.status_code == 200
+    assert preview.json()["username"] == "ada.lovelace"
+    assert preview.json()["display_name"] == "Ada Lovelace"
+
+    again = admin.post(f"/api/admin/users/{created['id']}/enrollment")
+    assert again.status_code == 200
+    assert again.json()["enrollment_token"] != created["enrollment_token"]
+    assert TestClient(app).get(f"/api/auth/invitations/{created['enrollment_token']}").status_code == 401
+    fresh = TestClient(app).get(f"/api/auth/invitations/{again.json()['enrollment_token']}")
+    assert fresh.status_code == 200
+
+    enrolled = TestClient(app).post(
+        f"/api/auth/invitations/{again.json()['enrollment_token']}/enroll",
+        json=passwordless_material(),
+    )
+    assert enrolled.status_code == 200
+    assert admin.post(f"/api/admin/users/{created['id']}/enrollment").status_code == 409
+
+    denied = admin.post(
+        f"/api/admin/users/{created['id']}/reset-contents",
+        json={"confirm": "RESET ada.lovelace@pending.local"},
+    )
+    assert denied.status_code == 400
+    reset = admin.post(
+        f"/api/admin/users/{created['id']}/reset-contents",
+        json={"confirm": "RESET ada.lovelace"},
+    )
+    assert reset.status_code == 200
+    recent = admin.get("/api/admin/metrics").json()["recent"]
+    assert any("erased finance data" in item["summary"] for item in recent)
+    ada = next(row for row in admin.get("/api/admin/metrics").json()["per_user"] if row["id"] == created["id"])
+    assert ada["active_sessions"] == 0
+    assert ada["enrolled"] is True
+
+
 def test_public_password_bootstrap_is_unmounted():
     client = TestClient(app)
     res = client.post(

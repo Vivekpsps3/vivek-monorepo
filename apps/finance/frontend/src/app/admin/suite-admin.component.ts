@@ -11,8 +11,9 @@ import { AuthUser, UserRole } from '../auth/auth.models';
 interface AdminMetrics {
   totals: Record<string, number>;
   finance_rows: Record<string, number>;
-  per_user: Array<Record<string, string | number | boolean>>;
+  per_user: Array<Record<string, string | number | boolean | null>>;
   tables: Array<{ name: string; rows: number | null }>;
+  recent?: Array<{ id: number; summary: string; created_at?: string | null }>;
 }
 
 interface ServiceHealth {
@@ -114,7 +115,7 @@ export class SuiteAdminComponent implements OnInit {
         id: 'never',
         icon: 'users',
         title: `${this.label(never[0])} has never signed in`,
-        detail: 'Send them the enrollment token from their row. It works once, for 24 hours.',
+        detail: 'Send them the enrollment link from their row. It works once, for 24 hours.',
       });
     } else if (never.length > 1) {
       items.push({
@@ -160,7 +161,7 @@ export class SuiteAdminComponent implements OnInit {
         id: 'sessions',
         icon: 'alert',
         title: extra === 1 ? '1 leftover sign-in is still open' : `${extra} leftover sign-ins are still open`,
-        detail: `${openSessions} sessions are open for ${activePeople} ${activePeople === 1 ? 'person' : 'people'}. Resetting an account signs that person out everywhere.`,
+        detail: `${openSessions} sessions are open for ${activePeople} ${activePeople === 1 ? 'person' : 'people'}. Sign out other devices on their row. Their vault stays.`,
       });
     }
 
@@ -180,13 +181,48 @@ export class SuiteAdminComponent implements OnInit {
   }
 
   hasVault(user: AuthUser): boolean {
-    const row = this.metrics?.per_user?.find(item => item['id'] === user.id);
-    return row?.['has_vault'] === true;
+    return this.userRow(user)?.['has_vault'] === true;
+  }
+
+  userRow(user: AuthUser): Record<string, string | number | boolean | null> | undefined {
+    return this.metrics?.per_user?.find(item => item['id'] === user.id);
+  }
+
+  sessionCount(user: AuthUser): number | null {
+    const count = this.userRow(user)?.['active_sessions'];
+    return typeof count === 'number' ? count : null;
+  }
+
+  showSignOut(user: AuthUser): boolean {
+    const count = this.sessionCount(user);
+    if (count == null) return false;
+    return this.isSelf(user) ? count > 1 : count > 0;
+  }
+
+  canReissue(user: AuthUser): boolean {
+    if (this.hasVault(user)) return false;
+    const enrolled = this.userRow(user)?.['enrolled'];
+    return enrolled !== true;
+  }
+
+  enrollmentLink(): string {
+    if (!this.inviteToken || typeof location === 'undefined') return '';
+    return `${location.origin}/auth/signup?invite=${encodeURIComponent(this.inviteToken)}`;
+  }
+
+  recent(): Array<{ id: number; summary: string; created_at?: string | null }> {
+    return this.metrics?.recent ?? [];
+  }
+
+  when(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const then = new Date(iso);
+    if (Number.isNaN(then.getTime())) return '';
+    return then.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
   recordsFor(user: AuthUser): number {
-    const row = this.metrics?.per_user?.find(item => item['id'] === user.id);
-    const count = row?.['encrypted_records'];
+    const count = this.userRow(user)?.['encrypted_records'];
     return typeof count === 'number' ? count : 0;
   }
 
@@ -260,7 +296,7 @@ export class SuiteAdminComponent implements OnInit {
         this.displayName = '';
         this.inviteRole = 'user';
         this.inviting = false;
-        this.notice = 'Account created. Copy the token and send it to them. It works once, for 24 hours.';
+        this.notice = 'Account created. Send them the enrollment link. It works once, for 24 hours.';
         this.load();
       },
       error: err => {
@@ -270,22 +306,56 @@ export class SuiteAdminComponent implements OnInit {
     });
   }
 
-  copyToken(): void {
-    if (!this.inviteToken) return;
-    const token = this.inviteToken;
+  copyLink(): void {
+    const link = this.enrollmentLink();
+    if (!link) return;
     const done = () => {
-      this.notice = 'Token copied. It works once, for 24 hours.';
+      this.notice = 'Enrollment link copied. It works once, for 24 hours.';
       this.cdr.markForCheck();
     };
     if (navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(token).then(done, () => {
-        this.notice = 'Select the token and copy it.';
+      void navigator.clipboard.writeText(link).then(done, () => {
+        this.notice = 'Select the link and copy it.';
         this.cdr.markForCheck();
       });
       return;
     }
-    this.notice = 'Select the token and copy it.';
+    this.notice = 'Select the link and copy it.';
     this.cdr.markForCheck();
+  }
+
+  reissue(user: AuthUser): void {
+    this.http.post<AuthUser & { enrollment_token: string }>(apiUrl(`/admin/users/${user.id}/enrollment`), {}).subscribe({
+      next: updated => {
+        this.inviteToken = updated.enrollment_token;
+        this.notice = `Enrollment link for ${this.handle(user)} is ready. It replaces any older link.`;
+        this.cdr.markForCheck();
+        this.load();
+      },
+      error: err => {
+        this.notice = err?.error?.detail || 'Could not make a new enrollment link';
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  revokeSessions(user: AuthUser): void {
+    const prompt = this.isSelf(user)
+      ? 'Sign out every other device? This browser stays signed in, and the vault stays.'
+      : `Sign ${this.handle(user)} out everywhere? Their vault stays.`;
+    if (!window.confirm(prompt)) return;
+    this.http.post<{ ok: boolean; revoked: number }>(apiUrl(`/admin/users/${user.id}/revoke-sessions`), {}).subscribe({
+      next: result => {
+        this.notice = result.revoked
+          ? `Signed out ${result.revoked} ${result.revoked === 1 ? 'session' : 'sessions'}.`
+          : 'No other sessions were open.';
+        this.load();
+      },
+      error: err => {
+        this.notice = err?.error?.detail || 'Could not sign that account out';
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   deleteUser(user: AuthUser): void {
@@ -306,7 +376,7 @@ export class SuiteAdminComponent implements OnInit {
   }
 
   resetUser(user: AuthUser): void {
-    const expected = `RESET ${user.email}`;
+    const expected = `RESET ${user.username || user.email}`;
     const typed = window.prompt(`Erase finance data for ${this.handle(user)}.\n\nType ${expected}`);
     if (typed !== expected) return;
     this.http.post<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}/reset-contents`), { confirm: expected }).subscribe({

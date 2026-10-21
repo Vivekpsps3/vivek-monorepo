@@ -45,8 +45,9 @@ describe('SuiteAdminComponent', () => {
     http.expectOne('/api/admin/metrics').flush({
       totals: { users: users.length, active_users: users.length, active_sessions: users.length + 4 },
       finance_rows: {},
-      per_user: users.map(user => ({ id: user.id, has_vault: false, encrypted_records: 0 })),
+      per_user: users.map(user => ({ id: user.id, has_vault: false, encrypted_records: 0, active_sessions: 3, enrolled: false })),
       tables: [{ name: 'alembic_version', rows: 1 }],
+      recent: [{ id: 9, summary: 'Someone signed in', created_at: '2026-10-21T12:00:00' }],
     });
     http.expectOne('/api/health').flush({ status: 'ok' });
     http.expectOne('/travel/api/health').flush({ status: 'ok' });
@@ -69,6 +70,9 @@ describe('SuiteAdminComponent', () => {
     expect(text).toContain('leftover sign-in');
     expect(text).toContain('Member');
     expect(text).toContain('Never signed in');
+    expect(text).toContain('Sign out everywhere');
+    expect(text).toContain('New enrollment link');
+    expect(text).toContain('Someone signed in');
     expect(text).not.toContain('alembic_version');
     expect(text).not.toContain('Encrypted rows');
   });

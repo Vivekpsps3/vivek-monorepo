@@ -2,18 +2,22 @@
   <section class="auth-layout" aria-labelledby="signup-title">
     <div class="auth-intro">
       <a class="brand-lockup" [href]="pageHref('login')">Account</a>
-      <h1 id="signup-title">Create account</h1>
+      <h1 id="signup-title">{{ inviteToken ? 'Finish your account' : 'Create account' }}</h1>
       <p class="privacy-note">This account signs in to your Hub, Finance, Travel, and Media. A lost passphrase cannot be reset or used to recover your encrypted finance data.</p>
     </div>
 
     <div class="login-panel">
       <ui-card>
         <form class="login-form" novalidate (ngSubmit)="submit()">
-          <ui-input
-            label="Username"
-            autocomplete="username"
-            [required]="true"
-            [(value)]="username" />
+          @if (inviteToken) {
+            <p class="password-hint">{{ inviteName || 'Your account' }} signs in as <strong>{{ username || '…' }}</strong></p>
+          } @else {
+            <ui-input
+              label="Username"
+              autocomplete="username"
+              [required]="true"
+              [(value)]="username" />
+          }
           <ui-input
             label="Vault passphrase"
             type="password"
@@ -22,13 +26,17 @@
             [required]="true"
             [(value)]="password" />
           <p class="password-hint">
-            Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+            @if (inviteToken) {
+              Passphrase: at least 12 characters. It stays in this browser.
+            } @else {
+              Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+            }
           </p>
           @if (error) {
             <p class="login-error" role="alert">{{ error }}</p>
           }
-          <ui-button type="submit" [disabled]="loading">
-            {{ loading ? 'Creating account' : 'Sign up' }}
+          <ui-button type="submit" [disabled]="loading || (!!inviteToken && !username)">
+            {{ loading ? 'Creating account' : (inviteToken ? 'Finish account' : 'Sign up') }}
           </ui-button>
         </form>
         <a class="mode-link" [href]="pageHref('login')">Sign in</a>

@@ -253,8 +253,22 @@ def create_user(
     return user
 
 
-def revoke_user_sessions(db: Session, user_id: int) -> None:
+def current_session_id(db: Session, request: Request) -> int | None:
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        return None
+    session = db.query(UserSession).filter(UserSession.token_hash == _hash_secret(token)).first()
+    if not session or session.revoked_at is not None:
+        return None
+    return int(session.id)
+
+
+def revoke_user_sessions(db: Session, user_id: int, *, keep_session_id: int | None = None) -> int:
     now = utc_now_naive()
-    db.query(UserSession).filter(UserSession.user_id == user_id, UserSession.revoked_at.is_(None)).update(
-        {UserSession.revoked_at: now}, synchronize_session=False
-    )
+    query = db.query(UserSession).filter(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+    if keep_session_id is not None:
+        query = query.filter(UserSession.id != keep_session_id)
+    rows = query.all()
+    for row in rows:
+        row.revoked_at = now
+    return len(rows)

@@ -91,6 +91,14 @@
                   (click)="toggleActive(user)">
                   {{ user.is_active ? 'Disable' : 'Enable' }}
                 </button>
+                @if (showSignOut(user)) {
+                  <button type="button" (click)="revokeSessions(user)">
+                    {{ isSelf(user) ? 'Sign out other devices' : 'Sign out everywhere' }}
+                  </button>
+                }
+                @if (canReissue(user)) {
+                  <button type="button" (click)="reissue(user)">New enrollment link</button>
+                }
                 <button type="button" (click)="resetUser(user)">Reset finance data</button>
                 <button type="button" class="is-danger" [disabled]="!canDelete(user)" (click)="deleteUser(user)">Delete</button>
               </div>
@@ -101,7 +109,7 @@
 
       @if (inviting) {
         <form class="invite" (submit)="$event.preventDefault(); createUser()">
-          <label>Name <input [value]="displayName" (input)="displayName = asText($event)" autocomplete="off" required></label>
+          <label>Display name <input [value]="displayName" (input)="displayName = asText($event)" autocomplete="off" required></label>
           <label>Username <input [value]="username" (input)="username = asText($event)" autocomplete="off" required></label>
           <button type="button" class="text-action" [attr.aria-pressed]="inviteRole === 'admin'" (click)="toggleInviteRole()">
             {{ inviteRole === 'admin' ? 'Invite as admin' : 'Invite as member' }}
@@ -115,11 +123,25 @@
 
       @if (inviteToken) {
         <div class="token">
-          <p>Enrollment token</p>
-          <code>{{ inviteToken }}</code>
-          <button type="button" (click)="copyToken()">Copy token</button>
+          <p>Enrollment link. It works once, for 24 hours.</p>
+          <code>{{ enrollmentLink() }}</code>
+          <button type="button" (click)="copyLink()">Copy link</button>
         </div>
       }
     </section>
+
+    @if (recent().length) {
+      <section class="activity" aria-labelledby="activity-heading">
+        <h2 id="activity-heading">Recent activity</h2>
+        <ul>
+          @for (event of recent(); track event.id) {
+            <li>
+              <span>{{ event.summary }}</span>
+              @if (event.created_at) { <time>{{ when(event.created_at) }}</time> }
+            </li>
+          }
+        </ul>
+      </section>
+    }
   </main>
 </div>

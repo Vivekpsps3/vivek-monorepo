@@ -20,6 +20,7 @@ from auth import (
     complete_migration_session,
     create_session,
     create_user,
+    current_session_id,
     get_current_admin,
     get_current_migration_user,
     get_current_user,
@@ -38,6 +39,7 @@ from schemas_auth import (
     BootstrapStatusResponse,
     AdminUserCreate,
     AdminInvitationResponse,
+    InvitationPreview,
     AdminUserUpdate,
     LoginRequest,
     LoginResponse,
@@ -299,6 +301,30 @@ def passwordless_verify(body: PasswordlessVerifyRequest, request: Request, respo
     return {"user": _user_response(user), "csrf_token": csrf}
 
 
+def _invitation_for_token(db: Session, token: str) -> tuple[AuthEnrollment, User]:
+    enrollment = db.query(AuthEnrollment).filter(
+        AuthEnrollment.token_hash == hashlib.sha256(token.encode()).hexdigest()
+    ).first()
+    if not enrollment or enrollment.consumed_at or enrollment.expires_at <= utc_now_naive():
+        raise HTTPException(status_code=401, detail="Authentication failed")
+    user = db.get(User, enrollment.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+    return enrollment, user
+
+
+@router.get("/auth/invitations/{token}", response_model=InvitationPreview)
+def preview_invitation(token: str, db: Session = Depends(get_db)):
+    _enrollment, user = _invitation_for_token(db, token)
+    if user.auth_public_key_b64:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+    return {
+        "username": user.username or "",
+        "display_name": user.display_name,
+        "expires_at": _enrollment.expires_at,
+    }
+
+
 @router.post("/auth/invitations/{token}/enroll", response_model=LoginResponse)
 def enroll_invitation(
     token: str,
@@ -307,12 +333,7 @@ def enroll_invitation(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    enrollment = db.query(AuthEnrollment).filter(AuthEnrollment.token_hash == hashlib.sha256(token.encode()).hexdigest()).first()
-    if not enrollment or enrollment.consumed_at or enrollment.expires_at <= utc_now_naive():
-        raise HTTPException(status_code=401, detail="Authentication failed")
-    user = db.get(User, enrollment.user_id)
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="Authentication failed")
+    enrollment, user = _invitation_for_token(db, token)
     _require_p256_public_key(body.public_key_b64)
     if vault_store.get_vault(db, user.id):
         raise HTTPException(status_code=409, detail="Enrollment is already complete")
@@ -417,13 +438,7 @@ def admin_create_user(
         actor_user_id=admin.id,
     )
     user.username = normalize_email(body.username)
-    token = secrets.token_urlsafe(32)
-    db.add(AuthEnrollment(
-        user_id=user.id,
-        token_hash=hashlib.sha256(token.encode()).hexdigest(),
-        expires_at=utc_now_naive() + timedelta(hours=24),
-        created_by_user_id=admin.id,
-    ))
+    token = _issue_enrollment(db, user, admin)
     db.commit()
     db.refresh(user)
     return {**_user_response(user).model_dump(), "enrollment_token": token}
@@ -509,12 +524,70 @@ def admin_reset_user_contents(
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    expected = f"RESET {target.email}"
+    handle = target.username or target.email
+    expected = f"RESET {handle}"
     if body.confirm.strip() != expected:
         raise HTTPException(status_code=400, detail=f'Type "{expected}" to reset this user')
     reset_user_contents(db, target, actor_user_id=admin.id)
     db.commit()
     return {"ok": True}
+
+
+def _issue_enrollment(db: Session, user: User, admin: User) -> str:
+    now = utc_now_naive()
+    db.query(AuthEnrollment).filter(
+        AuthEnrollment.user_id == user.id,
+        AuthEnrollment.consumed_at.is_(None),
+    ).update({AuthEnrollment.consumed_at: now}, synchronize_session=False)
+    token = secrets.token_urlsafe(32)
+    db.add(AuthEnrollment(
+        user_id=user.id,
+        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        expires_at=now + timedelta(hours=24),
+        created_by_user_id=admin.id,
+    ))
+    return token
+
+
+@router.post("/admin/users/{user_id}/revoke-sessions")
+def admin_revoke_sessions(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    keep = current_session_id(db, request) if target.id == admin.id else None
+    revoked = revoke_user_sessions(db, target.id, keep_session_id=keep)
+    audit_event(
+        db,
+        "sessions_revoked",
+        actor_user_id=admin.id,
+        target_user_id=target.id,
+        detail=f"revoked={revoked}",
+    )
+    db.commit()
+    return {"ok": True, "revoked": revoked}
+
+
+@router.post("/admin/users/{user_id}/enrollment", response_model=AdminInvitationResponse)
+def admin_reissue_enrollment(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.auth_public_key_b64 or target.passwordless_enrolled_at or vault_store.get_vault(db, target.id):
+        raise HTTPException(status_code=409, detail="Enrollment is already complete")
+    token = _issue_enrollment(db, target, admin)
+    audit_event(db, "enrollment_reissued", actor_user_id=admin.id, target_user_id=target.id)
+    db.commit()
+    db.refresh(target)
+    return {**_user_response(target).model_dump(), "enrollment_token": token}
 
 
 @router.get("/admin/metrics")

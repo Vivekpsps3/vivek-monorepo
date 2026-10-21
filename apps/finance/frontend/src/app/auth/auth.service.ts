@@ -133,6 +133,41 @@ export class AuthService {
     return response.user;
   }
 
+  previewInvitation(token: string): Promise<{ username: string; display_name: string; expires_at: string }> {
+    return firstValueFrom(
+      this.http.get<{ username: string; display_name: string; expires_at: string }>(
+        apiUrl(`/auth/invitations/${encodeURIComponent(token)}`),
+        { withCredentials: true },
+      ),
+    );
+  }
+
+  /** Finish an admin enrollment link: passphrase only. The username is already chosen. */
+  async enrollInvitation(token: string, vaultPassphrase: string): Promise<AuthUser> {
+    if (vaultPassphrase.length < 12) {
+      throw new Error('Vault passphrase must be at least 12 characters');
+    }
+    const vaultMaterial = await createVaultMaterial(vaultPassphrase);
+    const signingMaterial = await createSigningKey(vaultPassphrase);
+    const response = await firstValueFrom(
+      this.http.post<LoginResponse>(
+        apiUrl(`/auth/invitations/${encodeURIComponent(token)}/enroll`),
+        {
+          public_key_b64: signingMaterial.publicKeyB64,
+          vault: vaultMaterial.setupPayload,
+          auth: signingMaterial.wrapped,
+        },
+        { withCredentials: true },
+      ),
+    );
+    if (!response) throw new Error('Unable to finish enrollment');
+    this.checkedSession = true;
+    this.finance.clearSessionState();
+    await this.vault.adoptBootstrapVault(vaultMaterial.dek);
+    this.userSubject.next(response.user);
+    return response.user;
+  }
+
   login(email: string, password: string): Observable<AuthUser> {
     return this.http
       .post<LoginResponse>(apiUrl('/auth/login/migrate'), { email, password }, { withCredentials: true })
