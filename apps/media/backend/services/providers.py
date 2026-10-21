@@ -171,33 +171,48 @@ SKIPPED_ALBUM_TYPES = {"compilation", "live", "remix", "soundtrack", "dj-mix", "
 
 def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
     found = []
-    if kind in (None, "", "track"):
-        response = http.get(
-            "https://musicbrainz.org/ws/2/recording",
-            params={"query": query, "fmt": "json", "limit": 8},
-        )
-        response.raise_for_status()
-        for item in response.json().get("recordings", []):
-            artist = artist_name(item.get("artist-credit"))
-            found.append(music_result("track", item.get("id"), item.get("title"), artist, item.get("first-release-date")))
-    if kind in (None, "", "album"):
-        response = http.get(
-            "https://musicbrainz.org/ws/2/release",
-            params={"query": f"{query} AND primarytype:album", "fmt": "json", "limit": 8},
-        )
-        response.raise_for_status()
-        for item in response.json().get("releases", []):
-            artist = artist_name(item.get("artist-credit"))
-            mbid = item.get("id")
-            result = music_result("album", mbid, item.get("title"), artist, item.get("date"))
-            result["artwork_url"] = f"https://coverartarchive.org/release/{mbid}/front-250" if mbid else None
-            found.append(result)
-    if kind in (None, "", "artist"):
+    failed = False
+
+    def attempt(load):
+        nonlocal failed
         try:
-            found.extend(musicbrainz_artists(http, query))
+            found.extend(load())
         except Exception:
-            if kind == "artist":
-                raise
+            failed = True
+
+    if kind in (None, "", "track"):
+        def recordings():
+            response = http.get(
+                "https://musicbrainz.org/ws/2/recording",
+                params={"query": query, "fmt": "json", "limit": 8},
+            )
+            response.raise_for_status()
+            rows = []
+            for item in response.json().get("recordings", []):
+                artist = artist_name(item.get("artist-credit"))
+                rows.append(music_result("track", item.get("id"), item.get("title"), artist, item.get("first-release-date")))
+            return rows
+        attempt(recordings)
+    if kind in (None, "", "album"):
+        def albums():
+            response = http.get(
+                "https://musicbrainz.org/ws/2/release",
+                params={"query": f"{query} AND primarytype:album", "fmt": "json", "limit": 8},
+            )
+            response.raise_for_status()
+            rows = []
+            for item in response.json().get("releases", []):
+                artist = artist_name(item.get("artist-credit"))
+                mbid = item.get("id")
+                result = music_result("album", mbid, item.get("title"), artist, item.get("date"))
+                result["artwork_url"] = f"https://coverartarchive.org/release/{mbid}/front-250" if mbid else None
+                rows.append(result)
+            return rows
+        attempt(albums)
+    if kind in (None, "", "artist"):
+        attempt(lambda: musicbrainz_artists(http, query))
+    if not found and failed:
+        raise RuntimeError("MusicBrainz search failed")
     return found
 
 
