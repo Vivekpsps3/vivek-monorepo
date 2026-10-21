@@ -255,19 +255,9 @@ async function viewLibrary(params) {
   app.innerHTML = `
     <section class="hero"><div><p class="eyebrow">Library</p><h1>Saved</h1></div></section>
     ${continuePoint(resume)}
-    <form class="filters" data-action="library-filter">
-      <label>Type <select name="kind">${options(kinds, kind)}</select></label>
-      <label>Status <select name="status">${options(statuses, status)}</select></label>
-      <label>Sort <select name="sort">${options([
-        { value: "activity", label: "Recent activity" },
-        { value: "added", label: "Date added" },
-        { value: "rating", label: "Your rating" },
-        { value: "release", label: "Release year" },
-      ], sort)}</select></label>
-      <label>Search <input name="q" value="${esc(q)}" type="search" placeholder="Title or creator"></label>
-      <button class="btn" type="submit">Apply</button>
-    </form>
-    ${payload.items.length ? `<div class="grid">${payload.items.map(card).join("")}</div>` : `<p class="quiet">Nothing matches. <a href="#/search">Search public metadata</a> or <a href="#/new">add it yourself</a>.</p>`}
+    <div class="status-row">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind: item.value, status, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
+    <div class="status-row">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind, status: item.value, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
+    ${payload.items.length ? `<div class="grid">${payload.items.map(card).join("")}</div>` : `<p class="quiet"><a href="#/search">Search</a></p>`}
   `;
 }
 
@@ -275,7 +265,7 @@ function viewSearch(params) {
   const q = params.get("q") || "";
   const kind = params.get("kind") || "";
   app.innerHTML = `
-    <section class="hero"><div><p class="eyebrow">Search</p><h1>Find it, then make it yours.</h1></div></section>
+    <section class="hero"><div><h1>Search</h1></div></section>
     <form class="filters" data-action="search-now" id="search-form">
       <label class="grow">Search <input id="search-q" name="q" value="${esc(q)}" type="search" autocomplete="off" placeholder="Title, artist, or author"></label>
       <label>Type <select id="search-kind" name="kind">${options([
@@ -501,7 +491,7 @@ function musicBlock(entry) {
       </button>
       ${scoreMarks(album.rating, album.title)}
       <ol class="cover-tracks" hidden>
-        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><span>${esc(track.title)}</span>${scoreMarks(track.rating, track.title)}</li>`).join("")}
+        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><button type="button" class="song-name" data-song-center="${esc(track.title)}">${esc(track.title)}</button>${scoreMarks(track.rating, track.title)}</li>`).join("")}
       </ol>
     </li>`).join("");
   return `
@@ -516,14 +506,17 @@ function musicBlock(entry) {
     </section>`;
 }
 
-function paintWeb(center, nodes) {
+let webNodes = [];
+
+function paintWeb(center, nodes = webNodes) {
+  webNodes = nodes || [];
   const box = document.querySelector("[data-web]");
-  if (!box || !nodes.length) return;
-  const count = Math.min(nodes.length, 12);
+  if (!box || !webNodes.length) return;
+  const count = Math.min(webNodes.length, 12);
   const cx = 160;
   const cy = 118;
   const radius = 92;
-  const marks = nodes.slice(0, count).map((node, index) => {
+  const marks = webNodes.slice(0, count).map((node, index) => {
     const angle = (-Math.PI / 2) + (index / count) * Math.PI * 2;
     const x = cx + Math.cos(angle) * radius;
     const y = cy + Math.sin(angle) * radius;
@@ -788,6 +781,12 @@ document.addEventListener("click", async event => {
       setPressed(season, !watched, "is-done");
       fail(error);
     }
+    return;
+  }
+  const song = target.closest("[data-song-center]");
+  if (song) {
+    keepButtonClick(event, target);
+    paintWeb(song.dataset.songCenter);
     return;
   }
   const cover = target.closest("[data-album-open]");

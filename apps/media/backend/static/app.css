@@ -382,7 +382,9 @@ dialog form { display: grid; gap: var(--space-3); }
   background: var(--border-subtle, var(--surface)); cursor: pointer;
 }
 .mark.is-on { background: var(--accent); }
+.song-name { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 0; }
 .status-row, .flag-row, .exp-list { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items: center; }
 .status-mark, .flag {
   min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: 999px;
   background: var(--surface); color: inherit; font: inherit; cursor: pointer;

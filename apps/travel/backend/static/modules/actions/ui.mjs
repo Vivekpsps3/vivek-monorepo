@@ -151,11 +151,12 @@ export async function onAction(button, ui) {
       body: JSON.stringify({
         title: reminder.title,
         due_at: reminder.due_at,
-        done: button.checked,
+        done: !reminder.done,
         kind: reminder.kind,
         notes: reminder.notes,
       }),
     });
+    ui.paint(renderTrip(state.trip), "home");
     return;
   }
   if (action === "clear-key") {

@@ -19,10 +19,10 @@ export function renderTrip(trip, focusDay) {
     </div>${actions("Save trip")}</form>`;
   const header = editingTrip
     ? tripForm
-    : `<header class="page-head"><div class="page-head-row"><div><p class="kicker">${esc(labelOf(STATUSES, trip.status))} · ${esc(trip.phase === "in_progress" ? "In progress" : trip.phase)} · ${esc(prettyRange(trip.start_date, trip.end_date))}</p><h1>${esc(trip.title)}</h1><p class="lede">${trip.origin_label ? `From ${esc(trip.origin_label)}. ` : ""}${esc(trip.notes || "The days below are the trip.")}</p></div><div class="row-actions"><button class="btn btn-secondary btn-sm" type="button" data-action="edit" data-kind="trip" data-id="${trip.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="trip" data-id="${trip.id}">Delete</button></div></div></header>`;
+    : `<header class="page-head"><div class="page-head-row"><div><p class="kicker">${esc(labelOf(STATUSES, trip.status))} · ${esc(prettyRange(trip.start_date, trip.end_date))}</p><h1>${esc(trip.title)}</h1></div><div class="row-actions"><button class="btn btn-secondary btn-sm" type="button" data-action="edit" data-kind="trip" data-id="${trip.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="trip" data-id="${trip.id}">Delete</button></div></div></header>`;
   const ptoLine = trip.counts_as_pto
-    ? `<article class="metric"><b>${esc(daysText(trip.pto.days))}</b><span>${esc(trip.pto.leftover_after ? `${daysText(trip.pto.balance_when_you_leave)} when you leave · ${daysText(trip.pto.leftover_after)} left after` : trip.pto.note || "PTO")}</span></article>`
-    : `<article class="metric"><b>Not PTO</b><span>This trip does not use PTO.</span></article>`;
+    ? `<article class="metric"><b>${esc(daysText(trip.pto.days))}</b><span>PTO</span></article>`
+    : "";
   const metrics = `<section class="metrics">
       <article class="metric"><b>${trip.span_days}</b><span>${trip.nights} nights away</span></article>
       <article class="metric"><b>${esc(budgetText(trip.budget))}</b><span>Trip budget</span></article>
@@ -34,7 +34,7 @@ export function renderTrip(trip, focusDay) {
       ? stayForm(stay)
       : `<div class="ride"><div><strong>${esc(stay.city)}</strong><p class="meta">${esc(prettyRange(stay.arrive_on, stay.leave_on))}${stay.lodging_name ? ` · ${esc(stay.lodging_name)}` : ""}${stay.outside ? " · outside the trip dates" : ""}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="stay" data-id="${stay.id}">Edit</button></div>`)
     .join("");
-  const cityBlock = `<section class="card"><div class="card-head"><h2>Cities</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="stay">Add city</button></div>${state.compose === "stay" ? stayForm(null) : ""}${stays || "<p class='meta'>Add each city you stay in. More than one city is a multi-city trip.</p>"}</section>`;
+  const cityBlock = `<section class="card"><div class="card-head"><h2>Cities</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="stay" aria-label="Add city">+</button></div>${state.compose === "stay" ? stayForm(null) : ""}${stays}</section>`;
   const groups = ROLES.map(([role, label]) => {
     const rows = trip.transports.filter((item) => item.role === role);
     if (!rows.length && (role === "connection" || role === "local") && state.compose !== `transport:${role}`) return "";
@@ -46,7 +46,7 @@ export function renderTrip(trip, focusDay) {
       })
       .join("");
     const composer = state.compose === `transport:${role}` ? transportForm(null, role) : "";
-    return `<section class="section"><div class="card-head"><h3>${esc(label)}</h3><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="transport:${role}" data-role="${role}">Add</button></div>${composer}${body || "<p class='meta'>Nothing here yet.</p>"}</section>`;
+    return `<section class="section"><div class="card-head"><h3>${esc(label)}</h3><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="transport:${role}" data-role="${role}" aria-label="Add ${esc(label)}">+</button></div>${composer}${body}</section>`;
   }).join("");
   const days = trip.days
     .map((day) => {
@@ -57,8 +57,9 @@ export function renderTrip(trip, focusDay) {
           ? planForm(item)
           : `<div class="plan"><div><p>${item.start_time ? `<strong>${esc(item.start_time)}</strong> · ` : ""}<span class="chip">${esc(labelOf(KINDS, item.kind))}</span> ${esc(item.title)}</p><p class="meta">${[item.place_name, item.address, item.cost ? money(item.cost, item.currency) : "", item.notes].filter(Boolean).map(esc).join(" · ")}</p></div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="plan" data-id="${item.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="plan" data-id="${item.id}">Delete</button></div></div>`)
         .join("");
-      const adder = state.compose === "plan" && state.composeDate === day.on_date ? planForm(null, day.on_date) : "";
-      return `<div class="day" id="day-${day.on_date}"${focused}><div class="day-date">${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}<br><button class="btn btn-ghost btn-sm" type="button" data-action="compose" data-compose="plan" data-date="${day.on_date}">Add</button></div><div>${adder}${moves}${items || "<p class='meta'>Nothing planned.</p>"}</div></div>`;
+      const adder = editing("plan", 0) ? "" : `<form class="day-add" data-form="plan"><input type="hidden" name="on_date" value="${day.on_date}"><input type="hidden" name="kind" value="activity"><input name="title" aria-label="Plan" placeholder="${esc(day.city || prettyDate(day.on_date))}" autocomplete="off"></form>`;
+      const editor = state.compose === "plan" && state.composeDate === day.on_date ? planForm(null, day.on_date) : "";
+      return `<div class="day" id="day-${day.on_date}"${focused}><div class="day-date">${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}</div><div>${moves}${items}${adder}${editor}</div></div>`;
     })
     .join("");
   const outside = trip.outside_plans.length
@@ -85,7 +86,7 @@ export function renderTrip(trip, focusDay) {
     ? `<form class="stack" data-form="note"><div class="form-grid">${field("Date, optional", "on_date", "", "date", true)}${area("Note", "body", "")}</div>${actions("Add note")}</form>`
     : "";
   const reminders = trip.reminders
-    .map((item) => `<div class="ride"><label class="check"><input type="checkbox" data-action="toggle-reminder" data-id="${item.id}"${item.done ? " checked" : ""}> ${esc(item.title)}</label><div><p class="meta">${item.due_at ? esc(prettyWhen(item.due_at)) : esc(item.kind)}${item.notes ? ` · ${esc(item.notes)}` : ""}</p><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="reminder" data-id="${item.id}">Delete</button></div></div>`)
+    .map((item) => `<div class="ride"><button type="button" class="reminder${item.done ? " is-done" : ""}" data-action="toggle-reminder" data-id="${item.id}" aria-pressed="${item.done ? "true" : "false"}">${esc(item.title)}</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="reminder" data-id="${item.id}" aria-label="Delete">✕</button></div>`)
     .join("");
   const reminderForm = state.compose === "reminder"
     ? `<form class="stack" data-form="reminder"><div class="form-grid">${field("Reminder", "title", "", "text", true)}${select("Kind", "kind", "general", [["general", "General"], ["parking", "Parking"], ["flight", "Flight"], ["packing", "Packing"]])}${field("When", "due_at", "", "datetime-local")}${area("Notes", "notes", "")}</div>${actions("Add reminder")}</form>`
@@ -94,15 +95,15 @@ export function renderTrip(trip, focusDay) {
   const links = points
     .map((point) => `<a href="https://www.openstreetmap.org/?mlat=${point.lat}&mlon=${point.lng}#map=16/${point.lat}/${point.lng}">${esc(point.kind)} · ${esc(point.label)}</a>`)
     .join("");
-  const mapCard = `<aside class="card map-card"><h2>Map</h2><div id="map" class="map"${points.length ? "" : " hidden"}></div><p class="meta">${points.length ? "Pins are the cities, plans, and parking spots that have a location." : "Use Find on map when you add an address to drop a pin."}</p><div class="map-links">${links}</div></aside>`;
+  const mapCard = points.length ? `<aside class="card map-card"><div id="map" class="map"></div><div class="map-links">${links}</div></aside>` : "";
   return `${banner()}${header}${metrics}<div class="split"><div>
       ${cityBlock}
       <section class="card"><h2>Getting there</h2>${groups}</section>
       <section class="card"><div class="card-head"><h2>Days</h2></div>${days}${outside}</section>
-      <section class="card"><div class="card-head"><h2>Parking and pickup</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="parking">Add</button></div><p class="meta">Say whether a spot is necessary, whether it is booked, and whether you are parking, being dropped off, or picked up.</p>${state.compose === "parking" ? parkingForm(null, trip.transports) : ""}${parkingRows || "<p class='meta'>No parking notes yet.</p>"}</section>
-      <section class="card"><div class="card-head"><h2>Budget</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="budget">Add extra cost</button></div><p class="meta">Flight, drive, plan, and parking costs are included when you type them. Add a line only for something that is not already on the trip. Different currencies stay separate.</p>${budgetForm}${budgetLines}${manual}</section>
-      <section class="card"><div class="card-head"><h2>Notes</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="note">Add note</button></div>${noteForm}${notes || "<p class='meta'>Notes stay on this trip.</p>"}</section>
-      <section class="card"><div class="card-head"><h2>Reminders</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="reminder">Add reminder</button></div>${reminderForm}${reminders || "<p class='meta'>Reminders for parking, check-in, or packing.</p>"}</section>
+      <section class="card"><div class="card-head"><h2>Parking</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="parking" aria-label="Add parking">+</button></div>${state.compose === "parking" ? parkingForm(null, trip.transports) : ""}${parkingRows}</section>
+      <section class="card"><div class="card-head"><h2>Budget</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="budget" aria-label="Add cost">+</button></div>${budgetForm}${budgetLines}${manual}</section>
+      <section class="card"><div class="card-head"><h2>Notes</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="note" aria-label="Add note">+</button></div>${noteForm}${notes}</section>
+      <section class="card"><div class="card-head"><h2>Reminders</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="reminder" aria-label="Add reminder">+</button></div>${reminderForm}${reminders}</section>
     </div>${mapCard}</div>`;
 }
 export function collectPoints(trip) {

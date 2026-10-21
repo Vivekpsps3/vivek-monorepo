@@ -357,6 +357,16 @@ label { display: block; margin-bottom: var(--space-1); color: var(--text-seconda
   font: inherit;
   border-bottom: 2px solid var(--city, var(--border-subtle));
 }
+.day-add input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  min-height: 36px;
+}
+.reminder { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.reminder.is-done { color: var(--text-tertiary); }
 .pto-pip {
   border: 0;
   width: 1.6rem;
