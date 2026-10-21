@@ -34,7 +34,7 @@ export function renderTrip(trip, focusDay) {
       ? stayForm(stay)
       : `<div class="ride"><div><strong>${esc(stay.city)}</strong><p class="meta">${esc(prettyRange(stay.arrive_on, stay.leave_on))}${stay.lodging_name ? ` · ${esc(stay.lodging_name)}` : ""}${stay.outside ? " · outside the trip dates" : ""}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="stay" data-id="${stay.id}">Edit</button></div>`)
     .join("");
-  const cityBlock = `<section class="card"><div class="card-head"><h2>Cities</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="stay" aria-label="Add city">+</button></div>${state.compose === "stay" ? stayForm(null) : ""}${stays}</section>`;
+  const cityBlock = `<section class="card"><h2>Cities</h2>${stays}<form class="day-add" data-form="stay"><input type="hidden" name="arrive_on" value="${esc(trip.start_date)}"><input type="hidden" name="leave_on" value="${esc(trip.end_date)}"><input name="city" aria-label="City" placeholder="City" required autocomplete="off"></form></section>`;
   const groups = ROLES.map(([role, label]) => {
     const rows = trip.transports.filter((item) => item.role === role);
     if (!rows.length && (role === "connection" || role === "local") && state.compose !== `transport:${role}`) return "";
@@ -45,8 +45,8 @@ export function renderTrip(trip, focusDay) {
         return `<div class="ride"><div><p class="kicker">${esc(labelOf(MODES, item.mode))}</p><p>${esc(transportSummary(item))}</p>${meta ? `<p class="meta">${esc(meta)}</p>` : ""}</div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="transport" data-id="${item.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="transport" data-id="${item.id}">Delete</button></div></div>`;
       })
       .join("");
-    const composer = state.compose === `transport:${role}` ? transportForm(null, role) : "";
-    return `<section class="section"><div class="card-head"><h3>${esc(label)}</h3><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="transport:${role}" data-role="${role}" aria-label="Add ${esc(label)}">+</button></div>${composer}${body}</section>`;
+    const composer = `<form class="day-add" data-form="transport"><input type="hidden" name="role" value="${esc(role)}"><input type="hidden" name="mode" value="flight"><input type="hidden" name="status" value="planned"><input name="depart_place" aria-label="From" placeholder="From" required autocomplete="off"><input name="arrive_place" aria-label="To" placeholder="To" autocomplete="off"><button type="submit" hidden>Add</button></form>`;
+    return `<section class="section"><h3>${esc(label)}</h3>${body}${composer}</section>`;
   }).join("");
   const days = trip.days
     .map((day) => {
@@ -76,21 +76,15 @@ export function renderTrip(trip, focusDay) {
   const manual = trip.budget.manual
     .map((line) => `<div class="ride"><div><p>${esc(line.label)}</p><p class="meta">Extra line · ${esc(line.category_label)}</p></div><div class="row-actions"><strong>${esc(money(line.amount, line.currency))}</strong><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="budget" data-id="${line.id}">Delete</button></div></div>`)
     .join("");
-  const budgetForm = state.compose === "budget"
-    ? `<form class="stack" data-form="budget"><div class="form-grid">${select("Category", "category", "other", [["outbound_flight", "Outbound flight"], ["inbound_flight", "Inbound flight"], ["lodging", "Lodging"], ["food", "Food"], ["activity", "Activities"], ["parking", "Parking"], ["other", "Other"]], true)}${field("Name", "label", "", "text", true)}${field("Amount", "amount", "")}${field("Currency", "currency", "USD")}${check("Paid", "paid", false)}${area("Notes", "notes", "")}</div>${actions("Add cost")}</form>`
-    : "";
+  const budgetForm = `<form class="day-add" data-form="budget"><input type="hidden" name="category" value="other"><input name="label" aria-label="Cost" placeholder="Cost" required autocomplete="off"><input name="amount" aria-label="Amount" inputmode="decimal" placeholder="0" required><button type="submit" hidden>Add</button></form>`;
   const notes = trip.note_entries
     .map((note) => `<div class="ride"><div><p>${esc(note.body)}</p><p class="meta">${note.on_date ? esc(prettyDate(note.on_date)) : "Trip note"}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="note" data-id="${note.id}">Delete</button></div>`)
     .join("");
-  const noteForm = state.compose === "note"
-    ? `<form class="stack" data-form="note"><div class="form-grid">${field("Date, optional", "on_date", "", "date", true)}${area("Note", "body", "")}</div>${actions("Add note")}</form>`
-    : "";
+  const noteForm = `<form class="day-add" data-form="note"><input name="body" aria-label="Note" placeholder="Note" required autocomplete="off"></form>`;
   const reminders = trip.reminders
     .map((item) => `<div class="ride"><button type="button" class="reminder${item.done ? " is-done" : ""}" data-action="toggle-reminder" data-id="${item.id}" aria-pressed="${item.done ? "true" : "false"}">${esc(item.title)}</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="reminder" data-id="${item.id}" aria-label="Delete">✕</button></div>`)
     .join("");
-  const reminderForm = state.compose === "reminder"
-    ? `<form class="stack" data-form="reminder"><div class="form-grid">${field("Reminder", "title", "", "text", true)}${select("Kind", "kind", "general", [["general", "General"], ["parking", "Parking"], ["flight", "Flight"], ["packing", "Packing"]])}${field("When", "due_at", "", "datetime-local")}${area("Notes", "notes", "")}</div>${actions("Add reminder")}</form>`
-    : "";
+  const reminderForm = `<form class="day-add" data-form="reminder"><input type="hidden" name="kind" value="general"><input name="title" aria-label="Reminder" placeholder="Reminder" required autocomplete="off"></form>`;
   const points = collectPoints(trip);
   const links = points
     .map((point) => `<a href="https://www.openstreetmap.org/?mlat=${point.lat}&mlon=${point.lng}#map=16/${point.lat}/${point.lng}">${esc(point.kind)} · ${esc(point.label)}</a>`)
@@ -100,10 +94,10 @@ export function renderTrip(trip, focusDay) {
       ${cityBlock}
       <section class="card"><h2>Getting there</h2>${groups}</section>
       <section class="card"><div class="card-head"><h2>Days</h2></div>${days}${outside}</section>
-      <section class="card"><div class="card-head"><h2>Parking</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="parking" aria-label="Add parking">+</button></div>${state.compose === "parking" ? parkingForm(null, trip.transports) : ""}${parkingRows}</section>
-      <section class="card"><div class="card-head"><h2>Budget</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="budget" aria-label="Add cost">+</button></div>${budgetForm}${budgetLines}${manual}</section>
-      <section class="card"><div class="card-head"><h2>Notes</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="note" aria-label="Add note">+</button></div>${noteForm}${notes}</section>
-      <section class="card"><div class="card-head"><h2>Reminders</h2><button class="btn btn-secondary btn-sm" type="button" data-action="compose" data-compose="reminder" aria-label="Add reminder">+</button></div>${reminderForm}${reminders}</section>
+      <section class="card"><h2>Parking</h2>${parkingRows}<form class="day-add" data-form="parking"><input type="hidden" name="necessary" value="yes"><input type="hidden" name="arrangement" value="self_park"><input name="place_name" aria-label="Parking" placeholder="Parking" required autocomplete="off"></form></section>
+      <section class="card"><h2>Budget</h2>${budgetLines}${manual}${budgetForm}</section>
+      <section class="card"><h2>Notes</h2>${notes}${noteForm}</section>
+      <section class="card"><h2>Reminders</h2>${reminders}${reminderForm}</section>
     </div>${mapCard}</div>`;
 }
 export function collectPoints(trip) {
