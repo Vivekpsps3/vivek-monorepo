@@ -1,7 +1,7 @@
 """Address search through OpenStreetMap Nominatim.
 
-Search runs only when you ask to find a place. Results are cached so the same
-address is not sent again. Saves do not geocode on their own.
+A city or place with no coordinates is looked up once when it is saved or when
+the trip is opened. The same query is cached, so it is not sent again.
 """
 
 import json
@@ -70,3 +70,51 @@ def cached_search(db, query: str, fetch) -> list[dict]:
             continue
     db.merge(PlaceCache(query=key, payload=json.dumps(clean), fetched_at=datetime.now(UTC)))
     return clean
+
+
+def first_hit(db, query: str, fetch) -> dict | None:
+    try:
+        hits = cached_search(db, query, fetch)
+    except ValueError:
+        return None
+    return hits[0] if hits else None
+
+
+def pin_trip(db, trip, fetch) -> None:
+    """Fill missing coordinates for cities, day plans, and parking."""
+    for stay in trip.stays:
+        if stay.lat is not None and stay.lng is not None:
+            continue
+        query = ", ".join(part for part in (stay.city, stay.region, stay.country) if part)
+        hit = first_hit(db, query, fetch)
+        if hit:
+            stay.lat = hit["lat"]
+            stay.lng = hit["lng"]
+
+    def city_for(day) -> str | None:
+        for stay in trip.stays:
+            if stay.arrive_on <= day <= stay.leave_on:
+                return stay.city
+        return trip.stays[0].city if trip.stays else None
+
+    for plan in trip.plans:
+        if plan.lat is not None and plan.lng is not None:
+            continue
+        label = plan.place_name or plan.address or plan.title
+        city = city_for(plan.on_date)
+        query = f"{label}, {city}" if label and city else (label or "")
+        hit = first_hit(db, query, fetch)
+        if hit:
+            plan.lat = hit["lat"]
+            plan.lng = hit["lng"]
+
+    home = trip.stays[0].city if trip.stays else None
+    for spot in trip.parking:
+        if spot.lat is not None and spot.lng is not None:
+            continue
+        label = spot.place_name or spot.address
+        query = f"{label}, {home}" if label and home else (label or "")
+        hit = first_hit(db, query, fetch)
+        if hit:
+            spot.lat = hit["lat"]
+            spot.lng = hit["lng"]

@@ -32,7 +32,7 @@ export function renderTrip(trip, focusDay) {
   const stays = trip.stays
     .map((stay) => editing("stay", stay.id)
       ? stayForm(stay)
-      : `<div class="ride"><div><strong>${esc(stay.city)}</strong><p class="meta">${esc(prettyRange(stay.arrive_on, stay.leave_on))}${stay.lodging_name ? ` · ${esc(stay.lodging_name)}` : ""}${stay.outside ? " · outside the trip dates" : ""}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="stay" data-id="${stay.id}">Edit</button></div>`)
+      : `<div class="ride"${stay.lat != null ? ` data-map-lat="${stay.lat}" data-map-lng="${stay.lng}"` : ""}><div><strong>${esc(stay.city)}</strong><p class="meta">${esc(prettyRange(stay.arrive_on, stay.leave_on))}${stay.lodging_name ? ` · ${esc(stay.lodging_name)}` : ""}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="stay" data-id="${stay.id}">Edit</button></div>`)
     .join("");
   const cityBlock = `<section class="card"><h2>Cities</h2>${stays}<form class="day-add" data-form="stay"><input type="hidden" name="arrive_on" value="${esc(trip.start_date)}"><input type="hidden" name="leave_on" value="${esc(trip.end_date)}"><input name="city" aria-label="City" placeholder="City" required autocomplete="off"></form></section>`;
   const groups = ROLES.map(([role, label]) => {
@@ -59,7 +59,9 @@ export function renderTrip(trip, focusDay) {
         .join("");
       const adder = editing("plan", 0) ? "" : `<form class="day-add" data-form="plan"><input type="hidden" name="on_date" value="${day.on_date}"><input type="hidden" name="kind" value="activity"><input name="title" aria-label="Plan" placeholder="${esc(day.city || prettyDate(day.on_date))}" autocomplete="off"></form>`;
       const editor = state.compose === "plan" && state.composeDate === day.on_date ? planForm(null, day.on_date) : "";
-      return `<div class="day" id="day-${day.on_date}"${focused}><div class="day-date">${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}</div><div>${moves}${items}${adder}${editor}</div></div>`;
+      const here = trip.stays.find((stay) => stay.city === day.city && stay.lat != null);
+      const pin = here ? ` data-map-lat="${here.lat}" data-map-lng="${here.lng}"` : "";
+      return `<div class="day" id="day-${day.on_date}"${focused}${pin}><div class="day-date">${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}</div><div>${moves}${items}${adder}${editor}</div></div>`;
     })
     .join("");
   const outside = trip.outside_plans.length
@@ -86,10 +88,7 @@ export function renderTrip(trip, focusDay) {
     .join("");
   const reminderForm = `<form class="day-add" data-form="reminder"><input type="hidden" name="kind" value="general"><input name="title" aria-label="Reminder" placeholder="Reminder" required autocomplete="off"></form>`;
   const points = collectPoints(trip);
-  const links = points
-    .map((point) => `<a href="https://www.openstreetmap.org/?mlat=${point.lat}&mlon=${point.lng}#map=16/${point.lat}/${point.lng}">${esc(point.kind)} · ${esc(point.label)}</a>`)
-    .join("");
-  const mapCard = points.length ? `<aside class="card map-card"><div id="map" class="map"></div><div class="map-links">${links}</div></aside>` : "";
+  const mapCard = points.length ? `<aside class="card map-card"><div id="map" class="map"></div></aside>` : "";
   return `${banner()}${header}${metrics}<div class="split"><div>
       ${cityBlock}
       <section class="card"><h2>Getting there</h2>${groups}</section>
@@ -102,34 +101,66 @@ export function renderTrip(trip, focusDay) {
 }
 export function collectPoints(trip) {
   const points = [];
-  trip.stays.forEach((stay) => {
-    if (stay.lat != null && stay.lng != null) points.push({ lat: stay.lat, lng: stay.lng, label: stay.city, kind: "City" });
+  trip.stays.forEach((stay, index) => {
+    if (stay.lat != null && stay.lng != null) {
+      points.push({ lat: stay.lat, lng: stay.lng, label: stay.city, kind: "City", order: index });
+    }
   });
   trip.days.forEach((day) => day.items.forEach((item) => {
-    if (item.lat != null && item.lng != null) points.push({ lat: item.lat, lng: item.lng, label: item.title, kind: labelOf(KINDS, item.kind) });
+    if (item.lat != null && item.lng != null) {
+      points.push({ lat: item.lat, lng: item.lng, label: item.title, kind: labelOf(KINDS, item.kind), order: 0 });
+    }
   }));
   trip.parking.forEach((item) => {
-    if (item.lat != null && item.lng != null) points.push({ lat: item.lat, lng: item.lng, label: item.place_name || "Parking", kind: "Parking" });
+    if (item.lat != null && item.lng != null) {
+      points.push({ lat: item.lat, lng: item.lng, label: item.place_name || "Parking", kind: "Parking", order: 0 });
+    }
   });
   return points;
 }
+const CITY_COLORS = ["#1f6f6a", "#c4a574", "#7d9a78", "#8d7ea8", "#c47c6a"];
+
 export function mountMap() {
   const element = document.querySelector("#map");
-  if (!element || element.hidden) return;
+  if (!element) return;
   const points = state.trip ? collectPoints(state.trip) : [];
-  if (!points.length || !window.L) {
-    element.hidden = false;
-    element.textContent = window.L ? "" : "The map library did not load. Use the OpenStreetMap links.";
-    return;
+  if (!points.length || !window.L) return;
+  if (window._travelMap) {
+    window._travelMap.remove();
+    window._travelMap = null;
   }
-  const map = window.L.map(element);
+  const map = window.L.map(element, { scrollWheelZoom: false });
   window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
     attribution: "&copy; OpenStreetMap",
   }).addTo(map);
-  const markers = points.map((point) => window.L.marker([point.lat, point.lng]).bindPopup(`<strong>${esc(point.label)}</strong><br>${esc(point.kind)}`));
+  const route = points.filter((point) => point.kind === "City");
+  if (route.length > 1) {
+    window.L.polyline(route.map((point) => [point.lat, point.lng]), {
+      color: "#1f6f6a",
+      weight: 3,
+      opacity: 0.85,
+    }).addTo(map);
+  }
+  const markers = points.map((point) => {
+    const color = CITY_COLORS[(point.order || 0) % CITY_COLORS.length];
+    const icon = window.L.divIcon({
+      className: "map-pin",
+      html: `<span style="background:${color}"></span>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+    return window.L.marker([point.lat, point.lng], { icon }).bindPopup(`<strong>${esc(point.label)}</strong>`);
+  });
   const group = window.L.featureGroup(markers).addTo(map);
-  map.fitBounds(group.getBounds().pad(0.3));
+  if (points.length === 1) map.setView([points[0].lat, points[0].lng], 11);
+  else map.fitBounds(group.getBounds().pad(0.35));
   window._travelMap = map;
+  document.querySelectorAll("[data-map-lat]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      if (event.target.closest("button, input, a")) return;
+      map.flyTo([Number(node.dataset.mapLat), Number(node.dataset.mapLng)], 12);
+    });
+  });
   setTimeout(() => map.invalidateSize(), 0);
 }

@@ -238,6 +238,39 @@ def test_trips_stay_with_the_finance_user(client):
     assert client.get("/api/settings").json()["account"]["name"] == "Other"
 
 
+def test_cities_are_placed_on_the_map_when_the_trip_is_saved(client):
+    from deps import get_geocoder
+
+    def fetch(query):
+        places = {
+            "lisbon": {"label": "Lisbon", "lat": 38.72, "lng": -9.14},
+            "porto": {"label": "Porto", "lat": 41.15, "lng": -8.61},
+        }
+        hit = places.get(query.split(",")[0].strip().lower())
+        return [hit] if hit else []
+
+    client.app.dependency_overrides[get_geocoder] = lambda: fetch
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Portugal",
+            "start_date": "2026-12-02",
+            "end_date": "2026-12-06",
+            "stays": [
+                {"city": "Lisbon", "arrive_on": "2026-12-02", "leave_on": "2026-12-04"},
+                {"city": "Porto", "arrive_on": "2026-12-04", "leave_on": "2026-12-06"},
+            ],
+            "transports": [],
+        },
+    )
+    assert created.status_code == 201, created.text
+    stays = {stay["city"]: stay for stay in created.json()["stays"]}
+    assert stays["Lisbon"]["lat"] == 38.72
+    assert stays["Porto"]["lng"] == -8.61
+    again = client.get(f"/api/trips/{created.json()['id']}")
+    assert again.json()["stays"][0]["lat"] == 38.72
+
+
 def test_finance_session_is_required(client, monkeypatch):
     from fastapi import HTTPException
 

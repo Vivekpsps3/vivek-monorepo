@@ -195,7 +195,14 @@ label { display: block; margin-bottom: var(--space-1); color: var(--text-seconda
 .empty { padding: var(--space-8) var(--space-5); }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-4); align-items: start; }
 .map-card { position: sticky; top: 80px; }
-.map { height: 320px; border-radius: var(--radius-md); background: var(--surface-2); }
+.map { height: 28rem; border-radius: var(--radius-md); background: var(--surface-2); }
+.map-pin span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 99px;
+  box-shadow: 0 0 0 3px var(--bg);
+}
 .map-links { display: grid; gap: var(--space-2); margin-top: var(--space-3); font-size: var(--text-sm); }
 .map-links a { color: var(--accent); }
 

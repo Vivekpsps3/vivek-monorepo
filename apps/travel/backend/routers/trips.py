@@ -16,9 +16,10 @@ from schemas import (
     TripCreate,
     TripPatch,
 )
-from deps import require_actor
+from deps import get_geocoder, require_actor
 from services.assemble import build_trip, load_trip, pto_context
 from services.dates import ensure_stay_inside
+from services.places import pin_trip
 from services.pto import sync_trip_pto
 from services.records import (
     apply_budget_line,
@@ -41,10 +42,13 @@ def _trip_or_404(db: Session, trip_id: int) -> Trip:
     return trip
 
 
-def _detail(db: Session, trip_id: int) -> dict:
+def _detail(db: Session, trip_id: int, fetch=None) -> dict:
     trip = load_trip(db, trip_id, require_actor().id)
     if trip is None:
         raise HTTPException(status_code=404, detail="That trip is not here.")
+    if fetch is not None:
+        pin_trip(db, trip, fetch)
+        db.flush()
     _row, policy, usages = pto_context(db)
     return build_trip(trip, policy, usages)
 
@@ -73,12 +77,12 @@ def _check_stay_link(db: Session, trip_id: int, stay_id: int | None) -> None:
 
 
 @router.get("/trips/{trip_id}")
-def read_trip(trip_id: int, db: Session = Depends(get_db)):
-    return _detail(db, trip_id)
+def read_trip(trip_id: int, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
+    return _detail(db, trip_id, fetch)
 
 
 @router.post("/trips", status_code=201)
-def create_trip(body: TripCreate, db: Session = Depends(get_db)):
+def create_trip(body: TripCreate, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
     trip = Trip(
         user_id=require_actor().id,
         title=body.title,
@@ -103,7 +107,7 @@ def create_trip(body: TripCreate, db: Session = Depends(get_db)):
         db.add(row)
     sync_trip_pto(db, trip)
     db.flush()
-    return _detail(db, trip.id)
+    return _detail(db, trip.id, fetch)
 
 
 @router.patch("/trips/{trip_id}")
@@ -141,7 +145,7 @@ def delete_trip(trip_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips/{trip_id}/stays", status_code=201)
-def create_stay(trip_id: int, body: StayIn, db: Session = Depends(get_db)):
+def create_stay(trip_id: int, body: StayIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
     trip = _trip_or_404(db, trip_id)
     _check_stay(trip, body)
     sort_order = max((stay.sort_order for stay in trip.stays), default=-1) + 1
@@ -150,11 +154,11 @@ def create_stay(trip_id: int, body: StayIn, db: Session = Depends(get_db)):
     db.add(row)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id)
+    return _detail(db, trip.id, fetch)
 
 
 @router.patch("/stays/{stay_id}")
-def update_stay(stay_id: int, body: StayIn, db: Session = Depends(get_db)):
+def update_stay(stay_id: int, body: StayIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
     row = db.get(Stay, stay_id)
     if row is None:
         raise HTTPException(status_code=404, detail="That city is not here.")
@@ -163,7 +167,7 @@ def update_stay(stay_id: int, body: StayIn, db: Session = Depends(get_db)):
     apply_stay(row, body)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id)
+    return _detail(db, trip.id, fetch)
 
 
 @router.delete("/stays/{stay_id}", status_code=204)
@@ -212,7 +216,7 @@ def delete_transport(transport_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips/{trip_id}/plans", status_code=201)
-def create_plan(trip_id: int, body: PlanIn, db: Session = Depends(get_db)):
+def create_plan(trip_id: int, body: PlanIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
     trip = _trip_or_404(db, trip_id)
     _check_stay_link(db, trip.id, body.stay_id)
     sort_order = max((item.sort_order for item in trip.plans), default=-1) + 1
@@ -221,11 +225,11 @@ def create_plan(trip_id: int, body: PlanIn, db: Session = Depends(get_db)):
     db.add(row)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id)
+    return _detail(db, trip.id, fetch)
 
 
 @router.patch("/plans/{plan_id}")
-def update_plan(plan_id: int, body: PlanIn, db: Session = Depends(get_db)):
+def update_plan(plan_id: int, body: PlanIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
     row = db.get(PlanItem, plan_id)
     if row is None:
         raise HTTPException(status_code=404, detail="That plan is not here.")
@@ -234,7 +238,7 @@ def update_plan(plan_id: int, body: PlanIn, db: Session = Depends(get_db)):
     apply_plan(row, body)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id)
+    return _detail(db, trip.id, fetch)
 
 
 @router.delete("/plans/{plan_id}", status_code=204)
@@ -248,7 +252,7 @@ def delete_plan(plan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips/{trip_id}/parking", status_code=201)
-def create_parking(trip_id: int, body: ParkingIn, db: Session = Depends(get_db)):
+def create_parking(trip_id: int, body: ParkingIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
     trip = _trip_or_404(db, trip_id)
     _check_transport_link(db, trip.id, body.transport_id)
     row = Parking(trip_id=trip.id)
@@ -256,11 +260,11 @@ def create_parking(trip_id: int, body: ParkingIn, db: Session = Depends(get_db))
     db.add(row)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id)
+    return _detail(db, trip.id, fetch)
 
 
 @router.patch("/parking/{parking_id}")
-def update_parking(parking_id: int, body: ParkingIn, db: Session = Depends(get_db)):
+def update_parking(parking_id: int, body: ParkingIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
     row = db.get(Parking, parking_id)
     if row is None:
         raise HTTPException(status_code=404, detail="That parking note is not here.")
@@ -269,7 +273,7 @@ def update_parking(parking_id: int, body: ParkingIn, db: Session = Depends(get_d
     apply_parking(row, body)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id)
+    return _detail(db, trip.id, fetch)
 
 
 @router.delete("/parking/{parking_id}", status_code=204)
