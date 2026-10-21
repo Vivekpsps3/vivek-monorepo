@@ -14,11 +14,14 @@ export async function api(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const headers = { ...(options.headers || {}) };
   if (options.body) headers["Content-Type"] = "application/json";
+  const root = window.TRAVEL_ROOT || "";
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && !readCookie("finance_csrf")) {
+    await fetch(`${root}/api/home`, { credentials: "include", headers: { accept: "application/json" } });
+  }
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     const csrf = readCookie("finance_csrf");
     if (csrf) headers["X-CSRF-Token"] = csrf;
   }
-  const root = window.TRAVEL_ROOT || "";
   const response = await fetch(`${root}${path}`, {
     ...options,
     credentials: "include",

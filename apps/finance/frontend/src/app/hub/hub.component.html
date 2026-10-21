@@ -39,7 +39,6 @@
           <p class="figure-note">Travel is not available from here right now.</p>
         } @else if (!trip) {
           <p class="quiet-title">Nothing on the calendar</p>
-          <p class="figure-note">When you add a trip, the next departure shows up here.</p>
           <a class="open-link" href="/travel/#/trips/new">Plan a trip</a>
         } @else {
           <p class="when">{{ tripWhen(trip) }}</p>
@@ -63,11 +62,11 @@
         @if (mediaState === 'loading') {
           <p class="figure-note" role="status">Checking your journal…</p>
         } @else if (mediaState === 'unavailable') {
-          <p class="figure-note">Media is not available from here right now. You can still open the journal when the app is running.</p>
+          <p class="figure-note">Media is not available from here right now.</p>
         } @else if (media) {
           @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length) {
-            <p class="quiet-title">Your journal is empty</p>
-            <p class="figure-note">Save a film, book, album, song, show, or game when you want to remember it.</p>
+            <p class="quiet-title">Nothing in progress</p>
+            <a class="open-link" href="/media/#/search">Add something</a>
           }
           @if (media.currently.length) {
             <ul class="rows">
@@ -163,7 +162,7 @@
             <p class="figure-note">Positions are already included in the portfolio total.</p>
           }
           @if (cashOverlap) {
-            <p class="figure-note">A manual cash asset and brokerage holdings are both in this net worth. Brokerage cash sweeps can overlap with cash you entered by hand. Change either one in Finance.</p>
+            <p class="figure-note">Cash you entered and brokerage cash may both be in this total.</p>
           }
         </details>
         }

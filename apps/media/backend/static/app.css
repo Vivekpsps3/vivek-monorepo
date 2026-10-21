@@ -363,7 +363,39 @@ dialog form { display: grid; gap: var(--space-3); }
   color: var(--on-accent);
   text-decoration: none;
 }
+.episode-page .episode-toggle {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.episode-page.is-watched .episode-toggle h1 { color: var(--text-tertiary); }
 .episode-page .eyebrow a { color: inherit; text-decoration: none; }
+.marks { display: flex; gap: 4px; align-items: center; min-height: 44px; }
+.mark {
+  width: 14px; height: 14px; padding: 0; border: 0; border-radius: 99px;
+  background: var(--border-subtle, var(--surface)); cursor: pointer;
+}
+.mark.is-on { background: var(--accent); }
+.status-row, .flag-row, .exp-list { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.status-mark, .flag {
+  min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: 999px;
+  background: var(--surface); color: inherit; font: inherit; cursor: pointer;
+}
+.status-mark.is-on, .flag.is-on, .status-mark:has(input:checked) { background: var(--text); color: var(--bg); }
+.status-mark input { position: absolute; opacity: 0; pointer-events: none; }
+.opinion textarea, .opinion input[data-progress] {
+  width: 100%; border: 0; background: transparent; color: inherit; font: inherit;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.exp-list { list-style: none; margin: var(--space-3) 0; padding: 0; }
+.exp { display: flex; gap: var(--space-3); align-items: center; color: var(--text-secondary); }
+.overview { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .continue:focus-visible, .episode-open:focus-visible, .episode-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

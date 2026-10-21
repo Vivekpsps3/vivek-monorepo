@@ -267,7 +267,7 @@ def entry_web(entry_id: int, db: Session = Depends(get_db)):
             finally:
                 http.close()
         return {"kind": "artist", "nodes": nodes or []}
-    if catalog.kind == "movie":
+    if catalog.kind in {"movie", "tv"}:
         from services.followups import Budget, follow_ups
 
         http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
@@ -282,7 +282,7 @@ def entry_web(entry_id: int, db: Session = Depends(get_db)):
             for row in rows
             if isinstance(row, dict) and row.get("title")
         ]
-        return {"kind": "movie", "nodes": nodes}
+        return {"kind": catalog.kind, "nodes": nodes}
     return {"kind": catalog.kind, "nodes": []}
 
 

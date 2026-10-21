@@ -32,11 +32,10 @@ export function renderHome(home) {
   const empty = !home.in_progress.length && !home.upcoming.length
     ? `<section class="empty"><a class="composer-open" href="#/trips/new" aria-label="New trip"></a></section>`
     : "";
-  return `${banner()}${head("Upcoming", "Trips, travel details, and day plans.") }<section class="metrics">${metricHtml}</section>${attention}${empty}${blocks}${past}`;
+  return `${banner()}${head("Upcoming")}<section class="metrics">${metricHtml}</section>${attention}${empty}${blocks}${past}`;
 }
 export function renderTripCard(trip) {
   const planned = trip.days.filter((day) => day.items.length || day.transports.length);
-  const emptyDays = trip.days.length - planned.length;
   const rides = trip.transports.map((item) => `<p><span class="kicker">${esc(labelOf(ROLES, item.role))}</span><br>${esc(transportSummary(item))}</p>`).join("");
   const days = planned
     .map((day) => {
@@ -57,9 +56,8 @@ export function renderTripCard(trip) {
   return `<article class="trip-card trip-card--${esc(trip.phase)}">
     <div class="card-head"><div><p class="kicker">${esc(labelOf(STATUSES, trip.status))} · ${esc(prettyRange(trip.start_date, trip.end_date))} · ${trip.nights} nights</p><h2><a href="#/trips/${trip.id}">${esc(trip.title)}</a></h2></div><a class="btn btn-secondary btn-sm" href="#/trips/${trip.id}">Open</a></div>
     <div class="chips">${cities}${parking}</div>
-    <div class="stack">${rides || "<p class='meta'>No flights or drives yet.</p>"}</div>
-    ${days || "<p class='meta section'>No day plans yet.</p>"}
-    ${emptyDays ? `<p class="meta">${emptyDays} ${emptyDays === 1 ? "day" : "days"} with nothing planned.</p>` : ""}
+    ${rides ? `<div class="stack">${rides}</div>` : ""}
+    ${days}
     <p class="meta section">${esc(budgetText(trip.budget))}${pto ? ` · ${esc(pto)}` : ""}</p>
   </article>`;
 }

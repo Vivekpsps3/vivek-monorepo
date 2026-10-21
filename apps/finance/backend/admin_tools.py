@@ -85,7 +85,13 @@ def admin_metrics(db: Session) -> dict[str, Any]:
             "enrollment_expires_at": pending_by_user[user.id].isoformat() if user.id in pending_by_user else None,
         })
     recent = []
-    events = db.query(AuditEvent).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(8).all()
+    events = (
+        db.query(AuditEvent)
+        .filter(AuditEvent.event_type != "login")
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .limit(8)
+        .all()
+    )
     for event in events:
         recent.append({
             "id": event.id,

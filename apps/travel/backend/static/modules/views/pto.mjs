@@ -2,7 +2,13 @@ import { api } from '../api.mjs';
 import { esc, banner, daysText } from '../helpers.mjs';
 
 const PERIOD = { weekly: 7, biweekly: 14, semimonthly: 365 / 24, monthly: 365 / 12, yearly: 365 };
-const CADENCE = ['weekly', 'biweekly', 'semimonthly', 'monthly', 'yearly'];
+const CADENCE = [
+  ['weekly', 'Wk'],
+  ['biweekly', '2 wk'],
+  ['semimonthly', '½ mo'],
+  ['monthly', 'Mo'],
+  ['yearly', 'Yr'],
+];
 
 function iso(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -127,7 +133,7 @@ export function mountPto() {
       const step = days.length > 1 ? width / (days.length - 1) : width;
       const line = days.map((day, index) => `${index * step},${height - (day.balance / max) * (height - 16)}`).join(' ');
       const cells = days.map((day) => `<button type="button" class="pto-day${day.used ? ' is-used' : ''}" data-pto-day="${day.key}" style="--fill:${Math.round((day.balance / max) * 100)}%" aria-label="${day.key}"></button>`).join('');
-      const chips = CADENCE.map((cadence) => `<button type="button" class="cadence${cadence === draft.cadence ? ' is-on' : ''}" data-cadence="${cadence}" aria-pressed="${cadence === draft.cadence}"></button>`).join('');
+      const chips = CADENCE.map(([cadence, label]) => `<button type="button" class="cadence${cadence === draft.cadence ? ' is-on' : ''}" data-cadence="${cadence}" aria-pressed="${cadence === draft.cadence}">${label}</button>`).join('');
       const tripMarks = trips.map((trip) => `<a href="#/trips/${trip.id}">${esc(trip.title)} · ${esc(daysText(trip.days))}</a>`).join('');
       root.innerHTML = `
         <div class="pto-figures">
