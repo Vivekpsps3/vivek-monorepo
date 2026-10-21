@@ -119,7 +119,7 @@ export async function onAction(button, ui) {
     const result = await api(`/api/places/search?q=${encodeURIComponent(query || "")}`);
     const box = form.querySelector("[data-place-hits]");
     if (!result.results.length) {
-      box.innerHTML = `<p class="meta">No match. You can type latitude and longitude instead.</p>`;
+      box.innerHTML = "";
       return;
     }
     box.innerHTML = result.results

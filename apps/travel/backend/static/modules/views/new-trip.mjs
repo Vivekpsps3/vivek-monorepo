@@ -63,7 +63,6 @@ export function transportForm(item, role) {
       ${area("Notes", "notes", current.notes || "")}
     </div>
     <div data-flight-only ${current.mode === "flight" ? "" : "hidden"}>
-      <p class="meta">Lookup sends the flight number and this date to FlightAware. You can type the flight instead.</p>
       <div class="form-grid">${field("Lookup date", "lookup_on", (current.depart_at || "").slice(0, 10), "date")}</div>
       <button class="btn btn-secondary btn-sm" type="button" data-action="lookup-flight">Look up flight</button>
       <div id="flight-results"></div>
@@ -85,7 +84,7 @@ export function stayForm(item) {
     ${field("Latitude", "lat", current.lat ?? "")}
     ${field("Longitude", "lng", current.lng ?? "")}
     ${area("Notes", "notes", current.notes || "")}
-  </div><p class="meta">Find on map sends the address to OpenStreetMap.</p><button class="btn btn-secondary btn-sm" type="button" data-action="find-place">Find on map</button><div data-place-hits></div>${actions(item ? "Save city" : "Add city")}</form>`;
+  </div><button class="btn btn-secondary btn-sm" type="button" data-action="find-place">Find on map</button><div data-place-hits></div>${actions(item ? "Save city" : "Add city")}</form>`;
 }
 export function planForm(item, dateValue) {
   const current = item || { on_date: dateValue, kind: "restaurant", currency: "USD" };
@@ -104,7 +103,7 @@ export function planForm(item, dateValue) {
     ${field("Currency", "currency", current.currency || "USD")}
     ${check("Paid", "paid", Boolean(current.paid))}
     ${area("Notes", "notes", current.notes || "")}
-  </div><p class="meta">Find on map sends the address to OpenStreetMap.</p><button class="btn btn-secondary btn-sm" type="button" data-action="find-place">Find on map</button><div data-place-hits></div>${actions(item ? "Save plan" : "Add plan")}</form>`;
+  </div><button class="btn btn-secondary btn-sm" type="button" data-action="find-place">Find on map</button><div data-place-hits></div>${actions(item ? "Save plan" : "Add plan")}</form>`;
 }
 export function parkingForm(item, transports) {
   const current = item || { necessary: "yes", arrangement: "self_park", currency: "USD", booked: false };

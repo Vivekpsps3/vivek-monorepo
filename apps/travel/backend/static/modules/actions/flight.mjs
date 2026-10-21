@@ -55,7 +55,7 @@ export function renderFlightChoices(form, flights) {
   const box = form.querySelector("#flight-results");
   if (!box) return;
   if (!flights.length) {
-    box.innerHTML = `<p class="meta">No matching flight in that window. You can still type the details.</p>`;
+    box.innerHTML = "";
     return;
   }
   box.innerHTML = flights

@@ -315,7 +315,7 @@ async function runSearch() {
   if (!input || !box) return;
   const q = input.value.trim();
   if (q.length < 2) {
-    box.innerHTML = `<p class="quiet">Type at least two letters.</p>`;
+    box.innerHTML = "";
     return;
   }
   box.innerHTML = `<p class="quiet" role="status">Searching…</p>`;
