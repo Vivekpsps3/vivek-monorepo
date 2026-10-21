@@ -1,6 +1,5 @@
-import { state, ROLES, MODES, KINDS, ARRANGEMENTS, STATUSES } from '../state.mjs';
+import { state, ROLES, MODES, KINDS, STATUSES } from '../state.mjs';
 import { esc, banner, field, area, select, check, actions, labelOf, prettyRange, prettyDate, prettyWhen, money, daysText, budgetText, transportSummary, flightMeta, parkingChip, localInput } from '../helpers.mjs';
-import { planForm, parkingForm } from './new-trip.mjs';
 
 export function editing(kind, id) {
   return state.edit && state.edit.kind === kind && state.edit.id === id;
@@ -12,6 +11,14 @@ function hid(name, value) {
 
 function cityLine(stay) {
   return `<form class="day-add" data-form="stay" data-id="${stay.id}">${hid("region", stay.region)}${hid("country", stay.country)}${hid("arrive_on", stay.arrive_on)}${hid("leave_on", stay.leave_on)}${hid("lodging_name", stay.lodging_name)}${hid("lodging_address", stay.lodging_address)}${hid("notes", stay.notes)}<input name="city" value="${esc(stay.city)}" aria-label="City" required autocomplete="off"><button type="submit" hidden>Save</button></form>`;
+}
+
+function planLine(item) {
+  return `<form class="day-add" data-form="plan" data-id="${item.id}">${hid("on_date", item.on_date)}${hid("start_time", item.start_time)}${hid("end_time", item.end_time)}${hid("kind", item.kind || "activity")}${hid("place_name", item.place_name)}${hid("address", item.address)}${hid("url", item.url)}${hid("cost", item.cost)}${hid("currency", item.currency || "USD")}${hid("notes", item.notes)}<input type="checkbox" name="paid"${item.paid ? " checked" : ""} hidden><input name="title" value="${esc(item.title || "")}" aria-label="Plan" required autocomplete="off"><button type="submit" hidden>Save</button></form>`;
+}
+
+function parkingLine(item) {
+  return `<form class="day-add" data-form="parking" data-id="${item.id}">${hid("necessary", item.necessary || "yes")}${hid("arrangement", item.arrangement || "self_park")}${hid("transport_id", item.transport_id || "")}${hid("address", item.address)}${hid("confirmation", item.confirmation)}${hid("start_at", localInput(item.start_at))}${hid("end_at", localInput(item.end_at))}${hid("cost", item.cost)}${hid("currency", item.currency || "USD")}${hid("notes", item.notes)}<input type="checkbox" name="booked"${item.booked ? " checked" : ""} hidden><input type="checkbox" name="paid"${item.paid ? " checked" : ""} hidden><input name="place_name" value="${esc(item.place_name || "")}" aria-label="Parking" required autocomplete="off"><button type="submit" hidden>Save</button></form>`;
 }
 
 function rideLine(item) {
@@ -68,14 +75,13 @@ export function renderTrip(trip, focusDay) {
       const moves = day.transports.map((item) => `<p>${esc(item.movement === "arrives" ? "Arrives" : item.movement === "both" ? "Departs and arrives" : "Departs")} · ${esc(transportSummary(item))}</p>`).join("");
       const items = day.items
         .map((item) => editing("plan", item.id)
-          ? planForm(item)
-          : `<div class="plan"><div><p>${item.start_time ? `<strong>${esc(item.start_time)}</strong> · ` : ""}<span class="chip">${esc(labelOf(KINDS, item.kind))}</span> ${esc(item.title)}</p><p class="meta">${[item.place_name, item.address, item.cost ? money(item.cost, item.currency) : "", item.notes].filter(Boolean).map(esc).join(" · ")}</p></div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="plan" data-id="${item.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="plan" data-id="${item.id}">Delete</button></div></div>`)
+          ? planLine(item)
+          : `<div class="plan"><div><p>${item.start_time ? `<strong>${esc(item.start_time)}</strong> · ` : ""}<span class="chip">${esc(labelOf(KINDS, item.kind))}</span> ${esc(item.title)}</p></div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="plan" data-id="${item.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="plan" data-id="${item.id}">Delete</button></div></div>`)
         .join("");
-      const adder = editing("plan", 0) ? "" : `<form class="day-add" data-form="plan"><input type="hidden" name="on_date" value="${day.on_date}"><input type="hidden" name="kind" value="activity"><input name="title" aria-label="Plan" placeholder="${esc(day.city || prettyDate(day.on_date))}" autocomplete="off"></form>`;
-      const editor = state.compose === "plan" && state.composeDate === day.on_date ? planForm(null, day.on_date) : "";
+      const adder = `<form class="day-add" data-form="plan"><input type="hidden" name="on_date" value="${day.on_date}"><input type="hidden" name="kind" value="activity"><input name="title" aria-label="Plan" placeholder="${esc(day.city || prettyDate(day.on_date))}" autocomplete="off"></form>`;
       const here = trip.stays.find((stay) => stay.city === day.city && stay.lat != null);
       const pin = here ? ` data-map-lat="${here.lat}" data-map-lng="${here.lng}"` : "";
-      return `<div class="day" id="day-${day.on_date}"${focused}${pin}><div class="day-date">${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}</div><div>${moves}${items}${adder}${editor}</div></div>`;
+      return `<div class="day" id="day-${day.on_date}"${focused}${pin}><div class="day-date">${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}</div><div>${moves}${items}${adder}</div></div>`;
     })
     .join("");
   const outside = trip.outside_plans.length
@@ -83,8 +89,8 @@ export function renderTrip(trip, focusDay) {
     : "";
   const parkingRows = trip.parking
     .map((item) => editing("parking", item.id)
-      ? parkingForm(item, trip.transports)
-      : `<div class="ride"><div>${parkingChip(item)}<p>${esc(item.place_name || "Parking")}</p><p class="meta">${esc(labelOf(ARRANGEMENTS, item.arrangement))}${item.confirmation ? ` · ${esc(item.confirmation)}` : ""}${item.cost ? ` · ${esc(money(item.cost, item.currency))}` : ""}</p>${item.notes ? `<p>${esc(item.notes)}</p>` : ""}</div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="parking" data-id="${item.id}">Edit</button>${item.necessary === "yes" && !item.booked ? `<button class="btn btn-ghost btn-sm" type="button" data-action="remind-parking" data-id="${item.id}">Remind me</button>` : ""}<button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="parking" data-id="${item.id}">Delete</button></div></div>`)
+      ? parkingLine(item)
+      : `<div class="ride"><div>${parkingChip(item)}<p>${esc(item.place_name || "Parking")}</p></div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="parking" data-id="${item.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="parking" data-id="${item.id}">Delete</button></div></div>`)
     .join("");
   const budgetLines = trip.budget.lines
     .map((line) => `<div class="ride"><div><p>${esc(line.label)}</p></div><strong>${esc(money(line.amount, line.currency))}</strong></div>`)

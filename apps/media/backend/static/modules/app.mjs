@@ -279,7 +279,7 @@ function viewSearch(params) {
         { value: "game", label: "Games" },
       ], kind)}</select></label>
     </form>
-    <div id="search-results"><p class="quiet">Type at least two letters. If a work is missing, <a href="#/new">add it manually</a>.</p></div>
+    <div id="search-results"></div>
   `;
   if (q.length >= 2) runSearch();
 }
