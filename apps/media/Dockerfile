@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir --no-compile -r requirements.txt
 
 COPY backend /app
 COPY --from=tokens tokens.css /app/static/tokens.css
+COPY --from=tokens controls.css /app/static/controls.css
 
 ENV MEDIA_DATABASE_URL=sqlite:////data/media.db
 ENV FINANCE_API_URL=http://api:8000

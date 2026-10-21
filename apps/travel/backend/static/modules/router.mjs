@@ -16,19 +16,41 @@ export function destroyMap() {
     window._travelMap = null;
   }
 }
-export function paint(html, nav) {
-  destroyMap();
+export function paint(html, nav, options = {}) {
   const root = document.querySelector("#app");
+  const scrolling = document.scrollingElement || document.documentElement;
+  const scrollTop = scrolling.scrollTop;
+  const active = document.activeElement;
+  const restore = active instanceof HTMLElement ? focusSelector(active) : "";
+  destroyMap();
   root.innerHTML = html;
   document.querySelectorAll("[data-nav]").forEach((link) => {
     if (link.dataset.nav === nav) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
-  const focus = root.querySelector("[data-focus]");
-  if (focus) focus.scrollIntoView({ block: "start" });
+  if (options.route) {
+    const focus = root.querySelector("[data-focus]");
+    if (focus) focus.scrollIntoView({ block: "start" });
+    else scrolling.scrollTop = 0;
+  } else {
+    scrolling.scrollTop = scrollTop;
+    if (restore) {
+      const again = root.querySelector(restore);
+      if (again instanceof HTMLElement) again.focus({ preventScroll: true });
+    }
+  }
   mountMap();
   mountComposer();
   mountPto();
+}
+
+function focusSelector(element) {
+  if (!element.dataset.action) return "";
+  let selector = `[data-action="${CSS.escape(element.dataset.action)}"]`;
+  if (element.dataset.kind) selector += `[data-kind="${CSS.escape(element.dataset.kind)}"]`;
+  if (element.dataset.id) selector += `[data-id="${CSS.escape(element.dataset.id)}"]`;
+  if (element.dataset.compose) selector += `[data-compose="${CSS.escape(element.dataset.compose)}"]`;
+  return selector;
 }
 export function setTitle(text) {
   document.title = text ? `${text} · Travel` : "Travel";
@@ -41,15 +63,15 @@ export async function render() {
     if (seq !== state.seq) return;
     setTitle(page.title);
     if (Object.hasOwn(page, "trip")) state.trip = page.trip;
-    paint(page.html, page.nav);
+    paint(page.html, page.nav, { route: true });
   } catch (error) {
     if (seq !== state.seq) return;
     if (error.status === 401) {
       setTitle("Locked");
-      paint(renderLogin(), path.name);
+      paint(renderLogin(), path.name, { route: true });
       return;
     }
-    paint(`<p class="banner" role="alert">${esc(error.message)}</p>`, path.name);
+    paint(`<p class="banner" role="alert">${esc(error.message)}</p>`, path.name, { route: true });
   }
 }
 export async function build(path) {

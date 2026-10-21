@@ -180,7 +180,6 @@
   width: min(100%, 72rem);
   margin: 0 auto;
   padding: var(--space-5) var(--space-5) var(--space-8);
-  animation: page-enter 0.35s var(--ease-emphasized);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -506,7 +505,6 @@
     padding: var(--space-4) max(var(--space-3), env(safe-area-inset-right)) var(--space-4)
       max(var(--space-3), env(safe-area-inset-left));
     gap: var(--space-4);
-    animation-name: page-fade;
   }
 
   .hub-tabs {

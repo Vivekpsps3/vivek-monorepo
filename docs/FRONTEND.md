@@ -43,18 +43,18 @@ Source of truth: `packages/ui/tokens.css`.
 | `--surface-2` | Inputs, chips |
 | `--text` | Primary text |
 | `--text-secondary` | Secondary text |
-| `--accent` | Restrained green `#3F6658` — links, primary actions |
+| `--accent` | Deep teal `#0F6E6A` — links, primary actions |
 | `--border` | Borders |
 | `--success` / `--danger` / `--warning` | Status |
 
 Charts: shared palette and Chart.js options live in `@vivek/ui` (`packages/ui/src/chart-theme.ts`; prefer CSS vars for axes). Chart hover tooltips are off. Values sit in the table or readout beside the chart.
 
-**Appearance:** light is the default token set (canvas `#F7F7F5`, white
-surfaces, graphite `#222522`, restrained green `#3F6658`). Grouped surfaces use
-thin borders and no shadow; overlays may use elevation. Dark is
+**Appearance:** light is the default token set (warm paper `#F6F3EE`, warm-white
+cards `#FFFCF8`, ink `#1C1916`, deep teal `#0F6E6A`). Dark is warm ink
+(`#141311` canvas, `#1E1C19` cards, soft teal `#8FD0C8`) on
 `[data-theme="dark"]`. First visit follows the OS. The account menu has a
-Light / Dark split. Choice is stored in `localStorage` key `ft-theme`. Controls
-use rectangular 8px corners; status and date shapes retain familiar forms.
+System / Light / Dark split. Choice is stored in `localStorage` key `ft-theme`.
+Controls use the shared 8–20px radii; status and date shapes retain familiar forms.
 Reduced transparency and increased contrast media queries are honored.
 Typography prefers the system stack (no remote font fetch). Locale money and
 local-date helpers live in `@vivek/browser` (`packages/browser`).

@@ -49,6 +49,9 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private themeService = inject(ThemeService);
   private marketRefresh = inject(MarketRefreshCoordinatorService);
   private destroy$ = new Subject<void>();
+  private routePath = '';
+  private routeEnterTimer?: ReturnType<typeof setTimeout>;
+  routeEntering = false;
 
   apiOffline = false;
   theme: Theme = this.themeService.current;
@@ -117,14 +120,25 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.router.events
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
+      .subscribe(event => {
+        const path = event.urlAfterRedirects.split('?')[0].split('#')[0];
+        if (path !== this.routePath) {
+          this.routePath = path;
+          this.routeEntering = true;
+          if (this.routeEnterTimer) clearTimeout(this.routeEnterTimer);
+          this.routeEnterTimer = setTimeout(() => {
+            this.routeEntering = false;
+            this.cdr.markForCheck();
+          }, 220);
+          this.focusMainContent();
+        }
         this.cdr.markForCheck();
-        this.focusMainContent();
       });
     this.refreshApiStatus();
   }
 
   ngOnDestroy(): void {
+    if (this.routeEnterTimer) clearTimeout(this.routeEnterTimer);
     this.destroy$.next();
     this.destroy$.complete();
   }

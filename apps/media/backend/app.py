@@ -27,12 +27,19 @@ def tokens_path() -> Path:
     return REPO_ROOT / "packages" / "ui" / "tokens.css"
 
 
+def controls_path() -> Path:
+    bundled = STATIC_DIR / "controls.css"
+    if bundled.is_file():
+        return bundled
+    return REPO_ROOT / "packages" / "ui" / "controls.css"
+
+
 def mount_path() -> str:
     return os.getenv("MEDIA_MOUNT_PATH", "").rstrip("/")
 
 
 def _open_path(path: str) -> bool:
-    return path in ("/api/health", "/tokens.css", "/favicon.svg") or path.startswith("/static/")
+    return path in ("/api/health", "/tokens.css", "/controls.css", "/favicon.svg") or path.startswith("/static/")
 
 
 @asynccontextmanager
@@ -92,6 +99,13 @@ def create_app() -> FastAPI:
         path = tokens_path()
         if not path.is_file():
             return JSONResponse(status_code=404, content={"detail": "Theme tokens are missing."})
+        return FileResponse(path, media_type="text/css", headers={"Cache-Control": "no-cache"})
+
+    @application.get("/controls.css")
+    def controls():
+        path = controls_path()
+        if not path.is_file():
+            return JSONResponse(status_code=404, content={"detail": "Shared controls are missing."})
         return FileResponse(path, media_type="text/css", headers={"Cache-Control": "no-cache"})
 
     @application.get("/favicon.svg")

@@ -42,7 +42,7 @@
       <p class="mc-help">Some holdings have no quote date ({{ inputs?.undated_portfolio_quotes || 0 }}) or position date ({{ inputs?.undated_portfolio_positions || 0 }}). The planning calculation date is not used as a market-data date.</p>
     }
     @if (sourceRefreshError) {
-      <p class="mc-error" role="status">{{ sourceRefreshError }} <button type="button" class="planning-retry" (click)="refreshSourceFacts()">Retry loading current facts</button></p>
+      <p class="mc-error" role="status">{{ sourceRefreshError }} <ui-button variant="ghost" size="sm" (clicked)="refreshSourceFacts()">Retry loading current facts</ui-button></p>
     }
     @if (showAdvancedEvidence()) {
       <details class="planning-evidence-details">

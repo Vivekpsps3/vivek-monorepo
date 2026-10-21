@@ -643,7 +643,9 @@ async function render() {
   });
   syncTheme();
   const current = route();
-  app.innerHTML = `<p class="quiet" role="status">Loading…</p>`;
+  const scrolling = document.scrollingElement;
+  const scrollY = scrolling ? scrolling.scrollTop : 0;
+  const same = app.dataset.view === location.hash;
   try {
     if (current.name === "home") await viewHome();
     else if (current.name === "calendar") await viewCalendar(current.params);
@@ -652,6 +654,8 @@ async function render() {
     else if (current.name === "new") viewNew(current.params);
     else if (current.name === "episode") await viewEpisode(current.id, current.episodeId);
     else await viewItem(current.id, current.name === "season" ? current.seasonNumber : null);
+    app.dataset.view = location.hash;
+    if (scrolling) scrolling.scrollTop = same ? scrollY : 0;
   } catch (error) {
     app.innerHTML = `<p class="quiet" role="alert">${esc(error.message || "Could not load this page.")}</p>`;
     fail(error);
@@ -659,54 +663,65 @@ async function render() {
 }
 
 document.addEventListener("click", async event => {
-  const theme = event.target.closest("[data-theme-value]");
+  const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+  if (!(target instanceof Element)) return;
+  const pressed = target.closest("button");
+  if (pressed && pressed.getAttribute("type") !== "submit") event.preventDefault();
+  const theme = target.closest("[data-theme-value]");
   if (theme) {
     setTheme(theme.dataset.themeValue);
     return;
   }
-  const tile = event.target.closest("[data-episode-tile]");
+  const tile = target.closest("[data-episode-tile]");
   if (tile) {
+    const watched = tile.getAttribute("aria-pressed") !== "true";
+    tile.setAttribute("aria-pressed", String(watched));
+    tile.classList.toggle("is-watched", watched);
     try {
-      const watched = tile.getAttribute("aria-pressed") !== "true";
       await api(`/api/entries/${tile.dataset.id}/episodes/${tile.dataset.episode}/watched`, {
         method: "POST",
         body: JSON.stringify({ watched }),
       });
-      await render();
     } catch (error) {
+      tile.setAttribute("aria-pressed", String(!watched));
+      tile.classList.toggle("is-watched", !watched);
       fail(error);
     }
     return;
   }
-  const season = event.target.closest("[data-season-jump]");
+  const season = target.closest("[data-season-jump]");
   if (season) {
     if (String(season.dataset.season) !== String(season.dataset.current)) {
       location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
       return;
     }
+    const watched = season.getAttribute("aria-pressed") !== "true";
+    season.setAttribute("aria-pressed", String(watched));
+    season.classList.toggle("is-done", watched);
     try {
       const score = document.querySelector(`.season-score[data-season="${season.dataset.season}"]`);
       await api(`/api/entries/${season.dataset.id}/seasons`, {
         method: "POST",
         body: JSON.stringify({
           season_number: Number(season.dataset.season),
-          watched: season.getAttribute("aria-pressed") !== "true",
+          watched,
           rating: score && score.value !== "" ? score.value : null,
         }),
       });
-      await render();
     } catch (error) {
+      season.setAttribute("aria-pressed", String(!watched));
+      season.classList.toggle("is-done", !watched);
       fail(error);
     }
     return;
   }
-  const cover = event.target.closest("[data-album-open]");
+  const cover = target.closest("[data-album-open]");
   if (cover) {
     const tracks = cover.parentElement?.querySelector(".cover-tracks");
     if (tracks) tracks.hidden = !tracks.hidden;
     return;
   }
-  const button = event.target.closest("[data-action]");
+  const button = target.closest("[data-action]");
   if (!button) return;
   const action = button.dataset.action;
   try {

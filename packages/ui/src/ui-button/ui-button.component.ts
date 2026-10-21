@@ -27,8 +27,14 @@ export class UiButtonComponent {
   });
 
   onClick(event: MouseEvent): void {
-    if (!this.disabled()) {
-      this.clicked.emit(event);
+    if (this.disabled()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
     }
+    if (this.type() === 'button') {
+      event.preventDefault();
+    }
+    this.clicked.emit(event);
   }
 }

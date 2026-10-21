@@ -21,12 +21,13 @@ MEDIA_PORT ?= 8091
 SITE_FLASK_DIR := apps/site/flask
 SITE_VENV := $(SITE_FLASK_DIR)/.venv
 SITE_FRONTEND_DIR := apps/site
+SITE_PORT ?= 4202
 # WEB_HOST 0.0.0.0 exposes the dev UI on your LAN (SEC-011); API stays on API_HOST by default.
 WEB_HOST ?= 0.0.0.0
 WEB_PORT ?= 4200
 
 .PHONY: help install install-backend install-frontend dev backend frontend \
-        travel-install travel-dev travel-test media-install media-dev media-test site-install site-test \
+        travel-install travel-dev travel-test media-install media-dev media-test site-install site-dev site-test \
         test test-backend test-frontend test-fast test-finance test-security test-full test-doc-paths test-shared-boundaries \
         test-site-frontend test-release-manifest test-release-cache test-suite-routes \
         build-site-frontend build build-frontend clean reset-db check \
@@ -38,7 +39,8 @@ help:
 	@echo "  make install          Install Finance, Travel, site backend + frontend dependencies"
 	@echo "  make dev              Finance API + UI + Travel + Media. LOCAL_DEV_AUTH=1 skips local login."
 	@echo "  make backend          API only  → http://$(API_HOST):$(API_PORT)"
-	@echo "  make frontend         UI only   → http://localhost:$(WEB_PORT) (proxy → API)"
+	@echo "  make frontend         UI only   → http://localhost:$(WEB_PORT) (proxy → API, hot reload)"
+	@echo "  make site-dev         Public site UI → http://127.0.0.1:$(SITE_PORT) (hot reload)"
 	@echo "  make test             Backend + frontend unit tests"
 	@echo "  make test-fast        Doc path and shared-boundary checks"
 	@echo "  make test-finance     Finance invariants + migration matrix"
@@ -99,7 +101,9 @@ dev:
 	@echo "Travel:  http://127.0.0.1:$(WEB_PORT)/travel/"
 	@echo "Media:   http://127.0.0.1:$(WEB_PORT)/media/"
 	@echo "API:     http://127.0.0.1:$(API_PORT)/docs"
-	@echo "(Restart required after proxy.conf.js changes.)"
+	@echo "Hot reload: Finance UI templates and styles. Python reload: Finance, Travel, and Media APIs."
+	@echo "Public site is separate: make site-dev → http://127.0.0.1:$(SITE_PORT)"
+	@echo "(Restart the Finance UI after proxy.conf.js changes.)"
 	@trap 'kill 0' EXIT INT TERM; \
 	LOCAL_DEV_AUTH="$(if $(LOCAL_DEV_AUTH),$(LOCAL_DEV_AUTH),1)" \
 	DATABASE_URL="$(if $(DATABASE_URL),$(DATABASE_URL),sqlite:///./finance.db)" \
@@ -126,7 +130,7 @@ backend:
 
 frontend:
 	@test -d $(FRONTEND_DIR)/node_modules || (echo "Run: make install-frontend" && exit 1)
-	cd $(FRONTEND_DIR) && npx ng serve --configuration development --host $(WEB_HOST) --port $(WEB_PORT)
+	cd $(FRONTEND_DIR) && npx ng serve --configuration development --hmr --live-reload --host $(WEB_HOST) --port $(WEB_PORT)
 
 test: test-backend test-frontend
 
@@ -253,7 +257,7 @@ travel-install:
 
 travel-dev:
 	@test -x $(TRAVEL_VENV)/bin/uvicorn || (echo "Run: make travel-install" && exit 1)
-	cd $(TRAVEL_DIR) && .venv/bin/uvicorn main:app --host $(TRAVEL_HOST) --port $(TRAVEL_PORT)
+	cd $(TRAVEL_DIR) && .venv/bin/uvicorn main:app --reload --reload-dir . --host $(TRAVEL_HOST) --port $(TRAVEL_PORT)
 
 travel-test:
 	@test -x $(TRAVEL_VENV)/bin/python || (echo "Run: make travel-install" && exit 1)
@@ -268,12 +272,16 @@ media-install:
 
 media-dev:
 	@test -x $(MEDIA_VENV)/bin/uvicorn || (echo "Run: make media-install" && exit 1)
-	cd $(MEDIA_DIR) && .venv/bin/uvicorn main:app --host $(TRAVEL_HOST) --port $(MEDIA_PORT)
+	cd $(MEDIA_DIR) && .venv/bin/uvicorn main:app --reload --reload-dir . --host $(TRAVEL_HOST) --port $(MEDIA_PORT)
 
 media-test:
 	@test -x $(MEDIA_VENV)/bin/python || (echo "Run: make media-install" && exit 1)
 	cd $(MEDIA_DIR) && .venv/bin/python -m pytest -q
 	node --test apps/media/backend/static/tests/*.test.mjs
+
+site-dev:
+	@test -d $(SITE_FRONTEND_DIR)/node_modules || (echo "Run: make install-frontend" && exit 1)
+	cd $(SITE_FRONTEND_DIR) && npx ng serve --configuration development --hmr --live-reload --host 127.0.0.1 --port $(SITE_PORT)
 
 site-install:
 	@test -d $(SITE_VENV) || python3 -m venv $(SITE_VENV)

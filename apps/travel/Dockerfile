@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir --no-compile -r requirements.txt
 
 COPY backend /app
 COPY --from=tokens tokens.css /app/static/tokens.css
+COPY --from=tokens controls.css /app/static/controls.css
 COPY --from=browser runtime /app/shared-browser
 
 ENV TRAVEL_DATABASE_URL=sqlite:////data/travel.db

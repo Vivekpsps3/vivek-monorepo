@@ -36,6 +36,8 @@ export class ReleaseFreshnessService implements OnDestroy {
   start(): void {
     if (this.started) return;
     this.started = true;
+    // ng serve does not write version.json or the app-release meta tag.
+    // Without that meta, checkForUpdate returns immediately and never reloads the tab.
     this.routerSubscription = this.router.events.subscribe((event) => {
       if (event instanceof NavigationEnd) {
         void this.checkForUpdate();

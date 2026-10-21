@@ -218,18 +218,6 @@ app-monte-carlo-fan-chart {
   border-radius: var(--radius-lg);
 }
 
-.planning-retry {
-  margin-left: var(--space-2);
-  border: 0;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  background: transparent;
-  cursor: pointer;
-}
-
 .mc-summary-band,
 .mc-kpis {
   display: grid;
@@ -683,14 +671,6 @@ app-monte-carlo-fan-chart {
   .mc-check--compact {
     align-self: stretch;
     min-height: 44px;
-  }
-
-  .planning-retry {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    margin-left: var(--space-1);
-    padding: 0 var(--space-2);
   }
 
   .mc-profiles-row ui-button,

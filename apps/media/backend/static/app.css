@@ -31,7 +31,7 @@ body {
   border-bottom: 1px solid var(--border-subtle);
 }
 .topbar-inner, .shell, .footer {
-  width: min(1120px, calc(100% - 2 * var(--space-4)));
+  width: min(72rem, calc(100% - 2rem));
   margin: 0 auto;
 }
 .topbar-inner {
@@ -56,7 +56,7 @@ body {
   color: var(--text-secondary);
   text-decoration: none;
 }
-.nav a[aria-current="page"] { color: var(--text); }
+.nav a[aria-current="page"] { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
 .nav a:hover, .plain a:hover, .footnote a:hover { color: var(--accent); }
 .topbar-actions { margin-left: auto; }
 .theme-switch {
@@ -76,7 +76,7 @@ body {
 .shell { padding: var(--space-8) 0 var(--space-16); }
 .notice:empty { display: none; }
 .notice {
-  width: min(1120px, calc(100% - 2 * var(--space-4)));
+  width: min(72rem, calc(100% - 2rem));
   margin: var(--space-3) auto 0;
   color: var(--accent);
 }
@@ -133,27 +133,7 @@ section { margin: 0 0 var(--space-10); }
 .stack { max-width: 38rem; margin-bottom: var(--space-8); }
 label { display: grid; gap: var(--space-1); color: var(--text-secondary); font-size: var(--text-sm); }
 .check { grid-template-columns: auto 1fr; align-items: center; }
-input, select, textarea, .btn {
-  font: inherit;
-  color: var(--text);
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-input, select, textarea { width: 100%; padding: 10px 12px; min-height: 44px; box-sizing: border-box; }
-textarea { min-height: 96px; resize: vertical; }
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 14px;
-  text-decoration: none;
-  cursor: pointer;
-}
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn-danger { color: var(--danger); }
-.btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -191,7 +171,7 @@ dialog form { display: grid; gap: var(--space-3); }
     gap: var(--space-2) var(--space-3);
     box-sizing: border-box;
     min-height: 0;
-    width: min(1120px, calc(100% - 2rem));
+    width: min(72rem, calc(100% - 2rem));
     max-width: 100%;
     padding: max(var(--space-3), env(safe-area-inset-top)) 0 var(--space-2);
   }
@@ -460,7 +440,8 @@ dialog form { display: grid; gap: var(--space-3); }
 .web text { fill: var(--text); font-size: 11px; }
 .web a { text-decoration: none; }
 .follow, .followed {
-  width: 2.2rem; height: 2.2rem; border-radius: 999px; border: 0;
+  width: 44px; height: 44px; border-radius: 999px; border: 0;
   background: var(--accent); cursor: pointer;
 }
+.follow::before { content: "+"; color: var(--on-accent); font-size: 1.25rem; line-height: 1; }
 .followed { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-tertiary); cursor: default; }

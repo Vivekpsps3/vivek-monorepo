@@ -400,4 +400,6 @@ def test_home_page_and_tokens_render_without_private_rows(client):
     assert "media-theme" in html
     assert 'href="#/calendar"' in html
     assert client.get("/tokens.css").status_code == 200
+    assert "controls.css" in html
+    assert client.get("/controls.css").status_code == 200
     assert client.get("/favicon.svg").status_code == 200

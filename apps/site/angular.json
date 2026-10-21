@@ -59,7 +59,9 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "prebundle": false
+            "prebundle": false,
+            "hmr": true,
+            "liveReload": true
           },
           "configurations": {
             "production": {

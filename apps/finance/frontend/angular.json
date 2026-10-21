@@ -79,7 +79,9 @@
           },
           "defaultConfiguration": "development",
           "options": {
-            "proxyConfig": "proxy.conf.js"
+            "proxyConfig": "proxy.conf.js",
+            "hmr": true,
+            "liveReload": true
           }
         },
         "extract-i18n": {
