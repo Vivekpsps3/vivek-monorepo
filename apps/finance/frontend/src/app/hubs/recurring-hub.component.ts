@@ -99,7 +99,7 @@ export interface CommitmentRow {
           } @else if (rows.length) {
             <p class="commitment-empty">No items match these filters. Choose “All types” and “Active and inactive” to see every bill and subscription.</p>
           } @else if (!loadError) {
-            <div class="commitment-empty"><strong>No bills or subscriptions yet.</strong><p>Add rent, utilities, insurance, debt payments, or a subscription. You can enter items without a due date and include paused obligations.</p></div>
+            <div class="commitment-empty"><strong>No bills or subscriptions yet.</strong></div>
           }
         </section>
         <app-fixed-expenses [embedded]="true" [editorOnly]="true" />

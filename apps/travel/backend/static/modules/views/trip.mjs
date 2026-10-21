@@ -1,9 +1,23 @@
 import { state, ROLES, MODES, KINDS, ARRANGEMENTS, STATUSES } from '../state.mjs';
-import { esc, banner, field, area, select, check, actions, labelOf, prettyRange, prettyDate, prettyWhen, money, daysText, budgetText, transportSummary, flightMeta, parkingChip } from '../helpers.mjs';
-import { stayForm, transportForm, planForm, parkingForm } from './new-trip.mjs';
+import { esc, banner, field, area, select, check, actions, labelOf, prettyRange, prettyDate, prettyWhen, money, daysText, budgetText, transportSummary, flightMeta, parkingChip, localInput } from '../helpers.mjs';
+import { planForm, parkingForm } from './new-trip.mjs';
 
 export function editing(kind, id) {
   return state.edit && state.edit.kind === kind && state.edit.id === id;
+}
+
+function hid(name, value) {
+  return `<input type="hidden" name="${name}" value="${esc(value ?? "")}">`;
+}
+
+function cityLine(stay) {
+  return `<form class="day-add" data-form="stay" data-id="${stay.id}">${hid("region", stay.region)}${hid("country", stay.country)}${hid("arrive_on", stay.arrive_on)}${hid("leave_on", stay.leave_on)}${hid("lodging_name", stay.lodging_name)}${hid("lodging_address", stay.lodging_address)}${hid("notes", stay.notes)}<input name="city" value="${esc(stay.city)}" aria-label="City" required autocomplete="off"><button type="submit" hidden>Save</button></form>`;
+}
+
+function rideLine(item) {
+  const extras = ["carrier", "number", "confirmation", "seat", "cost", "currency", "notes", "depart_tz", "arrive_tz", "fa_ident", "fa_status", "fa_aircraft", "fa_gate_origin", "fa_gate_destination", "fa_terminal_origin", "fa_terminal_destination", "fa_baggage_claim", "fa_delay_departure_seconds", "fa_delay_arrival_seconds", "fa_scheduled_out", "fa_estimated_out", "fa_actual_out", "fa_scheduled_in", "fa_estimated_in", "fa_actual_in"]
+    .map((name) => hid(name, item[name])).join("");
+  return `<form class="day-add" data-form="transport" data-id="${item.id}">${hid("role", item.role)}${hid("mode", item.mode)}${hid("status", item.status || "planned")}${hid("depart_at", localInput(item.depart_at))}${hid("arrive_at", localInput(item.arrive_at))}<input type="checkbox" name="paid"${item.paid ? " checked" : ""} hidden>${extras}<input name="depart_place" value="${esc(item.depart_place || "")}" aria-label="From" required autocomplete="off"><input name="arrive_place" value="${esc(item.arrive_place || "")}" aria-label="To" autocomplete="off"><button type="submit" hidden>Save</button></form>`;
 }
 export function renderTrip(trip, focusDay) {
   const editingTrip = editing("trip", trip.id);
@@ -31,7 +45,7 @@ export function renderTrip(trip, focusDay) {
     </section>`;
   const stays = trip.stays
     .map((stay) => editing("stay", stay.id)
-      ? stayForm(stay)
+      ? cityLine(stay)
       : `<div class="ride"${stay.lat != null ? ` data-map-lat="${stay.lat}" data-map-lng="${stay.lng}"` : ""}><div><strong>${esc(stay.city)}</strong><p class="meta">${esc(prettyRange(stay.arrive_on, stay.leave_on))}${stay.lodging_name ? ` · ${esc(stay.lodging_name)}` : ""}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="stay" data-id="${stay.id}">Edit</button></div>`)
     .join("");
   const cityBlock = `<section class="card"><h2>Cities</h2>${stays}<form class="day-add" data-form="stay"><input type="hidden" name="arrive_on" value="${esc(trip.start_date)}"><input type="hidden" name="leave_on" value="${esc(trip.end_date)}"><input name="city" aria-label="City" placeholder="City" required autocomplete="off"></form></section>`;
@@ -40,7 +54,7 @@ export function renderTrip(trip, focusDay) {
     if (!rows.length && (role === "connection" || role === "local") && state.compose !== `transport:${role}`) return "";
     const body = rows
       .map((item) => {
-        if (editing("transport", item.id)) return transportForm(item, item.role);
+        if (editing("transport", item.id)) return rideLine(item);
         const meta = flightMeta(item);
         return `<div class="ride"><div><p class="kicker">${esc(labelOf(MODES, item.mode))}</p><p>${esc(transportSummary(item))}</p>${meta ? `<p class="meta">${esc(meta)}</p>` : ""}</div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="transport" data-id="${item.id}">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="transport" data-id="${item.id}">Delete</button></div></div>`;
       })
@@ -73,14 +87,14 @@ export function renderTrip(trip, focusDay) {
       : `<div class="ride"><div>${parkingChip(item)}<p>${esc(item.place_name || "Parking")}</p><p class="meta">${esc(labelOf(ARRANGEMENTS, item.arrangement))}${item.confirmation ? ` · ${esc(item.confirmation)}` : ""}${item.cost ? ` · ${esc(money(item.cost, item.currency))}` : ""}</p>${item.notes ? `<p>${esc(item.notes)}</p>` : ""}</div><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-kind="parking" data-id="${item.id}">Edit</button>${item.necessary === "yes" && !item.booked ? `<button class="btn btn-ghost btn-sm" type="button" data-action="remind-parking" data-id="${item.id}">Remind me</button>` : ""}<button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="parking" data-id="${item.id}">Delete</button></div></div>`)
     .join("");
   const budgetLines = trip.budget.lines
-    .map((line) => `<div class="ride"><div><p>${esc(line.category_label)} · ${esc(line.label)}</p><p class="meta">${line.paid ? "Paid" : "Not marked paid"}</p></div><strong>${esc(money(line.amount, line.currency))}</strong></div>`)
+    .map((line) => `<div class="ride"><div><p>${esc(line.label)}</p></div><strong>${esc(money(line.amount, line.currency))}</strong></div>`)
     .join("");
   const manual = trip.budget.manual
-    .map((line) => `<div class="ride"><div><p>${esc(line.label)}</p><p class="meta">Extra line · ${esc(line.category_label)}</p></div><div class="row-actions"><strong>${esc(money(line.amount, line.currency))}</strong><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="budget" data-id="${line.id}">Delete</button></div></div>`)
+    .map((line) => `<div class="ride"><div><p>${esc(line.label)}</p></div><div class="row-actions"><strong>${esc(money(line.amount, line.currency))}</strong><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="budget" data-id="${line.id}">Delete</button></div></div>`)
     .join("");
   const budgetForm = `<form class="day-add" data-form="budget"><input type="hidden" name="category" value="other"><input name="label" aria-label="Cost" placeholder="Cost" required autocomplete="off"><input name="amount" aria-label="Amount" inputmode="decimal" placeholder="0" required><button type="submit" hidden>Add</button></form>`;
   const notes = trip.note_entries
-    .map((note) => `<div class="ride"><div><p>${esc(note.body)}</p><p class="meta">${note.on_date ? esc(prettyDate(note.on_date)) : "Trip note"}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="note" data-id="${note.id}">Delete</button></div>`)
+    .map((note) => `<div class="ride"><div><p>${esc(note.body)}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="delete" data-kind="note" data-id="${note.id}">Delete</button></div>`)
     .join("");
   const noteForm = `<form class="day-add" data-form="note"><input name="body" aria-label="Note" placeholder="Note" required autocomplete="off"></form>`;
   const reminders = trip.reminders
