@@ -479,7 +479,13 @@ test('bank imports require account identity, resume one receipt, and undo retain
   await page.getByText(/Import receipts \(/).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
-  await expect.poll(() => vault.data('transactions').length).toBe(1);
+  // The unedited rows disappear before the receipt is marked withdrawn. Waiting
+  // only for one transaction left reads undo_summary before that write lands.
+  await expect.poll(() => {
+    const pending = vault.data('import_batches').find(row => row.status === 'withdrawn');
+    return pending?.undo_summary != null;
+  }).toBe(true);
+  expect(vault.data('transactions')).toHaveLength(1);
   expect(vault.data('transactions')[0].merchant).toBe('Coffee shop');
   expect(vault.data('transactions')[0].description).toBe('SOURCE COFFEE');
   const receipt = vault.data('import_batches').find(row => row.status === 'withdrawn');
