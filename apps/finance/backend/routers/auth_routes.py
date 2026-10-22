@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import logging
 import secrets
 from datetime import timedelta
 
@@ -32,7 +33,21 @@ from apps.finance.backend.auth import (
 )
 from apps.finance.backend.database import get_db
 from apps.finance.backend.models import AuthEnrollment, User, UserRole, UserSession
+from apps.finance.backend.rate_limit import (
+    enforce_account_rate_limit,
+    enforce_login_pair_limit,
+    failed_verify_blocked,
+    note_failed_verify,
+)
+from apps.finance.backend.services.auth_decoy import decoy_passwordless_material
 from apps.finance.backend.services.challenge_auth import CHALLENGE_TTL, PROTOCOL, issue_challenge, verify_challenge
+from apps.finance.backend.services.signup_gate import (
+    SIGNUP_UNAVAILABLE,
+    invite_code_matches,
+    signup_mode,
+    signup_policy,
+    username_allowlisted,
+)
 from apps.finance.backend.services import encrypted_storage as vault_store
 from apps.finance.backend.schemas_auth import (
     AdminUserContentReset,
@@ -53,10 +68,12 @@ from apps.finance.backend.schemas_auth import (
     PasswordlessSignupRequest,
     AuthPrivateKeyWrap,
     PasswordlessVerifyRequest,
+    SignupPolicyResponse,
     UserPublic,
 )
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger("finance.auth")
 
 
 def _origin(request: Request) -> str:
@@ -64,16 +81,15 @@ def _origin(request: Request) -> str:
 
 
 def _find_passwordless_user(db: Session, identifier: str) -> User | None:
-    """Resolve passwordless login by username, or by email for legacy convenience."""
+    """Resolve passwordless login by username only.
+
+    Email is not an alias. The same wrap for ``alice`` and ``alice@example.com``
+    would confirm that both identifiers exist and belong to one account.
+    """
     key = normalize_email(identifier)
-    if not key:
+    if not key or "@" in key:
         return None
-    user = db.query(User).filter(User.username == key).first()
-    if user:
-        return user
-    if "@" in key:
-        return db.query(User).filter(User.email == normalize_email(key)).first()
-    return None
+    return db.query(User).filter(User.username == key).first()
 
 
 def _user_response(user: User) -> UserPublic:
@@ -93,30 +109,48 @@ def _store_auth_wrap(user: User, auth: AuthPrivateKeyWrap) -> None:
     user.auth_kdf_salt_b64 = auth.kdf_salt_b64
     user.auth_kdf_iterations = auth.kdf_iterations
     user.auth_wrapped_private_key_b64 = auth.wrapped_private_key_b64
-    user.auth_recovery_wrapped_private_key_b64 = auth.recovery_wrapped_private_key_b64 or ""
+    incoming_recovery = auth.recovery_wrapped_private_key_b64 or ""
+    # An empty update must not wipe a stored recovery wrap. The column is unused
+    # by current clients, and KDF re-wrap sends an empty string.
+    if incoming_recovery or not user.auth_recovery_wrapped_private_key_b64:
+        user.auth_recovery_wrapped_private_key_b64 = incoming_recovery
 
 
-def _decoy_passwordless_material() -> dict:
-    def wrapped() -> str:
-        return base64.b64encode(secrets.token_bytes(48)).decode()
-
+def _auth_material(user: User) -> dict:
+    """Signing-key wrap only. The vault DEK stays on the authenticated status route."""
     return {
-        "vault": {
-            "kdf_algorithm": "PBKDF2",
-            "kdf_salt_b64": base64.b64encode(secrets.token_bytes(16)).decode(),
-            "kdf_iterations": 310000,
-            "wrapped_dek_b64": wrapped(),
-            "recovery_wrapped_dek_b64": "",
-            "key_version": 1,
-            "username": secrets.token_hex(4),
-        },
         "auth": {
-            "kdf_salt_b64": base64.b64encode(secrets.token_bytes(16)).decode(),
-            "kdf_iterations": 310000,
-            "wrapped_private_key_b64": wrapped(),
+            "kdf_salt_b64": user.auth_kdf_salt_b64,
+            "kdf_iterations": user.auth_kdf_iterations,
+            "wrapped_private_key_b64": user.auth_wrapped_private_key_b64,
             "recovery_wrapped_private_key_b64": "",
         },
     }
+
+
+def _passwordless_record_complete(user: User | None, vault: object | None) -> bool:
+    if (
+        not user
+        or not user.is_active
+        or not user.auth_public_key_b64
+        or not user.auth_wrapped_private_key_b64
+        or not user.auth_kdf_salt_b64
+        or not user.auth_kdf_iterations
+        or vault is None
+    ):
+        return False
+    return True
+
+
+def _user_and_vault(db: Session, identifier: str) -> tuple[User | None, object | None]:
+    """Load the account and always query the vault table.
+
+    A miss used to return before ``get_vault``. That extra query on a hit was a
+    repeatable timing difference. Unknown identifiers still run the vault read.
+    """
+    user = _find_passwordless_user(db, identifier)
+    vault = vault_store.get_vault(db, user.id if user is not None else 0)
+    return user, vault
 
 
 def _decoy_challenge(request: Request) -> dict:
@@ -134,10 +168,16 @@ def bootstrap_status(db: Session = Depends(get_db)):
     return {"needs_setup": db.query(User).count() == 0}
 
 
+@router.get("/auth/signup-policy", response_model=SignupPolicyResponse)
+def passwordless_signup_policy():
+    return signup_policy()
+
+
 @router.post("/auth/bootstrap/passwordless", response_model=LoginResponse)
 def passwordless_bootstrap_first_admin(
     body: PasswordlessBootstrapRequest, request: Request, response: Response, db: Session = Depends(get_db)
 ):
+    enforce_account_rate_limit(body.username)
     if db.query(User).count() != 0:
         raise HTTPException(status_code=409, detail="Setup is already complete")
     username = normalize_email(body.username)
@@ -169,11 +209,23 @@ def passwordless_bootstrap_first_admin(
 def passwordless_signup(
     body: PasswordlessSignupRequest, request: Request, response: Response, db: Session = Depends(get_db)
 ):
-    """Open self-signup: anyone may create an account with username + vault material."""
+    """Create an account when signup policy allows it. Closed by default."""
+    enforce_account_rate_limit(body.username)
+    mode = signup_mode()
     username = normalize_email(body.username)
+    if mode == "closed":
+        raise HTTPException(status_code=403, detail=SIGNUP_UNAVAILABLE)
+    if mode == "invite" and not invite_code_matches(body.invite_code):
+        raise HTTPException(status_code=403, detail=SIGNUP_UNAVAILABLE)
+    if mode == "allowlist" and not username_allowlisted(username):
+        raise HTTPException(status_code=403, detail=SIGNUP_UNAVAILABLE)
+    if mode not in {"open", "invite", "allowlist"}:
+        raise HTTPException(status_code=403, detail=SIGNUP_UNAVAILABLE)
     if "@" in username:
         raise HTTPException(status_code=422, detail="Username cannot be an email address")
     if db.query(User).filter(User.username == username).first():
+        if mode != "open":
+            raise HTTPException(status_code=403, detail=SIGNUP_UNAVAILABLE)
         raise HTTPException(status_code=409, detail="Username already exists")
     _require_p256_public_key(body.public_key_b64)
     display = (body.display_name or "").strip() or username
@@ -238,40 +290,19 @@ def enroll_passwordless(
 
 @router.post("/auth/passwordless/lookup")
 def passwordless_lookup(body: PasswordlessChallengeRequest, db: Session = Depends(get_db)):
-    user = _find_passwordless_user(db, body.username)
-    vault = vault_store.get_vault(db, user.id) if user and user.is_active else None
-    if (
-        not user
-        or not user.is_active
-        or not user.auth_public_key_b64
-        or not vault
-        or not user.auth_wrapped_private_key_b64
-        or not user.auth_kdf_salt_b64
-        or not user.auth_kdf_iterations
-    ):
-        return _decoy_passwordless_material()
-    return {
-        "vault": {
-            "kdf_algorithm": vault.kdf_algorithm,
-            "kdf_salt_b64": vault.kdf_salt_b64,
-            "kdf_iterations": vault.kdf_iterations,
-            "wrapped_dek_b64": vault.wrapped_dek_b64,
-            "recovery_wrapped_dek_b64": vault.recovery_wrapped_dek_b64 or "",
-            "key_version": vault.key_version,
-            # Canonical username so the client can verify with the enrolled handle.
-            "username": user.username,
-        },
-        "auth": {
-            "kdf_salt_b64": user.auth_kdf_salt_b64,
-            "kdf_iterations": user.auth_kdf_iterations,
-            "wrapped_private_key_b64": user.auth_wrapped_private_key_b64,
-            "recovery_wrapped_private_key_b64": user.auth_recovery_wrapped_private_key_b64 or "",
-        },
-    }
+    # No per-account limit. The response is deterministic, and sharing a budget
+    # with verify let one IP hold the owner's login at 429. The IP limiter still applies.
+    decoy = decoy_passwordless_material(body.username)
+    user, vault = _user_and_vault(db, body.username)
+    if not _passwordless_record_complete(user, vault):
+        return decoy
+    assert user is not None
+    return _auth_material(user)
 
 
 @router.post("/auth/passwordless/challenge", response_model=PasswordlessChallengeResponse)
 def passwordless_challenge(body: PasswordlessChallengeRequest, request: Request, db: Session = Depends(get_db)):
+    enforce_login_pair_limit(body.username, request)
     user = _find_passwordless_user(db, body.username)
     if not user or not user.is_active or not user.auth_public_key_b64:
         return _decoy_challenge(request)
@@ -280,25 +311,50 @@ def passwordless_challenge(body: PasswordlessChallengeRequest, request: Request,
     return {"challenge_id": challenge.challenge_id, "challenge": raw, "message": message, "expires_at": challenge.expires_at}
 
 
+@router.get("/auth/passwordless/wraps")
+def read_passwordless_wraps(current_user: User = Depends(get_current_user)):
+    """Signing-key wrap for the signed-in account. Unlock uses this when the browser has no cached wrap."""
+    if not current_user.auth_wrapped_private_key_b64 or not current_user.auth_kdf_salt_b64 or not current_user.auth_kdf_iterations:
+        raise HTTPException(status_code=404, detail="Authentication key is not enrolled")
+    return _auth_material(current_user)
+
+
 @router.put("/auth/passwordless/wraps")
 def update_passwordless_wraps(
     body: AuthPrivateKeyWrap,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Session cookie plus CSRF. Not counted against the login IP or account budgets.
+    previous = current_user.auth_kdf_iterations
     _store_auth_wrap(current_user, body)
+    if previous is not None and body.kdf_iterations > previous:
+        logger.info(
+            "signing-key wrap KDF iterations raised user_id=%s from=%s to=%s",
+            current_user.id,
+            previous,
+            body.kdf_iterations,
+        )
     db.commit()
     return {"ok": True}
 
 
 @router.post("/auth/passwordless/verify", response_model=LoginResponse)
 def passwordless_verify(body: PasswordlessVerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    enforce_login_pair_limit(body.username, request)
     user = _find_passwordless_user(db, body.username)
-    if not user or not user.is_active or not verify_challenge(db, user, body.challenge_id, body.challenge, body.message, body.signature_b64):
-        raise HTTPException(status_code=401, detail="Invalid or expired vault authentication challenge")
-    csrf = create_session(db, user, request, response)
-    db.refresh(user)
-    return {"user": _user_response(user), "csrf_token": csrf}
+    # The challenge row is checked before ECDSA, so a forged id is a lookup, not a signature.
+    # A correct signature is never turned into a 429. The failed-verify cap applies only after a failure.
+    if user and user.is_active and verify_challenge(
+        db, user, body.challenge_id, body.challenge, body.message, body.signature_b64
+    ):
+        csrf = create_session(db, user, request, response)
+        db.refresh(user)
+        return {"user": _user_response(user), "csrf_token": csrf}
+    if failed_verify_blocked(body.username):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded; retry later")
+    note_failed_verify(body.username)
+    raise HTTPException(status_code=401, detail="Invalid or expired vault authentication challenge")
 
 
 def _invitation_for_token(db: Session, token: str) -> tuple[AuthEnrollment, User]:

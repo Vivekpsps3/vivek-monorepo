@@ -49,6 +49,28 @@ export async function createSigningKey(
   };
 }
 
+/** Re-wrap the same signing key. A new keypair would strand the stored public key. */
+export async function rewrapSigningKey(
+  passphrase: string,
+  wrapped: WrappedSigningKey,
+  iterations = DEFAULT_PBKDF2_ITERATIONS
+): Promise<WrappedSigningKey> {
+  const privateKey = await decryptPackedAesGcm(
+    wrapped.wrapped_private_key_b64,
+    await derivePbkdf2AesGcmKey(passphrase, decodeBase64(wrapped.kdf_salt_b64), wrapped.kdf_iterations)
+  );
+  const salt = randomBytes(16);
+  return {
+    kdf_salt_b64: encodeBase64(salt),
+    kdf_iterations: iterations,
+    wrapped_private_key_b64: await encryptPrivateKey(
+      privateKey,
+      await derivePbkdf2AesGcmKey(passphrase, salt, iterations)
+    ),
+    recovery_wrapped_private_key_b64: '',
+  };
+}
+
 export async function signChallenge(
   passphrase: string,
   wrapped: WrappedSigningKey,

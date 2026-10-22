@@ -1,59 +1,3 @@
-@if (importsOnly) {
-  <div [class.page]="!embedded" [class.embed]="embedded" class="imports-page">
-    <ui-page-header
-      [embedded]="embedded"
-      [title]="'Imports'">
-      <div uiPageActions class="header-actions">
-        <app-info-tip label="Import receipts" text="Confirmed statement coverage, saved outcomes, and recovery for a receipt." />
-        <ui-button variant="primary" (clicked)="openImportModal()">Import from bank</ui-button>
-      </div>
-    </ui-page-header>
-    @if (importReceipts.length) {
-      <ui-card [title]="'Import receipts'">
-        @for (receipt of importReceipts; track receipt.id) {
-          <article class="import-history-row">
-            <div>
-              <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
-              <span>{{ receipt.started_at | date: 'medium' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length || 0 }} unresolved</span>
-              <span>Account outcome: {{ receipt.account_displays.join(', ') || 'No account confirmed' }}</span>
-              @if (receiptParseIssueCount(receipt)) {
-                <span class="import-error">{{ receiptParseIssueCount(receipt) }} CSV row(s) could not be parsed. Correct the file and reattach it to this receipt.</span>
-              }
-              @if (receiptNeedsClassificationCount(receipt)) {
-                <span>{{ receiptNeedsClassificationCount(receipt) }} credit transaction(s) need a type and are excluded from totals until classified.</span>
-              }
-              @for (range of receipt.coverage || []; track $index) {
-                <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
-              } @empty {
-                <span>Coverage not confirmed</span>
-              }
-              @if (receipt.last_error) { <span class="import-error">Last attempt: {{ receipt.last_error }}</span> }
-              @for (note of (receipt.unresolved || []); track $index) {
-                <span>{{ note.filename || 'CSV' }} · line {{ note.line || '—' }}: {{ note.reason }}</span>
-              }
-            </div>
-            <div class="import-history-actions">
-              @if (receiptTransactionCount(receipt)) {
-                <ui-button variant="secondary" size="sm" (clicked)="viewImportedTransactions(receipt)">View transactions</ui-button>
-              }
-              @if (receiptParseIssueCount(receipt)) {
-                <ui-button variant="secondary" size="sm" (clicked)="reattachCorrectedCsv(receipt)">Reattach corrected CSV</ui-button>
-              }
-              @if (receipt.status === 'staged' || receipt.status === 'partial' || receipt.status === 'undoing') {
-                <ui-button variant="secondary" size="sm" (clicked)="resumeImport(receipt)">{{ receipt.status === 'undoing' ? 'Resume undo' : 'Resume' }}</ui-button>
-              }
-              @if (receipt.status !== 'withdrawn') {
-                <ui-button variant="danger" size="sm" (clicked)="undoImport(receipt)">Undo</ui-button>
-              }
-            </div>
-          </article>
-        }
-      </ui-card>
-    } @else {
-      <ui-empty-state [title]="'No import receipts yet'" message="Import a statement to record its outcome and any confirmed coverage." />
-    }
-  </div>
-} @else {
 <div [class.page]="!embedded" [class.embed]="embedded">
   <ui-page-header
     [embedded]="embedded"
@@ -170,6 +114,13 @@
         placeholder="Search category or description..."
         class="search-input"
         aria-label="Search transactions"
+      />
+      <ui-select
+        selectId="tx-type-filter"
+        label="Type"
+        [value]="activityView"
+        [options]="activityViewOptions"
+        (valueChange)="onActivityViewChange($event)"
       />
       <ui-select
         selectId="tx-category-filter"
@@ -430,8 +381,53 @@
       }
     </ng-template>
   </ui-card>
+
+  <details class="import-history ledger-receipts" [open]="receiptsDetailsOpen" (toggle)="onReceiptsToggle($event)">
+    <summary>Import receipts ({{ importReceipts.length }})</summary>
+    @if (importReceipts.length) {
+      @for (receipt of importReceipts; track receipt.id) {
+        <article class="import-history-row">
+          <div>
+            <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
+            <span>{{ receipt.started_at | date: 'medium' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length || 0 }} unresolved</span>
+            <span>Account outcome: {{ receipt.account_displays.join(', ') || 'No account confirmed' }}</span>
+            @if (receiptParseIssueCount(receipt)) {
+              <span class="import-error">{{ receiptParseIssueCount(receipt) }} CSV row(s) could not be parsed. Correct the file and reattach it to this receipt.</span>
+            }
+            @if (receiptNeedsClassificationCount(receipt)) {
+              <span>{{ receiptNeedsClassificationCount(receipt) }} credit transaction(s) need a type and are excluded from totals until classified.</span>
+            }
+            @for (range of receipt.coverage || []; track $index) {
+              <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
+            } @empty {
+              <span>Coverage not confirmed</span>
+            }
+            @if (receipt.last_error) { <span class="import-error">Last attempt: {{ receipt.last_error }}</span> }
+            @for (note of (receipt.unresolved || []); track $index) {
+              <span>{{ note.filename || 'CSV' }} · line {{ note.line || '—' }}: {{ note.reason }}</span>
+            }
+          </div>
+          <div class="import-history-actions">
+            @if (receiptTransactionCount(receipt)) {
+              <ui-button variant="secondary" size="sm" (clicked)="viewImportedTransactions(receipt)">View transactions</ui-button>
+            }
+            @if (receiptParseIssueCount(receipt)) {
+              <ui-button variant="secondary" size="sm" (clicked)="reattachCorrectedCsv(receipt)">Reattach corrected CSV</ui-button>
+            }
+            @if (receipt.status === 'staged' || receipt.status === 'partial' || receipt.status === 'undoing') {
+              <ui-button variant="secondary" size="sm" (clicked)="resumeImport(receipt)">{{ receipt.status === 'undoing' ? 'Resume undo' : 'Resume' }}</ui-button>
+            }
+            @if (receipt.status !== 'withdrawn') {
+              <ui-button variant="danger" size="sm" (clicked)="undoImport(receipt)">Undo</ui-button>
+            }
+          </div>
+        </article>
+      }
+    } @else {
+      <ui-empty-state [title]="'No import receipts yet'" message="Import a statement to record its outcome and any confirmed coverage." />
+    }
+  </details>
 </div>
-}
 
 <ui-dialog scrollTarget=".main-content" [open]="importWorkflow.showImportModal" labelledBy="import-modal-title" panelClass="ui-dialog-panel--wide tx-sheet" (closed)="importWorkflow.closeImportModal()">
     <h3 id="import-modal-title">Import from bank</h3>

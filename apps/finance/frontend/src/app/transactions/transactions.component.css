@@ -686,6 +686,10 @@ label.form-group,
   min-width: 0;
 }
 
+.ledger-receipts {
+  margin-top: var(--space-4);
+}
+
 .import-notes-block {
   padding: var(--space-3);
 }

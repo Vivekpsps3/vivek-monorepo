@@ -84,8 +84,14 @@ import { InfoTipComponent } from '../shared/info-tip.component';
 export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   readonly transactionEffects = transactionEffects;
   @Input() embedded = false;
-  @Input() importsOnly = false;
   @Input() typeFilter: 'all' | 'income' | 'expense' = 'all';
+  @Input() receiptsOpen = false;
+  receiptsDetailsOpen = false;
+  readonly activityViewOptions: UiSelectOption[] = [
+    { value: 'all', label: 'All' },
+    { value: 'spending', label: 'Spending' },
+    { value: 'income', label: 'Income' },
+  ];
   transactions: Transaction[] = [];
   filteredTransactions: Transaction[] = [];
   allTransactions: Transaction[] = [];
@@ -243,10 +249,30 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['receiptsOpen']) this.receiptsDetailsOpen = this.receiptsOpen;
     if (changes['typeFilter'] && !changes['typeFilter'].firstChange) {
       this.visibleRowCount = this.pageSize;
       this.applyFilterAndSort();
     }
+  }
+
+  get activityView(): 'all' | 'spending' | 'income' {
+    return this.typeFilter === 'income' ? 'income' : this.typeFilter === 'expense' ? 'spending' : 'all';
+  }
+
+  onActivityViewChange(value: string): void {
+    const view = value === 'income' || value === 'spending' ? value : 'all';
+    if (view === this.activityView) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { v: view },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  onReceiptsToggle(event: Event): void {
+    const details = event.target as HTMLDetailsElement | null;
+    if (details) this.receiptsDetailsOpen = details.open;
   }
 
   private applyRouteQuery(params: any): void {
@@ -270,8 +296,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.throughDate = /^\d{4}-\d{2}-\d{2}$/.test(params.get('through') || '') ? params.get('through')! : '';
     const calendarDate = params.get('date') || '';
     this.selectedCalendarDate = /^\d{4}-\d{2}-\d{2}$/.test(calendarDate) ? calendarDate : null;
-    if (this.importsOnly && params.get('add') === '1' && !this.showImportModal) this.startImportWizard();
-    if (!this.importsOnly && this.selectedCalendarDate && params.get('add') === '1' && !this.showModal) {
+    if (params.get('add') === '1' && !this.selectedCalendarDate && !this.showImportModal) this.startImportWizard();
+    if (this.selectedCalendarDate && params.get('add') === '1' && !this.showModal) {
       this.transactionEditor.openAddModal(this.selectedCalendarDate);
     }
     const editId = params.get('edit') || '';
@@ -546,7 +572,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     if (this.importWorkflow.importCommitting) return;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { t: 'imports', add: '1' },
+      queryParams: { t: 'activity', receipts: '1', add: '1' },
       queryParamsHandling: 'merge',
     });
   }
@@ -554,7 +580,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   viewImportedTransactions(receipt: ImportReceipt): void {
     void this.router.navigate(['/spending'], {
       queryParams: {
-        t: 'activity', v: 'all', receipt: receipt.id,
+        t: 'activity', v: 'all', receipt: receipt.id, receipts: null,
         month: null, date: null, from: null, through: null,
         periodStart: null, periodEnd: null, priorStart: null, priorEnd: null,
         group: null, dimension: null, review: null, edit: null, add: null,
@@ -565,7 +591,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   reattachCorrectedCsv(receipt: ImportReceipt): void {
     const filename = this.receiptFirstParseFilename(receipt);
     void this.router.navigate(['/spending'], {
-      queryParams: { t: 'imports', add: '1', reattach: receipt.id, reattach_file: filename },
+      queryParams: { t: 'activity', receipts: '1', add: '1', reattach: receipt.id, reattach_file: filename },
     });
   }
 

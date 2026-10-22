@@ -2,7 +2,7 @@
   <section class="auth-layout" aria-labelledby="signup-title">
     <div class="auth-intro">
       <a class="brand-lockup" [href]="pageHref('login')">Account</a>
-      <h1 id="signup-title">{{ inviteToken ? 'Finish your account' : 'Create account' }}</h1>
+      <h1 id="signup-title">{{ inviteToken ? 'Finish your account' : (policy?.mode === 'closed' ? 'Signup is closed' : 'Create account') }}</h1>
       <p class="privacy-note">This account signs in to your Hub, Finance, Travel, and Media. A lost passphrase cannot be reset or used to recover your encrypted finance data.</p>
     </div>
 
@@ -11,33 +11,50 @@
         <form class="login-form" novalidate (ngSubmit)="submit()">
           @if (inviteToken) {
             <p class="password-hint">{{ inviteName || 'Your account' }} signs in as <strong>{{ username || '…' }}</strong></p>
+          } @else if (!policy) {
+            <p class="password-hint">Checking whether signup is open.</p>
+          } @else if (policy.mode === 'closed') {
+            <p class="password-hint">Account creation is closed. Ask an admin for an enrollment link.</p>
           } @else {
+            @if (policy.invite_code_required) {
+              <ui-input
+                label="Invite code"
+                autocomplete="off"
+                [required]="true"
+                [(value)]="inviteCode" />
+            }
             <ui-input
               label="Username"
               autocomplete="username"
               [required]="true"
               [(value)]="username" />
           }
-          <ui-input
-            label="Vault passphrase"
-            type="password"
-            [showPasswordToggle]="true"
-            autocomplete="new-password"
-            [required]="true"
-            [(value)]="password" />
-          <p class="password-hint">
-            @if (inviteToken) {
-              Passphrase: at least 12 characters. It stays in this browser.
-            } @else {
-              Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+          @if (inviteToken || (policy && policy.mode !== 'closed')) {
+            <ui-input
+              label="Vault passphrase"
+              type="password"
+              [showPasswordToggle]="true"
+              autocomplete="new-password"
+              [required]="true"
+              [(value)]="password" />
+            <p class="password-hint">
+              @if (inviteToken) {
+                Passphrase: at least 12 characters. It stays in this browser.
+              } @else if (policy?.invite_code_required) {
+                Use the invite code you were given. Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+              } @else {
+                Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+              }
+            </p>
+            @if (error) {
+              <p class="login-error" role="alert">{{ error }}</p>
             }
-          </p>
-          @if (error) {
+            <ui-button type="submit" [disabled]="loading || (!!inviteToken && !username)">
+              {{ loading ? 'Creating account' : (inviteToken ? 'Finish account' : 'Sign up') }}
+            </ui-button>
+          } @else if (error) {
             <p class="login-error" role="alert">{{ error }}</p>
           }
-          <ui-button type="submit" [disabled]="loading || (!!inviteToken && !username)">
-            {{ loading ? 'Creating account' : (inviteToken ? 'Finish account' : 'Sign up') }}
-          </ui-button>
         </form>
         <a class="mode-link" [href]="pageHref('login')">Sign in</a>
       </ui-card>

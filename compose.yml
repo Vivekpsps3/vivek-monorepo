@@ -20,6 +20,7 @@ services:
       args: {SITE_RELEASE: "${SITE_RELEASE:-development}"}
     command: [uvicorn, apps.server.main:app, --host, 0.0.0.0, --port, "8000", --limit-concurrency, "100", --timeout-keep-alive, "5", --no-access-log]
     environment:
+      # Gateway of SITE_SUBNET. If this drifts, per-IP limits collapse into one bucket.
       FORWARDED_ALLOW_IPS: 10.85.0.1
       SITE_DATABASE_URL: sqlite:////data/site.db
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-1}
@@ -27,6 +28,13 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://vivekpanchagnula.com}
       DISABLE_OPENAPI: "1"
       RATE_LIMIT_PER_MIN: "60"
+      AUTH_SIGNUP_MODE: ${AUTH_SIGNUP_MODE:-closed}
+      AUTH_INVITE_CODES: ${AUTH_INVITE_CODES:-}
+      AUTH_SIGNUP_ALLOWLIST: ${AUTH_SIGNUP_ALLOWLIST:-}
+      AUTH_IP_RATE_LIMIT_PER_MIN: ${AUTH_IP_RATE_LIMIT_PER_MIN:-60}
+      AUTH_PAIR_RATE_LIMIT_PER_MIN: ${AUTH_PAIR_RATE_LIMIT_PER_MIN:-20}
+      AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN: ${AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN:-60}
+      AUTH_ACCOUNT_RATE_LIMIT_PER_MIN: ${AUTH_ACCOUNT_RATE_LIMIT_PER_MIN:-20}
       FLIGHTAWARE_API_KEY: ${FLIGHTAWARE_API_KEY:-}
       TMDB_API_KEY: ${TMDB_API_KEY:-}
       RAWG_API_KEY: ${RAWG_API_KEY:-}

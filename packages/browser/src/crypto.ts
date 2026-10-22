@@ -1,4 +1,5 @@
-export const DEFAULT_PBKDF2_ITERATIONS = 310_000;
+/** PBKDF2-HMAC-SHA256 floor. Keep equal to MIN_PBKDF2_ITERATIONS in the finance backend. */
+export const DEFAULT_PBKDF2_ITERATIONS = 600_000;
 
 const AES_GCM_IV_BYTES = 12;
 const textEncoder = new TextEncoder();
