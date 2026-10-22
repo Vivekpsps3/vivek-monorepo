@@ -20,11 +20,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 SESSION_COOKIE_SECURE=1 SESSION
 WORKDIR /app
 COPY apps/server/requirements.lock /tmp/requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.lock \
- && groupadd --gid 10001 site && useradd --uid 10001 --gid site --no-create-home site
+ && groupadd --gid 10001 site && useradd --uid 10001 --gid site --no-create-home site \
+ && install -d -o 10001 -g 10001 -m 700 /data /backups
 COPY apps/finance/backend /app/apps/finance/backend
 COPY apps/travel/backend /app/apps/travel/backend
 COPY apps/media/backend /app/apps/media/backend
 COPY apps/server /app/apps/server
+COPY scripts/backup-site.py /app/backup-site.py
+COPY compose.yml /app/compose.yml
 COPY packages/browser/runtime /app/packages/browser/runtime
 COPY packages/ui/*.css /app/packages/ui/
 COPY --from=finance /src/apps/finance/frontend/dist/finance-app/browser /app/web/finance

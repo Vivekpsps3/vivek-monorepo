@@ -136,7 +136,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--source-dir", type=Path)
+    parser.add_argument("--if-missing", action="store_true", help="Validate an existing v1 database instead of overwriting it")
     args = parser.parse_args()
+    if args.if_missing and args.output.is_file():
+        with sqlite3.connect(args.output.resolve().as_uri() + "?mode=ro", uri=True) as existing:
+            if existing.execute("SELECT version FROM site_schema WHERE id=1").fetchone() != (VERSION,):
+                raise RuntimeError("Existing schema is incompatible")
+            check_integrity(existing)
+        print("Existing site database verified")
+        return
     report = migrate(args.output, args.source_dir)
     print(json.dumps({"schema": VERSION, "tables": len(report["tables"]), "rows": sum(t["rows"] for t in report["tables"].values())}))
 

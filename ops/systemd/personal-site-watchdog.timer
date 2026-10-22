@@ -1,7 +1,0 @@
-[Unit]
-Description=Check personal site health every minute
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=1min
-[Install]
-WantedBy=timers.target

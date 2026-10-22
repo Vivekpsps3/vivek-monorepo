@@ -7,6 +7,9 @@ from pathlib import Path
 import ssl
 import socket
 import time
+import subprocess
+import sys
+import threading
 import urllib.request
 
 TARGETS = {"public": "https://vivekpanchagnula.com/", "ready": "http://personal-site:8000/health/ready",
@@ -41,8 +44,9 @@ class Handler(BaseHTTPRequestHandler):
             body += f"site_tls_expiry_timestamp_seconds {expiry}\n"
         except Exception:
             body += "site_tls_expiry_timestamp_seconds 0\n"
-        status = Path("/status/backup.prom")
-        body += status.read_text() if status.is_file() else "site_backup_last_success_timestamp_seconds 0\n"
+        manifests = list(Path("/backups").glob("site-*.json"))
+        newest = max((p.stat().st_mtime for p in manifests), default=0)
+        body += f"site_backup_last_success_timestamp_seconds {newest}\n"
         body += f"site_probe_timestamp_seconds {time.time()}\n"
         encoded = body.encode()
         self.send_response(200)
@@ -55,5 +59,18 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def backup_loop():
+    interval = max(60, int(os.environ.get("SITE_BACKUP_INTERVAL_SECONDS", "3600")))
+    while True:
+        newest = max((p.stat().st_mtime for p in Path("/backups").glob("site-*.json")), default=0)
+        if time.time() - newest >= interval:
+            try:
+                subprocess.run([sys.executable, "/app/backup-site.py", "--source", "/data/site.db", "--directory", "/backups"], check=True, timeout=180)
+            except Exception as error:
+                print(json.dumps({"event": "backup_failed", "error": type(error).__name__}), flush=True)
+        time.sleep(60)
+
+
 if __name__ == "__main__":
+    threading.Thread(target=backup_loop, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 9090), Handler).serve_forever()

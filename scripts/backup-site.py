@@ -37,7 +37,11 @@ def backup(source, directory, retention_days=30):
         candidate = Path(temporary) / name
         with sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True, timeout=10) as src:
             with sqlite3.connect(candidate) as dest:
-                src.backup(dest, pages=256, sleep=0.05)
+                deadline = time.monotonic() + 120
+                def progress(_status, _remaining, _total):
+                    if time.monotonic() > deadline:
+                        raise TimeoutError("Backup exceeded its two-minute budget")
+                src.backup(dest, pages=256, progress=progress, sleep=0.05)
         result = verify(candidate)
         # Restore rehearsal: open a separate copy and re-verify it.
         restored = Path(temporary) / "restore.db"

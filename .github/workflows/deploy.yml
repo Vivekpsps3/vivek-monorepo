@@ -52,7 +52,14 @@ jobs:
           path: release
           github-token: ${{ github.token }}
           run-id: ${{ steps.release.outputs.run_id }}
+      - name: Sync deployment definition to tested SHA
+        env:
+          RELEASE: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git -C /home/vivek/Deployments/vivek-monorepo fetch origin
+          git -C /home/vivek/Deployments/vivek-monorepo checkout --detach "$RELEASE"
       - name: Deploy tested image with verified backup and rollback
         env:
           RELEASE: ${{ steps.release.outputs.sha }}
-        run: python3 /home/vivek/Deployments/personal-site-config/release-site.py deploy "$GITHUB_WORKSPACE/release/image.tar.gz" "$RELEASE"
+        run: DOCKER_COMMAND="sudo -n docker" /home/vivek/Deployments/vivek-monorepo/scripts/deploy-site.sh "$RELEASE" "$GITHUB_WORKSPACE/release/image.tar.gz"

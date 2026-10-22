@@ -1,8 +1,0 @@
-[Unit]
-Description=Verified personal site SQLite backup and restore rehearsal
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/personal-site-release backup
-TimeoutStartSec=300
-Nice=10
-IOSchedulingClass=idle

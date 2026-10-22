@@ -11,9 +11,9 @@ application authorization and a single private data mount are the boundaries.
   restore from that destination. Current backups protect accidental changes, not
   host/disk loss or compromise.
 - [ ] **Dedicated runner and root-owned release controller. User chose to retain
-  the existing runner.** Optional host-control sources under ops/ are review-only.
+  the existing runner.** The user also requested a stateless deployment; controller/account/timer scaffolding was removed.
   The active runner retains Docker-equivalent host privilege and access to the
-  operator account's state/config. No new account, sudoers, or systemd units were installed.
+  operator account's state/config. No new account, sudoers, systemd units, copied config tree, or release history files are installed.
 - [ ] **External availability monitor and notification destination.** Local probes
   and Prometheus rules exist; independent detection and proven recipient delivery
   are not configured. Do not claim paging coverage.
@@ -50,21 +50,21 @@ application authorization and a single private data mount are the boundaries.
 | 1–2 shared mounts / file access | Superseded by one service and one private owner-readable database; no cross-service data mounts remain. Runner boundary remains deferred. |
 | 3–5 coverage / verification / schedule | One database, verified backup plus separate restore check, hourly scheduling, bounded retention, hard failure on missing state. |
 | 6–9 off-host / consistency / recovery material | Coordinated all-domain migration and restore documentation; off-host and full-host drills remain explicit TODOs. Legacy material retained privately. |
-| 10 code and state colocated | Private config/state/backup directories outside the checkout. |
+| 10 code and state colocated | Only Docker-managed database and backup volumes persist; the tracked Compose file is the deployment definition. |
 | 11–12 sensitive build contexts | Root and domain Docker exclusions; assembled image checked for local DBs/env/venvs. |
-| 13–18 release reproducibility | One tracked Compose/vhost/controller source, installation hashes, hashed runtime lock, pinned bases, and CI-built artifact promotion. Host install is explicit. |
+| 13–18 release reproducibility | One tracked Compose/vhost source, hashed runtime lock, pinned bases, and CI-built artifact promotion; no installed controller or copied configs. |
 | 19–28 live checkout / partial deploy / rollback / provenance | No production checkout or package installs; exact SHA probes, tested artifact, stale guard, trusted push gate, manual CI-artifact requirement, image rollback. Database rollback remains deliberate. |
 | 29–32 resource and host failure | CPU/memory/PID/log bounds and no host builds; single-host availability remains accepted with drill TODOs. |
-| 33–37 runner / secrets / root containers | Private files and non-root, read-only, capability-free runtime; dedicated runner/root config deferred by user. |
+| 33–37 runner / secrets / root containers | Non-root, read-only, capability-free runtime; secrets in the existing private .env, data/backups in Docker volumes; stronger host controls deferred by user. |
 | 38–41 HTTP auth dependency | Removed: direct shared session validation with one engine and explicit CSRF. |
 | 42–45 scheme / client trust / rate limit | One proxy hop, sanitized headers, explicit trusted gateway, edge budgets, bounded application limiter state. Validate actual client identity after routing changes. |
 | 46–48 origin / cookies / lifecycle | Shared-origin risk documented, SameSite=lax, common auth, cross-user tests and unified account deletion. |
 | 49–51 DNS and startup ordering | Removed backend DNS and service-start dependency chains. Host reboot exercise remains TODO. |
-| 52–53 health and recovery | DB/schema/frontend preflight, exact release readiness, local probes and bounded unhealthy recovery. |
+| 52–53 health and recovery | DB/schema/frontend preflight, exact release readiness, local probes; running-unhealthy recovery is manual to avoid another privileged helper. |
 | 54–58 routing and request policy | One edge route, app-owned paths, compatibility redirects, correct 404s/cache policy, request/time budgets and security headers. CSP enforcement deferred. |
-| 59–66 monitoring and logs | Metrics/probes/rules, request IDs/timing, bounded Docker/scheduler logs, all-app diagnostics. External monitor and notification delivery deferred. |
+| 59–66 monitoring and logs | Metrics/probes/rules, request IDs/timing, bounded Docker logs, all-app diagnostics. External monitor and notification delivery deferred. |
 | 67–70 schema / SQLite | Explicit consolidated schema, offline verified migration, foreign keys, WAL, busy timeout, local filesystem requirement. Future migration framework and load exercises remain TODOs. |
 | 71–72 external providers | Existing timeout/budget behavior retained; quotas, total deadlines and stress exercises remain TODOs. |
-| 73–76 ownership / docs / TLS / bootstrap | Current operations map and bootstrap scripts; broader TLS/host cleanup and full replacement-machine proof remain TODOs. |
+| 73–76 ownership / docs / TLS / bootstrap | Current operations map and image/Compose bootstrap; broader TLS/host cleanup and full replacement-machine proof remain TODOs. |
 | 77–78 production coverage / exercises | Both production frontends, all-domain release checks, real migration rehearsal and browser checks; comprehensive fault-injection remains TODO. |
 | 79–80 patch policy / objectives | Vulnerable runtime updated and audited, pins and artifact flow added; ongoing patch/scan ownership and explicit SLO/RTO still require decisions. |

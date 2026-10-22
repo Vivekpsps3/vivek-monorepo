@@ -58,15 +58,17 @@ app = FastAPI(title="Personal site", lifespan=lifespan, docs_url=None, redoc_url
 
 @app.middleware("http")
 async def observe(request: Request, call_next):
-    request_id = uuid.uuid4().hex
+    supplied_id = request.headers.get("x-request-id", "")
+    request_id = supplied_id if re.fullmatch(r"[0-9a-f]{32}", supplied_id) else uuid.uuid4().hex
+    method = request.method if request.method in {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"} else "OTHER"
     started = time.monotonic()
     try:
         response = await call_next(request)
     except Exception:
         logger.exception("request_failed request_id=%s", request_id)
         response = JSONResponse(status_code=500, content={"detail": "Internal server error", "request_id": request_id})
-    REQUESTS.labels(request.method, str(response.status_code)).inc()
-    LATENCY.labels(request.method).observe(time.monotonic() - started)
+    REQUESTS.labels(method, str(response.status_code)).inc()
+    LATENCY.labels(method).observe(time.monotonic() - started)
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"

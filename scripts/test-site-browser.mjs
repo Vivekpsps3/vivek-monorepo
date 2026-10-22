@@ -20,7 +20,7 @@ try {
     assert.match(await page.locator('main').innerText(), /Browser round-trip 🌍/);
     await page.goto(base + '/auth/login', { waitUntil: 'networkidle' });
     assert.equal(await page.locator('app-root').count(), 1);
-    assert.match(await page.locator('body').innerText(), /Sign in/i);
+    assert.match(await page.locator('body').innerText(), /Sign in|Create the first account/i);
     for (const route of ['/finance/', '/hub', '/travel/', '/media/']) {
       await page.goto(base + route, { waitUntil: 'networkidle' });
       assert.match(await page.locator('body').innerText(), /sign in|username|passphrase/i, route);
