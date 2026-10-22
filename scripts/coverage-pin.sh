@@ -18,7 +18,10 @@ measure() {
   local suite=$1 tests=$2 cov=$3
   local report measured
   report=$(mktemp)
-  "$py" -m pytest -q "$tests" --cov="$cov" --cov-report=term | tee "$report"
+  # Pytest's report stays off stdout. The caller redirects stdout into
+  # quality/coverage.txt and only wants the suite line.
+  "$py" -m pytest -q "$tests" --cov="$cov" --cov-report=term >"$report"
+  cat "$report" >&2
   measured=$(awk '/^TOTAL / { gsub(/%/, "", $NF); print $NF }' "$report")
   rm -f "$report"
   if [[ -z "$measured" ]]; then

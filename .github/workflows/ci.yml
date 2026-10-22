@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+    # labeled and unlabeled retrigger the run. A re-run replays the original
+    # payload, so the ratchet-increase label would otherwise stay invisible
+    # until the next push.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches:
       - main
@@ -32,9 +36,15 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           RATCHET_ALLOW_INCREASE: ${{ contains(github.event.pull_request.labels.*.name, 'ratchet-increase') && 'true' || 'false' }}
         run: |
-          for tool in ruff mypy eslint-finance eslint-site eslint-packages suppressions; do
+          if [ "$RATCHET_ALLOW_INCREASE" = "true" ]; then
+            echo "ratchet-increase label is present; a higher allowance is accepted." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ratchet-increase label is absent." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python3 scripts/quality_ratchet.py check-tools "origin/${BASE_REF}"
+          while IFS= read -r tool; do
             python3 scripts/quality_ratchet.py check-base "$tool" "origin/${BASE_REF}"
-          done
+          done < <(python3 scripts/quality_ratchet.py list)
       - run: ./scripts/coverage-gate.sh finance
       - run: ./scripts/coverage-gate.sh server
       - run: make test-fast

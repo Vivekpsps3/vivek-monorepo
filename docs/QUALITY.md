@@ -16,22 +16,22 @@ Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requireme
 
 `scripts/quality_ratchet.py` records `path<TAB>rule<TAB>count` in `quality/`. CI fails when a live count rises, and when a recorded count is higher than the current one. A fix has to drop the baseline entry (`make lint-baseline`) instead of leaving a stale allowance.
 
-`update` refuses a higher count unless `--allow-increase` is passed. On a pull request, CI also compares each committed baseline with the same file on the base branch (`check-base`) and fails if this branch allows more than the base. The base ref is passed in the environment, and the job does not fetch with `--depth=1`, so blame and merge-base still see full history. A missing baseline is an error when that tool is already in `TOOLS` on the base. It is a `::warning::` when this script, or that tool, is new there. The `ratchet-increase` pull-request label sets `RATCHET_ALLOW_INCREASE` and is the reviewed way to accept a higher allowance. Do not add file-wide suppressions to quiet a noisy rule.
+`update` refuses a higher count unless `--allow-increase` is passed. On a pull request, CI compares each committed baseline with the same file on the base branch (`check-base`) and fails if this branch allows more than the base. The tool list comes from `quality_ratchet.py list`, so a new `TOOLS` key is covered without editing the workflow. `check-tools` fails when a key that exists on the base ref was renamed or removed here. The base ref is passed in the environment, and the job does not fetch with `--depth=1`, so blame and merge-base still see full history. A missing baseline is an error when that tool is already in `TOOLS` on the base. It is a `::warning::` when this script, or that tool, is new there. The workflow listens for `labeled` and `unlabeled` as well as the default pull-request events, and the allowance step writes whether the `ratchet-increase` label is present. That label sets `RATCHET_ALLOW_INCREASE` and is the reviewed way to accept a higher allowance. Do not add file-wide suppressions to quiet a noisy rule.
 
-ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts inline `# noqa` (any case, including `# ruff: noqa` and `# flake8: noqa`), `# type: ignore`, `# mypy: ignore-errors`, `eslint-disable`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `# pragma: no cover`, and `istanbul` / `c8` / `v8` `ignore` in `apps/`, `scripts/`, and `packages/`. `apps/site/flask` is skipped, same as the other Python gates. Alembic `versions/` directories are skipped by that path, not because the directory is named `versions`.
+ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts a `# noqa` comment (any case, including `# ruff: noqa` and `# flake8: noqa`). The `#` is required, so the word `noqa` inside a string is not a suppression. It also counts `# type: ignore`, any `# mypy:` inline option (including `ignore-errors` and `disable-error-code`), `eslint-disable`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `# pragma: no cover`, and `istanbul` / `c8` / `v8` `ignore` in `apps/`, `scripts/`, and `packages/`. `apps/site/flask` is skipped, same as the other Python gates. Alembic `versions/` directories are skipped by that path, not because the directory is named `versions`.
 
 Current baselines:
 
 | Tool | Findings left |
 | --- | ---: |
-| Ruff | 151 |
-| mypy | 368 |
-| ESLint, finance | 483 |
+| Ruff | 167 |
+| mypy | 384 |
+| ESLint, finance | 481 |
 | ESLint, site | 9 |
 | ESLint, packages | 0 |
 | Inline suppressions | 0 |
 
-Counting warnings did not move the ESLint totals: the current findings are all errors. `transactions.component.spec.ts` stays at 19 `@typescript-eslint/no-explicit-any`. The two route-action fixtures from the spending flatten are typed `ImportReceipt`s.
+Counting warnings did not move the ESLint totals: the current findings are all errors. `transactions.component.spec.ts` stays at 19 `@typescript-eslint/no-explicit-any`. The two route-action fixtures from the spending flatten are typed `ImportReceipt`s. The return-path specs in `after-auth.spec.ts` stub the router with `jasmine.SpyObj<Router>`, so that file no longer adds an `any`.
 
 The leftover Ruff findings are import order, pyupgrade, and simplify rules, plus `RUF012` on test doubles. The leftover mypy findings are mostly SQLAlchemy `Column` inference. The leftover ESLint findings are `no-explicit-any`, `prefer-inject`, and a handful of template rules. New code still has to stay inside those counts.
 
@@ -48,7 +48,7 @@ Ruff lints and formats `apps/` and `scripts/` at line length 100. Selected rules
 
 mypy runs on Python 3.12 with `check_untyped_defs` and `ignore_missing_imports`. `disallow_untyped_defs` is off; turning it on would be a new baseline, not a cleanup.
 
-The formatting-only commits listed in `.git-blame-ignore-revs` are `0fcae8021f783f836160bcd8f6a86ad1a98eacbe` and `2c41a00fecfabaefd4acab7229f613f7951a1d2a` (the auth-hardening reformat after merging main). Later formatting commits are appended. CI checks that every listed SHA is still an ancestor of `HEAD`, which holds when main is merged in rather than rebased. Do not drop either SHA on a rebase unless the owner has approved a force-push.
+The formatting-only commits listed in `.git-blame-ignore-revs` are `0fcae8021f783f836160bcd8f6a86ad1a98eacbe`, `2c41a00fecfabaefd4acab7229f613f7951a1d2a` (the auth-hardening reformat after merging main), and `0ccfa2cb0696d2c6c278fa21093cdeb3828fb9de` (the reformat after merging the schema, media, and CSP work). Later formatting commits are appended. CI checks that every listed SHA is still an ancestor of `HEAD`, which holds when main is merged in rather than rebased. Do not drop a SHA that is still an ancestor.
 
 ```bash
 git config blame.ignoreRevsFile .git-blame-ignore-revs
@@ -68,12 +68,12 @@ Prettier is not configured. The tree has no formatter today, and formatting both
 
 | Suite | Statements | Missed | Measured | Floor |
 | --- | ---: | ---: | ---: | ---: |
-| Finance | 2238 | 343 | 84.67% | 83.67% |
-| Travel | 2090 | 389 | 81.39% | 80.39% |
-| Media | 2336 | 689 | 70.51% | 69.51% |
-| Server | 480 | 378 | 21.25% | 20.25% |
+| Finance | 2265 | 354 | 84.37% | 83.37% |
+| Travel | 2092 | 389 | 81.41% | 80.41% |
+| Media | 2377 | 675 | 71.60% | 70.60% |
+| Server | 1254 | 483 | 61.48% | 60.48% |
 
-Server coverage is low because auth, checks, database, main, and monitor have no tests. The floor still counts those modules. Omitting them would make the gate look healthier than the package is. Re-measure Server when PR #5 lands `apps/server/migrations.py`.
+Server coverage rose once migrations, schema, redirects, and the security-header middleware gained tests. Auth, checks, database, main, and monitor are still untested, and the floor still counts those modules. Omitting them would make the gate look healthier than the package is.
 
 Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json`. `scripts/karma-coverage-summary.mjs` appends the totals to the GitHub step summary. Karma only instruments files the specs actually load, so these totals are not whole-app coverage. Measured totals are finance 61.46 / 53.32 / 57.12 / 63.53 and site 62.72 / 48.48 / 56 / 64. Thresholds sit about 1 point below those totals:
 

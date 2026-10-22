@@ -13,7 +13,9 @@ file on another git ref and fails when this branch allows more than that
 ref. A missing baseline is an error when that tool already exists on the
 ref. It is a warning when the tool, or this script, is new on this branch.
 ``RATCHET_ALLOW_INCREASE=true`` (the ``ratchet-increase`` pull-request
-label) is the reviewed way to accept a higher allowance.
+label) is the reviewed way to accept a higher allowance. ``list`` prints
+the ``TOOLS`` keys, and ``check-tools`` fails when a key that exists on
+the base ref was renamed or removed on this branch.
 """
 
 from __future__ import annotations
@@ -55,11 +57,11 @@ SUPPRESSION_SKIP = {
 }
 
 _NOQA = re.compile(
-    r"(?:#\s*(?P<tool>ruff|flake8)\s*:\s*)?noqa\b(?::\s*(?P<codes>[A-Za-z0-9_,\s]+))?",
+    r"#\s*(?:(?P<tool>ruff|flake8)\s*:\s*)?noqa\b(?::\s*(?P<codes>[A-Za-z0-9_,\s]+))?",
     re.IGNORECASE,
 )
 _TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore\b(?:\[([^\]]+)\])?", re.IGNORECASE)
-_MYPY_FILE = re.compile(r"#\s*mypy:\s*ignore-errors\b", re.IGNORECASE)
+_MYPY_INLINE = re.compile(r"#\s*mypy:\s*([a-z-]+)", re.IGNORECASE)
 _ESLINT_DISABLE = re.compile(
     r"eslint-disable(?:-next-line|-line)?\b(?:\s+([^/\n*]+))?",
     re.IGNORECASE,
@@ -243,8 +245,9 @@ def suppression_markers(line: str) -> list[str]:
     if ignored:
         codes = _codes(ignored.group(1))
         markers.extend([f"type: ignore[{code}]" for code in codes] or ["type: ignore"])
-    if _MYPY_FILE.search(line):
-        markers.append("mypy: ignore-errors")
+    mypy_inline = _MYPY_INLINE.search(line)
+    if mypy_inline:
+        markers.append(f"mypy: {mypy_inline.group(1).lower()}")
     disabled = _ESLINT_DISABLE.search(line)
     if disabled:
         codes = _codes(disabled.group(1))
@@ -375,6 +378,36 @@ def annotate(level: str, message: str) -> None:
     print(f"::{level}::{escaped}")
 
 
+def removed_tools(base_source: str, current: set[str] | None = None) -> set[str]:
+    """Keys in a base ``TOOLS`` dict that this branch no longer has.
+
+    A rename is a removal of the old key. Callers fail on a non-empty set
+    so the allowance comparison cannot be skipped by changing the name.
+    """
+    present = set(TOOLS) if current is None else current
+    return tools_in_source(base_source) - present
+
+
+def check_tools(base_ref: str) -> int:
+    script = git_show(base_ref, "scripts/quality_ratchet.py")
+    if script is None:
+        annotate(
+            "warning",
+            f"no scripts/quality_ratchet.py on {base_ref}; the TOOLS rename check is skipped",
+        )
+        return 0
+    missing = removed_tools(script)
+    if missing:
+        names = ", ".join(sorted(missing))
+        annotate(
+            "error",
+            f"TOOLS on {base_ref} has keys this branch removed or renamed: {names}",
+        )
+        return 1
+    print(f"TOOLS keys still cover {base_ref}")
+    return 0
+
+
 def increases_allowed(flag: bool) -> bool:
     if flag:
         return True
@@ -401,11 +434,33 @@ def guard_update(
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Lint and suppression ratchet.")
-    parser.add_argument("action", choices=["check", "update", "check-base"])
-    parser.add_argument("tool", choices=sorted(TOOLS))
+    parser.add_argument("action", choices=["check", "update", "check-base", "list", "check-tools"])
+    parser.add_argument("tool", nargs="?")
     parser.add_argument("base_ref", nargs="?")
     parser.add_argument("--allow-increase", action="store_true")
     args = parser.parse_args(argv[1:])
+
+    if args.action == "list":
+        if args.tool or args.base_ref:
+            print("usage: quality_ratchet.py list", file=sys.stderr)
+            return 2
+        for name in sorted(TOOLS):
+            print(name)
+        return 0
+
+    if args.action == "check-tools":
+        if not args.tool or args.base_ref:
+            print("usage: quality_ratchet.py check-tools BASE_REF", file=sys.stderr)
+            return 2
+        return check_tools(args.tool)
+
+    if args.tool not in TOOLS:
+        print(
+            f"usage: quality_ratchet.py {args.action} TOOL"
+            + (" BASE_REF" if args.action == "check-base" else ""),
+            file=sys.stderr,
+        )
+        return 2
     baseline_path, collect = TOOLS[args.tool]
 
     if args.action == "check-base":

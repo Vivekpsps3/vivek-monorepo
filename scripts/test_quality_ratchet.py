@@ -1,4 +1,6 @@
+import contextlib
 import importlib.util
+import io
 import tempfile
 import unittest
 from collections import Counter
@@ -133,11 +135,23 @@ class RatchetTests(unittest.TestCase):
     def test_noqa_is_case_insensitive(self):
         self.assertEqual(self.ratchet.suppression_markers("x = 1  # NOQA"), ["noqa"])
 
+    def test_noqa_word_in_a_string_is_not_a_suppression(self):
+        self.assertEqual(self.ratchet.suppression_markers('s = "the noqa flag"'), [])
+        self.assertEqual(self.ratchet.suppression_markers("canoqa = 1"), [])
+
     def test_mypy_ignore_errors(self):
         self.assertEqual(
             self.ratchet.suppression_markers("# mypy: ignore-errors"),
             ["mypy: ignore-errors"],
         )
+
+    def test_mypy_inline_config(self):
+        self.assertEqual(
+            self.ratchet.suppression_markers('# mypy: disable-error-code="arg-type"'),
+            ["mypy: disable-error-code"],
+        )
+        self.assertEqual(self.ratchet.suppression_markers("# pyright: ignore"), [])
+        self.assertEqual(self.ratchet.suppression_markers("x = 1  # pragma: no branch"), [])
 
     def test_ts_ignore(self):
         self.assertEqual(self.ratchet.suppression_markers("// @ts-ignore"), ["@ts-ignore"])
@@ -172,6 +186,18 @@ class RatchetTests(unittest.TestCase):
         source = 'TOOLS = {"ruff": (1, 2), "mypy": (3, 4)}\n'
         self.assertEqual(self.ratchet.tools_in_source(source), {"ruff", "mypy"})
         self.assertEqual(self.ratchet.tools_in_source("x = 1\n"), set())
+
+    def test_removed_tools_catches_a_rename(self):
+        source = 'TOOLS = {"ruff": (1, 2), "mypy": (3, 4)}\n'
+        self.assertEqual(self.ratchet.removed_tools(source, {"ruff-py", "mypy"}), {"ruff"})
+        self.assertEqual(self.ratchet.removed_tools(source, {"ruff", "mypy"}), set())
+
+    def test_list_prints_every_tool(self):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = self.ratchet.main(["quality_ratchet.py", "list"])
+        self.assertEqual(code, 0)
+        self.assertEqual(stdout.getvalue().splitlines(), sorted(self.ratchet.TOOLS))
 
 
 if __name__ == "__main__":

@@ -1,15 +1,16 @@
 import os
-from pathlib import Path
 import sqlite3
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from sqlalchemy import Column, Integer, Table, create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from alembic import command
+
 from apps.server.migrations import (
     adopt_or_upgrade,
     check_drift,
@@ -487,6 +488,7 @@ def test_in_place_baseline_edit_is_caught_by_model_diff(tmp_path, monkeypatch):
     )
 
     from sqlalchemy import Column, Text
+
     from apps.server import schema as schema_module
 
     real_metadata = schema_module.metadata

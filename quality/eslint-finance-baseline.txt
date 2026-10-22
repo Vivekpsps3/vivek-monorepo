@@ -7,7 +7,6 @@ apps/finance/frontend/e2e/synthetic-vault.ts	@typescript-eslint/no-explicit-any	
 apps/finance/frontend/src/app/app.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.spec.ts	@typescript-eslint/no-explicit-any	4
 apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.ts	@angular-eslint/prefer-inject	4
-apps/finance/frontend/src/app/auth/after-auth.spec.ts	@typescript-eslint/no-explicit-any	2
 apps/finance/frontend/src/app/auth/auth.service.ts	@typescript-eslint/no-explicit-any	3
 apps/finance/frontend/src/app/auth/login.component.spec.ts	@typescript-eslint/no-explicit-any	1
 apps/finance/frontend/src/app/auth/login.component.ts	@typescript-eslint/no-explicit-any	1
