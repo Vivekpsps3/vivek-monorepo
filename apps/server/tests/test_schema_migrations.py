@@ -426,6 +426,62 @@ def test_batch_recreate_of_user_entries_keeps_cascade_experiences(tmp_path):
         assert "batch_marker" not in {row[1] for row in db.execute("PRAGMA table_info(users)")}
 
 
+def test_database_path_rejects_a_file_uri_with_a_remote_authority():
+    with pytest.raises(RuntimeError, match="localhost"):
+        database_path("sqlite:///file://evil/data/x.db?uri=true")
+    # A fragment stays inside the file URI. SQLAlchemy's own query (mode, uri)
+    # is not part of that URI and still names the local path.
+    with pytest.raises(RuntimeError, match="query or fragment"):
+        database_path("sqlite:///file:///data/x.db#frag")
+    assert database_path("sqlite:///file:///data/x.db?mode=ro&uri=true") == Path("/data/x.db")
+    assert database_path("sqlite:///file://localhost/data/x.db?uri=true") == Path("/data/x.db")
+    assert database_path("sqlite:///file:///data/x.db?uri=true") == Path("/data/x.db")
+
+
+def test_in_place_baseline_edit_is_caught_by_model_diff(tmp_path, monkeypatch):
+    """A revision edited in place still reports current, and the schema diff does not.
+
+    ``--check`` upgrades a fresh database with the edited revision, so it
+    stays green. A database already stamped at that revision does not gain
+    the new column. Upgrade mode has to require an empty model diff.
+    """
+    published = tmp_path / "published.db"
+    adopt_or_upgrade(sqlite_url(published))
+    assert model_diff(published) == []
+    assert current_revision(published) == head_revision()
+
+    source = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "site_schema_v1_baseline_schema.py"
+    edited = tmp_path / "versions"
+    edited.mkdir()
+    original = source.read_text()
+    needle = 'value TEXT NOT NULL, \\n\\tPRIMARY KEY ("key")'
+    assert needle in original
+    (edited / source.name).write_text(
+        original.replace(needle, 'value TEXT NOT NULL, \\n\\tnote TEXT, \\n\\tPRIMARY KEY ("key")', 1)
+    )
+
+    from sqlalchemy import Column, Text
+    from apps.server import schema as schema_module
+
+    real_metadata = schema_module.metadata
+
+    def metadata_with_note():
+        meta = real_metadata()
+        meta.tables["settings"].append_column(Column("note", Text(), nullable=True))
+        return meta
+
+    monkeypatch.setattr(schema_module, "metadata", metadata_with_note)
+    fresh = tmp_path / "fresh.db"
+    cfg = make_config(sqlite_url(fresh))
+    cfg.set_main_option("version_path_separator", "os")
+    cfg.set_main_option("version_locations", str(edited))
+    command.upgrade(cfg, "head")
+    assert model_diff(fresh) == []
+    diff = model_diff(published)
+    assert any(item and item[0] == "add_column" for item in diff)
+    assert current_revision(published) == head_revision()
+
+
 def test_sqlite_url_opens_a_database_whose_name_contains_reserved_characters(tmp_path):
     database = tmp_path / "q?mark#hash%.db"
     url = sqlite_url(database)

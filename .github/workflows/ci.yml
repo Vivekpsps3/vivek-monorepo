@@ -111,10 +111,46 @@ jobs:
         id: migrations
         run: |
           set -euo pipefail
-          # pull_request and push to main use the same gate. A push with no
-          # usable before SHA still runs the rehearsals, so main cannot skip
-          # them by losing that commit. The script pins the un-adopted
-          # fixture itself; it does not treat origin/main as unstamped.
+          # Anchored, so the Alembic alternative has to consume the rest of
+          # the path. A bare "apps/server/alembic/" never matches a file name.
+          pattern='^(apps/[^/]+/backend/models\.py|apps/server/alembic(/.*|\.ini)|apps/server/(migrations|schema|migrate|database)\.py|scripts/(seed_dev_db\.py|validate-seeded-adoption\.sh|backup-site\.py|deploy-site\.sh)|compose\.yml|Dockerfile|\.github/workflows/ci\.yml)$'
+          check() {
+            path="$1"
+            expect="$2"
+            if printf '%s\n' "$path" | grep -Eq "$pattern"; then
+              got=run
+            else
+              got=skip
+            fi
+            if [ "$got" != "$expect" ]; then
+              echo "rehearsal path gate: $path expected $expect, got $got" >&2
+              exit 1
+            fi
+          }
+          check apps/server/alembic/versions/site_schema_v2_x.py run
+          check apps/server/alembic/env.py run
+          check apps/server/alembic.ini run
+          check compose.yml run
+          check Dockerfile run
+          check scripts/deploy-site.sh run
+          check .github/workflows/ci.yml run
+          check apps/travel/backend/models.py run
+          check apps/finance/backend/models.py run
+          check apps/server/migrations.py run
+          check apps/server/schema.py run
+          check apps/server/migrate.py run
+          check apps/server/database.py run
+          check scripts/seed_dev_db.py run
+          check scripts/validate-seeded-adoption.sh run
+          check scripts/backup-site.py run
+          check apps/server/alembic skip
+          check apps/server/main.py skip
+          check docs/MIGRATIONS.md skip
+          check .github/workflows/deploy.yml skip
+          # Push to main always rehearses. A later unrelated commit must not
+          # deploy over a red rehearsal that this diff no longer mentions.
+          # Pull requests still use the path gate. Either way, a revision
+          # file that already exists on the base cannot be edited in place.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "${{ github.base_ref }}"
             range="FETCH_HEAD"
@@ -132,7 +168,17 @@ jobs:
               exit 0
             fi
           fi
-          if git diff --name-only "$range" HEAD | grep -Eq '^(apps/[^/]+/backend/models\.py|apps/server/alembic/|apps/server/(migrations|schema|migrate)\.py|scripts/(seed_dev_db\.py|validate-seeded-adoption\.sh|backup-site\.py))$'; then
+          edited="$(git diff --diff-filter=MDR --name-only "$range" HEAD -- apps/server/alembic/versions/)"
+          if [ -n "$edited" ]; then
+            echo "existing Alembic revisions were modified or removed; add a new revision instead:" >&2
+            printf '%s\n' "$edited" >&2
+            exit 1
+          fi
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$range" HEAD | grep -Eq "$pattern"; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -147,6 +193,7 @@ jobs:
           SITE_IMAGE: personal-site:${{ github.sha }}
           PY: python
           REHEARSAL: both
+          UPGRADE_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: bash scripts/validate-seeded-adoption.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

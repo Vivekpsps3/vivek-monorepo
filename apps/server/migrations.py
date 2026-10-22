@@ -106,6 +106,13 @@ def database_path(url: str) -> Path:
         uri = urlparse(database)
         if uri.scheme != "file" or not uri.path.startswith("/"):
             raise RuntimeError("SITE_DATABASE_URL must name an absolute SQLite path")
+        # file://evil/data/x.db is not the local file /data/x.db. SQLite only
+        # accepts an empty authority or localhost, and the query belongs on
+        # the SQLAlchemy URL, not inside the file URI.
+        if uri.netloc not in ("", "localhost"):
+            raise RuntimeError("SQLite file URI must use an empty or localhost authority")
+        if uri.query or uri.fragment:
+            raise RuntimeError("SQLite file URI must not carry a query or fragment")
         path = Path(unquote(uri.path))
     else:
         path = Path(database)

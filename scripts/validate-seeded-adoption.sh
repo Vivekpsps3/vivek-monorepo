@@ -6,9 +6,12 @@
 #
 # adopt: build an un-adopted v1 database from the pinned pre-adoption commit,
 # seed it through that commit's HTTP handlers, and require --plan to stamp.
-# upgrade: build a database from current origin/main (already adopted), seed
-# it through that app, and require --plan to be the forward action from
-# main's revision to this branch's head.
+# upgrade: build a database from UPGRADE_FROM (default origin/main), seed it
+# through that app, and require --plan to be the forward action from that
+# revision to this branch's head. After migrate, this branch's model diff
+# on the result must be empty. CI passes the pull request base, or
+# github.event.before on a push, so a merge rehearses the migrations that
+# just landed instead of only reporting current.
 #
 # Set BATCH_PROOF=1 to also run the uncommitted batch-recreate check after
 # adopt. That proof is local only; CI leaves it unset.
@@ -32,6 +35,10 @@ esac
 # Pinned so later main commits cannot turn this rehearsal into a stamp of
 # an already-adopted file.
 LEGACY_UNADOPTED_SHA="8dc554e8094237419571551ff82b0fbfe115bfbd"
+upgrade_from="${UPGRADE_FROM:-origin/main}"
+if [[ -z "$upgrade_from" || "$upgrade_from" == "0000000000000000000000000000000000000000" ]]; then
+  upgrade_from="origin/main"
+fi
 
 work="$(mktemp -d /tmp/seed-validate.XXXXXX)"
 report="/tmp/seed-validation-report.json"
@@ -285,6 +292,24 @@ report.update({
 json.dump(report, open(report_path, "w"), indent=2)
 print(f"{mode}: row counts held and revision is {revision}")
 PY
+  if [[ "$mode" == "upgrade" ]]; then
+    echo "Checking the migrated database matches this branch's models"
+    PYTHONPATH="$root" "$py" - "$out_dir/migrated.db" <<'PY'
+import sys
+from pathlib import Path
+from apps.server.migrations import model_diff
+diff = model_diff(Path(sys.argv[1]), readonly=True)
+if diff:
+    parts = []
+    for item in diff:
+        kind = item[0] if item else "change"
+        subject = item[1] if len(item) > 1 else ""
+        name = getattr(subject, "name", None) or (subject if isinstance(subject, str) else "")
+        parts.append(f"{kind} {name}".strip())
+    raise SystemExit("schema diff after upgrade is not empty: " + ", ".join(parts[:12]))
+print("upgrade schema diff is empty")
+PY
+  fi
   local cookie csrf base path code
   cookie="$("$py" -c 'import json,sys; print(json.load(open(sys.argv[1]))["cookie"])' "$session")"
   csrf="$("$py" -c 'import json,sys; print(json.load(open(sys.argv[1]))["csrf_token"])' "$session")"
@@ -579,8 +604,13 @@ PY
 
 run_upgrade() {
   local sha main_head dir sha_before sha_after
-  sha="$(git rev-parse origin/main)"
-  echo "Upgrade rehearsal from origin/main $sha"
+  if [[ "$upgrade_from" == "origin/main" ]]; then
+    sha="$(git rev-parse origin/main)"
+  else
+    git fetch --no-tags origin "$upgrade_from"
+    sha="$(git rev-parse "${upgrade_from}^{commit}")"
+  fi
+  echo "Upgrade rehearsal from $sha"
   dir="$work/upgrade"
   mkdir -p "$dir"
   main_tree="$dir/src"
@@ -593,11 +623,11 @@ path, expected = sys.argv[1:]
 db = sqlite3.connect(path)
 names = {row[0] for row in db.execute("SELECT name FROM sqlite_master")}
 if "site_alembic_version" not in names:
-    raise SystemExit("origin/main did not adopt the database it created")
+    raise SystemExit("upgrade source did not adopt the database it created")
 found = db.execute("SELECT version_num FROM site_alembic_version").fetchone()[0]
 if found != expected:
-    raise SystemExit(f"origin/main database is {found}, its head is {expected}")
-print(f"origin/main database is adopted at {found}")
+    raise SystemExit(f"upgrade source database is {found}, its head is {expected}")
+print(f"upgrade source database is adopted at {found}")
 PY
   seed_database "$main_tree" "$dir/site.db" "$dir/session.json"
   copy_database "$dir/site.db" "$dir/plan.db"
@@ -626,7 +656,7 @@ counts = {name: db.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0] for n
 db_rev = current_revision(path)
 head = head_revision()
 if db_rev != main_head:
-    raise SystemExit(f"seeded database is {db_rev}; origin/main head is {main_head}")
+    raise SystemExit(f"seeded database is {db_rev}; upgrade source head is {main_head}")
 script = ScriptDirectory.from_config(make_config("sqlite://"))
 
 def ancestors(revision):

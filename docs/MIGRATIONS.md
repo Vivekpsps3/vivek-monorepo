@@ -142,17 +142,23 @@ path, including the Finance `alembic_version` row), seeds it through that
 app, and requires `--plan` to stamp `site_schema_v1` with an empty diff.
 Later commits on `main` do not change that fixture.
 
-`upgrade` builds a database with current `origin/main`, which is already
-adopted, seeds it through that app, and requires `--plan` to be the forward
-action from main's revision to this branch's head (`current` when they match,
-`upgrade` when this branch is a descendant). Applying that plan keeps the
-row counts of the tables that already existed.
+`upgrade` builds a database from `UPGRADE_FROM` (default `origin/main`).
+CI sets that to the pull request base, or to the push's previous commit, so
+the merge rehearses the migrations that just landed against the previous
+main. `--plan` must be the forward action (`current` when the revisions
+match, `upgrade` when this branch is a descendant). Applying it keeps the
+row counts of the tables that already existed, and the schema diff of the
+result against this branch's models must be empty. A `current` plan does
+not excuse a revision that was edited in place.
 
 Both rehearsals then run backup, migrate, and the site container. `--plan`
 reads its copy and does not write it. A successful adopt reports
-`schema_diff` and `foreign_key_check` as empty lists. CI runs both on pull
-requests and on pushes to `main` when models, migrations, or these scripts
-change.
+`schema_diff` and `foreign_key_check` as empty lists. Every push to `main`
+runs both rehearsals, and Deploy requires that step to have succeeded.
+Pull requests run them when the diff touches models, the Alembic tree,
+Compose, the image, or the deploy scripts. Files already in
+`apps/server/alembic/versions/` are append-only: a pull request or push
+that modifies or deletes one fails CI. New revision files are fine.
 
 ```sh
 SITE_DATABASE_URL=sqlite:////absolute/site-plan.db python -m apps.server.migrations --plan --require-existing
