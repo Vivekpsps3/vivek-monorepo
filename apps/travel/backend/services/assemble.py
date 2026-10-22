@@ -459,7 +459,7 @@ def snapshot_pto(policy, usages, today: date) -> dict:
             "accrual_amount": None,
             "accrual_unit": "day",
             "accrual_cadence": "yearly",
-            "hours_per_day": "8.0000",
+            "hours_per_day": "8",
             "annual_cap_days": None,
             "today_before_balance_date": False,
         }

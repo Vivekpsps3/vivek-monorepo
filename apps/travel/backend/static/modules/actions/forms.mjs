@@ -3,6 +3,8 @@ import { state } from '../state.mjs';
 import { esc, val, checked, daysText } from '../helpers.mjs';
 import { parseHash } from '../route-parser.mjs';
 import { renderTrip } from '../views/trip.mjs';
+import { fail, saved } from '../feedback.mjs';
+import { formError } from '../validate.mjs';
 
 export function readLeg(root, role) {
   return {
@@ -24,16 +26,17 @@ export function emptyInput(root, name) {
   const text = element.value.trim();
   return text ? text : null;
 }
-export function showError(error) {
-  state.error = error.message || "Something went wrong.";
-  let banner = document.querySelector(".banner");
-  if (!banner) {
-    banner = document.createElement("p");
-    banner.className = "banner";
-    banner.setAttribute("role", "alert");
-    document.querySelector("#app").prepend(banner);
+export function showError(error, options = {}) {
+  fail(error, options);
+}
+
+function readForm(form) {
+  const data = {};
+  for (const element of form.elements || []) {
+    if (!element.name || element.type === "submit") continue;
+    data[element.name] = element.type === "checkbox" ? element.checked : element.value;
   }
-  banner.textContent = state.error;
+  return data;
 }
 export async function refetchTrip(ui) {
   state.trip = await api(`/api/trips/${state.trip.id}`);
@@ -87,6 +90,22 @@ export function readTransport(form) {
 }
 export async function submit(kind, form, ui) {
   state.error = "";
+  const problem = formError(kind, readForm(form));
+  if (problem) {
+    fail({ message: problem.message, status: 422 }, { form, field: problem.name });
+    return;
+  }
+  try {
+    await submitBody(kind, form, ui);
+  } catch (error) {
+    fail(error, {
+      form,
+      retry: { key: `form:${kind}`, run: () => submit(kind, form, ui) },
+    });
+  }
+}
+
+async function submitBody(kind, form, ui) {
   if (kind === "create-trip") {
     const start = val(form, "start_date");
     const end = val(form, "end_date");
@@ -121,6 +140,7 @@ export async function submit(kind, form, ui) {
         transports,
       }),
     });
+    saved("Trip created.");
     location.hash = `#/trips/${trip.id}`;
     return;
   }
@@ -139,6 +159,8 @@ export async function submit(kind, form, ui) {
       }),
     });
     state.edit = null;
+    state.focusKey = "edit-trip";
+    saved("Trip saved.");
     ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     return;
   }
@@ -159,6 +181,8 @@ export async function submit(kind, form, ui) {
     state.trip = await api(path, { method: form.dataset.id ? "PATCH" : "POST", body: JSON.stringify(body) });
     state.compose = "";
     state.edit = null;
+    state.focusKey = form.dataset.id ? `edit-stay-${form.dataset.id}` : "add-city";
+    saved(form.dataset.id ? "City saved." : "City added.");
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
@@ -169,6 +193,8 @@ export async function submit(kind, form, ui) {
     state.compose = "";
     state.edit = null;
     state.flights = [];
+    state.focusKey = form.dataset.id ? `edit-transport-${form.dataset.id}` : `add-transport-${form.elements.role?.value || "outbound"}`;
+    saved(form.dataset.id ? "Ride saved." : "Ride added.");
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
@@ -193,6 +219,8 @@ export async function submit(kind, form, ui) {
     state.trip = await api(path, { method: form.dataset.id ? "PATCH" : "POST", body: JSON.stringify(body) });
     state.compose = "";
     state.edit = null;
+    state.focusKey = form.dataset.id ? `edit-plan-${form.dataset.id}` : `add-plan-${body.on_date}`;
+    saved(form.dataset.id ? "Plan saved." : "Plan added.");
     ui.paint(renderTrip(state.trip, body.on_date), "home");
     return;
   }
@@ -219,6 +247,8 @@ export async function submit(kind, form, ui) {
     state.trip = await api(path, { method: form.dataset.id ? "PATCH" : "POST", body: JSON.stringify(body) });
     state.compose = "";
     state.edit = null;
+    state.focusKey = form.dataset.id ? `edit-parking-${form.dataset.id}` : "add-parking";
+    saved(form.dataset.id ? "Parking saved." : "Parking added.");
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
@@ -228,6 +258,8 @@ export async function submit(kind, form, ui) {
       body: JSON.stringify({ body: val(form, "body"), on_date: val(form, "on_date") }),
     });
     state.compose = "";
+    state.focusKey = "add-note";
+    saved("Note added.");
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
@@ -243,6 +275,8 @@ export async function submit(kind, form, ui) {
       }),
     });
     state.compose = "";
+    state.focusKey = "add-reminder";
+    saved("Reminder added.");
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
@@ -259,6 +293,8 @@ export async function submit(kind, form, ui) {
       }),
     });
     state.compose = "";
+    state.focusKey = "add-cost";
+    saved("Cost added.");
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
@@ -275,6 +311,7 @@ export async function submit(kind, form, ui) {
         annual_cap_days: val(form, "annual_cap_days"),
       }),
     });
+    saved("PTO settings saved.");
     await ui.render();
     return;
   }
@@ -289,6 +326,7 @@ export async function submit(kind, form, ui) {
         notes: val(form, "notes"),
       }),
     });
+    saved("Time off added.");
     await ui.render();
     return;
   }
@@ -305,6 +343,7 @@ export async function submit(kind, form, ui) {
   }
   if (kind === "flight-key") {
     await api("/api/settings/flightaware", { method: "PUT", body: JSON.stringify({ api_key: val(form, "api_key") || "" }) });
+    saved("Key saved.");
     await ui.render();
   }
 }

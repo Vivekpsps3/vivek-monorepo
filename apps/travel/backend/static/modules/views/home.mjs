@@ -1,5 +1,5 @@
 import { state, ROLES, KINDS, STATUSES } from '../state.mjs';
-import { esc, banner, head, leavePhrase, daysText, budgetText, prettyRange, prettyDate, labelOf, transportSummary, parkingChip } from '../helpers.mjs';
+import { esc, banner, head, leavePhrase, daysText, budgetText, prettyRange, prettyDate, labelOf, transportSummary, parkingChip, nightsText } from '../helpers.mjs';
 
 export function renderHome(home) {
   const next = home.metrics.next_trip;
@@ -54,7 +54,7 @@ export function renderTripCard(trip) {
       : `PTO ${daysText(trip.pto.days)}`
     : "";
   return `<article class="trip-card trip-card--${esc(trip.phase)}">
-    <div class="card-head"><div><p class="kicker">${esc(labelOf(STATUSES, trip.status))} · ${esc(prettyRange(trip.start_date, trip.end_date))} · ${trip.nights} nights</p><h2><a href="#/trips/${trip.id}">${esc(trip.title)}</a></h2></div><a class="btn btn-secondary btn-sm" href="#/trips/${trip.id}">Open</a></div>
+    <div class="card-head"><div><p class="kicker">${esc(labelOf(STATUSES, trip.status))} · ${esc(prettyRange(trip.start_date, trip.end_date))} · ${esc(nightsText(trip.nights))}</p><h2><a href="#/trips/${trip.id}">${esc(trip.title)}</a></h2></div><a class="btn btn-secondary btn-sm" href="#/trips/${trip.id}">Open</a></div>
     <div class="chips">${cities}${parking}</div>
     ${rides ? `<div class="stack">${rides}</div>` : ""}
     ${days}

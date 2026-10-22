@@ -72,7 +72,7 @@ def test_trip_flow_home_calendar_budget_and_pto(client):
     trip = created.json()
     assert trip["cities"] == ["Tokyo", "Kyoto"]
     assert trip["nights"] == 4
-    assert trip["pto"]["days"] == "5.0000"
+    assert trip["pto"]["days"] == "5"
     assert [item["role"] for item in trip["transports"]] == ["outbound", "connection", "inbound"]
 
     planned = client.post(
@@ -163,9 +163,9 @@ def test_trip_flow_home_calendar_budget_and_pto(client):
     )
     assert outbound["amount"] == "400.00"
     assert inbound["amount"] == "350.00"
-    assert upcoming["pto"]["balance_when_you_leave"] == "10.0000"
-    assert upcoming["pto"]["leftover_after"] == "5.0000"
-    assert body["next_pto"]["leftover_after"] == "5.0000"
+    assert upcoming["pto"]["balance_when_you_leave"] == "10"
+    assert upcoming["pto"]["leftover_after"] == "5"
+    assert body["next_pto"]["leftover_after"] == "5"
 
     calendar = client.get(
         "/api/calendar", params={"start": start.isoformat(), "end": end.isoformat()}
@@ -223,8 +223,8 @@ def test_manual_pto_and_preview(client):
         "/api/pto/preview", params={"start": "2026-03-02", "end": "2026-03-06", "days": "5"}
     )
     assert preview.status_code == 200, preview.text
-    assert preview.json()["balance_when_you_leave"] == "11.0000"
-    assert preview.json()["leftover_after"] == "6.0000"
+    assert preview.json()["balance_when_you_leave"] == "11"
+    assert preview.json()["leftover_after"] == "6"
     assert client.delete(f"/api/pto/entries/{entry_id}").status_code == 204
 
 

@@ -1,4 +1,5 @@
 import { api } from '../api.mjs';
+import { fail, saved } from '../feedback.mjs';
 
 const COLORS = ['var(--accent)', '#c4a574', '#7d9a78', '#8d7ea8', '#c47c6a'];
 
@@ -112,7 +113,7 @@ export function mountComposer() {
       </div>
       <div class="composer-months">${months.map(drawMonth).join('')}</div>
       <div class="composer-cities"></div>
-      <p class="composer-error" role="alert"></p>`;
+      <p class="composer-error"></p>`;
     apply();
   }
 
@@ -173,9 +174,10 @@ export function mountComposer() {
           transports: [],
         }),
       });
+      saved("Trip created.");
       location.hash = `#/trips/${trip.id}`;
     } catch (reason) {
-      if (error) error.textContent = reason.message || 'Could not save the trip';
+      fail(reason, { retry: { key: "composer-save", run: () => save() } });
     }
   }
 

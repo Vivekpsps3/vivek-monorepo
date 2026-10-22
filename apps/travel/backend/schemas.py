@@ -261,9 +261,9 @@ class TripPatch(BaseModel):
     @field_validator("title")
     @classmethod
     def title_ok(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        text = value.strip()
+        if value is None or not str(value).strip():
+            raise ValueError("Give the trip a name.")
+        text = str(value).strip()
         if not text:
             raise ValueError("Give the trip a name.")
         if len(text) > 200:

@@ -5,7 +5,8 @@ import { parseHash } from '../route-parser.mjs';
 import { renderTrip } from '../views/trip.mjs';
 import { renderLogin } from '../views/settings.mjs';
 import { cityFields, connectionFields } from '../views/new-trip.mjs';
-import { submit, showError, refetchTrip } from './forms.mjs';
+import { submit, refetchTrip } from './forms.mjs';
+import { fail } from '../feedback.mjs';
 import { applyFlight, renderFlightChoices } from './flight.mjs';
 import { safeStorageSet } from '../../../shared-browser/dom.mjs';
 
@@ -159,6 +160,10 @@ export async function onAction(button, ui) {
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
+  if (action === "retry-route") {
+    await ui.render();
+    return;
+  }
   if (action === "clear-key") {
     await api("/api/settings/flightaware", { method: "DELETE" });
     await ui.render();
@@ -249,9 +254,14 @@ async function onActionSafe(work, ui) {
     await work();
   } catch (error) {
     if (error.status === 401) {
-      ui.paint(renderLogin(), parseHash().name);
+      ui.paint(renderLogin(), "");
+      const heading = document.querySelector("#app h1");
+      if (heading instanceof HTMLElement) {
+        heading.tabIndex = -1;
+        heading.focus();
+      }
       return;
     }
-    showError(error);
+    fail(error, { retry: error.status === 422 ? null : { key: "action", run: () => onActionSafe(work, ui) } });
   }
 }

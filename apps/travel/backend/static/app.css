@@ -14,7 +14,7 @@
   a { color: inherit; }
   h1, h2, h3, p { margin: 0; }
   button, input, select, textarea { font: inherit; color: inherit; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   [hidden] { display: none !important; }
 }
 
@@ -408,4 +408,118 @@ label { display: block; margin-bottom: var(--space-1); color: var(--text-seconda
 .pto-trips { margin-top: var(--space-4); }
 .pto-trips a { color: inherit; text-decoration: none; }
 .composer-error:empty { display: none; }
+
+/* Feedback layer. The behavior lives in packages/browser/runtime/toast.mjs.
+   Travel only adds the date-picker yield and a stacking order above Leaflet. */
+.toasts {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  left: var(--space-6);
+  bottom: var(--space-6);
+  width: min(400px, calc(100% - var(--space-8)));
+  pointer-events: none;
+}
+#toasts,
+#toast-alerts { display: contents; }
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 400px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+.toast.is-alert { box-shadow: inset 3px 0 0 var(--danger), var(--shadow-lg); }
+.toast p { margin: 0; flex: 1; }
+.toast button {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bg);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.toast button.toast-dismiss { text-decoration: none; }
+.toast-icon { flex: none; line-height: 1.2; }
+.toast button:focus-visible {
+  outline: 2px solid var(--bg);
+  outline-offset: 2px;
+}
+#toasts[data-yield],
+.toasts:has(#toasts[data-yield]) .toast:not(.is-alert) {
+  opacity: 0;
+  pointer-events: none;
+}
+.toasts:has(#toasts[data-yield]) {
+  top: var(--space-6);
+  right: var(--space-6);
+  bottom: auto;
+  left: auto;
+}
+@media (pointer: coarse) {
+  .toast button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+@media (max-width: 767px) {
+  .toasts {
+    left: 50%;
+    bottom: calc(56px + env(safe-area-inset-bottom) + var(--space-3));
+    align-items: center;
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: toast-in var(--motion-base) var(--ease-emphasized); }
+  .skeleton { animation: skeleton-pulse 1.2s ease-in-out infinite; }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.skeleton {
+  display: block;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.skeleton-h1 { height: 2.5rem; width: 40%; margin-bottom: var(--space-3); }
+.skeleton-line { height: 1rem; margin-bottom: var(--space-3); }
+.skeleton-w30 { width: 30%; }
+.skeleton-card { height: 7rem; margin-bottom: var(--space-3); }
+.skeleton-metric { height: 4rem; }
+.skeleton-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); margin-bottom: var(--space-4); }
+.skeleton-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-2); }
+.skeleton-day { height: 4.5rem; }
+.skeleton-map { height: 12rem; }
+.skeleton-chart { height: 9rem; }
+.skeleton-page { display: grid; gap: var(--space-2); }
+.error-panel { max-width: 36rem; }
+.error-panel h1:focus { outline: none; }
+.error-panel h1:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.field-error { color: var(--danger); font-size: var(--text-sm); margin: var(--space-1) 0 0; }
+input[aria-invalid="true"],
+textarea[aria-invalid="true"],
+select[aria-invalid="true"] { border-color: var(--danger); }
+::placeholder { color: var(--text-tertiary); opacity: 1; }
+.topbar { z-index: 900; }
 @media (max-width: 800px) { .composer-months { grid-template-columns: 1fr; } }

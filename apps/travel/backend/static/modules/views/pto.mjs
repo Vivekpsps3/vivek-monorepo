@@ -1,5 +1,7 @@
 import { api } from '../api.mjs';
 import { esc, banner, daysText } from '../helpers.mjs';
+import { fail, saved, applyFieldError } from '../feedback.mjs';
+import { balanceError } from '../validate.mjs';
 
 const PERIOD = { weekly: 7, biweekly: 14, semimonthly: 365 / 24, monthly: 365 / 12, yearly: 365 };
 const CADENCE = [
@@ -87,15 +89,33 @@ export function mountPto() {
     const input = event.target;
     if (!(input instanceof HTMLInputElement) || input.dataset.field !== 'label') return;
     const name = input.value.trim();
-    if (!name || !drag) return;
+    if (!drag) return;
+    if (!name) {
+      applyFieldError(root, "label", "Name this PTO.");
+      return;
+    }
     const [start, end] = ordered(drag.start, drag.end);
-    await api('/api/pto/entries', {
-      method: 'POST',
-      body: JSON.stringify({ label: name, start_date: start, end_date: end }),
-    });
-    location.hash = '#/pto';
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    const body = { label: name, start_date: start, end_date: end };
+    try {
+      await api('/api/pto/entries', { method: 'POST', body: JSON.stringify(body) });
+      saved("Time off added.");
+      location.hash = '#/pto';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    } catch (error) {
+      fail(error, { retry: { key: "pto-entry", run: () => resubmitEntry(body) } });
+    }
   });
+
+  async function resubmitEntry(body) {
+    try {
+      await api('/api/pto/entries', { method: 'POST', body: JSON.stringify(body) });
+      saved("Time off added.");
+      location.hash = '#/pto';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    } catch (error) {
+      fail(error, { retry: { key: "pto-entry", run: () => resubmitEntry(body) } });
+    }
+  }
 
   function ordered(a, b) {
     return a <= b ? [a, b] : [b, a];
@@ -137,14 +157,14 @@ export function mountPto() {
       const tripMarks = trips.map((trip) => `<a href="#/trips/${trip.id}">${esc(trip.title)} · ${esc(daysText(trip.days))}</a>`).join('');
       root.innerHTML = `
         <div class="pto-figures">
-          <input class="pto-balance" data-field="balance" inputmode="decimal" value="${esc(draft.balance)}" aria-label="Balance">
-          <input class="pto-asof" data-field="asof" type="date" value="${esc(draft.asOf)}" aria-label="Balance date">
+          <input class="pto-balance" name="balance_days" data-field="balance" inputmode="decimal" value="${esc(draft.balance)}" aria-label="Balance">
+          <input class="pto-asof" name="balance_as_of" data-field="asof" type="date" value="${esc(draft.asOf)}" aria-label="Balance date">
           <input class="pto-amount" data-field="amount" inputmode="decimal" value="${esc(draft.amount)}" aria-label="Accrual">
           <div class="cadence-row" aria-label="Cadence">${chips}</div>
         </div>
         <svg class="pto-chart" viewBox="0 0 ${width} ${height}" aria-hidden="true">${line ? `<polyline points="${line}" />` : ''}</svg>
         <div class="pto-strip">${cells}</div>
-        <input class="pto-name" data-field="label" aria-label="Name" autocomplete="off" hidden>
+        <input class="pto-name" name="label" data-field="label" aria-label="Name" autocomplete="off" hidden>
         <div class="pto-trips">${tripMarks}</div>`;
     }
     root.querySelectorAll('[data-pto-day]').forEach((cell) => {
@@ -156,21 +176,32 @@ export function mountPto() {
   }
 
   async function savePolicy() {
-    if (!draft.asOf) return;
-    await api('/api/pto/policy', {
-      method: 'PUT',
-      body: JSON.stringify({
-        balance_days: draft.balance || '0',
-        balance_as_of: draft.asOf,
-        accrual_amount: draft.amount || '0',
-        accrual_unit: 'day',
-        accrual_cadence: draft.cadence,
-        hours_per_day: '8',
-        annual_cap_days: null,
-      }),
-    });
-    policy.configured = true;
-    paint(drag);
+    const problem = balanceError(draft.balance);
+    if (problem) {
+      applyFieldError(root, "balance_days", problem);
+      return;
+    }
+    if (!draft.asOf) {
+      applyFieldError(root, "balance_as_of", "Pick the date this balance is from.");
+      return;
+    }
+    const payload = {
+      balance_days: draft.balance || '0',
+      balance_as_of: draft.asOf,
+      accrual_amount: draft.amount || '0',
+      accrual_unit: 'day',
+      accrual_cadence: draft.cadence,
+      hours_per_day: '8',
+      annual_cap_days: null,
+    };
+    try {
+      await api('/api/pto/policy', { method: 'PUT', body: JSON.stringify(payload) });
+      policy.configured = true;
+      saved("PTO settings saved.");
+      paint(drag);
+    } catch (error) {
+      fail(error, { retry: { key: "pto-policy", run: () => savePolicy() } });
+    }
   }
 
   paint(null);

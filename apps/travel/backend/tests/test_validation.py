@@ -3,13 +3,14 @@
 import json
 import sys
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from apps.travel.backend.services.money import parse_days, parse_money
+from apps.travel.backend.services.money import fmt_days, parse_days, parse_money
 
 
 @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "1e9999", "oops"])
@@ -57,6 +58,28 @@ def test_api_rejects_huge_cost_and_nonfinite_coordinates_as_422(client):
         headers={"content-type": "application/json"},
     )
     assert nonfinite_coordinate.status_code == 422
+
+
+def test_fmt_days_trims_to_two_places():
+    assert fmt_days(Decimal("12.5000")) == "12.5"
+    assert fmt_days(Decimal("5")) == "5"
+    assert fmt_days(Decimal("0.2500")) == "0.25"
+    assert fmt_days(Decimal("-1.4600")) == "-1.46"
+
+
+def test_blank_trip_name_is_a_validation_error_not_a_server_error(client):
+    created = client.post(
+        "/api/trips",
+        json={"title": "Named", "start_date": "2026-11-02", "end_date": "2026-11-03"},
+    )
+    assert created.status_code == 201, created.text
+    trip_id = created.json()["id"]
+    blank = client.patch(f"/api/trips/{trip_id}", json={"title": ""})
+    missing = client.patch(f"/api/trips/{trip_id}", json={"title": None})
+    assert blank.status_code == 422, blank.text
+    assert missing.status_code == 422, missing.text
+    assert "Give the trip a name." in blank.text
+    assert "Internal Server Error" not in blank.text
 
 
 def test_trip_patch_uses_create_limits_for_optional_fields(client):

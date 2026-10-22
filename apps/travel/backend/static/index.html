@@ -53,7 +53,11 @@
       </div>
     </div>
   </header>
-  <main id="app" class="shell"></main>
+  <div class="toasts">
+    <div id="toasts" role="status"></div>
+    <div id="toast-alerts" role="alert"></div>
+  </div>
+  <main id="app" class="shell" tabindex="-1"></main>
   <footer class="footer"></footer>
   <script src="__TRAVEL_ROOT__/static/vendor/leaflet.js"></script>
   <script type="module" src="__TRAVEL_ROOT__/static/app.js"></script>

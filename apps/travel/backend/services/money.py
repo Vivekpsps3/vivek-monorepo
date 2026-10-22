@@ -77,7 +77,12 @@ def parse_days(value, *, allow_zero: bool = True) -> Decimal:
 
 
 def fmt_days(value: Decimal) -> str:
-    return format(Decimal(value).quantize(DAY_STEP, rounding=ROUND_HALF_UP), "f")
+    """Up to two decimal places, trailing zeros trimmed (D3)."""
+    amount = Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    text = format(amount, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
 
 
 def stored_days(value: str | None) -> Decimal | None:

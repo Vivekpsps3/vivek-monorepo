@@ -1,6 +1,8 @@
 import { escapeHtml as esc } from '../../shared-browser/dom.mjs';
 import { state } from './state.mjs';
+import { daysText as daysLabel, parkingChipParts } from './labels.mjs';
 export { esc };
+export { nightsText, nightsAwayText, spanText, balancePhrase, formatDays } from './labels.mjs';
 
 export function dateParts(iso) {
   const [year, month, day] = String(iso).split("-").map(Number);
@@ -49,12 +51,7 @@ export function money(amount, currency = "USD") {
   }
 }
 export function daysText(value) {
-  if (value == null || value === "") return "";
-  const rounded = Math.round(Number(value) * 100) / 100;
-  if (!Number.isFinite(rounded)) return "";
-  const clean = rounded.toFixed(2).replace(/\.?0+$/, "");
-  const unit = clean === "1" || clean === "-1" ? "day" : "days";
-  return `${clean} ${unit}`;
+  return daysLabel(value);
 }
 export function budgetText(budget) {
   if (!budget || !budget.currencies.length) return "No costs yet";
@@ -102,7 +99,7 @@ export function actions(submitLabel) {
   return `<div class="row-actions"><button class="btn btn-primary" type="submit">${esc(submitLabel)}</button><button class="btn btn-ghost" type="button" data-action="cancel">Cancel</button></div>`;
 }
 export function banner() {
-  return state.error ? `<p class="banner" role="alert">${esc(state.error)}</p>` : "";
+  return "";
 }
 export function head(title, lede, extra = "") {
   return `<header class="page-head"><div class="page-head-row"><div><h1>${esc(title)}</h1>${lede ? `<p class="lede">${lede}</p>` : ""}</div>${extra}</div></header>`;
@@ -138,10 +135,8 @@ export function flightMeta(item) {
   return bits.join(" · ");
 }
 export function parkingChip(item) {
-  if (item.necessary === "no" || item.arrangement === "none") return `<span class="chip">Parking not needed</span>`;
-  if (item.booked) return `<span class="chip chip--ok">Parking booked${item.place_name ? ` · ${esc(item.place_name)}` : ""}</span>`;
-  if (item.necessary === "yes") return `<span class="chip chip--warn">Parking needed, not booked</span>`;
-  return `<span class="chip">${esc(labelOf(ARRANGEMENTS, item.arrangement))}</span>`;
+  const parts = parkingChipParts(item);
+  return `<span class="${parts.className}">${esc(parts.text)}</span>`;
 }
 export function plain(value) {
   if (value == null || value === "") return "";
