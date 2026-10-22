@@ -21,6 +21,8 @@ REPO_ROOT = BACKEND_DIR.parents[2] if len(BACKEND_DIR.parents) > 2 else BACKEND_
 SHARED_BROWSER_DIR = REPO_ROOT / "packages" / "browser" / "runtime"
 if not SHARED_BROWSER_DIR.is_dir():
     SHARED_BROWSER_DIR = BACKEND_DIR / "shared-browser"
+
+
 def shared_stylesheet(name: str) -> Path:
     bundled = STATIC_DIR / name
     if bundled.is_file():
