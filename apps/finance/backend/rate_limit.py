@@ -15,7 +15,6 @@ from starlette.responses import JSONResponse, Response
 _buckets: DefaultDict[str, Tuple[int, float]] = defaultdict(lambda: (0, 0.0))
 
 
-
 def _limit_per_minute() -> int | None:
     raw = os.getenv("RATE_LIMIT_PER_MIN", "").strip()
     if not raw:
@@ -61,7 +60,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             for ip in stale:
                 _buckets.pop(ip, None)
             if key not in _buckets and len(_buckets) >= 10000:
-                return JSONResponse(status_code=429, content={"detail": "Service busy; retry later"})
+                return JSONResponse(
+                    status_code=429, content={"detail": "Service busy; retry later"}
+                )
         count, window_start = _buckets[key]
         if now - window_start >= 60.0:
             count, window_start = 0, now

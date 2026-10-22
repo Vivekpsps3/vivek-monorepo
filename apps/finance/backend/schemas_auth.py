@@ -75,6 +75,7 @@ class PasswordlessBootstrapRequest(BaseModel):
 
 class PasswordlessSignupRequest(BaseModel):
     """Open self-signup: username + vault material. No invitation token."""
+
     username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
     display_name: str = Field("", max_length=160)
     public_key_b64: str = Field(..., min_length=16, max_length=4096)

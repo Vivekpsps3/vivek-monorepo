@@ -72,7 +72,9 @@ def get_market_research_batch(
     for symbol in body.symbols:
         try:
             results.append(
-                market_data.get_research(symbol, period=body.period, force_refresh=body.refresh, db=db)
+                market_data.get_research(
+                    symbol, period=body.period, force_refresh=body.refresh, db=db
+                )
             )
         except Exception as exc:
             failed.append(MarketResearchFailure(symbol=symbol, error=str(exc)[:200]))

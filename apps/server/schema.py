@@ -1,9 +1,19 @@
 """Versioned site schema. Schema changes are explicit, never performed at startup."""
+
 from sqlalchemy import Column, ForeignKeyConstraint, Integer, MetaData, String, Table
 
 VERSION = 1
-OWNER_TABLES = {"trips", "pto_policy", "pto_entries", "user_entries", "experiences",
-                "season_progress", "episode_progress", "album_ratings", "track_ratings"}
+OWNER_TABLES = {
+    "trips",
+    "pto_policy",
+    "pto_entries",
+    "user_entries",
+    "experiences",
+    "season_progress",
+    "episode_progress",
+    "album_ratings",
+    "track_ratings",
+}
 
 
 def metadata():
@@ -19,13 +29,21 @@ def metadata():
             table.to_metadata(result)
     for name in OWNER_TABLES:
         result.tables[name].append_constraint(ForeignKeyConstraint(["user_id"], ["users.id"]))
-    Table("site_schema", result, Column("id", Integer, primary_key=True), Column("version", Integer, nullable=False))
+    Table(
+        "site_schema",
+        result,
+        Column("id", Integer, primary_key=True),
+        Column("version", Integer, nullable=False),
+    )
     Table("alembic_version", result, Column("version_num", String(32), primary_key=True))
     return result
 
 
 def assert_ready(connection):
     from sqlalchemy import text
+
     row = connection.execute(text("SELECT version FROM site_schema WHERE id=1")).scalar_one()
     if row != VERSION:
-        raise RuntimeError(f"Database schema {row}; application requires {VERSION}. Run the migration command offline.")
+        raise RuntimeError(
+            f"Database schema {row}; application requires {VERSION}. Run the migration command offline."
+        )

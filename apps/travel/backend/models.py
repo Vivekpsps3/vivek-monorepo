@@ -7,7 +7,18 @@ that trip. PTO is a separate projection and never writes finance data.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -36,7 +47,9 @@ class Trip(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     stays = relationship("Stay", cascade="all, delete-orphan", order_by="Stay.sort_order")
-    transports = relationship("Transport", cascade="all, delete-orphan", order_by="Transport.sort_order")
+    transports = relationship(
+        "Transport", cascade="all, delete-orphan", order_by="Transport.sort_order"
+    )
     plans = relationship("PlanItem", cascade="all, delete-orphan")
     parking = relationship("Parking", cascade="all, delete-orphan")
     reminders = relationship("Reminder", cascade="all, delete-orphan")
@@ -49,7 +62,9 @@ class Stay(Base):
     __tablename__ = "stays"
 
     id = Column(Integer, primary_key=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     sort_order = Column(Integer, nullable=False, default=0)
     city = Column(String(200), nullable=False)
     region = Column(String(200), nullable=True)
@@ -67,7 +82,9 @@ class Transport(Base):
     __tablename__ = "transports"
 
     id = Column(Integer, primary_key=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     sort_order = Column(Integer, nullable=False, default=0)
     role = Column(String(20), nullable=False)  # outbound, inbound, connection, local
     mode = Column(String(20), nullable=False)  # flight, drive, train, bus, ferry, other
@@ -110,7 +127,9 @@ class PlanItem(Base):
     __tablename__ = "plan_items"
 
     id = Column(Integer, primary_key=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     stay_id = Column(Integer, ForeignKey("stays.id", ondelete="SET NULL"), nullable=True)
     on_date = Column(Date, nullable=False, index=True)
     start_time = Column(String(5), nullable=True)
@@ -133,7 +152,9 @@ class Parking(Base):
     __tablename__ = "parking"
 
     id = Column(Integer, primary_key=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     transport_id = Column(Integer, ForeignKey("transports.id", ondelete="SET NULL"), nullable=True)
     necessary = Column(String(10), nullable=False, default="unknown")  # yes, no, unknown
     booked = Column(Boolean, nullable=False, default=False)
@@ -156,7 +177,9 @@ class Reminder(Base):
     __tablename__ = "reminders"
 
     id = Column(Integer, primary_key=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     title = Column(String(200), nullable=False)
     due_at = Column(DateTime, nullable=True)
     done = Column(Boolean, nullable=False, default=False)
@@ -168,7 +191,9 @@ class Note(Base):
     __tablename__ = "notes"
 
     id = Column(Integer, primary_key=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     on_date = Column(Date, nullable=True)
     body = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
@@ -180,7 +205,9 @@ class BudgetLine(Base):
     __tablename__ = "budget_lines"
 
     id = Column(Integer, primary_key=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     category = Column(String(40), nullable=False)
     label = Column(String(200), nullable=False)
     amount_cents = Column(Integer, nullable=False)
@@ -212,7 +239,9 @@ class PtoEntry(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False, index=True)
-    trip_id = Column(Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=True, unique=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=True, unique=True
+    )
     start_date = Column(Date, nullable=False, index=True)
     end_date = Column(Date, nullable=False)
     days = Column(String(32), nullable=False)

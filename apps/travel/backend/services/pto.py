@@ -88,7 +88,9 @@ def walk(policy: Policy, usages: list[Usage], on: date) -> Walk:
     usage_on: dict[date, Fraction] = {}
     for usage in usages:
         if usage.start_date > policy.balance_as_of and usage.days:
-            usage_on[usage.start_date] = usage_on.get(usage.start_date, Fraction(0)) + Fraction(usage.days)
+            usage_on[usage.start_date] = usage_on.get(usage.start_date, Fraction(0)) + Fraction(
+                usage.days
+            )
     balance = Fraction(policy.balance_days)
     accrued = Fraction(0)
     used = Fraction(0)
@@ -173,7 +175,9 @@ def usages_from_rows(rows) -> list[Usage]:
     ]
 
 
-def trip_projection(policy: Policy, usages: list[Usage], trip, effective: Decimal, auto: bool) -> dict:
+def trip_projection(
+    policy: Policy, usages: list[Usage], trip, effective: Decimal, auto: bool
+) -> dict:
     payload = {
         "counts": bool(trip.counts_as_pto),
         "days": fmt_days(effective if trip.counts_as_pto else Decimal(0)),
@@ -201,7 +205,9 @@ def trip_projection(policy: Policy, usages: list[Usage], trip, effective: Decima
     return payload
 
 
-def preview_take(policy: Policy, usages: list[Usage], start: date, end: date, days: Decimal | None) -> dict:
+def preview_take(
+    policy: Policy, usages: list[Usage], start: date, end: date, days: Decimal | None
+) -> dict:
     if end < start:
         raise ValueError("The return date has to be on or after the day you leave.")
     charged = days if days is not None else Decimal(weekday_count(start, end))

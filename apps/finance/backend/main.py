@@ -1,6 +1,7 @@
 """
 ASGI entrypoint. Tests and uvicorn use: uvicorn main:app
 """
+
 from apps.finance.backend.app import app, uvicorn_log_config
 from apps.finance.backend.database import engine
 from apps.finance.backend.models import Base

@@ -57,7 +57,14 @@ async def lifespan(_app: FastAPI):
 def create_app(*, unified: bool = False) -> FastAPI:
     if not unified:
         load_dotenv()
-    application = FastAPI(title="Travel", version="0.1.0", lifespan=lifespan, docs_url=None if unified else "/docs", redoc_url=None if unified else "/redoc", openapi_url=None if unified else "/openapi.json")
+    application = FastAPI(
+        title="Travel",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url=None if unified else "/docs",
+        redoc_url=None if unified else "/redoc",
+        openapi_url=None if unified else "/openapi.json",
+    )
     application.state.principal_checker = None
 
     @application.middleware("http")
@@ -106,6 +113,7 @@ def create_app(*, unified: bool = False) -> FastAPI:
     def health():
         from sqlalchemy import text
         from apps.travel.backend import database
+
         try:
             with database.engine.connect() as connection:
                 connection.execute(text("SELECT id FROM trips LIMIT 1"))

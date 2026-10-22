@@ -10,9 +10,7 @@ from typing import Any, Dict, Optional
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_ACCESS_HEALTH = os.getenv("LOG_HEALTH", "").lower() in ("1", "true", "yes")
 
-DEFAULT_FORMAT = (
-    "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
-)
+DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -36,7 +34,10 @@ def setup_logging(level: Optional[str] = None) -> None:
         ("uvicorn.error", logging.INFO),
         ("httpx", logging.WARNING),
         ("httpcore", logging.WARNING),
-        ("yfinance", logging.CRITICAL),  # yfinance can be noisy for bad symbols; we skip most via heuristic
+        (
+            "yfinance",
+            logging.CRITICAL,
+        ),  # yfinance can be noisy for bad symbols; we skip most via heuristic
         ("peewee", logging.WARNING),
     ):
         logging.getLogger(name).setLevel(logging.DEBUG if lvl <= logging.DEBUG else default)

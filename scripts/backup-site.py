@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Private, atomic online SQLite backups with integrity checks and bounded retention."""
+
 import argparse
 import fcntl
 from datetime import datetime, timezone
@@ -46,15 +47,22 @@ def _backup_locked(source, directory, keep):
         raise RuntimeError("Source database missing; refusing to report backup success")
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(directory, 0o700)
-    name = datetime.now(timezone.utc).strftime("site-%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8] + ".db"
+    name = (
+        datetime.now(timezone.utc).strftime("site-%Y%m%dT%H%M%S")
+        + "-"
+        + uuid.uuid4().hex[:8]
+        + ".db"
+    )
     with tempfile.TemporaryDirectory(prefix=".backup-", dir=directory) as temporary:
         candidate = Path(temporary) / name
         with sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True, timeout=10) as src:
             with sqlite3.connect(candidate) as dest:
                 deadline = time.monotonic() + 120
+
                 def progress(_status, _remaining, _total):
                     if time.monotonic() > deadline:
                         raise TimeoutError("Backup exceeded its two-minute budget")
+
                 src.backup(dest, pages=256, progress=progress, sleep=0.05)
         result = verify(candidate)
         # Restore rehearsal: open a separate copy and re-verify it.
@@ -68,9 +76,20 @@ def _backup_locked(source, directory, keep):
         manifest = final.with_suffix(".json")
         with manifest.open("x") as file:
             os.chmod(manifest, 0o600)
-            json.dump({**result, "created_at": datetime.now(timezone.utc).isoformat(), "restore_checked": True}, file)
+            json.dump(
+                {
+                    **result,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "restore_checked": True,
+                },
+                file,
+            )
     # Publish and restore-check the replacement before deleting any older snapshot.
-    snapshots = sorted(directory.glob("site-????????T??????-????????.db"), key=lambda p: p.stat().st_mtime_ns, reverse=True)
+    snapshots = sorted(
+        directory.glob("site-????????T??????-????????.db"),
+        key=lambda p: p.stat().st_mtime_ns,
+        reverse=True,
+    )
     for old in snapshots[keep:]:
         old.unlink()
         old.with_suffix(".json").unlink(missing_ok=True)

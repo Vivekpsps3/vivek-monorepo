@@ -183,14 +183,17 @@ def test_vault_rejects_urlsafe_or_unpadded_base64():
 
 def test_vault_upsert_requires_explicit_revision_and_preserves_key_version():
     client = authenticated_client(app, email="vault-revision@example.com")
-    assert client.post(
-        "/api/vault/setup",
-        json={
-            "kdf_salt_b64": _b64(16),
-            "wrapped_dek_b64": _b64(48),
-            "recovery_wrapped_dek_b64": _b64(48),
-        },
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/vault/setup",
+            json={
+                "kdf_salt_b64": _b64(16),
+                "wrapped_dek_b64": _b64(48),
+                "recovery_wrapped_dek_b64": _b64(48),
+            },
+        ).status_code
+        == 200
+    )
     created = client.post(
         "/api/vault/records/upsert",
         json={
@@ -245,7 +248,10 @@ def test_vault_upsert_requires_explicit_revision_and_preserves_key_version():
 def test_plaintext_migration_endpoints_are_retired():
     client = authenticated_client(app, email="retired-migration@example.com")
     assert client.get("/api/vault/migration/export").status_code == 404
-    assert client.post("/api/vault/migration/complete", json={"counts": {}, "records": []}).status_code == 404
+    assert (
+        client.post("/api/vault/migration/complete", json={"counts": {}, "records": []}).status_code
+        == 404
+    )
 
 
 def test_vault_rejects_stale_record_delete():
@@ -279,9 +285,7 @@ def test_vault_rejects_stale_record_delete():
     stale_delete = client.post(
         "/api/vault/records/delete",
         json={
-            "records": [
-                {"collection": "assets", "client_id": "asset-001", "expected_revision": 0}
-            ]
+            "records": [{"collection": "assets", "client_id": "asset-001", "expected_revision": 0}]
         },
     )
     assert stale_delete.status_code == 409

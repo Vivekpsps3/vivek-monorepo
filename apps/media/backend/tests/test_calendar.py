@@ -7,10 +7,22 @@ import pytest
 
 
 def silence(monkeypatch, wiki=None, parts=None, tvmaze=None, tmdb_episodes=None):
-    monkeypatch.setattr("apps.media.backend.services.followups.wikidata_related", wiki or (lambda *_args, **_kwargs: []))
-    monkeypatch.setattr("apps.media.backend.services.followups.tmdb_collection_parts", parts or (lambda *_args, **_kwargs: []))
-    monkeypatch.setattr("apps.media.backend.services.followups.tvmaze_episodes", tvmaze or (lambda *_args, **_kwargs: []))
-    monkeypatch.setattr("apps.media.backend.services.followups.tmdb_episodes", tmdb_episodes or (lambda *_args, **_kwargs: []))
+    monkeypatch.setattr(
+        "apps.media.backend.services.followups.wikidata_related",
+        wiki or (lambda *_args, **_kwargs: []),
+    )
+    monkeypatch.setattr(
+        "apps.media.backend.services.followups.tmdb_collection_parts",
+        parts or (lambda *_args, **_kwargs: []),
+    )
+    monkeypatch.setattr(
+        "apps.media.backend.services.followups.tvmaze_episodes",
+        tvmaze or (lambda *_args, **_kwargs: []),
+    )
+    monkeypatch.setattr(
+        "apps.media.backend.services.followups.tmdb_episodes",
+        tmdb_episodes or (lambda *_args, **_kwargs: []),
+    )
 
 
 def add_movie(client, title, **extra):
@@ -53,15 +65,63 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
         seen.append((title, year))
         if title == "Watched":
             return [
-                {"relation": "sequel", "title": "Watched 2", "year": 2026, "precision": "day", "released_on": "2026-10-19", "source": "wikidata", "source_id": None},
-                {"relation": "spinoff", "title": "Watched Stories", "year": 2026, "precision": "month", "released_on": "2026-10-01", "source": "wikidata", "source_id": None},
-                {"relation": "sequel", "title": "Watched Zero", "year": 2019, "precision": "day", "released_on": "2019-05-01", "source": "wikidata", "source_id": None},
-                {"relation": "sequel", "title": "Watched", "year": 2021, "precision": "day", "released_on": "2021-01-01", "source": "wikidata", "source_id": None},
-                {"relation": "sequel", "title": "Seen Sequel", "year": 2019, "precision": "day", "released_on": "2026-10-19", "source": "wikidata", "source_id": None},
+                {
+                    "relation": "sequel",
+                    "title": "Watched 2",
+                    "year": 2026,
+                    "precision": "day",
+                    "released_on": "2026-10-19",
+                    "source": "wikidata",
+                    "source_id": None,
+                },
+                {
+                    "relation": "spinoff",
+                    "title": "Watched Stories",
+                    "year": 2026,
+                    "precision": "month",
+                    "released_on": "2026-10-01",
+                    "source": "wikidata",
+                    "source_id": None,
+                },
+                {
+                    "relation": "sequel",
+                    "title": "Watched Zero",
+                    "year": 2019,
+                    "precision": "day",
+                    "released_on": "2019-05-01",
+                    "source": "wikidata",
+                    "source_id": None,
+                },
+                {
+                    "relation": "sequel",
+                    "title": "Watched",
+                    "year": 2021,
+                    "precision": "day",
+                    "released_on": "2021-01-01",
+                    "source": "wikidata",
+                    "source_id": None,
+                },
+                {
+                    "relation": "sequel",
+                    "title": "Seen Sequel",
+                    "year": 2019,
+                    "precision": "day",
+                    "released_on": "2026-10-19",
+                    "source": "wikidata",
+                    "source_id": None,
+                },
             ]
         if title == "Logging":
             return [
-                {"relation": "sequel", "title": "Logging Returns", "year": 2026, "precision": "year", "released_on": "2026-01-01", "source": "wikidata", "source_id": None},
+                {
+                    "relation": "sequel",
+                    "title": "Logging Returns",
+                    "year": 2026,
+                    "precision": "year",
+                    "released_on": "2026-01-01",
+                    "source": "wikidata",
+                    "source_id": None,
+                },
             ]
         return []
 
@@ -76,28 +136,77 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
     ):
         assert client.post(f"/api/entries/{show['id']}/episodes", json=episode).status_code == 200
     pilot_id = client.get(f"/api/entries/{show['id']}").json()["show"]["episodes"][0]["id"]
-    assert client.post(
-        f"/api/entries/{show['id']}/episodes/{pilot_id}/watched",
-        json={"watched": True},
-    ).status_code == 200
-    dropped = add_movie(client, "Dropped Show", kind="tv", status="dropped")
-    assert client.post(f"/api/entries/{dropped['id']}/episodes", json={
-        "season_number": 2, "episode_number": 1, "title": "Still Listed", "air_date": "2026-10-21",
-    }).status_code == 200
-    finished = add_movie(client, "Finished Show", kind="tv", status="completed")
-    assert client.post(f"/api/entries/{finished['id']}/episodes", json={
-        "season_number": 3, "episode_number": 4, "title": "Renewal", "air_date": "2026-10-22",
-    }).status_code == 200
-
-    add_movie(client, "Soon", status="anticipating", release_on="2026-10-18", release_precision="day")
-    add_movie(
-        client, "Sometime", status="anticipating", anticipated=True,
-        release_on="2026-10-20", release_precision="month", release_status="scheduled",
+    assert (
+        client.post(
+            f"/api/entries/{show['id']}/episodes/{pilot_id}/watched",
+            json={"watched": True},
+        ).status_code
+        == 200
     )
-    add_movie(client, "Day One", status="anticipating", release_on="2026-10-01", release_precision="day")
-    add_movie(client, "This Year", status="anticipating", release_on="2026-08-01", release_precision="year")
-    add_movie(client, "Next Year", status="anticipating", release_on="2027-04-01", release_precision="year")
-    add_movie(client, "Held", status="anticipating", release_on="2026-10-11", release_precision="day", release_status="postponed")
+    dropped = add_movie(client, "Dropped Show", kind="tv", status="dropped")
+    assert (
+        client.post(
+            f"/api/entries/{dropped['id']}/episodes",
+            json={
+                "season_number": 2,
+                "episode_number": 1,
+                "title": "Still Listed",
+                "air_date": "2026-10-21",
+            },
+        ).status_code
+        == 200
+    )
+    finished = add_movie(client, "Finished Show", kind="tv", status="completed")
+    assert (
+        client.post(
+            f"/api/entries/{finished['id']}/episodes",
+            json={
+                "season_number": 3,
+                "episode_number": 4,
+                "title": "Renewal",
+                "air_date": "2026-10-22",
+            },
+        ).status_code
+        == 200
+    )
+
+    add_movie(
+        client, "Soon", status="anticipating", release_on="2026-10-18", release_precision="day"
+    )
+    add_movie(
+        client,
+        "Sometime",
+        status="anticipating",
+        anticipated=True,
+        release_on="2026-10-20",
+        release_precision="month",
+        release_status="scheduled",
+    )
+    add_movie(
+        client, "Day One", status="anticipating", release_on="2026-10-01", release_precision="day"
+    )
+    add_movie(
+        client,
+        "This Year",
+        status="anticipating",
+        release_on="2026-08-01",
+        release_precision="year",
+    )
+    add_movie(
+        client,
+        "Next Year",
+        status="anticipating",
+        release_on="2027-04-01",
+        release_precision="year",
+    )
+    add_movie(
+        client,
+        "Held",
+        status="anticipating",
+        release_on="2026-10-11",
+        release_precision="day",
+        release_status="postponed",
+    )
     add_movie(client, "Undated", status="anticipating")
     add_movie(client, "Wishlist", status="want", year=2024)
     add_movie(client, "Halfway", status="in_progress", year=2020)
@@ -105,9 +214,16 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
     add_movie(client, "Watched 2", status="want", year=2026)
     add_movie(client, "Seen Sequel", status="completed", year=2019)
     logging = add_movie(client, "Logging", status="in_progress", year=2018)
-    assert client.post(f"/api/entries/{logging['id']}/experiences", json={
-        "kind": "watch", "finished_on": "2026-09-01",
-    }).status_code == 200
+    assert (
+        client.post(
+            f"/api/entries/{logging['id']}/experiences",
+            json={
+                "kind": "watch",
+                "finished_on": "2026-09-01",
+            },
+        ).status_code
+        == 200
+    )
 
     before = {item["title"] for item in client.get("/api/library").json()["items"]}
     payload = client.get("/api/calendar").json()
@@ -185,8 +301,12 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
     assert by_title(later, "Next Year")[0]["band"] == "year_band"
     assert by_title(later, "Next Year")[0]["on"] is None
 
-    client.app.state.principal_checker = lambda _request: AuthResult(Principal(2, "other", "Other"), [])
-    assert "Serial" not in json.dumps(client.get("/api/calendar", params={"month": "2026-10"}).json())
+    client.app.state.principal_checker = lambda _request: AuthResult(
+        Principal(2, "other", "Other"), []
+    )
+    assert "Serial" not in json.dumps(
+        client.get("/api/calendar", params={"month": "2026-10"}).json()
+    )
     assert client.get("/api/calendar", params={"month": "2026-13"}).status_code == 422
     assert client.get("/api/calendar", params={"month": "October"}).status_code == 422
 
@@ -203,38 +323,80 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
             raise RuntimeError("tvmaze down")
         return [
             {"season_number": 1, "episode_number": 1, "title": "Old", "air_date": "2026-10-02"},
-            {"season_number": 1, "episode_number": 2, "title": "New", "air_date": "2026-10-28", "overview": "<p>A <b>pilot</b> &amp; more.</p>"},
+            {
+                "season_number": 1,
+                "episode_number": 2,
+                "title": "New",
+                "air_date": "2026-10-28",
+                "overview": "<p>A <b>pilot</b> &amp; more.</p>",
+            },
             {"season_number": 1, "episode_number": 3, "title": "Later", "air_date": "2026-11-02"},
             {"season_number": 1, "episode_number": None, "title": "Skip", "air_date": "2026-10-03"},
-            {"season_number": 1, "episode_number": 4, "title": "Undated episode", "air_date": "nope"},
+            {
+                "season_number": 1,
+                "episode_number": 4,
+                "title": "Undated episode",
+                "air_date": "nope",
+            },
         ]
 
     def tmdb_episodes(_http, show_id):
         tmdb_calls.append(show_id)
-        return [{"season_number": 1, "episode_number": 8, "title": "From TMDB", "air_date": "2026-10-07"}]
+        return [
+            {
+                "season_number": 1,
+                "episode_number": 8,
+                "title": "From TMDB",
+                "air_date": "2026-10-07",
+            }
+        ]
 
     silence(monkeypatch, tvmaze=tvmaze, tmdb_episodes=tmdb_episodes)
-    maze = client.post("/api/library/from-provider", json={
-        "source": "tvmaze",
-        "source_id": "42",
-        "kind": "tv",
-        "title": "Maze Show",
-        "status": "completed",
-        "episodes": [{"season_number": 1, "episode_number": 1, "title": "Old", "air_date": "2026-10-02"}],
-    })
+    maze = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "tvmaze",
+            "source_id": "42",
+            "kind": "tv",
+            "title": "Maze Show",
+            "status": "completed",
+            "episodes": [
+                {"season_number": 1, "episode_number": 1, "title": "Old", "air_date": "2026-10-02"}
+            ],
+        },
+    )
     assert maze.status_code == 200
     manual = add_movie(client, "Typed Show", kind="tv", status="in_progress")
-    assert client.post(f"/api/entries/{manual['id']}/episodes", json={
-        "season_number": 1, "episode_number": 1, "title": "Manual Ep", "air_date": "2026-10-05",
-    }).status_code == 200
-    tmdb = client.post("/api/library/from-provider", json={
-        "source": "tmdb",
-        "source_id": "tv:77",
-        "kind": "tv",
-        "title": "Keyed Show",
-        "status": "in_progress",
-        "episodes": [{"season_number": 1, "episode_number": 1, "title": "Stored Ep", "air_date": "2026-10-06"}],
-    })
+    assert (
+        client.post(
+            f"/api/entries/{manual['id']}/episodes",
+            json={
+                "season_number": 1,
+                "episode_number": 1,
+                "title": "Manual Ep",
+                "air_date": "2026-10-05",
+            },
+        ).status_code
+        == 200
+    )
+    tmdb = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "tmdb",
+            "source_id": "tv:77",
+            "kind": "tv",
+            "title": "Keyed Show",
+            "status": "in_progress",
+            "episodes": [
+                {
+                    "season_number": 1,
+                    "episode_number": 1,
+                    "title": "Stored Ep",
+                    "air_date": "2026-10-06",
+                }
+            ],
+        },
+    )
     assert tmdb.status_code == 200
 
     failed = client.get("/api/calendar", params={"month": "2026-10"}).json()
@@ -286,52 +448,64 @@ def test_follow_up_queries_keep_precision_and_keys_off_the_response(client, monk
         if request.url.host == "query.wikidata.org":
             assert "api_key" not in str(request.url)
             assert 'Say \\"hello\\"' in request.url.params["query"]
-            return httpx.Response(200, json={"results": {"bindings": [
-                {
-                    "rel": {"value": "sequel"},
-                    "relatedLabel": {"value": "Hello Later"},
-                    "date": {"value": "+2026-10-01T00:00:00Z"},
-                    "precision": {"value": "10"},
+            return httpx.Response(
+                200,
+                json={
+                    "results": {
+                        "bindings": [
+                            {
+                                "rel": {"value": "sequel"},
+                                "relatedLabel": {"value": "Hello Later"},
+                                "date": {"value": "+2026-10-01T00:00:00Z"},
+                                "precision": {"value": "10"},
+                            },
+                            {
+                                "rel": {"value": "spinoff"},
+                                "relatedLabel": {"value": "Hello Stories"},
+                                "date": {"value": "+2026-10-21T00:00:00Z"},
+                                "precision": {"value": "11"},
+                            },
+                            {
+                                "rel": {"value": "series"},
+                                "relatedLabel": {"value": "Hello Year"},
+                                "date": {"value": "+2026-01-01T00:00:00Z"},
+                                "precision": {"value": "9"},
+                            },
+                            {
+                                "rel": {"value": "series"},
+                                "relatedLabel": {"value": "Hello Prequel"},
+                                "date": {"value": "+2010-05-01T00:00:00Z"},
+                                "precision": {"value": "11"},
+                            },
+                            {
+                                "rel": {"value": "spinoff"},
+                                "relatedLabel": {"value": "Hello Undated"},
+                            },
+                            {
+                                "rel": {"value": "sequel"},
+                                "relatedLabel": {"value": 'Say "hello"'},
+                                "date": {"value": "+2021-04-01T00:00:00Z"},
+                                "precision": {"value": "11"},
+                            },
+                        ]
+                    }
                 },
-                {
-                    "rel": {"value": "spinoff"},
-                    "relatedLabel": {"value": "Hello Stories"},
-                    "date": {"value": "+2026-10-21T00:00:00Z"},
-                    "precision": {"value": "11"},
-                },
-                {
-                    "rel": {"value": "series"},
-                    "relatedLabel": {"value": "Hello Year"},
-                    "date": {"value": "+2026-01-01T00:00:00Z"},
-                    "precision": {"value": "9"},
-                },
-                {
-                    "rel": {"value": "series"},
-                    "relatedLabel": {"value": "Hello Prequel"},
-                    "date": {"value": "+2010-05-01T00:00:00Z"},
-                    "precision": {"value": "11"},
-                },
-                {
-                    "rel": {"value": "spinoff"},
-                    "relatedLabel": {"value": "Hello Undated"},
-                },
-                {
-                    "rel": {"value": "sequel"},
-                    "relatedLabel": {"value": 'Say "hello"'},
-                    "date": {"value": "+2021-04-01T00:00:00Z"},
-                    "precision": {"value": "11"},
-                },
-            ]}})
+            )
         if request.url.host == "api.themoviedb.org":
             assert request.url.params["api_key"] == "test-key"
             if request.url.path.endswith("/movie/11"):
                 return httpx.Response(200, json={"belongs_to_collection": {"id": 5}})
             if request.url.path.endswith("/collection/5"):
-                return httpx.Response(200, json={"parts": [
-                    {"id": 11, "title": 'Say "hello"', "release_date": "2021-04-01"},
-                    {"id": 12, "title": "Hello Again", "release_date": "2026-11-02"},
-                    {"id": 13, "title": "Hello Someday", "release_date": ""},
-                ]})
+                return httpx.Response(
+                    200,
+                    json={
+                        "parts": [
+                            {"id": 11, "title": 'Say "hello"', "release_date": "2021-04-01"},
+                            {"id": 12, "title": "Hello Again", "release_date": "2026-11-02"},
+                            {"id": 13, "title": "Hello Someday", "release_date": ""},
+                        ]
+                    },
+                )
         raise AssertionError(str(request.url))
 
     real_client = httpx.Client
@@ -347,14 +521,17 @@ def test_follow_up_queries_keep_precision_and_keys_off_the_response(client, monk
             self._client.close()
 
     monkeypatch.setattr("apps.media.backend.routers.journal.httpx.Client", FakeClient)
-    saved = client.post("/api/library/from-provider", json={
-        "source": "tmdb",
-        "source_id": "movie:11",
-        "kind": "movie",
-        "title": 'Say "hello"',
-        "year": 2021,
-        "status": "completed",
-    })
+    saved = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "tmdb",
+            "source_id": "movie:11",
+            "kind": "movie",
+            "title": 'Say "hello"',
+            "year": 2021,
+            "status": "completed",
+        },
+    )
     assert saved.status_code == 200
     before = client.get("/api/library").json()["items"]
     october = client.get("/api/calendar", params={"month": "2026-10"})
@@ -401,15 +578,17 @@ def test_uncached_follow_ups_finish_on_the_next_view(client, monkeypatch):
 
     def wiki(_http, title, _year):
         calls.append(title)
-        return [{
-            "relation": "sequel",
-            "title": f"{title} Returns",
-            "year": 2026,
-            "precision": "day",
-            "released_on": "2026-10-16",
-            "source": "wikidata",
-            "source_id": None,
-        }]
+        return [
+            {
+                "relation": "sequel",
+                "title": f"{title} Returns",
+                "year": 2026,
+                "precision": "day",
+                "released_on": "2026-10-16",
+                "source": "wikidata",
+                "source_id": None,
+            }
+        ]
 
     silence(monkeypatch, wiki=wiki)
     for number in range(1, 10):
@@ -426,7 +605,11 @@ def test_uncached_follow_ups_finish_on_the_next_view(client, monkeypatch):
 
 
 def test_public_follow_up_parsers_do_not_pin_a_month_to_a_day():
-    from apps.media.backend.services.followups import release_from_wikidata, tmdb_collection_parts, tvmaze_episodes
+    from apps.media.backend.services.followups import (
+        release_from_wikidata,
+        tmdb_collection_parts,
+        tvmaze_episodes,
+    )
 
     assert release_from_wikidata("+2026-10-01T00:00:00Z", "10")[0] == "month"
     assert release_from_wikidata("+2026-10-21T00:00:00Z", "11") == ("day", "2026-10-21", 2026)
@@ -435,10 +618,21 @@ def test_public_follow_up_parsers_do_not_pin_a_month_to_a_day():
 
     def tvmaze(request: httpx.Request) -> httpx.Response:
         assert request.url.host == "api.tvmaze.com"
-        return httpx.Response(200, json=[
-            {"id": 1, "season": 1, "number": 2, "name": "Next", "airdate": "2026-10-20", "airstamp": "2026-10-21T01:00:00Z", "summary": "<p>A <b>teacher</b> &amp; a student.</p>"},
-            {"id": 2, "season": 1, "number": None, "name": "Special", "airdate": "2026-10-01"},
-        ])
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 1,
+                    "season": 1,
+                    "number": 2,
+                    "name": "Next",
+                    "airdate": "2026-10-20",
+                    "airstamp": "2026-10-21T01:00:00Z",
+                    "summary": "<p>A <b>teacher</b> &amp; a student.</p>",
+                },
+                {"id": 2, "season": 1, "number": None, "name": "Special", "airdate": "2026-10-01"},
+            ],
+        )
 
     with httpx.Client(transport=httpx.MockTransport(tvmaze)) as http:
         rows = tvmaze_episodes(http, "42")
@@ -453,10 +647,15 @@ def test_public_follow_up_parsers_do_not_pin_a_month_to_a_day():
         assert request.url.params["api_key"] == "test-key"
         if request.url.path.endswith("/movie/11"):
             return httpx.Response(200, json={"belongs_to_collection": {"id": 9}})
-        return httpx.Response(200, json={"parts": [
-            {"id": 11, "title": "Original", "release_date": "2021-01-01"},
-            {"id": 12, "title": "Next", "release_date": "2026-10"},
-        ]})
+        return httpx.Response(
+            200,
+            json={
+                "parts": [
+                    {"id": 11, "title": "Original", "release_date": "2021-01-01"},
+                    {"id": 12, "title": "Next", "release_date": "2026-10"},
+                ]
+            },
+        )
 
     try:
         with httpx.Client(transport=httpx.MockTransport(tmdb)) as http:

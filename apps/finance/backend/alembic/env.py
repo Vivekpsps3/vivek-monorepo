@@ -19,6 +19,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # Use the project's models
 import sys
+
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[4]))
 from apps.finance.backend.models import Base
 from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
@@ -74,9 +75,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         target = context.get_revision_argument()
         if target in ("head", "heads", "e0f6a2b3c4d5"):

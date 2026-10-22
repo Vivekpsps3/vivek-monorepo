@@ -89,11 +89,11 @@ def test_fetch_eod_prefers_regular_market_quote_and_keeps_market_date(svc, monke
         fast_info = {"last_price": 124.5}
 
         def history(self, **_kwargs):
-            return pd.DataFrame(
-                {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
-            )
+            return pd.DataFrame({"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"]))
 
-    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr(
+        "apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker()
+    )
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -114,11 +114,11 @@ def test_fetch_eod_invalid_exchange_timezone_uses_history_date(svc, monkeypatch)
         fast_info = {}
 
         def history(self, **_kwargs):
-            return pd.DataFrame(
-                {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
-            )
+            return pd.DataFrame({"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"]))
 
-    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr(
+        "apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker()
+    )
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -139,11 +139,11 @@ def test_fetch_eod_rejects_future_market_timestamp(svc, monkeypatch):
         fast_info = {}
 
         def history(self, **_kwargs):
-            return pd.DataFrame(
-                {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
-            )
+            return pd.DataFrame({"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"]))
 
-    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr(
+        "apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker()
+    )
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -159,11 +159,11 @@ def test_fetch_eod_ignores_post_market_price_and_falls_back_to_history(svc, monk
         fast_info = {"last_price": float("nan")}
 
         def history(self, **_kwargs):
-            return pd.DataFrame(
-                {"Close": [101.5]}, index=pd.to_datetime(["2026-01-15"])
-            )
+            return pd.DataFrame({"Close": [101.5]}, index=pd.to_datetime(["2026-01-15"]))
 
-    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr(
+        "apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker()
+    )
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -183,7 +183,9 @@ def test_fetch_eod_skips_nonfinite_and_nonpositive_prices(svc, monkeypatch):
                 index=pd.to_datetime(["2026-01-13", "2026-01-14", "2026-01-15"]),
             )
 
-    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr(
+        "apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker()
+    )
 
     assert svc._fetch_eod("ACME") == (None, None, "error")
 
@@ -210,9 +212,7 @@ def test_market_price_cache_preserves_quote_date_separately_from_fetch_time(svc,
 
         cache_reader = MarketDataService(ttl_seconds=3600)
         monkeypatch.setattr(cache_reader, "_looks_like_non_ticker", lambda _s: False)
-        cached_price, cached_source, cached_fetched_at = cache_reader.get_price(
-            "ACME", db=session
-        )
+        cached_price, cached_source, cached_fetched_at = cache_reader.get_price("ACME", db=session)
         assert (cached_price, cached_source) == (42.5, "live")
         assert cached_fetched_at is not None
         assert abs((cached_fetched_at - fetched_at).total_seconds()) < 1
@@ -325,14 +325,27 @@ def test_research_cache_cold_insert_uses_winning_row_after_savepoint_collision(s
 
     now = datetime.now(UTC).replace(tzinfo=None)
     winner = MarketResearchCache(
-        symbol="VOO", period="10y", payload_json="{}", source="yfinance",
-        fetched_at=now, expires_at=now,
+        symbol="VOO",
+        period="10y",
+        payload_json="{}",
+        source="yfinance",
+        fetched_at=now,
+        expires_at=now,
     )
     savepoint = Savepoint()
     query_calls = []
     response = MarketResearchResponse(
-        symbol="VOO", valid=True, source="yfinance", fetched_at=now,
-        cache_status="miss", warnings=[], profile={}, quote={}, history=[], dividends=[], splits=[],
+        symbol="VOO",
+        valid=True,
+        source="yfinance",
+        fetched_at=now,
+        cache_status="miss",
+        warnings=[],
+        profile={},
+        quote={},
+        history=[],
+        dividends=[],
+        splits=[],
     )
 
     svc._research_cache_set(Session(), "VOO", "10y", response)

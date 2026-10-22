@@ -1,4 +1,5 @@
 """Production ASGI entrypoint. Explicit migration precedes startup."""
+
 import json
 import logging
 import os
@@ -53,20 +54,28 @@ async def lifespan(_app):
     engine.dispose()
 
 
-app = FastAPI(title="Personal site", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(
+    title="Personal site", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
+)
 
 
 @app.middleware("http")
 async def observe(request: Request, call_next):
     supplied_id = request.headers.get("x-request-id", "")
     request_id = supplied_id if re.fullmatch(r"[0-9a-f]{32}", supplied_id) else uuid.uuid4().hex
-    method = request.method if request.method in {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"} else "OTHER"
+    method = (
+        request.method
+        if request.method in {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}
+        else "OTHER"
+    )
     started = time.monotonic()
     try:
         response = await call_next(request)
     except Exception:
         logger.exception("request_failed request_id=%s", request_id)
-        response = JSONResponse(status_code=500, content={"detail": "Internal server error", "request_id": request_id})
+        response = JSONResponse(
+            status_code=500, content={"detail": "Internal server error", "request_id": request_id}
+        )
     REQUESTS.labels(method, str(response.status_code)).inc()
     LATENCY.labels(method).observe(time.monotonic() - started)
     response.headers["X-Request-ID"] = request_id
@@ -75,8 +84,17 @@ async def observe(request: Request, call_next):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if "/api/" in request.url.path or request.url.path.endswith("/api"):
         response.headers["Cache-Control"] = "no-store, private"
-    logger.info(json.dumps({"event": "request", "request_id": request_id, "method": request.method,
-                            "status": response.status_code, "duration_ms": round((time.monotonic()-started)*1000, 2)}))
+    logger.info(
+        json.dumps(
+            {
+                "event": "request",
+                "request_id": request_id,
+                "method": request.method,
+                "status": response.status_code,
+                "duration_ms": round((time.monotonic() - started) * 1000, 2),
+            }
+        )
+    )
     return response
 
 
@@ -103,7 +121,9 @@ def ready():
 
 
 travel_app = travel.create_app(unified=True)
-travel_app.state.principal_checker = principal_checker(travel_deps.AuthResult, travel_deps.Principal)
+travel_app.state.principal_checker = principal_checker(
+    travel_deps.AuthResult, travel_deps.Principal
+)
 media_app = media.create_app(unified=True)
 media_app.state.principal_checker = principal_checker(media_deps.AuthResult, media_deps.Principal)
 app.mount("/travel", travel_app)
@@ -135,9 +155,13 @@ def finance_slash():
     return RedirectResponse("/finance/", status_code=308)
 
 
-@app.api_route("/finance/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+@app.api_route(
+    "/finance/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
+)
 async def legacy_api(path: str, request: Request):
-    return RedirectResponse("/api/" + path + ("?" + request.url.query if request.url.query else ""), status_code=308)
+    return RedirectResponse(
+        "/api/" + path + ("?" + request.url.query if request.url.query else ""), status_code=308
+    )
 
 
 @app.get("/finance/login")
@@ -146,8 +170,12 @@ async def legacy_api(path: str, request: Request):
 @app.get("/finance/auth/signup")
 @app.get("/finance/enroll")
 def legacy_login(request: Request):
-    destination = "/auth/signup" if request.url.path.endswith(("signup", "enroll")) else "/auth/login"
-    return RedirectResponse(destination + ("?" + request.url.query if request.url.query else ""), status_code=302)
+    destination = (
+        "/auth/signup" if request.url.path.endswith(("signup", "enroll")) else "/auth/login"
+    )
+    return RedirectResponse(
+        destination + ("?" + request.url.query if request.url.query else ""), status_code=302
+    )
 
 
 @app.get("/finance/{path:path}")
@@ -157,9 +185,20 @@ def finance_page(path: str):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
     if path and file.is_file():
         immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-        return FileResponse(file, headers={"Cache-Control": "no-store" if file.suffix == ".html" else "public, max-age=31536000, immutable" if immutable else "no-cache"})
+        return FileResponse(
+            file,
+            headers={
+                "Cache-Control": "no-store"
+                if file.suffix == ".html"
+                else "public, max-age=31536000, immutable"
+                if immutable
+                else "no-cache"
+            },
+        )
     if path and (Path(path).suffix or path.startswith("assets/")):
-        return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
+        return JSONResponse(
+            status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"}
+        )
     return shell()
 
 
@@ -184,7 +223,9 @@ def login():
 
 @app.get("/auth/enroll")
 def enroll(request: Request):
-    return RedirectResponse("/auth/signup" + ("?" + request.url.query if request.url.query else ""), status_code=302)
+    return RedirectResponse(
+        "/auth/signup" + ("?" + request.url.query if request.url.query else ""), status_code=302
+    )
 
 
 @app.get("/{path:path}")
@@ -194,7 +235,18 @@ def portfolio_page(path: str):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
     if file.is_file():
         immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-        return FileResponse(file, headers={"Cache-Control": "no-store" if file.suffix == ".html" else "public, max-age=31536000, immutable" if immutable else "no-cache"})
+        return FileResponse(
+            file,
+            headers={
+                "Cache-Control": "no-store"
+                if file.suffix == ".html"
+                else "public, max-age=31536000, immutable"
+                if immutable
+                else "no-cache"
+            },
+        )
     if path in {"home", "work", "about", "secrets"}:
         return FileResponse(PORTFOLIO_ROOT / "index.html", headers={"Cache-Control": "no-store"})
-    return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
+    return JSONResponse(
+        status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"}
+    )

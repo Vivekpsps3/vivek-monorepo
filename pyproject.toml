@@ -1,0 +1,11 @@
+[tool.ruff]
+# 100 matches the existing sources better than the 88 default, so the
+# formatter wraps less while still bounding new code.
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+  # Historical Flask chat backend. It is not deployed and not part of CI.
+  "apps/site/flask",
+  # Applied migrations. Reformatting them only adds blame noise.
+  "**/alembic/versions",
+]

@@ -39,7 +39,12 @@ def mount_path() -> str:
 
 
 def _open_path(path: str) -> bool:
-    return path in ("/api/health", "/tokens.css", "/controls.css", "/favicon.svg") or path.startswith("/static/")
+    return path in (
+        "/api/health",
+        "/tokens.css",
+        "/controls.css",
+        "/favicon.svg",
+    ) or path.startswith("/static/")
 
 
 @asynccontextmanager
@@ -51,7 +56,14 @@ async def lifespan(_app: FastAPI):
 def create_app(*, unified: bool = False) -> FastAPI:
     if not unified:
         load_dotenv()
-    application = FastAPI(title="Media", version="0.1.0", lifespan=lifespan, docs_url=None if unified else "/docs", redoc_url=None if unified else "/redoc", openapi_url=None if unified else "/openapi.json")
+    application = FastAPI(
+        title="Media",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url=None if unified else "/docs",
+        redoc_url=None if unified else "/redoc",
+        openapi_url=None if unified else "/openapi.json",
+    )
     application.state.principal_checker = None
 
     @application.middleware("http")
@@ -91,6 +103,7 @@ def create_app(*, unified: bool = False) -> FastAPI:
     def health():
         from sqlalchemy import text
         from apps.media.backend import database
+
         try:
             with database.engine.connect() as connection:
                 connection.execute(text("SELECT id FROM user_entries LIMIT 1"))

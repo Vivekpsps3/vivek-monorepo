@@ -23,6 +23,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv("RAWG_API_KEY", raising=False)
     monkeypatch.delenv("MEDIA_SCRAPE_MODE", raising=False)
     monkeypatch.delenv("MEDIA_TODAY", raising=False)
-    application.state.principal_checker = lambda _request: AuthResult(Principal(1, "tester", "Tester"), [])
+    application.state.principal_checker = lambda _request: AuthResult(
+        Principal(1, "tester", "Tester"), []
+    )
     with TestClient(application) as test_client:
         yield test_client

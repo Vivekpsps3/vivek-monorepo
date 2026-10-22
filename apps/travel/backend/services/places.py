@@ -65,7 +65,9 @@ def cached_search(db, query: str, fetch) -> list[dict]:
         if not isinstance(hit, dict):
             continue
         try:
-            clean.append({"label": str(hit["label"]), "lat": float(hit["lat"]), "lng": float(hit["lng"])})
+            clean.append(
+                {"label": str(hit["label"]), "lat": float(hit["lat"]), "lng": float(hit["lng"])}
+            )
         except (KeyError, TypeError, ValueError):
             continue
     db.merge(PlaceCache(query=key, payload=json.dumps(clean), fetched_at=datetime.now(UTC)))
