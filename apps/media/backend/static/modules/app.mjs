@@ -1,5 +1,15 @@
 import { NETWORK_MESSAGE, api, loginHref } from "./api.mjs";
 import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
+import { icon } from "./icons.mjs";
+import {
+  documentTitle,
+  msUntilLocalMidnight,
+  navKey,
+  notFoundHtml,
+  parseRoute,
+  screenTitle,
+  tabBarHidden,
+} from "./shell.mjs";
 import { createKeyedFetch, createSequence } from "./guard.mjs";
 import {
   NOTE_CONFLICT_STATUS,
@@ -351,20 +361,42 @@ function showSaved(status) {
 }
 
 function route() {
-  const raw = location.hash.replace(/^#/, "") || "/";
-  const [path, query = ""] = raw.split("?");
-  const params = new URLSearchParams(query);
-  const episode = path.match(/^\/item\/(\d+)\/episode\/(\d+)$/);
-  if (episode) return { name: "episode", id: Number(episode[1]), episodeId: Number(episode[2]), params };
-  const season = path.match(/^\/item\/(\d+)\/season\/(\d+)$/);
-  if (season) return { name: "season", id: Number(season[1]), seasonNumber: Number(season[2]), params };
-  const item = path.match(/^\/item\/(\d+)$/);
-  if (item) return { name: "item", id: Number(item[1]), params };
-  if (path === "/library") return { name: "library", params };
-  if (path === "/calendar") return { name: "calendar", params };
-  if (path === "/search") return { name: "search", params };
-  if (path === "/new") return { name: "new", params };
-  return { name: "home", params };
+  return parseRoute(location.hash);
+}
+
+function paintIcons() {
+  document.querySelectorAll("[data-icon]").forEach(node => {
+    if (node.dataset.iconReady === "true") return;
+    node.innerHTML = icon(node.dataset.icon);
+    node.dataset.iconReady = "true";
+  });
+}
+
+function applyChrome(current, extra = {}) {
+  document.title = documentTitle(current, extra);
+  const label = screenTitle(current, extra);
+  document.querySelectorAll("[data-screen-title]").forEach(node => {
+    node.textContent = label;
+  });
+  const currentNav = navKey(current.name);
+  document.querySelectorAll("[data-nav]").forEach(link => {
+    if (currentNav && link.dataset.nav === currentNav) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  const links = [...document.querySelectorAll(".nav [data-nav]")];
+  const active = links.find(link => link.getAttribute("aria-current") === "page") || links[0];
+  links.forEach(link => {
+    link.tabIndex = link === active ? 0 : -1;
+  });
+}
+
+function closeAccountMenus() {
+  document.querySelectorAll(".account-menu").forEach(menu => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll("[data-action='account-menu']").forEach(button => {
+    button.setAttribute("aria-expanded", "false");
+  });
 }
 
 function options(rows, selected) {
@@ -392,6 +424,7 @@ function syncTheme() {
   document.querySelectorAll("[data-theme-value]").forEach(button => {
     const on = button.dataset.themeValue === choice;
     button.setAttribute("aria-pressed", String(on));
+    button.setAttribute("aria-checked", String(on));
   });
 }
 
@@ -480,6 +513,7 @@ async function viewCalendar(params, ticket) {
     ${band(`Sometime in ${year || "this year"}`, data.year_band)}
     ${band("Date not set", data.unknown)}
   `);
+  applyChrome(route(), { monthLabel: label });
 }
 
 function eventChip(event, compact) {
@@ -627,6 +661,10 @@ function viewSearch(params) {
     <div id="search-results"></div>
   `);
   if (q.length >= 2) runSearch();
+  if (focusSearchOnPaint) {
+    focusSearchOnPaint = false;
+    document.querySelector("#search-q")?.focus();
+  }
 }
 
 function providerLine(providers) {
@@ -781,6 +819,7 @@ async function viewItem(id, ticket, forcedSeason = null) {
     }
   }
   dismissToast(`note-conflict:${id}`);
+  applyChrome(route(), { title: entry.title });
   loadWeb(entry, ticket);
 }
 
@@ -896,6 +935,12 @@ async function viewEpisode(entryId, episodeId, ticket) {
       </button>
       ${episode.overview ? `<p class="overview">${esc(episode.overview)}</p>` : ""}
     </article>`);
+  applyChrome(route(), {
+    show: entry.title,
+    season: episode.season_number,
+    episode: episode.episode_number,
+    episodeTitle: episode.title || "",
+  });
 }
 
 function musicBlock(entry) {
@@ -1105,16 +1150,15 @@ async function render() {
   if (staying) await Promise.all([progressChain, noteChain]);
   if (!ticket.isCurrent()) return;
   const libraryNotice = settleLibraryHash();
-  document.querySelectorAll("[data-nav]").forEach(link => {
-    link.setAttribute("aria-current", link.dataset.nav === route().name ? "page" : "false");
-  });
+  const chromeRoute = route();
+  applyChrome(chromeRoute, { query: chromeRoute.params.get("q") || "" });
   syncTheme();
   if (libraryNotice.droppedSort) toast(SORT_TOAST);
   const current = route();
   const scrolling = document.scrollingElement;
   const scrollY = scrolling ? scrolling.scrollTop : 0;
   const same = app.dataset.view === location.hash;
-  const waits = current.name !== "search" && current.name !== "new";
+  const waits = current.name !== "search" && current.name !== "new" && current.name !== "missing";
   if (waits) {
     app.setAttribute("aria-busy", "true");
     clearSkeletonTimer();
@@ -1132,9 +1176,16 @@ async function render() {
     else if (current.name === "search") viewSearch(current.params);
     else if (current.name === "new") viewNew(current.params);
     else if (current.name === "episode") await viewEpisode(current.id, current.episodeId, ticket);
-    else await viewItem(current.id, ticket, current.name === "season" ? current.seasonNumber : null);
+    else if (current.name === "item" || current.name === "season") await viewItem(current.id, ticket, current.name === "season" ? current.seasonNumber : null);
+    else {
+      commitView(notFoundHtml(location.hash || "#/"));
+      applyChrome(current);
+    }
     if (!ticket.isCurrent()) return;
     app.dataset.view = location.hash;
+    if (current.name === "missing") {
+      app.querySelector("h1")?.focus();
+    }
     restoreFocus(focusKey);
     if (scrolling) scrolling.scrollTop = same ? scrollY : 0;
   } catch (error) {
@@ -1152,6 +1203,7 @@ async function render() {
 document.addEventListener("click", async event => {
   const target = clickTarget(event);
   if (!target) return;
+  if (!target.closest(".account")) closeAccountMenus();
   const theme = target.closest("[data-theme-value]");
   if (theme) {
     keepButtonClick(event, target);
@@ -1346,6 +1398,33 @@ document.addEventListener("click", async event => {
   keepButtonClick(event, target);
   const action = button.dataset.action;
   try {
+    if (action === "account-menu") {
+      const menu = button.parentElement?.querySelector(".account-menu");
+      const opening = Boolean(menu?.hidden);
+      closeAccountMenus();
+      if (opening && menu) {
+        menu.hidden = false;
+        button.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+    if (action === "open-add") {
+      closeAccountMenus();
+      location.hash = "#/new";
+      return;
+    }
+    if (action === "sign-out") {
+      closeAccountMenus();
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+          headers: { accept: "application/json" },
+        });
+      } catch { /* leave the journal either way */ }
+      location.assign("/auth/login");
+      return;
+    }
     if (action === "retry-route") {
       await render();
       if (!app.querySelector("[data-error-title]")) focusPageHeading();
@@ -1548,6 +1627,7 @@ document.addEventListener("submit", async event => {
 });
 
 let searchTimer = 0;
+let focusSearchOnPaint = false;
 document.addEventListener("focusout", async event => {
   const box = event.target;
   if (box instanceof HTMLInputElement && box.dataset.progress) {
@@ -1862,6 +1942,34 @@ async function commitProgress(payload) {
 }
 
 document.addEventListener("keydown", event => {
+  const typing = event.target instanceof HTMLInputElement
+    || event.target instanceof HTMLTextAreaElement
+    || event.target instanceof HTMLSelectElement
+    || (event.target instanceof HTMLElement && event.target.isContentEditable);
+  if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && event.key === "/") {
+    event.preventDefault();
+    focusSearchOnPaint = true;
+    if (route().name === "search") document.querySelector("#search-q")?.focus();
+    else location.hash = "#/search";
+    return;
+  }
+  if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "n" || event.key === "N")) {
+    event.preventDefault();
+    location.hash = "#/new";
+    return;
+  }
+  const navLink = event.target instanceof Element ? event.target.closest(".nav [data-nav]") : null;
+  if (navLink && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
+    const links = [...document.querySelectorAll(".nav [data-nav]")];
+    const index = links.indexOf(navLink);
+    const next = links[event.key === "ArrowRight" ? index + 1 : index - 1];
+    if (next instanceof HTMLElement) {
+      event.preventDefault();
+      links.forEach(link => { link.tabIndex = link === next ? 0 : -1; });
+      next.focus();
+    }
+    return;
+  }
   if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.dataset.progress) {
     event.preventDefault();
     saveProgress();
@@ -1895,6 +2003,37 @@ function paintToday() {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") paintToday();
 });
+
+function armMidnight() {
+  window.setTimeout(() => {
+    paintToday();
+    armMidnight();
+  }, msUntilLocalMidnight(new Date()));
+}
+
+let lastScrollY = 0;
+let tabHidden = false;
+document.addEventListener("scroll", () => {
+  const nextY = document.scrollingElement ? document.scrollingElement.scrollTop : 0;
+  const short = window.matchMedia("(max-height: 500px)").matches;
+  tabHidden = tabBarHidden(lastScrollY, nextY, short, tabHidden);
+  lastScrollY = nextY;
+  document.querySelector(".tabbar")?.classList.toggle("is-hidden", tabHidden);
+}, { passive: true });
+
+async function loadAccount() {
+  try {
+    const me = await api("/api/me");
+    const name = me?.username || me?.display_name || "Account";
+    document.querySelectorAll("[data-account-name]").forEach(node => { node.textContent = name; });
+    const initial = String(name).trim().charAt(0).toUpperCase() || "A";
+    document.querySelectorAll("[data-account-initial]").forEach(node => { node.textContent = initial; });
+  } catch { /* the button still says Account */ }
+}
+
+paintIcons();
+armMidnight();
+loadAccount();
 
 window.addEventListener("hashchange", () => {
   void render();

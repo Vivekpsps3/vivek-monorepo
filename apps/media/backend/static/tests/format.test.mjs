@@ -101,7 +101,7 @@ test("empty state escapes its copy and route errors are one panel", () => {
     primary: { href: "#/search", label: "Find something" },
     secondary: { href: "#/library", label: "Library" },
   });
-  assert.match(html, /class="empty"/);
+  assert.match(html, /class="empty(?:\s|")/);
   assert.match(html, /Nothing &lt;here&gt;/);
   assert.match(html, /class="btn btn-primary"/);
   assert.match(emptyState({ icon: "<star>" }), /class="empty-icon" aria-hidden="true">&lt;star&gt;/);

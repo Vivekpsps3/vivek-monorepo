@@ -26,7 +26,8 @@ def test_media_screens_redirect_to_the_hash(client):
         assert added.headers["location"] == "/media/#/new"
 
         missing = mounted.get("/not-a-screen", follow_redirects=False)
-        assert missing.status_code == 404
+        assert missing.status_code == 302
+        assert missing.headers["location"] == "/media/#/not-a-screen"
 
 
 def test_screen_redirect_without_a_mount_stays_on_this_host(client):

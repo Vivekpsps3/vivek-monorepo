@@ -326,7 +326,7 @@ test('a slower library response cannot replace a newer screen', async ({ page })
   await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Saved');
   await page.waitForTimeout(1200);
   await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Saved');
-  await expect(page.locator('nav [aria-current="page"]')).toHaveText('Now');
+  await expect(page.locator('.nav [aria-current="page"]')).toHaveText('Now');
 });
 
 test('a slower search for the previous type cannot replace the current one', async ({ page }) => {
@@ -709,14 +709,15 @@ test('a finished progress save does not dismiss another item draft', async ({ pa
 
 test('the theme toggle names the theme it applies', async ({ page }) => {
   await page.goto('/media/');
-  await page.getByRole('button', { name: 'Dark', exact: true }).click();
+  await page.getByRole('button', { name: 'Account', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: 'Dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.locator('[data-theme-value="dark"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.topbar [data-theme-value="dark"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.topbar [data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'false');
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(20, 19, 17)');
-  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: 'Light', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('[data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.topbar [data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(246, 243, 238)');
 });
 

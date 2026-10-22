@@ -14,6 +14,12 @@ from apps.media.backend.services.validate import clean_text
 router = APIRouter()
 
 
+@router.get("/me")
+def me():
+    current = require_actor()
+    return {"username": current.username or "", "display_name": current.display_name}
+
+
 @router.get("/summary")
 def summary(db: Session = Depends(get_db)):
     return build_summary(db, require_actor().id)

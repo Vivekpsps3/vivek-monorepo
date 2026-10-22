@@ -10,13 +10,14 @@ const backgrounds = {
 
 async function assertTheme(page: Page, theme: 'light' | 'dark') {
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-  await expect(page.locator(`[data-theme-value="${theme}"]`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator(`.topbar [data-theme-value="${theme}"]`)).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(backgrounds[theme]);
 }
 
 async function openThemed(page: Page, hash: string, theme: 'light' | 'dark') {
   await page.goto('/media/');
   await page.evaluate(value => {
+    localStorage.setItem('suite-theme', value);
     localStorage.setItem('media-theme', value);
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith('media-review-draft:') || key.startsWith('media-progress-draft:')) localStorage.removeItem(key);
