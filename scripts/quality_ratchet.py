@@ -10,12 +10,16 @@ as allowed debt.
 ``update`` refuses to write a higher count unless ``--allow-increase`` is
 passed. ``check-base REF`` compares the committed baseline with the same
 file on another git ref and fails when this branch allows more than that
-ref. A missing file on the ref is the initial introduction and is skipped.
+ref. A missing baseline is an error when that tool already exists on the
+ref. It is a warning when the tool, or this script, is new on this branch.
+``RATCHET_ALLOW_INCREASE=true`` (the ``ratchet-increase`` pull-request
+label) is the reviewed way to accept a higher allowance.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -43,7 +47,6 @@ SKIP_DIRS = {
     "coverage",
     "__pycache__",
     ".angular",
-    "versions",
 }
 # The scanner's own source mentions the markers it looks for.
 SUPPRESSION_SKIP = {
@@ -51,10 +54,20 @@ SUPPRESSION_SKIP = {
     "scripts/test_quality_ratchet.py",
 }
 
-_NOQA = re.compile(r"#\s*noqa\b(?::\s*([A-Za-z0-9_,\s]+))?")
-_TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore\b(?:\[([^\]]+)\])?")
-_ESLINT_DISABLE = re.compile(r"eslint-disable(?:-next-line|-line)?\b(?:\s+([^/\n*]+))?")
-_TS_EXPECT = re.compile(r"@ts-expect-error\b")
+_NOQA = re.compile(
+    r"(?:#\s*(?P<tool>ruff|flake8)\s*:\s*)?noqa\b(?::\s*(?P<codes>[A-Za-z0-9_,\s]+))?",
+    re.IGNORECASE,
+)
+_TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore\b(?:\[([^\]]+)\])?", re.IGNORECASE)
+_MYPY_FILE = re.compile(r"#\s*mypy:\s*ignore-errors\b", re.IGNORECASE)
+_ESLINT_DISABLE = re.compile(
+    r"eslint-disable(?:-next-line|-line)?\b(?:\s+([^/\n*]+))?",
+    re.IGNORECASE,
+)
+_TS_DIRECTIVE = re.compile(r"@ts-(ignore|nocheck|expect-error)\b", re.IGNORECASE)
+_PRAGMA_NO_COVER = re.compile(r"#\s*pragma:\s*no\s*cover\b", re.IGNORECASE)
+_COVERAGE_IGNORE = re.compile(r"(?P<tool>istanbul|c8|v8)\s+ignore\b", re.IGNORECASE)
+_ALEMBIC_VERSIONS = re.compile(r"apps/(?:[^/]+/backend|server)/alembic/versions(?:/.*)?")
 
 
 def compare(current: Counter[tuple[str, str]], baseline: Counter[tuple[str, str]]) -> list[str]:
@@ -222,19 +235,39 @@ def suppression_markers(line: str) -> list[str]:
     markers: list[str] = []
     noqa = _NOQA.search(line)
     if noqa:
-        codes = _codes(noqa.group(1))
-        markers.extend([f"noqa:{code}" for code in codes] or ["noqa"])
+        tool = (noqa.group("tool") or "").lower()
+        prefix = f"{tool}: noqa" if tool else "noqa"
+        codes = _codes(noqa.group("codes"))
+        markers.extend([f"{prefix}:{code}" for code in codes] or [prefix])
     ignored = _TYPE_IGNORE.search(line)
     if ignored:
         codes = _codes(ignored.group(1))
         markers.extend([f"type: ignore[{code}]" for code in codes] or ["type: ignore"])
+    if _MYPY_FILE.search(line):
+        markers.append("mypy: ignore-errors")
     disabled = _ESLINT_DISABLE.search(line)
     if disabled:
         codes = _codes(disabled.group(1))
         markers.extend(codes or ["eslint-disable"])
-    if _TS_EXPECT.search(line):
-        markers.append("@ts-expect-error")
+    directive = _TS_DIRECTIVE.search(line)
+    if directive:
+        markers.append(f"@ts-{directive.group(1).lower()}")
+    if _PRAGMA_NO_COVER.search(line):
+        markers.append("pragma: no cover")
+    coverage = _COVERAGE_IGNORE.search(line)
+    if coverage:
+        markers.append(f"{coverage.group('tool').lower()} ignore")
     return markers
+
+
+def excluded_dir(relative_dir: str) -> bool:
+    """Trees the other Python gates already skip, plus Alembic revision dirs.
+
+    A directory that is merely named ``versions`` is still scanned.
+    """
+    if relative_dir == "apps/site/flask" or relative_dir.startswith("apps/site/flask/"):
+        return True
+    return _ALEMBIC_VERSIONS.fullmatch(relative_dir) is not None
 
 
 def iter_source_files() -> list[Path]:
@@ -244,7 +277,7 @@ def iter_source_files() -> list[Path]:
             continue
         for dirpath, dirnames, filenames in os.walk(base):
             relative_dir = Path(dirpath).relative_to(ROOT).as_posix()
-            if relative_dir == "apps/site/flask" or relative_dir.startswith("apps/site/flask/"):
+            if excluded_dir(relative_dir):
                 dirnames[:] = []
                 continue
             dirnames[:] = [name for name in dirnames if name not in SKIP_DIRS]
@@ -293,8 +326,7 @@ TOOLS = {
 }
 
 
-def git_baseline(ref: str, baseline_path: Path) -> str | None:
-    rel = baseline_path.relative_to(ROOT).as_posix()
+def git_show(ref: str, rel: str) -> str | None:
     completed = subprocess.run(
         ["git", "show", f"{ref}:{rel}"],
         cwd=ROOT,
@@ -310,6 +342,43 @@ def git_baseline(ref: str, baseline_path: Path) -> str | None:
         return None
     sys.stderr.write(completed.stderr)
     raise SystemExit(completed.returncode or 1)
+
+
+def git_baseline(ref: str, baseline_path: Path) -> str | None:
+    return git_show(ref, baseline_path.relative_to(ROOT).as_posix())
+
+
+def tools_in_source(source: str) -> set[str]:
+    tree = ast.parse(source)
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "TOOLS" for target in node.targets
+        ):
+            continue
+        if not isinstance(node.value, ast.Dict):
+            break
+        names: set[str] = set()
+        for key in node.value.keys:
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                names.add(key.value)
+        return names
+    return set()
+
+
+def annotate(level: str, message: str) -> None:
+    print(message, file=sys.stderr)
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::{level}::{escaped}")
+
+
+def increases_allowed(flag: bool) -> bool:
+    if flag:
+        return True
+    return os.environ.get("RATCHET_ALLOW_INCREASE", "").strip().lower() in {"1", "true", "yes"}
 
 
 def guard_update(
@@ -345,12 +414,38 @@ def main(argv: list[str]) -> int:
             return 2
         text = git_baseline(args.base_ref, baseline_path)
         if text is None:
-            rel = baseline_path.relative_to(ROOT)
-            print(f"{args.tool}: no {rel} on {args.base_ref}; allowance check skipped")
-            return 0
+            rel = baseline_path.relative_to(ROOT).as_posix()
+            script = git_show(args.base_ref, "scripts/quality_ratchet.py")
+            if script is None:
+                annotate(
+                    "warning",
+                    f"{args.tool}: no scripts/quality_ratchet.py on {args.base_ref}; "
+                    f"{rel} is a new gate and the allowance check is skipped",
+                )
+                return 0
+            if args.tool not in tools_in_source(script):
+                annotate(
+                    "warning",
+                    f"{args.tool}: not in TOOLS on {args.base_ref}; "
+                    f"{rel} is a new gate and the allowance check is skipped",
+                )
+                return 0
+            annotate(
+                "error",
+                f"{args.tool}: {rel} is missing on {args.base_ref}, but {args.tool} is already "
+                "in TOOLS there. Restoring or renaming a baseline has to be explicit.",
+            )
+            return 1
         proposed = load(baseline_path)
         base_counts = parse_baseline(text, f"{args.base_ref}:{baseline_path.name}")
         messages = increase_messages(proposed, base_counts, word="raised", label="base")
+        if messages and increases_allowed(args.allow_increase):
+            annotate(
+                "warning",
+                f"{args.tool}: allowance rose against {args.base_ref} and "
+                "RATCHET_ALLOW_INCREASE is set:\n" + "\n".join(messages),
+            )
+            return 0
         if messages:
             print(f"{args.tool} allowance rose against {args.base_ref}:", file=sys.stderr)
             for message in messages:

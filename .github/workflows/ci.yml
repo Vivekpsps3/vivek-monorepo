@@ -28,10 +28,12 @@ jobs:
       - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install --require-hashes -r requirements-dev.txt
       - name: Lint allowances did not rise
         if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          RATCHET_ALLOW_INCREASE: ${{ contains(github.event.pull_request.labels.*.name, 'ratchet-increase') && 'true' || 'false' }}
         run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
           for tool in ruff mypy eslint-finance eslint-site eslint-packages suppressions; do
-            python3 scripts/quality_ratchet.py check-base "$tool" "origin/${{ github.base_ref }}"
+            python3 scripts/quality_ratchet.py check-base "$tool" "origin/${BASE_REF}"
           done
       - run: ./scripts/coverage-gate.sh finance
       - run: ./scripts/coverage-gate.sh server

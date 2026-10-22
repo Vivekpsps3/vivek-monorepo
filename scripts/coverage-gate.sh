@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Run one backend suite and fail if statement coverage leaves its band.
+# Run one backend suite and fail if statement coverage drops under its floor.
 # quality/coverage.txt stores the measured total and a floor about 1 point
-# below it. pytest-cov enforces the floor at precision 2. A measured total
-# more than 1 point above that floor is stale and has to be re-pinned.
+# below it. pytest-cov enforces the floor at precision 2. A gain does not
+# fail; it prints a notice with the suggested new floor.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -49,12 +49,9 @@ measured=$(awk '/^TOTAL / { gsub(/%/, "", $NF); print $NF }' "$report")
 if [[ -z "$measured" ]]; then
   echo "coverage report has no TOTAL line" >&2
   status=1
-else
-  if ! "$py" -c 'import sys; measured, floor = map(float, sys.argv[1:]); sys.exit(0 if measured <= floor + 1 else 1)' "$measured" "$floor"; then
-    echo "${suite} coverage ${measured}% is more than 1 point above the floor ${floor}%." >&2
-    echo "Raise the floor in quality/coverage.txt to about 1 point below the new total." >&2
-    status=1
-  fi
+elif "$py" -c 'import sys; measured, stored = map(float, sys.argv[1:]); sys.exit(0 if measured > stored else 1)' "$measured" "$stored"; then
+  suggested=$("$py" -c 'import sys; print(f"{float(sys.argv[1]) - 1:.2f}")' "$measured")
+  echo "::notice::${suite} coverage rose from ${stored}% to ${measured}%. Suggested floor ${suggested}% (make coverage-pin)."
 fi
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

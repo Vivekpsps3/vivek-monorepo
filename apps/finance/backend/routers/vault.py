@@ -23,6 +23,11 @@ router = APIRouter(prefix="/vault", tags=["vault"])
 logger = logging.getLogger("finance.auth")
 
 
+def _user_id(user: User) -> int:
+    """Primary key of a loaded user. mypy types the column as Column[int]."""
+    return int(user.id)
+
+
 def _iso(dt) -> str | None:
     if dt is None:
         return None
@@ -76,7 +81,7 @@ def vault_update_wraps(
     db: Session = Depends(get_db),
 ):
     # Session cookie plus CSRF. Not counted against the login IP or account budgets.
-    previous = store.get_vault(db, current_user.id)
+    previous = store.get_vault(db, _user_id(current_user))
     previous_iterations = previous.kdf_iterations if previous else None
     store.update_vault_wraps(
         db,

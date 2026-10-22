@@ -6,7 +6,7 @@ FINANCE_WEB := $(CURDIR)/apps/finance/frontend/dist/finance-app/browser
 PORTFOLIO_WEB := $(CURDIR)/apps/site/dist/personal-website/browser
 export PYTHONPATH := $(CURDIR)
 
-.PHONY: help install init-db dev build build-frontends test test-fast test-backend test-frontend test-suite-routes docker-build docker-up docker-down lint lint-python lint-web typecheck typecheck-python typecheck-web e2e lint-baseline
+.PHONY: help install init-db dev build build-frontends test test-fast test-backend test-frontend test-suite-routes docker-build docker-up docker-down lint lint-python lint-web typecheck typecheck-python typecheck-web e2e lint-baseline coverage-pin
 PYTHON ?= python3
 PY := $(CURDIR)/.venv/bin/python
 help:
@@ -90,6 +90,9 @@ lint-baseline:
 	 $(PYTHON) scripts/quality_ratchet.py update eslint-site && \
 	 $(PYTHON) scripts/quality_ratchet.py update eslint-packages && \
 	 $(PYTHON) scripts/quality_ratchet.py update suppressions
+
+coverage-pin:
+	./scripts/coverage-pin.sh
 
 test: test-fast test-backend test-frontend
 	node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs

@@ -134,7 +134,7 @@ def _auth_material(user: User) -> dict:
 
 
 def _passwordless_record_complete(user: User | None, vault: object | None) -> bool:
-    if (
+    return not (
         not user
         or not user.is_active
         or not user.auth_public_key_b64
@@ -142,9 +142,7 @@ def _passwordless_record_complete(user: User | None, vault: object | None) -> bo
         or not user.auth_kdf_salt_b64
         or not user.auth_kdf_iterations
         or vault is None
-    ):
-        return False
-    return True
+    )
 
 
 def _user_and_vault(db: Session, identifier: str) -> tuple[User | None, object | None]:

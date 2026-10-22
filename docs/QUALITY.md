@@ -7,6 +7,7 @@ make lint          # Ruff format check, Ruff, ESLint, and inline suppressions
 make typecheck     # mypy and tsc --noEmit
 make e2e           # production finance bundle at /finance/, then Playwright
 make lint-baseline # rewrite quality/*.txt after a finding count shrinks
+make coverage-pin  # rewrite quality/coverage.txt from a fresh measurement
 ```
 
 Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requirements-dev.in`). `make install` installs that lock with `--require-hashes`. The production image installs only `apps/server/requirements.lock`. The image-building CI job does not install the dev lock. `pip-audit` is in the dev lock and runs in the finance backend job, against `apps/server/requirements.lock`.
@@ -15,15 +16,15 @@ Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requireme
 
 `scripts/quality_ratchet.py` records `path<TAB>rule<TAB>count` in `quality/`. CI fails when a live count rises, and when a recorded count is higher than the current one. A fix has to drop the baseline entry (`make lint-baseline`) instead of leaving a stale allowance.
 
-`update` refuses a higher count unless `--allow-increase` is passed. On a pull request, CI also compares each committed baseline with the same file on the base branch (`check-base`) and fails if this branch allows more than the base. A file that does not exist on the base branch is the first introduction of that baseline and is skipped. Do not add file-wide suppressions to quiet a noisy rule.
+`update` refuses a higher count unless `--allow-increase` is passed. On a pull request, CI also compares each committed baseline with the same file on the base branch (`check-base`) and fails if this branch allows more than the base. The base ref is passed in the environment, and the job does not fetch with `--depth=1`, so blame and merge-base still see full history. A missing baseline is an error when that tool is already in `TOOLS` on the base. It is a `::warning::` when this script, or that tool, is new there. The `ratchet-increase` pull-request label sets `RATCHET_ALLOW_INCREASE` and is the reviewed way to accept a higher allowance. Do not add file-wide suppressions to quiet a noisy rule.
 
-ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts inline `# noqa`, `# type: ignore`, `eslint-disable`, and `@ts-expect-error` in `apps/`, `scripts/`, and `packages/`. `apps/site/flask` is skipped, same as the other Python gates.
+ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts inline `# noqa` (any case, including `# ruff: noqa` and `# flake8: noqa`), `# type: ignore`, `# mypy: ignore-errors`, `eslint-disable`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `# pragma: no cover`, and `istanbul` / `c8` / `v8` `ignore` in `apps/`, `scripts/`, and `packages/`. `apps/site/flask` is skipped, same as the other Python gates. Alembic `versions/` directories are skipped by that path, not because the directory is named `versions`.
 
 Current baselines:
 
 | Tool | Findings left |
 | --- | ---: |
-| Ruff | 156 |
+| Ruff | 151 |
 | mypy | 368 |
 | ESLint, finance | 483 |
 | ESLint, site | 9 |
@@ -47,7 +48,7 @@ Ruff lints and formats `apps/` and `scripts/` at line length 100. Selected rules
 
 mypy runs on Python 3.12 with `check_untyped_defs` and `ignore_missing_imports`. `disallow_untyped_defs` is off; turning it on would be a new baseline, not a cleanup.
 
-The formatting-only commit is `0fcae8021f783f836160bcd8f6a86ad1a98eacbe`, listed in `.git-blame-ignore-revs`. Later formatting commits are appended. CI checks that every listed SHA is still an ancestor of `HEAD`, which holds when main is merged in rather than rebased. Do not drop `0fcae80` on a rebase unless the owner has approved a force-push.
+The formatting-only commits listed in `.git-blame-ignore-revs` are `0fcae8021f783f836160bcd8f6a86ad1a98eacbe` and `2c41a00fecfabaefd4acab7229f613f7951a1d2a` (the auth-hardening reformat after merging main). Later formatting commits are appended. CI checks that every listed SHA is still an ancestor of `HEAD`, which holds when main is merged in rather than rebased. Do not drop either SHA on a rebase unless the owner has approved a force-push.
 
 ```bash
 git config blame.ignoreRevsFile .git-blame-ignore-revs
@@ -63,11 +64,11 @@ Prettier is not configured. The tree has no formatter today, and formatting both
 
 ## Coverage
 
-`scripts/coverage-gate.sh` runs pytest with `pytest-cov` at `precision = 2`, so `--cov-fail-under` decides on the displayed total. Tests and Alembic are omitted. `quality/coverage.txt` stores the measured total and a floor about 1 percentage point below it. The gate fails when coverage drops under the floor, and when the measured total is more than 1 point above the floor, so a real gain has to raise the floor instead of leaving it stale. Each CI job appends the table to the GitHub step summary. The summary step exits cleanly when a job failed before writing `coverage/`.
+`scripts/coverage-gate.sh` runs pytest with `pytest-cov` at `precision = 2`, so `--cov-fail-under` decides on the displayed total. Tests and Alembic are omitted. `quality/coverage.txt` stores the measured total and a floor about 1 percentage point below it. The gate fails when coverage drops under the floor. A gain does not fail; the job prints a `::notice::` with a suggested floor, and `make coverage-pin` rewrites the file from a fresh measurement. Each CI job appends the table to the GitHub step summary. The summary step exits cleanly when a job failed before writing `coverage/`.
 
 | Suite | Statements | Missed | Measured | Floor |
 | --- | ---: | ---: | ---: | ---: |
-| Finance | 1933 | 340 | 82.41% | 81.41% |
+| Finance | 2238 | 343 | 84.67% | 83.67% |
 | Travel | 2090 | 389 | 81.39% | 80.39% |
 | Media | 2336 | 689 | 70.51% | 69.51% |
 | Server | 480 | 378 | 21.25% | 20.25% |

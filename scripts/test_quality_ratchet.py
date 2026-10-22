@@ -118,6 +118,61 @@ class RatchetTests(unittest.TestCase):
             ["@ts-expect-error"],
         )
 
+    def test_ruff_file_noqa(self):
+        self.assertEqual(self.ratchet.suppression_markers("# ruff: noqa"), ["ruff: noqa"])
+
+    def test_ruff_file_noqa_with_code(self):
+        self.assertEqual(
+            self.ratchet.suppression_markers("# ruff: noqa: F401"),
+            ["ruff: noqa:F401"],
+        )
+
+    def test_flake8_file_noqa(self):
+        self.assertEqual(self.ratchet.suppression_markers("# flake8: noqa"), ["flake8: noqa"])
+
+    def test_noqa_is_case_insensitive(self):
+        self.assertEqual(self.ratchet.suppression_markers("x = 1  # NOQA"), ["noqa"])
+
+    def test_mypy_ignore_errors(self):
+        self.assertEqual(
+            self.ratchet.suppression_markers("# mypy: ignore-errors"),
+            ["mypy: ignore-errors"],
+        )
+
+    def test_ts_ignore(self):
+        self.assertEqual(self.ratchet.suppression_markers("// @ts-ignore"), ["@ts-ignore"])
+
+    def test_ts_nocheck(self):
+        self.assertEqual(self.ratchet.suppression_markers("// @ts-nocheck"), ["@ts-nocheck"])
+
+    def test_pragma_no_cover(self):
+        self.assertEqual(
+            self.ratchet.suppression_markers("value = 1  # pragma: no cover"),
+            ["pragma: no cover"],
+        )
+
+    def test_istanbul_ignore(self):
+        self.assertEqual(
+            self.ratchet.suppression_markers("/* istanbul ignore next */"),
+            ["istanbul ignore"],
+        )
+
+    def test_c8_ignore(self):
+        self.assertEqual(self.ratchet.suppression_markers("/* c8 ignore */"), ["c8 ignore"])
+
+    def test_v8_ignore(self):
+        self.assertEqual(self.ratchet.suppression_markers("/* v8 ignore next */"), ["v8 ignore"])
+
+    def test_versions_skip_is_alembic_only(self):
+        self.assertTrue(self.ratchet.excluded_dir("apps/finance/backend/alembic/versions"))
+        self.assertTrue(self.ratchet.excluded_dir("apps/server/alembic/versions/abc.py"))
+        self.assertFalse(self.ratchet.excluded_dir("apps/finance/backend/versions"))
+
+    def test_tools_in_source_reads_the_dict_keys(self):
+        source = 'TOOLS = {"ruff": (1, 2), "mypy": (3, 4)}\n'
+        self.assertEqual(self.ratchet.tools_in_source(source), {"ruff", "mypy"})
+        self.assertEqual(self.ratchet.tools_in_source("x = 1\n"), set())
+
 
 if __name__ == "__main__":
     unittest.main()

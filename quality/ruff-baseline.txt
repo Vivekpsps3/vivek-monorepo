@@ -12,9 +12,7 @@ apps/finance/backend/legacy_schema_guard.py	I001	1
 apps/finance/backend/logging_config.py	UP006	1
 apps/finance/backend/logging_config.py	UP035	1
 apps/finance/backend/logging_config.py	UP045	1
-apps/finance/backend/rate_limit.py	SIM103	1
-apps/finance/backend/rate_limit.py	UP006	2
-apps/finance/backend/rate_limit.py	UP035	3
+apps/finance/backend/rate_limit.py	UP035	1
 apps/finance/backend/request_logging.py	UP035	1
 apps/finance/backend/routers/auth_routes.py	I001	1
 apps/finance/backend/routers/auth_routes.py	UP006	1
