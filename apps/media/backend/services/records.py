@@ -400,7 +400,6 @@ def assert_review_base(entry: UserEntry, body: dict) -> None:
 
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     assert_review_base(entry, body)
-    before_rating = entry.rating
     before_review = entry.review
     if "status" in body:
         entry.status = choice(body.get("status"), STATUSES, "Status")

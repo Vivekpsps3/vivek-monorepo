@@ -1,5 +1,4 @@
 import { firstValueFrom, Subject } from 'rxjs';
-import type { Transaction } from '../models/transaction.model';
 import { randomClientId } from './vault-crypto';
 import { VaultService } from './vault.service';
 

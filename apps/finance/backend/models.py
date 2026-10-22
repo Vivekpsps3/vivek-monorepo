@@ -162,7 +162,11 @@ class EncryptedRecordIndex(Base):
     __tablename__ = "encrypted_record_indexes"
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "collection", "index_name", "index_value_b64", name="uq_user_blind_index_value"
+            "user_id",
+            "collection",
+            "index_name",
+            "index_value_b64",
+            name="uq_user_blind_index_value",
         ),
     )
     id = Column(Integer, primary_key=True, index=True)

@@ -7,7 +7,6 @@ from apps.media.backend.deps import require_actor
 from apps.media.backend.models import Episode, Experience
 from apps.media.backend.services import providers, records
 from apps.media.backend.services.calendar import build_calendar
-from apps.media.backend.services import providers
 from apps.media.backend.services.providers import UA
 from apps.media.backend.services.summary import build_summary
 from apps.media.backend.services.validate import clean_text

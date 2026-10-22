@@ -88,16 +88,22 @@ def fetch_principal(request: Request) -> AuthResult:
     if unsafe:
         csrf = request.headers.get("x-csrf-token")
         if not csrf:
-            raise HTTPException(status_code=403, detail="Sign in through Finance again so this change can be saved.")
+            raise HTTPException(
+                status_code=403, detail="Sign in through Finance again so this change can be saved."
+            )
         headers["x-csrf-token"] = csrf
     try:
-        response = httpx.request("POST" if unsafe else "GET", f"{base}{path}", headers=headers, timeout=5.0)
+        response = httpx.request(
+            "POST" if unsafe else "GET", f"{base}{path}", headers=headers, timeout=5.0
+        )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.") from exc
     if response.status_code == 401:
         raise HTTPException(status_code=401, detail="Sign in through Finance.")
     if response.status_code == 403:
-        raise HTTPException(status_code=403, detail="Sign in through Finance again so this change can be saved.")
+        raise HTTPException(
+            status_code=403, detail="Sign in through Finance again so this change can be saved."
+        )
     if response.status_code >= 400:
         raise HTTPException(status_code=503, detail="Finance sign-in is unavailable.")
     try:

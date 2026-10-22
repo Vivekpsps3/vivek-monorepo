@@ -100,6 +100,14 @@ let nextInfoTipId = 0;
       visibility: hidden;
       opacity: 0;
       pointer-events: none;
+      /* A hidden pop is out of the scrollable overflow. width: max-content
+         still widens document.scrollingElement while visibility is hidden. */
+      width: 0;
+      max-width: 0;
+      height: 0;
+      overflow: hidden;
+      padding: 0;
+      border-width: 0;
     }
 
     :host.info-tip--end .info-tip__pop {
@@ -112,6 +120,12 @@ let nextInfoTipId = 0;
       visibility: visible;
       opacity: 1;
       pointer-events: auto;
+      width: max-content;
+      max-width: min(17rem, 70vw);
+      height: auto;
+      overflow: visible;
+      padding: 0.4rem 0.55rem;
+      border-width: 1px;
     }
   `,
 })

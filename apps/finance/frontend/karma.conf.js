@@ -1,4 +1,5 @@
-// Karma config — coverage gate QA-012 (low threshold while specs grow).
+// Karma coverage gate. Thresholds sit about 1 point below the measured totals.
+// Karma only instruments files the specs load, so these are not whole-app coverage.
 module.exports = function (config) {
   config.set({
     basePath: '',
@@ -20,18 +21,24 @@ module.exports = function (config) {
     coverageReporter: {
       dir: require('path').join(__dirname, './coverage/finance-app'),
       subdir: '.',
-      reporters: [{ type: 'html' }, { type: 'text-summary' }, { type: 'lcovonly' }],
+      reporters: [{ type: 'text-summary' }, { type: 'json-summary' }],
       check: {
         global: {
-          statements: 20,
-          branches: 10,
-          functions: 15,
-          lines: 20,
+          statements: 60,
+          branches: 52,
+          functions: 56,
+          lines: 62,
         },
       },
     },
-    reporters: ['progress', 'kjhtml', 'coverage'],
-    browsers: ['Chrome'],
+    reporters: ['progress', 'coverage'],
+    customLaunchers: {
+      ChromeHeadlessCI: {
+        base: 'ChromeHeadless',
+        flags: ['--no-sandbox', '--disable-dev-shm-usage'],
+      },
+    },
+    browsers: ['ChromeHeadlessCI'],
     restartOnFileChange: true,
   });
 };

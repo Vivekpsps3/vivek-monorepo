@@ -1,5 +1,47 @@
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { Page } from '@playwright/test';
+import { errors, expect, Locator, Page } from '@playwright/test';
+
+// Production e2e builds with --base-href /finance/. ng serve stays at /.
+const BASE_PREFIX = process.env.E2E_DIST ? '/finance' : '';
+
+function canonicalUrl(url: string): string {
+  const queryAt = url.indexOf('?');
+  const pathname = queryAt === -1 ? url : url.slice(0, queryAt);
+  const search = queryAt === -1 ? '' : url.slice(queryAt);
+  const trimmed = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  return `${trimmed}${search}`;
+}
+
+/** Browser path for an app route. /hub and /auth stay outside the base href. */
+export function externalPath(internal: string): string {
+  const queryAt = internal.indexOf('?');
+  const rawPath = queryAt === -1 ? internal : internal.slice(0, queryAt);
+  const search = queryAt === -1 ? '' : internal.slice(queryAt);
+  const pathname = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  if (pathname === '/auth' || pathname.startsWith('/auth/') || pathname === '/hub' || pathname.startsWith('/hub/')) {
+    return `${pathname}${search}`;
+  }
+  if (!BASE_PREFIX) return `${pathname}${search}`;
+  if (pathname === '/') return `${BASE_PREFIX}/${search}`;
+  return `${BASE_PREFIX}${pathname}${search}`;
+}
+
+function routeReady(target: Page, pathname: string) {
+  const bare = pathname.replace(/^\/finance(?=\/|$)/, '') || '/';
+  if (bare === '/hub' || bare.startsWith('/hub/')) return target.locator('app-hub');
+  if (bare === '/') return target.getByRole('heading', { level: 1, name: 'Home', exact: true });
+  if (bare === '/have' || bare.startsWith('/have/')) return target.getByRole('heading', { level: 1, name: 'What you have', exact: true });
+  if (bare === '/spending' || bare.startsWith('/spending/')) return target.getByRole('heading', { level: 1, name: 'Spending', exact: true });
+  if (bare === '/recurring' || bare.startsWith('/recurring/')) return target.getByRole('heading', { level: 1, name: 'Recurring', exact: true });
+  if (bare === '/planning' || bare.startsWith('/planning/')) return target.getByRole('heading', { level: 1, name: 'Planning', exact: true });
+  if (bare === '/login' || bare.startsWith('/auth/')) return target.getByRole('heading', { level: 1, name: /Sign in|Create/ });
+  return target.locator('app-root');
+}
+
+/** Form control with this accessible name. Ignores an info-tip button that repeats the label. */
+export function field(target: Page | Locator, name: string) {
+  return target.locator('input, select, textarea').and(target.getByLabel(name, { exact: true }));
+}
 
 type Payload = Record<string, any>;
 type QuoteResponse = {
@@ -153,32 +195,65 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
   const enteredPages = new WeakSet<Page>();
   async function unlock(target: Page = page) {
     attach(target);
-    await target.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(passphrase);
-    await target.getByRole('button', { name: 'Unlock', exact: true }).click();
-    await target.waitForURL(url => url.pathname === '/');
+    const passphraseBox = target.getByRole('textbox', { name: 'Vault passphrase', exact: true });
+    // A second tab restores the key and continues to /hub before the form can be submitted.
+    // Only the wait is optional. A fill or click failure still fails the test.
+    try {
+      await passphraseBox.waitFor({ state: 'visible', timeout: 5_000 });
+      if (new URL(target.url()).pathname.includes('/vault/')) {
+        await passphraseBox.fill(passphrase, { timeout: 2_000 });
+        if (new URL(target.url()).pathname.includes('/vault/')) {
+          await target.getByRole('button', { name: 'Unlock', exact: true }).click({ timeout: 2_000 });
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof errors.TimeoutError)) throw error;
+    }
+    // No next= param, so unlock lands on /hub. /login is signed out, not unlocked.
+    await expect(target).toHaveURL(/\/hub$/);
+    await expect(target.locator('app-hub')).toBeVisible();
     enteredPages.add(target);
   }
-  async function navigate(path: string, target: Page = page) {
-    // Browser history navigation exercises Angular guards without replacing the unlocked session.
+  async function navigate(pushPath: string, target: Page, expected: string | RegExp) {
+    // pushState updates the address before Angular routes. Wait for the final
+    // URL, then for that route's heading, so a redirect is not skipped.
     await target.evaluate(nextPath => {
       history.pushState(null, '', nextPath);
       window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
-    }, path);
-    await target.waitForURL(url => url.pathname + url.search === path);
+    }, pushPath);
+    if (expected instanceof RegExp) {
+      await target.waitForURL(expected);
+    } else {
+      await target.waitForFunction(expectedPath => {
+        const here = `${location.pathname}${location.search}`;
+        const queryAt = here.indexOf('?');
+        const pathname = queryAt === -1 ? here : here.slice(0, queryAt);
+        const search = queryAt === -1 ? '' : here.slice(queryAt);
+        const trimmed = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+        return `${trimmed}${search}` === expectedPath;
+      }, expected);
+    }
+    await expect(routeReady(target, new URL(target.url()).pathname)).toBeVisible();
   }
   return {
     quoteRequests, quoteRequestDetails, mutations,
-    async open(path: string, target: Page = page) {
+    async open(path: string, target: Page = page, expected?: string | RegExp) {
       attach(target);
-      if (!enteredPages.has(target)) { await target.goto('/vault/unlock'); await unlock(target); }
+      if (!enteredPages.has(target)) { await target.goto('vault/unlock'); await unlock(target); }
+      const push = externalPath(path);
+      const destination = expected instanceof RegExp ? expected : canonicalUrl(externalPath(expected ?? path));
       const current = new URL(target.url());
-      if (current.pathname + current.search !== path) await navigate(path, target);
+      const here = canonicalUrl(current.pathname + current.search);
+      const arrived = destination instanceof RegExp
+        ? destination.test(`${current.pathname}${current.search}`)
+        : here === destination;
+      if (!arrived) await navigate(push, target, destination);
     },
     async reload(target: Page = page) {
       const previous = new URL(target.url());
-      const path = previous.pathname + previous.search;
+      const path = canonicalUrl(previous.pathname + previous.search);
       await target.reload();
-      await target.locator('app-main-layout, app-vault-unlock').first().waitFor({ state: 'visible' });
+      await target.locator('app-main-layout, app-vault-unlock, app-hub').first().waitFor({ state: 'visible' });
       if (await target.locator('app-vault-unlock').isVisible()) {
         enteredPages.delete(target);
         await unlock(target);
@@ -186,7 +261,7 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
         enteredPages.add(target);
       }
       const current = new URL(target.url());
-      if (current.pathname + current.search !== path) await navigate(path, target);
+      if (canonicalUrl(current.pathname + current.search) !== path) await navigate(path, target, path);
     },
     failNextWrites(count = 1) { failedWrites = count; },
     holdNextUpserts(count = 1) {

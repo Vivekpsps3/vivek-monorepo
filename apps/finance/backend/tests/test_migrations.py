@@ -9,7 +9,6 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
 
-
 def _backend_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
@@ -187,7 +186,8 @@ def test_passwordless_migration_recovers_partial_sqlite_state():
         with engine.begin() as conn:
             conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
             conn.execute(text("INSERT INTO alembic_version VALUES ('d4e5f6a7b8c9')"))
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE users (
                     id INTEGER PRIMARY KEY, email VARCHAR NOT NULL,
                     username VARCHAR, auth_public_key_b64 TEXT,
@@ -197,30 +197,37 @@ def test_passwordless_migration_recovers_partial_sqlite_state():
                     auth_recovery_wrapped_private_key_b64 TEXT,
                     passwordless_enrolled_at DATETIME
                 )
-            """))
+            """)
+            )
             conn.execute(text("INSERT INTO users (id, email) VALUES (1, 'owner@example.com')"))
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE user_sessions (
                     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL,
                     token_hash VARCHAR NOT NULL
                 )
-            """))
-            conn.execute(text("""
+            """)
+            )
+            conn.execute(
+                text("""
                 CREATE TABLE auth_challenges (
                     id INTEGER PRIMARY KEY, challenge_id VARCHAR NOT NULL UNIQUE,
                     user_id INTEGER NOT NULL, challenge_hash VARCHAR NOT NULL UNIQUE,
                     expires_at DATETIME NOT NULL, consumed_at DATETIME,
                     created_at DATETIME NOT NULL
                 )
-            """))
-            conn.execute(text("""
+            """)
+            )
+            conn.execute(
+                text("""
                 CREATE TABLE auth_enrollments (
                     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL,
                     token_hash VARCHAR NOT NULL UNIQUE, expires_at DATETIME NOT NULL,
                     consumed_at DATETIME, created_by_user_id INTEGER,
                     created_at DATETIME NOT NULL
                 )
-            """))
+            """)
+            )
         engine.dispose()
 
         here = _backend_dir()
@@ -240,14 +247,22 @@ def test_passwordless_migration_recovers_partial_sqlite_state():
 
         engine = create_engine(url, connect_args={"check_same_thread": False})
         inspector = inspect(engine)
-        assert "migration_only" in {column["name"] for column in inspector.get_columns("user_sessions")}
+        assert "migration_only" in {
+            column["name"] for column in inspector.get_columns("user_sessions")
+        }
         assert any(
             constraint["name"] == "uq_users_username"
             for constraint in inspector.get_unique_constraints("users")
         )
         with engine.connect() as conn:
-            assert conn.execute(text("SELECT email FROM users WHERE id = 1")).scalar_one() == "owner@example.com"
-            assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "b7c9d2e4f601"
+            assert (
+                conn.execute(text("SELECT email FROM users WHERE id = 1")).scalar_one()
+                == "owner@example.com"
+            )
+            assert (
+                conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                == "b7c9d2e4f601"
+            )
         engine.dispose()
 
 
@@ -258,7 +273,9 @@ def test_password_hash_migration_allows_passwordless_users():
         with engine.begin() as conn:
             conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
             conn.execute(text("INSERT INTO alembic_version VALUES ('f1a2b3c4d5e6')"))
-            conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, password_hash VARCHAR NOT NULL)"))
+            conn.execute(
+                text("CREATE TABLE users (id INTEGER PRIMARY KEY, password_hash VARCHAR NOT NULL)")
+            )
             conn.execute(text("INSERT INTO users (id, password_hash) VALUES (1, 'legacy-hash')"))
         engine.dispose()
 
@@ -277,9 +294,14 @@ def test_password_hash_migration_allows_passwordless_users():
                 os.environ["DATABASE_URL"] = prev_db_url
 
         engine = create_engine(url, connect_args={"check_same_thread": False})
-        assert {c["name"]: c for c in inspect(engine).get_columns("users")}["password_hash"]["nullable"] is True
+        assert {c["name"]: c for c in inspect(engine).get_columns("users")}["password_hash"][
+            "nullable"
+        ] is True
         with engine.begin() as conn:
-            assert conn.execute(text("SELECT password_hash FROM users WHERE id = 1")).scalar_one() == "legacy-hash"
+            assert (
+                conn.execute(text("SELECT password_hash FROM users WHERE id = 1")).scalar_one()
+                == "legacy-hash"
+            )
             conn.execute(text("INSERT INTO users (id, password_hash) VALUES (2, NULL)"))
         engine.dispose()
 

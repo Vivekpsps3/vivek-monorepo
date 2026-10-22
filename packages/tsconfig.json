@@ -1,0 +1,12 @@
+{
+  "extends": "../apps/finance/frontend/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": []
+  },
+  "include": [
+    "browser/src/**/*.ts",
+    "auth/src/**/*.ts",
+    "ui/src/**/*.ts"
+  ]
+}

@@ -59,7 +59,9 @@ def test_writes_post_the_session_probe(monkeypatch):
         assert method == "POST"
         assert url == "http://127.0.0.1:8000/api/auth/session"
         assert headers["x-csrf-token"] == "csrf-token"
-        return httpx.Response(200, json={"user": {"id": 7, "username": "vivek", "display_name": None}})
+        return httpx.Response(
+            200, json={"user": {"id": 7, "username": "vivek", "display_name": None}}
+        )
 
     monkeypatch.setattr(httpx, "request", fake_request)
     result = fetch_principal(
@@ -109,7 +111,9 @@ def test_finance_rejection_and_outage_map_to_travel_errors(monkeypatch):
 def test_malformed_finance_principal_responses_become_503(monkeypatch, payload):
     from apps.travel.backend.deps import fetch_principal
 
-    monkeypatch.setattr(httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, json=payload))
+    monkeypatch.setattr(
+        httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, json=payload)
+    )
     with pytest.raises(HTTPException) as unavailable:
         fetch_principal(_request("GET"))
     assert unavailable.value.status_code == 503
@@ -118,7 +122,9 @@ def test_malformed_finance_principal_responses_become_503(monkeypatch, payload):
 def test_non_json_finance_principal_response_becomes_503(monkeypatch):
     from apps.travel.backend.deps import fetch_principal
 
-    monkeypatch.setattr(httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, content=b"not json"))
+    monkeypatch.setattr(
+        httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, content=b"not json")
+    )
     with pytest.raises(HTTPException) as unavailable:
         fetch_principal(_request("GET"))
     assert unavailable.value.status_code == 503

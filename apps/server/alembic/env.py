@@ -5,6 +5,7 @@ failure rolls the revision back instead of leaving a partially applied schema.
 The version table is site_alembic_version, deliberately not the historical
 Finance table alembic_version.
 """
+
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from apps.server.migrations import include_name, include_object
 from apps.server.schema import MIGRATION_VERSION_TABLE
 
 config = context.config
+
 
 def target_metadata():
     # Resolve at call time so a drift check sees the models loaded in-process.
@@ -43,7 +45,11 @@ def _configure(**kwargs):
 
 
 def run_migrations_offline() -> None:
-    _configure(url=config.get_main_option("sqlalchemy.url"), literal_binds=True, dialect_opts={"paramstyle": "named"})
+    _configure(
+        url=config.get_main_option("sqlalchemy.url"),
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
     with context.begin_transaction():
         context.run_migrations()
 

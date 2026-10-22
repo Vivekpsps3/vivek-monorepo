@@ -78,7 +78,11 @@ def dev_env_file_in_use() -> bool:
         expected_path = expected.resolve()
     except OSError:
         return False
-    return marker_path == expected_path and expected_path.is_file() and _file_enables_local_dev(expected_path)
+    return (
+        marker_path == expected_path
+        and expected_path.is_file()
+        and _file_enables_local_dev(expected_path)
+    )
 
 
 def hostname_from_host_header(value: str) -> str:
@@ -121,7 +125,8 @@ def ensure_local_dev_user(db: Session) -> User:
             )
             if taken:
                 raise HTTPException(
-                    status_code=409, detail="The local dev username is already used by another account"
+                    status_code=409,
+                    detail="The local dev username is already used by another account",
                 )
             existing.username = LOCAL_DEV_USERNAME
             changed = True
@@ -143,7 +148,9 @@ def ensure_local_dev_user(db: Session) -> User:
         return existing
     taken = db.query(User).filter(User.username == LOCAL_DEV_USERNAME).one_or_none()
     if taken:
-        raise HTTPException(status_code=409, detail="The local dev username is already used by another account")
+        raise HTTPException(
+            status_code=409, detail="The local dev username is already used by another account"
+        )
     user = create_user(
         db,
         email=LOCAL_DEV_EMAIL,

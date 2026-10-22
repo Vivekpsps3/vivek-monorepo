@@ -12,7 +12,7 @@ test('shared sign-in page is visible for anonymous users', async ({ page }) => {
     body: JSON.stringify({ detail: 'Not authenticated' }),
   }));
 
-  await page.goto('/login');
+  await page.goto('login');
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 });

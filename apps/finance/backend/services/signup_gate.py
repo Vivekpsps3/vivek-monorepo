@@ -36,7 +36,9 @@ def _listed(name: str) -> list[str]:
 
 
 def _same(left: str, right: str) -> bool:
-    return secrets.compare_digest(hashlib.sha256(left.encode()).digest(), hashlib.sha256(right.encode()).digest())
+    return secrets.compare_digest(
+        hashlib.sha256(left.encode()).digest(), hashlib.sha256(right.encode()).digest()
+    )
 
 
 def invite_code_matches(code: str) -> bool:

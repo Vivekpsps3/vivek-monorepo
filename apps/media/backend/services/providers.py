@@ -39,7 +39,9 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
     status = provider_status()
     results = []
     own_client = client is None
-    http = client or httpx.Client(timeout=4.0, headers={"User-Agent": UA, "Accept": "application/json"})
+    http = client or httpx.Client(
+        timeout=4.0, headers={"User-Agent": UA, "Accept": "application/json"}
+    )
     try:
         jobs = []
         if kind in (None, "", "movie", "tv"):
@@ -129,21 +131,23 @@ def tmdb_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
             date_text = item.get("release_date") or item.get("first_air_date") or ""
             year = int(date_text[:4]) if len(date_text) >= 4 and date_text[:4].isdigit() else None
             creator = item.get("name") if media == "tv" else None
-            found.append({
-                "source": "tmdb",
-                "source_id": f"{media}:{item.get('id')}",
-                "kind": media,
-                "title": item.get("title") or item.get("name") or "Untitled",
-                "creator": creator,
-                "year": year,
-                "overview": (item.get("overview") or "")[:400],
-                "artwork_url": f"https://image.tmdb.org/t/p/w342{poster}" if poster else None,
-                "genres": [],
-                "external_ratings": tmdb_rating(item),
-                "extra": {},
-                "releases": release_from_day(date_text),
-                "episodes": [],
-            })
+            found.append(
+                {
+                    "source": "tmdb",
+                    "source_id": f"{media}:{item.get('id')}",
+                    "kind": media,
+                    "title": item.get("title") or item.get("name") or "Untitled",
+                    "creator": creator,
+                    "year": year,
+                    "overview": (item.get("overview") or "")[:400],
+                    "artwork_url": f"https://image.tmdb.org/t/p/w342{poster}" if poster else None,
+                    "genres": [],
+                    "external_ratings": tmdb_rating(item),
+                    "extra": {},
+                    "releases": release_from_day(date_text),
+                    "episodes": [],
+                }
+            )
     return found
 
 
@@ -151,13 +155,15 @@ def tmdb_rating(item: dict) -> list[dict]:
     value = item.get("vote_average")
     if not isinstance(value, (int, float)) or value <= 0:
         return []
-    return [{
-        "provider": "tmdb",
-        "label": "TMDB",
-        "value": round(float(value), 1),
-        "scale": "0–10",
-        "votes": item.get("vote_count") if isinstance(item.get("vote_count"), int) else None,
-    }]
+    return [
+        {
+            "provider": "tmdb",
+            "label": "TMDB",
+            "value": round(float(value), 1),
+            "scale": "0–10",
+            "votes": item.get("vote_count") if isinstance(item.get("vote_count"), int) else None,
+        }
+    ]
 
 
 def release_from_day(text: str) -> list[dict]:
@@ -166,7 +172,17 @@ def release_from_day(text: str) -> list[dict]:
     return []
 
 
-SKIPPED_ALBUM_TYPES = {"compilation", "live", "remix", "soundtrack", "dj-mix", "mixtape/street", "demo", "audiobook", "audio drama"}
+SKIPPED_ALBUM_TYPES = {
+    "compilation",
+    "live",
+    "remix",
+    "soundtrack",
+    "dj-mix",
+    "mixtape/street",
+    "demo",
+    "audiobook",
+    "audio drama",
+}
 
 
 def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
@@ -181,6 +197,7 @@ def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list
             failed = True
 
     if kind in (None, "", "track"):
+
         def recordings():
             response = http.get(
                 "https://musicbrainz.org/ws/2/recording",
@@ -190,10 +207,20 @@ def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list
             rows = []
             for item in response.json().get("recordings", []):
                 artist = artist_name(item.get("artist-credit"))
-                rows.append(music_result("track", item.get("id"), item.get("title"), artist, item.get("first-release-date")))
+                rows.append(
+                    music_result(
+                        "track",
+                        item.get("id"),
+                        item.get("title"),
+                        artist,
+                        item.get("first-release-date"),
+                    )
+                )
             return rows
+
         attempt(recordings)
     if kind in (None, "", "album"):
+
         def albums():
             response = http.get(
                 "https://musicbrainz.org/ws/2/release",
@@ -205,9 +232,12 @@ def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list
                 artist = artist_name(item.get("artist-credit"))
                 mbid = item.get("id")
                 result = music_result("album", mbid, item.get("title"), artist, item.get("date"))
-                result["artwork_url"] = f"https://coverartarchive.org/release/{mbid}/front-250" if mbid else None
+                result["artwork_url"] = (
+                    f"https://coverartarchive.org/release/{mbid}/front-250" if mbid else None
+                )
                 rows.append(result)
             return rows
+
         attempt(albums)
     if kind in (None, "", "artist"):
         attempt(lambda: musicbrainz_artists(http, query))
@@ -228,9 +258,23 @@ def musicbrainz_artists(http: httpx.Client, query: str) -> list[dict]:
             continue
         span = item.get("life-span") if isinstance(item.get("life-span"), dict) else {}
         begin = span.get("begin") or ""
-        year = int(begin[:4]) if isinstance(begin, str) and len(begin) >= 4 and begin[:4].isdigit() else None
-        disambiguation = item.get("disambiguation") if isinstance(item.get("disambiguation"), str) else None
-        found.append(music_result("artist", item.get("id"), item.get("name"), item.get("type"), begin if year else None))
+        year = (
+            int(begin[:4])
+            if isinstance(begin, str) and len(begin) >= 4 and begin[:4].isdigit()
+            else None
+        )
+        disambiguation = (
+            item.get("disambiguation") if isinstance(item.get("disambiguation"), str) else None
+        )
+        found.append(
+            music_result(
+                "artist",
+                item.get("id"),
+                item.get("name"),
+                item.get("type"),
+                begin if year else None,
+            )
+        )
         found[-1]["overview"] = (disambiguation or "")[:400] or None
         found[-1]["releases"] = []
     return found
@@ -274,7 +318,9 @@ def musicbrainz_artist_catalog(
     for release in releases:
         if not isinstance(release, dict):
             continue
-        group = release.get("release-group") if isinstance(release.get("release-group"), dict) else {}
+        group = (
+            release.get("release-group") if isinstance(release.get("release-group"), dict) else {}
+        )
         group_id = group.get("id")
         if not isinstance(group_id, str):
             continue
@@ -291,14 +337,20 @@ def musicbrainz_artist_catalog(
             continue
         seen.add(group["id"])
         released = group.get("first-release-date") or ""
-        year = int(released[:4]) if isinstance(released, str) and len(released) >= 4 and released[:4].isdigit() else None
-        albums.append({
-            "source_id": group["id"],
-            "title": group.get("title") or "Untitled",
-            "year": year,
-            "artwork_url": f"https://coverartarchive.org/release-group/{group['id']}/front-250",
-            "tracks": list(tracks_by_group.get(group["id"]) or []),
-        })
+        year = (
+            int(released[:4])
+            if isinstance(released, str) and len(released) >= 4 and released[:4].isdigit()
+            else None
+        )
+        albums.append(
+            {
+                "source_id": group["id"],
+                "title": group.get("title") or "Untitled",
+                "year": year,
+                "artwork_url": f"https://coverartarchive.org/release-group/{group['id']}/front-250",
+                "tracks": list(tracks_by_group.get(group["id"]) or []),
+            }
+        )
     albums.sort(key=lambda row: ((row.get("year") or 9999), str(row.get("title") or "").casefold()))
     return {
         "albums": albums,
@@ -372,11 +424,13 @@ def _tracks_from_release(release: dict) -> list[dict]:
                 continue
             if isinstance(source_id, str):
                 seen.add(source_id)
-            tracks.append({
-                "title": title.strip(),
-                "position": len(tracks) + 1,
-                "source_id": source_id if isinstance(source_id, str) else None,
-            })
+            tracks.append(
+                {
+                    "title": title.strip(),
+                    "position": len(tracks) + 1,
+                    "source_id": source_id if isinstance(source_id, str) else None,
+                }
+            )
     return tracks
 
 
@@ -448,16 +502,30 @@ def artist_name(credit) -> str | None:
     return name or None
 
 
-def music_result(kind: str, source_id: str | None, title: str | None, artist: str | None, released: str | None) -> dict:
-    year = int(released[:4]) if isinstance(released, str) and len(released) >= 4 and released[:4].isdigit() else None
-    precision = "day" if isinstance(released, str) and len(released) >= 10 else "year" if year else "unknown"
+def music_result(
+    kind: str, source_id: str | None, title: str | None, artist: str | None, released: str | None
+) -> dict:
+    year = (
+        int(released[:4])
+        if isinstance(released, str) and len(released) >= 4 and released[:4].isdigit()
+        else None
+    )
+    precision = (
+        "day"
+        if isinstance(released, str) and len(released) >= 10
+        else "year"
+        if year
+        else "unknown"
+    )
     releases = []
     if year:
-        releases.append({
-            "released_on": released[:10] if precision == "day" else f"{year}-01-01",
-            "precision": precision,
-            "status": "released",
-        })
+        releases.append(
+            {
+                "released_on": released[:10] if precision == "day" else f"{year}-01-01",
+                "precision": precision,
+                "status": "released",
+            }
+        )
     return {
         "source": "musicbrainz",
         "source_id": source_id,
@@ -484,21 +552,29 @@ def openlibrary_search(http: httpx.Client, query: str) -> list[dict]:
         cover = item.get("cover_i")
         year = item.get("first_publish_year")
         authors = item.get("author_name") or []
-        found.append({
-            "source": "openlibrary",
-            "source_id": work or item.get("cover_edition_key"),
-            "kind": "book",
-            "title": item.get("title") or "Untitled",
-            "creator": authors[0] if authors else None,
-            "year": year if isinstance(year, int) else None,
-            "overview": None,
-            "artwork_url": f"https://covers.openlibrary.org/b/id/{cover}-M.jpg" if cover else None,
-            "genres": [],
-            "external_ratings": [],
-            "extra": {"pages": item.get("number_of_pages_median")},
-            "releases": [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}] if isinstance(year, int) else [],
-            "episodes": [],
-        })
+        found.append(
+            {
+                "source": "openlibrary",
+                "source_id": work or item.get("cover_edition_key"),
+                "kind": "book",
+                "title": item.get("title") or "Untitled",
+                "creator": authors[0] if authors else None,
+                "year": year if isinstance(year, int) else None,
+                "overview": None,
+                "artwork_url": f"https://covers.openlibrary.org/b/id/{cover}-M.jpg"
+                if cover
+                else None,
+                "genres": [],
+                "external_ratings": [],
+                "extra": {"pages": item.get("number_of_pages_median")},
+                "releases": [
+                    {"released_on": f"{year}-01-01", "precision": "year", "status": "released"}
+                ]
+                if isinstance(year, int)
+                else [],
+                "episodes": [],
+            }
+        )
     return [item for item in found if item["source_id"]]
 
 
@@ -521,32 +597,44 @@ def tvmaze_search(http: httpx.Client, query: str) -> list[dict]:
         average = rating.get("average")
         ratings = []
         if isinstance(average, (int, float)) and average > 0:
-            ratings.append({
-                "provider": "tvmaze",
-                "label": "TVMaze",
-                "value": round(float(average), 1),
-                "scale": "0–10",
-                "votes": None,
-            })
-        channel = show.get("network") if isinstance(show.get("network"), dict) else show.get("webChannel")
+            ratings.append(
+                {
+                    "provider": "tvmaze",
+                    "label": "TVMaze",
+                    "value": round(float(average), 1),
+                    "scale": "0–10",
+                    "votes": None,
+                }
+            )
+        channel = (
+            show.get("network") if isinstance(show.get("network"), dict) else show.get("webChannel")
+        )
         creator = channel.get("name") if isinstance(channel, dict) else None
-        found.append({
-            "source": "tvmaze",
-            "source_id": str(show.get("id")),
-            "kind": "tv",
-            "title": show.get("name") or "Untitled",
-            "creator": creator,
-            "year": year,
-            "overview": plain_text(show.get("summary")),
-            "artwork_url": artwork if isinstance(artwork, str) and artwork.startswith("https://") else None,
-            "genres": [genre for genre in show.get("genres") or [] if isinstance(genre, str)],
-            "external_ratings": ratings,
-            "extra": {},
-            "releases": release_from_day(premiered) if len(premiered) >= 10 else (
-                [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}] if year else []
-            ),
-            "episodes": [],
-        })
+        found.append(
+            {
+                "source": "tvmaze",
+                "source_id": str(show.get("id")),
+                "kind": "tv",
+                "title": show.get("name") or "Untitled",
+                "creator": creator,
+                "year": year,
+                "overview": plain_text(show.get("summary")),
+                "artwork_url": artwork
+                if isinstance(artwork, str) and artwork.startswith("https://")
+                else None,
+                "genres": [genre for genre in show.get("genres") or [] if isinstance(genre, str)],
+                "external_ratings": ratings,
+                "extra": {},
+                "releases": release_from_day(premiered)
+                if len(premiered) >= 10
+                else (
+                    [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}]
+                    if year
+                    else []
+                ),
+                "episodes": [],
+            }
+        )
     return found
 
 
@@ -567,21 +655,25 @@ def itunes_search(http: httpx.Client, query: str) -> list[dict]:
         if isinstance(artwork, str) and "100x100bb" in artwork:
             artwork = artwork.replace("100x100bb", "300x300bb")
         genre = item.get("primaryGenreName")
-        found.append({
-            "source": "itunes",
-            "source_id": str(track_id),
-            "kind": "movie",
-            "title": item.get("trackName") or "Untitled",
-            "creator": item.get("artistName"),
-            "year": year,
-            "overview": plain_text(item.get("longDescription") or item.get("shortDescription")),
-            "artwork_url": artwork if isinstance(artwork, str) and artwork.startswith("https://") else None,
-            "genres": [genre] if isinstance(genre, str) and genre else [],
-            "external_ratings": [],
-            "extra": {},
-            "releases": release_from_day(released[:10]) if len(released) >= 10 else [],
-            "episodes": [],
-        })
+        found.append(
+            {
+                "source": "itunes",
+                "source_id": str(track_id),
+                "kind": "movie",
+                "title": item.get("trackName") or "Untitled",
+                "creator": item.get("artistName"),
+                "year": year,
+                "overview": plain_text(item.get("longDescription") or item.get("shortDescription")),
+                "artwork_url": artwork
+                if isinstance(artwork, str) and artwork.startswith("https://")
+                else None,
+                "genres": [genre] if isinstance(genre, str) and genre else [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": release_from_day(released[:10]) if len(released) >= 10 else [],
+                "episodes": [],
+            }
+        )
     return found
 
 
@@ -589,7 +681,9 @@ def rawg_search(http: httpx.Client, query: str) -> list[dict]:
     key = os.getenv("RAWG_API_KEY", "").strip()
     if not key:
         return []
-    response = http.get("https://api.rawg.io/api/games", params={"key": key, "search": query, "page_size": 8})
+    response = http.get(
+        "https://api.rawg.io/api/games", params={"key": key, "search": query, "page_size": 8}
+    )
     response.raise_for_status()
     found = []
     for item in response.json().get("results", []):
@@ -598,27 +692,41 @@ def rawg_search(http: httpx.Client, query: str) -> list[dict]:
         rating = item.get("rating")
         ratings = []
         if isinstance(rating, (int, float)) and rating > 0:
-            ratings.append({
-                "provider": "rawg",
-                "label": "RAWG",
-                "value": round(float(rating), 2),
-                "scale": "0–5",
-                "votes": item.get("ratings_count") if isinstance(item.get("ratings_count"), int) else None,
-            })
-        platforms = [row.get("platform", {}).get("name") for row in item.get("platforms") or [] if isinstance(row, dict)]
-        found.append({
-            "source": "rawg",
-            "source_id": str(item.get("id")),
-            "kind": "game",
-            "title": item.get("name") or "Untitled",
-            "creator": None,
-            "year": year,
-            "overview": None,
-            "artwork_url": item.get("background_image"),
-            "genres": [genre.get("name") for genre in item.get("genres") or [] if isinstance(genre, dict) and genre.get("name")],
-            "external_ratings": ratings,
-            "extra": {"platforms": [name for name in platforms if name]},
-            "releases": release_from_day(released) if len(released) >= 10 else [],
-            "episodes": [],
-        })
+            ratings.append(
+                {
+                    "provider": "rawg",
+                    "label": "RAWG",
+                    "value": round(float(rating), 2),
+                    "scale": "0–5",
+                    "votes": item.get("ratings_count")
+                    if isinstance(item.get("ratings_count"), int)
+                    else None,
+                }
+            )
+        platforms = [
+            row.get("platform", {}).get("name")
+            for row in item.get("platforms") or []
+            if isinstance(row, dict)
+        ]
+        found.append(
+            {
+                "source": "rawg",
+                "source_id": str(item.get("id")),
+                "kind": "game",
+                "title": item.get("name") or "Untitled",
+                "creator": None,
+                "year": year,
+                "overview": None,
+                "artwork_url": item.get("background_image"),
+                "genres": [
+                    genre.get("name")
+                    for genre in item.get("genres") or []
+                    if isinstance(genre, dict) and genre.get("name")
+                ],
+                "external_ratings": ratings,
+                "extra": {"platforms": [name for name in platforms if name]},
+                "releases": release_from_day(released) if len(released) >= 10 else [],
+                "episodes": [],
+            }
+        )
     return found

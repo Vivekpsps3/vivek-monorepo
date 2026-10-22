@@ -1,4 +1,5 @@
 from datetime import date
+from typing import NoReturn
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -12,7 +13,7 @@ RELEASE_STATUSES = {"scheduled", "released", "postponed", "unknown"}
 SOURCES = {"manual", "tmdb", "musicbrainz", "openlibrary", "rawg", "tvmaze", "itunes"}
 
 
-def fail(detail: str) -> None:
+def fail(detail: str) -> NoReturn:
     raise HTTPException(status_code=422, detail=detail)
 
 

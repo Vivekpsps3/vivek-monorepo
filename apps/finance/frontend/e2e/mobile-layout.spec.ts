@@ -9,6 +9,8 @@ async function expectFits(page: Page, label: string): Promise<void> {
     let edge = '';
     for (const node of Array.from(document.querySelectorAll('body *'))) {
       const el = node as HTMLElement;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
       const box = el.getBoundingClientRect();
       if (box.width < 8 || box.height < 8) continue;
       if (box.right > right) {
@@ -16,14 +18,18 @@ async function expectFits(page: Page, label: string): Promise<void> {
         edge = `${el.tagName.toLowerCase()}.${String(el.className).split(' ').slice(0, 3).join('.')} ${box.left.toFixed(0)}+${box.width.toFixed(0)}`;
       }
     }
+    const scrolling = document.scrollingElement || document.documentElement;
     return {
       main: main ? main.scrollWidth - main.clientWidth : 0,
+      page: scrolling.scrollWidth,
+      innerWidth: window.innerWidth,
       right,
       viewWidth,
       edge,
     };
   });
   expect(overflow.main, `${label} horizontal scroll`).toBeLessThanOrEqual(1);
+  expect(overflow.page, `${label} document scrollWidth`).toBeLessThanOrEqual(overflow.innerWidth);
   expect(overflow.right, `${label} right edge ${overflow.edge}`).toBeLessThanOrEqual(overflow.viewWidth + 1);
 }
 

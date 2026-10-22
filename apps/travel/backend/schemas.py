@@ -534,7 +534,9 @@ class PtoPolicyIn(BaseModel):
             raise ValueError("Hours per day has to be greater than 0 and at most 24.")
         if self.balance_days < -366 or self.balance_days > 366:
             raise ValueError("Balance has to be between -366 and 366 days.")
-        if self.annual_cap_days is not None and (self.annual_cap_days <= 0 or self.annual_cap_days > 366):
+        if self.annual_cap_days is not None and (
+            self.annual_cap_days <= 0 or self.annual_cap_days > 366
+        ):
             raise ValueError("The cap has to be greater than 0 and at most 366 days.")
         return self
 

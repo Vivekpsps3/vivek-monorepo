@@ -54,10 +54,14 @@ def fetch_principal(request: Request) -> AuthResult:
     if unsafe:
         csrf = request.headers.get("x-csrf-token")
         if not csrf:
-            raise HTTPException(status_code=403, detail="Sign in again so this change can be saved.")
+            raise HTTPException(
+                status_code=403, detail="Sign in again so this change can be saved."
+            )
         headers["x-csrf-token"] = csrf
     try:
-        response = httpx.request("POST" if unsafe else "GET", f"{base}{path}", headers=headers, timeout=5.0)
+        response = httpx.request(
+            "POST" if unsafe else "GET", f"{base}{path}", headers=headers, timeout=5.0
+        )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail="Sign-in is unavailable.") from exc
     if response.status_code == 401:
@@ -80,4 +84,7 @@ def fetch_principal(request: Request) -> AuthResult:
     if display_name is not None and not isinstance(display_name, str):
         raise HTTPException(status_code=503, detail="Sign-in is unavailable.")
     name = display_name or username or "You"
-    return AuthResult(Principal(id=user["id"], username=username, display_name=name), response.headers.get_list("set-cookie"))
+    return AuthResult(
+        Principal(id=user["id"], username=username, display_name=name),
+        response.headers.get_list("set-cookie"),
+    )
