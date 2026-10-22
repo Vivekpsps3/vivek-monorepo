@@ -293,12 +293,16 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
+    this.removeAsset(row);
+  }
+
+  private removeAsset(row: Asset): void {
     this.financeService.deleteAsset(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Asset deleted'),
       error: () => {
         this.toastService.error(failureCopy('delete', 'this asset'), {
           label: 'Try again',
-          run: () => { void this.deleteAsset(row); },
+          run: () => this.removeAsset(row),
         });
       },
     });
@@ -312,12 +316,16 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
+    this.removeLiability(row);
+  }
+
+  private removeLiability(row: Liability): void {
     this.financeService.deleteLiability(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Liability deleted'),
       error: () => {
         this.toastService.error(failureCopy('delete', 'this debt'), {
           label: 'Try again',
-          run: () => { void this.deleteLiability(row); },
+          run: () => this.removeLiability(row),
         });
       },
     });

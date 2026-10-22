@@ -413,6 +413,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
         backgroundColor: chartSuccessColor(),
         pointRadius: 0,
         pointHoverRadius: 4,
+        borderDash: [8, 4],
         borderWidth: 2,
         tension: 0.28,
       },

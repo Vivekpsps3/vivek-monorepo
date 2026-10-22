@@ -423,7 +423,8 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         ...(hasRefundEffects ? { indexAxis: 'y' } : {}),
         ...(hasRefundEffects ? { scales: chartCartesianScales() } : {}),
         plugins: {
-          legend: chartLegendBottom(),
+          // A bar chart's legend is the dataset name. Categories are already the axis labels.
+          legend: hasRefundEffects ? { display: false } : chartLegendBottom(),
           tooltip: { enabled: false },
         },
         onClick: (_event: unknown, active: Array<{ index: number }>) => {

@@ -19,13 +19,51 @@ async function assertTheme(page: Page, theme: 'light' | 'dark') {
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(backgrounds[theme]);
 }
 
-const upgradeToast = "Couldn't finish a security upgrade. We'll retry next time you unlock.";
-
 async function expectNoStrayToast(page: Page) {
-  const upgrade = page.locator('.toast', { hasText: upgradeToast });
-  await upgrade.waitFor({ state: 'visible', timeout: 2_000 }).catch(() => undefined);
-  if (await upgrade.count()) await upgrade.getByRole('button', { name: 'Dismiss' }).click();
-  await expect(page.locator('.toast')).toHaveCount(0, { timeout: 1_000 });
+  await expect(page.locator('.toast')).toHaveCount(0, { timeout: 2_000 });
+}
+
+async function expectChartsDrawn(page: Page) {
+  await expect.poll(async () => page.evaluate(() => {
+    const canvases = [...document.querySelectorAll('canvas')];
+    if (!canvases.length) return false;
+    return canvases.every(node => {
+      const canvas = node as HTMLCanvasElement;
+      if (canvas.width < 2 || canvas.height < 2 || canvas.clientWidth < 2 || canvas.clientHeight < 2) return false;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return false;
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      for (let index = 3; index < data.length; index += 64) {
+        if (data[index] > 8) return true;
+      }
+      return false;
+    });
+  })).toBe(true);
+}
+
+async function freezeCharts(page: Page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('canvas').forEach(node => {
+      const canvas = node as HTMLCanvasElement;
+      const img = document.createElement('img');
+      img.src = canvas.toDataURL('image/png');
+      img.alt = canvas.getAttribute('aria-label') || 'Chart';
+      img.style.width = `${canvas.clientWidth}px`;
+      img.style.height = `${canvas.clientHeight}px`;
+      img.dataset.chartShot = '1';
+      canvas.insertAdjacentElement('afterend', img);
+      canvas.style.display = 'none';
+    });
+  });
+}
+
+async function thawCharts(page: Page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('img[data-chart-shot]').forEach(img => img.remove());
+    document.querySelectorAll('canvas').forEach(node => {
+      (node as HTMLElement).style.display = '';
+    });
+  });
 }
 
 async function chooseTheme(page: Page, vault: Awaited<ReturnType<typeof syntheticVault>>, theme: 'light' | 'dark') {
@@ -80,9 +118,10 @@ test.describe('finance F1 screenshot matrix', () => {
         await expect(page.locator('.source-dates')).toContainText('Balances');
         await shot('home-source-dates', width, theme);
         await page.locator('canvas[aria-label*="category"]').scrollIntoViewIfNeeded();
-        await expect(page.locator('canvas[aria-label*="category"]')).toBeVisible();
-        await expect(page.locator('canvas[aria-label*="Portfolio"]')).toBeVisible();
+        await expectChartsDrawn(page);
+        await freezeCharts(page);
         await shot('donuts-home', width, theme);
+        await thawCharts(page);
         await page.locator('.skip-link').focus();
         await expect(page.locator('.skip-link')).toBeFocused();
         await shot('skip-link', width, theme);
@@ -103,8 +142,10 @@ test.describe('finance F1 screenshot matrix', () => {
         await shot('activity-totals', width, theme);
 
         await vault.open('/spending?t=calendar');
-        await expect(page.locator('canvas[aria-label*="category"]')).toBeVisible();
+        await expectChartsDrawn(page);
+        await freezeCharts(page);
         await shot('donut-calendar', width, theme);
+        await thawCharts(page);
 
         await vault.open('/planning');
         await expect(page.getByText('Current net worth').locator('..')).toContainText('$1,');
@@ -127,6 +168,7 @@ test.describe('finance F1 screenshot matrix', () => {
         const otherWeight = await otherPreset.evaluate(el => getComputedStyle(el).fontWeight);
         expect(Number(selectedStyle.weight)).toBeGreaterThan(Number(otherWeight));
         expect(selectedStyle.shadow).toContain('inset');
+        await selectedPreset.scrollIntoViewIfNeeded();
         await shot('growth-presets', width, theme);
 
         await vault.open('/planning?t=stocks');
@@ -230,9 +272,53 @@ test.describe('finance F1 screenshot matrix', () => {
         await shot('toast-dismiss-focused', width, theme);
         await page.getByRole('button', { name: 'Undo' }).click();
         await expect.poll(() => vault.data('holdings').some(row => row.symbol === 'VOO')).toBe(true);
-        const errorToast = page.locator('.toast.error');
-        if (await errorToast.count()) await errorToast.getByRole('button', { name: 'Dismiss' }).click();
-        await expect(page.locator('.toast')).toHaveCount(0, { timeout: 12_000 });
+      }
+    }
+  });
+
+  test('no-ticker price failure and refund chart', async ({ page }) => {
+    test.setTimeout(180_000);
+    const vault = await syntheticVault(page, {
+      job_incomes: [{
+        id: 21,
+        employer: 'Private Co',
+        pay_frequency: 'annual',
+        base_pay: 80000,
+        effective_date: '2026-01-01',
+        is_active: true,
+        stock_symbol: '',
+        stock_grants: [{ date: '2026-02-01', origin: 'equity', label: 'Grant', quantity: 10, price_at_grant: 5 }],
+      }],
+      transactions: [
+        { id: 13, date: '2026-10-02', type: 'expense', kind: 'purchase', category: 'Food', amount: 40, description: 'Grocery' },
+        { id: 15, date: '2026-10-04', type: 'expense', kind: 'refund', category: 'Travel', amount: 12, description: 'Fare refund' },
+      ],
+    });
+    for (const width of [390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ['light', 'dark'] as const) {
+        await vault.open('/recurring');
+        await page.evaluate(value => localStorage.setItem('ft-theme', value), theme);
+        await vault.reload();
+        await expectNoStrayToast(page);
+        await page.getByText('Show pay and stock history').click();
+        const controls = page.locator('section[aria-label="Private share price controls"]');
+        await controls.getByLabel('Manual price as of').fill('2026-10-01');
+        await controls.locator('input[type="number"]').fill('12.5');
+        vault.failNextWrites(1);
+        await controls.getByRole('button', { name: 'Save current manual price' }).click();
+        await expect(controls).toContainText('Manual price could not be saved');
+        await expect(page.getByText("Couldn't save this share price. Try again.")).toBeVisible();
+        await page.screenshot({ path: path.join(dir as string, `no-ticker-price-${width}-${theme}.png`), fullPage: true });
+        await page.getByRole('button', { name: 'Dismiss' }).click();
+
+        await vault.open('/');
+        await expectNoStrayToast(page);
+        await page.locator('canvas').first().scrollIntoViewIfNeeded();
+        await expectChartsDrawn(page);
+        await freezeCharts(page);
+        await page.screenshot({ path: path.join(dir as string, `refund-donut-${width}-${theme}.png`), fullPage: true });
+        await thawCharts(page);
       }
     }
   });

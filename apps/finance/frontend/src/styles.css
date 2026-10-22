@@ -85,6 +85,12 @@
     border-color: var(--border-strong);
   }
 
+  input[aria-invalid="true"],
+  select[aria-invalid="true"],
+  textarea[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible,
@@ -92,6 +98,13 @@
   a:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+}
+
+@media (max-width: 640px) {
+  app-stock-lab .ui-card__header {
+    flex-direction: row;
+    align-items: center;
   }
 }
 

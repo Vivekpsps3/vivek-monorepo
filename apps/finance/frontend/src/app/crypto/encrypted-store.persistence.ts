@@ -1,6 +1,6 @@
 import { firstValueFrom, Subject } from 'rxjs';
 import { randomClientId } from './vault-crypto';
-import { VaultService } from './vault.service';
+import { VaultService, type VaultWriteOptions } from './vault.service';
 
 export type EncryptedCollection =
   | 'transactions'
@@ -124,12 +124,12 @@ export class EncryptedRecordPersistence {
     return acquire(0);
   }
 
-  async ensureLoaded(): Promise<void> {
+  async ensureLoaded(options?: VaultWriteOptions): Promise<void> {
     if (this.loaded) return;
     if (!this.vault.isUnlocked) throw new Error('Vault locked');
     const generation = this.getSessionToken();
     if (this.loadingPromise && this.loadingGeneration === generation) return this.loadingPromise;
-    const promise = this.loadStore(generation);
+    const promise = this.loadStore(generation, options);
     this.loadingPromise = promise;
     this.loadingGeneration = generation;
     try {
@@ -151,8 +151,8 @@ export class EncryptedRecordPersistence {
     }
   }
 
-  private async loadStore(generation: number): Promise<void> {
-    const rows = await firstValueFrom(this.vault.listRecords());
+  private async loadStore(generation: number, options?: VaultWriteOptions): Promise<void> {
+    const rows = await firstValueFrom(this.vault.listRecords(undefined, options));
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     for (const key of Object.keys(this.bags)) this.bags[key] = new Map();
     const decoded: Array<{ row: any; data: any }> = [];
@@ -238,10 +238,11 @@ export class EncryptedRecordPersistence {
     collection: CollectionName,
     payload: T,
     clientId?: string,
-    expectedGeneration?: number
+    expectedGeneration?: number,
+    options?: VaultWriteOptions,
   ): Promise<T> {
     const requestedGeneration = expectedGeneration ?? this.getSessionToken();
-    await this.ensureLoaded();
+    await this.ensureLoaded(options);
     const generation = requestedGeneration;
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     const existing = clientId
@@ -277,7 +278,7 @@ export class EncryptedRecordPersistence {
           expected_revision: existing?.revision ?? null,
           indexes,
         },
-      ])
+      ], options)
     ).catch(async error => {
       if (Number((error as any)?.status) === 409) {
         let latestLoaded = false;
@@ -313,22 +314,24 @@ export class EncryptedRecordPersistence {
   async savePreparedRecords<T extends { id: number }>(
     collection: CollectionName,
     records: T[],
-    _replaceExisting = false
+    _replaceExisting = false,
+    options?: VaultWriteOptions,
   ): Promise<T[]> {
     const generation = this.getSessionToken();
     if (collection === 'holdings' && records.length) {
       return this.withRecordUpdates(collection, records.map(record => record.id), generation,
-        () => this.savePreparedRecordsUnlocked(collection, records, generation));
+        () => this.savePreparedRecordsUnlocked(collection, records, generation, options));
     }
-    return this.savePreparedRecordsUnlocked(collection, records, generation);
+    return this.savePreparedRecordsUnlocked(collection, records, generation, options);
   }
 
   private async savePreparedRecordsUnlocked<T extends { id: number }>(
     collection: CollectionName,
     records: T[],
-    generation: number
+    generation: number,
+    options?: VaultWriteOptions,
   ): Promise<T[]> {
-    await this.ensureLoaded();
+    await this.ensureLoaded(options);
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     const output: T[] = [];
     for (let offset = 0; offset < records.length; offset += 200) {
@@ -363,7 +366,7 @@ export class EncryptedRecordPersistence {
         envelopes.push({ id: data.id, client_id, schema_version, key_version, data });
       }
       if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
-      const saved = await firstValueFrom(this.vault.upsertRecords(prepared));
+      const saved = await firstValueFrom(this.vault.upsertRecords(prepared, options));
       if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
       this.bumpCollectionVersion(collection);
       saved.forEach((row, index) => {
@@ -390,16 +393,16 @@ export class EncryptedRecordPersistence {
     }
   }
 
-  async remove(collection: CollectionName, id: number): Promise<void> {
+  async remove(collection: CollectionName, id: number, options?: VaultWriteOptions): Promise<void> {
     const generation = this.getSessionToken();
-    await this.ensureLoaded();
+    await this.ensureLoaded(options);
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     const found = Array.from(this.bags[collection].values()).find(v => v.id === id);
     if (!found) return;
     await firstValueFrom(
       this.vault.deleteRecords([
         { collection, client_id: found.client_id, expected_revision: found.revision },
-      ])
+      ], options)
     );
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     this.bumpCollectionVersion(collection);
@@ -464,8 +467,8 @@ export class EncryptedRecordPersistence {
   }
 
 
-  async deleteMany(collection: CollectionName, ids: number[]): Promise<void> {
-    await this.ensureLoaded();
+  async deleteMany(collection: CollectionName, ids: number[], options?: VaultWriteOptions): Promise<void> {
+    await this.ensureLoaded(options);
     const generation = this.getSessionToken();
     const records = ids
       .map(id => Array.from(this.bags[collection].values()).find(row => row.id === id))
@@ -475,7 +478,7 @@ export class EncryptedRecordPersistence {
       const batch = records.slice(offset, offset + 200);
       await firstValueFrom(this.vault.deleteRecords(batch.map(row => ({
         collection, client_id: row.client_id, expected_revision: row.revision,
-      }))));
+      })), options));
       this.assertSession(generation);
       this.bumpCollectionVersion(collection);
       for (const row of batch) this.bags[collection].delete(row.client_id);

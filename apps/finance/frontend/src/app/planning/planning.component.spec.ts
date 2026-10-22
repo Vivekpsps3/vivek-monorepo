@@ -204,6 +204,7 @@ describe('PlanningComponent spending acceptance', () => {
     expect(component.assumptions.spending_components?.variable_annual).toBe(0);
     expect(component.assumptions.spending_acceptance).toBeNull();
     expect(component.acceptingSpendingSuggestion).toBeFalse();
-    expect(component.error).toBe('vault write failed');
+    expect(component.error).toBe("Couldn't save the spending estimate.");
+    expect(component.error).not.toContain('vault write failed');
   });
 });

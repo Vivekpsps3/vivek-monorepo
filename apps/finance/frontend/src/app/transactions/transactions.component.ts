@@ -966,7 +966,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private restoreTransaction(backup: TransactionCreate): void {
-    this.financeService.addTransaction(backup, true).pipe(takeUntil(this.destroy$)).subscribe({
+    // Keep the error toast if the user leaves this page while the restore is in flight.
+    this.financeService.addTransaction(backup, true).subscribe({
       error: () => {
         this.toastService.error(failureCopy('restore', 'this transaction'), {
           label: 'Try again',

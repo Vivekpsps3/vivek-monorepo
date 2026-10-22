@@ -65,7 +65,7 @@ export class PlanningService {
           payload_json: JSON.stringify((body as any).payload || body),
           created_at: now,
           updated_at: now,
-        });
+        }, undefined, { silent: true });
         return {
           id: row.id,
           name: row.name,
@@ -89,7 +89,8 @@ export class PlanningService {
             payload_json: JSON.stringify((body as any).payload || body),
             updated_at: now,
           },
-          id
+          id,
+          { silent: true },
         );
         return {
           id: row.id,
@@ -104,7 +105,7 @@ export class PlanningService {
   }
 
   deleteProfile(id: number): Observable<void> {
-    return from(this.encStore.deletePlanningProfile(id));
+    return from(this.encStore.deletePlanningProfile(id, { silent: true }));
   }
 
   createRun(body: PlanningRunCreate): Observable<PlanningRun> {

@@ -2,6 +2,7 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { TestBed } from '@angular/core/testing';
 import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
+import { SILENT_ERROR_TOAST } from '../core/http-error.interceptor';
 import { ToastService } from '@vivek/ui';
 import { VaultService } from './vault.service';
 
@@ -83,5 +84,40 @@ describe('VaultService KDF upgrade', () => {
 
     expect(service['authWrap']?.kdf_iterations).toBe(600000);
     expect(service.kdfUpgradeFailures).toBe(0);
+  });
+});
+
+describe('VaultService per-request silence', () => {
+  let service: VaultService;
+  let http: HttpTestingController;
+  const row = { collection: 'assets', client_id: 'one', ciphertext_b64: 'Y2lwaGVy' };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    service = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('marks a silent upsert and leaves a concurrent normal upsert unmarked', () => {
+    service.upsertRecords([row], { silent: true }).subscribe({ error: () => undefined });
+    service.upsertRecords([row]).subscribe({ error: () => undefined });
+    const requests = http.match(apiUrl('/vault/records/upsert'));
+    expect(requests.length).toBe(2);
+    expect(requests[0].request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    expect(requests[1].request.context.get(SILENT_ERROR_TOAST)).toBeFalse();
+    requests.forEach(request => request.flush([]));
+  });
+
+  it('marks a silent delete and leaves a concurrent normal delete unmarked', () => {
+    const record = { collection: 'assets', client_id: 'one', expected_revision: 1 };
+    service.deleteRecords([record], { silent: true }).subscribe({ error: () => undefined });
+    service.deleteRecords([record]).subscribe({ error: () => undefined });
+    const requests = http.match(apiUrl('/vault/records/delete'));
+    expect(requests.length).toBe(2);
+    expect(requests[0].request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    expect(requests[1].request.context.get(SILENT_ERROR_TOAST)).toBeFalse();
+    requests.forEach(request => request.flush({ deleted: 1 }));
   });
 });

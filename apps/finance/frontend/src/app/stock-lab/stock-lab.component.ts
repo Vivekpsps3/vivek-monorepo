@@ -101,7 +101,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
   }
 
   get dividendCadence(): string {
-    return this.primaryResearch ? detectDividendCadence(this.primaryResearch.dividends) : 'none';
+    const cadence = this.primaryResearch ? detectDividendCadence(this.primaryResearch.dividends) : 'none';
+    return cadence === 'none' ? '—' : cadence;
   }
 
   get trailingDividend(): number {
@@ -122,7 +123,7 @@ export class StockLabComponent implements OnInit, OnDestroy {
     return stockLabEvidenceCards({
       primarySymbol: this.scenario.primary_symbol,
       hasQuote: !!primary?.quote?.current_price,
-      cacheStatus: primary?.cache_status,
+      cacheStatus: this.cachePhrase(primary?.cache_status),
     });
   }
 
@@ -277,8 +278,15 @@ export class StockLabComponent implements OnInit, OnDestroy {
     return formatEstimateMoney(value);
   }
 
+  cachePhrase(status: string | null | undefined): string {
+    if (status === 'hit') return 'cached';
+    if (status === 'refresh') return 'refreshed';
+    if (status === 'miss') return 'fetched';
+    return '—';
+  }
+
   formatPct(value: number | null | undefined): string {
-    if (value == null || Number.isNaN(value)) return '-';
+    if (value == null || Number.isNaN(value)) return '—';
     return `${(value * 100).toFixed(Math.abs(value) >= 0.1 ? 1 : 2)}%`;
   }
 }

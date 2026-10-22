@@ -49,7 +49,7 @@
         <p class="stock-name">{{ item.profile?.name || 'Unavailable' }}</p>
         <strong class="stock-price">{{ formatMoney(item.quote?.current_price) }}</strong>
         <p>1Y price / total: {{ formatPct(calculateReturnPeriods(item).at(2)?.price_return_pct) }} / {{ formatPct(calculateReturnPeriods(item).at(2)?.total_return_pct) }}</p>
-        <small>{{ item.cache_status }} · {{ item.fetched_at | appDate:'timestamp' }}</small>
+        <small>{{ cachePhrase(item.cache_status) }} · {{ item.fetched_at | appDate:'table' }}</small>
       </ui-card>
     }
   </section>

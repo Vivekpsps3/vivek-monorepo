@@ -29,7 +29,7 @@ import { EncryptedRecordPersistence } from './encrypted-store.persistence';
 import type { CollectionName, EncryptedCollection } from './encrypted-store.persistence';
 export type { EncryptedCollection, EncryptedStoreChange } from './encrypted-store.persistence';
 export { RecordRevisionConflictError } from './encrypted-store.persistence';
-import { VaultService } from './vault.service';
+import { VaultService, type VaultWriteOptions } from './vault.service';
 
 @Injectable({ providedIn: 'root' })
 export class EncryptedStoreService {
@@ -83,19 +83,21 @@ export class EncryptedStoreService {
   private withRecordUpdates<T>(collection: CollectionName, ids: number[], expectedGeneration: number, update: () => Promise<T>): Promise<T> {
     return this.persistence.withRecordUpdates(collection, ids, expectedGeneration, update);
   }
-  private ensureLoaded(): Promise<void> { return this.persistence.ensureLoaded(); }
+  private ensureLoaded(options?: VaultWriteOptions): Promise<void> { return this.persistence.ensureLoaded(options); }
   private allocateId(): number { return this.persistence.allocateId(); }
   private list<T>(collection: CollectionName): T[] { return this.persistence.list<T>(collection); }
   private readPersistedRows<T>(collection: CollectionName, generation = this.generation): Promise<T[]> {
     return this.persistence.readPersistedRows<T>(collection, generation);
   }
-  private upsert<T extends { id?: number }>(collection: CollectionName, payload: T, clientId?: string, expectedGeneration?: number): Promise<T> {
-    return this.persistence.upsert(collection, payload, clientId, expectedGeneration);
+  private upsert<T extends { id?: number }>(collection: CollectionName, payload: T, clientId?: string, expectedGeneration?: number, options?: VaultWriteOptions): Promise<T> {
+    return this.persistence.upsert(collection, payload, clientId, expectedGeneration, options);
   }
-  private savePreparedRecords<T extends { id: number }>(collection: CollectionName, records: T[], replaceExisting = false): Promise<T[]> {
-    return this.persistence.savePreparedRecords(collection, records, replaceExisting);
+  private savePreparedRecords<T extends { id: number }>(collection: CollectionName, records: T[], replaceExisting = false, options?: VaultWriteOptions): Promise<T[]> {
+    return this.persistence.savePreparedRecords(collection, records, replaceExisting, options);
   }
-  private remove(collection: CollectionName, id: number): Promise<void> { return this.persistence.remove(collection, id); }
+  private remove(collection: CollectionName, id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.persistence.remove(collection, id, options);
+  }
   reloadCollections(collections: EncryptedCollection[]): Promise<void> { return this.persistence.reloadCollections(collections); }
 
   async getTransactions(): Promise<Transaction[]> {
@@ -103,11 +105,11 @@ export class EncryptedStoreService {
     return this.list<Transaction>('transactions').sort((a, b) => b.date.localeCompare(a.date));
   }
 
-  async addTransaction(tx: Omit<Transaction, 'id'> & { dedupe_key?: string }): Promise<Transaction> {
-    return this.upsert('transactions', { ...tx, source: tx.source || 'manual' } as Transaction);
+  async addTransaction(tx: Omit<Transaction, 'id'> & { dedupe_key?: string }, options?: VaultWriteOptions): Promise<Transaction> {
+    return this.upsert('transactions', { ...tx, source: tx.source || 'manual' } as Transaction, undefined, undefined, options);
   }
 
-  async updateTransaction(id: number, tx: Partial<Transaction>): Promise<Transaction> {
+  async updateTransaction(id: number, tx: Partial<Transaction>, options?: VaultWriteOptions): Promise<Transaction> {
     const generation = this.generation;
     await this.ensureLoaded();
     this.assertSession(generation);
@@ -125,11 +127,11 @@ export class EncryptedStoreService {
       ...tx,
       ...(edited ? { import_edited: true } : {}),
       id,
-    }, undefined, generation);
+    }, undefined, generation, options);
   }
 
-  async deleteTransaction(id: number): Promise<void> {
-    return this.remove('transactions', id);
+  async deleteTransaction(id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.remove('transactions', id, options);
   }
 
   async deleteTransactions(ids: number[]): Promise<void> {
@@ -223,20 +225,20 @@ export class EncryptedStoreService {
     return this.list<Asset>('assets');
   }
 
-  async addAsset(body: any): Promise<Asset> {
-    return this.upsert('assets', body);
+  async addAsset(body: any, options?: VaultWriteOptions): Promise<Asset> {
+    return this.upsert('assets', body, undefined, undefined, options);
   }
 
-  async updateAsset(id: number, body: any): Promise<Asset> {
+  async updateAsset(id: number, body: any, options?: VaultWriteOptions): Promise<Asset> {
     const generation = this.generation;
     const current = (await this.getAssets()).find(a => a.id === id);
     this.assertSession(generation);
     if (!current) throw new Error('Asset not found');
-    return this.upsert('assets', { ...current, ...body, id }, undefined, generation);
+    return this.upsert('assets', { ...current, ...body, id }, undefined, generation, options);
   }
 
-  async deleteAsset(id: number): Promise<void> {
-    return this.remove('assets', id);
+  async deleteAsset(id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.remove('assets', id, options);
   }
 
   async getLiabilities(): Promise<Liability[]> {
@@ -244,20 +246,20 @@ export class EncryptedStoreService {
     return this.list<Liability>('liabilities');
   }
 
-  async addLiability(body: any): Promise<Liability> {
-    return this.upsert('liabilities', body);
+  async addLiability(body: any, options?: VaultWriteOptions): Promise<Liability> {
+    return this.upsert('liabilities', body, undefined, undefined, options);
   }
 
-  async updateLiability(id: number, body: any): Promise<Liability> {
+  async updateLiability(id: number, body: any, options?: VaultWriteOptions): Promise<Liability> {
     const generation = this.generation;
     const current = (await this.getLiabilities()).find(a => a.id === id);
     this.assertSession(generation);
     if (!current) throw new Error('Liability not found');
-    return this.upsert('liabilities', { ...current, ...body, id }, undefined, generation);
+    return this.upsert('liabilities', { ...current, ...body, id }, undefined, generation, options);
   }
 
-  async deleteLiability(id: number): Promise<void> {
-    return this.remove('liabilities', id);
+  async deleteLiability(id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.remove('liabilities', id, options);
   }
 
   async getHoldings(): Promise<Holding[]> {
@@ -306,7 +308,7 @@ export class EncryptedStoreService {
     );
   }
 
-  async addHolding(body: any): Promise<Holding> {
+  async addHolding(body: any, options?: VaultWriteOptions): Promise<Holding> {
     const generation = this.generation;
     const payload = { ...body };
     if (payload.brokerage_account_id != null && payload.portfolio_stage_id == null) {
@@ -321,11 +323,11 @@ export class EncryptedStoreService {
       ...payload,
       current_price: body.current_price ?? body.purchase_price,
       price_source: body.price_source ?? 'manual',
-    }, undefined, generation);
+    }, undefined, generation, options);
     return enrichHolding(row);
   }
 
-  async updateHolding(id: number, body: any, expectedGeneration = this.generation): Promise<Holding> {
+  async updateHolding(id: number, body: any, expectedGeneration = this.generation, options?: VaultWriteOptions): Promise<Holding> {
     const generation = expectedGeneration;
     return this.runRecordUpdate('holdings', id, generation, async () => {
       const current = (await this.getHoldings()).find(a => a.id === id);
@@ -343,7 +345,7 @@ export class EncryptedStoreService {
       if (body.purchase_price !== undefined && body.cost_basis_status === undefined) {
         next.cost_basis_status = body.purchase_price == null ? 'unknown' : 'known';
       }
-      return enrichHolding(await this.upsert('holdings', next, undefined, generation));
+      return enrichHolding(await this.upsert('holdings', next, undefined, generation, options));
     });
   }
 
@@ -420,9 +422,9 @@ export class EncryptedStoreService {
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
   }
 
-  async deleteHolding(id: number): Promise<void> {
+  async deleteHolding(id: number, options?: VaultWriteOptions): Promise<void> {
     const generation = this.generation;
-    return this.runRecordUpdate('holdings', id, generation, () => this.remove('holdings', id));
+    return this.runRecordUpdate('holdings', id, generation, () => this.remove('holdings', id, options));
   }
 
   async getBrokerageAccounts(): Promise<
@@ -494,23 +496,23 @@ export class EncryptedStoreService {
     return this.list<JobIncome>('job_incomes').map(enrichJobIncome);
   }
 
-  async addJobIncome(body: any): Promise<JobIncome> {
-    return enrichJobIncome(await this.upsert('job_incomes', body));
+  async addJobIncome(body: any, options?: VaultWriteOptions): Promise<JobIncome> {
+    return enrichJobIncome(await this.upsert('job_incomes', body, undefined, undefined, options));
   }
 
-  async updateJobIncome(id: number, body: any): Promise<JobIncome> {
+  async updateJobIncome(id: number, body: any, options?: VaultWriteOptions): Promise<JobIncome> {
     const generation = this.generation;
     return this.runRecordUpdate('job_incomes', id, generation, async () => {
       const current = (await this.getJobIncomes()).find(a => a.id === id);
       this.assertSession(generation);
       if (!current) throw new Error('Income not found');
-      return enrichJobIncome(await this.upsert('job_incomes', { ...current, ...body, id }, undefined, generation));
+      return enrichJobIncome(await this.upsert('job_incomes', { ...current, ...body, id }, undefined, generation, options));
     });
   }
 
-  async deleteJobIncome(id: number): Promise<void> {
+  async deleteJobIncome(id: number, options?: VaultWriteOptions): Promise<void> {
     const generation = this.generation;
-    return this.runRecordUpdate('job_incomes', id, generation, () => this.remove('job_incomes', id));
+    return this.runRecordUpdate('job_incomes', id, generation, () => this.remove('job_incomes', id, options));
   }
 
   async getFixedExpenses(): Promise<FixedExpense[]> {
@@ -518,22 +520,22 @@ export class EncryptedStoreService {
     return this.list<FixedExpense>('fixed_expenses').map(enrichFixedExpense);
   }
 
-  async addFixedExpense(body: any): Promise<FixedExpense> {
-    return enrichFixedExpense(await this.upsert('fixed_expenses', body));
+  async addFixedExpense(body: any, options?: VaultWriteOptions): Promise<FixedExpense> {
+    return enrichFixedExpense(await this.upsert('fixed_expenses', body, undefined, undefined, options));
   }
 
-  async updateFixedExpense(id: number, body: any): Promise<FixedExpense> {
+  async updateFixedExpense(id: number, body: any, options?: VaultWriteOptions): Promise<FixedExpense> {
     const generation = this.generation;
     return this.runRecordUpdate('fixed_expenses', id, generation, async () => {
       const current = (await this.getFixedExpenses()).find(a => a.id === id);
       this.assertSession(generation);
       if (!current) throw new Error('Expense not found');
-      return enrichFixedExpense(await this.upsert('fixed_expenses', { ...current, ...body, id }, undefined, generation));
+      return enrichFixedExpense(await this.upsert('fixed_expenses', { ...current, ...body, id }, undefined, generation, options));
     });
   }
 
-  async deleteFixedExpense(id: number): Promise<void> {
-    return this.remove('fixed_expenses', id);
+  async deleteFixedExpense(id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.remove('fixed_expenses', id, options);
   }
 
   async getSubscriptions(): Promise<Subscription[]> {
@@ -541,22 +543,22 @@ export class EncryptedStoreService {
     return this.list<Subscription>('subscriptions').map(enrichSubscription);
   }
 
-  async addSubscription(body: any): Promise<Subscription> {
-    return enrichSubscription(await this.upsert('subscriptions', body));
+  async addSubscription(body: any, options?: VaultWriteOptions): Promise<Subscription> {
+    return enrichSubscription(await this.upsert('subscriptions', body, undefined, undefined, options));
   }
 
-  async updateSubscription(id: number, body: any): Promise<Subscription> {
+  async updateSubscription(id: number, body: any, options?: VaultWriteOptions): Promise<Subscription> {
     const generation = this.generation;
     return this.runRecordUpdate('subscriptions', id, generation, async () => {
       const current = (await this.getSubscriptions()).find(a => a.id === id);
       this.assertSession(generation);
       if (!current) throw new Error('Subscription not found');
-      return enrichSubscription(await this.upsert('subscriptions', { ...current, ...body, id }, undefined, generation));
+      return enrichSubscription(await this.upsert('subscriptions', { ...current, ...body, id }, undefined, generation, options));
     });
   }
 
-  async deleteSubscription(id: number): Promise<void> {
-    return this.remove('subscriptions', id);
+  async deleteSubscription(id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.remove('subscriptions', id, options);
   }
 
   async getNetWorth() {
@@ -586,30 +588,30 @@ export class EncryptedStoreService {
     return this.list<any>('planning_profiles');
   }
 
-  async savePlanningProfile(body: any, id?: number): Promise<any> {
+  async savePlanningProfile(body: any, id?: number, options?: VaultWriteOptions): Promise<any> {
     const generation = this.generation;
     if (id != null) {
       const current = (await this.listPlanningProfiles()).find(p => p.id === id) || { id };
       this.assertSession(generation);
-      return this.upsert('planning_profiles', { ...current, ...body, id }, undefined, generation);
+      return this.upsert('planning_profiles', { ...current, ...body, id }, undefined, generation, options);
     }
-    return this.upsert('planning_profiles', body, undefined, generation);
+    return this.upsert('planning_profiles', body, undefined, generation, options);
   }
 
-  async deletePlanningProfile(id: number): Promise<void> {
-    return this.remove('planning_profiles', id);
+  async deletePlanningProfile(id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.remove('planning_profiles', id, options);
   }
 
-  async getStockLabScenarios(): Promise<StockLabScenario[]> {
-    await this.ensureLoaded();
+  async getStockLabScenarios(options?: VaultWriteOptions): Promise<StockLabScenario[]> {
+    await this.ensureLoaded(options);
     return this.list<StockLabScenario>('stock_lab_scenarios').sort((a, b) =>
       b.updated_at.localeCompare(a.updated_at)
     );
   }
 
-  async saveStockLabScenario(body: StockLabScenario, id?: number): Promise<StockLabScenario> {
+  async saveStockLabScenario(body: StockLabScenario, id?: number, options?: VaultWriteOptions): Promise<StockLabScenario> {
     const current = id
-      ? (await this.getStockLabScenarios()).find(row => row.id === id)
+      ? (await this.getStockLabScenarios(options)).find(row => row.id === id)
       : undefined;
     const now = new Date().toISOString();
     return this.upsert('stock_lab_scenarios', {
@@ -618,10 +620,10 @@ export class EncryptedStoreService {
       id: id ?? body.id,
       created_at: current?.created_at ?? body.created_at ?? now,
       updated_at: now,
-    });
+    }, undefined, undefined, options);
   }
 
-  async deleteStockLabScenario(id: number): Promise<void> {
-    return this.remove('stock_lab_scenarios', id);
+  async deleteStockLabScenario(id: number, options?: VaultWriteOptions): Promise<void> {
+    return this.remove('stock_lab_scenarios', id, options);
   }
 }

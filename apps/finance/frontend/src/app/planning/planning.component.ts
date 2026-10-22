@@ -17,8 +17,7 @@ import { Subject, auditTime, finalize, takeUntil } from 'rxjs';
 import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 import { FinanceDataChange, FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
-import { ConfirmService } from '@vivek/ui';
-import { ToastService } from '@vivek/ui';
+import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
 import {
   DEFAULT_MC_ASSUMPTIONS,
   MC_FAN_PATHS_PERSIST_MAX,
@@ -396,8 +395,8 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
         this.toast.success('Covered spending estimate accepted and saved.');
         this.cdr.markForCheck();
       },
-      error: err => {
-        this.error = err?.message ?? 'Could not save the accepted spending estimate.';
+      error: () => {
+        this.error = failureCopy('save', 'the spending estimate');
       },
     });
   }
@@ -535,8 +534,8 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
           this.savedInputName = p.name;
           this.toast.success('Saved inputs updated.');
         },
-        error: err => {
-          this.error = err?.message ?? 'Could not save inputs.';
+        error: () => {
+          this.error = failureCopy('save', 'these inputs');
         },
       });
   }

@@ -20,9 +20,9 @@
           <canvas #incomeExpenseChart role="img" aria-label="Monthly cashflow chart. Select a month to open matching Activity."></canvas>
         </div>
         <p class="chart-note">
-          Income <strong>{{ incomeTotal | money }}</strong>
-          · Spending <strong>{{ expenseTotal | money }}</strong>
-          · Net <strong>{{ netCashflow | money }}</strong>
+          Income <strong class="money">{{ incomeTotal | money }}</strong>
+          · Spending <strong class="money">{{ expenseTotal | money }}</strong>
+          · Net <strong class="money">{{ netCashflow | money }}</strong>
           <app-info-tip label="How cashflow is counted" text="Card activity and repeating pay and bills, counted once." />
         </p>
         <details class="chart-data">

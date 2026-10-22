@@ -57,6 +57,13 @@ describe('formatMoney', () => {
     expect(plural(0, 'deposit', 'deposits')).toBe(PLURAL_ZERO_IS_NO ? 'No deposits' : '0 deposits');
   });
 
+  it('uses an irregular plural and can combine it with a zero count', () => {
+    expect(plural(2, 'person', 'people')).toBe('2 people');
+    expect(plural(0, 'person', { plural: 'people', zeroIsNo: true })).toBe('No people');
+    expect(plural(1, 'person', { plural: 'people', zeroIsNo: false })).toBe('1 person');
+    expect(plural(0, 'person', { plural: 'people', zeroIsNo: false })).toBe('0 people');
+  });
+
   it('keeps compact amounts recognizable', () => {
     const compact = formatCompactMoney(1_250_000);
     expect(compact).toContain('12');

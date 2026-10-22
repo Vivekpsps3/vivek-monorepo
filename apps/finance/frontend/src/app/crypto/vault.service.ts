@@ -29,6 +29,11 @@ export interface VaultStatus {
   key_version?: number | null;
 }
 
+/** Per-request flag. Only that HTTP call skips the fallback toast. */
+export interface VaultWriteOptions {
+  silent?: boolean;
+}
+
 export interface EncryptedRecordDto {
   collection: string;
   client_id: string;
@@ -261,28 +266,15 @@ export class VaultService {
     return hmacBlindIndex(this.requireDek(), value);
   }
 
-  listRecords(collection?: string): Observable<EncryptedRecordDto[]> {
+  listRecords(collection?: string, options?: VaultWriteOptions): Observable<EncryptedRecordDto[]> {
     const q = collection ? `?collection=${encodeURIComponent(collection)}` : '';
-    return this.http.get<EncryptedRecordDto[]>(apiUrl(`/vault/records${q}`));
+    return this.http.get<EncryptedRecordDto[]>(apiUrl(`/vault/records${q}`), this.requestOptions(options));
   }
 
   /**
-   * Dialog saves and other callers that show their own error opt in.
-   * Every other upsert or delete keeps the interceptor toast.
+   * Dialog saves and other callers that show their own error pass `{ silent: true }`
+   * on that call. A concurrent upsert or delete keeps the interceptor toast.
    */
-  private silentMutations = 0;
-
-  runSilent<T>(work: () => Promise<T>): Promise<T> {
-    this.silentMutations += 1;
-    return Promise.resolve().then(work).finally(() => {
-      this.silentMutations -= 1;
-    });
-  }
-
-  private mutationOptions(): { context: ReturnType<typeof silentErrorToast> } | undefined {
-    return this.silentMutations > 0 ? { context: silentErrorToast() } : undefined;
-  }
-
   upsertRecords(
     records: Array<{
       collection: string;
@@ -292,15 +284,21 @@ export class VaultService {
       key_version?: number;
       expected_revision?: number | null;
       indexes?: Array<{ index_name: string; index_value_b64: string }>;
-    }>
+    }>,
+    options?: VaultWriteOptions,
   ): Observable<EncryptedRecordDto[]> {
-    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records }, this.mutationOptions());
+    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records }, this.requestOptions(options));
   }
 
   deleteRecords(
-    records: Array<{ collection: string; client_id: string; expected_revision: number }>
+    records: Array<{ collection: string; client_id: string; expected_revision: number }>,
+    options?: VaultWriteOptions,
   ): Observable<{ deleted: number }> {
-    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records }, this.mutationOptions());
+    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records }, this.requestOptions(options));
+  }
+
+  private requestOptions(options?: VaultWriteOptions): { context: ReturnType<typeof silentErrorToast> } | undefined {
+    return options?.silent ? { context: silentErrorToast() } : undefined;
   }
 
   getCounts(): Observable<{ counts: Record<string, number> }> {

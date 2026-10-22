@@ -574,7 +574,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   private restoreHolding(backup: HoldingCreate): void {
-    this.financeService.addHolding(backup, true).pipe(takeUntil(this.destroy$)).subscribe({
+    // Keep the error toast if the user leaves this page while the restore is in flight.
+    this.financeService.addHolding(backup, true).subscribe({
       error: () => {
         this.toastService.error(failureCopy('restore', 'this holding'), {
           label: 'Try again',
