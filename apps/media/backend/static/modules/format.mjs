@@ -9,13 +9,13 @@ const MONTHS = [
  * surface that reads this map. "All types" uses STATUS_GENERIC.
  */
 const STATUS = {
-  movie: { want: "Want to Watch", anticipating: "Anticipating", in_progress: "Watching", completed: "Watched", paused: "Paused", dropped: "Dropped" },
-  tv: { want: "Want to Watch", anticipating: "Anticipating", in_progress: "Currently Watching", completed: "Watched", paused: "Paused", dropped: "Dropped" },
-  book: { want: "Want to Read", anticipating: "Anticipating", in_progress: "Currently Reading", completed: "Read", paused: "Paused", dropped: "Dropped" },
-  track: { want: "Want to Listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Dropped" },
-  album: { want: "Want to Listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Dropped" },
-  artist: { want: "Following", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Dropped" },
-  game: { want: "Want to Play", anticipating: "Anticipating", in_progress: "Currently Playing", completed: "Played", paused: "Paused", dropped: "Dropped" },
+  movie: { want: "Want to watch", anticipating: "Anticipating", in_progress: "Watching", completed: "Watched", paused: "Paused", dropped: "Dropped" },
+  tv: { want: "Want to watch", anticipating: "Anticipating", in_progress: "Watching", completed: "Watched", paused: "Paused", dropped: "Dropped" },
+  book: { want: "Want to read", anticipating: "Anticipating", in_progress: "Reading", completed: "Read", paused: "Paused", dropped: "Dropped" },
+  track: { want: "Want to listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Dropped" },
+  album: { want: "Want to listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Dropped" },
+  artist: { want: "Following", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Unfollowed" },
+  game: { want: "Want to play", anticipating: "Anticipating", in_progress: "Playing", completed: "Played", paused: "Paused", dropped: "Dropped" },
 };
 
 const STATUS_GENERIC = {

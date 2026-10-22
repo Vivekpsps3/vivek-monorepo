@@ -480,13 +480,27 @@ dialog form { display: grid; gap: var(--space-3); }
 .episode-page .eyebrow a { color: inherit; text-decoration: none; }
 .marks { display: flex; gap: 4px; align-items: center; min-height: 44px; }
 .mark {
-  width: 14px; height: 14px; padding: 0;
+  width: 32px; height: 32px; padding: 0;
   border: 1.5px solid var(--border-control);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
-.mark.is-on { background: var(--accent); border-color: var(--accent); }
+.mark.is-on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.mark.is-half { background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+.score-child .mark.is-on,
+.score-child .mark.is-half { background: var(--text-secondary); border-color: var(--text-secondary); color: var(--bg); }
+.score-child .mark.is-half { background: linear-gradient(90deg, var(--text-secondary) 50%, transparent 50%); }
+.note-block { display: grid; gap: var(--space-2); margin-top: 16px; }
+.confirm { width: min(420px, calc(100% - 32px)); border: 0; border-radius: var(--radius-lg); background: var(--surface-elevated, var(--card-bg)); color: inherit; }
+.confirm::backdrop { background: color-mix(in srgb, var(--text) 40%, transparent); }
+.log-form { display: grid; gap: var(--space-3); margin-top: var(--space-3); max-width: 24rem; }
+.log-form[hidden] { display: none; }
+.note-block label { font-weight: 600; color: var(--text); }
+.field-label { font-size: var(--text-sm); font-weight: 600; }
 .song-name { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 0; }
 .status-row, .flag-row, .exp-list { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items: center; }

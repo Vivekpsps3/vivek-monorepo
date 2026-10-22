@@ -1,6 +1,7 @@
 import { NETWORK_MESSAGE, api, loginHref } from "./api.mjs";
 import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
 import { icon } from "./icons.mjs";
+import { keyboardScore, pointerScore, scoreControl, scoreValue } from "./score.mjs";
 import {
   documentTitle,
   msUntilLocalMidnight,
@@ -193,7 +194,7 @@ function patchOpinion(id, body) {
 async function saveStatus(id, status) {
   const key = `status:${id}`;
   try {
-    await patchOpinion(id, { status });
+    await patchOpinion(id, { status, anticipated: status === "anticipating" });
     dismissToast(key);
     await render();
   } catch (error) {
@@ -222,10 +223,15 @@ async function saveFlag(id, flag, on) {
 
 async function saveRating(id, rating) {
   const key = `rating:${id}`;
+  const status = document.querySelector("#score-status");
+  const cancel = armSaving(status);
   try {
     await patchOpinion(id, { rating });
+    cancel();
     dismissToast(key);
+    showSaved(status);
   } catch (error) {
+    cancel();
     if (writeTimedOut(error)) {
       showWriteTimeout(key, () => saveRating(id, rating));
       return;
@@ -745,14 +751,28 @@ function viewNew(params) {
     </form>`);
 }
 
-function scoreMarks(value, label) {
-  const current = value === "" || value == null || Number.isNaN(Number(value)) ? null : Number(value);
-  const buttons = [];
-  for (let step = 1; step <= 10; step += 1) {
-    const on = current != null && step <= Math.round(current);
-    buttons.push(`<button type="button" class="mark${on ? " is-on" : ""}" data-score="${step}" aria-pressed="${on ? "true" : "false"}" aria-label="${esc(label)} ${step}"></button>`);
-  }
-  return `<div class="marks" role="group" aria-label="${esc(label)}">${buttons.join("")}</div>`;
+function scoreMarks(value, label, child = false) {
+  return scoreControl({ value, label, child });
+}
+
+let ratingTimer = 0;
+function scheduleRating(id, rating) {
+  window.clearTimeout(ratingTimer);
+  ratingTimer = window.setTimeout(() => {
+    void saveRating(id, rating);
+  }, 400);
+}
+
+function paintScore(group, value) {
+  const child = group.classList.contains("score-child");
+  const label = group.getAttribute("aria-label") || "Your score";
+  const holder = document.createElement("div");
+  holder.innerHTML = scoreControl({ value, label, child });
+  const next = holder.firstElementChild;
+  if (!next) return group;
+  group.replaceWith(next);
+  next.querySelector('[aria-checked="true"]')?.focus();
+  return next;
 }
 
 function chooseSeason(entry, forcedSeason) {
@@ -791,16 +811,23 @@ async function viewItem(id, ticket, forcedSeason = null) {
         ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
         ${entry.kind === "movie" || entry.kind === "tv" ? `<div class="web" data-web="${entry.id}" hidden></div>` : ""}
         <div class="opinion" data-id="${entry.id}" data-favorite="${entry.favorite ? "true" : "false"}" data-anticipated="${entry.anticipated ? "true" : "false"}">
-          <div class="status-row">${statusOptions(entry.kind).map(opt => `<button type="button" class="status-mark${opt.value === entry.status ? " is-on" : ""}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`).join("")}</div>
-          ${scoreMarks(entry.rating, "Score")}
-          <div class="flag-row">
-            <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}">Favorite</button>
-            <button type="button" class="flag${entry.anticipated ? " is-on" : ""}" data-flag="anticipated" data-focus-key="flag-anticipated" aria-pressed="${entry.anticipated ? "true" : "false"}">Soon</button>
+          <div class="field-label">Status <span id="status-save" class="progress-status" role="status"></span></div>
+          <div class="status-row" role="radiogroup" aria-label="Status">${statusOptions(entry.kind).map(opt => {
+            const on = opt.value === entry.status;
+            return `<button type="button" role="radio" class="status-mark${on ? " is-on" : ""}" aria-checked="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`;
+          }).join("")}</div>
+          <div class="field-label">Your score <span id="score-value">${esc(entry.rating == null ? "Unrated" : `${ratingText(entry.rating).replace("/10", " / 10")}`)}</span> <span id="score-status" class="progress-status" role="status"></span></div>
+          ${scoreMarks(entry.rating, "Your score")}
+          <div class="flag-row favorite-row">
+            <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}" aria-label="Favorite">${entry.favorite ? "★ Favorite" : "☆ Favorite"}</button>
           </div>
-          <textarea name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="3" aria-label="Note">${esc(review.text)}</textarea>
-          <p id="note-status" class="progress-status" role="status"></p>
-          ${review.restore ? `<p id="note-draft" class="save-draft">${esc(NOTE_RESTORE_LABEL)} <button type="button" data-restore-note="${entry.id}">Restore</button> <button type="button" data-discard-note="${entry.id}">Discard</button></p>` : ""}
           ${progress ? progressField(entry) : ""}
+          <div class="note-block">
+            <label for="note">Your note</label>
+            <textarea id="note" name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="4" aria-label="Note">${esc(review.text)}</textarea>
+            <p id="note-status" class="progress-status" role="status"></p>
+            ${review.restore ? `<p id="note-draft" class="save-draft">${esc(NOTE_RESTORE_LABEL)} <button type="button" data-restore-note="${entry.id}">Restore</button> <button type="button" data-discard-note="${entry.id}">Discard</button></p>` : ""}
+          </div>
         </div>
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
         ${experienceBlock(entry)}
@@ -876,19 +903,34 @@ function releaseLine(releases) {
   return `<ul class="plain">${releases.map(row => `<li><span>${esc([row.platform, row.region].filter(Boolean).join(" · ") || "Release")}</span><span>${esc(releaseLabel(row))}</span></li>`).join("")}</ul>`;
 }
 
+function logVerb(kind) {
+  return { book: "read", movie: "watch", tv: "watch", game: "play", album: "listen", track: "listen", artist: "listen" }[kind] || "watch";
+}
+
 function experienceBlock(entry) {
   const kind = experienceOptions(entry.kind)[0]?.value || "watch";
-  const rows = (entry.experiences || []).map(row => `
+  const rows = (entry.experiences || []).map(row => {
+    const when = row.finished_on || row.started_on || "an undated day";
+    const name = `Remove ${experienceLabel(row.kind)} on ${when}`;
+    return `
     <li class="exp">
       <span>${esc(experienceLabel(row.kind))}</span>
-      <span>${esc(row.finished_on || row.started_on || "")}</span>
-      <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" aria-label="Remove">✕</button>
-    </li>`).join("");
+      <span>${esc(when)}</span>
+      <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" aria-label="${esc(name)}">Remove</button>
+    </li>`;
+  }).join("");
   const list = rows ? `<ul class="exp-list">${rows}</ul>` : "";
   return `
     <section class="exps">
+      <h2>History</h2>
       ${list}
-      <button type="button" class="flag" data-action="log-again" data-focus-key="again" data-id="${entry.id}" data-kind="${kind}">Again</button>
+      <button type="button" class="flag" data-action="toggle-log" data-focus-key="again" data-id="${entry.id}">Log a ${esc(logVerb(entry.kind))}</button>
+      <form class="log-form" data-log-form data-action="add-experience" data-id="${entry.id}" hidden>
+        <label>Kind <select name="kind">${options(experienceOptions(entry.kind), kind)}</select></label>
+        <label>Finished <input name="finished_on" type="date" value="${esc(new Date().toISOString().slice(0, 10))}"></label>
+        <label>Note <textarea name="notes" rows="2"></textarea></label>
+        <button class="btn btn-primary" type="submit">Save</button>
+      </form>
     </section>`;
 }
 
@@ -905,7 +947,7 @@ function showEpisodes(entry, seasonNumber) {
   }).join("");
   const rating = seasons.find(item => item.season_number === seasonNumber);
   const score = rating
-    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${rating.watched ? "true" : "false"}">${scoreMarks(rating.rating, "Season")}</div>`
+    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${rating.watched ? "true" : "false"}">${scoreMarks(rating.rating, "Season", true)}</div>`
     : "";
   const tiles = episodes.map(episode => {
     const label = episodePlace(episode);
@@ -951,9 +993,9 @@ function musicBlock(entry) {
         ${coverImage(album.artwork_url)}
         <span>${esc(album.title)}</span>
       </button>
-      ${scoreMarks(album.rating, album.title)}
+      ${scoreMarks(album.rating, album.title, true)}
       <ol class="cover-tracks" hidden>
-        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><button type="button" class="song-name" data-song-center="${esc(track.title)}">${esc(track.title)}</button>${scoreMarks(track.rating, track.title)}</li>`).join("")}
+        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><button type="button" class="song-name" data-song-center="${esc(track.title)}">${esc(track.title)}</button>${scoreMarks(track.rating, track.title, true)}</li>`).join("")}
       </ol>
     </li>`).join("");
   return `
@@ -1210,22 +1252,25 @@ document.addEventListener("click", async event => {
     setTheme(theme.dataset.themeValue);
     return;
   }
-  const mark = target.closest("[data-score]");
+  const mark = target.closest(".score [data-score]");
   if (mark) {
     keepButtonClick(event, target);
-    const group = mark.closest(".marks");
-    const chosen = Number(mark.dataset.score);
-    const current = group.querySelectorAll(".mark.is-on").length;
-    const next = chosen === current ? null : chosen;
-    group.querySelectorAll(".mark").forEach(button => {
-      const on = next != null && Number(button.dataset.score) <= next;
-      button.classList.toggle("is-on", on);
-      button.setAttribute("aria-pressed", String(on));
-    });
-    const season = mark.closest("[data-season-marks]");
-    const track = mark.closest("[data-track-row]");
-    const album = mark.closest("[data-album-row]");
-    const opinion = mark.closest(".opinion");
+    const group = mark.closest(".score");
+    const current = scoreValue(group?.dataset.scoreValue);
+    let next = null;
+    if (mark.dataset.score === "") next = null;
+    else if (mark.dataset.score === "0") next = 0;
+    else {
+      const rect = mark.getBoundingClientRect();
+      const fraction = rect.width ? (event.clientX - rect.left) / rect.width : 1;
+      next = pointerScore(mark.dataset.score, fraction);
+    }
+    if (next === current) return;
+    const painted = paintScore(group, next);
+    const season = painted.closest("[data-season-marks]");
+    const track = painted.closest("[data-track-row]");
+    const album = painted.closest("[data-album-row]");
+    const opinion = painted.closest(".opinion");
     try {
       if (season) {
         await api(`/api/entries/${season.dataset.id}/seasons`, {
@@ -1247,7 +1292,7 @@ document.addEventListener("click", async event => {
           body: JSON.stringify({ rating: next }),
         });
       } else if (opinion) {
-        await saveRating(opinion.dataset.id, next);
+        scheduleRating(opinion.dataset.id, next);
       }
     } catch (error) {
       fail(error);
@@ -1314,14 +1359,15 @@ document.addEventListener("click", async event => {
     const watched = season.getAttribute("aria-pressed") !== "true";
     setPressed(season, watched, "is-done");
     try {
-      const marks = document.querySelector(`[data-season-marks][data-season="${season.dataset.season}"]`);
-      const filled = marks ? marks.querySelectorAll(".mark.is-on").length : 0;
+      const marks = document.querySelector(`[data-season-marks][data-season="${season.dataset.season}"] .score`);
+      const raw = marks?.dataset.scoreValue;
+      const rating = raw === "" || raw == null ? null : Number(raw);
       await api(`/api/entries/${season.dataset.id}/seasons`, {
         method: "POST",
         body: JSON.stringify({
           season_number: Number(season.dataset.season),
           watched,
-          rating: filled || null,
+          rating,
         }),
       });
     } catch (error) {
@@ -1444,6 +1490,14 @@ document.addEventListener("click", async event => {
       location.hash = `#/item/${created.id}`;
     }
     if (action === "close-quick") document.querySelector("#quick-add")?.close();
+    if (action === "toggle-log") {
+      const form = button.parentElement?.querySelector("[data-log-form]");
+      if (form instanceof HTMLElement) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector("select, input, textarea")?.focus();
+      }
+      return;
+    }
     if (action === "log-again") {
       const today = new Date();
       const finished = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -1529,7 +1583,7 @@ document.addEventListener("submit", async event => {
         rating: data.rating === "" ? null : data.rating,
         spoiler: Boolean(data.spoiler),
       }) });
-      toast("Experience added. The overall review was not changed.");
+      toast("Logged. Your overall score didn't change.");
       await render();
       return;
     }
@@ -1599,9 +1653,21 @@ document.addEventListener("submit", async event => {
       return;
     }
     if (form.dataset.action === "delete-entry") {
-      if (!confirm("Remove this from your library? The overall review, season scores, and experiences go with it.")) return;
+      const title = document.querySelector("h1")?.textContent || "this";
+      const dialog = document.querySelector("#confirm");
+      if (!(dialog instanceof HTMLDialogElement)) return;
+      const heading = dialog.querySelector("#confirm-title");
+      const body = dialog.querySelector("#confirm-body");
+      if (heading) heading.textContent = `Remove ${title}?`;
+      if (body) body.textContent = "This deletes your status, score, note, history, and any season, album and song scores for it. This can't be undone.";
+      dialog.showModal();
+      dialog.querySelector("button[value='cancel']")?.focus();
+      const choice = await new Promise(resolve => {
+        dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
+      });
+      if (choice !== "confirm") return;
       await api(`/api/entries/${id}`, { method: "DELETE" });
-      toast("Removed from your library.");
+      toast(`Removed ${title}.`);
       location.hash = "#/library";
       return;
     }
@@ -1967,6 +2033,48 @@ document.addEventListener("keydown", event => {
       event.preventDefault();
       links.forEach(link => { link.tabIndex = link === next ? 0 : -1; });
       next.focus();
+    }
+    return;
+  }
+  const radio = event.target instanceof Element ? event.target.closest("[role='radio']") : null;
+  const radioGroup = radio?.closest("[role='radiogroup']");
+  if (radio && radioGroup && (event.key === "ArrowRight" || event.key === "ArrowLeft" || event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End")) {
+    if (radioGroup.classList.contains("score")) {
+      const next = keyboardScore(radioGroup.dataset.scoreValue, event.key, event.shiftKey);
+      if (next !== undefined && next !== scoreValue(radioGroup.dataset.scoreValue)) {
+        event.preventDefault();
+        const painted = paintScore(radioGroup, next);
+        const opinion = painted.closest(".opinion");
+        if (opinion) scheduleRating(opinion.dataset.id, next);
+      } else if (next !== undefined) {
+        event.preventDefault();
+      }
+      return;
+    }
+    const radios = [...radioGroup.querySelectorAll("[role='radio']")];
+    const index = radios.indexOf(radio);
+    let nextIndex = index;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = Math.min(radios.length - 1, index + 1);
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = Math.max(0, index - 1);
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = radios.length - 1;
+    const nextRadio = radios[nextIndex];
+    if (nextRadio instanceof HTMLElement && nextRadio !== radio) {
+      event.preventDefault();
+      nextRadio.focus();
+      nextRadio.click();
+    } else {
+      event.preventDefault();
+    }
+    return;
+  }
+  if (radio && radioGroup?.classList.contains("score") && (event.key === "Delete" || event.key === "Backspace")) {
+    const next = keyboardScore(radioGroup.dataset.scoreValue, event.key, false);
+    if (next !== undefined) {
+      event.preventDefault();
+      const painted = paintScore(radioGroup, next);
+      const opinion = painted.closest(".opinion");
+      if (opinion) scheduleRating(opinion.dataset.id, next);
     }
     return;
   }

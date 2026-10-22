@@ -97,6 +97,17 @@
     <a href="#/calendar" data-nav="calendar"><span data-icon="calendar"></span><span>Calendar</span></a>
     <a href="#/new" data-nav="new"><span data-icon="add"></span><span>Add</span></a>
   </nav>
+  <dialog id="confirm" class="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-body"></p>
+      <p id="confirm-error" class="quiet" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn" type="submit" value="cancel">Cancel</button>
+        <button class="btn btn-danger" type="submit" value="confirm">Remove</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="quick-add" aria-labelledby="quick-title">
     <form data-action="quick-add">
       <p class="eyebrow">Add to your library</p>
