@@ -70,6 +70,38 @@ def test_stale_review_base_is_a_conflict(client):
     assert client.get(f"/api/entries/{entry['id']}").json()["review"] == "two"
 
 
+def test_same_review_text_with_a_stale_base_is_a_noop(client):
+    entry = _add(client, "Dune")
+    first = client.patch(
+        f"/api/entries/{entry['id']}",
+        json={"review": "mine", "review_base": ""},
+    )
+    assert first.status_code == 200, first.text
+    saved_at = first.json()["review_updated_at"]
+    assert saved_at
+    replay = client.patch(
+        f"/api/entries/{entry['id']}",
+        json={"review": "mine", "review_base": ""},
+    )
+    assert replay.status_code == 200, replay.text
+    body = replay.json()
+    assert body["review"] == "mine"
+    assert body["review_updated_at"] == saved_at
+    blank = client.patch(
+        f"/api/entries/{entry['id']}",
+        json={"review": "", "review_base": saved_at},
+    )
+    assert blank.status_code == 200, blank.text
+    cleared_at = blank.json()["review_updated_at"]
+    again = client.patch(
+        f"/api/entries/{entry['id']}",
+        json={"review": "   ", "review_base": saved_at},
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["review"] is None
+    assert again.json()["review_updated_at"] == cleared_at
+
+
 def test_progress_survives_a_reload(client):
     entry = _add(client, "Dune")
     saved = client.patch(
