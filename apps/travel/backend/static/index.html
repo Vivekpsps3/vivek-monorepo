@@ -58,7 +58,16 @@
     <div id="toast-alerts" role="alert"></div>
   </div>
   <main id="app" class="shell" tabindex="-1"></main>
-  <footer class="footer"></footer>
+  <footer class="footer"><p>Travel · <a href="/hub">Back to Hub</a></p></footer>
+  <dialog id="confirm" class="confirm" aria-labelledby="confirm-title">
+    <h2 id="confirm-title" data-confirm-title></h2>
+    <p data-confirm-body></p>
+    <p class="field-error" data-confirm-error role="status"></p>
+    <div class="row-actions">
+      <button type="button" class="btn" data-confirm-cancel>Cancel</button>
+      <button type="button" class="btn btn-ghost btn-danger" data-confirm-ok>Delete</button>
+    </div>
+  </dialog>
   <script src="__TRAVEL_ROOT__/static/vendor/leaflet.js"></script>
   <script type="module" src="__TRAVEL_ROOT__/static/app.js"></script>
 </body>

@@ -1,4 +1,5 @@
 import { ROLES, MODES, KINDS, ARRANGEMENTS, NECESSARY } from '../state.mjs';
+import { DECISIONS } from '../decisions.mjs';
 import { esc, banner, head, field, area, select, check, actions, labelOf, transportSummary, localInput } from '../helpers.mjs';
 
 export function cityFields() {
@@ -45,10 +46,10 @@ export function hiddenFlight(item) {
 }
 export function transportForm(item, role) {
   const current = item || { role, mode: "flight", currency: "USD", status: "planned", paid: false };
-  return `<form class="stack" data-form="transport" data-id="${item ? item.id : ""}"><div class="form-grid">
+  return `<form class="stack" data-form="transport" data-id="${item && item.id ? item.id : ""}"><div class="form-grid">
       ${select("Part of the trip", "role", current.role, ROLES)}
       ${select("Mode", "mode", current.mode, MODES)}
-      ${select("Status", "status", current.status || "planned", [["planned", "Planned"], ["booked", "Booked"], ["completed", "Completed"], ["cancelled", "Cancelled"]])}
+      ${select("Status", "status", current.status || "planned", DECISIONS.legStatuses)}
       ${field("Carrier", "carrier", current.carrier || "")}
       ${field("Number", "number", current.number || "")}
       ${field("From", "depart_place", current.depart_place || "")}
@@ -73,7 +74,7 @@ export function transportForm(item, role) {
 }
 export function stayForm(item) {
   const current = item || {};
-  return `<form class="stack" data-form="stay" data-id="${item ? item.id : ""}"><div class="form-grid">
+  return `<form class="stack" data-form="stay" data-id="${item && item.id ? item.id : ""}"><div class="form-grid">
     ${field("City", "city", current.city || "")}
     ${field("Region", "region", current.region || "")}
     ${field("Country", "country", current.country || "")}
@@ -88,7 +89,7 @@ export function stayForm(item) {
 }
 export function planForm(item, dateValue) {
   const current = item || { on_date: dateValue, kind: "restaurant", currency: "USD" };
-  return `<form class="stack" data-form="plan" data-id="${item ? item.id : ""}"><div class="form-grid">
+  return `<form class="stack" data-form="plan" data-id="${item && item.id ? item.id : ""}"><div class="form-grid">
     ${field("Date", "on_date", current.on_date || "", "date")}
     ${field("Start", "start_time", current.start_time || "", "time")}
     ${field("End", "end_time", current.end_time || "", "time")}
@@ -108,7 +109,7 @@ export function planForm(item, dateValue) {
 export function parkingForm(item, transports) {
   const current = item || { necessary: "yes", arrangement: "self_park", currency: "USD", booked: false };
   const transportOptions = [["", "Not tied to one ride"], ...transports.map((ride) => [String(ride.id), transportSummary(ride)])];
-  return `<form class="stack" data-form="parking" data-id="${item ? item.id : ""}"><div class="form-grid">
+  return `<form class="stack" data-form="parking" data-id="${item && item.id ? item.id : ""}"><div class="form-grid">
     ${select("Is parking necessary?", "necessary", current.necessary, NECESSARY)}
     ${select("How you'll handle it", "arrangement", current.arrangement, ARRANGEMENTS)}
     ${select("Tied to", "transport_id", current.transport_id ? String(current.transport_id) : "", transportOptions, true)}

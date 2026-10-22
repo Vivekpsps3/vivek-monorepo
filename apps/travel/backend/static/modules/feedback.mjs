@@ -26,8 +26,8 @@ export function toast(message, kind = "status", action = null) {
   return node;
 }
 
-export function saved(message) {
-  return toast(message, "status");
+export function saved(message, action = null) {
+  return toast(message, "status", action);
 }
 
 function fieldElement(form, name) {
@@ -90,6 +90,32 @@ export function fail(error, options = {}) {
   toast(message, "alert", retry
     ? { label: "Retry", persist: true, key: retry.key || "retry", onClick: () => { void retry.run(); } }
     : (options.action || null));
+}
+
+export function openConfirm({ title, body, confirmLabel, onConfirm }) {
+  const dialog = document.querySelector("#confirm");
+  if (!(dialog instanceof HTMLDialogElement)) return;
+  dialog.querySelector("[data-confirm-title]").textContent = title;
+  dialog.querySelector("[data-confirm-body]").textContent = body;
+  const error = dialog.querySelector("[data-confirm-error]");
+  if (error) error.textContent = "";
+  const ok = dialog.querySelector("[data-confirm-ok]");
+  ok.textContent = confirmLabel;
+  ok.onclick = async () => {
+    ok.disabled = true;
+    try {
+      await onConfirm();
+      dialog.close();
+    } catch (reason) {
+      if (error) error.textContent = reason?.message || "Something went wrong.";
+    } finally {
+      ok.disabled = false;
+    }
+  };
+  const cancel = dialog.querySelector("[data-confirm-cancel]");
+  cancel.onclick = () => dialog.close();
+  dialog.showModal();
+  cancel.focus();
 }
 
 export function bindDateYield(doc = document) {

@@ -364,14 +364,35 @@ label { display: block; margin-bottom: var(--space-1); color: var(--text-seconda
   font: inherit;
   border-bottom: 2px solid var(--city, var(--border-subtle));
 }
-.day-add input {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  min-height: 36px;
+.add-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-3);
 }
+.add-row.is-pair { grid-template-columns: minmax(8rem, auto) minmax(0, 1fr) minmax(0, 1fr) auto auto; }
+.add-row input, .add-row select { min-width: 0; }
+.add-label { margin: 0; }
+.btn-danger { color: var(--danger); }
+.row-actions { flex-wrap: nowrap; }
+.money { font-variant-numeric: tabular-nums; margin-left: auto; }
+.ride--muted { color: var(--text-secondary); }
+.reminder.is-done span { text-decoration: line-through; color: var(--text-secondary); }
+.check input { accent-color: var(--accent); width: 1.25rem; height: 1.25rem; }
+@media (max-width: 639px) {
+  .add-row, .add-row.is-pair { grid-template-columns: 1fr; }
+}
+dialog.confirm {
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  color: var(--text);
+  padding: var(--space-5);
+  max-width: 28rem;
+}
+dialog.confirm::backdrop { background: rgba(20, 19, 17, 0.5); }
+dialog.confirm .row-actions { margin-top: var(--space-4); }
 .reminder { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .reminder.is-done { color: var(--text-tertiary); }
 .pto-pip {

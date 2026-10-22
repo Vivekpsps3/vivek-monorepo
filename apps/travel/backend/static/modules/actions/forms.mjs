@@ -160,6 +160,7 @@ async function submitBody(kind, form, ui) {
     });
     state.edit = null;
     state.focusKey = "edit-trip";
+    document.title = `${state.trip.title} · Travel`;
     saved("Trip saved.");
     ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     return;

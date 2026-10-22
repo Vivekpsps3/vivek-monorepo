@@ -14,6 +14,7 @@ export function boot() {
   window.addEventListener("hashchange", () => {
     state.edit = null;
     state.compose = "";
+    state.details = null;
     state.error = "";
     state.flights = [];
     render();
