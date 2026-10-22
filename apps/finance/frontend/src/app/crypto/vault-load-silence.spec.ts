@@ -37,7 +37,12 @@ describe('vault load silence', () => {
 
   afterEach(() => http.verify());
 
-  async function whenRequest(match: (req: { method: string; url: string; context: { get(token: typeof SILENT_ERROR_TOAST): boolean } }) => boolean) {
+  async function whenRequest(match: (req: {
+    method: string;
+    url: string;
+    body?: { records?: Array<{ collection?: string; client_id?: string; expected_revision?: number | null }> };
+    context: { get(token: typeof SILENT_ERROR_TOAST): boolean };
+  }) => boolean) {
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const found = http.match(req => match(req));
       if (found.length) return found[0];
@@ -46,20 +51,134 @@ describe('vault load silence', () => {
     return http.expectOne(req => match(req));
   }
 
-  it('does not let a silent first load hide a normal load failure', async () => {
+  function fullLoad(req: { method: string; url: string }): boolean {
+    return req.method === 'GET' && req.url.includes('/vault/records') && !req.url.includes('collection=');
+  }
+
+  function assetRow(revision: number, schemaVersion = 2) {
+    return {
+      collection: 'assets',
+      client_id: 'asset-1',
+      ciphertext_b64: 'Y2lwaGVy',
+      schema_version: schemaVersion,
+      key_version: 1,
+      revision,
+      updated_at: '2026-10-01T00:00:00Z',
+    };
+  }
+
+  it('uses one silent GET when a silent caller and a normal caller load together', async () => {
+    const silent = store.getStockLabScenarios({ silent: true });
+    const open = store.getTransactions();
+    await Promise.resolve();
+    const requests = http.match(fullLoad);
+    expect(requests.length).toBe(1);
+    expect(requests[0].request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    requests[0].flush([]);
+    await Promise.all([silent, open]);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('toasts a normal caller when the shared load fails and stays quiet for a silent caller', async () => {
     const silent = store.getStockLabScenarios({ silent: true }).catch(() => undefined);
     const open = store.getTransactions().catch(() => undefined);
-    const requests = http.match(req => req.method === 'GET' && req.url.includes('/vault/records'));
-    expect(requests.map(req => req.request.context.get(SILENT_ERROR_TOAST)).sort()).toEqual([false, true]);
-
-    const openReq = requests.find(req => req.request.context.get(SILENT_ERROR_TOAST) === false)!;
-    const silentReq = requests.find(req => req.request.context.get(SILENT_ERROR_TOAST) === true)!;
-    openReq.flush({ detail: 'Synthetic load failed' }, { status: 503, statusText: 'Unavailable' });
     await Promise.resolve();
-    expect(toast.error).toHaveBeenCalledOnceWith(HTTP_ERROR_FALLBACK);
-    silentReq.flush({ detail: 'Synthetic load failed' }, { status: 503, statusText: 'Unavailable' });
+    const requests = http.match(fullLoad);
+    expect(requests.length).toBe(1);
+    expect(requests[0].request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    requests[0].flush({ detail: 'Synthetic load failed' }, { status: 503, statusText: 'Unavailable' });
     await Promise.all([silent, open]);
+    expect(toast.error).toHaveBeenCalledOnceWith(HTTP_ERROR_FALLBACK);
+  });
+
+  it('does not roll a saved revision back when a slower load finishes after a write', async () => {
+    const silent = store.getStockLabScenarios({ silent: true });
+    const open = store.getTransactions();
+    await Promise.resolve();
+    const loads = http.match(fullLoad);
+    loads[0].flush([assetRow(3)]);
+    for (let step = 0; step < 30; step += 1) await Promise.resolve();
+
+    const firstSave = store.updateAsset(1, { name: 'Edited' });
+    const saved = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(saved.request.body?.records?.[0].expected_revision).toBe(3);
+    saved.flush([assetRow(4)]);
+    await firstSave;
+
+    for (const late of loads.slice(1)) late.flush([assetRow(3)]);
+    await Promise.all([silent, open]);
+
+    const secondSave = store.updateAsset(1, { name: 'Edited again' });
+    const next = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(next.request.body?.records?.[0].expected_revision).toBe(4);
+    next.flush([assetRow(5)]);
+    await secondSave;
+  });
+
+  it('rewrites a legacy record once when a silent load and a normal load overlap', async () => {
+    const silent = store.getStockLabScenarios({ silent: true });
+    const open = store.getTransactions();
+    await Promise.resolve();
+    const loads = http.match(fullLoad);
+    expect(loads.length).toBe(1);
+    expect(loads[0].request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    loads[0].flush([assetRow(3, 1)]);
+    const rewrite = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(rewrite.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    expect(rewrite.request.body?.records?.[0].expected_revision).toBe(3);
+    rewrite.flush([assetRow(4)]);
+    await Promise.all([silent, open]);
+    expect(http.match(req => req.method === 'POST' && req.url.includes('/vault/records/upsert')).length).toBe(0);
+  });
+
+  it('retries a failed legacy rewrite without reloading, and stays quiet for a silent caller', async () => {
+    const first = store.getStockLabScenarios({ silent: true }).then(() => 'ok', () => 'failed');
+    const list = await whenRequest(fullLoad);
+    expect(list.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    list.flush([assetRow(3, 1)]);
+    const rewrite = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(rewrite.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    expect(rewrite.request.body?.records?.[0].expected_revision).toBe(3);
+    rewrite.flush({ detail: 'Synthetic rewrite failed' }, { status: 503, statusText: 'Unavailable' });
+    expect(await first).toBe('failed');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(http.match(fullLoad).length).toBe(0);
+
+    const retryRead = store.getAssets().then(rows => rows, () => 'failed' as const);
+    const again = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(http.match(fullLoad).length).withContext('collections stay loaded').toBe(0);
+    expect(again.request.body?.records?.[0].expected_revision).toBe(3);
+    again.flush({ detail: 'Synthetic rewrite failed' }, { status: 503, statusText: 'Unavailable' });
+    expect(await retryRead).toBe('failed');
+    expect(toast.error).toHaveBeenCalledOnceWith(HTTP_ERROR_FALLBACK);
+
+    const commit = store.addTransaction({
+      date: '2026-10-22',
+      type: 'expense',
+      category: 'Food',
+      amount: 4,
+      description: 'Tea',
+    } as never, { silent: true });
+    const commitRewrite = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(commitRewrite.request.context.get(SILENT_ERROR_TOAST)).withContext('silent commit retry').toBeTrue();
+    expect(commitRewrite.request.body?.records?.[0].expected_revision).toBe(3);
+    commitRewrite.flush([assetRow(4)]);
+    const insert = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(insert.request.body?.records?.[0].collection).toBe('transactions');
+    expect(insert.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    insert.flush([{
+      collection: 'transactions',
+      client_id: insert.request.body?.records?.[0].client_id,
+      ciphertext_b64: 'Y2lwaGVy',
+      schema_version: 2,
+      key_version: 1,
+      revision: 1,
+      updated_at: '2026-10-01T00:00:00Z',
+    }]);
+    await commit;
     expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(await store.getAssets()).toEqual([jasmine.objectContaining({ id: 1, name: 'Cash', current_value: 10 })]);
+    expect(http.match(fullLoad).length).toBe(0);
   });
 
   it('shares one request when two silent callers load together', async () => {

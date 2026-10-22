@@ -16,7 +16,7 @@ import {
 } from './vault-crypto';
 import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
-import { ToastService } from '@vivek/ui';
+import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
 import { silentErrorToast } from '../core/http-error.interceptor';
 
 export interface VaultStatus {
@@ -299,6 +299,14 @@ export class VaultService {
 
   private requestOptions(options?: VaultWriteOptions): { context: ReturnType<typeof silentErrorToast> } | undefined {
     return options?.silent ? { context: silentErrorToast() } : undefined;
+  }
+
+  /**
+   * The shared vault load suppresses the interceptor toast.
+   * A normal caller asks for the standard failure toast after that load rejects.
+   */
+  reportFallbackFailure(): void {
+    this.toast.error(HTTP_ERROR_FALLBACK);
   }
 
   getCounts(): Observable<{ counts: Record<string, number> }> {
