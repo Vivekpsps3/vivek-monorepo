@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { EcdhService } from '../../services/ecdh.service';
 import { MarkdownModule } from 'ngx-markdown';
@@ -18,15 +18,16 @@ export class SecretsComponent implements OnInit {
   errorMessage = '';
   keyExchangeComplete = false;
 
-  constructor(private ecdhService: EcdhService) {}
+  constructor(private ecdhService: EcdhService, private change: ChangeDetectorRef) {}
 
   ngOnInit(): void {
-    setTimeout(() => {
-      this.keyExchangeComplete = this.ecdhService.isKeyExchangeComplete();
-      if (!this.keyExchangeComplete) {
-        this.errorMessage = 'Timed out. Reload to start a new key exchange.';
-      }
-    }, 1000);
+    void this.ecdhService.whenReady().then(() => {
+      this.keyExchangeComplete = true;
+      this.change.markForCheck();
+    }).catch((error: Error) => {
+      this.errorMessage = error.message;
+      this.change.markForCheck();
+    });
   }
 
   async encryptMessage() {
@@ -43,6 +44,7 @@ export class SecretsComponent implements OnInit {
       this.errorMessage = `Encryption failed: ${error.message || error}`;
     } finally {
       this.isEncrypting = false;
+      this.change.markForCheck();
     }
   }
 
@@ -60,6 +62,7 @@ export class SecretsComponent implements OnInit {
       this.decryptedMessage = '';
     } finally {
       this.isDecrypting = false;
+      this.change.markForCheck();
     }
   }
 

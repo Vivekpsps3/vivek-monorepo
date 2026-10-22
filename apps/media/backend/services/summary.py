@@ -4,9 +4,9 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from models import Release, UserEntry
-from services.clock import today
-from services.records import entry_card, episode_state, iso, progress_label
+from apps.media.backend.models import Release, UserEntry
+from apps.media.backend.services.clock import today
+from apps.media.backend.services.records import entry_card, episode_state, iso, progress_label
 
 
 def build_summary(db: Session, user_id: int) -> dict:

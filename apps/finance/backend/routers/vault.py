@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
-from database import get_db
-from models import User
-from schemas_vault import (
+from apps.finance.backend.auth import get_current_user
+from apps.finance.backend.database import get_db
+from apps.finance.backend.models import User
+from apps.finance.backend.schemas_vault import (
     BlindIndexLookupRequest,
     EncryptedRecordBatchDelete,
     EncryptedRecordBatchUpsert,
@@ -15,7 +15,7 @@ from schemas_vault import (
     VaultResponse,
     VaultUpdateRequest,
 )
-from services import encrypted_storage as store
+from apps.finance.backend.services import encrypted_storage as store
 
 router = APIRouter(prefix="/vault", tags=["vault"])
 

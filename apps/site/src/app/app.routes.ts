@@ -28,7 +28,7 @@ export const routes: Routes = [
     path: 'secrets',
     component: SecretsComponent,
     title: 'Encryption demo · Vivek Panchagnula',
-    data: { description: 'An interactive ECDH and AES-GCM demo: the browser encrypts a prompt, the server decrypts it, and the LLM reply returns as ordinary text.' },
+    data: { description: 'An interactive browser-only demonstration of ECDH key agreement and authenticated AES-GCM encryption.' },
   },
   { path: '', redirectTo: '/home', pathMatch: 'full' },
 ];

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 
 @pytest.fixture
@@ -14,8 +14,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv("RAWG_API_KEY", raising=False)
     monkeypatch.delenv("MEDIA_SCRAPE_MODE", raising=False)
     monkeypatch.delenv("MEDIA_TODAY", raising=False)
-    from app import create_app
-    from deps import AuthResult, Principal
+    from apps.media.backend.app import create_app
+    from apps.media.backend.deps import AuthResult, Principal
 
     application = create_app()
     # load_dotenv() inside create_app can refill these from a developer .env.

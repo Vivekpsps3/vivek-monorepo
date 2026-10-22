@@ -5,16 +5,17 @@ from typing import Any
 from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 
-from auth import role_str, utc_now_naive
-from models import (
+from apps.finance.backend.auth import role_str, utc_now_naive
+from apps.finance.backend.models import (
     AuditEvent,
     AuthEnrollment,
+    AuthChallenge,
     EncryptedRecord,
     User,
     UserSession,
     UserVault,
 )
-from services.encrypted_storage import wipe_encrypted_user_data
+from apps.finance.backend.services.encrypted_storage import wipe_encrypted_user_data
 
 
 def _audit_summary(event: AuditEvent, names: dict[int, str]) -> str:
@@ -99,7 +100,7 @@ def admin_metrics(db: Session) -> dict[str, Any]:
             "created_at": event.created_at.isoformat() if event.created_at else None,
             "summary": _audit_summary(event, names),
         })
-    inspector = inspect(db.bind)
+    inspector = inspect(db.connection())
     tables = []
     for table in inspector.get_table_names():
         try:
@@ -125,6 +126,14 @@ def reset_user_contents(db: Session, user: User, *, actor_user_id: int, revoke_s
 
 def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
     wipe_encrypted_user_data(db, user.id)
+    if "site_schema" in inspect(db.connection()).get_table_names():
+        # Unified ownership contract; delete personal rows, retain public catalogs.
+        for table in ("album_ratings", "track_ratings", "season_progress", "experiences", "episode_progress", "user_entries", "pto_entries", "pto_policy", "trips"):
+            db.execute(text(f'DELETE FROM "{table}" WHERE user_id=:owner'), {"owner": user.id})
+        db.execute(text("DELETE FROM settings WHERE key LIKE :prefix"), {"prefix": f"user:{user.id}:%"})
+    db.query(AuthChallenge).filter(AuthChallenge.user_id == user.id).delete(synchronize_session=False)
+    db.query(AuthEnrollment).filter(AuthEnrollment.user_id == user.id).delete(synchronize_session=False)
+    db.query(AuthEnrollment).filter(AuthEnrollment.created_by_user_id == user.id).update({AuthEnrollment.created_by_user_id: None}, synchronize_session=False)
     db.query(UserSession).filter(UserSession.user_id == user.id).delete(synchronize_session=False)
     db.query(AuditEvent).filter(AuditEvent.actor_user_id == user.id).update(
         {AuditEvent.actor_user_id: None}, synchronize_session=False

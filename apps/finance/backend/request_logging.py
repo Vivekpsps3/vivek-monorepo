@@ -9,7 +9,7 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from logging_config import LOG_ACCESS_HEALTH
+from apps.finance.backend.logging_config import LOG_ACCESS_HEALTH
 
 logger = logging.getLogger("finance_api.access")
 

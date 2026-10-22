@@ -199,7 +199,7 @@ def test_flight_lookup_and_place_cache(client, monkeypatch):
         assert api_key == "test-key"
         return [{"ident": "UAL837", "origin_iata": "SFO", "destination_iata": "NRT"}]
 
-    from deps import get_flight_lookup, get_geocoder
+    from apps.travel.backend.deps import get_flight_lookup, get_geocoder
 
     client.app.dependency_overrides[get_flight_lookup] = lambda: fake_lookup
     saved = client.put("/api/settings/flightaware", json={"api_key": "test-key"})
@@ -224,7 +224,7 @@ def test_flight_lookup_and_place_cache(client, monkeypatch):
 
 
 def test_trips_stay_with_the_finance_user(client):
-    from deps import AuthResult, Principal
+    from apps.travel.backend.deps import AuthResult, Principal
 
     created = client.post(
         "/api/trips",
@@ -239,7 +239,7 @@ def test_trips_stay_with_the_finance_user(client):
 
 
 def test_cities_are_placed_on_the_map_when_the_trip_is_saved(client):
-    from deps import get_geocoder
+    from apps.travel.backend.deps import get_geocoder
 
     def fetch(query):
         places = {
@@ -279,7 +279,7 @@ def test_finance_session_is_required(client, monkeypatch):
     def deny(_request):
         raise HTTPException(status_code=401, detail="Sign in through Finance.")
 
-    monkeypatch.setattr("deps.fetch_principal", deny)
+    monkeypatch.setattr("apps.travel.backend.deps.fetch_principal", deny)
     assert client.get("/api/health").status_code == 200
     assert client.get("/api/home").status_code == 401
     assert client.get("/api/home").json()["detail"] == "Sign in through Finance."

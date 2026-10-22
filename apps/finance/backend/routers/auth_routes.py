@@ -13,8 +13,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from admin_tools import admin_metrics, delete_user_account, reset_user_contents
-from auth import (
+from apps.finance.backend.admin_tools import admin_metrics, delete_user_account, reset_user_contents
+from apps.finance.backend.auth import (
     audit_event,
     clear_session_cookie,
     complete_migration_session,
@@ -30,11 +30,11 @@ from auth import (
     revoke_user_sessions,
     verify_password,
 )
-from database import get_db
-from models import AuthEnrollment, User, UserRole, UserSession
-from services.challenge_auth import CHALLENGE_TTL, PROTOCOL, issue_challenge, verify_challenge
-from services import encrypted_storage as vault_store
-from schemas_auth import (
+from apps.finance.backend.database import get_db
+from apps.finance.backend.models import AuthEnrollment, User, UserRole, UserSession
+from apps.finance.backend.services.challenge_auth import CHALLENGE_TTL, PROTOCOL, issue_challenge, verify_challenge
+from apps.finance.backend.services import encrypted_storage as vault_store
+from apps.finance.backend.schemas_auth import (
     AdminUserContentReset,
     BootstrapStatusResponse,
     AdminUserCreate,
@@ -359,7 +359,7 @@ def logout(
 ):
     token = request.cookies.get("finance_session")
     if token:
-        from auth import _hash_secret
+        from apps.finance.backend.auth import _hash_secret
 
         session = db.query(UserSession).filter(UserSession.token_hash == _hash_secret(token)).first()
         if session and session.revoked_at is None:
@@ -371,7 +371,7 @@ def logout(
 
 
 def _me_body(request: Request, user: User) -> dict:
-    from local_dev import is_local_dev_identity, local_dev_override_active
+    from apps.finance.backend.local_dev import is_local_dev_identity, local_dev_override_active
 
     return {
         "user": _user_response(user),
@@ -388,7 +388,7 @@ def me(request: Request, current_user: User = Depends(get_current_user)):
 @router.get("/auth/local-dev/vault")
 def local_dev_vault(request: Request, current_user: User = Depends(get_current_user)):
     """Passphrase for the local-dev user's vault. 404 for every other account and when the bypass is off."""
-    from local_dev import is_local_dev_identity, local_dev_override_active, local_dev_vault_passphrase
+    from apps.finance.backend.local_dev import is_local_dev_identity, local_dev_override_active, local_dev_vault_passphrase
 
     if not local_dev_override_active(request) or not is_local_dev_identity(current_user):
         raise HTTPException(status_code=404, detail="Not found")

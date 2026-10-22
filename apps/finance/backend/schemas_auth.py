@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from schemas_vault import VaultCreateRequest
+from apps.finance.backend.schemas_vault import VaultCreateRequest
 
 UserRoleValue = Literal["admin", "user"]
 

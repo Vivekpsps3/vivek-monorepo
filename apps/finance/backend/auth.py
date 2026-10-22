@@ -11,8 +11,8 @@ from argon2.exceptions import VerifyMismatchError, VerificationError
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models import AuditEvent, User, UserRole, UserSession
+from apps.finance.backend.database import get_db
+from apps.finance.backend.models import AuditEvent, User, UserRole, UserSession
 
 SESSION_COOKIE_NAME = "finance_session"
 CSRF_COOKIE_NAME = "finance_csrf"
@@ -188,7 +188,7 @@ def require_csrf(request: Request, session: UserSession) -> None:
 
 
 def get_current_user(request: Request, response: Response, db: Session = Depends(get_db)) -> User:
-    from local_dev import local_dev_override_active, open_local_dev_session
+    from apps.finance.backend.local_dev import local_dev_override_active, open_local_dev_session
 
     try:
         session, user = _session_from_request(db, request)

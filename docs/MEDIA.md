@@ -1,5 +1,8 @@
 # Media journal
 
+> Current unified development/deployment commands are in [Operations](OPERATIONS.md).
+> Standalone app commands below are historical domain references.
+
 Media is a separate app in `apps/media/`. The suite hosts it at `/media/`. It checks the finance session cookie by calling the finance API. It does not open `finance.db`, the encrypted vault, or travel data.
 
 Personal data is private to the signed-in user: library entries, the one overall rating and review, optional experiences, episode progress, season watched marks and season ratings, artist album scores, artist song scores, favorites, tags, and anticipation. Album and song scores are stored on their own rows. They do not change the artist rating, and the artist rating does not change them. Catalog rows hold public metadata and can be shared by provider id. There is no public profile, feed, or social action.

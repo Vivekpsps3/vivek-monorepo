@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from conftest import authenticated_client
-from main import Base, app, engine, market_data
-from models import UserRole
+from apps.finance.backend.main import Base, app, engine, market_data
+from apps.finance.backend.models import UserRole
 
 
 @pytest.fixture(autouse=True)
@@ -36,9 +36,9 @@ def test_finance_api_requires_login():
 def test_session_cookie_persists_and_slides_while_the_browser_is_in_use():
     from datetime import timedelta
 
-    from auth import utc_now_naive
-    from database import SessionLocal
-    from models import UserSession
+    from apps.finance.backend.auth import utc_now_naive
+    from apps.finance.backend.database import SessionLocal
+    from apps.finance.backend.models import UserSession
 
     client = authenticated_client(app, email="persist@example.com")
     me = client.get("/api/auth/me")
@@ -133,9 +133,9 @@ def test_admin_can_delete_user_and_owned_data_is_removed():
     admin = authenticated_client(app, email="owner-admin@example.com", role=UserRole.admin)
     login = authenticated_client(app, email="delete-me@example.com")
     created = login.get("/api/auth/me").json()["user"]
-    db = next(__import__("database").get_db())
+    db = next(__import__("apps.finance.backend.database", fromlist=["get_db"]).get_db())
     try:
-        from models import EncryptedRecord, User
+        from apps.finance.backend.models import EncryptedRecord, User
         db.add(EncryptedRecord(
             user_id=created["id"],
             collection="transactions",
@@ -160,9 +160,9 @@ def test_user_can_reset_own_data_without_affecting_other_users():
     other = authenticated_client(app, email="reset-other@example.com")
     owner_id = owner.get("/api/auth/me").json()["user"]["id"]
     other_id = other.get("/api/auth/me").json()["user"]["id"]
-    db = next(__import__("database").get_db())
+    db = next(__import__("apps.finance.backend.database", fromlist=["get_db"]).get_db())
     try:
-        from models import EncryptedRecord
+        from apps.finance.backend.models import EncryptedRecord
         db.add(EncryptedRecord(
             user_id=owner_id, collection="transactions", client_id="tx-owner-01",
             ciphertext_b64="Y2lwaGVy", schema_version=2, key_version=1, revision=1,
@@ -231,8 +231,8 @@ def test_public_password_signup_is_unmounted():
 
 
 def test_admin_can_sign_out_other_devices_without_wiping_the_current_one():
-    from database import SessionLocal
-    from models import UserSession
+    from apps.finance.backend.database import SessionLocal
+    from apps.finance.backend.models import UserSession
 
     admin = authenticated_client(app, email="session-admin@example.com", role=UserRole.admin)
     me = admin.get("/api/auth/me").json()["user"]

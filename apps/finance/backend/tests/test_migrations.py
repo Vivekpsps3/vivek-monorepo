@@ -287,7 +287,7 @@ def test_password_hash_migration_allows_passwordless_users():
 def test_market_research_cache_create_all_has_expected_columns():
     from sqlalchemy import create_engine, inspect
 
-    from models import Base, MarketResearchCache
+    from apps.finance.backend.models import Base, MarketResearchCache
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)

@@ -2,8 +2,8 @@
 
 from datetime import UTC, datetime
 
-from models import BudgetLine, Parking, PlanItem, Reminder, Stay, Transport
-from services.money import fmt_days, parse_days, parse_money
+from apps.travel.backend.models import BudgetLine, Parking, PlanItem, Reminder, Stay, Transport
+from apps.travel.backend.services.money import fmt_days, parse_days, parse_money
 
 
 def touch(trip) -> None:

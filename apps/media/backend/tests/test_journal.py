@@ -20,7 +20,7 @@ def _request(method: str, headers: list[tuple[bytes, bytes]] | None = None) -> R
 
 
 def test_reads_and_writes_follow_the_finance_session(monkeypatch):
-    from deps import fetch_principal
+    from apps.media.backend.deps import fetch_principal
 
     with pytest.raises(HTTPException) as missing:
         fetch_principal(_request("POST", [(b"cookie", b"finance_session=abc")]))
@@ -158,8 +158,8 @@ def test_episode_progress_survives_reload(client, monkeypatch):
 def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkeypatch):
     from datetime import date
 
-    from models import Release
-    from services.summary import classify_release
+    from apps.media.backend.models import Release
+    from apps.media.backend.services.summary import classify_release
 
     current = date(2026, 10, 15)
 
@@ -202,7 +202,7 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
 
 
 def test_library_filters_and_owner_isolation(client):
-    from deps import AuthResult, Principal
+    from apps.media.backend.deps import AuthResult, Principal
 
     movie = client.post("/api/library", json={"kind": "album", "title": "Secret", "creator": "Ada", "status": "completed", "rating": 10}).json()
     client.app.state.principal_checker = lambda _request: AuthResult(Principal(2, "other", "Other"), [])
@@ -248,7 +248,7 @@ def test_provider_metadata_cannot_overwrite_a_review_and_outages_keep_saved_rows
     def boom(*_args, **_kwargs):
         raise RuntimeError("provider down")
 
-    monkeypatch.setattr("services.providers.openlibrary_search", boom)
+    monkeypatch.setattr("apps.media.backend.services.providers.openlibrary_search", boom)
     found = client.get("/api/search", params={"q": "original", "kind": "book"})
     assert found.status_code == 200
     assert found.json()["providers"]["openlibrary"] == "error"
@@ -276,7 +276,7 @@ def test_search_uses_a_cache_and_marks_saved_items(client, monkeypatch):
             "episodes": [],
         }]
 
-    monkeypatch.setattr("services.providers.musicbrainz_search", once)
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_search", once)
     first = client.get("/api/search", params={"q": "song", "kind": "track"}).json()
     second = client.get("/api/search", params={"q": "song", "kind": "track"}).json()
     assert calls["n"] == 1
@@ -292,8 +292,8 @@ def test_scrape_mode_stays_off_until_asked(client, monkeypatch):
     def forbidden(*_args, **_kwargs):
         raise AssertionError("public catalog was called")
 
-    monkeypatch.setattr("services.providers.itunes_search", forbidden)
-    monkeypatch.setattr("services.providers.tvmaze_search", forbidden)
+    monkeypatch.setattr("apps.media.backend.services.providers.itunes_search", forbidden)
+    monkeypatch.setattr("apps.media.backend.services.providers.tvmaze_search", forbidden)
     found = client.get("/api/search", params={"q": "inception", "kind": "movie"})
     assert found.status_code == 200
     body = found.json()
@@ -355,8 +355,8 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
             "episodes": [],
         }]
 
-    monkeypatch.setattr("services.providers.tmdb_search", tmdb)
-    monkeypatch.setattr("services.providers.itunes_search", itunes)
+    monkeypatch.setattr("apps.media.backend.services.providers.tmdb_search", tmdb)
+    monkeypatch.setattr("apps.media.backend.services.providers.itunes_search", itunes)
     found = client.get("/api/search", params={"q": "inception", "kind": "movie"}).json()
     assert [item["source"] for item in found["results"]] == ["tmdb", "itunes"]
     assert found["results"][1]["title"] == "Inception: The App"
@@ -368,7 +368,7 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
 
 def test_tvmaze_summary_is_plain_text():
     import httpx
-    from services.providers import tvmaze_search
+    from apps.media.backend.services.providers import tvmaze_search
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.host == "api.tvmaze.com"

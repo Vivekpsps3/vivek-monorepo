@@ -4,7 +4,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from fastapi.testclient import TestClient
 
-from app import create_app
+from apps.finance.backend.app import create_app
 
 
 def test_openapi_disabled_when_env_set(monkeypatch):

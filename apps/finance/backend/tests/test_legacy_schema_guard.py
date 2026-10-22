@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import create_engine, text
 
-from legacy_schema_guard import assert_safe_to_remove_legacy_schema
+from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
 
 
 def test_guard_refuses_populated_legacy_tables_without_changing_source_rows():
@@ -62,8 +62,8 @@ def _upgrade_file(url, monkeypatch, target="head"):
 
 def test_cleanup_preserves_ciphertext_and_keys_and_stays_clean_on_restart(tmp_path, monkeypatch):
     from sqlalchemy import inspect
-    import database
-    from models import Base, User, UserVault, EncryptedRecord, UserRole
+    from apps.finance.backend import database
+    from apps.finance.backend.models import Base, User, UserVault, EncryptedRecord, UserRole
     from sqlalchemy.orm import Session
     url = f"sqlite:///{tmp_path / 'vault.db'}"
     engine = create_engine(url)
@@ -116,7 +116,7 @@ def test_head_upgrade_refuses_legacy_data_before_any_schema_changes(tmp_path, mo
 
 def test_fresh_file_startup_creates_only_current_schema(tmp_path, monkeypatch):
     from sqlalchemy import inspect
-    import database
+    from apps.finance.backend import database
     url = f"sqlite:///{tmp_path / 'fresh.db'}"
     engine = create_engine(url)
     monkeypatch.setenv("DATABASE_URL", url)

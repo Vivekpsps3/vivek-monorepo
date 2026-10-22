@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from constants import SYMBOL_PATTERN
+from apps.finance.backend.constants import SYMBOL_PATTERN
 
 
 MarketCacheStatus = Literal["hit", "miss", "refresh"]

@@ -3,18 +3,18 @@ import math
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from constants import SYMBOL_PATTERN
-from auth import get_current_user
-from database import get_db
-from models import User
-from schemas_market import (
+from apps.finance.backend.constants import SYMBOL_PATTERN
+from apps.finance.backend.auth import get_current_user
+from apps.finance.backend.database import get_db
+from apps.finance.backend.models import User
+from apps.finance.backend.schemas_market import (
     MarketPriceResponse,
     MarketResearchBatchRequest,
     MarketResearchBatchResponse,
     MarketResearchFailure,
     MarketResearchResponse,
 )
-from services.market_data import market_data
+from apps.finance.backend.services.market_data import market_data
 
 router = APIRouter(tags=["market"])
 

@@ -8,11 +8,11 @@ from datetime import date
 import httpx
 from sqlalchemy.orm import Session
 
-from models import Episode, EpisodeProgress, Experience, Release, UserEntry
-from services.clock import today
-from services.followups import Budget, follow_ups, norm_title, refresh_show
-from services.validate import fail
-from services.when import public_release_on
+from apps.media.backend.models import Episode, EpisodeProgress, Experience, Release, UserEntry
+from apps.media.backend.services.clock import today
+from apps.media.backend.services.followups import Budget, follow_ups, norm_title, refresh_show
+from apps.media.backend.services.validate import fail
+from apps.media.backend.services.when import public_release_on
 
 TYPE_ORDER = {"episode": 0, "anticipated": 1, "sequel": 2, "spinoff": 3}
 WATCHED_EXPERIENCES = {"watch", "rewatch"}

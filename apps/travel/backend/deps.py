@@ -13,8 +13,8 @@ import httpx
 from fastapi import HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from services.flights import lookup_flights
-from services.places import nominatim_search
+from apps.travel.backend.services.flights import lookup_flights
+from apps.travel.backend.services.places import nominatim_search
 
 actor: ContextVar["Principal | None"] = ContextVar("travel_actor", default=None)
 
@@ -53,7 +53,7 @@ def settings_key(name: str) -> str:
 
 def flightaware_key(db) -> tuple[str | None, str | None]:
     """Env wins over a key saved from the settings page."""
-    from models import Setting
+    from apps.travel.backend.models import Setting
 
     env = os.getenv("FLIGHTAWARE_API_KEY", "").strip()
     if env:

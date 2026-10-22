@@ -1,0 +1,157 @@
+# Unified personal site
+
+The application is disposable. The only persistent application volumes are
+`personal-site_data` (one SQLite database) and `personal-site_backups` (verified
+backups). There are no installed controllers, copied config trees, custom release
+history files, host timers, scheduler logs, or new runner accounts.
+
+## Configuration and boundaries
+
+**compose.yml is the single deployment definition**: image, environment defaults,
+ports, mounts, limits, health checks, backup schedule, and monitoring helper.
+The root Dockerfile builds both UIs and the modular FastAPI service. Its pinned
+base images and hashed Python lock make builds reproducible.
+
+Secrets are supplied through the existing private repo-root `.env` (mode 600).
+Do not bake secrets into Compose, the Dockerfile, or images. The shared nginx-edge
+and its Let's Encrypt certificates remain existing host infrastructure. The site's
+edge vhost source is ops/nginx/site.conf; adding/replacing this vhost requires a
+config test and reload. Other hostnames are unaffected.
+
+The existing self-hosted runner and its Docker privilege are retained by explicit
+user preference. It remains capable of modifying host resources and reading site
+state through Docker. Stateless containers do not remove that trust boundary.
+
+## Application and data flow
+
+Browser -> nginx-edge HTTPS -> 127.0.0.1:8085 -> site :8000 -> /data/site.db.
+The public portfolio is at `/`; Apps links to `/hub`. Finance, Travel, and Media
+remain at `/finance/`, `/travel/`, and `/media/`, with shared `/auth/login` and
+`/api/auth`. Both UIs ship in the same immutable image.
+
+The three domains are modules in one process and use one engine and identity
+store. Travel and Media validate sessions and CSRF directly, without HTTP auth
+calls. Owner foreign keys, tenant filtering, CSRF, and complete account deletion
+are tested. Combining databases preserves Finance ciphertext and wrapped keys;
+it does not decrypt or transform financial records.
+
+The portfolio encryption demo is browser-only ECDH/HKDF/AES-GCM. The historical
+Flask/Socket.IO/LLM backend and standalone Docker/nginx definitions are retired.
+
+## Runtime containers
+
+- **site**: non-root, read-only root filesystem, bounded CPU/memory/PIDs/logs;
+  only loopback :8085 is published. Its persistent mount is the data volume.
+- **maintenance**: the same immutable image, no public ports or API keys. It
+  performs hourly SQLite backups and exposes local probes to the existing
+  Prometheus network. Its timer is in memory; backup file timestamps determine
+  the last success after recreation. It mounts data for SQLite coordination and
+  backups for writing. The source database connection is read-only.
+- **backup**: an on-demand `ops` profile job using the same image for immediate
+  backup, verification, or explicit migration commands. It does not run permanently.
+
+Readiness checks schema and all domain tables. Startup refuses a missing database,
+missing frontend, wrong schema version, or non-WAL database, and runs no DDL.
+Only the app and maintenance helper restart automatically on process exit.
+A running unhealthy container needs investigation; no Docker socket is exposed
+to an autoheal helper.
+
+## Release and rollback
+
+GitHub-hosted CI runs domain tests, both frontend production builds, migration and
+restore tests, runtime dependency audits, and image checks for authenticated reads,
+writes, CSRF, isolation, deletion, routing, and caching. Desktop/mobile Chromium
+checks run against the built image. Official Actions and image bases are pinned.
+
+The Deploy workflow accepts only successful trusted main push artifacts. It
+rejects stale SHAs; manual runs also require a successful main artifact. The
+existing runner downloads the image and checks out the tested deployment definition
+in the canonical repo, then runs scripts/deploy-site.sh. It does not build images
+or install npm/pip packages on production. Runtime code is baked into the image,
+so changing the checkout does not change the running application.
+
+The deploy script uses a temporary lock, reads the preceding image from Docker's
+existing metadata, runs image checks without production data/network, verifies a
+backup, starts the new image, and checks exact-SHA readiness plus HTTPS routes.
+On failure it restores the prior image and its Compose definition embedded in
+that image. Rollback material is temporary; release identity lives in image labels
+and Docker metadata. No separate release database/history file is needed.
+
+Database restoration is never automatic after users may have written data. Future
+schema changes require explicit migration and backward-compatibility planning.
+Keep preceding images available; do not prune rollback images indiscriminately.
+
+Commands from the canonical checkout (as vivek):
+
+```sh
+sudo -n docker compose ps
+sudo -n docker logs --tail 100 personal-site-site-1
+curl -fsS http://127.0.0.1:8085/health/ready
+DOCKER_COMMAND='sudo -n docker' ./scripts/backup-site.sh
+```
+
+The old `_control` finance-tracker stack must stay stopped; do not start its old
+containers against retired databases or compete for :8085.
+
+## First database consolidation
+
+Rehearse with read-only online snapshots before changing production. Final cutover:
+stop every legacy writer, preserve the old image IDs/config/env/vhost and data,
+then migrate the offline files into a **new** site.db. The migration refuses an
+existing destination, missing or unexpected data, unsupported Finance revisions,
+invalid ownership, or integrity errors. It preserves all IDs and compares every
+copied table's row count and content digest. A private report is recovery material,
+not runtime state. Originals remain untouched until the recovery window expires.
+
+Transfer the new file into the named data volume with owner 10001 and mode 600.
+Start the tested image, test/reload the new edge vhost, then verify public TLS,
+all apps, existing sessions, and browser behavior. Preserve old data as rollback
+backup material; do not treat old database files as active production databases.
+
+## Backup and recovery
+
+Maintenance checks once a minute and backs up when the most recent verified
+backup is an hour old. It uses SQLite's online backup API, checks integrity and
+foreign keys, restores into a separate verification copy, and atomically publishes
+a private snapshot with a checksum/verification manifest. It keeps 30 days and at
+least seven snapshots. Missing source databases fail rather than silently skip.
+Backup files and manifests live in the backup volume; no separate status file is
+needed. Logs use the bounded Docker driver.
+
+The intended recovery point is about one hour plus scheduling delay. All copies
+remain on this machine by user choice. Off-host encrypted backup and a measured
+replacement-host recovery time are explicit TODOs.
+
+For restore: stop site and maintenance, preserve the current database together
+with WAL/SHM, verify the chosen backup, restore into a new empty data volume with
+correct ownership, then start its compatible image. Verify authenticated reads
+and writes across every domain before discarding any old state. Never replace a
+live SQLite file or pair an old database with unrelated WAL files. Restore all
+domains together so identity and ownership remain consistent.
+
+## Monitoring and limits
+
+The app exposes request, latency and process metrics. Maintenance checks public
+HTTPS, domain health, readiness, TLS expiry and backup age. Prometheus rules in
+ops/monitoring/site-alerts.yml cover availability, backup freshness, TLS, errors,
+and latency. /metrics and internal health endpoints are blocked at the public edge.
+Edge logs use nginx-edge's existing bounded Docker logging driver.
+
+Local probes cannot independently detect a dead host or Internet connection.
+An external monitor and proven notification delivery remain TODOs. Existing alert
+rules alone are not proof that anyone receives a notification. Shared-origin XSS,
+resource contention with the homelab, one disk/host/router/ISP, and the existing
+runner's Docker access remain deliberate constraints, tracked in SRE-FOLLOWUPS.md.
+
+## Development
+
+```sh
+make install
+make build-frontends
+make dev
+```
+
+Local Python development uses .local/data/site.db. Docker development uses a
+separate project, subnet, port and named volumes. make test runs domain tests in
+separate processes and browser/unit checks. make test-suite-routes exercises the
+assembled image. scripts/test-site-browser.mjs accepts SITE_TEST_URL and CHROME_BIN.

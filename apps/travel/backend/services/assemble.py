@@ -4,18 +4,18 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import selectinload
 
-from models import Note, Parking, PlanItem, PtoEntry, PtoPolicy, Reminder, Stay, Transport, Trip
-from services.budget import (
+from apps.travel.backend.models import Note, Parking, PlanItem, PtoEntry, PtoPolicy, Reminder, Stay, Transport, Trip
+from apps.travel.backend.services.budget import (
     CATEGORY_LABELS,
     BudgetInput,
     category_for_plan,
     category_for_transport,
     rollup,
 )
-from services.dates import iter_dates, nights_away, phase_for, span_days
-from services.money import fmt_days, fmt_money, stored_days
-from deps import require_actor
-from services.pto import effective_pto_days, policy_from_row, trip_projection, usages_from_rows, walk
+from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
+from apps.travel.backend.services.money import fmt_days, fmt_money, stored_days
+from apps.travel.backend.deps import require_actor
+from apps.travel.backend.services.pto import effective_pto_days, policy_from_row, trip_projection, usages_from_rows, walk
 
 ROLE_ORDER = {"outbound": 0, "connection": 1, "local": 2, "inbound": 3}
 MODE_LABELS = {

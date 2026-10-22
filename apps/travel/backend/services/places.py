@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import httpx
 
-from models import PlaceCache
+from apps.travel.backend.models import PlaceCache
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = "vivek-travel/0.1 (personal self-hosted travel planner)"

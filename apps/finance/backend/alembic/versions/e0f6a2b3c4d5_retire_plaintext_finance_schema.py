@@ -4,7 +4,7 @@ Encrypted records, vault keys, auth, and public market caches are preserved.
 """
 from alembic import op
 import sqlalchemy as sa
-from legacy_schema_guard import assert_safe_to_remove_legacy_schema
+from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
 
 revision = "e0f6a2b3c4d5"
 down_revision = "b7c9d2e4f601"

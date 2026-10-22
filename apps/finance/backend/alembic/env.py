@@ -19,9 +19,9 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # Use the project's models
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from models import Base
-from legacy_schema_guard import assert_safe_to_remove_legacy_schema
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[4]))
+from apps.finance.backend.models import Base
+from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
 
 target_metadata = Base.metadata
 

@@ -9,7 +9,7 @@ import os
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from models import Base
+from apps.travel.backend.models import Base
 
 engine = None
 SessionLocal = None
@@ -74,3 +74,10 @@ def get_db():
         raise
     finally:
         db.close()
+
+
+def bind_database(shared_engine) -> None:
+    """Bind the domain to the site's engine; schema changes run offline."""
+    global engine, SessionLocal
+    engine = shared_engine
+    SessionLocal = sessionmaker(autocommit=False, autoflush=True, expire_on_commit=False, bind=engine)

@@ -70,7 +70,7 @@ def main() -> int:
                 module = match.group(1) or match.group(2)
                 target = import_target(source, module)
                 target_app = app_name(target) if target else None
-                if target_app and source_app and target_app != source_app:
+                if target_app and source_app and target_app != source_app and source_app != "server":
                     errors.append(
                         f"cross-app source import: {source.relative_to(ROOT)} -> {module} (apps/{target_app})"
                     )

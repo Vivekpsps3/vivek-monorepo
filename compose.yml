@@ -1,0 +1,79 @@
+# The single deployment definition. Secrets come from the existing private .env.
+# Only data and backups persist; application and probe containers are disposable.
+name: personal-site
+x-runtime: &runtime
+  image: ${SITE_IMAGE:-personal-site:development}
+  user: "10001:10001"
+  read_only: true
+  tmpfs: ["/tmp:size=64m,mode=1777"]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  init: true
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+services:
+  site:
+    <<: *runtime
+    build:
+      context: .
+      args: {SITE_RELEASE: "${SITE_RELEASE:-development}"}
+    command: [uvicorn, apps.server.main:app, --host, 0.0.0.0, --port, "8000", --limit-concurrency, "100", --timeout-keep-alive, "5", --no-access-log]
+    environment:
+      FORWARDED_ALLOW_IPS: 10.85.0.1
+      SITE_DATABASE_URL: sqlite:////data/site.db
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-1}
+      SESSION_COOKIE_SAMESITE: lax
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://vivekpanchagnula.com}
+      DISABLE_OPENAPI: "1"
+      RATE_LIMIT_PER_MIN: "60"
+      FLIGHTAWARE_API_KEY: ${FLIGHTAWARE_API_KEY:-}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      RAWG_API_KEY: ${RAWG_API_KEY:-}
+    volumes: [data:/data]
+    ports: ["127.0.0.1:${SITE_PORT:-8085}:8000"]
+    networks:
+      site: {gw_priority: 1}
+      monitoring: {aliases: [personal-site]}
+    mem_limit: 1536m
+    cpus: 2.0
+    pids_limit: 128
+    restart: unless-stopped
+    stop_grace_period: 45s
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5).read()"]
+      interval: 15s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
+  backup:
+    <<: *runtime
+    profiles: [ops]
+    command: [python, /app/backup-site.py, --source, /data/site.db, --directory, /backups]
+    volumes: [data:/data, backups:/backups]
+    network_mode: none
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 32
+  maintenance:
+    <<: *runtime
+    command: [python, -m, apps.server.monitor]
+    environment:
+      SITE_BACKUP_INTERVAL_SECONDS: "3600"
+    volumes: [data:/data, backups:/backups]
+    networks:
+      monitoring: {aliases: [personal-site-probe]}
+    mem_limit: 256m
+    cpus: 0.25
+    pids_limit: 32
+    restart: unless-stopped
+volumes:
+  data:
+  backups:
+networks:
+  monitoring:
+    external: true
+    name: monitoring
+  site:
+    ipam:
+      config: [{subnet: "${SITE_SUBNET:-10.85.0.0/28}"}]

@@ -111,7 +111,7 @@ def test_follow_loads_albums_and_songs_without_scores(client, monkeypatch):
             }],
         }
 
-    monkeypatch.setattr("services.providers.musicbrainz_artist_catalog", fake)
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", fake)
     followed = client.post("/api/library/from-provider", json={
         "source": "musicbrainz",
         "source_id": "artist-1",
@@ -129,7 +129,7 @@ def test_follow_loads_albums_and_songs_without_scores(client, monkeypatch):
 
 
 def test_missing_songs_resume_on_the_next_view(client, monkeypatch):
-    monkeypatch.setattr("services.records.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("apps.media.backend.services.records.time.sleep", lambda _seconds: None)
     lookups = []
 
     def catalog(_http, artist_id, group_offset=0, release_offset=0):
@@ -153,8 +153,8 @@ def test_missing_songs_resume_on_the_next_view(client, monkeypatch):
         lookups.append(group_id)
         return [{"source_id": f"{group_id}-song", "title": "Only Song", "position": 1}]
 
-    monkeypatch.setattr("services.providers.musicbrainz_artist_catalog", catalog)
-    monkeypatch.setattr("services.providers.release_group_tracks", tracks)
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
+    monkeypatch.setattr("apps.media.backend.services.providers.release_group_tracks", tracks)
     followed = client.post("/api/library/from-provider", json={
         "source": "musicbrainz",
         "source_id": "artist-1",
@@ -174,7 +174,7 @@ def test_missing_songs_resume_on_the_next_view(client, monkeypatch):
 
 
 def test_disc_two_keeps_its_place_in_the_song_order():
-    from services.providers import _tracks_from_release
+    from apps.media.backend.services.providers import _tracks_from_release
 
     tracks = _tracks_from_release({
         "media": [

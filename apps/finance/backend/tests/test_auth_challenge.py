@@ -10,9 +10,9 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 import base64
 
 from conftest import authenticated_client
-from main import Base, app, engine, market_data
-from models import UserRole
-from rate_limit import _buckets
+from apps.finance.backend.main import Base, app, engine, market_data
+from apps.finance.backend.models import UserRole
+from apps.finance.backend.rate_limit import _buckets
 
 
 def setup_function():
@@ -148,8 +148,8 @@ def test_passwordless_endpoints_are_rate_limited(monkeypatch):
 
 def test_migration_session_cannot_access_normal_authenticated_routes():
     client = TestClient(app)
-    from auth import create_user
-    from database import SessionLocal
+    from apps.finance.backend.auth import create_user
+    from apps.finance.backend.database import SessionLocal
 
     db = SessionLocal()
     try:
@@ -165,8 +165,8 @@ def test_migration_session_cannot_access_normal_authenticated_routes():
 
 def test_passwordless_enroll_rejects_email_as_username_and_creates_vault():
     client = TestClient(app)
-    from auth import create_user
-    from database import SessionLocal
+    from apps.finance.backend.auth import create_user
+    from apps.finance.backend.database import SessionLocal
 
     db = SessionLocal()
     try:

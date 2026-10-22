@@ -7,8 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from services.dates import weekday_count
-from services.pto import Policy, Usage, walk
+from apps.travel.backend.services.dates import weekday_count
+from apps.travel.backend.services.pto import Policy, Usage, walk
 
 
 def policy(**overrides) -> Policy:

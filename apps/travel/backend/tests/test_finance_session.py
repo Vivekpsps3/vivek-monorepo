@@ -23,7 +23,7 @@ def _request(method: str, headers: list[tuple[bytes, bytes]] | None = None) -> R
 
 
 def test_writes_require_the_finance_csrf_token():
-    from deps import fetch_principal
+    from apps.travel.backend.deps import fetch_principal
 
     request = _request("POST", [(b"cookie", b"finance_session=abc")])
     with pytest.raises(HTTPException) as exc:
@@ -32,7 +32,7 @@ def test_writes_require_the_finance_csrf_token():
 
 
 def test_reads_accept_the_finance_user(monkeypatch):
-    from deps import fetch_principal
+    from apps.travel.backend.deps import fetch_principal
 
     def fake_request(method, url, headers, timeout):
         assert method == "GET"
@@ -53,7 +53,7 @@ def test_reads_accept_the_finance_user(monkeypatch):
 
 
 def test_writes_post_the_session_probe(monkeypatch):
-    from deps import fetch_principal
+    from apps.travel.backend.deps import fetch_principal
 
     def fake_request(method, url, headers, timeout):
         assert method == "POST"
@@ -70,7 +70,7 @@ def test_writes_post_the_session_probe(monkeypatch):
 
 
 def test_finance_rejection_and_outage_map_to_travel_errors(monkeypatch):
-    from deps import fetch_principal
+    from apps.travel.backend.deps import fetch_principal
 
     def reject(method, url, headers, timeout):
         return httpx.Response(401, json={"detail": "Login required"})
@@ -107,7 +107,7 @@ def test_finance_rejection_and_outage_map_to_travel_errors(monkeypatch):
     ],
 )
 def test_malformed_finance_principal_responses_become_503(monkeypatch, payload):
-    from deps import fetch_principal
+    from apps.travel.backend.deps import fetch_principal
 
     monkeypatch.setattr(httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, json=payload))
     with pytest.raises(HTTPException) as unavailable:
@@ -116,7 +116,7 @@ def test_malformed_finance_principal_responses_become_503(monkeypatch, payload):
 
 
 def test_non_json_finance_principal_response_becomes_503(monkeypatch):
-    from deps import fetch_principal
+    from apps.travel.backend.deps import fetch_principal
 
     monkeypatch.setattr(httpx, "request", lambda *_args, **_kwargs: httpx.Response(200, content=b"not json"))
     with pytest.raises(HTTPException) as unavailable:
@@ -127,7 +127,7 @@ def test_non_json_finance_principal_response_becomes_503(monkeypatch):
 def test_principal_checker_offloads_sync_work_and_accepts_async_checkers():
     import threading
 
-    from deps import AuthResult, Principal, check_principal
+    from apps.travel.backend.deps import AuthResult, Principal, check_principal
 
     async def exercise():
         event_loop_thread = threading.get_ident()
@@ -172,7 +172,7 @@ def test_shared_browser_runtime_is_served_for_direct_and_mounted_imports(client)
 
 
 def test_sliding_finance_cookies_reach_the_browser(client):
-    from deps import AuthResult, Principal
+    from apps.travel.backend.deps import AuthResult, Principal
 
     client.app.state.principal_checker = lambda _request: AuthResult(
         Principal(1, "tester", "Tester"),

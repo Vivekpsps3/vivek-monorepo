@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from services.money import clean_currency, parse_money
+from apps.travel.backend.services.money import clean_currency, parse_money
 
 Role = Literal["outbound", "inbound", "connection", "local"]
 Mode = Literal["flight", "drive", "train", "bus", "ferry", "other"]

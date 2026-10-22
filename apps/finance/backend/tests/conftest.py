@@ -7,13 +7,13 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["LOCAL_DEV_AUTH"] = "0"
 os.environ.pop("FINANCE_DEV_ENV_FILE", None)
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from fastapi.testclient import TestClient
 
-from auth import create_user
-from database import SQLALCHEMY_DATABASE_URL, SessionLocal
-from models import UserRole, UserSession
+from apps.finance.backend.auth import create_user
+from apps.finance.backend.database import SQLALCHEMY_DATABASE_URL, SessionLocal
+from apps.finance.backend.models import UserRole, UserSession
 
 if ":memory:" not in SQLALCHEMY_DATABASE_URL:
     raise RuntimeError(f"Tests must not run against a file database: {SQLALCHEMY_DATABASE_URL}")

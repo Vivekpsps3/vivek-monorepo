@@ -5,10 +5,10 @@ from datetime import UTC, date, datetime, timedelta
 import pandas as pd
 import pytest
 
-from models import Base, MarketResearchCache, TickerQuote
-from services.market_data import MarketDataService
-from schemas_market import MarketPriceResponse, MarketResearchResponse
-from routers import market as market_router
+from apps.finance.backend.models import Base, MarketResearchCache, TickerQuote
+from apps.finance.backend.services.market_data import MarketDataService
+from apps.finance.backend.schemas_market import MarketPriceResponse, MarketResearchResponse
+from apps.finance.backend.routers import market as market_router
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -93,7 +93,7 @@ def test_fetch_eod_prefers_regular_market_quote_and_keeps_market_date(svc, monke
                 {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
             )
 
-    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -118,7 +118,7 @@ def test_fetch_eod_invalid_exchange_timezone_uses_history_date(svc, monkeypatch)
                 {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
             )
 
-    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -143,7 +143,7 @@ def test_fetch_eod_rejects_future_market_timestamp(svc, monkeypatch):
                 {"Close": [100.0]}, index=pd.to_datetime(["2026-01-14"])
             )
 
-    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -163,7 +163,7 @@ def test_fetch_eod_ignores_post_market_price_and_falls_back_to_history(svc, monk
                 {"Close": [101.5]}, index=pd.to_datetime(["2026-01-15"])
             )
 
-    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
 
     price, quote_date, source = svc._fetch_eod("ACME")
 
@@ -183,7 +183,7 @@ def test_fetch_eod_skips_nonfinite_and_nonpositive_prices(svc, monkeypatch):
                 index=pd.to_datetime(["2026-01-13", "2026-01-14", "2026-01-15"]),
             )
 
-    monkeypatch.setattr("services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
+    monkeypatch.setattr("apps.finance.backend.services.market_data.yf.Ticker", lambda _symbol: FakeTicker())
 
     assert svc._fetch_eod("ACME") == (None, None, "error")
 

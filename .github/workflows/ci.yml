@@ -15,13 +15,13 @@ jobs:
     name: Finance Backend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: apps/finance/backend/requirements.txt
-      - run: python -m pip install -r apps/finance/backend/requirements.txt
+          cache-dependency-path: apps/server/requirements.lock
+      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install pytest
       - working-directory: apps/finance/backend
         run: python -m pytest -q
       - run: make test-fast
@@ -30,55 +30,40 @@ jobs:
     name: Travel Backend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
             apps/travel/backend/requirements.txt
             apps/travel/backend/requirements-dev.txt
-      - run: python -m pip install -r apps/travel/backend/requirements-dev.txt
+      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install pytest
       - working-directory: apps/travel/backend
         run: python -m pytest -q
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "24"
       - run: node --test apps/travel/backend/static/tests/*.test.mjs
 
   media-backend:
     name: Media Journal Backend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
             apps/media/backend/requirements.txt
             apps/media/backend/requirements-dev.txt
-      - run: python -m pip install -r apps/media/backend/requirements-dev.txt
+      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install pytest
       - run: python -m pytest -q apps/media/backend/tests
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "24"
       - run: node --test apps/media/backend/static/tests/*.test.mjs
-
-  site-backend:
-    name: Site Flask Backend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            apps/site/flask/requirements.txt
-            apps/site/flask/requirements-dev.txt
-      - run: python -m pip install -r apps/site/flask/requirements-dev.txt
-      - run: python -m pytest -q apps/site/flask/tests
 
   frontends:
     name: Frontend Builds
@@ -90,26 +75,71 @@ jobs:
           - { dir: apps/finance/frontend, lock: apps/finance/frontend/package-lock.json }
           - { dir: apps/site, lock: apps/site/package-lock.json }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: ${{ matrix.app.lock }}
       - working-directory: ${{ matrix.app.dir }}
         run: npm ci
       - working-directory: ${{ matrix.app.dir }}
+        run: npm audit --omit=dev --audit-level=high
+      - working-directory: ${{ matrix.app.dir }}
         run: npm test -- --watch=false --browsers=ChromeHeadless
       - working-directory: ${{ matrix.app.dir }}
-        run: npx ng build --configuration development
+        run: npx ng build --configuration production
 
-  docker:
-    name: Docker Build
+  unified:
+    name: Unified Site Release
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          node-version: "20"
-      - run: docker compose build
-      - run: make test-suite-routes
+          python-version: "3.12"
+      - run: |
+          python -m pip install --require-hashes -r apps/server/requirements.lock
+          python -m pip install pytest
+          python -m pytest -q apps/server/tests
+          python -m pip install pip-audit
+          pip-audit --disable-pip --no-deps -r apps/server/requirements.lock
+      - name: Build immutable production image
+        run: docker build --build-arg SITE_RELEASE=${{ github.sha }} --tag personal-site:${{ github.sha }} .
+      - name: Exercise unified release
+        run: docker run --rm --network none --read-only --tmpfs /tmp:rw,size=128m,mode=1777 personal-site:${{ github.sha }} python -m apps.server.checks
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install browser tooling
+        run: |
+          npm ci --prefix apps/finance/frontend
+          cd apps/finance/frontend && npx playwright install --with-deps chromium
+      - name: Browser checks against production image
+        run: |
+          set -euo pipefail
+          docker network create monitoring
+          printf 'SESSION_COOKIE_SECURE=0\nSITE_PORT=8086\nSITE_IMAGE=personal-site:${{ github.sha }}\n' > /tmp/site-ci.env
+          docker compose --env-file /tmp/site-ci.env --profile ops run --rm --no-deps backup python -m apps.server.migrate --output /data/site.db
+          docker compose --env-file /tmp/site-ci.env up -d --no-build --wait --wait-timeout 60
+          node scripts/test-site-browser.mjs
+      - name: Browser container diagnostics and cleanup
+        if: always()
+        run: |
+          if [ -f /tmp/site-ci.env ]; then
+            docker compose --env-file /tmp/site-ci.env logs --tail 30 || true
+            docker compose --env-file /tmp/site-ci.env --profile ops down -v || true
+          fi
+      - name: Package tested image
+        run: |
+          set -euo pipefail
+          docker save personal-site:${{ github.sha }} | gzip > image.tar.gz
+          echo "${{ github.sha }}" > release.sha
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: personal-site-release
+          path: |
+            image.tar.gz
+            release.sha
+          retention-days: 14
