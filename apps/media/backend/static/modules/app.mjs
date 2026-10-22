@@ -1,7 +1,35 @@
 import { NETWORK_MESSAGE, api, loginHref } from "./api.mjs";
 import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
+import { writeWeekStart, weekStartsOn } from "../../shared-browser/week.mjs";
 import { icon } from "./icons.mjs";
 import { keyboardScore, pointerScore, scoreControl, scoreValue } from "./score.mjs";
+import { affectedSentence, orderGroups } from "./search-groups.mjs";
+import {
+  LIBRARY_PAGE_SIZE,
+  addFormInner,
+  caughtUpText,
+  connectionsFailureHtml,
+  creatorLabel,
+  emptyMonthHtml,
+  episodeCode,
+  eventWord,
+  graphCenter,
+  historyLine,
+  historyRemoveName,
+  legendHtml,
+  libraryEmptyHtml,
+  loggedToast,
+  markNextLabel,
+  monthEventCount,
+  noteCardHtml,
+  noteCountText,
+  overviewHtml,
+  relatedHtml,
+  releaseInformative,
+  searchIdleHtml,
+  searchResultHeading,
+  validateAdd,
+} from "./views.mjs";
 import {
   documentTitle,
   msUntilLocalMidnight,
@@ -30,11 +58,13 @@ import {
   coverImage,
   dayLabel,
   draftKey,
+  emptyState,
   escapeHtml as esc,
   experienceLabel,
   experienceOptions,
   genericStatusOptions,
   kindLabel,
+  kindPlural,
   monthCells,
   monthLabel,
   normalizeLibraryQuery,
@@ -202,7 +232,12 @@ async function saveStatus(id, status) {
       showWriteTimeout(key, () => saveStatus(id, status));
       return;
     }
-    fail(error);
+    fail(error, {
+      label: "Retry",
+      persist: true,
+      key,
+      onClick: () => { void saveStatus(id, status); },
+    });
   }
 }
 
@@ -217,7 +252,12 @@ async function saveFlag(id, flag, on) {
       showWriteTimeout(key, () => saveFlag(id, flag, on));
       return;
     }
-    fail(error);
+    fail(error, {
+      label: "Retry",
+      persist: true,
+      key,
+      onClick: () => { void saveFlag(id, flag, on); },
+    });
   }
 }
 
@@ -236,8 +276,12 @@ async function saveRating(id, rating) {
       showWriteTimeout(key, () => saveRating(id, rating));
       return;
     }
-    fail(error);
-    await render();
+    fail(error, {
+      label: "Retry",
+      persist: true,
+      key,
+      onClick: () => { void saveRating(id, rating); },
+    });
   }
 }
 
@@ -309,7 +353,7 @@ function focusPageHeading() {
 }
 
 function focusSearchResult(box) {
-  const heading = box.querySelector("h2");
+  const heading = box.querySelector(searchResultHeading());
   if (heading instanceof HTMLElement) {
     heading.tabIndex = -1;
     heading.focus({ preventScroll: true });
@@ -411,18 +455,29 @@ function options(rows, selected) {
 
 function poster(item) {
   const art = safeUrl(item.artwork_url);
-  if (art) return `<img alt="" src="${esc(art)}" width="342" height="513">`;
-  return `<span class="poster-fallback">${esc(kindLabel(item.kind))}</span>`;
+  if (art) return `<img alt="" src="${esc(art)}" width="342" height="513" loading="lazy" decoding="async">`;
+  return `<span class="poster-fallback" aria-hidden="true">${esc(kindLabel(item.kind).slice(0, 1))}</span>`;
 }
 
 function card(item) {
   const progress = item.progress_label ? ` · ${item.progress_label}` : "";
+  const star = item.favorite ? `<span class="fav-badge" aria-label="Favorite">★</span>` : "";
+  const percent = item.progress_unit === "percent" && item.progress_value != null
+    ? `<span class="progress-bar" style="width:${Math.max(0, Math.min(100, Number(item.progress_value)))}%"></span>`
+    : "";
   return `<a class="card" href="#/item/${item.id}">
-    <span class="poster">${poster(item)}</span>
+    <span class="poster">${poster(item)}${star}${percent}</span>
     <span class="card-title">${esc(item.title)}</span>
     <span class="meta">${esc([kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · "))}</span>
     <span class="meta">${esc(`${statusLabel(item.kind, item.status)} · ${ratingText(item.rating)}${progress}`)}</span>
   </a>`;
+}
+
+function syncWeek() {
+  const start = String(weekStartsOn());
+  document.querySelectorAll("[data-week-start]").forEach(button => {
+    button.setAttribute("aria-checked", String(button.dataset.weekStart === start));
+  });
 }
 
 function syncTheme() {
@@ -450,21 +505,46 @@ function setTheme(choice) {
 async function viewHome(ticket) {
   const summary = await api("/api/summary", { signal: ticket.signal });
   if (!ticket.isCurrent()) return;
+  const counts = summary.counts || {};
+  const current = summary.currently || [];
+  const upcoming = summary.upcoming || [];
+  const notes = summary.recent_reviews || [];
+  const next = summary.next_episodes || [];
+  const allEmpty = !current.length && !upcoming.length && !next.length && !notes.length;
+  const stats = `<p class="stats"><a href="#/library?status=in_progress">${counts.in_progress || 0} in progress</a> · <a href="#/library">${counts.library || 0} in library</a> · <a href="#/library?status=anticipating">${counts.anticipated || 0} coming up</a></p>`;
+  const hero = `<section class="hero"><div><p class="eyebrow">Journal</p><h1>Now</h1>${stats}</div><div class="hero-actions"><a class="btn btn-primary" href="#/search">Find something to add</a></div></section>`;
+  if (allEmpty) {
+    commitView(`${hero}${emptyState({
+      title: "Nothing in progress yet",
+      body: "Find a book, show, film, album or game and it will show up here while you're on it.",
+      primary: { href: "#/search", label: "Find something to add" },
+      secondary: { href: "#/new", label: "Add by title" },
+    })}`);
+    return;
+  }
+  const nextRows = next.map(item => {
+    const code = episodeCode(item.season, item.episode);
+    const airs = item.state === "upcoming" && item.air_date ? `<span class="meta">Airs ${esc(dayLabel(String(item.air_date).slice(0, 10)).split(",")[0])}</span>` : "";
+    const button = item.episode_id
+      ? `<button type="button" class="btn btn-secondary btn-sm" data-action="mark-watched" data-id="${item.entry_id}" data-episode="${item.episode_id}" data-label="${esc(code)}">Mark watched</button>`
+      : "";
+    return `<li class="next-row"><a href="#/item/${item.entry_id}?season=${encodeURIComponent(item.season)}"><span class="poster poster-next">${poster(item)}</span><span><strong>${esc(item.show_title)}</strong><span>${esc(code)}${item.title ? ` · ${esc(item.title)}` : ""}</span>${airs}</span></a>${button}</li>`;
+  }).join("");
+  const inProgress = current.length
+    ? `<div class="grid">${current.map(card).join("")}</div>`
+    : `<p class="quiet">Nothing in progress. <a href="#/library?status=want">Open library</a></p>`;
+  const coming = upcoming.length
+    ? `<ul class="plain">${upcoming.map(item => `<li><a href="#/item/${item.id}">${esc(item.title)}</a><span>${esc(whenLabel(item))}</span></li>`).join("")}</ul>`
+    : `<p class="quiet">Nothing coming up. Mark something Anticipating to track its release.</p>`;
+  const noteCards = notes.length
+    ? `<section><h2>Recent notes</h2><div class="note-cards">${notes.map(item => noteCardHtml(item)).join("")}</div></section>`
+    : "";
   commitView(`
-    <section class="hero">
-      <div>
-        <p class="eyebrow">Journal</p>
-        <h1>${summary.counts.in_progress ? `${summary.counts.in_progress} in progress` : "Now"}</h1>
-      </div>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="#/search">Search</a>
-        <a class="btn" href="#/new">Add manually</a>
-      </div>
-    </section>
-    ${section("In progress", summary.currently, `<a href="#/search">Search</a>`)}
-    ${releaseSection(summary.upcoming)}
-    ${reviewSection(summary.recent_reviews)}
-    <p class="footnote"><a href="#/calendar">Episode calendar</a> · <a href="#/library">Open the full library</a></p>
+    ${hero}
+    <section><h2>Next up</h2>${next.length ? `<ul class="next-list">${nextRows}</ul>` : `<p class="quiet">Nothing waiting.</p>`}</section>
+    <section><h2>In progress</h2>${inProgress}</section>
+    <section><h2>Coming up</h2>${coming}</section>
+    ${noteCards}
   `);
 }
 
@@ -483,42 +563,50 @@ async function viewCalendar(params, ticket) {
   const heads = weekDayLabels()
     .map(name => `<div class="cal-head">${name}</div>`)
     .join("");
-  const grid = cells.map(day => {
-    if (!day) return `<div class="cal-day is-outside"></div>`;
-    const events = byDay.get(day) || [];
-    const todayClass = day === today ? " is-today" : "";
-    const current = day === today ? ` aria-current="date"` : "";
-    const chips = events.map(event => eventChip(event, true)).join("");
-    return `<div class="cal-day${todayClass}"${current}><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${chips}</div>`;
-  }).join("");
   const agendaDays = (data.days || []).filter(day => (day.events || []).length);
   const agenda = agendaDays.length
     ? `<ul class="calendar-agenda">${agendaDays.map(day => `<li><time datetime="${esc(day.date)}">${esc(dayLabel(day.date))}</time><div class="cal-events">${(day.events || []).map(event => eventChip(event, false)).join("")}</div></li>`).join("")}</ul>`
-    : `<ul class="calendar-agenda"><li><p class="quiet">Nothing on a specific day this month.</p></li></ul>`;
+    : "";
+  const rows = [];
+  for (let index = 0; index < cells.length; index += 7) rows.push(cells.slice(index, index + 7));
+  const body = rows.map(week => `<div role="row">${week.map(day => {
+    if (!day) return `<div role="gridcell" class="cal-day is-outside"></div>`;
+    const events = byDay.get(day) || [];
+    const todayClass = day === today ? " is-today" : "";
+    const current = day === today ? ` aria-current="date"` : "";
+    const shown = events.slice(0, 3).map(event => eventChip(event, true)).join("");
+    const extra = events.length > 3 ? `<button type="button" class="cal-more" data-action="cal-more">+${events.length - 3} more</button><div class="cal-popover" hidden>${events.map(event => eventChip(event, false)).join("")}</div>` : "";
+    const tab = day === today ? ` tabindex="0"` : ` tabindex="-1"`;
+    return `<div role="gridcell" class="cal-day${todayClass}" data-date="${esc(day)}"${current}${tab}><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${shown}${extra}</div>`;
+  }).join("")}</div>`).join("");
+  const empty = monthEventCount(data) ? "" : emptyMonthHtml(label, `#/calendar?month=${shiftMonth(data.month, 1)}`);
+  const partial = data.partial
+    ? `<p class="quiet cal-partial">Some episode dates and follow-ups could not be loaded yet. What you already saved is still here. <button type="button" class="btn btn-sm" data-action="reload-calendar">Load the rest</button></p>`
+    : "";
   commitView(`
     <section class="hero">
       <div>
-        <p class="eyebrow">Calendar</p>
         <h1>${esc(label)}</h1>
       </div>
-      <div class="hero-actions">
-        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, -1))}">Previous</a>
-        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, 1))}">Next</a>
+      <div class="hero-actions cal-toolbar">
+        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, -1))}" aria-label="Previous month">‹</a>
+        <a class="btn" href="#/calendar">Today</a>
+        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, 1))}" aria-label="Next month">›</a>
       </div>
     </section>
-    <p class="calendar-legend">
-      <span><span class="swatch cal-episode"></span> Episode</span>
-      <span><span class="swatch cal-anticipated"></span> Anticipated</span>
-      <span><span class="swatch cal-sequel"></span> Sequel</span>
-      <span><span class="swatch cal-spinoff"></span> Spin-off</span>
-    </p>
-    ${data.partial ? `<p class="quiet">Some episode dates and follow-ups could not be loaded yet. What you already saved is still here.</p>` : ""}
-    <div class="calendar-grid" aria-label="${esc(label)}">${heads}${grid}</div>
+    ${legendHtml(data)}
+    ${partial}
+    ${empty}
+    <div class="calendar-grid" role="grid" aria-label="${esc(label)}"><div role="row">${heads.replaceAll("<div ", `<div role="columnheader" `)}</div>${body}</div>
     ${agenda}
     ${band(`Sometime in ${label}`, data.month_band)}
     ${band(`Sometime in ${year || "this year"}`, data.year_band)}
     ${band("Date not set", data.unknown)}
   `);
+  if (requested && data.month && requested !== data.month) {
+    toast("That month couldn't be read. Showing this month.");
+    history.replaceState(null, "", `${location.pathname}${location.search}#/calendar?month=${data.month}`);
+  }
   applyChrome(route(), { monthLabel: label });
 }
 
@@ -526,9 +614,12 @@ function eventChip(event, compact) {
   const type = ["episode", "anticipated", "sequel", "spinoff"].includes(event.type) ? event.type : "anticipated";
   const className = `cal-event cal-${type}${event.watched ? " is-watched" : ""}`;
   const text = chipText(event, compact);
+  const prefix = `<span class="visually-hidden">${esc(eventWord(type))}: </span>`;
+  const mark = event.watched ? " ✓" : "";
   const id = Number(event.entry_id);
-  if (Number.isInteger(id) && id > 0) return `<a class="${className}" href="#/item/${id}">${esc(text)}</a>`;
-  return `<span class="${className}">${esc(text)}</span>`;
+  const body = `${prefix}${esc(text)}${mark}`;
+  if (Number.isInteger(id) && id > 0) return `<a class="${className}" href="#/item/${id}">${body}</a>`;
+  return `<span class="${className}">${body}</span>`;
 }
 
 function chipText(event, compact) {
@@ -586,12 +677,23 @@ function reviewSection(items) {
   return `<section><h2>Recent notes</h2><ul class="plain">${rows}</ul></section>`;
 }
 
-function libraryPage(kind, status, q, sort, body, resume) {
-  const kinds = ["", "movie", "tv", "book", "artist", "album", "track", "game"].map(value => ({
+function libraryQuery(kind, status, q, sort, fav) {
+  const params = new URLSearchParams();
+  if (kind) params.set("kind", kind);
+  if (status) params.set("status", status);
+  if (q) params.set("q", q);
+  if (sort && sort !== "activity") params.set("sort", sort);
+  if (fav) params.set("fav", "1");
+  const text = params.toString();
+  return text ? `#/library?${text}` : "#/library";
+}
+
+function libraryPage(kind, status, q, sort, body, resume, count, fav) {
+  const kinds = ["", "movie", "tv", "book", "game", "album", "track", "artist"].map(value => ({
     value,
-    label: value ? kindLabel(value) : "All types",
+    label: value ? kindPlural(value) : "All",
   }));
-  const statuses = [{ value: "", label: "Any status" }, ...(kind ? statusOptions(kind) : genericStatusOptions())];
+  const statuses = [{ value: "", label: "All" }, ...(kind ? statusOptions(kind) : genericStatusOptions())];
   const sorts = [
     { value: "activity", label: "Recently active" },
     { value: "added", label: "Recently added" },
@@ -599,14 +701,51 @@ function libraryPage(kind, status, q, sort, body, resume) {
     { value: "rating", label: "Your score" },
     { value: "release", label: "Release year" },
   ];
+  const heading = count == null ? "Library" : `Library · ${count}`;
   return `
-    <section class="hero"><div><p class="eyebrow">Library</p><h1>Saved</h1></div></section>
-    <label class="sort-field">Sort <select id="library-sort" data-library-sort>${options(sorts, sort)}</select></label>
+    <section class="hero"><div><h1>${esc(heading)}</h1></div></section>
+    <div class="library-toolbar" id="library-toolbar">
+      <label class="grow">Search your library <input id="library-q" type="search" value="${esc(q)}" placeholder="Filter by title or creator" autocomplete="off"></label>
+      <label class="sort-field">Sort <select id="library-sort" data-library-sort aria-label="Sort">${options(sorts, sort)}</select></label>
+      <a class="flag${fav ? " is-on" : ""}" href="${libraryQuery(kind, status, q, sort, !fav)}" aria-pressed="${fav ? "true" : "false"}">★ Favorites</a>
+    </div>
+    <div class="chip-row" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, status, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
+    <div class="chip-row status-wide">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" ${item.value === status ? `aria-current="true"` : ""} href="${libraryQuery(kind, item.value, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
+    <label class="status-narrow">Status <select id="library-status" data-library-status>${options(statuses.map(item => ({ value: item.value, label: item.label === "All" ? "All" : item.label })), status)}</select></label>
     ${continuePoint(resume)}
-    <div class="status-row">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind: item.value, status, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
-    <div class="status-row">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind, status: item.value, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
     <div data-library-body>${body}</div>
   `;
+}
+
+let libraryItems = [];
+let libraryResume = null;
+let libraryShown = LIBRARY_PAGE_SIZE;
+
+function filteredLibrary(items, q, fav) {
+  const needle = String(q || "").trim().toLowerCase();
+  return (items || []).filter(item => {
+    if (fav && !item.favorite) return false;
+    if (!needle) return true;
+    return `${item.title || ""} ${item.creator || ""}`.toLowerCase().includes(needle);
+  });
+}
+
+function libraryCards(items) {
+  const shown = items.slice(0, libraryShown);
+  const more = items.length - shown.length;
+  const button = more > 0 ? `<button type="button" class="btn" data-action="show-more">Show more</button>` : "";
+  return `<div class="grid">${shown.map(card).join("")}</div>${button}`;
+}
+
+function paintLibrary(params, resume) {
+  const kind = params.get("kind") || "";
+  const status = params.get("status") || "";
+  const q = params.get("q") || "";
+  const sort = params.get("sort") || "activity";
+  const fav = params.get("fav") === "1";
+  const visible = filteredLibrary(libraryItems, q, fav);
+  const body = visible.length ? libraryCards(visible) : libraryEmptyHtml({ kind, status, q });
+  commitView(libraryPage(kind, status, q, sort, body, resume, visible.length, fav));
 }
 
 async function viewLibrary(params, ticket) {
@@ -614,14 +753,14 @@ async function viewLibrary(params, ticket) {
   const status = params.get("status") || "";
   const q = params.get("q") || "";
   const sort = params.get("sort") || "activity";
+  const fav = params.get("fav") === "1";
   const query = new URLSearchParams();
   if (kind) query.set("kind", kind);
   if (status) query.set("status", status);
-  if (q) query.set("q", q);
   query.set("sort", sort);
   const fromLibrary = String(app.dataset.view || "").startsWith("#/library");
   const previousCards = fromLibrary ? (app.querySelector("[data-library-body]")?.innerHTML || "") : "";
-  commitView(libraryPage(kind, status, q, sort, previousCards, null), true);
+  commitView(libraryPage(kind, status, q, sort, previousCards, null, null, fav), true);
   const cardsTimer = window.setTimeout(() => {
     if (!ticket.isCurrent()) return;
     const slot = app.querySelector("[data-library-body]");
@@ -629,17 +768,13 @@ async function viewLibrary(params, ticket) {
     slot.innerHTML = `<div class="grid" aria-hidden="true">${skeletonBlocks(12, "skeleton-card")}</div>`;
   }, SKELETON_DELAY_MS);
   try {
-    const [payload, summary] = await Promise.all([
-      api(`/api/library?${query}`, { signal: ticket.signal }),
-      api("/api/summary", { signal: ticket.signal }),
-    ]);
+    const payload = await api(`/api/library?${query}`, { signal: ticket.signal });
     window.clearTimeout(cardsTimer);
     if (!ticket.isCurrent()) return;
-    const resume = (!kind || kind === "tv") ? continueItem(summary.next_episodes) : null;
-    const body = payload.items.length
-      ? `<div class="grid">${payload.items.map(card).join("")}</div>`
-      : `<p class="quiet"><a href="#/search">Search</a></p>`;
-    commitView(libraryPage(kind, status, q, sort, body, resume));
+    libraryItems = payload.items || [];
+    libraryShown = LIBRARY_PAGE_SIZE;
+    libraryResume = (!kind || kind === "tv") ? continueItem(payload.continue) : null;
+    paintLibrary(params, libraryResume);
   } catch (error) {
     window.clearTimeout(cardsTimer);
     throw error;
@@ -652,7 +787,8 @@ function viewSearch(params) {
   commitView(`
     <section class="hero"><div><h1>Search</h1></div></section>
     <form class="filters" data-action="search-now" id="search-form">
-      <label class="grow">Search <input id="search-q" name="q" value="${esc(q)}" type="search" autocomplete="off" placeholder="Title, artist, or author"></label>
+      <label class="grow">Search <input id="search-q" name="q" value="${esc(q)}" type="search" autocomplete="off" placeholder="Title, artist, author or game"></label>
+      <button class="btn search-clear" type="button" data-action="clear-search" aria-label="Clear">Clear</button>
       <label>Type <select id="search-kind" name="kind">${options([
         { value: "", label: "All" },
         { value: "movie", label: "Movies" },
@@ -664,37 +800,54 @@ function viewSearch(params) {
         { value: "game", label: "Games" },
       ], kind)}</select></label>
     </form>
-    <div id="search-results"></div>
+    <div id="search-results">${searchIdleHtml(q)}</div>
   `);
-  if (q.length >= 2) runSearch();
+  if (q.trim().length >= 2) runSearch();
   if (focusSearchOnPaint) {
     focusSearchOnPaint = false;
     document.querySelector("#search-q")?.focus();
   }
 }
 
-function providerLine(providers) {
-  const names = { tmdb: "TMDB", musicbrainz: "MusicBrainz", openlibrary: "Open Library", rawg: "RAWG", tvmaze: "TVMaze", itunes: "iTunes" };
-  const states = { ok: "available", unconfigured: "not configured", error: "unavailable" };
-  const bits = Object.entries(providers).map(([name, state]) => `${names[name] || name} ${states[state] || state}`);
-  return `<p class="quiet">${esc(bits.join(" · "))}. Your notes are not sent to these services.</p>`;
+function resultRow(item, index) {
+  const openHref = item.saved_id ? `#/item/${item.saved_id}` : "#/library";
+  const action = item.already_saved
+    ? `<span class="in-library">In library</span> <a href="${openHref}">Open</a>`
+    : `<button class="btn btn-secondary btn-sm" type="button" tabindex="-1" data-action="${item.kind === "artist" ? "follow" : "open-quick"}" data-index="${index}">${item.kind === "artist" ? "Follow" : "Add"}</button>`;
+  return `<article class="result" tabindex="-1" data-result="${index}">
+    <span class="poster poster-sm">${poster(item)}</span>
+    <div>
+      <h2>${esc(item.title)} <span class="type-badge">${esc(kindLabel(item.kind).toUpperCase())}</span></h2>
+      <p class="meta">${esc([item.year, item.creator].filter(Boolean).join(" · "))}</p>
+      ${item.overview ? `<p class="clamp">${esc(item.overview)}</p>` : ""}
+    </div>
+    <div class="result-action">${action}</div>
+  </article>`;
 }
 
 function renderResults(payload) {
+  const sentence = affectedSentence(payload.providers);
+  const line = sentence
+    ? `<p class="quiet">${esc(sentence)} <a href="#/new?title=${encodeURIComponent(payload.query || "")}">Add one by title</a></p>`
+    : "";
   if (!payload.results.length) {
-    return `${providerLine(payload.providers)}<p class="quiet">No public match. <a href="#/new?title=${encodeURIComponent(payload.query || "")}">Add “${esc(payload.query)}” manually</a>.</p>`;
+    return `${line}<p class="quiet">Your notes are never sent to these services.</p><div class="empty suite-empty"><h2>No public match for “${esc(payload.query)}”</h2><p>Check the spelling, or add it yourself.</p><a class="btn btn-primary" href="#/new?title=${encodeURIComponent(payload.query || "")}">Add “${esc(payload.query)}” by title</a></div>`;
   }
-  const rows = payload.results.map((item, index) => `
-    <article class="result">
-      <span class="poster poster-sm">${poster(item)}</span>
-      <div>
-        <h2>${esc(item.title)}</h2>
-        <p class="meta">${esc([kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · "))}</p>
-        ${item.overview ? `<p class="clamp">${esc(item.overview)}</p>` : ""}
-        ${item.already_saved ? `<span class="followed" aria-label="In your library"></span>` : `<button class="follow" type="button" data-action="${item.kind === "artist" ? "follow" : "open-quick"}" data-index="${index}" aria-label="${item.kind === "artist" ? "Follow" : "Add"}"></button>`}
-      </div>
-    </article>`).join("");
-  return `${providerLine(payload.providers)}<div class="results">${rows}</div>`;
+  const selected = document.querySelector("#search-kind")?.value || "";
+  const count = `<p class="quiet" role="status">${payload.results.length} results for “${esc(payload.query)}”</p>`;
+  if (selected) {
+    return `${line}<div class="results">${payload.results.map((item, index) => resultRow(item, index)).join("")}</div>${count}`;
+  }
+  const groups = orderGroups(payload.results, payload.query).map(group => {
+    const visible = group.expanded ? group.rows : group.rows.slice(0, 3);
+    const hidden = group.rows.length - visible.length;
+    const more = hidden > 0
+      ? `<button type="button" data-action="show-group" data-kind="${group.kind}">Show all ${group.rows.length} ${esc(kindPlural(group.kind).toLowerCase())}</button>`
+      : "";
+    const rows = visible.map(item => resultRow(item, payload.results.indexOf(item))).join("");
+    return `<section data-group="${group.kind}"><h2>${esc(kindPlural(group.kind))} · ${group.rows.length}</h2><div class="results">${rows}</div>${more}</section>`;
+  }).join("");
+  return `${line}${groups}${count}`;
 }
 
 async function runSearch({ focusError = false, focusResult = false } = {}) {
@@ -705,7 +858,7 @@ async function runSearch({ focusError = false, focusResult = false } = {}) {
   const q = input.value.trim();
   if (q.length < 2) {
     searchLoads.start("");
-    box.innerHTML = "";
+    box.innerHTML = searchIdleHtml(q);
     box.setAttribute("aria-busy", "false");
     return;
   }
@@ -725,6 +878,8 @@ async function runSearch({ focusError = false, focusResult = false } = {}) {
     if (`${liveQ}\u0000${liveKind}` !== `${q}\u0000${kind}`) return;
     searchResults = payload.results;
     box.innerHTML = renderResults(payload);
+    const rows = box.querySelectorAll(".result");
+    if (rows[0]) rows[0].tabIndex = 0;
     box.setAttribute("aria-busy", "false");
     if (focusResult) focusSearchResult(box);
   } catch (error) {
@@ -739,16 +894,13 @@ async function runSearch({ focusError = false, focusResult = false } = {}) {
 }
 
 function viewNew(params) {
-  const kinds = [
-    ["movie", "Movie"], ["tv", "Series"], ["book", "Book"], ["artist", "Artist"],
-    ["album", "Album"], ["track", "Song"], ["game", "Game"],
-  ];
+  const kind = params.get("kind") || "movie";
   commitView(`
-    <form class="stack" data-action="create-manual">
-      <input name="title" required value="${esc(params.get("title") || "")}" aria-label="Title" placeholder="Title">
-      <div class="status-row">${kinds.map(([value, label], index) => `<label class="status-mark"><input type="radio" name="kind" value="${value}"${index === 0 ? " checked" : ""}>${label}</label>`).join("")}</div>
-      <button class="btn btn-primary" type="submit">Add</button>
+    <h1>Add</h1>
+    <form class="stack add-form" data-action="create-manual" novalidate>
+      ${addFormInner({ title: params.get("title") || "", kind })}
     </form>`);
+  document.querySelector("[name=title]")?.focus();
 }
 
 function scoreMarks(value, label, child = false) {
@@ -805,11 +957,9 @@ async function viewItem(id, ticket, forcedSeason = null) {
         <p class="eyebrow">${esc(kindLabel(entry.kind))}${entry.catalog.source === "manual" ? " · Added manually" : ""}</p>
         <h1>${esc(entry.title)}</h1>
         <p class="lede">${esc([entry.creator, entry.year].filter(Boolean).join(" · "))}</p>
-        ${entry.catalog.overview ? `<p class="overview">${esc(entry.catalog.overview)}</p>` : ""}
+        ${overviewHtml(entry.catalog.overview)}
         ${externalRatings(entry.catalog.external_ratings)}
         ${releaseLine(entry.releases)}
-        ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
-        ${entry.kind === "movie" || entry.kind === "tv" ? `<div class="web" data-web="${entry.id}" hidden></div>` : ""}
         <div class="opinion" data-id="${entry.id}" data-favorite="${entry.favorite ? "true" : "false"}" data-anticipated="${entry.anticipated ? "true" : "false"}">
           <div class="field-label">Status <span id="status-save" class="progress-status" role="status"></span></div>
           <div class="status-row" role="radiogroup" aria-label="Status">${statusOptions(entry.kind).map(opt => {
@@ -817,21 +967,26 @@ async function viewItem(id, ticket, forcedSeason = null) {
             return `<button type="button" role="radio" class="status-mark${on ? " is-on" : ""}" aria-checked="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`;
           }).join("")}</div>
           <div class="field-label">Your score <span id="score-value">${esc(entry.rating == null ? "Unrated" : `${ratingText(entry.rating).replace("/10", " / 10")}`)}</span> <span id="score-status" class="progress-status" role="status"></span></div>
-          ${scoreMarks(entry.rating, "Your score")}
-          <div class="flag-row favorite-row">
+          <div class="score-row">
+            ${scoreMarks(entry.rating, "Your score")}
             <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}" aria-label="Favorite">${entry.favorite ? "★ Favorite" : "☆ Favorite"}</button>
           </div>
           ${progress ? progressField(entry) : ""}
           <div class="note-block">
             <label for="note">Your note</label>
-            <textarea id="note" name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="4" aria-label="Note">${esc(review.text)}</textarea>
+            <textarea id="note" name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" data-spoiler-saved="${entry.review_spoiler ? "true" : "false"}" rows="4" aria-label="Note">${esc(review.text)}</textarea>
+            <label class="spoiler"><input type="checkbox" data-spoiler ${entry.review_spoiler ? "checked" : ""}> Contains spoilers</label>
+            <p class="meta" data-note-count>${esc(noteCountText(review.text))}</p>
             <p id="note-status" class="progress-status" role="status"></p>
             ${review.restore ? `<p id="note-draft" class="save-draft">${esc(NOTE_RESTORE_LABEL)} <button type="button" data-restore-note="${entry.id}">Restore</button> <button type="button" data-discard-note="${entry.id}">Discard</button></p>` : ""}
           </div>
         </div>
+        ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
         ${experienceBlock(entry)}
-        <form data-action="delete-entry" data-id="${entry.id}"><button class="btn btn-danger" type="submit">Remove</button></form>
+        <div class="web" data-web="${entry.id}" hidden></div>
+        ${detailsBlock(entry)}
+        <form class="danger-zone" data-action="delete-entry" data-id="${entry.id}"><button class="btn btn-danger" type="submit">Remove from library</button></form>
       </div>
     </article>
   `);
@@ -899,8 +1054,17 @@ function externalRatings(rows) {
 }
 
 function releaseLine(releases) {
-  if (!releases?.length) return "";
-  return `<ul class="plain">${releases.map(row => `<li><span>${esc([row.platform, row.region].filter(Boolean).join(" · ") || "Release")}</span><span>${esc(releaseLabel(row))}</span></li>`).join("")}</ul>`;
+  const rows = (releases || []).filter(releaseInformative);
+  if (!rows.length) return "";
+  return `<ul class="plain">${rows.map(row => `<li><span>${esc([row.platform, row.region].filter(Boolean).join(" · ") || "Release")}</span><span>${esc(releaseLabel(row))}</span></li>`).join("")}</ul>`;
+}
+
+function detailsBlock(entry) {
+  const genres = Array.isArray(entry.catalog?.genres) ? entry.catalog.genres.filter(Boolean) : [];
+  const tags = Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : [];
+  const genreLine = genres.length ? `<p>Genres: ${esc(genres.join(", "))}</p>` : "";
+  const tagLine = tags.length ? `<p>Tags: ${esc(tags.join(", "))}</p>` : "";
+  return `<details class="item-details"><summary>Details</summary>${genreLine}${tagLine}${releaseForm(entry)}</details>`;
 }
 
 function logVerb(kind) {
@@ -910,16 +1074,23 @@ function logVerb(kind) {
 function experienceBlock(entry) {
   const kind = experienceOptions(entry.kind)[0]?.value || "watch";
   const rows = (entry.experiences || []).map(row => {
-    const when = row.finished_on || row.started_on || "an undated day";
-    const name = `Remove ${experienceLabel(row.kind)} on ${when}`;
+    const name = historyRemoveName(row);
     return `
     <li class="exp">
-      <span>${esc(experienceLabel(row.kind))}</span>
-      <span>${esc(when)}</span>
-      <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" aria-label="${esc(name)}">Remove</button>
+      <span>${esc(historyLine(row))}</span>
+      <button type="button" data-action="edit-experience" data-id="${entry.id}" data-experience="${row.id}">Edit</button>
+      <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" data-kind="${esc(row.kind || "")}" data-finished="${esc(row.finished_on || "")}" data-started="${esc(row.started_on || "")}" data-notes="${esc(row.notes || "")}" data-rating="${row.rating ?? ""}" aria-label="${esc(name)}">Remove</button>
+      <form class="log-form" data-action="save-experience" data-id="${entry.id}" data-experience="${row.id}" hidden>
+        <label>Entry <textarea name="notes" rows="2" aria-label="Entry">${esc(row.notes || "")}</textarea></label>
+        <label>Score <input name="rating" inputmode="decimal" value="${row.rating ?? ""}"></label>
+        <label class="spoiler"><input type="checkbox" name="spoiler" ${row.spoiler ? "checked" : ""}> Contains spoilers</label>
+        <button class="btn btn-primary" type="submit">Save</button>
+      </form>
     </li>`;
   }).join("");
   const list = rows ? `<ul class="exp-list">${rows}</ul>` : "";
+  const today = new Date();
+  const finished = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return `
     <section class="exps">
       <h2>History</h2>
@@ -927,8 +1098,11 @@ function experienceBlock(entry) {
       <button type="button" class="flag" data-action="toggle-log" data-focus-key="again" data-id="${entry.id}">Log a ${esc(logVerb(entry.kind))}</button>
       <form class="log-form" data-log-form data-action="add-experience" data-id="${entry.id}" hidden>
         <label>Kind <select name="kind">${options(experienceOptions(entry.kind), kind)}</select></label>
-        <label>Finished <input name="finished_on" type="date" value="${esc(new Date().toISOString().slice(0, 10))}"></label>
-        <label>Note <textarea name="notes" rows="2"></textarea></label>
+        <label>Started <input name="started_on" type="date"></label>
+        <label>Finished <input name="finished_on" type="date" value="${esc(finished)}"></label>
+        <label>Score <input name="rating" inputmode="decimal"></label>
+        <label>Entry <textarea name="notes" rows="2" aria-label="Entry"></textarea></label>
+        <label class="spoiler"><input type="checkbox" name="spoiler"> Contains spoilers</label>
         <button class="btn btn-primary" type="submit">Save</button>
       </form>
     </section>`;
@@ -940,22 +1114,33 @@ function showEpisodes(entry, seasonNumber) {
   const episodes = (show.episodes || [])
     .filter(episode => seasonNumber == null || episode.season_number === seasonNumber)
     .sort((a, b) => a.episode_number - b.episode_number || a.id - b.id);
-  const chips = seasons.map(item => {
-    const current = item.season_number === seasonNumber ? " is-current" : "";
-    const done = item.watched ? " is-done" : "";
-    return `<button type="button" class="season-chip${current}${done}" data-season-jump data-id="${entry.id}" data-season="${item.season_number}" data-current="${seasonNumber ?? ""}" aria-pressed="${item.watched ? "true" : "false"}" aria-label="Season ${item.season_number}">${item.season_number}</button>`;
+  const tabs = seasons.map(item => {
+    const selected = item.season_number === seasonNumber;
+    return `<button type="button" role="tab" class="season-chip${selected ? " is-current" : ""}" id="season-tab-${item.season_number}" data-season-jump data-id="${entry.id}" data-season="${item.season_number}" aria-selected="${selected ? "true" : "false"}" tabindex="${selected ? "0" : "-1"}" aria-controls="season-panel">${esc(seasonLabel(item.season_number))}</button>`;
   }).join("");
   const rating = seasons.find(item => item.season_number === seasonNumber);
+  const watched = rating?.watched ? "true" : "false";
   const score = rating
-    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${rating.watched ? "true" : "false"}">${scoreMarks(rating.rating, "Season", true)}</div>`
+    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${watched}">${scoreMarks(rating.rating, "Season score", true)}</div>`
+    : "";
+  const seasonBox = rating
+    ? `<label class="spoiler"><input type="checkbox" data-season-watched data-id="${entry.id}" data-season="${rating.season_number}" ${rating.watched ? "checked" : ""}> Season watched</label>${score}`
     : "";
   const tiles = episodes.map(episode => {
     const label = episodePlace(episode);
-    return `<li><button type="button" class="episode-tile${episode.watched ? " is-watched" : ""}" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}" aria-label="${esc(label)}"><span>${esc(episode.episode_number)}</span><strong>${esc(episode.title || label)}</strong></button><a class="episode-open" href="#/item/${entry.id}/episode/${episode.id}" aria-label="Open ${esc(label)}"></a></li>`;
+    const code = episodeCode(episode.season_number, episode.episode_number);
+    return `<li class="episode-tile${episode.watched ? " is-watched" : ""}"><a href="#/item/${entry.id}/episode/${episode.id}">${esc(episode.episode_number)} ${esc(episode.title || label)}</a><button type="button" class="episode-watch" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}" aria-label="${episode.watched ? `Watched ${code}` : `Mark ${code} watched`}"></button></li>`;
   }).join("");
+  const nextLabel = markNextLabel(show);
+  const upcoming = show.next_episode;
+  const next = nextLabel && upcoming
+    ? `<button type="button" class="btn btn-primary" data-action="mark-next" data-id="${entry.id}" data-episode="${upcoming.id}" data-label="${esc(episodeCode(upcoming.season_number, upcoming.episode_number))}">${esc(nextLabel)}</button>`
+    : "";
   return `<section class="episodes-section">
-    <div class="season-strip">${chips}${score}</div>
-    <ol class="episode-tiles">${tiles}</ol>
+    <p class="meta">${esc(caughtUpText(show))}</p>
+    ${next}
+    <div class="season-strip" role="tablist" aria-label="Seasons">${tabs}</div>
+    <div role="tabpanel" id="season-panel">${seasonBox}<ol class="episode-tiles">${tiles}</ol></div>
   </section>`;
 }
 
@@ -971,10 +1156,9 @@ async function viewEpisode(entryId, episodeId, ticket) {
   commitView(`
     <article class="episode-page${episode.watched ? " is-watched" : ""}">
       <p class="eyebrow"><a href="#/item/${entry.id}?season=${episode.season_number}">${esc(entry.title)}</a></p>
-      <button type="button" class="episode-toggle" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">
-        <h1>${esc(episode.title || label)}</h1>
-        <p class="lede">${esc(label)}${episode.air_date ? ` · ${esc(episode.air_date)}` : ""}</p>
-      </button>
+      <h1>${esc(episode.title || label)}</h1>
+      <p class="lede">${esc(label)}${episode.air_date ? ` · ${esc(releaseLabel({ precision: "day", released_on: episode.air_date, status: "released" }))}` : ""}</p>
+      <button type="button" class="episode-toggle" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Watched" : "Mark watched"}</button>
       ${episode.overview ? `<p class="overview">${esc(episode.overview)}</p>` : ""}
     </article>`);
   applyChrome(route(), {
@@ -989,18 +1173,19 @@ function musicBlock(entry) {
   const music = entry.music || { albums: [], partial: false };
   const albums = music.albums.map(album => `
     <li class="cover" data-album-row data-id="${entry.id}" data-album="${album.id}">
-      <button type="button" class="cover-face" data-album-open aria-label="${esc(album.title)}">
+      <button type="button" class="cover-face" data-album-open aria-expanded="false" aria-label="${esc(album.title)}">
         ${coverImage(album.artwork_url)}
         <span>${esc(album.title)}</span>
       </button>
       ${scoreMarks(album.rating, album.title, true)}
       <ol class="cover-tracks" hidden>
-        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><button type="button" class="song-name" data-song-center="${esc(track.title)}">${esc(track.title)}</button>${scoreMarks(track.rating, track.title, true)}</li>`).join("")}
+        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><span class="song-name">${esc(track.title)}</span>${scoreMarks(track.rating, track.title, true)}</li>`).join("")}
       </ol>
     </li>`).join("");
+  const partial = music.partial ? `<p class="quiet">Some albums are still loading. Check back in a minute.</p>` : "";
   return `
     <section class="discog">
-      <div class="web" data-web="${entry.id}" hidden></div>
+      ${partial}
       <ul class="covers">${albums}</ul>
       <form class="cover cover-add" data-action="add-album" data-id="${entry.id}">
         <input name="title" aria-label="Album" placeholder="Album" required>
@@ -1011,36 +1196,38 @@ function musicBlock(entry) {
 }
 
 let webNodes = [];
+let webCenter = "";
 
 function paintWeb(center, nodes = webNodes) {
   webNodes = nodes || [];
+  webCenter = graphCenter(center);
   const box = document.querySelector("[data-web]");
-  if (!box || !webNodes.length) return;
-  const count = Math.min(webNodes.length, 12);
-  const cx = 160;
-  const cy = 118;
-  const radius = 92;
-  const marks = webNodes.slice(0, count).map((node, index) => {
-    const angle = (-Math.PI / 2) + (index / count) * Math.PI * 2;
-    const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius;
-    const label = String(node.name || node.title || "").slice(0, 18);
-    const query = encodeURIComponent(node.name || node.title || "");
-    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"></line><a href="#/search?q=${query}"><text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${esc(label)}</text></a>`;
-  }).join("");
+  if (!box) return;
+  const html = relatedHtml(webNodes);
+  if (!html) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
   box.hidden = false;
-  box.innerHTML = `<svg viewBox="0 0 320 240" role="img" aria-label="Connections"><g>${marks}</g><circle cx="${cx}" cy="${cy}" r="26"></circle><text x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(String(center).slice(0, 16))}</text></svg>`;
+  box.innerHTML = html;
 }
 
 async function loadWeb(entry, ticket) {
   if (entry.kind !== "artist" && entry.kind !== "movie" && entry.kind !== "tv") return;
+  const box = document.querySelector("[data-web]");
   try {
     const web = await api(`/api/entries/${entry.id}/web`, { signal: ticket?.signal });
     if (ticket && !ticket.isCurrent()) return;
     const current = route();
     if (current.name !== "item" || current.id !== entry.id) return;
     paintWeb(entry.title, web.nodes || []);
-  } catch { /* the title still stands on its own */ }
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    if (!box) return;
+    box.hidden = false;
+    box.innerHTML = connectionsFailureHtml();
+  }
 }
 
 function releaseForm(entry) {
@@ -1133,19 +1320,50 @@ function formBody(form) {
   return data;
 }
 
-function openQuick(index) {
-  const item = searchResults[index];
+let addInvoker = null;
+
+function openAdd(options, invoker) {
   const dialog = document.querySelector("#quick-add");
-  if (!item || !dialog) return;
-  quickIndex = index;
-  dialog.querySelector("#quick-title").textContent = item.title;
-  dialog.querySelector("#quick-meta").textContent = [kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · ");
-  const status = dialog.querySelector("select[name=status]");
-  status.innerHTML = options(statusOptions(item.kind), "completed");
-  dialog.querySelector("input[name=rating]").value = "";
-  dialog.querySelector("textarea[name=review]").value = "";
-  dialog.showModal();
-  dialog.querySelector("input[name=rating]").focus();
+  const form = dialog?.querySelector("form");
+  if (!(dialog instanceof HTMLDialogElement) || !(form instanceof HTMLFormElement)) {
+    location.hash = "#/new";
+    return;
+  }
+  form.dataset.action = options.prefilled ? "quick-add" : "create-manual";
+  form.innerHTML = addFormInner(options);
+  addInvoker = invoker instanceof HTMLElement ? invoker : null;
+  if (!dialog.open) dialog.showModal();
+  const focus = options.prefilled
+    ? form.querySelector("[name=status]")
+    : form.querySelector("[name=title]");
+  if (focus instanceof HTMLElement) focus.focus();
+}
+
+function showAddErrors(form, errors) {
+  let first = null;
+  for (const name of ["title", "year"]) {
+    const field = form.querySelector(`[name="${name}"]`);
+    const message = form.querySelector(`#${name}-error`);
+    const invalid = Boolean(errors[name]);
+    if (field instanceof HTMLElement) {
+      field.setAttribute("aria-invalid", invalid ? "true" : "false");
+      if (invalid && !first) first = field;
+    }
+    if (message) {
+      message.hidden = !invalid;
+      message.textContent = errors[name] || "";
+    }
+  }
+  const banner = form.querySelector("[data-form-error]");
+  if (banner) banner.hidden = true;
+  if (first instanceof HTMLElement) first.focus();
+  return Object.keys(errors).length === 0;
+}
+
+function addScore(form) {
+  const raw = form.querySelector(".score")?.getAttribute("data-score-value");
+  if (raw == null || raw === "") return null;
+  return raw;
 }
 
 function clickTarget(event) {
@@ -1195,6 +1413,7 @@ async function render() {
   const chromeRoute = route();
   applyChrome(chromeRoute, { query: chromeRoute.params.get("q") || "" });
   syncTheme();
+  syncWeek();
   if (libraryNotice.droppedSort) toast(SORT_TOAST);
   const current = route();
   const scrolling = document.scrollingElement;
@@ -1246,6 +1465,14 @@ document.addEventListener("click", async event => {
   const target = clickTarget(event);
   if (!target) return;
   if (!target.closest(".account")) closeAccountMenus();
+  const week = target.closest("[data-week-start]");
+  if (week) {
+    keepButtonClick(event, target);
+    writeWeekStart(week.dataset.weekStart);
+    syncWeek();
+    if (route().name === "calendar") await render();
+    return;
+  }
   const theme = target.closest("[data-theme-value]");
   if (theme) {
     keepButtonClick(event, target);
@@ -1352,41 +1579,22 @@ document.addEventListener("click", async event => {
   const season = target.closest("[data-season-jump]");
   if (season) {
     keepButtonClick(event, target);
-    if (String(season.dataset.season) !== String(season.dataset.current)) {
-      location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
-      return;
-    }
-    const watched = season.getAttribute("aria-pressed") !== "true";
-    setPressed(season, watched, "is-done");
-    try {
-      const marks = document.querySelector(`[data-season-marks][data-season="${season.dataset.season}"] .score`);
-      const raw = marks?.dataset.scoreValue;
-      const rating = raw === "" || raw == null ? null : Number(raw);
-      await api(`/api/entries/${season.dataset.id}/seasons`, {
-        method: "POST",
-        body: JSON.stringify({
-          season_number: Number(season.dataset.season),
-          watched,
-          rating,
-        }),
-      });
-    } catch (error) {
-      setPressed(season, !watched, "is-done");
-      fail(error);
-    }
+    location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
     return;
   }
   const song = target.closest("[data-song-center]");
   if (song) {
     keepButtonClick(event, target);
-    paintWeb(song.dataset.songCenter);
+    paintWeb(graphCenter(webCenter));
     return;
   }
   const cover = target.closest("[data-album-open]");
   if (cover) {
     keepButtonClick(event, target);
     const tracks = cover.parentElement?.querySelector(".cover-tracks");
-    if (tracks) tracks.hidden = !tracks.hidden;
+    const open = tracks ? tracks.hidden : false;
+    if (tracks) tracks.hidden = !open;
+    cover.setAttribute("aria-expanded", open ? "true" : "false");
     return;
   }
   const restore = target.closest("[data-restore-note]");
@@ -1456,7 +1664,111 @@ document.addEventListener("click", async event => {
     }
     if (action === "open-add") {
       closeAccountMenus();
-      location.hash = "#/new";
+      openAdd({}, button);
+      return;
+    }
+    if (action === "clear-search") {
+      const input = document.querySelector("#search-q");
+      if (input instanceof HTMLInputElement) {
+        input.value = "";
+        input.focus();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      return;
+    }
+    if (action === "show-more") {
+      libraryShown += LIBRARY_PAGE_SIZE;
+      const slot = app.querySelector("[data-library-body]");
+      const current = route();
+      if (slot && current.name === "library") {
+        const visible = filteredLibrary(libraryItems, current.params.get("q") || "", current.params.get("fav") === "1");
+        slot.innerHTML = visible.length ? libraryCards(visible) : libraryEmptyHtml({
+          kind: current.params.get("kind") || "",
+          status: current.params.get("status") || "",
+          q: current.params.get("q") || "",
+        });
+      }
+      return;
+    }
+    if (action === "toggle-overview") {
+      const overview = document.querySelector("#overview");
+      const open = button.getAttribute("aria-expanded") === "true";
+      button.setAttribute("aria-expanded", open ? "false" : "true");
+      button.textContent = open ? "More" : "Less";
+      overview?.classList.toggle("is-clamped", open);
+      return;
+    }
+    if (action === "cal-more") {
+      const pop = button.parentElement?.querySelector(".cal-popover");
+      if (pop instanceof HTMLElement) pop.hidden = !pop.hidden;
+      return;
+    }
+    if (action === "reload-calendar") {
+      await render();
+      return;
+    }
+    if (action === "retry-web") {
+      const id = document.querySelector("[data-web]")?.getAttribute("data-web");
+      if (id) {
+        try {
+          const web = await api(`/api/entries/${id}/web`);
+          paintWeb(webCenter || document.querySelector("h1")?.textContent || "", web.nodes || []);
+        } catch (error) {
+          if (error?.name !== "AbortError") {
+            const box = document.querySelector("[data-web]");
+            if (box) box.innerHTML = connectionsFailureHtml();
+          }
+        }
+      }
+      return;
+    }
+    if (action === "mark-next") {
+      const label = button.dataset.label || "the episode";
+      const episode = button.dataset.episode;
+      const id = button.dataset.id;
+      await api(`/api/entries/${id}/episodes/next`, { method: "POST", body: "{}" });
+      toast(`Marked ${label} watched.`, "status", {
+        label: "Undo",
+        key: `watched:${episode}`,
+        onClick: async () => {
+          await api(`/api/entries/${id}/episodes/${episode}/watched`, {
+            method: "POST",
+            body: JSON.stringify({ watched: false }),
+          });
+          dismissToast(`watched:${episode}`);
+          await render();
+        },
+      });
+      await render();
+      return;
+    }
+    if (action === "mark-watched") {
+      const label = button.dataset.label || "the episode";
+      await api(`/api/entries/${button.dataset.id}/episodes/${button.dataset.episode}/watched`, {
+        method: "POST",
+        body: JSON.stringify({ watched: true }),
+      });
+      toast(`Marked ${label} watched.`, "status", {
+        label: "Undo",
+        key: `watched:${button.dataset.episode}`,
+        onClick: async () => {
+          await api(`/api/entries/${button.dataset.id}/episodes/${button.dataset.episode}/watched`, {
+            method: "POST",
+            body: JSON.stringify({ watched: false }),
+          });
+          dismissToast(`watched:${button.dataset.episode}`);
+          await render();
+        },
+      });
+      await render();
+      return;
+    }
+    if (action === "edit-experience") {
+      const form = button.parentElement?.querySelector("[data-action='save-experience']");
+      if (form instanceof HTMLElement) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector("textarea, input")?.focus();
+      }
       return;
     }
     if (action === "sign-out") {
@@ -1476,18 +1788,50 @@ document.addEventListener("click", async event => {
       if (!app.querySelector("[data-error-title]")) focusPageHeading();
       return;
     }
+    if (action === "show-group") {
+      const section = button.closest("[data-group]");
+      const kind = button.dataset.kind;
+      const rows = (searchResults || []).filter(item => item.kind === kind);
+      if (section) {
+        section.querySelector(".results").innerHTML = rows.map(item => resultRow(item, searchResults.indexOf(item))).join("");
+        button.remove();
+      }
+      return;
+    }
     if (action === "retry-search") {
       await runSearch({ focusError: true, focusResult: true });
       return;
     }
-    if (action === "open-quick" || action === "follow") {
+    if (action === "open-quick") {
+      const item = searchResults[Number(button.dataset.index)];
+      if (!item) return;
+      quickIndex = Number(button.dataset.index);
+      openAdd({
+        title: item.title,
+        kind: item.kind,
+        creator: item.creator || "",
+        year: item.year || "",
+        status: "want",
+        prefilled: true,
+      }, button);
+      return;
+    }
+    if (action === "follow") {
       const item = searchResults[Number(button.dataset.index)];
       if (!item) return;
       const created = await api("/api/library/from-provider", {
         method: "POST",
         body: JSON.stringify({ ...item, status: "want" }),
       });
-      location.hash = `#/item/${created.id}`;
+      item.already_saved = true;
+      item.saved_id = created.id;
+      toast(created.already_saved ? `${item.title} is already in your library.` : `Following ${item.title}.`, "status", {
+        label: "Open",
+        href: `#/item/${created.id}`,
+      });
+      const box = document.querySelector("#search-results");
+      if (box) box.innerHTML = renderResults({ results: searchResults, providers: {}, query: document.querySelector("#search-q")?.value || "" });
+      return;
     }
     if (action === "close-quick") document.querySelector("#quick-add")?.close();
     if (action === "toggle-log") {
@@ -1508,8 +1852,24 @@ document.addEventListener("click", async event => {
       await render();
     }
     if (action === "delete-experience") {
-      await api(`/api/entries/${button.dataset.id}/experiences/${button.dataset.experience}`, { method: "DELETE" });
-      toast("Experience removed. The overall review was left as it is.");
+      const payload = {
+        kind: button.dataset.kind,
+        finished_on: button.dataset.finished || null,
+        started_on: button.dataset.started || null,
+        notes: button.dataset.notes || null,
+        rating: button.dataset.rating === "" ? null : button.dataset.rating,
+      };
+      const id = button.dataset.id;
+      await api(`/api/entries/${id}/experiences/${button.dataset.experience}`, { method: "DELETE" });
+      toast("Removed from history.", "status", {
+        label: "Undo",
+        key: `experience:${button.dataset.experience}`,
+        onClick: async () => {
+          await api(`/api/entries/${id}/experiences`, { method: "POST", body: JSON.stringify(payload) });
+          dismissToast(`experience:${button.dataset.experience}`);
+          await render();
+        },
+      });
       await render();
     }
   } catch (error) {
@@ -1533,25 +1893,23 @@ document.addEventListener("submit", async event => {
       return;
     }
     if (form.dataset.action === "create-manual") {
+      const errors = validateAdd({ title: data.title, year: data.year });
+      if (!showAddErrors(form, errors)) return;
       const body = {
         kind: data.kind || "movie",
-        title: data.title,
+        title: String(data.title || "").trim(),
         creator: data.creator || null,
         year: data.year || null,
-        artwork_url: data.artwork_url || null,
         status: data.status || "want",
-        rating: data.rating === "" || data.rating == null ? null : data.rating,
+        rating: addScore(form),
         review: data.review || null,
-        anticipated: Boolean(data.anticipated),
+        anticipated: data.status === "anticipating",
       };
-      if (data.release_on || data.release_precision === "unknown") {
-        body.release_on = data.release_on || null;
-        body.release_precision = data.release_precision;
-        body.release_status = data.anticipated ? "scheduled" : "released";
-      }
       const created = await api("/api/library", { method: "POST", body: JSON.stringify(body) });
-      toast("Saved in your library.");
-      location.hash = `#/item/${created.id}`;
+      const dialog = form.closest("dialog");
+      if (dialog instanceof HTMLDialogElement && dialog.open) dialog.close();
+      toast(`Added ${body.title}.`, "status", { label: "Open", href: `#/item/${created.id}` });
+      if (!(dialog instanceof HTMLDialogElement)) location.hash = `#/item/${created.id}`;
       return;
     }
     if (form.dataset.action === "save-entry") {
@@ -1583,7 +1941,7 @@ document.addEventListener("submit", async event => {
         rating: data.rating === "" ? null : data.rating,
         spoiler: Boolean(data.spoiler),
       }) });
-      toast("Logged. Your overall score didn't change.");
+      toast(loggedToast(data.kind));
       await render();
       return;
     }
@@ -1678,16 +2036,34 @@ document.addEventListener("submit", async event => {
         method: "POST",
         body: JSON.stringify({
           ...item,
-          status: data.status,
-          rating: data.rating === "" ? null : data.rating,
+          status: data.status || "want",
+          rating: addScore(form),
           review: data.review || null,
         }),
       });
       document.querySelector("#quick-add")?.close();
-      toast(created.already_saved ? "Already in your library." : "Saved in your library.");
-      location.hash = `#/item/${created.id}`;
+      item.already_saved = true;
+      item.saved_id = created.id;
+      const title = item.title;
+      toast(created.already_saved ? `${title} is already in your library.` : `Added ${title} to your library.`, "status", {
+        label: "Open",
+        href: `#/item/${created.id}`,
+      });
+      const box = document.querySelector("#search-results");
+      if (box) {
+        box.innerHTML = renderResults({
+          results: searchResults,
+          providers: {},
+          query: document.querySelector("#search-q")?.value || "",
+        });
+      }
     }
   } catch (error) {
+    const banner = form.querySelector("[data-form-error]");
+    if (banner && (form.dataset.action === "create-manual" || form.dataset.action === "quick-add")) {
+      banner.hidden = false;
+      banner.textContent = error?.message || "Couldn't add this.";
+    }
     fail(error);
   }
 });
@@ -1748,7 +2124,9 @@ async function commitNote(id) {
     return;
   }
   const sent = box.value;
-  if (sent === (box.dataset.saved ?? "")) return;
+  const spoilerBox = document.querySelector("[data-spoiler]");
+  const spoiler = spoilerBox instanceof HTMLInputElement ? spoilerBox.checked : false;
+  if (sent === (box.dataset.saved ?? "") && String(spoiler) === (box.dataset.spoilerSaved || "false")) return;
   const base = box.dataset.reviewBase ?? "";
   const status = document.querySelector("#note-status");
   const stopSaving = armSaving(status);
@@ -1762,7 +2140,11 @@ async function commitNote(id) {
     const updated = await api(`/api/entries/${id}`, {
       method: "PATCH",
       signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
-      body: JSON.stringify({ review: sent, review_base: base }),
+      body: JSON.stringify({
+        review: sent,
+        review_base: base,
+        ...(String(spoiler) === (box.dataset.spoilerSaved || "false") ? {} : { review_spoiler: spoiler }),
+      }),
     });
     stopSaving();
     if (readDraftRecord(id)?.text === sent) clearDraft(id);
@@ -1773,6 +2155,7 @@ async function commitNote(id) {
     if (!live) return;
     delete live.dataset.conflict;
     live.dataset.saved = sent;
+    live.dataset.spoilerSaved = String(spoiler);
     live.dataset.reviewBase = updated?.review_updated_at || "";
     if (live.value === sent) showSaved(document.querySelector("#note-status"));
   } catch (error) {
@@ -1807,6 +2190,8 @@ document.addEventListener("input", event => {
   const target = event.target;
   if (target instanceof HTMLTextAreaElement && target.dataset.review) {
     writeDraft(target.dataset.review, target.value, target.dataset.reviewBase ?? "");
+    const count = document.querySelector("[data-note-count]");
+    if (count) count.textContent = noteCountText(target.value);
   }
   if (target instanceof HTMLInputElement && target.id === "progress") {
     target.dataset.dirty = "true";
@@ -1814,14 +2199,93 @@ document.addEventListener("input", event => {
     const unit = document.querySelector("#progress-unit");
     if (help) help.textContent = progressPreview(target.value, unit instanceof HTMLSelectElement ? unit.value : "");
   }
+  if (target instanceof HTMLInputElement && target.id === "library-q") {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+      const params = new URLSearchParams(route().params);
+      const q = target.value.trim();
+      if (q) params.set("q", q);
+      else params.delete("q");
+      const text = params.toString();
+      const hash = text ? `#/library?${text}` : "#/library";
+      if (location.hash !== hash) history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+      const current = route();
+      if (current.name !== "library") return;
+      const start = target.selectionStart;
+      paintLibrary(current.params, libraryResume);
+      const again = document.querySelector("#library-q");
+      if (again instanceof HTMLInputElement) {
+        again.focus();
+        if (start != null) again.setSelectionRange(start, start);
+      }
+    }, 220);
+  }
   if (target instanceof HTMLInputElement && target.id === "search-q") {
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(() => runSearch(), 220);
+    searchTimer = window.setTimeout(() => {
+      const q = target.value.trim();
+      const kind = document.querySelector("#search-kind")?.value || "";
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if (kind) params.set("kind", kind);
+      const hash = params.toString() ? `#/search?${params}` : "#/search";
+      if (location.hash !== hash) history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+      runSearch();
+    }, 220);
   }
 });
 
 document.addEventListener("change", async event => {
   const target = event.target;
+  if (target instanceof HTMLInputElement && target.name === "kind" && target.closest(".add-form, #quick-add")) {
+    const form = target.form;
+    const status = form?.querySelector("[data-add-status]");
+    const creator = form?.querySelector("[data-creator-label]");
+    if (status) {
+      const selected = form.querySelector("[name=status]:checked")?.value || "want";
+      status.innerHTML = statusOptions(target.value).map(opt => `<label class="status-mark"><input type="radio" name="status" value="${esc(opt.value)}"${opt.value === selected ? " checked" : ""}>${esc(opt.label)}</label>`).join("");
+    }
+    if (creator) {
+      const input = creator.querySelector("input");
+      creator.firstChild.textContent = `${creatorLabel(target.value)} `;
+      if (input) creator.append(input);
+    }
+    return;
+  }
+  if (target instanceof HTMLInputElement && target.dataset.spoiler != null) {
+    const box = document.querySelector("textarea[data-review]");
+    if (box instanceof HTMLTextAreaElement) await saveNote(box);
+    return;
+  }
+  if (target instanceof HTMLInputElement && target.dataset.seasonWatched != null) {
+    const marks = document.querySelector(`[data-season-marks][data-season="${target.dataset.season}"] .score`);
+    const raw = marks?.dataset.scoreValue;
+    const rating = raw === "" || raw == null ? null : Number(raw);
+    try {
+      await api(`/api/entries/${target.dataset.id}/seasons`, {
+        method: "POST",
+        body: JSON.stringify({
+          season_number: Number(target.dataset.season),
+          watched: target.checked,
+          rating,
+        }),
+      });
+      const holder = document.querySelector(`[data-season-marks][data-season="${target.dataset.season}"]`);
+      if (holder) holder.dataset.watched = target.checked ? "true" : "false";
+    } catch (error) {
+      target.checked = !target.checked;
+      fail(error);
+    }
+    return;
+  }
+  if (target instanceof HTMLSelectElement && target.dataset.libraryStatus != null) {
+    const params = new URLSearchParams(route().params);
+    if (!target.value) params.delete("status");
+    else params.set("status", target.value);
+    const query = params.toString();
+    location.hash = query ? `#/library?${query}` : "#/library";
+    return;
+  }
   if (target instanceof HTMLSelectElement && target.id === "progress-unit") {
     const help = document.querySelector("#progress-help");
     const input = document.querySelector("#progress");
@@ -2078,9 +2542,89 @@ document.addEventListener("keydown", event => {
     }
     return;
   }
+  if (event.key === "Escape" && event.target instanceof HTMLTextAreaElement && event.target.dataset.review) {
+    event.target.value = event.target.dataset.saved ?? "";
+    event.target.blur();
+    return;
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    const form = event.target instanceof HTMLElement ? event.target.closest("form.add-form, #quick-add form") : null;
+    if (form instanceof HTMLFormElement) {
+      event.preventDefault();
+      form.requestSubmit();
+      return;
+    }
+  }
   if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.dataset.progress) {
     event.preventDefault();
     saveProgress();
+    return;
+  }
+  const result = event.target instanceof Element ? event.target.closest(".result") : null;
+  if (result && (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "ArrowRight" || event.key === "Enter" || event.key === "Escape")) {
+    const rows = [...document.querySelectorAll("#search-results .result")];
+    const index = rows.indexOf(result);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      document.querySelector("#search-q")?.focus();
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      const action = result.querySelector("button, a");
+      if (action instanceof HTMLElement) {
+        event.preventDefault();
+        action.tabIndex = 0;
+        action.focus();
+      }
+      return;
+    }
+    if (event.key === "Enter" && event.target === result) {
+      event.preventDefault();
+      result.querySelector("[data-action='open-quick'], [data-action='follow']")?.click();
+      return;
+    }
+    const next = rows[event.key === "ArrowDown" ? index + 1 : index - 1];
+    if (next instanceof HTMLElement) {
+      event.preventDefault();
+      rows.forEach(row => { row.tabIndex = row === next ? 0 : -1; });
+      next.focus();
+    }
+    return;
+  }
+  const cell = event.target instanceof Element ? event.target.closest("[role='gridcell'][data-date]") : null;
+  if (cell && route().name === "calendar") {
+    const cells = [...document.querySelectorAll("[role='gridcell'][data-date]")];
+    const index = cells.indexOf(cell);
+    const move = (next) => {
+      if (!(next instanceof HTMLElement)) return;
+      event.preventDefault();
+      cells.forEach(item => { item.tabIndex = item === next ? 0 : -1; });
+      next.focus();
+    };
+    if (event.key === "ArrowRight") move(cells[index + 1]);
+    else if (event.key === "ArrowLeft") move(cells[index - 1]);
+    else if (event.key === "ArrowDown") move(cells[index + 7]);
+    else if (event.key === "ArrowUp") move(cells[index - 7]);
+    else if (event.key === "Home") move(cells[index - (index % 7)]);
+    else if (event.key === "End") move(cells[Math.min(cells.length - 1, index + (6 - (index % 7)))]);
+    else if (event.key === "PageDown" || event.key === "PageUp") {
+      event.preventDefault();
+      const month = route().params.get("month") || "";
+      const delta = event.key === "PageDown" ? 1 : -1;
+      const next = shiftMonth(month || new Date().toISOString().slice(0, 7), delta);
+      location.hash = `#/calendar?month=${next}`;
+    } else if (event.key === "Enter") {
+      const link = cell.querySelector("a");
+      if (link instanceof HTMLElement) {
+        event.preventDefault();
+        link.click();
+      }
+    }
+    if (["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Home", "End", "PageDown", "PageUp", "Enter"].includes(event.key)) return;
+  }
+  if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && event.key === "t" && route().name === "calendar") {
+    event.preventDefault();
+    location.hash = "#/calendar";
     return;
   }
   if (event.key !== "ArrowDown" || document.activeElement?.id !== "search-q") return;
@@ -2142,6 +2686,9 @@ async function loadAccount() {
 paintIcons();
 armMidnight();
 loadAccount();
+document.querySelector("#quick-add")?.addEventListener("close", () => {
+  addInvoker?.focus();
+});
 
 window.addEventListener("hashchange", () => {
   void render();

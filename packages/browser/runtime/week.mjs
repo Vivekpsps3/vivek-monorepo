@@ -11,3 +11,9 @@ export function weekStartsOn() {
   } catch { /* node, or private mode */ }
   return WEEK_STARTS_ON;
 }
+
+export function writeWeekStart(value) {
+  const next = value === 1 || value === "1" ? "1" : "0";
+  try { localStorage.setItem(WEEK_START_KEY, next); } catch { /* private mode */ }
+  return Number(next);
+}

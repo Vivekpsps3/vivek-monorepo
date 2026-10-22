@@ -58,7 +58,7 @@ test('title sort works and an unknown sort does not fail the page', async ({ pag
   await page.screenshot({ path: shot('after-library-sort.png'), fullPage: true });
 
   await page.goto('/media/#/library?sort=nope');
-  await expect(page.getByRole('heading', { name: 'Saved' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Library/ })).toBeVisible();
   await expect(page.locator('#toasts')).toContainText("That sort isn't available. Showing recently active.");
   await expect(page.locator('#notice')).toHaveCount(0);
   await expect(page).not.toHaveURL(/sort=nope/);
@@ -464,9 +464,9 @@ test('a missing item is one error panel and a success toast survives navigation'
 
   await page.goto('/media/#/new');
   await page.getByLabel('Title').fill('Synthetic Toast Title');
-  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to library' }).click();
   await expect(page).toHaveURL(/#\/item\//);
-  await expect(page.locator('#toasts')).toContainText('Saved in your library.');
+  await expect(page.locator('#toasts')).toContainText('Added Synthetic Toast Title.');
 });
 
 test('a slow route shows a skeleton and a fast one does not flash', async ({ page }) => {
@@ -561,7 +561,7 @@ test('library keeps the current cards until the skeleton delay', async ({ page }
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });
-  await page.locator('a.status-mark', { hasText: /^Book$/ }).click();
+  await page.locator('a.status-mark', { hasText: /^Books$/ }).click();
   await expect(page.locator('[data-library-body] .skeleton').first()).toBeVisible();
   const trace = await page.evaluate(() => (window as unknown as { __library: { sawCards: boolean, sawSkeleton: boolean, blanked: boolean } }).__library);
   expect(trace.sawCards).toBe(true);
@@ -650,7 +650,7 @@ test('media routes stay quiet under the enforced content security policy', async
   });
   page.on('pageerror', error => problems.push(String(error)));
   await page.goto('/media/#/library');
-  await expect(page.getByRole('heading', { name: 'Saved' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Library/ })).toBeVisible();
   await page.goto('/media/#/search');
   await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
   await page.goto('/media/#/');
@@ -705,7 +705,7 @@ test('a finished progress save does not dismiss another item draft', async ({ pa
 
 test('the theme toggle names the theme it applies', async ({ page }) => {
   await page.goto('/media/');
-  await page.getByRole('button', { name: 'Account', exact: true }).click();
+  await page.locator('.topbar [data-action="account-menu"]').click();
   await page.getByRole('menuitemradio', { name: 'Dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('.topbar [data-theme-value="dark"]')).toHaveAttribute('aria-pressed', 'true');

@@ -81,6 +81,10 @@ export function kindLabel(kind) {
   return { movie: "Movie", tv: "Series", book: "Book", track: "Song", album: "Album", artist: "Artist", game: "Game" }[kind] || "Media";
 }
 
+export function kindPlural(kind) {
+  return { movie: "Movies", tv: "Series", book: "Books", track: "Songs", album: "Albums", artist: "Artists", game: "Games" }[kind] || "Media";
+}
+
 export function statusLabel(kind, status) {
   return (STATUS[kind] || STATUS.movie)[status] || status;
 }

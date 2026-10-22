@@ -3,7 +3,7 @@
 import json
 import math
 import time
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -63,8 +63,8 @@ def iso(value: datetime | date | None) -> str | None:
         return None
     if isinstance(value, datetime):
         if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc).isoformat()
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC).isoformat()
     return value.isoformat()
 
 
@@ -98,6 +98,8 @@ def entry_card(entry: UserEntry) -> dict:
         "rating": entry.rating,
         "favorite": entry.favorite,
         "anticipated": entry.anticipated,
+        "progress_value": entry.progress_value,
+        "progress_unit": entry.progress_unit,
         "progress_label": progress_label(entry),
         "updated_at": iso(entry.updated_at),
         "review_updated_at": iso(entry.review_updated_at),
@@ -920,9 +922,9 @@ def _year(value) -> int | None:
     try:
         year = int(value)
     except (TypeError, ValueError):
-        return None
+        fail("Year must be a number from 1000 to 3000.")
     if year < 1000 or year > 3000:
-        return None
+        fail("Year must be a number from 1000 to 3000.")
     return year
 
 
@@ -1118,11 +1120,15 @@ def detail(db: Session, entry: UserEntry) -> dict:
     }
 
 
-def saved_source_keys(db: Session, user_id: int) -> set[tuple[str, str]]:
+def saved_source_ids(db: Session, user_id: int) -> dict[tuple[str, str], int]:
     rows = (
-        db.query(CatalogItem.source, CatalogItem.source_id)
+        db.query(CatalogItem.source, CatalogItem.source_id, UserEntry.id)
         .join(UserEntry, UserEntry.catalog_id == CatalogItem.id)
         .filter(UserEntry.user_id == user_id, CatalogItem.source_id.is_not(None))
         .all()
     )
-    return {(source, source_id) for source, source_id in rows}
+    return {(source, source_id): entry_id for source, source_id, entry_id in rows}
+
+
+def saved_source_keys(db: Session, user_id: int) -> set[tuple[str, str]]:
+    return set(saved_source_ids(db, user_id))
