@@ -4,12 +4,13 @@ import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { TransactionsComponent } from '../transactions/transactions.component';
 import { CalendarComponent } from '../calendar/calendar.component';
 
-export type SpendingTab = 'activity' | 'calendar' | 'imports';
+export type SpendingTab = 'activity' | 'calendar';
 export type SpendingActivityView = 'all' | 'spending' | 'income';
 
 export interface SpendingHubRouteState {
   tab: SpendingTab;
   activityView: SpendingActivityView;
+  receiptsOpen: boolean;
   queryParams: Record<string, string | null> | null;
 }
 
@@ -19,18 +20,24 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
   const requested = params.get('t') || '';
   const legacyView = requested === 'pay' ? 'income' : requested === 'spend' ? 'spending' : null;
   const isReviewLink = requested === 'review';
+  const isImportsLink = requested === 'imports';
   const view = params.get('v');
   const activityView: SpendingActivityView = legacyView || (view === 'income' || view === 'spending' ? view : 'all');
-  const tab: SpendingTab = requested === 'calendar' || requested === 'imports' ? requested : 'activity';
+  const tab: SpendingTab = requested === 'calendar' ? 'calendar' : 'activity';
+  const receiptsOpen = params.get('receipts') === '1' || isImportsLink;
   const hasObsoleteReviewParams = obsoleteReviewParams.some(key => params.has(key));
-  const shouldNormalize = isReviewLink || !!legacyView || hasObsoleteReviewParams;
+  const shouldNormalize = isReviewLink || !!legacyView || hasObsoleteReviewParams || isImportsLink;
 
-  if (!shouldNormalize) return { tab, activityView, queryParams: null };
+  if (!shouldNormalize) return { tab, activityView, receiptsOpen, queryParams: null };
 
   const queryParams: Record<string, string | null> = {};
   if (isReviewLink || legacyView) {
     queryParams['t'] = 'activity';
     queryParams['v'] = legacyView || activityView;
+  }
+  if (isImportsLink) {
+    queryParams['t'] = 'activity';
+    queryParams['receipts'] = '1';
   }
   if ((isReviewLink || requested === 'activity' || !!legacyView)
     && !/^\d{4}-\d{2}$/.test(params.get('month') || '')
@@ -46,7 +53,7 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
     }
   }
   for (const key of obsoleteReviewParams) queryParams[key] = null;
-  return { tab, activityView, queryParams };
+  return { tab, activityView, receiptsOpen, queryParams };
 }
 
 @Component({
@@ -59,18 +66,11 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
       <nav class="hub-tabs" aria-label="Spending sections">
         <a [routerLink]="[]" [queryParams]="{ t: 'activity', v: activityView }" [class.on]="tab === 'activity'">Activity</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'calendar' }" [class.on]="tab === 'calendar'">Calendar</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'imports' }" [class.on]="tab === 'imports'">Imports</a>
       </nav>
       @switch (tab) {
         @case ('calendar') { <app-calendar [embedded]="true" /> }
-        @case ('imports') { <app-transactions [embedded]="true" [importsOnly]="true" /> }
         @case ('activity') {
-          <div class="activity-switch" role="group" aria-label="Activity filter">
-            <button type="button" [attr.aria-pressed]="activityView === 'all'" (click)="setActivityView('all')">All</button>
-            <button type="button" [attr.aria-pressed]="activityView === 'spending'" (click)="setActivityView('spending')">Spending</button>
-            <button type="button" [attr.aria-pressed]="activityView === 'income'" (click)="setActivityView('income')">Income</button>
-          </div>
-          <app-transactions [embedded]="true" [typeFilter]="activityTypeFilter" />
+          <app-transactions [embedded]="true" [typeFilter]="activityTypeFilter" [receiptsOpen]="receiptsOpen" />
         }
       }
     </div>
@@ -79,50 +79,6 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
     :host { display: block; min-width: 0; max-width: 100%; }
     h1 { margin: 0; }
     app-transactions, app-calendar { display: block; min-width: 0; max-width: 100%; }
-    .activity-switch {
-      display: inline-flex;
-      max-width: 100%;
-      gap: 2px;
-      margin: 0;
-      padding: 3px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      background: var(--surface-muted, var(--card-bg));
-    }
-    .activity-switch button {
-      min-height: 2.25rem;
-      padding: 0 var(--space-3);
-      border: 0;
-      border-radius: calc(var(--radius-md) - 3px);
-      background: transparent;
-      color: var(--text-secondary);
-      font: inherit;
-      font-size: var(--text-sm);
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .activity-switch button[aria-pressed="true"] {
-      background: var(--card-bg);
-      color: var(--text-primary);
-      box-shadow: var(--shadow-sm);
-    }
-    .activity-switch button:hover { color: var(--text-primary); }
-    .activity-switch button:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-      position: relative;
-      z-index: 1;
-    }
-    @media (max-width: 768px) {
-      .activity-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
-      .activity-switch button {
-        min-width: 0;
-        min-height: 2.75rem;
-        padding-inline: var(--space-2);
-        white-space: normal;
-        line-height: 1.2;
-      }
-    }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -133,6 +89,7 @@ export class SpendingHubComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   tab: SpendingTab = 'activity';
   activityView: SpendingActivityView = 'all';
+  receiptsOpen = false;
 
   get activityTypeFilter(): 'all' | 'income' | 'expense' {
     return this.activityView === 'income' ? 'income' : this.activityView === 'spending' ? 'expense' : 'all';
@@ -143,6 +100,7 @@ export class SpendingHubComponent implements OnInit {
       const state = normalizeSpendingHubRoute(params);
       this.tab = state.tab;
       this.activityView = state.activityView;
+      this.receiptsOpen = state.receiptsOpen;
       if (state.queryParams) {
         void this.router.navigate([], {
           relativeTo: this.route,
@@ -153,11 +111,5 @@ export class SpendingHubComponent implements OnInit {
       }
       this.cdr.markForCheck();
     });
-  }
-
-  setActivityView(view: 'all' | 'spending' | 'income'): void {
-    this.activityView = view;
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { t: 'activity', v: view }, queryParamsHandling: 'merge' });
-    this.cdr.markForCheck();
   }
 }
