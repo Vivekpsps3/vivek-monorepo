@@ -133,7 +133,9 @@ def create_app(*, unified: bool = False) -> FastAPI:
         if not page.is_file():
             return JSONResponse(status_code=404, content={"detail": "Travel UI is not built."})
         html = page.read_text(encoding="utf-8").replace("__TRAVEL_ROOT__", mount_path())
-        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+        # x-csp-shell opts this static document into nonce injection. See
+        # apps/server/security_headers.py. The middleware strips the header.
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache", "x-csp-shell": "1"})
 
     @application.get("/tokens.css")
     def tokens():

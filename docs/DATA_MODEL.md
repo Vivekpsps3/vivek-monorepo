@@ -215,3 +215,16 @@ The inferred growth allocation is portfolio value divided by gross assets (`net 
 `stock_lab_scenarios` is an encrypted vault collection, not a plaintext SQL finance table. It stores saved speculative inputs such as primary symbol, comparison symbols, purchase budget, share count, target price, return assumptions, dividend assumptions, and projection horizon.
 
 Stock Lab scenarios do not mutate holdings, assets, liabilities, transactions, recurring cashflow, or net worth. Public ticker research is cached separately as symbol-level market data and must not include user budgets, share counts, scenario names, holdings IDs, or user IDs.
+
+## Site schema revisions
+
+Unified SQL changes are Alembic revisions under `apps/server/alembic`, applied by `python -m apps.server.migrations`. Startup does not apply them. An older image serves a newer revision only when `site_revision_compatibility` lists that image's head for the database revision. The procedure and the reason the historical Finance chain is not reused are in [MIGRATIONS.md](./MIGRATIONS.md).
+
+These recovery-key columns are removal candidates. This change does not drop them. Auth and vault routes still read and write them, often as empty strings, and `user_vaults.recovery_wrapped_dek_b64` is `NOT NULL`. Dropping either column is a later revision that has to change those writers in the same release.
+
+| Column | Why it is a candidate |
+| --- | --- |
+| `users.auth_recovery_wrapped_private_key_b64` | No recovery flow unwraps it. Signup still stores the client-supplied value or an empty string. |
+| `user_vaults.recovery_wrapped_dek_b64` | No recovery flow unwraps it. Vault setup still persists it. |
+
+The historical Finance revision row in `alembic_version` (`e0f6a2b3c4d5`) stays so that adopting the site baseline does not rewrite it. It is not a site revision. Do not run `apps/finance/backend/alembic` against `site.db`.

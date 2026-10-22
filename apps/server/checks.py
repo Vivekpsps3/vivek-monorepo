@@ -93,6 +93,8 @@ def main():
                     url,
                     response.headers.get("location"),
                 )
+            from apps.server.security_headers import validate_response_headers
+
             for url in (
                 "/",
                 "/home",
@@ -113,13 +115,23 @@ def main():
             ):
                 response = client.get(url)
                 assert response.status_code == 200, (url, response.status_code, response.text[:150])
+                validate_response_headers(response.headers, url, response.content)
             from apps.server.main import WEB_ROOT
 
             bundle = next(WEB_ROOT.glob("main-*.js"))
-            assert "immutable" in client.get("/finance/" + bundle.name).headers.get(
-                "cache-control", ""
+            asset = client.get("/finance/" + bundle.name)
+            assert "immutable" in asset.headers.get("cache-control", "")
+            validate_response_headers(asset.headers, "/finance/" + bundle.name, asset.content)
+            index = client.get("/finance/index.html")
+            assert index.headers.get("cache-control") == "no-store"
+            validate_response_headers(index.headers, "/finance/index.html", index.content)
+            report = client.post(
+                "/csp-report",
+                content=b'{"csp-report":{"document-uri":"https://testserver/finance/","violated-directive":"script-src","blocked-uri":"inline","script-sample":"not-stored"}}',
+                headers={"content-type": "application/csp-report"},
             )
-            assert client.get("/finance/index.html").headers.get("cache-control") == "no-store"
+            assert report.status_code == 204, report.status_code
+            assert report.content == b""
             assert client.get("/auth/login").headers.get("cache-control") == "no-store"
             assert client.get("/api/health").headers.get("cache-control") == "no-store, private"
             for url in (
@@ -178,7 +190,7 @@ def main():
             metrics = client.get("/metrics")
             assert b"site_requests_total" in metrics.content
         print(
-            "Unified checks passed: portfolio, assets, all apps, shared auth, CSRF, isolation, deletion, schema and metrics"
+            "Unified checks passed: portfolio, assets, all apps, shared auth, CSRF, isolation, deletion, schema, metrics and CSP"
         )
 
 

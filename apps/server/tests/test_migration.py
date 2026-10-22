@@ -1,4 +1,6 @@
 import importlib.util
+import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -85,3 +87,76 @@ def test_latest_backup_replaces_previous_only_after_verification(tmp_path, monke
         tool.backup(database, directory)
     assert list(directory.glob("*.db")) == [second]
     assert second.with_suffix(".json").is_file()
+
+
+def _load_backup_tool():
+    spec = importlib.util.spec_from_file_location(
+        "backup_retention_kinds", Path(__file__).resolve().parents[3] / "scripts/backup-site.py"
+    )
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    return tool
+
+
+def test_premigrate_backups_stay_when_hourly_retention_deletes_site_snapshots(tmp_path):
+    database = tmp_path / "site.db"
+    migrate(database)
+    tool = _load_backup_tool()
+    directory = tmp_path / "backups"
+    hourly = tool.backup(database, directory, keep=1)
+    premigrate = [
+        tool.backup(database, directory, kind="premigrate", revision=revision)
+        for revision in ("rev_a", "rev_b", "rev_c", "rev_d")
+    ]
+    kept = sorted(directory.glob("premigrate-*.db"))
+    assert len(kept) == 3
+    assert hourly.is_file()
+    assert not premigrate[0].exists()
+    assert all(path.exists() for path in premigrate[1:])
+    manifest = json.loads(premigrate[-1].with_suffix(".json").read_text())
+    assert manifest["kind"] == "premigrate"
+    assert manifest["revision"] == "rev_d"
+    replacement = tool.backup(database, directory, keep=1)
+    assert replacement.is_file()
+    assert not hourly.exists()
+    assert len(list(directory.glob("premigrate-*.db"))) == 3
+
+
+def test_premigrate_keeps_one_snapshot_per_revision(tmp_path):
+    database = tmp_path / "site.db"
+    migrate(database)
+    tool = _load_backup_tool()
+    directory = tmp_path / "backups"
+    taken = [
+        tool.backup(database, directory, kind="premigrate", revision="site_schema_v1")
+        for _ in range(4)
+    ]
+    kept = list(directory.glob("premigrate-*.db"))
+    assert kept == [taken[-1]]
+
+
+def test_retention_orders_by_filename_timestamp_not_mtime(tmp_path):
+    database = tmp_path / "site.db"
+    migrate(database)
+    tool = _load_backup_tool()
+    directory = tmp_path / "backups"
+    made = [
+        tool.backup(database, directory, kind="premigrate", revision=revision)
+        for revision in ("rev_a", "rev_b", "rev_c")
+    ]
+    renamed = []
+    for path, stamp in zip(made, ("20200101T000000", "20200102T000000", "20200103T000000")):
+        # premigrate-<revision>-<stamp>-<id>.db and these revisions contain no hyphen.
+        revision = path.name.split("-")[1]
+        target = directory / f"premigrate-{revision}-{stamp}-aaaaaaaa.db"
+        path.rename(target)
+        path.with_suffix(".json").unlink(missing_ok=True)
+        renamed.append(target)
+    # Oldest filename gets the newest mtime. A mtime sort would keep it.
+    os.utime(renamed[0], (2_000_000_000, 2_000_000_000))
+    os.utime(renamed[2], (1_000_000_000, 1_000_000_000))
+    tool.backup(database, directory, kind="premigrate", revision="rev_d")
+    names = {path.name for path in directory.glob("premigrate-*.db")}
+    assert renamed[0].name not in names
+    assert renamed[2].name in names
+    assert renamed[1].name in names

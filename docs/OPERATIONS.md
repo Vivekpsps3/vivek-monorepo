@@ -21,11 +21,16 @@ Do not bake secrets into Compose, the Dockerfile, or images.
 
 Auth defaults live in the process and in `compose.yml`. `AUTH_SIGNUP_MODE` defaults to `closed` (`open`, `invite`, or `allowlist` opt in). `AUTH_INVITE_CODES` and `AUTH_SIGNUP_ALLOWLIST` are comma-separated and empty by default. `AUTH_IP_RATE_LIMIT_PER_MIN` defaults to 60. `AUTH_PAIR_RATE_LIMIT_PER_MIN` defaults to 20 and applies to challenge and verify for one username from one client address. `AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN` defaults to 60 and counts failed verifies for that username from every address. `AUTH_ACCOUNT_RATE_LIMIT_PER_MIN` defaults to 20 and applies to signup and bootstrap only. Lookup is limited per IP, not per account. `AUTH_DECOY_SECRET` is optional; when it is unset the server writes `auth-decoy-secret` beside the database file so unknown-user responses stay stable across restarts. A missing or short file is replaced. An unreadable file is left in place and logged, so a restore with the wrong owner does not rotate the decoys. Put that secret in the private env file if a database restore should keep the same decoys. `RATE_LIMIT_PER_MIN` remains the optional shared cap. Passwordless sign-in takes the enrolled username. An email address is not an alias and gets a decoy wrap, so existing users must sign in with the username, not the account email.
 
-`FORWARDED_ALLOW_IPS` must be the gateway of `SITE_SUBNET` (today `10.85.0.1` for `10.85.0.0/28`). Uvicorn only trusts forwarded client addresses from that peer. If the value does not match the gateway, every visitor shares one per-IP bucket. nginx overwrites `X-Forwarded-For` with `$remote_addr`, and the application does not read that header itself.
+`FORWARDED_ALLOW_IPS` must be the gateway of `SITE_SUBNET` (today `10.85.0.1` for `10.85.0.0/28`). Uvicorn only trusts forwarded client addresses from that peer. If the value does not match the gateway, every visitor shares one per-IP bucket. nginx overwrites `X-Forwarded-For` with `$remote_addr`, and the application does not read that header itself. The CSP report log uses `request.client.host`, which is that uvicorn address, and does not read `X-Forwarded-For` either.
 
-The shared nginx-edge and its Let's Encrypt certificates remain existing host infrastructure. The site's
-edge vhost source is ops/nginx/site.conf; adding/replacing this vhost requires a
-config test and reload. Other hostnames are unaffected.
+The shared nginx-edge and its Let's Encrypt certificates remain existing host infrastructure. The site's edge vhost source is ops/nginx/site.conf. The deploy workflow does not install that file. Other hostnames are unaffected. Never add an enforced `Content-Security-Policy` on the edge: the application sends the one enforced policy, and a second enforced policy would be applied as well. When a release changes the vhost, use this order:
+
+1. Deploy the app.
+2. `curl -sI https://vivekpanchagnula.com/media/` and confirm there is exactly one `Content-Security-Policy` header (not Report-Only) and that it includes `*.archive.org`.
+3. On nginx-edge, `nginx -t && nginx -s reload`.
+4. `curl -sI https://vivekpanchagnula.com/media/` again and confirm `Content-Security-Policy-Report-Only` and `X-Frame-Options: SAMEORIGIN` are gone.
+
+Until step 3, the edge still adds the previous report-only policy and `X-Frame-Options: SAMEORIGIN` beside the app headers. The report-only policy does not block. Modern browsers apply `frame-ancestors` rather than `X-Frame-Options` when both are present.
 
 The existing self-hosted runner and its Docker privilege are retained by explicit
 user preference. It remains capable of modifying host resources and reading site
@@ -57,10 +62,18 @@ Flask/Socket.IO/LLM backend and standalone Docker/nginx definitions are retired.
   the last success after recreation. It mounts data for SQLite coordination and
   backups for writing. The source database connection is read-only.
 - **backup**: an on-demand `ops` profile job using the same image for immediate
-  backup, verification, or explicit migration commands. It does not run permanently.
+  backup or verification. It does not run permanently.
+- **migrate**: an on-demand `ops` profile job. It mounts the data and backup
+  volumes, writes a `premigrate-*` snapshot, then stamps or upgrades
+  `/data/site.db`. It refuses a missing or empty production database.
 
-Readiness checks schema and all domain tables. Startup refuses a missing database,
-missing frontend, wrong schema version, or non-WAL database, and runs no DDL.
+Readiness checks the site schema version, the site migration revision, and all
+domain tables. Startup refuses a missing database, missing frontend, non-WAL
+database, a revision this image does not know how to serve, or a database
+behind the image's head. It does not stamp or upgrade. The migrate job is the
+only schema writer. The root filesystem stays read-only; the only database
+writes are on the data volume. See [MIGRATIONS.md](./MIGRATIONS.md).
+
 Only the app and maintenance helper restart automatically on process exit.
 A running unhealthy container needs investigation; no Docker socket is exposed
 to an autoheal helper.
@@ -86,14 +99,24 @@ so changing the checkout does not change the running application.
 
 The deploy script uses a temporary lock, reads the preceding image from Docker's
 existing metadata, runs image checks without production data/network, verifies a
-backup, starts the new image, and checks exact-SHA readiness plus HTTPS routes.
-On failure it restores the prior image and its Compose definition embedded in
-that image. Rollback material is temporary; release identity lives in image labels
-and Docker metadata. No separate release database/history file is needed.
+backup, runs the migrate job, starts the new image, and checks exact-SHA
+readiness plus HTTPS routes. The migrate job writes a separate pre-migration
+snapshot and then stamps or upgrades the database. If that command fails, the
+script exits before replacing the running container. On a failed start it
+restores the prior image and its Compose definition embedded in that image.
+Rollback material is temporary; release identity lives in image labels and
+Docker metadata. No separate release database/history file is needed.
 
-Database restoration is never automatic after users may have written data. Future
-schema changes require explicit migration and backward-compatibility planning.
-Keep preceding images available; do not prune rollback images indiscriminately.
+Database restoration is never automatic after users may have written data.
+Image rollback does not roll the database back. The baseline stamp only adds
+`site_alembic_version`, which the previous release ignores. Once a newer
+revision exists, the previous image starts only when that revision recorded
+this image's head in `site_revision_compatibility`. A database behind the
+image's head fails startup instead of migrating. A later revision that changes
+live tables needs an expand/contract plan before it is merged, because deploy
+migrates while the previous process may still be serving and a failed probe
+after a successful migration leaves the new schema in place. Keep preceding
+images available; do not prune rollback images indiscriminately.
 
 Commands from any directory on the host (as vivek):
 
@@ -138,8 +161,12 @@ Maintenance checks once a minute and backs up when the most recent verified
 backup is an hour old. It uses SQLite's online backup API, checks integrity and
 foreign keys, restores into a separate verification copy, and atomically publishes
 a private snapshot with a checksum/verification manifest. `SITE_BACKUP_KEEP: "1"`
-in Compose retains only the latest verified snapshot, by user choice. Scheduled
-and manual jobs lock the backup directory to serialize publication and pruning.
+in Compose retains only the latest hourly `site-*` snapshot, by user choice.
+Pre-migration snapshots use the `premigrate-<revision>-<timestamp>` prefix,
+which that glob does not match, and at least three of them are kept so a bad
+revision can still be restored after the hourly snapshot has rotated. The
+manifest records the revision. Scheduled and manual jobs lock the backup
+directory to serialize publication and pruning.
 Older snapshots are removed only after the replacement passes verification and
 a separate restore check. Failed backups preserve the preceding snapshot. Missing
 source databases fail rather than silently skip.

@@ -146,7 +146,9 @@ def create_app(*, unified: bool = False) -> FastAPI:
             return JSONResponse(status_code=404, content={"detail": "Media UI is not built."})
         root = str(request.scope.get("root_path") or mount_path() or "").rstrip("/")
         html = page.read_text(encoding="utf-8").replace("__MEDIA_ROOT__", root)
-        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+        # x-csp-shell opts this static document into nonce injection. See
+        # apps/server/security_headers.py. The middleware strips the header.
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache", "x-csp-shell": "1"})
 
     def screen_redirect(screen: str, request: Request):
         name = screen.strip().strip("/").lower()

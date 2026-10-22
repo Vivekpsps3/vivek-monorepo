@@ -148,3 +148,200 @@ data reset.
 - SQLite database bytes contain no known finance plaintext after migration, cleanup, WAL checkpoint, and `VACUUM`.
 - Wrong-user record access is rejected server-side even though payloads are encrypted.
 - Tampered ciphertext or associated data fails to decrypt in the browser.
+
+## Content Security Policy and origin isolation
+
+The site is one origin behind the edge proxy in
+[ops/nginx/site.conf](../ops/nginx/site.conf). Finance, Travel, Media, the
+portfolio, and `/api` share that origin. The unwrapped finance data key is
+stored in `localStorage` under `finance-dek` (`persistDekLocal` in
+`apps/finance/frontend/src/app/crypto/vault-crypto.ts`). The vault passphrase
+is typed into the finance document and is not stored. Any script that runs on
+this origin can read that key and can hook the passphrase field. A path such
+as `/travel` is not a security boundary.
+
+The application (not the edge proxy) sends an **enforced**
+`Content-Security-Policy`. A second policy on the proxy would be enforced as
+well, so the vhost no longer sends `Content-Security-Policy-Report-Only`.
+SPA shell routes set `x-csp-shell: 1`. The middleware strips that header and,
+only then, writes a new nonce onto parser-inserted `<script>`, `<style>`, and
+modulepreload tags. Angular roots receive `ngCspNonce` so component styles can
+carry it. Any other HTML response is left untouched, so a reflected `<script>`
+cannot pick up the nonce. Shell responses are `Cache-Control: no-store` so a
+shared cache cannot reuse a nonce. Production Angular builds disable
+critical-CSS inlining because that injects an `onload` handler, which a script
+policy without `'unsafe-inline'` refuses.
+
+| App | What is different |
+| --- | --- |
+| Finance (`/finance`, `/hub`, `/auth`) | `img-src 'self' data:`, `connect-src 'self'`, Trusted Types with an empty policy allowlist (`require-trusted-types-for 'script'`). `frame-ancestors 'none'`. |
+| Portfolio (`/`, `/home`, `/work`, `/about`, `/secrets`, other documents) | Same script rules as finance, without Trusted Types. `frame-ancestors 'none'`. No map or artwork hosts. |
+| Travel | `img-src` adds only `https://tile.openstreetmap.org`. No Trusted Types, because trip pages assign HTML strings. `frame-ancestors 'none'`. |
+| Media | `img-src` adds the artwork hosts the providers emit, plus the hosts their redirects land on: `image.tmdb.org`, `static.tvmaze.com`, `coverartarchive.org`, `covers.openlibrary.org`, `archive.org`, `*.archive.org`, `*.mzstatic.com`, `media.rawg.io`. No blanket `https:`. No Trusted Types. |
+| API and health (`/api`, `/travel/api`, `/media/api`, `/health`, `/metrics`) | `default-src 'none'` and the same lock on scripts, images, connect, base, forms, and framing. |
+
+Every document policy also sets `script-src` to a per-response nonce plus
+`'strict-dynamic'` (with `'self'` only as a fallback for old browsers),
+`script-src-attr 'none'`, `object-src 'none'`, `base-uri 'self'`,
+`form-action 'self'`, and `connect-src 'self'`. There is no
+`'unsafe-eval'`. `'unsafe-inline'` is used only for `style-src-attr`, because
+style attributes cannot take a nonce and Leaflet, Media covers, and a few
+finance templates set them. Companion headers on every response:
+`Referrer-Policy: same-origin`, `X-Content-Type-Options: nosniff`,
+`Cross-Origin-Opener-Policy: same-origin`,
+`Cross-Origin-Resource-Policy: same-origin`, `Origin-Agent-Cluster: ?1`,
+`X-Frame-Options: DENY`, and a `Permissions-Policy` that disables camera,
+microphone, geolocation, payment, and the other unused powerful features.
+HSTS stays on the HTTPS vhost.
+
+`/embed` is a compact net-worth route (`docs/FRONTEND.md`). It is not an
+iframe, and the repository has no `<iframe>` that loads it. Every document
+sends `frame-src 'none'`, so a page on this origin cannot frame `/embed`. A
+cross-origin ops page was already blocked by the previous
+`X-Frame-Options: SAMEORIGIN`. `frame-ancestors 'none'` applies to finance as
+well. `after-auth.ts` still sends a framed window to `/embed`, and that branch
+cannot run while ancestors are denied.
+
+Browsers POST violations to `/csp-report` (`report-uri` and `report-to` /
+`Reporting-Endpoints`). The handler returns 204, counts a directive label, and
+logs one JSON object per report (directive, app, blocked URL without its query,
+and client address). The address is `request.client.host`. Uvicorn fills that
+from the forwarded client only when the peer is `FORWARDED_ALLOW_IPS`; the
+handler does not read `X-Forwarded-For`. It reads the body with a running
+16 KiB cap, including chunked requests that omit `Content-Length`. The edge
+`location = /csp-report` sets `client_max_body_size 16k`. Each request logs at
+most 5 reports. Each budget key logs at most 30 lines per minute, IPv6 keys
+are the /64 prefix, and the whole process logs at most 300 lines per minute.
+A full key table drops expired entries and otherwise refuses new keys. The
+handler does not store or log `script-sample`, which could contain page text.
+
+Trusted Types are enforced on the finance shell only, with an empty
+`trusted-types` allowlist. Finance source does not call `bypassSecurityTrust*`
+or assign `innerHTML` (`scripts/check-shared-boundaries.py` fails the build if
+a bypass appears). The production bundle can create `angular#unsafe-bypass`
+lazily for a script-URL bypass, and nothing on the finance shell calls that
+helper, so the name is not allowlisted. Chart.js 4 in this build does not
+assign `innerHTML`. `angular#bundler` is not emitted. ngx-markdown is the
+portfolio secrets demo, not finance; it assigns a string to `innerHTML`, and
+enforcing Trusted Types there blanks that demo. Travel and Media render with
+`innerHTML` / `insertAdjacentHTML`. A policy that allowed those assignments
+would be a passthrough. Enabling Trusted Types for those shells means rewriting
+them onto DOM APIs or a sanitizer that returns TrustedHTML.
+
+### Separating the finance origin
+
+CSP does not stop script that is already allowed from reading `finance-dek`
+or the passphrase field. That requires a different origin (scheme, host, and
+port). Doing it now, before DNS exists, would break production, so this image
+does not switch hosts.
+
+`finance.vivekpanchagnula.com` and the apex are schemeful same-site. A CNAME
+does not change cookie scope: `finance.` is a subdomain either way, and the
+browser does not consult DNS to decide which cookies to send. What matters is
+not setting a parent `Domain`, and using `__Host-` names so a parent-domain
+cookie cannot be set at all.
+
+Travel and Media authenticate with the finance session. `apps/server/auth.py`
+reads `finance_session`, and both browsers send `finance_csrf`. If those apps
+stay on the apex while the cookie becomes host-only on `finance.`, their login
+stops. The cutover has to give them an apex session of their own before the
+finance cookies move. That session must not be the vault session. Moving
+Travel and Media onto `finance.` would keep login working and would also put
+them back in the vault's origin.
+
+1. DNS. Add `finance.vivekpanchagnula.com` as a record on the same host as the
+   apex. Do not set a parent `Domain` on any cookie.
+2. Certificate. Expand the live certificate so the existing files in
+   `/etc/letsencrypt/live/vivekpanchagnula.com/` cover the new name, for
+   example `certbot certonly --nginx --expand -d vivekpanchagnula.com -d www.vivekpanchagnula.com -d finance.vivekpanchagnula.com`.
+3. Edge proxy. The zones `personal_site` and `personal_connections` stay in the
+   `http` context of [ops/nginx/site.conf](../ops/nginx/site.conf). Add a server
+   that uses those zones, the same body size, timeouts, and access log as the
+   apex, and proxies to `127.0.0.1:8085`. Set `Host` to the finance name. Keep
+   HSTS. Do not add a `Content-Security-Policy`. `location = /csp-report` uses
+   `client_max_body_size 16k`. This file is not applied by the deploy workflow;
+   after editing the host copy, run `nginx -t && nginx -s reload` on nginx-edge.
+   After the finance host serves the app, redirect apex `/finance`, `/hub`,
+   `/auth`, and `/api` to the finance host and send `Clear-Site-Data: "storage"`
+   on those redirects so the apex copy of `finance-dek` is deleted. That header
+   clears every apex site store, including Travel and Media preferences, the
+   first time a browser hits a retired finance URL. Do not publish the DNS name
+   before this cutover.
+
+```nginx
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name finance.vivekpanchagnula.com;
+    ssl_certificate /etc/letsencrypt/live/vivekpanchagnula.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vivekpanchagnula.com/privkey.pem;
+    access_log /dev/stdout personal_site;
+    error_log /dev/stderr warn;
+    client_max_body_size 10m;
+    client_body_timeout 15s;
+    client_header_timeout 15s;
+    send_timeout 60s;
+    limit_conn personal_connections 40;
+    limit_req zone=personal_site burst=100 nodelay;
+    limit_req_status 429;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
+    location = /csp-report {
+        client_max_body_size 16k;
+        proxy_hide_header x-csp-shell;
+        proxy_pass http://127.0.0.1:8085;
+        proxy_http_version 1.1;
+        proxy_set_header Host finance.vivekpanchagnula.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+    location / {
+        proxy_hide_header x-csp-shell;
+        proxy_pass http://127.0.0.1:8085;
+        proxy_http_version 1.1;
+        proxy_set_header Host finance.vivekpanchagnula.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+}
+```
+
+4. Application follow-up, only after that host answers. This is intentionally
+   not in the current image:
+   - Serve the finance shell, `/hub`, `/auth`, and `/api` only when `Host` is
+     `finance.vivekpanchagnula.com`.
+   - Before that gate flips, issue Travel and Media an apex session that is
+     not `finance_session`. They currently read that cookie
+     (`apps/server/auth.py`, `apps/travel/backend/static/modules/api.mjs`,
+     `apps/media/backend/static/modules/api.mjs`).
+   - Rename the finance cookies to `__Host-finance_session` and
+     `__Host-finance_csrf` with `Secure`, `Path=/`, and no `Domain`. The
+     `__Host-` prefix makes the browser reject a `Domain` attribute, so an
+     apex script cannot plant `Domain=vivekpanchagnula.com` over the session
+     or shadow `finance_csrf`. `__Host-` requires HTTPS. Local HTTP dev keeps
+     the current names until the split.
+   - On the apex shells that remain, call `localStorage.removeItem('finance-dek')`
+     once at startup so a browser that never hits the redirect still drops the
+     old key. Do that only at cutover. Doing it while finance still shares the
+     apex origin would delete the live vault key. `Clear-Site-Data: "storage"`
+     on the apex redirects covers browsers that never load those shells again.
+   - Rebuild the finance bundle with `<base href="/">` (the image currently
+     uses `--base-href /finance/`).
+   - Point hub links at `https://finance.vivekpanchagnula.com/hub`.
+   - Set `CORS_ORIGINS` to `https://finance.vivekpanchagnula.com` only.
+   - Re-run the browser CSP check against both hosts.
+
+`Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Resource-Policy: same-origin` keep other sites from embedding
+or scripting these responses. They do not split `/travel` from `/finance`.
