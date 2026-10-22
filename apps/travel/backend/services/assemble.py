@@ -4,7 +4,17 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import selectinload
 
-from apps.travel.backend.models import Note, Parking, PlanItem, PtoEntry, PtoPolicy, Reminder, Stay, Transport, Trip
+from apps.travel.backend.models import (
+    Note,
+    Parking,
+    PlanItem,
+    PtoEntry,
+    PtoPolicy,
+    Reminder,
+    Stay,
+    Transport,
+    Trip,
+)
 from apps.travel.backend.services.budget import (
     CATEGORY_LABELS,
     BudgetInput,
@@ -15,7 +25,13 @@ from apps.travel.backend.services.budget import (
 from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
 from apps.travel.backend.services.money import fmt_days, fmt_money, stored_days
 from apps.travel.backend.deps import require_actor
-from apps.travel.backend.services.pto import effective_pto_days, policy_from_row, trip_projection, usages_from_rows, walk
+from apps.travel.backend.services.pto import (
+    effective_pto_days,
+    policy_from_row,
+    trip_projection,
+    usages_from_rows,
+    walk,
+)
 
 ROLE_ORDER = {"outbound": 0, "connection": 1, "local": 2, "inbound": 3}
 MODE_LABELS = {
@@ -343,7 +359,13 @@ def _sorted_transports(trip: Trip) -> list[Transport]:
 def _sorted_plans(trip: Trip) -> list[PlanItem]:
     return sorted(
         trip.plans,
-        key=lambda row: (row.on_date, row.start_time is None, row.start_time or "", row.sort_order, row.id),
+        key=lambda row: (
+            row.on_date,
+            row.start_time is None,
+            row.start_time or "",
+            row.sort_order,
+            row.id,
+        ),
     )
 
 
@@ -372,7 +394,11 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
                 "transports": day_moves,
             }
         )
-    outside_plans = [plan_out(row, True) for row in plans if row.on_date < trip.start_date or row.on_date > trip.end_date]
+    outside_plans = [
+        plan_out(row, True)
+        for row in plans
+        if row.on_date < trip.start_date or row.on_date > trip.end_date
+    ]
     effective, auto = effective_pto_days(trip.pto_days, trip.start_date, trip.end_date)
     open_reminders = sum(1 for row in trip.reminders if not row.done)
     return {
@@ -395,7 +421,12 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
         "days": days,
         "outside_plans": outside_plans,
         "parking": [parking_out(row) for row in trip.parking],
-        "reminders": [reminder_out(row) for row in sorted(trip.reminders, key=lambda item: (item.done, item.due_at or datetime.max, item.id))],
+        "reminders": [
+            reminder_out(row)
+            for row in sorted(
+                trip.reminders, key=lambda item: (item.done, item.due_at or datetime.max, item.id)
+            )
+        ],
         "note_entries": [note_out(row) for row in trip.note_entries],
         "budget": budget_for(trip),
         "pto": trip_projection(policy, usages, trip, effective, auto),
@@ -408,7 +439,10 @@ def pto_context(db, user_id: int | None = None):
     row = db.query(PtoPolicy).filter(PtoPolicy.user_id == owner).one_or_none()
     policy = policy_from_row(row)
     usages = usages_from_rows(
-        db.query(PtoEntry).filter(PtoEntry.user_id == owner).order_by(PtoEntry.start_date, PtoEntry.id).all()
+        db.query(PtoEntry)
+        .filter(PtoEntry.user_id == owner)
+        .order_by(PtoEntry.start_date, PtoEntry.id)
+        .all()
     )
     return row, policy, usages
 
@@ -441,7 +475,9 @@ def snapshot_pto(policy, usages, today: date) -> dict:
         "accrual_unit": policy.accrual_unit,
         "accrual_cadence": policy.accrual_cadence,
         "hours_per_day": fmt_days(policy.hours_per_day),
-        "annual_cap_days": fmt_days(policy.annual_cap_days) if policy.annual_cap_days is not None else None,
+        "annual_cap_days": fmt_days(policy.annual_cap_days)
+        if policy.annual_cap_days is not None
+        else None,
         "today_before_balance_date": walked.before_balance_date,
     }
 
@@ -572,7 +608,9 @@ def build_summary(db, today: date | None = None) -> dict:
     card = home["metrics"]["next_trip"]
     if card is None:
         return {"today": today, "next_trip": None}
-    detail = next(item for item in (*home["in_progress"], *home["upcoming"]) if item["id"] == card["id"])
+    detail = next(
+        item for item in (*home["in_progress"], *home["upcoming"]) if item["id"] == card["id"]
+    )
     cities = detail["cities"]
     return {
         "today": today,

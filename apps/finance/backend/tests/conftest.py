@@ -59,7 +59,9 @@ def seed_user(email: str = "user@example.com", role: UserRole = UserRole.user):
         db.close()
 
 
-def authenticated_client(app, email: str = "user@example.com", role: UserRole = UserRole.user) -> TestClient:
+def authenticated_client(
+    app, email: str = "user@example.com", role: UserRole = UserRole.user
+) -> TestClient:
     user = seed_user(email=email, role=role)
     client = TestClient(app)
     res = client.post("/api/auth/login/migrate", json={"email": email, "password": TEST_PASSWORD})

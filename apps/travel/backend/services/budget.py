@@ -60,7 +60,9 @@ def rollup(lines: list[BudgetInput]) -> dict:
         bucket["total_cents"] += line.amount_cents
         if line.paid:
             bucket["paid_cents"] += line.amount_cents
-        bucket["categories"][line.category] = bucket["categories"].get(line.category, 0) + line.amount_cents
+        bucket["categories"][line.category] = (
+            bucket["categories"].get(line.category, 0) + line.amount_cents
+        )
         rendered.append(line)
 
     currencies = []

@@ -1,4 +1,12 @@
+import { Router } from '@angular/router';
+
 import { afterAuthUrl, authNavigation, continueAfterAuth, safeNextPathFrom } from './after-auth';
+
+function routerStub(): jasmine.SpyObj<Router> {
+  const router = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
+  router.navigateByUrl.and.resolveTo(true);
+  return router;
+}
 
 describe('shared-auth return paths', () => {
   beforeEach(() => {
@@ -34,7 +42,7 @@ describe('shared-auth return paths', () => {
   it('keeps Travel return paths on a full-page navigation including query and hash', async () => {
     history.replaceState({}, '', '/auth/login?next=%2Ftravel%3Ftrip%3D1%23day-2');
     const assign = spyOn(authNavigation, 'assignPath');
-    const router = { navigateByUrl: jasmine.createSpy('navigateByUrl').and.resolveTo(true) } as any;
+    const router = routerStub();
 
     await continueAfterAuth(router);
 
@@ -45,7 +53,7 @@ describe('shared-auth return paths', () => {
   it('sends a hub media return through a full page load so the server can redirect', async () => {
     history.replaceState({}, '', '/auth/signup?next=%2Fhub%2Fmedia');
     const assign = spyOn(authNavigation, 'assignPath');
-    const router = { navigateByUrl: jasmine.createSpy('navigateByUrl').and.resolveTo(true) } as any;
+    const router = routerStub();
 
     await continueAfterAuth(router);
 
@@ -56,7 +64,7 @@ describe('shared-auth return paths', () => {
   it('keeps Media return paths on a full-page navigation', async () => {
     history.replaceState({}, '', '/auth/login?next=%2Fmedia%2Flibrary');
     const assign = spyOn(authNavigation, 'assignPath');
-    const router = { navigateByUrl: jasmine.createSpy('navigateByUrl').and.resolveTo(true) } as any;
+    const router = routerStub();
 
     await continueAfterAuth(router);
 

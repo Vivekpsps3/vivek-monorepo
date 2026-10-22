@@ -34,7 +34,9 @@ def _b64(n: int) -> str:
 def passwordless_material():
     private_key = ec.generate_private_key(ec.SECP256R1())
     public_key_b64 = base64.b64encode(
-        private_key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+        private_key.public_key().public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
     ).decode()
     return {
         "public_key_b64": public_key_b64,
@@ -89,18 +91,26 @@ def test_invitation_enrollment_consumes_token_and_creates_session():
     assert response.json()["user"]["email"] == "new.user@pending.local"
     assert client.get("/api/auth/me").status_code == 200
     assert client.get("/api/vault/status").json()["exists"] is True
-    assert client.post(
-        f"/api/auth/invitations/{invitation['enrollment_token']}/enroll",
-        json=passwordless_material(),
-    ).status_code == 401
+    assert (
+        client.post(
+            f"/api/auth/invitations/{invitation['enrollment_token']}/enroll",
+            json=passwordless_material(),
+        ).status_code
+        == 401
+    )
 
 
 def test_passwordless_lookup_returns_signing_wrap_and_keeps_the_vault_on_the_session():
     client = TestClient(app)
     material = passwordless_material()
-    response = client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    })
+    response = client.post(
+        "/api/auth/bootstrap/passwordless",
+        json={
+            "username": "first.admin",
+            "display_name": "First Admin",
+            **material,
+        },
+    )
     assert response.status_code == 200
 
     lookup = TestClient(app).post("/api/auth/passwordless/lookup", json={"username": "first.admin"})
@@ -117,24 +127,40 @@ def test_passwordless_lookup_returns_signing_wrap_and_keeps_the_vault_on_the_ses
 def test_passwordless_lookup_does_not_link_a_username_to_its_email():
     client = TestClient(app)
     material = passwordless_material()
-    assert client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    }).status_code == 200
+    assert (
+        client.post(
+            "/api/auth/bootstrap/passwordless",
+            json={
+                "username": "first.admin",
+                "display_name": "First Admin",
+                **material,
+            },
+        ).status_code
+        == 200
+    )
 
     by_email = TestClient(app).post(
         "/api/auth/passwordless/lookup",
         json={"username": "first.admin@pending.local"},
     )
-    by_name = TestClient(app).post("/api/auth/passwordless/lookup", json={"username": "first.admin"})
+    by_name = TestClient(app).post(
+        "/api/auth/passwordless/lookup", json={"username": "first.admin"}
+    )
     repeated = TestClient(app).post(
         "/api/auth/passwordless/lookup",
         json={"username": "first.admin@pending.local"},
     )
     assert by_email.status_code == 200
     assert by_email.json() == repeated.json()
-    assert by_email.json()["auth"]["wrapped_private_key_b64"] != by_name.json()["auth"]["wrapped_private_key_b64"]
+    assert (
+        by_email.json()["auth"]["wrapped_private_key_b64"]
+        != by_name.json()["auth"]["wrapped_private_key_b64"]
+    )
     assert by_email.json()["auth"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
-    assert by_name.json()["auth"]["wrapped_private_key_b64"] == material["auth"]["wrapped_private_key_b64"]
+    assert (
+        by_name.json()["auth"]["wrapped_private_key_b64"]
+        == material["auth"]["wrapped_private_key_b64"]
+    )
     assert "username" not in by_email.text
     assert "wrapped_dek" not in by_email.text
 
@@ -142,27 +168,53 @@ def test_passwordless_lookup_does_not_link_a_username_to_its_email():
 def test_passwordless_lookup_and_challenge_do_not_reveal_whether_a_user_exists():
     client = TestClient(app)
     material = passwordless_material()
-    client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    })
+    client.post(
+        "/api/auth/bootstrap/passwordless",
+        json={
+            "username": "first.admin",
+            "display_name": "First Admin",
+            **material,
+        },
+    )
 
-    known_lookup = TestClient(app).post("/api/auth/passwordless/lookup", json={"username": "first.admin"})
+    known_lookup = TestClient(app).post(
+        "/api/auth/passwordless/lookup", json={"username": "first.admin"}
+    )
     unknown = TestClient(app)
-    unknown_lookup = unknown.post("/api/auth/passwordless/lookup", json={"username": "unknown.user"})
+    unknown_lookup = unknown.post(
+        "/api/auth/passwordless/lookup", json={"username": "unknown.user"}
+    )
     repeated = unknown.post("/api/auth/passwordless/lookup", json={"username": "unknown.user"})
     assert known_lookup.status_code == unknown_lookup.status_code == repeated.status_code == 200
     assert unknown_lookup.json() == repeated.json()
     assert known_lookup.json().keys() == unknown_lookup.json().keys()
     assert known_lookup.json()["auth"].keys() == unknown_lookup.json()["auth"].keys()
-    assert known_lookup.json()["auth"]["kdf_iterations"] == unknown_lookup.json()["auth"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
-    assert len(known_lookup.json()["auth"]["kdf_salt_b64"]) == len(unknown_lookup.json()["auth"]["kdf_salt_b64"])
-    assert len(known_lookup.json()["auth"]["wrapped_private_key_b64"]) == len(unknown_lookup.json()["auth"]["wrapped_private_key_b64"])
-    assert len(base64.b64decode(unknown_lookup.json()["auth"]["wrapped_private_key_b64"])) == AUTH_WRAP_BYTES
-    other = TestClient(app).post("/api/auth/passwordless/lookup", json={"username": "other.missing"})
+    assert (
+        known_lookup.json()["auth"]["kdf_iterations"]
+        == unknown_lookup.json()["auth"]["kdf_iterations"]
+        == MIN_PBKDF2_ITERATIONS
+    )
+    assert len(known_lookup.json()["auth"]["kdf_salt_b64"]) == len(
+        unknown_lookup.json()["auth"]["kdf_salt_b64"]
+    )
+    assert len(known_lookup.json()["auth"]["wrapped_private_key_b64"]) == len(
+        unknown_lookup.json()["auth"]["wrapped_private_key_b64"]
+    )
+    assert (
+        len(base64.b64decode(unknown_lookup.json()["auth"]["wrapped_private_key_b64"]))
+        == AUTH_WRAP_BYTES
+    )
+    other = TestClient(app).post(
+        "/api/auth/passwordless/lookup", json={"username": "other.missing"}
+    )
     assert other.json()["auth"]["kdf_salt_b64"] != unknown_lookup.json()["auth"]["kdf_salt_b64"]
 
-    known_challenge = TestClient(app).post("/api/auth/passwordless/challenge", json={"username": "first.admin"})
-    unknown_challenge = TestClient(app).post("/api/auth/passwordless/challenge", json={"username": "unknown.user"})
+    known_challenge = TestClient(app).post(
+        "/api/auth/passwordless/challenge", json={"username": "first.admin"}
+    )
+    unknown_challenge = TestClient(app).post(
+        "/api/auth/passwordless/challenge", json={"username": "unknown.user"}
+    )
     assert known_challenge.status_code == unknown_challenge.status_code == 200
     assert known_challenge.json().keys() == unknown_challenge.json().keys()
 
@@ -172,8 +224,14 @@ def test_passwordless_endpoints_are_rate_limited(monkeypatch):
     clear_limits()
     client = TestClient(app)
 
-    assert client.post("/api/auth/passwordless/lookup", json={"username": "unknown.user"}).status_code == 200
-    assert client.post("/api/auth/passwordless/lookup", json={"username": "unknown.user"}).status_code == 429
+    assert (
+        client.post("/api/auth/passwordless/lookup", json={"username": "unknown.user"}).status_code
+        == 200
+    )
+    assert (
+        client.post("/api/auth/passwordless/lookup", json={"username": "unknown.user"}).status_code
+        == 429
+    )
     clear_limits()
 
 
@@ -184,17 +242,38 @@ def test_passwordless_lookup_is_not_limited_per_account(monkeypatch):
     clear_limits()
     client = TestClient(app)
 
-    assert client.post("/api/auth/passwordless/lookup", json={"username": "alice.user"}).status_code == 200
-    assert client.post("/api/auth/passwordless/lookup", json={"username": "alice.user"}).status_code == 200
-    assert client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code == 200
-    assert client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code == 429
-    assert client.post("/api/auth/passwordless/challenge", json={"username": "bob.user"}).status_code == 200
+    assert (
+        client.post("/api/auth/passwordless/lookup", json={"username": "alice.user"}).status_code
+        == 200
+    )
+    assert (
+        client.post("/api/auth/passwordless/lookup", json={"username": "alice.user"}).status_code
+        == 200
+    )
+    assert (
+        client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code
+        == 200
+    )
+    assert (
+        client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code
+        == 429
+    )
+    assert (
+        client.post("/api/auth/passwordless/challenge", json={"username": "bob.user"}).status_code
+        == 200
+    )
 
     monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "10")
     monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "1")
     clear_limits()
-    assert client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code == 200
-    assert client.post("/api/auth/passwordless/challenge", json={"username": "bob.user"}).status_code == 429
+    assert (
+        client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code
+        == 200
+    )
+    assert (
+        client.post("/api/auth/passwordless/challenge", json={"username": "bob.user"}).status_code
+        == 429
+    )
 
 
 def test_migration_session_cannot_access_normal_authenticated_routes():
@@ -204,12 +283,17 @@ def test_migration_session_cannot_access_normal_authenticated_routes():
 
     db = SessionLocal()
     try:
-        create_user(db, email="legacy@example.com", display_name="Legacy", password="legacy-password")
+        create_user(
+            db, email="legacy@example.com", display_name="Legacy", password="legacy-password"
+        )
         db.commit()
     finally:
         db.close()
 
-    login = client.post("/api/auth/login/migrate", json={"email": "legacy@example.com", "password": "legacy-password"})
+    login = client.post(
+        "/api/auth/login/migrate",
+        json={"email": "legacy@example.com", "password": "legacy-password"},
+    )
     assert login.status_code == 200
     assert client.get("/api/auth/me").status_code == 403
 
@@ -221,12 +305,17 @@ def test_passwordless_enroll_rejects_email_as_username_and_creates_vault():
 
     db = SessionLocal()
     try:
-        create_user(db, email="legacy@example.com", display_name="Legacy", password="legacy-password")
+        create_user(
+            db, email="legacy@example.com", display_name="Legacy", password="legacy-password"
+        )
         db.commit()
     finally:
         db.close()
 
-    login = client.post("/api/auth/login/migrate", json={"email": "legacy@example.com", "password": "legacy-password"})
+    login = client.post(
+        "/api/auth/login/migrate",
+        json={"email": "legacy@example.com", "password": "legacy-password"},
+    )
     assert login.status_code == 200
     client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
     material = passwordless_material()
@@ -252,9 +341,14 @@ def test_passwordless_enroll_rejects_email_as_username_and_creates_vault():
 def test_authenticated_user_can_update_signing_key_wrap():
     client = TestClient(app)
     material = passwordless_material()
-    bootstrap = client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    })
+    bootstrap = client.post(
+        "/api/auth/bootstrap/passwordless",
+        json={
+            "username": "first.admin",
+            "display_name": "First Admin",
+            **material,
+        },
+    )
     client.headers["X-CSRF-Token"] = bootstrap.json()["csrf_token"]
     replacement = {
         **material["auth"],
@@ -265,16 +359,29 @@ def test_authenticated_user_can_update_signing_key_wrap():
     response = client.put("/api/auth/passwordless/wraps", json=replacement)
 
     assert response.status_code == 200
-    assert TestClient(app).post("/api/auth/passwordless/lookup", json={"username": "first.admin"}).json()["auth"] == replacement
+    assert (
+        TestClient(app)
+        .post("/api/auth/passwordless/lookup", json={"username": "first.admin"})
+        .json()["auth"]
+        == replacement
+    )
 
 
 def test_open_passwordless_signup_creates_user_without_invitation(monkeypatch):
     monkeypatch.setenv("AUTH_SIGNUP_MODE", "open")
     admin = TestClient(app)
     material = passwordless_material()
-    assert admin.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    }).status_code == 200
+    assert (
+        admin.post(
+            "/api/auth/bootstrap/passwordless",
+            json={
+                "username": "first.admin",
+                "display_name": "First Admin",
+                **material,
+            },
+        ).status_code
+        == 200
+    )
 
     client = TestClient(app)
     signup_material = passwordless_material()
@@ -295,16 +402,23 @@ def test_bootstrap_rejects_a_non_p256_authentication_key():
     material = passwordless_material()
     material["public_key_b64"] = "aGVsbG8td29ybGQtcHVibGljLWtleQ=="
 
-    response = client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    })
+    response = client.post(
+        "/api/auth/bootstrap/passwordless",
+        json={
+            "username": "first.admin",
+            "display_name": "First Admin",
+            **material,
+        },
+    )
 
     assert response.status_code == 400
 
 
 def test_password_login_is_unmounted():
     client = TestClient(app)
-    response = client.post("/api/auth/login", json={"email": "legacy@example.com", "password": "legacy-password"})
+    response = client.post(
+        "/api/auth/login", json={"email": "legacy@example.com", "password": "legacy-password"}
+    )
     assert response.status_code == 404
 
 
@@ -329,20 +443,35 @@ def test_passwordless_bootstrap_creates_first_admin_and_vault():
 def test_challenge_login_rejects_replay():
     private_key = ec.generate_private_key(ec.SECP256R1())
     public_key_b64 = base64.b64encode(
-        private_key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+        private_key.public_key().public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
     ).decode()
     client = TestClient(app)
     material = passwordless_material()
     material["public_key_b64"] = public_key_b64
-    client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    })
+    client.post(
+        "/api/auth/bootstrap/passwordless",
+        json={
+            "username": "first.admin",
+            "display_name": "First Admin",
+            **material,
+        },
+    )
     challenger = TestClient(app)
-    challenge = challenger.post("/api/auth/passwordless/challenge", json={"username": "first.admin"}).json()
+    challenge = challenger.post(
+        "/api/auth/passwordless/challenge", json={"username": "first.admin"}
+    ).json()
     der = private_key.sign(challenge["message"].encode(), ec.ECDSA(hashes.SHA256()))
     r, s = decode_dss_signature(der)
     signature_b64 = base64.b64encode(r.to_bytes(32, "big") + s.to_bytes(32, "big")).decode()
-    payload = {"username": "first.admin", "challenge_id": challenge["challenge_id"], "challenge": challenge["challenge"], "message": challenge["message"], "signature_b64": signature_b64}
+    payload = {
+        "username": "first.admin",
+        "challenge_id": challenge["challenge_id"],
+        "challenge": challenge["challenge"],
+        "message": challenge["message"],
+        "signature_b64": signature_b64,
+    }
 
     assert challenger.post("/api/auth/passwordless/verify", json=payload).status_code == 200
     assert challenger.post("/api/auth/passwordless/verify", json=payload).status_code == 401
@@ -355,7 +484,9 @@ def _enroll_legacy_user(private_key):
     from apps.finance.backend.models import User, UserVault
 
     public_key_b64 = base64.b64encode(
-        private_key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+        private_key.public_key().public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
     ).decode()
     db = SessionLocal()
     try:
@@ -377,15 +508,17 @@ def _enroll_legacy_user(private_key):
         )
         db.add(user)
         db.flush()
-        db.add(UserVault(
-            user_id=user.id,
-            kdf_algorithm="PBKDF2",
-            kdf_salt_b64=_b64(16),
-            kdf_iterations=LEGACY_PBKDF2_ITERATIONS,
-            wrapped_dek_b64=_b64(60),
-            recovery_wrapped_dek_b64="legacy-dek-recovery-not-served",
-            key_version=1,
-        ))
+        db.add(
+            UserVault(
+                user_id=user.id,
+                kdf_algorithm="PBKDF2",
+                kdf_salt_b64=_b64(16),
+                kdf_iterations=LEGACY_PBKDF2_ITERATIONS,
+                wrapped_dek_b64=_b64(60),
+                recovery_wrapped_dek_b64="legacy-dek-recovery-not-served",
+                key_version=1,
+            )
+        )
         db.commit()
     finally:
         db.close()
@@ -417,8 +550,13 @@ def test_existing_user_with_legacy_kdf_can_still_log_in_and_rewrap(caplog):
     assert "wrapped_dek" not in lookup.text
     assert "legacy-auth-recovery" not in lookup.text
     assert "legacy-dek-recovery" not in lookup.text
-    by_email = anonymous.post("/api/auth/passwordless/lookup", json={"username": "legacy.user@pending.local"})
-    assert by_email.json()["auth"]["wrapped_private_key_b64"] != lookup.json()["auth"]["wrapped_private_key_b64"]
+    by_email = anonymous.post(
+        "/api/auth/passwordless/lookup", json={"username": "legacy.user@pending.local"}
+    )
+    assert (
+        by_email.json()["auth"]["wrapped_private_key_b64"]
+        != lookup.json()["auth"]["wrapped_private_key_b64"]
+    )
     assert by_email.json()["auth"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
 
     client = TestClient(app)
@@ -443,34 +581,63 @@ def test_existing_user_with_legacy_kdf_can_still_log_in_and_rewrap(caplog):
     }
     with caplog.at_level(logging.INFO, logger="finance.auth"):
         assert client.put("/api/auth/passwordless/wraps", json=upgraded_auth).status_code == 200
-        assert client.put("/api/vault/wraps", json={
-            "kdf_salt_b64": _b64(16),
-            "kdf_iterations": MIN_PBKDF2_ITERATIONS,
-            "wrapped_dek_b64": _b64(60),
-        }).status_code == 200
+        assert (
+            client.put(
+                "/api/vault/wraps",
+                json={
+                    "kdf_salt_b64": _b64(16),
+                    "kdf_iterations": MIN_PBKDF2_ITERATIONS,
+                    "wrapped_dek_b64": _b64(60),
+                },
+            ).status_code
+            == 200
+        )
     assert "signing-key wrap KDF iterations raised" in caplog.text
     assert "vault wrap KDF iterations raised" in caplog.text
 
     again = TestClient(app)
-    assert again.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).json()["auth"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
+    assert (
+        again.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).json()[
+            "auth"
+        ]["kdf_iterations"]
+        == MIN_PBKDF2_ITERATIONS
+    )
     _verify(again, private_key, "legacy.user")
     assert again.get("/api/vault/status").json()["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
 
 
 def test_signup_is_closed_by_default_and_does_not_enumerate_usernames():
     client = TestClient(app)
-    assert client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **passwordless_material(),
-    }).status_code == 200
+    assert (
+        client.post(
+            "/api/auth/bootstrap/passwordless",
+            json={
+                "username": "first.admin",
+                "display_name": "First Admin",
+                **passwordless_material(),
+            },
+        ).status_code
+        == 200
+    )
     policy = client.get("/api/auth/signup-policy")
     assert policy.json() == {"mode": "closed", "signup_open": False, "invite_code_required": False}
 
-    taken = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "first.admin", "display_name": "Taken", **passwordless_material(),
-    })
-    missing = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "missing.user", "display_name": "Missing", **passwordless_material(),
-    })
+    taken = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "first.admin",
+            "display_name": "Taken",
+            **passwordless_material(),
+        },
+    )
+    missing = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "missing.user",
+            "display_name": "Missing",
+            **passwordless_material(),
+        },
+    )
     assert taken.status_code == missing.status_code == 403
     assert taken.json() == missing.json() == {"detail": "Signup is not available"}
 
@@ -479,30 +646,63 @@ def test_signup_invite_code_and_allowlist(monkeypatch):
     monkeypatch.setenv("AUTH_SIGNUP_MODE", "invite")
     monkeypatch.setenv("AUTH_INVITE_CODES", "household-code")
     client = TestClient(app)
-    assert client.post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **passwordless_material(),
-    }).status_code == 200
+    assert (
+        client.post(
+            "/api/auth/bootstrap/passwordless",
+            json={
+                "username": "first.admin",
+                "display_name": "First Admin",
+                **passwordless_material(),
+            },
+        ).status_code
+        == 200
+    )
 
-    wrong = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "invited.user", "invite_code": "nope", **passwordless_material(),
-    })
-    missing_code = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "invited.user", **passwordless_material(),
-    })
+    wrong = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "invited.user",
+            "invite_code": "nope",
+            **passwordless_material(),
+        },
+    )
+    missing_code = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "invited.user",
+            **passwordless_material(),
+        },
+    )
     assert wrong.status_code == missing_code.status_code == 403
     assert wrong.json() == missing_code.json()
 
-    created = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "invited.user", "display_name": "Invited", "invite_code": "household-code", **passwordless_material(),
-    })
+    created = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "invited.user",
+            "display_name": "Invited",
+            "invite_code": "household-code",
+            **passwordless_material(),
+        },
+    )
     assert created.status_code == 200
     assert created.json()["user"]["role"] == "user"
-    duplicate = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "invited.user", "invite_code": "household-code", **passwordless_material(),
-    })
-    unknown = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "someone.else", "invite_code": "household-code", **passwordless_material(),
-    })
+    duplicate = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "invited.user",
+            "invite_code": "household-code",
+            **passwordless_material(),
+        },
+    )
+    unknown = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "someone.else",
+            "invite_code": "household-code",
+            **passwordless_material(),
+        },
+    )
     # The second name is new, so it succeeds. The taken name uses the same 403 as a failed code,
     # which is covered above. A second successful signup is fine; existence of the first is not a 409.
     assert duplicate.status_code == 403
@@ -511,18 +711,31 @@ def test_signup_invite_code_and_allowlist(monkeypatch):
 
     monkeypatch.setenv("AUTH_SIGNUP_MODE", "allowlist")
     monkeypatch.setenv("AUTH_SIGNUP_ALLOWLIST", "household.user")
-    blocked = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "not.listed", **passwordless_material(),
-    })
-    allowed = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "household.user", "display_name": "Household", **passwordless_material(),
-    })
+    blocked = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "not.listed",
+            **passwordless_material(),
+        },
+    )
+    allowed = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "household.user",
+            "display_name": "Household",
+            **passwordless_material(),
+        },
+    )
     assert blocked.status_code == 403
     assert blocked.json()["detail"] == "Signup is not available"
     assert allowed.status_code == 200
-    taken_allowance = TestClient(app).post("/api/auth/signup/passwordless", json={
-        "username": "household.user", **passwordless_material(),
-    })
+    taken_allowance = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={
+            "username": "household.user",
+            **passwordless_material(),
+        },
+    )
     assert taken_allowance.status_code == 403
     assert taken_allowance.json() == blocked.json()
 
@@ -538,11 +751,32 @@ def test_attacker_pair_budget_does_not_block_login_from_another_ip(monkeypatch):
     attacker = TestClient(app, client=("203.0.113.5", 50000))
     owner = TestClient(app, client=("203.0.113.9", 50000))
 
-    assert attacker.post("/api/auth/passwordless/challenge", json={"username": "legacy.user"}).status_code == 200
-    assert attacker.post("/api/auth/passwordless/challenge", json={"username": "legacy.user"}).status_code == 200
-    assert attacker.post("/api/auth/passwordless/challenge", json={"username": "legacy.user"}).status_code == 429
-    assert attacker.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 200
-    assert attacker.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 200
+    assert (
+        attacker.post(
+            "/api/auth/passwordless/challenge", json={"username": "legacy.user"}
+        ).status_code
+        == 200
+    )
+    assert (
+        attacker.post(
+            "/api/auth/passwordless/challenge", json={"username": "legacy.user"}
+        ).status_code
+        == 200
+    )
+    assert (
+        attacker.post(
+            "/api/auth/passwordless/challenge", json={"username": "legacy.user"}
+        ).status_code
+        == 429
+    )
+    assert (
+        attacker.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code
+        == 200
+    )
+    assert (
+        attacker.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code
+        == 200
+    )
 
     _verify(owner, private_key, "legacy.user")
     assert owner.get("/api/vault/status").status_code == 200
@@ -565,8 +799,12 @@ def test_failed_verify_cap_counts_failures_for_the_account(monkeypatch):
     }
     bad = attacker.post("/api/auth/passwordless/verify", json={"username": "legacy.user", **forged})
     assert bad.status_code == 401
-    blocked = other.post("/api/auth/passwordless/verify", json={"username": "legacy.user", **forged})
-    unknown = other.post("/api/auth/passwordless/verify", json={"username": "nobody.user", **forged})
+    blocked = other.post(
+        "/api/auth/passwordless/verify", json={"username": "legacy.user", **forged}
+    )
+    unknown = other.post(
+        "/api/auth/passwordless/verify", json={"username": "nobody.user", **forged}
+    )
     assert blocked.status_code == 429
     assert unknown.status_code == 401
     _verify(TestClient(app, client=("203.0.113.10", 50000)), private_key, "legacy.user")
@@ -591,9 +829,12 @@ def test_valid_signature_succeeds_while_the_failed_verify_cap_is_tripped(monkeyp
         attacker = TestClient(app, client=(host, 50000))
         for _ in range(20):
             assert attacker.post("/api/auth/passwordless/verify", json=forged).status_code == 401
-    assert TestClient(app, client=("198.51.100.4", 50000)).post(
-        "/api/auth/passwordless/verify", json=forged
-    ).status_code == 429
+    assert (
+        TestClient(app, client=("198.51.100.4", 50000))
+        .post("/api/auth/passwordless/verify", json=forged)
+        .status_code
+        == 429
+    )
     _verify(TestClient(app, client=("203.0.113.9", 50000)), private_key, "legacy.user")
 
 
@@ -617,8 +858,18 @@ def test_session_wrap_updates_are_not_on_the_login_budget(monkeypatch):
     assert client.put("/api/auth/passwordless/wraps", json=body).status_code == 200
     assert client.put("/api/auth/passwordless/wraps", json=body).status_code == 200
     anonymous = TestClient(app, client=("203.0.113.8", 50000))
-    assert anonymous.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 200
-    assert anonymous.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 429
+    assert (
+        anonymous.post(
+            "/api/auth/passwordless/lookup", json={"username": "legacy.user"}
+        ).status_code
+        == 200
+    )
+    assert (
+        anonymous.post(
+            "/api/auth/passwordless/lookup", json={"username": "legacy.user"}
+        ).status_code
+        == 429
+    )
 
 
 def test_spoofed_forwarded_for_does_not_split_the_ip_bucket(monkeypatch):
@@ -649,25 +900,31 @@ def test_client_key_buckets_ipv6_by_prefix_and_ignores_forwarded_for():
         headers = []
         if forwarded is not None:
             headers.append((b"x-forwarded-for", forwarded.encode()))
-        return Request({
-            "type": "http",
-            "asgi": {"version": "3.0"},
-            "http_version": "1.1",
-            "method": "POST",
-            "scheme": "http",
-            "path": "/",
-            "raw_path": b"/",
-            "query_string": b"",
-            "headers": headers,
-            "client": (host, 1234),
-            "server": ("test", 80),
-        })
+        return Request(
+            {
+                "type": "http",
+                "asgi": {"version": "3.0"},
+                "http_version": "1.1",
+                "method": "POST",
+                "scheme": "http",
+                "path": "/",
+                "raw_path": b"/",
+                "query_string": b"",
+                "headers": headers,
+                "client": (host, 1234),
+                "server": ("test", 80),
+            }
+        )
 
     left = _client_key(request_from("203.0.113.5", "198.51.100.9"))
     right = _client_key(request_from("203.0.113.5", "198.51.100.10"))
     assert left == right == "203.0.113.5"
-    assert _client_key(request_from("2001:db8:1:2::1")) == _client_key(request_from("2001:db8:1:2::abcd"))
-    assert _client_key(request_from("2001:db8:1:2::1")) != _client_key(request_from("2001:db8:1:3::1"))
+    assert _client_key(request_from("2001:db8:1:2::1")) == _client_key(
+        request_from("2001:db8:1:2::abcd")
+    )
+    assert _client_key(request_from("2001:db8:1:2::1")) != _client_key(
+        request_from("2001:db8:1:3::1")
+    )
     assert _client_key(request_from("::ffff:203.0.113.5")) == "203.0.113.5"
 
 
@@ -685,8 +942,13 @@ def test_rate_limit_table_evicts_the_oldest_key():
     assert rate_limit._consume(rate_limit._auth_ip_buckets, "203.0.113.50", 2) is False
 
 
-def test_decoy_secret_file_survives_restart_and_a_short_file_is_replaced(tmp_path, monkeypatch, caplog):
-    from apps.finance.backend.services.auth_decoy import decoy_passwordless_material, reset_decoy_state
+def test_decoy_secret_file_survives_restart_and_a_short_file_is_replaced(
+    tmp_path, monkeypatch, caplog
+):
+    from apps.finance.backend.services.auth_decoy import (
+        decoy_passwordless_material,
+        reset_decoy_state,
+    )
 
     monkeypatch.delenv("AUTH_DECOY_SECRET", raising=False)
     database = tmp_path / "site.db"
@@ -719,7 +981,10 @@ def test_decoy_secret_file_survives_restart_and_a_short_file_is_replaced(tmp_pat
 def test_unreadable_decoy_secret_is_left_in_place(tmp_path, monkeypatch, caplog):
     from pathlib import Path
 
-    from apps.finance.backend.services.auth_decoy import decoy_passwordless_material, reset_decoy_state
+    from apps.finance.backend.services.auth_decoy import (
+        decoy_passwordless_material,
+        reset_decoy_state,
+    )
 
     monkeypatch.delenv("AUTH_DECOY_SECRET", raising=False)
     database = tmp_path / "site.db"
@@ -752,7 +1017,12 @@ def test_bootstrap_rejects_a_weaker_than_current_kdf():
     material = passwordless_material()
     material["auth"]["kdf_iterations"] = LEGACY_PBKDF2_ITERATIONS
     material["vault"]["kdf_iterations"] = LEGACY_PBKDF2_ITERATIONS
-    response = TestClient(app).post("/api/auth/bootstrap/passwordless", json={
-        "username": "first.admin", "display_name": "First Admin", **material,
-    })
+    response = TestClient(app).post(
+        "/api/auth/bootstrap/passwordless",
+        json={
+            "username": "first.admin",
+            "display_name": "First Admin",
+            **material,
+        },
+    )
     assert response.status_code == 422

@@ -9,7 +9,11 @@ from apps.finance.backend.models import Base
 
 def _resolve_database_url(raw_url: str) -> str:
     """Keep relative SQLite files anchored to backend/, independent of process cwd."""
-    if not raw_url.startswith("sqlite:///") or raw_url.startswith("sqlite:////") or ":memory:" in raw_url:
+    if (
+        not raw_url.startswith("sqlite:///")
+        or raw_url.startswith("sqlite:////")
+        or ":memory:" in raw_url
+    ):
         return raw_url
 
     relative_path = raw_url.removeprefix("sqlite:///")

@@ -17,6 +17,7 @@ Usage:
     python -m apps.server.migrations --check
     python -m apps.server.migrations revision --autogenerate -m "describe the change"
 """
+
 import argparse
 import ast
 import importlib.util
@@ -37,7 +38,12 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
-from apps.server.schema import COMPATIBILITY_TABLE, FINANCE_REVISION, MIGRATION_VERSION_TABLE, VERSION
+from apps.server.schema import (
+    COMPATIBILITY_TABLE,
+    FINANCE_REVISION,
+    MIGRATION_VERSION_TABLE,
+    VERSION,
+)
 
 SQLITE_TIMEOUT_SECONDS = 30
 _IGNORED_TABLES = {MIGRATION_VERSION_TABLE, COMPATIBILITY_TABLE}
@@ -149,7 +155,12 @@ def schema_signature(path: Path) -> tuple:
 
 def table_names(path: Path) -> set[str]:
     with connect(path, readonly=True) as db:
-        return {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+        return {
+            row[0]
+            for row in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
 
 
 def current_revision(path: Path) -> str | None:
@@ -184,7 +195,9 @@ def classify(path: Path) -> str:
     with connect(path, readonly=True) as db:
         version = db.execute("SELECT version FROM site_schema WHERE id=1").fetchone()
     if version != (VERSION,):
-        raise RuntimeError(f"Database schema {version[0] if version else 'missing'}; refusing to adopt. Expected site schema version {VERSION}.")
+        raise RuntimeError(
+            f"Database schema {version[0] if version else 'missing'}; refusing to adopt. Expected site schema version {VERSION}."
+        )
     return "adopt"
 
 
@@ -241,7 +254,10 @@ def _diff_summary(diff) -> str:
 
 
 def _load_backup():
-    for candidate in (Path("/app/backup-site.py"), package_dir().parents[1] / "scripts" / "backup-site.py"):
+    for candidate in (
+        Path("/app/backup-site.py"),
+        package_dir().parents[1] / "scripts" / "backup-site.py",
+    ):
         if candidate.is_file():
             spec = importlib.util.spec_from_file_location("backup_site", candidate)
             module = importlib.util.module_from_spec(spec)
@@ -288,7 +304,9 @@ def foreign_key_violations(path: Path) -> list[tuple]:
 def _finance_marker(path: Path) -> str | None:
     with connect(path, readonly=True) as db:
         try:
-            rows = db.execute("SELECT version_num FROM alembic_version ORDER BY version_num").fetchall()
+            rows = db.execute(
+                "SELECT version_num FROM alembic_version ORDER BY version_num"
+            ).fetchall()
         except sqlite3.OperationalError:
             return None
     if rows == [(FINANCE_REVISION,)]:
@@ -352,14 +370,19 @@ def plan(url: str, *, require_existing: bool = False) -> int:
         try:
             state = classify(path)
         except RuntimeError as exc:
-            print(json.dumps({
-                "event": "schema_migration_plan",
-                "state": "refuse",
-                "revision": current_revision(path),
-                "head": head_revision(),
-                "action": "refuse",
-                "detail": str(exc),
-            }), flush=True)
+            print(
+                json.dumps(
+                    {
+                        "event": "schema_migration_plan",
+                        "state": "refuse",
+                        "revision": current_revision(path),
+                        "head": head_revision(),
+                        "action": "refuse",
+                        "detail": str(exc),
+                    }
+                ),
+                flush=True,
+            )
             return 1
         revision = current_revision(path) if state == "managed" else None
     head = head_revision()
@@ -388,7 +411,9 @@ def plan(url: str, *, require_existing: bool = False) -> int:
             report["action"] = "stamp"
             report["schema_diff"] = []
             report["foreign_key_check"] = []
-            report["detail"] = "Would record the baseline revision and not rewrite application tables"
+            report["detail"] = (
+                "Would record the baseline revision and not rewrite application tables"
+            )
             sql = _stamp_sql(head)
     elif state in {"missing", "empty"}:
         report["action"] = "upgrade"
@@ -449,7 +474,10 @@ def adopt_or_upgrade(url: str, *, require_existing: bool = False) -> str:
     expected = head_revision()
     if revision != expected:
         raise RuntimeError(f"Migration finished at {revision}, not {expected}")
-    print(json.dumps({"event": "schema_migration", "action": action, "revision": revision}), flush=True)
+    print(
+        json.dumps({"event": "schema_migration", "action": action, "revision": revision}),
+        flush=True,
+    )
     return action
 
 
@@ -458,7 +486,11 @@ def _revision_is_empty(source: str) -> bool:
     for node in ast.parse(source).body:
         if isinstance(node, ast.FunctionDef) and node.name in {"upgrade", "downgrade"}:
             body = list(node.body)
-            if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(getattr(body[0], "value", None), ast.Constant)
+            ):
                 body = body[1:]
             found[node.name] = len(body) == 1 and isinstance(body[0], ast.Pass)
     return found.get("upgrade") is True and found.get("downgrade") is True
@@ -475,7 +507,9 @@ def check_drift() -> None:
         versions.mkdir()
         real_versions = package_dir() / "alembic" / "versions"
         cfg.set_main_option("version_path_separator", "os")
-        cfg.set_main_option("version_locations", os.pathsep.join((str(real_versions), str(versions))))
+        cfg.set_main_option(
+            "version_locations", os.pathsep.join((str(real_versions), str(versions)))
+        )
         command.revision(
             cfg,
             message="drift check",
@@ -487,15 +521,26 @@ def check_drift() -> None:
         source = script.read_text()
         if not _revision_is_empty(source):
             raise SystemExit("model/migration drift: autogenerate produced operations\n" + source)
-    print(json.dumps({"event": "schema_drift_check", "status": "ok", "revision": head_revision()}), flush=True)
+    print(
+        json.dumps({"event": "schema_drift_check", "status": "ok", "revision": head_revision()}),
+        flush=True,
+    )
 
 
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=os.environ.get("SITE_DATABASE_URL", ""))
-    parser.add_argument("--check", action="store_true", help="Fail if models differ from the migrations")
-    parser.add_argument("--plan", action="store_true", help="Print the decision and SQL without writing")
-    parser.add_argument("--require-existing", action="store_true", help="Refuse to create a missing or empty database")
+    parser.add_argument(
+        "--check", action="store_true", help="Fail if models differ from the migrations"
+    )
+    parser.add_argument(
+        "--plan", action="store_true", help="Print the decision and SQL without writing"
+    )
+    parser.add_argument(
+        "--require-existing",
+        action="store_true",
+        help="Refuse to create a missing or empty database",
+    )
     sub = parser.add_subparsers(dest="command")
     revision = sub.add_parser("revision", help="Create a new revision script")
     revision.add_argument("-m", "--message", required=True)
@@ -511,7 +556,9 @@ def main(argv=None) -> None:
     if args.plan:
         raise SystemExit(plan(args.url, require_existing=args.require_existing))
     if args.command == "revision":
-        command.revision(make_config(args.url), message=args.message, autogenerate=args.autogenerate)
+        command.revision(
+            make_config(args.url), message=args.message, autogenerate=args.autogenerate
+        )
         return
     adopt_or_upgrade(args.url, require_existing=args.require_existing)
 

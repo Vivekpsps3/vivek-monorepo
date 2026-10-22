@@ -16,7 +16,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from apps.finance.backend.logging_config import get_logger, redact_database_url, setup_logging, uvicorn_log_config
+from apps.finance.backend.logging_config import (
+    get_logger,
+    redact_database_url,
+    setup_logging,
+    uvicorn_log_config,
+)
 from apps.finance.backend.api_auth import ApiKeyMiddleware
 from apps.finance.backend.rate_limit import RateLimitMiddleware
 from apps.finance.backend.request_logging import RequestLoggingMiddleware
@@ -91,7 +96,9 @@ def create_app() -> FastAPI:
             request.url.path,
             type(exc).__name__,
         )
-        return JSONResponse(status_code=500, content={"error": "Internal server error", "code": 500})
+        return JSONResponse(
+            status_code=500, content={"error": "Internal server error", "code": 500}
+        )
 
     api_prefix = "/api"
     application.include_router(health.router, prefix=api_prefix)

@@ -117,18 +117,16 @@ def _is_shared_limited(request: Request) -> bool:
         return True
     if request.method != "POST":
         return False
-    if path in _AUTH_POSTS or path.startswith("/api/auth/invitations/"):
-        return True
-    return False
+    return path in _AUTH_POSTS or path.startswith("/api/auth/invitations/")
 
 
 def _is_auth_ip_limited(request: Request) -> bool:
     path = _path(request)
-    if request.method == "POST" and (path in _AUTH_POSTS or path.startswith("/api/auth/invitations/")):
+    if request.method == "POST" and (
+        path in _AUTH_POSTS or path.startswith("/api/auth/invitations/")
+    ):
         return True
-    if request.method == "GET" and path.startswith("/api/auth/invitations/"):
-        return True
-    return False
+    return request.method == "GET" and path.startswith("/api/auth/invitations/")
 
 
 def _touch(buckets: OrderedDict[str, tuple[int, float]], key: str) -> None:
@@ -211,7 +209,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(status_code=429, content={"detail": _RATE_DETAIL})
 
         shared = _limit_per_minute()
-        if shared is not None and _is_shared_limited(request):
-            if not _consume(_buckets, _client_key(request), shared):
-                return JSONResponse(status_code=429, content={"detail": _RATE_DETAIL})
+        if (
+            shared is not None
+            and _is_shared_limited(request)
+            and not _consume(_buckets, _client_key(request), shared)
+        ):
+            return JSONResponse(status_code=429, content={"detail": _RATE_DETAIL})
         return await call_next(request)

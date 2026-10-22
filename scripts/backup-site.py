@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Private, atomic online SQLite backups with integrity checks and bounded retention."""
+
 import argparse
 import fcntl
 from datetime import datetime, timedelta, timezone
@@ -53,7 +54,9 @@ def backup(source, directory, keep=1, *, kind="hourly", revision=None):
     descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
-        return _backup_locked(source, directory, keep, name_prefix=name_prefix, kind=kind, revision=revision)
+        return _backup_locked(
+            source, directory, keep, name_prefix=name_prefix, kind=kind, revision=revision
+        )
     finally:
         os.close(descriptor)
 
@@ -73,7 +76,7 @@ def _snapshot_sort_key(path: Path) -> tuple[str, str]:
 def _premigrate_revision(path: Path) -> str:
     match = _SNAPSHOT_STAMP.search(path.name)
     if match and path.name.startswith("premigrate-"):
-        return path.name[len("premigrate-"):match.start()]
+        return path.name[len("premigrate-") : match.start()]
     return path.name
 
 
@@ -81,7 +84,9 @@ def _snapshot_paths(directory: Path, kind: str) -> list[Path]:
     if kind == "hourly":
         matches = directory.glob(_HOURLY_GLOB)
     else:
-        matches = [path for path in directory.glob("premigrate-*.db") if _PREMIGRATE_NAME.match(path.name)]
+        matches = [
+            path for path in directory.glob("premigrate-*.db") if _PREMIGRATE_NAME.match(path.name)
+        ]
     return sorted(matches, key=_snapshot_sort_key, reverse=True)
 
 
@@ -116,7 +121,9 @@ def _fresh_stamp(directory: Path, kind: str) -> str:
     newest = _snapshot_sort_key(existing[0])[0]
     if not newest or stamp > newest:
         return stamp
-    advanced = datetime.strptime(newest, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc) + timedelta(seconds=1)
+    advanced = datetime.strptime(newest, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc) + timedelta(
+        seconds=1
+    )
     return advanced.strftime("%Y%m%dT%H%M%S")
 
 
@@ -132,9 +139,11 @@ def _backup_locked(source, directory, keep, *, name_prefix, kind, revision):
         with sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True, timeout=10) as src:
             with sqlite3.connect(candidate) as dest:
                 deadline = time.monotonic() + 120
+
                 def progress(_status, _remaining, _total):
                     if time.monotonic() > deadline:
                         raise TimeoutError("Backup exceeded its two-minute budget")
+
                 src.backup(dest, pages=256, progress=progress, sleep=0.05)
         result = verify(candidate)
         # Restore rehearsal: open a separate copy and re-verify it.
@@ -148,7 +157,12 @@ def _backup_locked(source, directory, keep, *, name_prefix, kind, revision):
         manifest = final.with_suffix(".json")
         with manifest.open("x") as file:
             os.chmod(manifest, 0o600)
-            payload = {**result, "created_at": datetime.now(timezone.utc).isoformat(), "restore_checked": True, "kind": kind}
+            payload = {
+                **result,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "restore_checked": True,
+                "kind": kind,
+            }
             if kind == "premigrate":
                 payload["revision"] = revision or "none"
             json.dump(payload, file)

@@ -250,8 +250,7 @@ export class FinanceService {
     if (force) this.dashboardLoad$ = null;
     if (!this.dashboardLoad$) {
       const requestedEpoch = this.snapshotEpoch;
-      let request!: Observable<DashboardLoadResult>;
-      request = forkJoin([
+      const request = forkJoin([
         this.getDashboardTransactions({ limit: 5000 }),
         this.getHoldings(),
         this.getAssets(),
@@ -339,7 +338,7 @@ export class FinanceService {
     return from(this.encStore.getTransactions());
   }
 
-  getDashboardTransactions(options?: { limit?: number }): Observable<Transaction[]> {
+  getDashboardTransactions(_options?: { limit?: number }): Observable<Transaction[]> {
     const epoch = this.dataEpoch(['transactions']);
     return from(this.encStore.getTransactions().then(rows => {
       // Dashboard totals must use the complete ledger; visible pagination is a component concern.

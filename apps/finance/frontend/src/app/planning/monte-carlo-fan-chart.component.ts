@@ -550,7 +550,6 @@ export class MonteCarloFanChartComponent implements AfterViewInit, OnChanges, On
     const labels = d.years.map(y => (y === 0 ? 'Now' : `Y${y}`));
     const p = d.percentiles;
     const fmt = (v: number) => this.formatMoney(v);
-    const years = d.years;
 
     const noInteract = { tooltip: { enabled: false }, hover: { enabled: false } };
     const samplePoint = {

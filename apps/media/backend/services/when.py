@@ -22,7 +22,9 @@ def today() -> date:
     return date.today()
 
 
-def classify_release(precision: str | None, released_on: date | None, status: str | None, today_value: date) -> str | None:
+def classify_release(
+    precision: str | None, released_on: date | None, status: str | None, today_value: date
+) -> str | None:
     """Return a when label, or None when the release should leave the upcoming list."""
     if (status or "").lower() == "postponed":
         return "postponed"
@@ -94,7 +96,9 @@ def choose_release(releases: list, today_value: date):
         return None, "unknown"
     choices = []
     for release in releases:
-        label = classify_release(release.precision, release.released_on, release.status, today_value)
+        label = classify_release(
+            release.precision, release.released_on, release.status, today_value
+        )
         if label is None:
             continue
         choices.append((release, label))

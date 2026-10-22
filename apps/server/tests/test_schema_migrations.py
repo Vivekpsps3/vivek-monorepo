@@ -1,15 +1,16 @@
 import os
-from pathlib import Path
 import sqlite3
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from sqlalchemy import Column, Integer, Table, create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from alembic import command
+
 from apps.server.migrations import (
     adopt_or_upgrade,
     check_drift,
@@ -33,15 +34,21 @@ def legacy_site_database(path: Path) -> None:
     metadata().create_all(engine)
     with engine.begin() as connection:
         connection.execute(text("INSERT INTO site_schema (id, version) VALUES (1, 1)"))
-        connection.execute(text("INSERT INTO alembic_version (version_num) VALUES ('e0f6a2b3c4d5')"))
-        connection.execute(text(
-            "INSERT INTO users (email, display_name, role, is_active, must_change_password, created_at, updated_at) "
-            "VALUES ('keeper@example.invalid', 'Keeper', 'user', 1, 0, '2026-01-01', '2026-01-01')"
-        ))
-        connection.execute(text(
-            "INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
-            "VALUES (1, 'Keep me', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')"
-        ))
+        connection.execute(
+            text("INSERT INTO alembic_version (version_num) VALUES ('e0f6a2b3c4d5')")
+        )
+        connection.execute(
+            text(
+                "INSERT INTO users (email, display_name, role, is_active, must_change_password, created_at, updated_at) "
+                "VALUES ('keeper@example.invalid', 'Keeper', 'user', 1, 0, '2026-01-01', '2026-01-01')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
+                "VALUES (1, 'Keep me', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')"
+            )
+        )
     engine.dispose()
     with sqlite3.connect(path) as db:
         assert db.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
@@ -50,7 +57,8 @@ def legacy_site_database(path: Path) -> None:
 def dump_rows(path: Path) -> dict:
     with sqlite3.connect(path) as db:
         names = [
-            row[0] for row in db.execute(
+            row[0]
+            for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' "
                 "AND name != 'site_alembic_version' ORDER BY name"
             )
@@ -72,10 +80,16 @@ def test_empty_database_is_created_by_migrations(tmp_path):
         assert db.execute("PRAGMA integrity_check").fetchone() == ("ok",)
         assert db.execute("SELECT version FROM site_schema WHERE id=1").fetchone() == (VERSION,)
         assert db.execute("SELECT version_num FROM alembic_version").fetchone() == ("e0f6a2b3c4d5",)
-        assert db.execute("SELECT version_num FROM site_alembic_version").fetchone() == (head_revision(),)
+        assert db.execute("SELECT version_num FROM site_alembic_version").fetchone() == (
+            head_revision(),
+        )
         assert any(row[2] == "users" for row in db.execute("PRAGMA foreign_key_list(trips)"))
-        assert "auth_recovery_wrapped_private_key_b64" in {row[1] for row in db.execute("PRAGMA table_info(users)")}
-        assert "recovery_wrapped_dek_b64" in {row[1] for row in db.execute("PRAGMA table_info(user_vaults)")}
+        assert "auth_recovery_wrapped_private_key_b64" in {
+            row[1] for row in db.execute("PRAGMA table_info(users)")
+        }
+        assert "recovery_wrapped_dek_b64" in {
+            row[1] for row in db.execute("PRAGMA table_info(user_vaults)")
+        }
     engine = create_engine(sqlite_url(database))
     with engine.connect() as connection:
         assert_ready(connection)
@@ -215,7 +229,11 @@ def test_backup_hook_runs_before_stamp_and_failure_leaves_the_database(tmp_path,
 
     import apps.server.migrations as migrations
 
-    monkeypatch.setattr(migrations, "_load_backup", lambda: type("Tool", (), {"backup": staticmethod(fail_backup)})())
+    monkeypatch.setattr(
+        migrations,
+        "_load_backup",
+        lambda: type("Tool", (), {"backup": staticmethod(fail_backup)})(),
+    )
     with pytest.raises(RuntimeError, match="disk full"):
         adopt_or_upgrade(sqlite_url(adoptable))
     assert current_revision(adoptable) is None
@@ -408,7 +426,9 @@ def test_batch_recreate_of_users_keeps_non_cascade_trips(tmp_path):
         assert db.execute("SELECT COUNT(*) FROM experiences").fetchone() == (1,)
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert "batch_marker" in {row[1] for row in db.execute("PRAGMA table_info(users)")}
-        assert "batch_marker" not in {row[1] for row in db.execute("PRAGMA table_info(user_entries)")}
+        assert "batch_marker" not in {
+            row[1] for row in db.execute("PRAGMA table_info(user_entries)")
+        }
 
 
 def test_batch_recreate_of_user_entries_keeps_cascade_experiences(tmp_path):
@@ -450,17 +470,25 @@ def test_in_place_baseline_edit_is_caught_by_model_diff(tmp_path, monkeypatch):
     assert model_diff(published) == []
     assert current_revision(published) == head_revision()
 
-    source = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "site_schema_v1_baseline_schema.py"
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "site_schema_v1_baseline_schema.py"
+    )
     edited = tmp_path / "versions"
     edited.mkdir()
     original = source.read_text()
     needle = 'value TEXT NOT NULL, \\n\\tPRIMARY KEY ("key")'
     assert needle in original
     (edited / source.name).write_text(
-        original.replace(needle, 'value TEXT NOT NULL, \\n\\tnote TEXT, \\n\\tPRIMARY KEY ("key")', 1)
+        original.replace(
+            needle, 'value TEXT NOT NULL, \\n\\tnote TEXT, \\n\\tPRIMARY KEY ("key")', 1
+        )
     )
 
     from sqlalchemy import Column, Text
+
     from apps.server import schema as schema_module
 
     real_metadata = schema_module.metadata
@@ -496,7 +524,10 @@ def test_sqlite_url_opens_a_database_whose_name_contains_reserved_characters(tmp
     assert not (tmp_path / "q").exists()
     assert model_diff(database, readonly=True) == []
     with connect(database, readonly=True) as db:
-        assert db.execute("SELECT version_num FROM site_alembic_version").fetchone()[0] == head_revision()
+        assert (
+            db.execute("SELECT version_num FROM site_alembic_version").fetchone()[0]
+            == head_revision()
+        )
 
 
 def test_foreign_key_violation_rolls_the_revision_back(tmp_path):
@@ -510,7 +541,7 @@ def test_foreign_key_violation_rolls_the_revision_back(tmp_path):
             'down_revision = "site_schema_v1"\n'
             "branch_labels = None\ndepends_on = None\n"
             "def upgrade():\n"
-            "    op.execute(\"INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
+            '    op.execute("INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) '
             "VALUES (999, 'orphan', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')\")\n"
             "def downgrade():\n"
             "    pass\n",

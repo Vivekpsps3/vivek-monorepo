@@ -99,7 +99,9 @@ def parse_flights(payload: dict) -> list[dict]:
     return parsed
 
 
-def lookup_flights(ident: str, depart_on: date, api_key: str, client: httpx.Client | None = None) -> list[dict]:
+def lookup_flights(
+    ident: str, depart_on: date, api_key: str, client: httpx.Client | None = None
+) -> list[dict]:
     """Return normalized candidates. Raises FlightAwareError on provider failure."""
     normalized = normalize_ident(ident)
     params = {

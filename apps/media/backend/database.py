@@ -12,7 +12,11 @@ SessionLocal = None
 
 
 def resolve_database_url(raw_url: str) -> str:
-    if not raw_url.startswith("sqlite:///") or raw_url.startswith("sqlite:////") or ":memory:" in raw_url:
+    if (
+        not raw_url.startswith("sqlite:///")
+        or raw_url.startswith("sqlite:////")
+        or ":memory:" in raw_url
+    ):
         return raw_url
     relative_path = raw_url.removeprefix("sqlite:///")
     if os.path.isabs(relative_path):
@@ -35,7 +39,9 @@ def init_db(url: str | None = None) -> str:
         engine.dispose()
     engine = create_engine(resolved, connect_args={"check_same_thread": False})
     event.listen(engine, "connect", _enable_foreign_keys)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=True, expire_on_commit=False, bind=engine)
+    SessionLocal = sessionmaker(
+        autocommit=False, autoflush=True, expire_on_commit=False, bind=engine
+    )
     Base.metadata.create_all(bind=engine)
     return resolved
 
@@ -58,4 +64,6 @@ def bind_database(shared_engine) -> None:
     """Bind the domain to the site's engine; schema changes run offline."""
     global engine, SessionLocal
     engine = shared_engine
-    SessionLocal = sessionmaker(autocommit=False, autoflush=True, expire_on_commit=False, bind=engine)
+    SessionLocal = sessionmaker(
+        autocommit=False, autoflush=True, expire_on_commit=False, bind=engine
+    )

@@ -4,7 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from apps.travel.backend.database import get_db
-from apps.travel.backend.models import BudgetLine, Note, Parking, PlanItem, Reminder, Stay, Transport, Trip
+from apps.travel.backend.models import (
+    BudgetLine,
+    Note,
+    Parking,
+    PlanItem,
+    Reminder,
+    Stay,
+    Transport,
+    Trip,
+)
 from apps.travel.backend.schemas import (
     BudgetLineIn,
     NoteIn,
@@ -121,7 +130,9 @@ def update_trip(trip_id: int, body: TripPatch, db: Session = Depends(get_db)):
     if "end_date" in data:
         trip.end_date = data["end_date"]
     if trip.end_date < trip.start_date:
-        raise HTTPException(status_code=422, detail="The return date has to be on or after the day you leave.")
+        raise HTTPException(
+            status_code=422, detail="The return date has to be on or after the day you leave."
+        )
     if "status" in data:
         trip.status = data["status"]
     if "origin_label" in data:
@@ -145,7 +156,9 @@ def delete_trip(trip_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips/{trip_id}/stays", status_code=201)
-def create_stay(trip_id: int, body: StayIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
+def create_stay(
+    trip_id: int, body: StayIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)
+):
     trip = _trip_or_404(db, trip_id)
     _check_stay(trip, body)
     sort_order = max((stay.sort_order for stay in trip.stays), default=-1) + 1
@@ -158,7 +171,9 @@ def create_stay(trip_id: int, body: StayIn, db: Session = Depends(get_db), fetch
 
 
 @router.patch("/stays/{stay_id}")
-def update_stay(stay_id: int, body: StayIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
+def update_stay(
+    stay_id: int, body: StayIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)
+):
     row = db.get(Stay, stay_id)
     if row is None:
         raise HTTPException(status_code=404, detail="That city is not here.")
@@ -216,7 +231,9 @@ def delete_transport(transport_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips/{trip_id}/plans", status_code=201)
-def create_plan(trip_id: int, body: PlanIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
+def create_plan(
+    trip_id: int, body: PlanIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)
+):
     trip = _trip_or_404(db, trip_id)
     _check_stay_link(db, trip.id, body.stay_id)
     sort_order = max((item.sort_order for item in trip.plans), default=-1) + 1
@@ -229,7 +246,9 @@ def create_plan(trip_id: int, body: PlanIn, db: Session = Depends(get_db), fetch
 
 
 @router.patch("/plans/{plan_id}")
-def update_plan(plan_id: int, body: PlanIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
+def update_plan(
+    plan_id: int, body: PlanIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)
+):
     row = db.get(PlanItem, plan_id)
     if row is None:
         raise HTTPException(status_code=404, detail="That plan is not here.")
@@ -252,7 +271,9 @@ def delete_plan(plan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips/{trip_id}/parking", status_code=201)
-def create_parking(trip_id: int, body: ParkingIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
+def create_parking(
+    trip_id: int, body: ParkingIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)
+):
     trip = _trip_or_404(db, trip_id)
     _check_transport_link(db, trip.id, body.transport_id)
     row = Parking(trip_id=trip.id)
@@ -264,7 +285,9 @@ def create_parking(trip_id: int, body: ParkingIn, db: Session = Depends(get_db),
 
 
 @router.patch("/parking/{parking_id}")
-def update_parking(parking_id: int, body: ParkingIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)):
+def update_parking(
+    parking_id: int, body: ParkingIn, db: Session = Depends(get_db), fetch=Depends(get_geocoder)
+):
     row = db.get(Parking, parking_id)
     if row is None:
         raise HTTPException(status_code=404, detail="That parking note is not here.")

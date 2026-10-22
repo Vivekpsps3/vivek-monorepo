@@ -30,6 +30,8 @@ def test_rollup_keeps_currencies_apart_and_counts_every_line():
     assert by_currency["USD"]["total_cents"] == 92000
     assert by_currency["USD"]["paid_cents"] == 40000
     assert by_currency["EUR"]["total_cents"] == 2000
-    outbound = next(item for item in by_currency["USD"]["categories"] if item["category"] == "outbound_flight")
+    outbound = next(
+        item for item in by_currency["USD"]["categories"] if item["category"] == "outbound_flight"
+    )
     assert outbound["amount_cents"] == 45000
     assert len(rolled["lines"]) == 6

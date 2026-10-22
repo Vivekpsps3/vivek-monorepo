@@ -9,6 +9,8 @@
     "test:release-manifest": "node scripts/test-release-manifest.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "lint": "eslint src e2e",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit && tsc -p ../../../packages/tsconfig.json --noEmit",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui"
   },
@@ -30,15 +32,19 @@
     "@angular-devkit/build-angular": "^21.2.25",
     "@angular/cli": "^21.2.25",
     "@angular/compiler-cli": "^21.2.25",
+    "@eslint/js": "9.39.1",
+    "@playwright/test": "^1.51.0",
     "@types/jasmine": "~5.1.0",
+    "angular-eslint": "21.4.0",
+    "eslint": "9.39.1",
     "jasmine-core": "~5.5.0",
     "karma": "~6.4.0",
     "karma-chrome-launcher": "~3.2.0",
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
+    "playwright": "^1.51.0",
     "typescript": "~5.9.3",
-    "@playwright/test": "^1.51.0",
-    "playwright": "^1.51.0"
+    "typescript-eslint": "8.46.0"
   }
 }

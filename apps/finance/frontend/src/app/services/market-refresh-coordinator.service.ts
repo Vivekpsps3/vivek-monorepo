@@ -248,9 +248,8 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
   private fetchAndApply(symbol: string, sessionToken: number): Promise<MarketSymbolRefreshResult> {
     const current = this.inFlightSymbols.get(symbol);
     if (current) return current;
-    let request!: Promise<MarketSymbolRefreshResult>;
     const sessionCancel = this.sessionCancel$;
-    request = Promise.resolve().then(async (): Promise<MarketSymbolRefreshResult> => {
+    const request = Promise.resolve().then(async (): Promise<MarketSymbolRefreshResult> => {
       try {
         this.assertActiveSession();
         if (sessionToken !== this.activeSessionToken || sessionToken !== this.finance.sessionToken) throw new Error('Vault session changed');

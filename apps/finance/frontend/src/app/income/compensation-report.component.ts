@@ -30,10 +30,13 @@ import { MoneyPipe } from '../shared/pipes/money.pipe';
             @if (selectedYear === 'custom') { <option value="custom">Custom dates</option> }
           </select>
         </label>
-        <label class="form-group">
-          <span>From <app-info-tip label="From date" text="Leave blank for all history." /></span>
-          <input name="compensation_start" type="date" [(ngModel)]="start" (ngModelChange)="customRangeChanged()" />
-        </label>
+        <div class="form-group">
+          <span>
+            <label for="compensation-start">From</label>
+            <app-info-tip label="From date" text="Leave blank for all history." />
+          </span>
+          <input id="compensation-start" name="compensation_start" type="date" [(ngModel)]="start" (ngModelChange)="customRangeChanged()" />
+        </div>
         <label class="form-group">
           <span>Through</span>
           <input name="compensation_end" type="date" [(ngModel)]="end" (ngModelChange)="customRangeChanged()" required />
@@ -78,6 +81,8 @@ import { MoneyPipe } from '../shared/pipes/money.pipe';
     .stat-display { margin-bottom: 0; }
     .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--space-4); min-width: 0; }
     .form-group, input, select { min-width: 0; max-width: 100%; box-sizing: border-box; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group > span { display: flex; align-items: center; }
     @media (max-width: 768px) {
       .form-row { grid-template-columns: 1fr; }
       input, select { min-height: 44px; }

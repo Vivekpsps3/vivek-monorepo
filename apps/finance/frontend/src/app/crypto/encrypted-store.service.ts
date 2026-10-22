@@ -8,7 +8,6 @@ import {
   Liability,
   ImportReceipt,
   ImportReceiptRows,
-  ImportPreviewRow,
   Subscription,
   Transaction,
 } from '../models/transaction.model';

@@ -9,6 +9,7 @@ a database that already has people in it.
 migrations and starts the app. The adoption rehearsal starts current main
 instead and passes ``--base-url``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -127,14 +128,20 @@ def seed_records(client: httpx.Client, user_index: int, count: int) -> int:
             "key_version": 1,
         }
         if number % 4 == 0:
-            record["indexes"] = [{
-                "index_name": "seed",
-                "index_value_b64": base64.b64encode(f"seed-{user_index}-{number}".encode()).decode("ascii"),
-            }]
+            record["indexes"] = [
+                {
+                    "index_name": "seed",
+                    "index_value_b64": base64.b64encode(
+                        f"seed-{user_index}-{number}".encode()
+                    ).decode("ascii"),
+                }
+            ]
             indexes += 1
         batch.append(record)
         if len(batch) == 50:
-            require(client.post("/api/vault/records/upsert", json={"records": batch}), "record upsert")
+            require(
+                client.post("/api/vault/records/upsert", json={"records": batch}), "record upsert"
+            )
             batch = []
     if batch:
         require(client.post("/api/vault/records/upsert", json={"records": batch}), "record upsert")
@@ -225,14 +232,23 @@ def seed_trips(client: httpx.Client, user_index: int, count: int) -> None:
         require(
             client.post(
                 f"/travel/api/trips/{trip_id}/reminders",
-                json={"title": "Check the synthetic booking", "kind": "general", "due_at": f"{start.isoformat()}T08:00:00"},
+                json={
+                    "title": "Check the synthetic booking",
+                    "kind": "general",
+                    "due_at": f"{start.isoformat()}T08:00:00",
+                },
             ),
             "create reminder",
         )
         require(
             client.post(
                 f"/travel/api/trips/{trip_id}/budget-lines",
-                json={"category": "lodging", "label": "Synthetic inn", "amount": "80.00", "currency": "USD"},
+                json={
+                    "category": "lodging",
+                    "label": "Synthetic inn",
+                    "amount": "80.00",
+                    "currency": "USD",
+                },
             ),
             "create budget line",
         )
@@ -284,7 +300,11 @@ def seed_media(client: httpx.Client, user_index: int, count: int) -> None:
         require(
             client.post(
                 f"/media/api/entries/{entry_id}/experiences",
-                json={"kind": EXPERIENCE_AGAIN[experience], "finished_on": (finished + timedelta(days=10)).isoformat(), "rating": 6},
+                json={
+                    "kind": EXPERIENCE_AGAIN[experience],
+                    "finished_on": (finished + timedelta(days=10)).isoformat(),
+                    "rating": 6,
+                },
             ),
             "create second experience",
         )
@@ -293,7 +313,12 @@ def seed_media(client: httpx.Client, user_index: int, count: int) -> None:
                 detail = require(
                     client.post(
                         f"/media/api/entries/{entry_id}/episodes",
-                        json={"season_number": 1, "episode_number": episode, "title": f"Synthetic episode {episode}", "air_date": "2019-06-01"},
+                        json={
+                            "season_number": 1,
+                            "episode_number": episode,
+                            "title": f"Synthetic episode {episode}",
+                            "air_date": "2019-06-01",
+                        },
                     ),
                     "create episode",
                 )
@@ -368,13 +393,27 @@ def seed(base_url: str, args: argparse.Namespace) -> None:
         print(f"seeded {username}", flush=True)
         client.close()
     if args.session_file:
-        Path(args.session_file).write_text(json.dumps({
-            "username": "seed.user.0",
-            "cookie": admin_cookie,
-            "csrf_token": admin_csrf,
-        }))
-    print(json.dumps({"event": "dev_seed_complete", **totals, "records_per_user": args.records_per_user,
-                      "trips_per_user": args.trips_per_user, "entries_per_user": args.entries_per_user}), flush=True)
+        Path(args.session_file).write_text(
+            json.dumps(
+                {
+                    "username": "seed.user.0",
+                    "cookie": admin_cookie,
+                    "csrf_token": admin_csrf,
+                }
+            )
+        )
+    print(
+        json.dumps(
+            {
+                "event": "dev_seed_complete",
+                **totals,
+                "records_per_user": args.records_per_user,
+                "trips_per_user": args.trips_per_user,
+                "entries_per_user": args.entries_per_user,
+            }
+        ),
+        flush=True,
+    )
 
 
 def database_path(url: str) -> Path:
@@ -430,7 +469,9 @@ def ensure_dev(args: argparse.Namespace) -> None:
     env["SITE_DATABASE_URL"] = url
     subprocess.run([sys.executable, "-m", "apps.server.migrations"], cwd=REPO, env=env, check=True)
     if users_present(path):
-        raise SystemExit(f"{path} already has users. Remove it before running make db-seed-dev again.")
+        raise SystemExit(
+            f"{path} already has users. Remove it before running make db-seed-dev again."
+        )
     finance = REPO / "apps" / "finance" / "frontend" / "dist" / "finance-app" / "browser"
     portfolio = REPO / "apps" / "site" / "dist" / "personal-website" / "browser"
     if not (finance / "index.html").is_file():
@@ -441,19 +482,32 @@ def ensure_dev(args: argparse.Namespace) -> None:
         portfolio = REPO / ".local" / "web" / "portfolio"
         portfolio.mkdir(parents=True, exist_ok=True)
         (portfolio / "index.html").write_text("<!doctype html><title>portfolio</title>\n")
-    env.update({
-        "SITE_WEB_ROOT": str(finance),
-        "SITE_PORTFOLIO_ROOT": str(portfolio),
-        "SESSION_COOKIE_SECURE": "0",
-        "AUTH_SIGNUP_MODE": "open",
-        "AUTH_IP_RATE_LIMIT_PER_MIN": "100000",
-        "RATE_LIMIT_PER_MIN": "100000",
-    })
+    env.update(
+        {
+            "SITE_WEB_ROOT": str(finance),
+            "SITE_PORTFOLIO_ROOT": str(portfolio),
+            "SESSION_COOKIE_SECURE": "0",
+            "AUTH_SIGNUP_MODE": "open",
+            "AUTH_IP_RATE_LIMIT_PER_MIN": "100000",
+            "RATE_LIMIT_PER_MIN": "100000",
+        }
+    )
     port = args.port
     env["PYTHONUNBUFFERED"] = "1"
-    log_file = tempfile.NamedTemporaryFile("w+", prefix="seed-dev-server-", suffix=".log", delete=False)
+    log_file = tempfile.NamedTemporaryFile(
+        "w+", prefix="seed-dev-server-", suffix=".log", delete=False
+    )
     process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "apps.server.main:app", "--host", "127.0.0.1", "--port", str(port)],
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "apps.server.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
         cwd=REPO,
         env=env,
         stdout=log_file,
@@ -465,7 +519,9 @@ def ensure_dev(args: argparse.Namespace) -> None:
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                raise SystemExit(_server_failure(log_file, "dev server exited before it accepted connections"))
+                raise SystemExit(
+                    _server_failure(log_file, "dev server exited before it accepted connections")
+                )
             try:
                 response = httpx.get(f"{base_url}/api/auth/bootstrap-status", timeout=2.0)
             except httpx.HTTPError:
@@ -487,7 +543,11 @@ def ensure_dev(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8091")
-    parser.add_argument("--ensure-dev", action="store_true", help="Migrate .local/data/site.db, start the app, seed, and stop")
+    parser.add_argument(
+        "--ensure-dev",
+        action="store_true",
+        help="Migrate .local/data/site.db, start the app, seed, and stop",
+    )
     parser.add_argument("--port", type=int, default=8091)
     parser.add_argument("--users", type=int, default=6)
     parser.add_argument("--records-per-user", type=int, default=200)

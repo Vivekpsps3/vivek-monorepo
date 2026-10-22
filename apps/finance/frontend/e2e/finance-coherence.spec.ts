@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { test, expect, Page } from '@playwright/test';
-import { syntheticVault } from './synthetic-vault';
+import { test, expect } from '@playwright/test';
+import { field, syntheticVault } from './synthetic-vault';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -14,12 +14,6 @@ function legacyChaseDedupeKey(date: string, amount: number, description: string)
 
 async function expectQuoteRequests(vault: Awaited<ReturnType<typeof syntheticVault>>, symbols: string[]) {
   await expect.poll(() => vault.quoteRequests.map(symbol => symbol.toUpperCase()).sort()).toEqual([...symbols].sort());
-}
-
-async function enterVault(page: Page) {
-  await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill('Synthetic finance test passphrase');
-  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await page.waitForURL(url => url.pathname === '/');
 }
 
 function profilePayload(vault: Awaited<ReturnType<typeof syntheticVault>>) {
@@ -138,7 +132,11 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
     }],
   });
 
-  await vault.open('/planning?t=compensation&start=2024-01-01&end=2024-12-31');
+  await vault.open(
+    '/planning?t=compensation&start=2024-01-01&end=2024-12-31',
+    page,
+    '/recurring?t=pay&start=2024-01-01&end=2024-12-31&history=1',
+  );
   await expect(page).toHaveURL(/\/recurring\?/);
   const url = new URL(page.url());
   expect(url.searchParams.get('t')).toBe('pay');
@@ -154,8 +152,8 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
   const report = page.locator('app-compensation-report');
   await expect(report).toContainText('Former employer');
   await expect(report.getByRole('row').filter({ hasText: 'Former employer' })).toContainText('$5,000.00');
-  await expect(report.getByLabel('From (blank for all history)', { exact: true })).toHaveValue('2024-01-01');
-  await expect(report.getByLabel('Through', { exact: true })).toHaveValue('2024-12-31');
+  await expect(field(report, 'From')).toHaveValue('2024-01-01');
+  await expect(field(report, 'Through')).toHaveValue('2024-12-31');
   await expect(report.getByRole('button', { name: /Edit|Add job/ })).toHaveCount(0);
   expect(vault.data('job_incomes')[0].compensation_payments).toEqual([
     expect.objectContaining({ date: '2024-12-15', kind: 'bonus', label: 'Retention bonus', amount: 5000 }),
@@ -331,8 +329,9 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   const loadProfile = page.locator('.mc-profiles-row select');
   await loadProfile.selectOption(String(profileId));
   await expect(page.getByLabel('Use ledger net worth at start', { exact: true })).toBeChecked();
-  const startingNetWorth = page.getByRole('complementary', { name: 'Scenario builder' })
-    .getByRole('spinbutton', { name: /^Starting net worth/ });
+  const startingNetWorth = page.locator('aside[aria-label="Scenario builder"]')
+    .locator('label.mc-field', { hasText: 'Starting net worth' })
+    .locator('input');
   await expect(startingNetWorth).toBeDisabled();
 
   await page.getByLabel('Use ledger net worth at start', { exact: true }).uncheck();
@@ -470,7 +469,7 @@ test('import account mapping refreshes the exact account label in another mounte
   };
   const vault = await syntheticVault(page, { transactions: [legacy] });
   const second = await page.context().newPage();
-  await vault.open('/spending?t=imports', page);
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await vault.open('/spending?t=activity', second);
   const secondRow = second.getByRole('row').filter({ hasText: description });
   await expect(secondRow).toContainText('—');
@@ -484,7 +483,7 @@ test('import account mapping refreshes the exact account label in another mounte
   await dialog.locator('input[type=file]').setInputFiles({ name: 'map-cross-tab.csv', mimeType: 'text/csv', buffer: csv });
   await dialog.getByLabel('Bank for map-cross-tab.csv', { exact: true }).selectOption('chase');
   await dialog.getByLabel('Account name', { exact: true }).fill('Daily card');
-  await dialog.getByLabel('Map matching legacy transactions to this account', { exact: true }).check();
+  await dialog.getByRole('checkbox', { name: /Map matching legacy transactions to this account/ }).check();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('0 new · 1 duplicate');
   await dialog.getByRole('button', { name: 'Map 1 legacy transaction', exact: true }).click();
@@ -507,13 +506,13 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
   });
   const activityTab = await page.context().newPage();
   const homeTab = await page.context().newPage();
-  await vault.open('/spending?t=imports', page);
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await vault.open('/spending?t=activity', activityTab);
   await vault.open('/', homeTab);
   const homeMonth = homeTab.locator('.home-tile').filter({ hasText: 'This month' });
 
   await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
-  let dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({
     name: 'confirmed-coverage.csv', mimeType: 'text/csv', buffer: Buffer.from(
       `Transaction Date,Post Date,Description,Category,Type,Amount,Memo\n${transactionDate},${transactionDate},COVERAGE PURCHASE,Food,Sale,-10,\n`
@@ -534,9 +533,12 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
     account_key: 'card', start_date: coverageStart, end_date: coverageEnd, confirmed: true,
   });
 
+  // t=imports rewrites to receipts=1, which opens the disclosure. Wait for the
+  // row instead of clicking the summary: that click toggles a panel the route
+  // already opened and hides Undo again.
   const receipt = page.locator('.ledger-receipts .import-history-row').filter({ hasText: 'confirmed-coverage.csv' });
   const undo = receipt.getByRole('button', { name: 'Undo', exact: true });
-  if (!(await undo.isVisible())) await page.locator('.ledger-receipts summary').click();
+  await expect(undo).toBeVisible();
   await undo.click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   await expect.poll(() => vault.data('import_batches')[0]?.status).toBe('withdrawn');
@@ -589,7 +591,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await page.locator('.account-actions > summary').click();
   await expect(accountMenu).not.toHaveAttribute('open', '');
   await expect.poll(() => page.locator('app-charts ui-card .ui-card').first().evaluate(card => getComputedStyle(card).backgroundColor))
-    .toBe('rgb(22, 27, 34)');
+    .toBe('rgb(30, 28, 25)');
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);
   await holdingsCanvas.scrollIntoViewIfNeeded();
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);

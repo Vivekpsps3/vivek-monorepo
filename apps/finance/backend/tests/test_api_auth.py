@@ -43,7 +43,9 @@ def test_session_cookie_persists_and_slides_while_the_browser_is_in_use():
     client = authenticated_client(app, email="persist@example.com")
     me = client.get("/api/auth/me")
     assert me.status_code == 200
-    session_cookie = next(item for item in me.headers.get_list("set-cookie") if item.startswith("finance_session="))
+    session_cookie = next(
+        item for item in me.headers.get_list("set-cookie") if item.startswith("finance_session=")
+    )
     assert "Max-Age=604800" in session_cookie
     assert "expires=" in session_cookie.lower()
 
@@ -136,21 +138,28 @@ def test_admin_can_delete_user_and_owned_data_is_removed():
     db = next(__import__("apps.finance.backend.database", fromlist=["get_db"]).get_db())
     try:
         from apps.finance.backend.models import EncryptedRecord, User
-        db.add(EncryptedRecord(
-            user_id=created["id"],
-            collection="transactions",
-            client_id="tx-delete-me-01",
-            ciphertext_b64="Y2lwaGVy",
-            schema_version=2,
-            key_version=1,
-            revision=1,
-        ))
+
+        db.add(
+            EncryptedRecord(
+                user_id=created["id"],
+                collection="transactions",
+                client_id="tx-delete-me-01",
+                ciphertext_b64="Y2lwaGVy",
+                schema_version=2,
+                key_version=1,
+                revision=1,
+            )
+        )
         db.commit()
         delete = admin.delete(f"/api/admin/users/{created['id']}")
         assert delete.status_code == 200
-        assert all(u["email"] != "delete-me@example.com" for u in admin.get("/api/admin/users").json())
+        assert all(
+            u["email"] != "delete-me@example.com" for u in admin.get("/api/admin/users").json()
+        )
         assert db.query(User).filter(User.email == "delete-me@example.com").first() is None
-        assert db.query(EncryptedRecord).filter(EncryptedRecord.user_id == created["id"]).count() == 0
+        assert (
+            db.query(EncryptedRecord).filter(EncryptedRecord.user_id == created["id"]).count() == 0
+        )
     finally:
         db.close()
 
@@ -163,14 +172,29 @@ def test_user_can_reset_own_data_without_affecting_other_users():
     db = next(__import__("apps.finance.backend.database", fromlist=["get_db"]).get_db())
     try:
         from apps.finance.backend.models import EncryptedRecord
-        db.add(EncryptedRecord(
-            user_id=owner_id, collection="transactions", client_id="tx-owner-01",
-            ciphertext_b64="Y2lwaGVy", schema_version=2, key_version=1, revision=1,
-        ))
-        db.add(EncryptedRecord(
-            user_id=other_id, collection="transactions", client_id="tx-other-01",
-            ciphertext_b64="Y2lwaGVy", schema_version=2, key_version=1, revision=1,
-        ))
+
+        db.add(
+            EncryptedRecord(
+                user_id=owner_id,
+                collection="transactions",
+                client_id="tx-owner-01",
+                ciphertext_b64="Y2lwaGVy",
+                schema_version=2,
+                key_version=1,
+                revision=1,
+            )
+        )
+        db.add(
+            EncryptedRecord(
+                user_id=other_id,
+                collection="transactions",
+                client_id="tx-other-01",
+                ciphertext_b64="Y2lwaGVy",
+                schema_version=2,
+                key_version=1,
+                revision=1,
+            )
+        )
         db.commit()
 
         denied = owner.post("/api/auth/reset-data", json={"confirm": "CLEAR"})
@@ -217,7 +241,9 @@ def test_admin_can_delete_inactive_admin_when_another_admin_is_active():
 
     delete = admin.delete(f"/api/admin/users/{inactive_admin['id']}")
     assert delete.status_code == 200
-    assert all(u["email"] != "inactive-admin@example.com" for u in admin.get("/api/admin/users").json())
+    assert all(
+        u["email"] != "inactive-admin@example.com" for u in admin.get("/api/admin/users").json()
+    )
 
 
 def test_public_password_signup_is_unmounted():
@@ -225,7 +251,11 @@ def test_public_password_signup_is_unmounted():
     client = TestClient(app)
     res = client.post(
         "/api/auth/signup",
-        json={"email": "signup@example.com", "display_name": "Signup User", "password": "signup-password"},
+        json={
+            "email": "signup@example.com",
+            "display_name": "Signup User",
+            "password": "signup-password",
+        },
     )
     assert res.status_code == 404
 
@@ -274,7 +304,10 @@ def test_enrollment_link_can_be_replaced_and_reset_confirms_the_username():
     again = admin.post(f"/api/admin/users/{created['id']}/enrollment")
     assert again.status_code == 200
     assert again.json()["enrollment_token"] != created["enrollment_token"]
-    assert TestClient(app).get(f"/api/auth/invitations/{created['enrollment_token']}").status_code == 401
+    assert (
+        TestClient(app).get(f"/api/auth/invitations/{created['enrollment_token']}").status_code
+        == 401
+    )
     fresh = TestClient(app).get(f"/api/auth/invitations/{again.json()['enrollment_token']}")
     assert fresh.status_code == 200
 
@@ -297,7 +330,11 @@ def test_enrollment_link_can_be_replaced_and_reset_confirms_the_username():
     assert reset.status_code == 200
     recent = admin.get("/api/admin/metrics").json()["recent"]
     assert any("erased finance data" in item["summary"] for item in recent)
-    ada = next(row for row in admin.get("/api/admin/metrics").json()["per_user"] if row["id"] == created["id"])
+    ada = next(
+        row
+        for row in admin.get("/api/admin/metrics").json()["per_user"]
+        if row["id"] == created["id"]
+    )
     assert ada["active_sessions"] == 0
     assert ada["enrolled"] is True
 

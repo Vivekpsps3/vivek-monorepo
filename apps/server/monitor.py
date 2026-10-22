@@ -1,4 +1,5 @@
 """Small independent probe exporter. Contains no database or application credentials."""
+
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -12,9 +13,13 @@ import sys
 import threading
 import urllib.request
 
-TARGETS = {"public": "https://vivekpanchagnula.com/", "ready": "http://personal-site:8000/health/ready",
-           "finance": "https://vivekpanchagnula.com/api/health", "travel": "https://vivekpanchagnula.com/travel/api/health",
-           "media": "https://vivekpanchagnula.com/media/api/health"}
+TARGETS = {
+    "public": "https://vivekpanchagnula.com/",
+    "ready": "http://personal-site:8000/health/ready",
+    "finance": "https://vivekpanchagnula.com/api/health",
+    "travel": "https://vivekpanchagnula.com/travel/api/health",
+    "media": "https://vivekpanchagnula.com/media/api/health",
+}
 
 
 def probe(item):
@@ -26,7 +31,7 @@ def probe(item):
             good = int(response.status == 200)
     except Exception:
         pass
-    return f'site_probe_success{{target="{name}"}} {good}\nsite_probe_duration_seconds{{target="{name}"}} {time.monotonic()-start}\n'
+    return f'site_probe_success{{target="{name}"}} {good}\nsite_probe_duration_seconds{{target="{name}"}} {time.monotonic() - start}\n'
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -65,9 +70,23 @@ def backup_loop():
         newest = max((p.stat().st_mtime for p in Path("/backups").glob("site-*.json")), default=0)
         if time.time() - newest >= interval:
             try:
-                subprocess.run([sys.executable, "/app/backup-site.py", "--source", "/data/site.db", "--directory", "/backups"], check=True, timeout=180)
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "/app/backup-site.py",
+                        "--source",
+                        "/data/site.db",
+                        "--directory",
+                        "/backups",
+                    ],
+                    check=True,
+                    timeout=180,
+                )
             except Exception as error:
-                print(json.dumps({"event": "backup_failed", "error": type(error).__name__}), flush=True)
+                print(
+                    json.dumps({"event": "backup_failed", "error": type(error).__name__}),
+                    flush=True,
+                )
         time.sleep(60)
 
 
