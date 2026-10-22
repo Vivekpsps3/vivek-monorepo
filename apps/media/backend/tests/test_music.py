@@ -7,35 +7,54 @@ def _scores(payload):
     artist = payload["rating"]
     albums = []
     for album in payload["music"]["albums"]:
-        albums.append((album["title"], album["rating"], [(track["title"], track["rating"]) for track in album["tracks"]]))
+        albums.append(
+            (
+                album["title"],
+                album["rating"],
+                [(track["title"], track["rating"]) for track in album["tracks"]],
+            )
+        )
     return artist, albums
 
 
 def test_scores_do_not_cascade(client, tmp_path):
-    created = client.post("/api/library", json={
-        "kind": "artist",
-        "title": "Snail Mail",
-        "status": "want",
-        "rating": 8,
-        "review": "The artist.",
-        "summary": "One line.",
-    })
+    created = client.post(
+        "/api/library",
+        json={
+            "kind": "artist",
+            "title": "Snail Mail",
+            "status": "want",
+            "rating": 8,
+            "review": "The artist.",
+            "summary": "One line.",
+        },
+    )
     assert created.status_code == 200
     artist = created.json()
     assert artist["music"]["albums"] == []
     opinion = (artist["rating"], artist["review"], artist["summary"])
 
-    with_album = client.post(f"/api/entries/{artist['id']}/albums", json={"title": "Lush", "year": 2018})
+    with_album = client.post(
+        f"/api/entries/{artist['id']}/albums", json={"title": "Lush", "year": 2018}
+    )
     assert with_album.status_code == 200
-    assert (with_album.json()["rating"], with_album.json()["review"], with_album.json()["summary"]) == opinion
+    assert (
+        with_album.json()["rating"],
+        with_album.json()["review"],
+        with_album.json()["summary"],
+    ) == opinion
     album = with_album.json()["music"]["albums"][0]
     assert album["rating"] is None
 
-    with_songs = client.post(f"/api/entries/{artist['id']}/albums/{album['id']}/tracks", json={"title": "Pristine"})
+    with_songs = client.post(
+        f"/api/entries/{artist['id']}/albums/{album['id']}/tracks", json={"title": "Pristine"}
+    )
     assert with_songs.status_code == 200
     song = with_songs.json()["music"]["albums"][0]["tracks"][0]
     assert song["rating"] is None
-    client.post(f"/api/entries/{artist['id']}/albums/{album['id']}/tracks", json={"title": "Heat Wave"})
+    client.post(
+        f"/api/entries/{artist['id']}/albums/{album['id']}/tracks", json={"title": "Heat Wave"}
+    )
 
     rated_album = client.post(
         f"/api/entries/{artist['id']}/albums/{album['id']}/rating",
@@ -44,7 +63,10 @@ def test_scores_do_not_cascade(client, tmp_path):
     assert _scores(rated_album)[0] == 8
     assert rated_album["review"] == "The artist."
     assert rated_album["music"]["albums"][0]["rating"] == 6
-    assert [track["rating"] for track in rated_album["music"]["albums"][0]["tracks"]] == [None, None]
+    assert [track["rating"] for track in rated_album["music"]["albums"][0]["tracks"]] == [
+        None,
+        None,
+    ]
 
     song_id = rated_album["music"]["albums"][0]["tracks"][0]["id"]
     rated_song = client.post(
@@ -99,30 +121,38 @@ def test_follow_loads_albums_and_songs_without_scores(client, monkeypatch):
         assert artist_id == "artist-1"
         return {
             "partial": False,
-            "albums": [{
-                "source_id": "rg-1",
-                "title": "Valentine",
-                "year": 2021,
-                "artwork_url": "https://coverartarchive.org/release-group/rg-1/front-250",
-                "tracks": [
-                    {"source_id": "rec-1", "title": "Valentine", "position": 1},
-                    {"source_id": "rec-2", "title": "Ben Franklin", "position": 2},
-                ],
-            }],
+            "albums": [
+                {
+                    "source_id": "rg-1",
+                    "title": "Valentine",
+                    "year": 2021,
+                    "artwork_url": "https://coverartarchive.org/release-group/rg-1/front-250",
+                    "tracks": [
+                        {"source_id": "rec-1", "title": "Valentine", "position": 1},
+                        {"source_id": "rec-2", "title": "Ben Franklin", "position": 2},
+                    ],
+                }
+            ],
         }
 
     monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", fake)
-    followed = client.post("/api/library/from-provider", json={
-        "source": "musicbrainz",
-        "source_id": "artist-1",
-        "kind": "artist",
-        "title": "Snail Mail",
-        "rating": 7,
-    })
+    followed = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": "artist-1",
+            "kind": "artist",
+            "title": "Snail Mail",
+            "rating": 7,
+        },
+    )
     assert followed.status_code == 200
     body = followed.json()
     assert body["already_saved"] is False
-    assert _scores(body) == (7, [("Valentine", None, [("Valentine", None), ("Ben Franklin", None)])])
+    assert _scores(body) == (
+        7,
+        [("Valentine", None, [("Valentine", None), ("Ben Franklin", None)])],
+    )
 
     again = client.get(f"/api/entries/{body['id']}").json()
     assert _scores(again) == _scores(body)
@@ -155,36 +185,73 @@ def test_missing_songs_resume_on_the_next_view(client, monkeypatch):
 
     monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
     monkeypatch.setattr("apps.media.backend.services.providers.release_group_tracks", tracks)
-    followed = client.post("/api/library/from-provider", json={
-        "source": "musicbrainz",
-        "source_id": "artist-1",
-        "kind": "artist",
-        "title": "Snail Mail",
-    })
+    followed = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": "artist-1",
+            "kind": "artist",
+            "title": "Snail Mail",
+        },
+    )
     assert followed.status_code == 200, followed.text
     first = followed.json()["music"]
     assert first["partial"] is True
-    assert [album["title"] for album in first["albums"] if album["tracks"]] == [f"Album {number}" for number in range(1, 9)]
+    assert [album["title"] for album in first["albums"] if album["tracks"]] == [
+        f"Album {number}" for number in range(1, 9)
+    ]
     assert len(lookups) == 8
 
     again = client.get(f"/api/entries/{followed.json()['id']}").json()["music"]
     assert again["partial"] is False
-    assert [album["title"] for album in again["albums"] if album["tracks"]] == [f"Album {number}" for number in range(1, 11)]
+    assert [album["title"] for album in again["albums"] if album["tracks"]] == [
+        f"Album {number}" for number in range(1, 11)
+    ]
     assert lookups == [f"rg-{number}" for number in range(1, 11)]
+
+
+def test_manual_album_artwork_url_must_be_http(client):
+    created = client.post(
+        "/api/library", json={"kind": "artist", "title": "Synthetic Band", "status": "want"}
+    )
+    assert created.status_code == 200, created.text
+    artist_id = created.json()["id"]
+    rejected = client.post(
+        f"/api/entries/{artist_id}/albums",
+        json={"title": "Nope", "artwork_url": "javascript:alert(1)"},
+    )
+    assert rejected.status_code == 422, rejected.text
+    accepted = client.post(
+        f"/api/entries/{artist_id}/albums",
+        json={"title": "Yes", "artwork_url": "https://example.invalid/cover.png"},
+    )
+    assert accepted.status_code == 200, accepted.text
+    album = accepted.json()["music"]["albums"][0]
+    assert album["artwork_url"] == "https://example.invalid/cover.png"
 
 
 def test_disc_two_keeps_its_place_in_the_song_order():
     from apps.media.backend.services.providers import _tracks_from_release
 
-    tracks = _tracks_from_release({
-        "media": [
-            {"tracks": [
-                {"title": "One", "position": 1, "recording": {"id": "a"}},
-                {"title": "Two", "position": 2, "recording": {"id": "b"}},
-            ]},
-            {"tracks": [
-                {"title": "Three", "position": 1, "recording": {"id": "c"}},
-            ]},
-        ]
-    })
-    assert [(row["title"], row["position"]) for row in tracks] == [("One", 1), ("Two", 2), ("Three", 3)]
+    tracks = _tracks_from_release(
+        {
+            "media": [
+                {
+                    "tracks": [
+                        {"title": "One", "position": 1, "recording": {"id": "a"}},
+                        {"title": "Two", "position": 2, "recording": {"id": "b"}},
+                    ]
+                },
+                {
+                    "tracks": [
+                        {"title": "Three", "position": 1, "recording": {"id": "c"}},
+                    ]
+                },
+            ]
+        }
+    )
+    assert [(row["title"], row["position"]) for row in tracks] == [
+        ("One", 1),
+        ("Two", 2),
+        ("Three", 3),
+    ]

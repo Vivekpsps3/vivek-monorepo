@@ -6,7 +6,6 @@ import time
 from datetime import date, datetime, timezone
 
 from fastapi import HTTPException
-
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 

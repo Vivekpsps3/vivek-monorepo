@@ -133,6 +133,42 @@ test('navigation does not wait for a slow progress save', async ({ page }) => {
   releaseSave();
 });
 
+test('a failed progress draft does not overwrite a newer save', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await page.goto(`/media/#/item/${dune.id}`);
+  const progress = page.getByLabel('Progress', { exact: true });
+  await expect(progress).toBeVisible();
+  await page.route('**/api/entries/**', route => {
+    if (route.request().method() === 'PATCH') {
+      route.abort('failed');
+      return;
+    }
+    route.continue();
+  });
+  await progress.fill('40');
+  await page.getByLabel('Unit').selectOption('page');
+  await progress.press('Enter');
+  await expect(page.locator('#progress-status')).toContainText("Progress wasn't saved");
+  await expect.poll(() => page.evaluate(id => localStorage.getItem(`media-progress-draft:${id}`), dune.id)).toContain('40');
+
+  const newer = await request.patch(`/media/api/entries/${dune.id}`, {
+    data: { progress_value: 200, progress_unit: 'page' },
+  });
+  expect(newer.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('200');
+  const choice = page.locator('#progress-draft');
+  await expect(choice).toContainText("Progress wasn't saved (p. 40).");
+  await expect(choice.getByRole('button', { name: 'Restore' })).toBeVisible();
+  await expect(choice.getByRole('button', { name: 'Discard' })).toBeVisible();
+
+  await page.getByRole('navigation', { name: 'Media' }).getByRole('link', { name: 'Calendar', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/20\d\d/);
+  const after = await request.get(`/media/api/entries/${dune.id}`);
+  expect((await after.json()).progress_value).toBe(200);
+});
+
 test('blurring an unchanged note does not overwrite a newer save', async ({ page, request }) => {
   const listed = await request.get('/media/api/library');
   const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');

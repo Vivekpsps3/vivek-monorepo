@@ -30,11 +30,9 @@ test.describe('phase 0 screenshot matrix', () => {
       await page.setViewportSize({ width, height: 900 });
       for (const theme of ['light', 'dark'] as const) {
         for (const [url, name] of shots) {
+          await page.goto('/media/');
+          await page.evaluate(value => localStorage.setItem('media-theme', value), theme);
           await page.goto(url);
-          await page.evaluate(value => {
-            document.documentElement.setAttribute('data-theme', value);
-            document.documentElement.setAttribute('data-theme-choice', value);
-          }, theme);
           if (name === 't02-progress' || name === 't09-contrast') {
             await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
           }

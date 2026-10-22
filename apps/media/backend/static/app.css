@@ -392,8 +392,13 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 .status-mark.is-on, .flag.is-on, .status-mark:has(input:checked) { background: var(--text); color: var(--bg); }
 .status-mark input { position: absolute; opacity: 0; pointer-events: none; }
 .opinion textarea {
-  width: 100%; border: 0; background: transparent; color: inherit; font: inherit;
-  border-bottom: 1px solid var(--border-subtle);
+  width: 100%;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: inherit;
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
 }
 .sort-field {
   display: flex;
@@ -447,6 +452,21 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
   font-size: var(--text-sm);
 }
 .progress-status.is-error { color: var(--danger); }
+.progress-draft {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.progress-draft button {
+  margin: 0 0 0 var(--space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .exp-list { list-style: none; margin: var(--space-3) 0; padding: 0; }
 .exp { display: flex; gap: var(--space-3); align-items: center; color: var(--text-secondary); }
 .overview { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }

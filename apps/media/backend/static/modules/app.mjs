@@ -53,6 +53,7 @@ function route() {
 function setNotice(message, kind = "status") {
   notice.textContent = message || "";
   notice.dataset.kind = kind;
+  notice.setAttribute("role", kind === "alert" ? "alert" : "status");
 }
 
 function fail(error) {
@@ -442,7 +443,6 @@ async function viewItem(id, ticket, forcedSeason = null) {
     note.dataset.saved = entry.review ?? "";
     note.dataset.reviewBase = entry.review_updated_at ?? "";
   }
-  if (readProgressDraft(entry.id)) setProgressStatus("Progress wasn't saved", true);
   loadWeb(entry, ticket);
 }
 
@@ -450,19 +450,29 @@ function progressField(entry) {
   const units = progressUnits(entry.kind);
   const serverUnit = units.some(item => item.value === entry.progress_unit) ? entry.progress_unit : units[0].value;
   const serverValue = entry.progress_value ?? "";
-  const draft = readProgressDraft(entry.id);
-  const unit = draft && units.some(item => item.value === draft.unit) ? draft.unit : serverUnit;
-  const value = draft ? draft.value : serverValue;
-  const preview = progressPreview(value, unit);
+  const preview = progressPreview(serverValue, serverUnit);
   return `<div class="progress-field">
     <label for="progress">Progress</label>
     <div class="progress-controls">
-      <input id="progress" name="progress_value" type="text" inputmode="decimal" autocomplete="off" data-progress="${entry.id}" data-saved="${esc(`${serverValue}|${serverUnit}`)}" value="${esc(value)}" aria-invalid="false" aria-describedby="progress-help progress-status">
-      <select id="progress-unit" aria-label="Unit" data-progress-unit="${entry.id}">${units.map(item => `<option value="${esc(item.value)}"${item.value === unit ? " selected" : ""}>${esc(item.label)}</option>`).join("")}</select>
+      <input id="progress" name="progress_value" type="text" inputmode="decimal" autocomplete="off" data-progress="${entry.id}" data-saved="${esc(`${serverValue}|${serverUnit}`)}" value="${esc(serverValue)}" aria-invalid="false" aria-describedby="progress-help progress-status">
+      <select id="progress-unit" aria-label="Unit" data-progress-unit="${entry.id}">${units.map(item => `<option value="${esc(item.value)}"${item.value === serverUnit ? " selected" : ""}>${esc(item.label)}</option>`).join("")}</select>
     </div>
     <p id="progress-help" class="meta">${esc(preview)}</p>
     <p id="progress-status" class="progress-status" role="status"></p>
+    ${progressDraftChoice(entry, serverValue, serverUnit)}
   </div>`;
+}
+
+function progressDraftChoice(entry, serverValue, serverUnit) {
+  const draft = readProgressDraft(entry.id);
+  if (!draft) return "";
+  const serverKey = `${serverValue}|${serverUnit}`;
+  if (`${draft.value}|${draft.unit}` === serverKey) {
+    clearProgressDraft(entry.id);
+    return "";
+  }
+  const preview = progressPreview(draft.value, draft.unit) || draft.value;
+  return `<p id="progress-draft" class="progress-draft">Progress wasn't saved (${esc(preview)}). <button type="button" data-restore-progress="${entry.id}">Restore</button> <button type="button" data-discard-progress="${entry.id}">Discard</button></p>`;
 }
 
 function externalRatings(rows) {
@@ -650,15 +660,23 @@ function readProgressDraft(id) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.value !== "string" || typeof parsed.unit !== "string") return null;
-    return parsed;
+    return {
+      value: parsed.value,
+      unit: parsed.unit,
+      base: typeof parsed.base === "string" ? parsed.base : "",
+    };
   } catch {
     return null;
   }
 }
 
-function writeProgressDraft(id, value, unit) {
+function writeProgressDraft(id, value, unit, base) {
   try {
-    localStorage.setItem(progressDraftKey(id), JSON.stringify({ value, unit }));
+    localStorage.setItem(progressDraftKey(id), JSON.stringify({
+      value,
+      unit,
+      base: base ?? "",
+    }));
   } catch { /* private mode */ }
 }
 
@@ -719,7 +737,8 @@ function settleLibraryHash() {
 }
 
 async function render() {
-  saveProgress();
+  const progress = document.querySelector("#progress");
+  if (progress instanceof HTMLInputElement && progress.dataset.dirty === "true") saveProgress();
   searchLoads.start("");
   const ticket = routeLoads.start();
   const libraryNotice = settleLibraryHash();
@@ -920,6 +939,29 @@ document.addEventListener("click", async event => {
       box.value = draft.text;
       box.focus();
     }
+    return;
+  }
+  const restoreProgress = target.closest("[data-restore-progress]");
+  if (restoreProgress) {
+    keepButtonClick(event, target);
+    const draft = readProgressDraft(restoreProgress.getAttribute("data-restore-progress"));
+    const input = document.querySelector("#progress");
+    const unit = document.querySelector("#progress-unit");
+    if (draft && input instanceof HTMLInputElement) {
+      input.value = draft.value;
+      delete input.dataset.dirty;
+      if (unit instanceof HTMLSelectElement && draft.unit) unit.value = draft.unit;
+      const help = document.querySelector("#progress-help");
+      if (help) help.textContent = progressPreview(input.value, unit instanceof HTMLSelectElement ? unit.value : "");
+      input.focus();
+    }
+    return;
+  }
+  const discardProgress = target.closest("[data-discard-progress]");
+  if (discardProgress) {
+    keepButtonClick(event, target);
+    clearProgressDraft(discardProgress.getAttribute("data-discard-progress"));
+    document.querySelector("#progress-draft")?.remove();
     return;
   }
   const button = target.closest("[data-action]");
@@ -1123,7 +1165,7 @@ let searchTimer = 0;
 document.addEventListener("focusout", async event => {
   const box = event.target;
   if (box instanceof HTMLInputElement && box.dataset.progress) {
-    await saveProgress();
+    if (box.dataset.dirty === "true") await saveProgress();
     return;
   }
   if (!(box instanceof HTMLTextAreaElement) || !box.dataset.review) return;
@@ -1155,6 +1197,7 @@ document.addEventListener("input", event => {
     writeDraft(target.dataset.review, target.value, target.dataset.reviewBase ?? "");
   }
   if (target instanceof HTMLInputElement && target.id === "progress") {
+    target.dataset.dirty = "true";
     const help = document.querySelector("#progress-help");
     const unit = document.querySelector("#progress-unit");
     if (help) help.textContent = progressPreview(target.value, unit instanceof HTMLSelectElement ? unit.value : "");
@@ -1258,21 +1301,25 @@ function setProgressStatus(message, failed = false) {
 
 function progressProblem(value, unit) {
   if (value === "") return "";
-  if (!/^\d+(\.\d+)?$/.test(value)) return "Progress must be a number.";
+  if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) return "Progress must be a number.";
+  if (Number(value) < 0) return "Progress must be zero or more.";
   if (unit === "percent" && Number(value) > 100) return "Percent progress is between 0 and 100.";
   return "";
 }
 
 let progressFailure = "";
 
-function failProgress(payload, message) {
-  writeProgressDraft(payload.id, payload.value, payload.unit);
-  progressFailure = "Progress wasn't saved";
+function failProgress(payload, message, keepDraft = true) {
+  if (keepDraft) {
+    writeProgressDraft(payload.id, payload.value, payload.unit, payload.input?.dataset.saved || "");
+  }
   if (payload.input?.isConnected) {
+    progressFailure = "Progress wasn't saved";
     setProgressStatus(message || progressFailure, true);
     return;
   }
-  setNotice(progressFailure, "alert");
+  setNotice("Progress wasn't saved", "alert");
+  progressFailure = "";
 }
 
 function saveProgress() {
@@ -1290,7 +1337,7 @@ async function commitProgress(payload) {
   if (payload.input.isConnected && payload.input.dataset.saved === payload.key) return;
   const problem = progressProblem(payload.value, payload.unit);
   if (problem) {
-    failProgress(payload, problem);
+    failProgress(payload, problem, false);
     return;
   }
   try {
@@ -1307,6 +1354,7 @@ async function commitProgress(payload) {
     progressFailure = "";
     if (payload.input.isConnected) {
       payload.input.dataset.saved = payload.key;
+      delete payload.input.dataset.dirty;
       setProgressStatus("Saved");
     }
   } catch (error) {
@@ -1315,7 +1363,8 @@ async function commitProgress(payload) {
       return;
     }
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
-    failProgress(payload, timedOut ? "Progress wasn't saved" : (error?.message || "Progress wasn't saved"));
+    const unreachable = timedOut || !error?.status;
+    failProgress(payload, unreachable ? "Progress wasn't saved" : (error?.message || "Progress wasn't saved"));
   }
 }
 

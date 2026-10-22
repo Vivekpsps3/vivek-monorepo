@@ -70,8 +70,8 @@ def main() -> int:
     for app_root in app_roots:
         for source in source_files(app_root):
             source_app = app_name(source)
-            # Browser harnesses may wire the site redirects. They are not shipped.
-            if "e2e" in source.relative_to(ROOT).parts:
+            # The Media browser harness wires site redirects. It is not shipped.
+            if source.is_relative_to(ROOT / "apps/media/e2e"):
                 continue
             for match in IMPORT_RE.finditer(source.read_text(encoding="utf-8", errors="replace")):
                 module = match.group(1) or match.group(2)
