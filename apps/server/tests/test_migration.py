@@ -65,3 +65,23 @@ def test_migration_rejects_nonempty_unknown_tables(tmp_path):
     with pytest.raises(RuntimeError, match="Unrecognized nonempty"):
         migrate(tmp_path / "combined.db", sources)
     assert not (tmp_path / "combined.db").exists()
+
+
+def test_latest_backup_replaces_previous_only_after_verification(tmp_path, monkeypatch):
+    database = tmp_path / "site.db"
+    migrate(database)
+    spec = importlib.util.spec_from_file_location("backup_retention", Path(__file__).resolve().parents[3] / "scripts/backup-site.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    directory = tmp_path / "backups"
+    first = tool.backup(database, directory)
+    second = tool.backup(database, directory)
+    assert not first.exists()
+    assert not first.with_suffix(".json").exists()
+    assert second.with_suffix(".json").is_file()
+    assert tool.verify(second)["schema"] == 1
+    monkeypatch.setattr(tool, "verify", lambda _: (_ for _ in ()).throw(RuntimeError("verification failed")))
+    with pytest.raises(RuntimeError, match="verification failed"):
+        tool.backup(database, directory)
+    assert list(directory.glob("*.db")) == [second]
+    assert second.with_suffix(".json").is_file()

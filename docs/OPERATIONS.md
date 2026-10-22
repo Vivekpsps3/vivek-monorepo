@@ -106,10 +106,9 @@ Docker restart policies restore containers after reboot without source files.
 The old `_control` finance-tracker stack must stay stopped; do not start its old
 containers against retired databases or compete for :8085.
 
-Legacy cutover databases and pre-existing local backups are temporarily retained
-under `/home/vivek/Deployments/personal-site/recovery/`, separate from active Docker
-volumes. Review removal after the original recovery window (2026-10-29) and restore
-validation. This directory is recovery material, not an application dependency.
+By explicit user choice, legacy recovery copies and old backups are removed.
+Only the latest verified unified backup is retained; there is no historical
+point-in-time recovery window. Secrets remain outside Git in `personal-site/.env`.
 
 ## First database consolidation
 
@@ -131,8 +130,12 @@ backup material; do not treat old database files as active production databases.
 Maintenance checks once a minute and backs up when the most recent verified
 backup is an hour old. It uses SQLite's online backup API, checks integrity and
 foreign keys, restores into a separate verification copy, and atomically publishes
-a private snapshot with a checksum/verification manifest. It keeps 30 days and at
-least seven snapshots. Missing source databases fail rather than silently skip.
+a private snapshot with a checksum/verification manifest. `SITE_BACKUP_KEEP: "1"`
+in Compose retains only the latest verified snapshot, by user choice. Scheduled
+and manual jobs lock the backup directory to serialize publication and pruning.
+Older snapshots are removed only after the replacement passes verification and
+a separate restore check. Failed backups preserve the preceding snapshot. Missing
+source databases fail rather than silently skip.
 Backup files and manifests live in the backup volume; no separate status file is
 needed. Logs use the bounded Docker driver.
 

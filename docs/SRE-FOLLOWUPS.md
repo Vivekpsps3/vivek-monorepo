@@ -43,11 +43,9 @@ application authorization and a single private data mount are the boundaries.
   Implement reviewed numbered migrations and compatibility windows for future versions;
   do not use create_all or historical Finance Alembic against the unified production DB.
 
-- [ ] **Retire transition recovery copies after the recovery window.** The stopped
-  legacy containers and original database files are retained as temporary rollback
-  material, not active state. After a verified restore from the legacy archive,
-  review their removal on or after 2026-10-29. The unified database and backup
-  volumes are the only ongoing application persistence.
+- [x] **Recovery-copy retention decision.** User explicitly requested deletion of
+  old backups and legacy recovery material. Only the latest verified unified
+  snapshot is kept; historical point-in-time recovery is intentionally unavailable.
 
 ## Traceability to the 80-point review
 
@@ -55,7 +53,7 @@ application authorization and a single private data mount are the boundaries.
 | --- | --- |
 | 1–2 shared mounts / file access | Superseded by one service and one private owner-readable database; no cross-service data mounts remain. Runner boundary remains deferred. |
 | 3–5 coverage / verification / schedule | One database, verified backup plus separate restore check, hourly scheduling, bounded retention, hard failure on missing state. |
-| 6–9 off-host / consistency / recovery material | Coordinated all-domain migration and restore documentation; off-host and full-host drills remain explicit TODOs. Legacy material retained privately. |
+| 6–9 off-host / consistency / recovery material | Coordinated all-domain migration and restore documentation; off-host and full-host drills remain explicit TODOs. Historical recovery copies removed by user choice. |
 | 10 code and state colocated | Only Docker-managed database and backup volumes persist; the tracked Compose file is the deployment definition. |
 | 11–12 sensitive build contexts | Root and domain Docker exclusions; assembled image checked for local DBs/env/venvs. |
 | 13–18 release reproducibility | One tracked Compose/vhost source, hashed runtime lock, pinned bases, and CI-built artifact promotion; no installed controller or copied configs. |

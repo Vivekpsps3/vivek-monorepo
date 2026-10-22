@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Private, atomic online SQLite backups with integrity checks and bounded retention."""
 import argparse
+import fcntl
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -27,7 +28,20 @@ def verify(path):
     return {"schema": version[0], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def backup(source, directory, retention_days=30):
+def backup(source, directory, keep=1):
+    if keep < 1:
+        raise ValueError("At least one verified backup must be retained")
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Lock the directory inode: scheduled and manual jobs share no extra state file.
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        return _backup_locked(source, directory, keep)
+    finally:
+        os.close(descriptor)
+
+
+def _backup_locked(source, directory, keep):
     if not source.is_file():
         raise RuntimeError("Source database missing; refusing to report backup success")
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -55,13 +69,11 @@ def backup(source, directory, retention_days=30):
         with manifest.open("x") as file:
             os.chmod(manifest, 0o600)
             json.dump({**result, "created_at": datetime.now(timezone.utc).isoformat(), "restore_checked": True}, file)
-    # Only expire this tool's own files, after a new verified backup exists; retain at least seven.
-    snapshots = sorted(directory.glob("site-????????T??????-????????.db"), key=lambda p: p.stat().st_mtime, reverse=True)
-    cutoff = time.time() - retention_days * 86400
-    for old in snapshots[7:]:
-        if old.stat().st_mtime < cutoff:
-            old.unlink()
-            old.with_suffix(".json").unlink(missing_ok=True)
+    # Publish and restore-check the replacement before deleting any older snapshot.
+    snapshots = sorted(directory.glob("site-????????T??????-????????.db"), key=lambda p: p.stat().st_mtime_ns, reverse=True)
+    for old in snapshots[keep:]:
+        old.unlink()
+        old.with_suffix(".json").unlink(missing_ok=True)
     print(json.dumps({"backup": str(final), "restore_checked": True, **result}))
     return final
 
@@ -71,11 +83,12 @@ def main():
     parser.add_argument("--source", type=Path)
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--verify", type=Path)
+    parser.add_argument("--keep", type=int, default=int(os.environ.get("SITE_BACKUP_KEEP", "1")))
     args = parser.parse_args()
     if args.verify:
         print(json.dumps(verify(args.verify)))
     elif args.source and args.directory:
-        backup(args.source, args.directory)
+        backup(args.source, args.directory, args.keep)
     else:
         parser.error("Provide --verify, or --source and --directory")
 
