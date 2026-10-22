@@ -18,11 +18,11 @@ def main() -> None:
     os.environ["TRAVEL_DATABASE_URL"] = f"sqlite:///{database}"
     os.environ.pop("FLIGHTAWARE_API_KEY", None)
 
+    from apps.travel.backend import database
     from apps.travel.backend.app import create_app
     from apps.travel.backend.database import init_db
     from apps.travel.backend.deps import AuthResult, Principal, get_geocoder
     from apps.travel.backend.models import Base
-    from apps.travel.backend import database
 
     init_db()
     travel = create_app()
@@ -48,7 +48,12 @@ def main() -> None:
 
     import uvicorn
 
-    uvicorn.run(parent, host="127.0.0.1", port=int(os.environ.get("TRAVEL_E2E_PORT", "8098")), log_level="warning")
+    uvicorn.run(
+        parent,
+        host="127.0.0.1",
+        port=int(os.environ.get("TRAVEL_E2E_PORT", "8098")),
+        log_level="warning",
+    )
 
 
 if __name__ == "__main__":
