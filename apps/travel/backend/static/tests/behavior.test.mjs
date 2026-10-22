@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { balancePhrase, daysText, nightsAwayText, nightsText, parkingChipParts, spanText } from "../modules/labels.mjs";
@@ -86,6 +87,12 @@ test("route errors are a heading panel and not an alert", () => {
   const lost = errorPanel(routeProblem({ name: "not-found" }));
   assert.match(lost, /Page not found/);
   assert.match(lost, /Calendar/);
+});
+
+test("a route is marked busy before its request returns", () => {
+  const router = readFileSync(new URL("../modules/router.mjs", import.meta.url), "utf8");
+  assert.match(router, /root\.setAttribute\("aria-busy", "true"\)/);
+  assert.match(router, /data-seq/);
 });
 
 test("each route has a skeleton that marks itself hidden from assistive tech", () => {

@@ -65,6 +65,7 @@ def test_fmt_days_trims_to_two_places():
     assert fmt_days(Decimal("5")) == "5"
     assert fmt_days(Decimal("0.2500")) == "0.25"
     assert fmt_days(Decimal("-1.4600")) == "-1.46"
+    assert fmt_days(Decimal("1.239")) == "1.24"
 
 
 def test_blank_trip_name_is_a_validation_error_not_a_server_error(client):

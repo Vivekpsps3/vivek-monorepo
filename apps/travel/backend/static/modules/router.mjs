@@ -92,6 +92,11 @@ export function setTitle(text) {
 
 export async function render() {
   const seq = ++state.seq;
+  const root = document.querySelector("#app");
+  if (root) {
+    root.setAttribute("aria-busy", "true");
+    root.setAttribute("data-seq", String(seq));
+  }
   const path = parseHash();
   if (path.name === "not-found") {
     setTitle("Not found");
