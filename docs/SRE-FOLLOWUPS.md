@@ -22,9 +22,11 @@ application authorization and a single private data mount are the boundaries.
   No HA or independent power/network path was introduced.
 - [x] **Enforce CSP.** The application sends an enforced per-app policy (finance
   is the strictest), Trusted Types on the finance shell, and a `/csp-report`
-  sink. Map tiles and provider artwork hosts are allowlisted. Same-origin
-  framing stays enabled only for finance because `/embed` is the ops iframe.
-  Path prefixes are still not an origin boundary; splitting the finance host
+  sink. Map tiles and provider artwork hosts are allowlisted, including the
+  archive.org hosts that Open Library and Cover Art Archive redirect through.
+  Every document uses `frame-ancestors 'none'`: `/embed` is a compact route,
+  and nothing in this repo frames it. Path prefixes are still not an origin
+  boundary; splitting the finance host
   needs DNS and edge proxy changes recorded in [SECURITY_MODEL.md](./SECURITY_MODEL.md#content-security-policy-and-origin-isolation).
 - [ ] **Provider-wide budgets and capacity exercises.** Existing provider timeouts
   and budget helpers remain. Test saturation, quota exhaustion, disconnects, and

@@ -9,12 +9,15 @@ from fastapi.testclient import TestClient
 from starlette.responses import Response
 
 from apps.server.security_headers import (
+    SHELL_HEADER,
     SecurityHeadersMiddleware,
+    allow_report_log,
     classify,
     content_security_policy,
     csp_report,
     directives,
     inject_nonce,
+    reset_report_logs,
     validate_response_headers,
 )
 
@@ -29,11 +32,19 @@ def _app() -> FastAPI:
 
     @application.get("/")
     def portfolio():
-        return HTMLResponse("<!doctype html><script>var site = 1;</script><app-root></app-root>")
+        return HTMLResponse(
+            "<!doctype html><script>var site = 1;</script><app-root></app-root>",
+            headers={SHELL_HEADER: "1"},
+        )
 
     @application.get("/finance/")
     def finance():
-        return HTMLResponse(FINANCE_PAGE, headers={"Cache-Control": "no-store"})
+        return HTMLResponse(FINANCE_PAGE, headers={"Cache-Control": "no-store", SHELL_HEADER: "1"})
+
+    @application.get("/reflected")
+    def reflected(request: Request):
+        snippet = request.query_params.get("q", "hi")
+        return HTMLResponse(f"<!doctype html><p>{snippet}</p><script>var reflected = 1;</script>")
 
     @application.get("/finance/main.js")
     def finance_script():
@@ -41,13 +52,16 @@ def _app() -> FastAPI:
 
     @application.get("/travel/")
     def travel():
-        return HTMLResponse(PLAIN_PAGE, headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(PLAIN_PAGE, headers={"Cache-Control": "no-cache", SHELL_HEADER: "1"})
 
     media = FastAPI()
 
     @media.get("/")
     def media_index():
-        return HTMLResponse("<!doctype html><script>var media = 1;</script>", headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(
+            "<!doctype html><script>var media = 1;</script>",
+            headers={"Cache-Control": "no-cache", SHELL_HEADER: "1"},
+        )
 
     application.mount("/media", media)
 
@@ -122,7 +136,14 @@ def test_finance_policy_is_stricter_than_travel_and_media():
     assert "tile.openstreetmap.org" in travel["img-src"]
     assert "image.tmdb.org" not in travel["img-src"]
     assert "image.tmdb.org" in media["img-src"]
+    assert "https://archive.org" in media["img-src"].split()
+    assert "https://*.archive.org" in media["img-src"].split()
+    assert "archive.org" not in finance["img-src"]
+    assert "archive.org" not in travel["img-src"]
     assert "tile.openstreetmap.org" not in media["img-src"]
+    assert finance["frame-ancestors"] == "'none'"
+    assert finance["trusted-types"] == ""
+    assert "angular#unsafe-bypass" not in content_security_policy("finance", "n")
     assert "require-trusted-types-for" in finance
     assert "require-trusted-types-for" not in portfolio
     assert "require-trusted-types-for" not in travel
@@ -176,6 +197,16 @@ def test_html_nonces_are_unique_and_documents_are_not_stored(client):
     assert travel.headers["cache-control"] == "no-store"
     assert '<link rel="stylesheet" href="/app.css">' in travel.text
     assert re.search(r'<link nonce="[^"]+" rel="modulepreload"', travel.text)
+    assert "x-csp-shell" not in {name.lower() for name in first.headers}
+
+
+def test_reflected_html_does_not_receive_a_nonce(client):
+    response = client.get("/reflected", params={"q": "<script>alert(1)</script>"})
+    assert response.status_code == 200
+    validate_response_headers(response.headers, "/reflected", response.content)
+    assert 'nonce="' not in response.text
+    assert "<script>var reflected = 1;</script>" in response.text
+    assert "x-csp-shell" not in {name.lower() for name in response.headers}
 
 
 def test_csp_report_accepts_legacy_and_reporting_api_bodies_without_echoing_samples(client, caplog):
@@ -206,10 +237,70 @@ def test_csp_report_accepts_legacy_and_reporting_api_bodies_without_echoing_samp
     assert "should-not-be-logged" not in caplog.text
     assert "token=secret" not in caplog.text
     assert "user=secret" not in caplog.text
-    assert "directive=script-src" in caplog.text
-    assert "directive=img-src" in caplog.text
-    assert "app=travel" in caplog.text
-    assert "app=finance" in caplog.text
+    events = [json.loads(record.message) for record in caplog.records if record.message.startswith("{")]
+    assert {(event["app"], event["directive"]) for event in events} >= {("travel", "script-src"), ("finance", "img-src")}
+    assert all(" " not in event["directive"] for event in events)
     validate_response_headers(legacy_response.headers, "/csp-report")
     oversized = client.post("/csp-report", content=b"x" * 16385, headers={"content-type": "application/csp-report"})
     assert oversized.status_code == 413
+
+
+def test_csp_report_log_is_json_and_stops_a_chunked_body_at_the_cap(client, caplog):
+    forged = "https://evil.example/a app=finance document=https://attacker.example"
+    payload = {
+        "csp-report": {
+            "document-uri": "https://testserver/travel/",
+            "violated-directive": "img-src",
+            "blocked-uri": forged,
+            "script-sample": "vault-passphrase-hunter2",
+        }
+    }
+    with caplog.at_level("INFO", logger="site.csp"):
+        response = client.post("/csp-report", content=json.dumps(payload), headers={"content-type": "application/csp-report"})
+    assert response.status_code == 204
+    event = json.loads(caplog.records[-1].message)
+    assert event["event"] == "csp_report"
+    assert event["app"] == "travel"
+    assert event["directive"] == "img-src"
+    assert event["blocked"] == forged
+    assert "script-sample" not in event
+    assert "vault-passphrase-hunter2" not in caplog.text
+
+    def chunks():
+        yield b"y" * 10000
+        yield b"z" * 8000
+
+    streamed = client.post("/csp-report", content=chunks(), headers={"content-type": "application/csp-report"})
+    assert streamed.status_code == 413
+
+
+def test_report_body_stops_at_the_cap_while_streaming():
+    import asyncio
+
+    from apps.server.security_headers import _read_report_body
+
+    class Chunked:
+        headers: dict[str, str] = {}
+
+        async def stream(self):
+            yield b"a" * 10000
+            yield b"b" * 8000
+
+    class Small:
+        headers: dict[str, str] = {}
+
+        async def stream(self):
+            yield b'{"ok":true}'
+
+    assert asyncio.run(_read_report_body(Chunked())) is None
+    assert asyncio.run(_read_report_body(Small())) == b'{"ok":true}'
+
+
+def test_report_log_budget_is_per_address():
+    reset_report_logs()
+    try:
+        assert all(allow_report_log("203.0.113.5") for _ in range(30))
+        assert allow_report_log("203.0.113.5") is False
+        assert allow_report_log("203.0.113.9") is True
+    finally:
+        reset_report_logs()

@@ -19,8 +19,15 @@ secrets later, set `SITE_ENV_FILE` to an explicit private file outside Git (mode
 600, parent directory mode 700). An explicit missing file fails deployment.
 Do not bake secrets into Compose, the Dockerfile, or images. The shared nginx-edge
 and its Let's Encrypt certificates remain existing host infrastructure. The site's
-edge vhost source is ops/nginx/site.conf; adding/replacing this vhost requires a
-config test and reload. Other hostnames are unaffected.
+edge vhost source is ops/nginx/site.conf. The deploy workflow does not install
+that file. After a release that changes it, on nginx-edge run
+`nginx -t && nginx -s reload`. Other hostnames are unaffected. The app and the
+edge can be updated in either order: the previous report-only policy does not
+replace the app's enforced policy, and removing the edge policy does not leave
+a response without one. Until that reload, the edge still adds
+`Content-Security-Policy-Report-Only` and `X-Frame-Options: SAMEORIGIN` beside
+the app headers. Modern browsers apply `frame-ancestors` rather than
+`X-Frame-Options` when both are present.
 
 The existing self-hosted runner and its Docker privilege are retained by explicit
 user preference. It remains capable of modifying host resources and reading site

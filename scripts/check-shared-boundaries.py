@@ -79,6 +79,16 @@ def main() -> int:
         if (ROOT / relative).exists():
             errors.append(f"generic Finance UI implementation belongs in packages/ui: {relative}")
 
+    finance_src = ROOT / "apps/finance/frontend/src"
+    if finance_src.exists():
+        for source in source_files(finance_src):
+            if source.suffix not in {".ts", ".html"}:
+                continue
+            if "bypassSecurityTrust" in source.read_text(encoding="utf-8", errors="replace"):
+                errors.append(
+                    f"finance Trusted Types allowlist stays empty only while finance has no bypass: {source.relative_to(ROOT)}"
+                )
+
     finance_shared = ROOT / "apps/finance/frontend/src/app/shared"
     if finance_shared.exists():
         for source in source_files(finance_shared):

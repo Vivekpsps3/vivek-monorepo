@@ -37,8 +37,13 @@ PERMISSIONS_POLICY = (
     "accelerometer=(), autoplay=(), camera=(), display-capture=(), "
     "encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), "
     "microphone=(), midi=(), payment=(), publickey-credentials-get=(), usb=(), "
-    "interest-cohort=(), browsing-topics=()"
+    "browsing-topics=()"
 )
+# Shell routes opt in with this response header. The middleware strips it and
+# only then rewrites script, style, and modulepreload tags. Other HTML keeps
+# its body, so a reflected script cannot pick up the nonce.
+SHELL_HEADER = "x-csp-shell"
+_MAX_REPORT_BYTES = 16384
 _DIRECTIVE_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 _KNOWN_DIRECTIVES = frozenset({
     "base-uri", "connect-src", "default-src", "font-src", "form-action", "frame-ancestors",
@@ -52,18 +57,21 @@ _LINK_OPEN = re.compile(r"<link\b([^>]*)>", re.IGNORECASE)
 _APP_ROOT = re.compile(r"<app-root\b([^>]*)>", re.IGNORECASE)
 _NONCE_ATTR = re.compile(r"\bnonce\s*=", re.IGNORECASE)
 _LOG_LIMIT = 30
-_log_window_start = 0.0
-_log_count = 0
+_LOG_WINDOW_SECONDS = 60.0
+_LOG_MAX_IPS = 1024
+_log_windows: dict[str, tuple[float, int]] = {}
 
-# This Angular 21 production build creates the angular#unsafe-bypass policy for
-# script URLs and for DomSanitizer bypasses (ngx-markdown). The plain angular
-# policy remains allowlisted because the framework still creates it when that
-# path is not tree-shaken. angular#bundler is not emitted by this build.
-# Travel and Media assign strings to innerHTML, so Trusted Types stay off there.
-_ANGULAR_TRUSTED_TYPES = "angular angular#unsafe-bypass"
+# Finance source does not call bypassSecurityTrust* or assign innerHTML.
+# ngx-markdown is the portfolio app, and that shell does not enable Trusted
+# Types. The finance production bundle can create angular#unsafe-bypass lazily
+# for a script-URL bypass, but nothing on the finance shell calls it, so the
+# allowlist is empty. require-trusted-types-for still rejects string assignment
+# to script sinks. angular#bundler is not in this build. Travel and Media
+# assign strings to innerHTML, so Trusted Types stay off there.
 _MEDIA_IMG = (
     "'self' data: https://image.tmdb.org https://static.tvmaze.com "
     "https://coverartarchive.org https://covers.openlibrary.org "
+    "https://archive.org https://*.archive.org "
     "https://*.mzstatic.com https://media.rawg.io"
 )
 
@@ -96,6 +104,34 @@ def classify(path: str) -> str:
     ):
         return "finance"
     return "portfolio"
+
+
+def expects_shell(path: str) -> bool:
+    """True for the static SPA documents that opt into nonce injection."""
+    normalized = (path or "/").split("?", 1)[0]
+    if not normalized.startswith("/"):
+        normalized = "/" + normalized
+    if normalized in {
+        "/",
+        "/home",
+        "/work",
+        "/about",
+        "/secrets",
+        "/hub",
+        "/hub/",
+        "/hub/admin",
+        "/auth/login",
+        "/auth/signup",
+        "/finance",
+        "/finance/",
+        "/finance/index.html",
+        "/travel",
+        "/travel/",
+        "/media",
+        "/media/",
+    }:
+        return True
+    return False
 
 
 def content_security_policy(kind: str, nonce: str) -> str:
@@ -138,7 +174,9 @@ def content_security_policy(kind: str, nonce: str) -> str:
             "manifest-src 'self'",
             "worker-src 'self'",
             "frame-src 'none'",
-            "frame-ancestors 'self'" if kind == "finance" else "frame-ancestors 'none'",
+            # Nothing in this repo frames a finance document. /embed is a compact
+            # route, and every document already sets frame-src 'none'.
+            "frame-ancestors 'none'",
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",
@@ -147,7 +185,7 @@ def content_security_policy(kind: str, nonce: str) -> str:
         # on the finance shell only. See docs/SECURITY_MODEL.md.
         if kind == "finance":
             parts.append("require-trusted-types-for 'script'")
-            parts.append(f"trusted-types {_ANGULAR_TRUSTED_TYPES}")
+            parts.append("trusted-types")
         parts.append("upgrade-insecure-requests")
     parts.append(f"report-uri {REPORT_PATH}")
     parts.append(f"report-to {REPORT_GROUP}")
@@ -242,13 +280,15 @@ def validate_response_headers(headers, path: str, body: bytes | str = b"") -> No
         assert parsed["frame-src"] == "'none'"
         assert "https:" not in parsed["connect-src"]
         if kind == "finance":
-            assert parsed["frame-ancestors"] == "'self'"
+            assert parsed["frame-ancestors"] == "'none'"
             assert parsed["img-src"] == "'self' data:"
-            assert "require-trusted-types-for" in parsed
-            assert "angular#unsafe-bypass" in parsed["trusted-types"]
-            assert "angular#bundler" not in parsed["trusted-types"]
+            assert parsed["require-trusted-types-for"] == "'script'"
+            assert parsed["trusted-types"] == ""
+            assert "angular#unsafe-bypass" not in policy
+            assert "angular#bundler" not in policy
             assert "tile.openstreetmap.org" not in policy
             assert "image.tmdb.org" not in policy
+            assert "archive.org" not in policy
         elif kind == "portfolio":
             assert parsed["frame-ancestors"] == "'none'"
             assert parsed["img-src"] == "'self' data:"
@@ -261,6 +301,8 @@ def validate_response_headers(headers, path: str, body: bytes | str = b"") -> No
         elif kind == "media":
             assert parsed["frame-ancestors"] == "'none'"
             assert "https://image.tmdb.org" in parsed["img-src"]
+            assert "https://archive.org" in parsed["img-src"].split()
+            assert "https://*.archive.org" in parsed["img-src"].split()
             assert "https://*.mzstatic.com" in parsed["img-src"]
             assert "https://media.rawg.io" in parsed["img-src"]
             assert "tile.openstreetmap.org" not in parsed["img-src"]
@@ -269,16 +311,21 @@ def validate_response_headers(headers, path: str, body: bytes | str = b"") -> No
         for name, value in parsed.items():
             if "unsafe-inline" in value:
                 assert name == "style-src-attr", (name, value)
+        assert _header(headers, SHELL_HEADER) == "", path
         content_type = _header(headers, "content-type").lower()
         if "text/html" in content_type:
             text = body.decode("utf-8") if isinstance(body, bytes) else body
-            assert f'nonce="{nonce}"' in text, path
-            assert "no-store" in _header(headers, "cache-control").lower(), path
             assert "onload=" not in text.lower(), path
             opens = re.findall(r"<script\b[^>]*>", text, flags=re.IGNORECASE)
-            assert opens and all("nonce=" in tag for tag in opens), path
-            if kind in {"finance", "portfolio"}:
-                assert f'ngCspNonce="{nonce}"' in text, path
+            if expects_shell(path):
+                assert opens and all("nonce=" in tag for tag in opens), path
+                assert f'nonce="{nonce}"' in text, path
+                assert "no-store" in _header(headers, "cache-control").lower(), path
+                if kind in {"finance", "portfolio"}:
+                    assert f'ngCspNonce="{nonce}"' in text, path
+            else:
+                assert f'nonce="{nonce}"' not in text, path
+                assert all("nonce=" not in tag for tag in opens), path
     assert _header(headers, "referrer-policy") == "same-origin", path
     assert _header(headers, "x-content-type-options") == "nosniff", path
     assert _header(headers, "cross-origin-opener-policy") == "same-origin", path
@@ -297,7 +344,7 @@ def _is_html(content_type: str) -> bool:
     return content_type.split(";", 1)[0].strip().lower() == "text/html"
 
 
-def _apply_headers(headers: MutableHeaders, policy: str, kind: str) -> None:
+def _apply_headers(headers: MutableHeaders, policy: str) -> None:
     headers["Content-Security-Policy"] = policy
     if "content-security-policy-report-only" in headers:
         del headers["content-security-policy-report-only"]
@@ -305,7 +352,7 @@ def _apply_headers(headers: MutableHeaders, policy: str, kind: str) -> None:
     headers["Report-To"] = REPORT_TO
     headers["X-Content-Type-Options"] = "nosniff"
     headers["Referrer-Policy"] = "same-origin"
-    headers["X-Frame-Options"] = "SAMEORIGIN" if kind == "finance" else "DENY"
+    headers["X-Frame-Options"] = "DENY"
     headers["Cross-Origin-Opener-Policy"] = "same-origin"
     headers["Cross-Origin-Resource-Policy"] = "same-origin"
     headers["Origin-Agent-Cluster"] = "?1"
@@ -334,8 +381,11 @@ class SecurityHeadersMiddleware:
             nonlocal held
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(raw=message["headers"])
-                _apply_headers(headers, policy, kind)
-                if _is_html(headers.get("content-type", "")) and scope.get("method") != "HEAD":
+                shell = headers.get(SHELL_HEADER) == "1"
+                if SHELL_HEADER in headers:
+                    del headers[SHELL_HEADER]
+                _apply_headers(headers, policy)
+                if shell and _is_html(headers.get("content-type", "")) and scope.get("method") != "HEAD":
                     held = message
                     return
                 await send(message)
@@ -366,14 +416,41 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
-def _allow_log() -> bool:
-    global _log_window_start, _log_count
+def reset_report_logs() -> None:
+    _log_windows.clear()
+
+
+def allow_report_log(ip: str) -> bool:
+    """Per-address log budget. One flooder does not silence every other client."""
     now = time.monotonic()
-    if now - _log_window_start >= 60:
-        _log_window_start = now
-        _log_count = 0
-    _log_count += 1
-    return _log_count <= _LOG_LIMIT
+    start, count = _log_windows.get(ip, (now, 0))
+    if now - start >= _LOG_WINDOW_SECONDS:
+        start, count = now, 0
+    count += 1
+    if len(_log_windows) >= _LOG_MAX_IPS and ip not in _log_windows:
+        expired = [key for key, (opened, _) in _log_windows.items() if now - opened >= _LOG_WINDOW_SECONDS]
+        for key in expired:
+            del _log_windows[key]
+        if len(_log_windows) >= _LOG_MAX_IPS:
+            _log_windows.clear()
+    _log_windows[ip] = (start, count)
+    return count <= _LOG_LIMIT
+
+
+def client_address(request: Request) -> str:
+    """Client address for the report log.
+
+    nginx replaces X-Forwarded-For and X-Real-IP with $remote_addr. Trust those
+    only when the peer is loopback, which is the edge proxy. A direct client
+    cannot pick the bucket by sending the header.
+    """
+    peer = request.client.host if request.client and request.client.host else ""
+    if peer in {"127.0.0.1", "::1"}:
+        forwarded = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for") or ""
+        candidate = forwarded.split(",")[-1].strip()
+        if candidate:
+            return candidate[:80]
+    return peer or "unknown"
 
 
 def _clean(value: object, limit: int = 180) -> str:
@@ -420,34 +497,43 @@ def _field(report: dict, *names: str) -> str:
     return ""
 
 
+def _log_report(ip: str, **fields: str) -> None:
+    if not allow_report_log(ip):
+        return
+    logger.info(json.dumps({"event": "csp_report", "ip": ip, **fields}))
+
+
+async def _read_report_body(request: Request) -> bytes | None:
+    """Read at most _MAX_REPORT_BYTES. None means the body exceeded the cap."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > _MAX_REPORT_BYTES:
+        return None
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > _MAX_REPORT_BYTES:
+            return None
+        body.extend(chunk)
+    return bytes(body)
+
+
 async def csp_report(request: Request) -> Response:
     """Accept browser CSP reports. The body is not stored or reflected."""
-    declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > 16384:
+    body = await _read_report_body(request)
+    if body is None:
         return Response(status_code=413)
-    body = await request.body()
-    if len(body) > 16384:
-        return Response(status_code=413)
+    ip = client_address(request)
     reports: list[dict]
     try:
         reports = _report_objects(json.loads(body.decode("utf-8"))) if body else []
     except (UnicodeDecodeError, json.JSONDecodeError):
         reports = []
         CSP_REPORTS.labels("unknown", "unparsed").inc()
-        if _allow_log():
-            logger.info("csp_report app=unknown directive=unparsed")
+        _log_report(ip, app="unknown", directive="unparsed", blocked="", document="")
     for report in reports:
         directive = _directive_label(_field(report, "effective-directive", "effectiveDirective", "violated-directive", "violatedDirective"))
         app_name = _app_label(_field(report, "document-uri", "documentURL", "document-url"))
         CSP_REPORTS.labels(app_name, directive or "other").inc()
-        if not _allow_log():
-            continue
         blocked = _clean(_field(report, "blocked-uri", "blockedURL", "blocked-url")).split("?", 1)[0]
-        logger.info(
-            "csp_report app=%s directive=%s blocked=%s document=%s",
-            app_name,
-            directive or "other",
-            blocked,
-            _clean(_field(report, "document-uri", "documentURL")).split("?", 1)[0],
-        )
+        document = _clean(_field(report, "document-uri", "documentURL")).split("?", 1)[0]
+        _log_report(ip, app=app_name, directive=directive or "other", blocked=blocked, document=document)
     return Response(status_code=204)

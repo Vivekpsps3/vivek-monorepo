@@ -79,15 +79,31 @@ try {
     });
     await page.goto(base + '/media/', { waitUntil: 'domcontentloaded' });
     await page.locator('#app').waitFor();
-    await page.evaluate(() => new Promise((resolve) => {
-      const img = new Image();
-      const done = () => resolve(true);
-      img.onload = done;
-      img.onerror = done;
-      img.src = 'https://image.tmdb.org/t/p/w342/csp-probe.jpg';
-      setTimeout(done, 1500);
-    }));
-    await assertClean(page, 'media artwork host');
+    const covers = await page.evaluate(() => {
+      function load(src, timeout) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          let settled = false;
+          const finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            resolve({ src, ok, width: img.naturalWidth || 0 });
+          };
+          img.onload = () => finish(true);
+          img.onerror = () => finish(false);
+          img.src = src;
+          setTimeout(() => finish(img.complete && img.naturalWidth > 0), timeout);
+        });
+      }
+      return Promise.all([
+        load('https://image.tmdb.org/t/p/w342/csp-probe.jpg', 1500),
+        load('https://covers.openlibrary.org/b/id/8739161-M.jpg', 8000),
+        load('https://coverartarchive.org/release/0fb1bdd3-1443-4569-943f-fc69c6424f99/front-250', 8000),
+      ]);
+    });
+    assert.equal(covers[1].ok, true, `Open Library cover did not load ${JSON.stringify(covers[1])}`);
+    assert.equal(covers[2].ok, true, `Cover Art Archive cover did not load ${JSON.stringify(covers[2])}`);
+    await assertClean(page, 'media artwork hosts');
     releaseMedia();
     await page.waitForURL('**/auth/login**', { timeout: 15000 });
     await page.waitForLoadState('networkidle');
