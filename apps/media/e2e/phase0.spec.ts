@@ -30,7 +30,7 @@ test('progress saves with a unit and survives reload and Again', async ({ page }
   await progress.fill('120');
   await page.getByLabel('Unit').selectOption('page');
   await progress.press('Enter');
-  await expect(page.locator('#progress-status')).toHaveText('Saved');
+  await expect(page.locator('#progress-status')).toHaveText('Saved ✓');
   await expect(page.locator('#progress-help')).toHaveText('p. 120');
   await page.screenshot({ path: shot('after-progress.png'), fullPage: true });
 
@@ -56,7 +56,8 @@ test('title sort works and an unknown sort does not fail the page', async ({ pag
 
   await page.goto('/media/#/library?sort=nope');
   await expect(page.getByRole('heading', { name: 'Saved' })).toBeVisible();
-  await expect(page.locator('#notice')).toHaveText("That sort isn't available. Showing recently active.");
+  await expect(page.locator('#toasts')).toContainText("That sort isn't available. Showing recently active.");
+  await expect(page.locator('#notice')).toHaveCount(0);
   await expect(page).not.toHaveURL(/sort=nope/);
   expect(rejected).toEqual([]);
 });
@@ -82,7 +83,10 @@ test('a saved note clears its draft and an older draft loses', async ({ page }) 
   }, { entryId: id, reviewBase: base });
   await page.reload();
   await expect(page.getByLabel('Note')).toHaveValue('A fresh note');
-  await expect(page.getByRole('button', { name: 'Restore unsaved note' })).toBeVisible();
+  const noteDraft = page.locator('#note-draft');
+  await expect(noteDraft).toContainText('Unsaved note from earlier.');
+  await expect(noteDraft.getByRole('button', { name: 'Restore' })).toBeVisible();
+  await expect(noteDraft.getByRole('button', { name: 'Discard' })).toBeVisible();
 
   await page.evaluate(entryId => {
     localStorage.setItem(`media-review-draft:${entryId}`, JSON.stringify({
@@ -149,7 +153,9 @@ test('a failed progress draft does not overwrite a newer save', async ({ page, r
   await progress.fill('40');
   await page.getByLabel('Unit').selectOption('page');
   await progress.press('Enter');
-  await expect(page.locator('#progress-status')).toContainText("Progress wasn't saved");
+  await expect(page.locator('#progress-status')).toContainText('Not saved. Try again');
+  await expect(page.locator('#toasts')).toContainText("Couldn't save your progress. Try again.");
+  await expect(page.locator('#toasts').getByRole('button', { name: 'Retry' })).toBeVisible();
   await expect.poll(() => page.evaluate(id => localStorage.getItem(`media-progress-draft:${id}`), dune.id)).toContain('40');
 
   const newer = await request.patch(`/media/api/entries/${dune.id}`, {
@@ -198,7 +204,7 @@ test('restoring a progress draft saves on blur and navigation', async ({ page, r
   await expect(progress).toHaveValue('40');
   await progress.blur();
   await expect(page.locator('#progress-draft')).toHaveCount(0);
-  await expect(page.locator('#progress-status')).toHaveText('Saved');
+  await expect(page.locator('#progress-status')).toHaveText('Saved ✓');
   await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(40);
 
   const again = await request.patch(`/media/api/entries/${dune.id}`, {
@@ -237,8 +243,9 @@ test('an unknown progress draft unit is not saved as null', async ({ page, reque
   await expect(unit).toHaveValue('page');
   await page.getByLabel('Progress', { exact: true }).blur();
   await expect(page.locator('#progress-draft')).toHaveCount(0);
+  await expect(page.locator('#progress-status')).toHaveText('Saved ✓');
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(7);
   const saved = await (await request.get(`/media/api/entries/${dune.id}`)).json();
-  expect(saved.progress_value).toBe(7);
   expect(saved.progress_unit).toBe('page');
 
   await page.evaluate(id => {
@@ -269,7 +276,9 @@ test('blurring an unchanged note does not overwrite a newer save', async ({ page
 
   await note.fill('from the stale tab');
   await note.blur();
-  await expect(page.locator('#notice')).toHaveText('This note changed in another tab.');
+  await expect(page.locator('#toasts')).toContainText('This note changed in another tab. Your text is kept as a draft.');
+  await expect(page.locator('#toasts').getByRole('button', { name: 'Reload' })).toBeVisible();
+  await expect(page.locator('#notice')).toHaveCount(0);
   const kept = await request.get(`/media/api/entries/${dune.id}`);
   expect((await kept.json()).review).toBe('Newer note from the other tab');
 });
@@ -333,4 +342,166 @@ test('a slower search for the previous type cannot replace the current one', asy
   await expect(page.getByRole('heading', { name: 'Result book' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Result movie' })).toHaveCount(0);
   await expect(page.getByLabel('Type')).toHaveValue('book');
+});
+
+test('progress stays 120 after a status change re-renders the item', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await page.goto(`/media/#/item/${dune.id}`);
+  let releaseSave: () => void = () => {};
+  const gate = new Promise<void>(resolve => {
+    releaseSave = resolve;
+  });
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() !== 'PATCH') {
+      await route.continue();
+      return;
+    }
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(body, 'progress_value')) await gate;
+    await route.continue();
+  });
+  const progress = page.getByLabel('Progress', { exact: true });
+  await progress.fill('120');
+  const status = page.getByRole('button', { name: 'Paused' });
+  const clicked = status.click();
+  await page.waitForTimeout(200);
+  releaseSave();
+  await clicked;
+  await expect(progress).toHaveValue('120');
+  await expect(status).toHaveClass(/is-on/);
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(120);
+});
+
+test('status, favorite, and again keep focus on the same control', async ({ page }) => {
+  await page.goto('/media/#/library');
+  await page.getByRole('link', { name: /Dune/ }).click();
+  const paused = page.getByRole('button', { name: 'Paused' });
+  await paused.click();
+  await expect(paused).toBeFocused();
+  const favorite = page.getByRole('button', { name: 'Favorite', exact: true });
+  await favorite.click();
+  await expect(favorite).toBeFocused();
+  const again = page.getByRole('button', { name: 'Again' });
+  await again.click();
+  await expect(again).toBeFocused();
+});
+
+test('a missing item is one error panel and a success toast survives navigation', async ({ page }) => {
+  await page.goto('/media/#/item/999');
+  const panel = page.locator('.error-panel');
+  await expect(panel).toHaveCount(1);
+  await expect(panel.getByRole('heading', { name: "This item isn't in your library" })).toBeFocused();
+  await expect(panel.getByText('It may have been removed.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Open library' })).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Search' })).toBeVisible();
+  await expect(page.locator('#toasts')).toBeEmpty();
+  await expect(page.getByRole('alert')).toHaveCount(1);
+
+  await page.goto('/media/#/new');
+  await page.getByLabel('Title').fill('Synthetic Toast Title');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page).toHaveURL(/#\/item\//);
+  await expect(page.locator('#toasts')).toContainText('Saved in your library.');
+});
+
+test('a slow route shows a skeleton and a fast one does not flash', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __skeletonShown: boolean }).__skeletonShown = false;
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('.skeleton')) {
+        (window as unknown as { __skeletonShown: boolean }).__skeletonShown = true;
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  });
+  await page.goto('/media/#/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __skeletonShown: boolean }).__skeletonShown)).toBe(false);
+  await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
+
+  await page.route('**/api/summary', async route => {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    await route.continue();
+  });
+  await page.goto('/media/#/calendar');
+  await page.goto('/media/#/');
+  await expect(page.locator('.skeleton').first()).toBeVisible();
+  await expect(page.locator('main')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('.skeleton-home')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('.skeleton')).toHaveCount(0);
+  await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
+});
+
+test('media routes stay quiet under the enforced content security policy', async ({ page }) => {
+  const nonce = 'cspchecknonce';
+  const policy = [
+    "default-src 'self'",
+    `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'`,
+    "script-src-attr 'none'",
+    `style-src 'self' 'nonce-${nonce}'`,
+    "style-src-attr 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+  await page.route(url => {
+    const path = new URL(url).pathname;
+    return path === '/media' || path === '/media/';
+  }, async route => {
+    const response = await route.fetch();
+    const body = (await response.text()).replaceAll('<script', `<script nonce="${nonce}"`);
+    const headers = response.headers();
+    headers['content-security-policy'] = policy;
+    await route.fulfill({ response, body, headers });
+  });
+  const problems: string[] = [];
+  page.on('console', message => {
+    const text = message.text();
+    if (/content security policy|refused to/i.test(text)) problems.push(text);
+  });
+  page.on('pageerror', error => problems.push(String(error)));
+  await page.goto('/media/#/library');
+  await expect(page.getByRole('heading', { name: 'Saved' })).toBeVisible();
+  await page.goto('/media/#/search');
+  await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
+  await page.goto('/media/#/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  expect(problems).toEqual([]);
+});
+
+test('a finished progress save does not dismiss another item draft', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const items = (await listed.json()).items;
+  const dune = items.find((item: { title: string }) => item.title === 'Dune');
+  const alpha = items.find((item: { title: string }) => item.title === 'Alpha');
+  await page.goto(`/media/#/item/${dune.id}`);
+  let releaseSave: () => void = () => {};
+  const gate = new Promise<void>(resolve => {
+    releaseSave = resolve;
+  });
+  await page.route('**/api/entries/**', async route => {
+    const url = route.request().url();
+    if (route.request().method() === 'PATCH' && url.includes(`/entries/${dune.id}`)) await gate;
+    await route.continue();
+  });
+  await page.getByLabel('Progress', { exact: true }).fill('15');
+  await page.getByLabel('Progress', { exact: true }).press('Enter');
+  await page.evaluate(id => {
+    localStorage.setItem(`media-progress-draft:${id}`, JSON.stringify({
+      value: '3',
+      unit: 'page',
+      base: '|page',
+    }));
+  }, alpha.id);
+  await page.goto(`/media/#/item/${alpha.id}`);
+  await expect(page.locator('#progress-draft')).toContainText("Progress wasn't saved");
+  releaseSave();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#progress-draft')).toContainText("Progress wasn't saved");
 });

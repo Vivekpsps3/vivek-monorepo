@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseReview, coverImage, dayLabel, draftKey, escapeHtml, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, safeUrl, seasonLabel, shiftMonth, statusLabel, whenLabel } from "../modules/format.mjs";
+import { WEEK_STARTS_ON, chooseReview, coverImage, dayLabel, draftKey, emptyState, escapeHtml, genericStatusOptions, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, weekDayLabels, whenLabel } from "../modules/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
@@ -18,6 +18,15 @@ test("keeps unrated distinct from zero and labels statuses by medium", () => {
   assert.equal(statusLabel("game", "in_progress"), "Currently Playing");
   assert.equal(statusLabel("album", "want"), "Want to Listen");
   assert.equal(statusLabel("artist", "want"), "Following");
+  assert.equal(statusLabel("movie", "want"), "Want to Watch");
+  assert.equal(statusLabel("book", "want"), "Want to Read");
+  assert.equal(statusLabel("game", "want"), "Want to Play");
+  assert.equal(statusLabel("movie", "completed"), "Watched");
+  assert.equal(statusLabel("tv", "completed"), "Watched");
+  assert.equal(statusLabel("book", "completed"), "Read");
+  assert.equal(statusLabel("game", "completed"), "Played");
+  assert.equal(statusLabel("album", "completed"), "Listened");
+  assert.equal(genericStatusOptions().find(row => row.value === "completed").label, "Finished");
 });
 
 test("month and year releases are not shown as a day", () => {
@@ -71,14 +80,41 @@ test("progress units and cover images stay inside their own fields", () => {
   assert.equal(coverImage('https://covers.example/a".jpg'), '<img alt="" src="https://covers.example/a%22.jpg" width="300" height="300" loading="lazy" decoding="async">');
 });
 
-test("calendar months start on Monday and step across years", () => {
+test("calendar weeks start on Sunday for en-US and step across years", () => {
+  assert.equal(WEEK_STARTS_ON, 0);
+  assert.deepEqual(weekDayLabels().slice(0, 3), ["Sun", "Mon", "Tue"]);
   assert.equal(monthLabel("2026-10"), "October 2026");
   assert.equal(shiftMonth("2026-12", 1), "2027-01");
   assert.equal(shiftMonth("2026-01", -1), "2025-12");
   const cells = monthCells("2026-10");
   assert.equal(cells.length % 7, 0);
   assert.equal(cells[0], null);
-  assert.equal(cells[3], "2026-10-01");
+  assert.equal(cells[4], "2026-10-01");
   assert.equal(cells.filter(Boolean).length, 31);
   assert.equal(cells.includes("2026-10-32"), false);
+});
+
+test("empty state escapes its copy and route errors are one panel", () => {
+  const html = emptyState({
+    title: "Nothing <here>",
+    body: "Try again.",
+    primary: { href: "#/search", label: "Find something" },
+    secondary: { href: "#/library", label: "Library" },
+  });
+  assert.match(html, /class="empty"/);
+  assert.match(html, /Nothing &lt;here&gt;/);
+  assert.match(html, /class="btn btn-primary"/);
+  assert.deepEqual(routeErrorCopy("item", { status: 404, message: "That item is not in your library." }), {
+    title: "This item isn't in your library",
+    body: "It may have been removed.",
+    retry: true,
+    links: [
+      { href: "#/library", label: "Open library" },
+      { href: "#/search", label: "Search" },
+    ],
+  });
+  assert.equal(routeErrorCopy("home", { status: 0, message: "Failed to fetch" }).title, "Can't reach Media");
+  assert.equal(routeErrorCopy("library", { status: 503, message: "nope" }).body, "Try again in a minute.");
+  assert.equal(routeErrorCopy("calendar", { status: 500, message: "Nope." }).title, "Couldn't load the calendar");
+  assert.equal(routeErrorCopy("home", { status: 500, message: "Nope." }).links[0].label, "Open library");
 });
