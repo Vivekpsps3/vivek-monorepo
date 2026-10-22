@@ -36,15 +36,21 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           RATCHET_ALLOW_INCREASE: ${{ contains(github.event.pull_request.labels.*.name, 'ratchet-increase') && 'true' || 'false' }}
         run: |
+          set -euo pipefail
           if [ "$RATCHET_ALLOW_INCREASE" = "true" ]; then
             echo "ratchet-increase label is present; a higher allowance is accepted." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "ratchet-increase label is absent." >> "$GITHUB_STEP_SUMMARY"
           fi
           python3 scripts/quality_ratchet.py check-tools "origin/${BASE_REF}"
-          while IFS= read -r tool; do
+          tools="$(python3 scripts/quality_ratchet.py list)"
+          if [ -z "$tools" ]; then
+            echo "quality_ratchet.py list printed no tools" >&2
+            exit 1
+          fi
+          for tool in $tools; do
             python3 scripts/quality_ratchet.py check-base "$tool" "origin/${BASE_REF}"
-          done < <(python3 scripts/quality_ratchet.py list)
+          done
       - run: ./scripts/coverage-gate.sh finance
       - run: ./scripts/coverage-gate.sh server
       - run: make test-fast

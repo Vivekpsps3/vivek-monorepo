@@ -3,7 +3,7 @@
 # coverage-gate.sh fails when a suite drops under its floor.
 # A gain prints a notice and does not fail. Re-pin with: make coverage-pin
 # suite  measured  floor
-finance 84.37 83.37
+finance 84.28 83.28
 travel 81.41 80.41
 media 71.60 70.60
 server 61.48 60.48

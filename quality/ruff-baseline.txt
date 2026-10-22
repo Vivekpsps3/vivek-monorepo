@@ -47,9 +47,7 @@ apps/media/backend/tests/test_journal.py	I001	1
 apps/server/auth.py	I001	1
 apps/server/checks.py	I001	2
 apps/server/database.py	I001	1
-apps/server/main.py	F401	1
 apps/server/main.py	I001	2
-apps/server/migrate.py	F401	1
 apps/server/migrate.py	I001	1
 apps/server/migrate.py	SIM117	1
 apps/server/migrations.py	I001	1

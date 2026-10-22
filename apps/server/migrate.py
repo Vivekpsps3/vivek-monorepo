@@ -14,7 +14,7 @@ import sqlite3
 import tempfile
 
 from apps.server.migrations import adopt_or_upgrade, sqlite_url
-from apps.server.schema import VERSION, OWNER_TABLES, metadata
+from apps.server.schema import VERSION, metadata
 
 FINANCE_REVISION = "e0f6a2b3c4d5"
 

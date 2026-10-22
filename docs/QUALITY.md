@@ -24,7 +24,7 @@ Current baselines:
 
 | Tool | Findings left |
 | --- | ---: |
-| Ruff | 167 |
+| Ruff | 165 |
 | mypy | 384 |
 | ESLint, finance | 481 |
 | ESLint, site | 9 |
@@ -68,12 +68,12 @@ Prettier is not configured. The tree has no formatter today, and formatting both
 
 | Suite | Statements | Missed | Measured | Floor |
 | --- | ---: | ---: | ---: | ---: |
-| Finance | 2265 | 354 | 84.37% | 83.37% |
+| Finance | 2265 | 356 | 84.28% | 83.28% |
 | Travel | 2092 | 389 | 81.41% | 80.41% |
 | Media | 2377 | 675 | 71.60% | 70.60% |
 | Server | 1254 | 483 | 61.48% | 60.48% |
 
-Server coverage rose once migrations, schema, redirects, and the security-header middleware gained tests. Auth, checks, database, main, and monitor are still untested, and the floor still counts those modules. Omitting them would make the gate look healthier than the package is.
+Server coverage rose once migrations, schema, redirects, and the security-header middleware gained tests. Auth, checks, database, main, and monitor are still untested, and the floor still counts those modules. Omitting them would make the gate look healthier than the package is. Finance is pinned from CI's 84.28% (356 missed). A local run measures 84.37% because two `rate_limit.py` statements depend on the environment, so `make coverage-pin` on a laptop would move that row.
 
 Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json`. `scripts/karma-coverage-summary.mjs` appends the totals to the GitHub step summary. Karma only instruments files the specs actually load, so these totals are not whole-app coverage. Measured totals are finance 61.46 / 53.32 / 57.12 / 63.53 and site 62.72 / 48.48 / 56 / 64. Thresholds sit about 1 point below those totals:
 
