@@ -1,8 +1,11 @@
 """Personal library reads and writes. Metadata refreshes never touch reviews."""
 
 import json
+import math
 import time
 from datetime import date, datetime, timezone
+
+from fastapi import HTTPException
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -126,6 +129,7 @@ def owned_entry(db: Session, user_id: int, entry_id: int) -> UserEntry:
 
 def fail_missing() -> None:
     from fastapi import HTTPException
+
     raise HTTPException(status_code=404, detail="That item is not in your library.")
 
 
@@ -156,7 +160,9 @@ def apply_catalog_fields(row: CatalogItem, body: dict, *, fill_blanks_only: bool
 
 
 def store_release(db: Session, catalog: CatalogItem, body: dict) -> None:
-    if not any(key in body for key in ("release_on", "release_precision", "release_status", "releases")):
+    if not any(
+        key in body for key in ("release_on", "release_precision", "release_status", "releases")
+    ):
         return
     releases = body.get("releases")
     if isinstance(releases, list) and releases:
@@ -166,14 +172,19 @@ def store_release(db: Session, catalog: CatalogItem, body: dict) -> None:
             add_release(db, catalog, item)
         return
     if "release_on" in body or "release_precision" in body or "release_status" in body:
-        add_release(db, catalog, {
-            "released_on": body.get("release_on"),
-            "precision": body.get("release_precision") or ("day" if body.get("release_on") else "unknown"),
-            "status": body.get("release_status") or "scheduled",
-            "region": body.get("region"),
-            "platform": body.get("platform"),
-            "note": body.get("release_note"),
-        })
+        add_release(
+            db,
+            catalog,
+            {
+                "released_on": body.get("release_on"),
+                "precision": body.get("release_precision")
+                or ("day" if body.get("release_on") else "unknown"),
+                "status": body.get("release_status") or "scheduled",
+                "region": body.get("region"),
+                "platform": body.get("platform"),
+                "note": body.get("release_note"),
+            },
+        )
 
 
 def add_release(db: Session, catalog: CatalogItem, item: dict) -> None:
@@ -182,15 +193,17 @@ def add_release(db: Session, catalog: CatalogItem, item: dict) -> None:
     released_on = parse_date(item.get("released_on"), "Release date")
     if precision in {"month", "year"} and released_on is not None:
         released_on = date(released_on.year, 1 if precision == "year" else released_on.month, 1)
-    db.add(Release(
-        catalog_id=catalog.id,
-        region=clean_text(item.get("region"), 40, "Region"),
-        platform=clean_text(item.get("platform"), 80, "Platform"),
-        released_on=released_on,
-        precision=precision,
-        status=status,
-        note=clean_text(item.get("note"), 300, "Release note"),
-    ))
+    db.add(
+        Release(
+            catalog_id=catalog.id,
+            region=clean_text(item.get("region"), 40, "Region"),
+            platform=clean_text(item.get("platform"), 80, "Platform"),
+            released_on=released_on,
+            precision=precision,
+            status=status,
+            note=clean_text(item.get("note"), 300, "Release note"),
+        )
+    )
 
 
 def store_episodes(db: Session, catalog: CatalogItem, episodes: list | None) -> None:
@@ -212,7 +225,11 @@ def upsert_episode(db: Session, catalog: CatalogItem, item: dict) -> Episode:
         fail("Episode numbers start at 1.")
     row = (
         db.query(Episode)
-        .filter(Episode.catalog_id == catalog.id, Episode.season_number == season, Episode.episode_number == number)
+        .filter(
+            Episode.catalog_id == catalog.id,
+            Episode.season_number == season,
+            Episode.episode_number == number,
+        )
         .one_or_none()
     )
     if row is None:
@@ -307,13 +324,15 @@ def normalize_ratings(value) -> list:
             number = float(item["value"])
         except (TypeError, ValueError):
             continue
-        cleaned.append({
-            "provider": clean_text(item.get("provider"), 40, "Provider") or label,
-            "label": label,
-            "value": number,
-            "scale": clean_text(item.get("scale"), 20, "Scale") or "",
-            "votes": item.get("votes") if isinstance(item.get("votes"), int) else None,
-        })
+        cleaned.append(
+            {
+                "provider": clean_text(item.get("provider"), 40, "Provider") or label,
+                "label": label,
+                "value": number,
+                "scale": clean_text(item.get("scale"), 20, "Scale") or "",
+                "votes": item.get("votes") if isinstance(item.get("votes"), int) else None,
+            }
+        )
     return cleaned
 
 
@@ -321,19 +340,30 @@ def new_entry(db: Session, user_id: int, catalog: CatalogItem, body: dict) -> Us
     entry = UserEntry(
         user_id=user_id,
         catalog_id=catalog.id,
-        status=choice(body.get("status"), STATUSES, "Status", "anticipating" if body.get("anticipated") else "want"),
+        status=choice(
+            body.get("status"),
+            STATUSES,
+            "Status",
+            "anticipating" if body.get("anticipated") else "want",
+        ),
         rating=rating_value(body.get("rating")) if "rating" in body else None,
         review=clean_text(body.get("review"), 20000, "Review"),
         review_spoiler=bool(body.get("review_spoiler")),
         summary=clean_text(body.get("summary"), 400, "Summary"),
         favorite=bool(body.get("favorite")),
         anticipated=bool(body.get("anticipated")) or body.get("status") == "anticipating",
-        progress_value=number_or_none(body.get("progress_value"), "Progress"),
-        progress_unit=choice(body.get("progress_unit"), PROGRESS_UNITS, "Progress unit", None) if body.get("progress_unit") else None,
+        progress_value=progress_number(body.get("progress_value")),
+        progress_unit=choice(body.get("progress_unit"), PROGRESS_UNITS, "Progress unit", None)
+        if body.get("progress_unit")
+        else None,
     )
     if entry.review:
         entry.review_updated_at = utc_now()
-    if entry.progress_unit == "percent" and entry.progress_value is not None and not 0 <= entry.progress_value <= 100:
+    if (
+        entry.progress_unit == "percent"
+        and entry.progress_value is not None
+        and not 0 <= entry.progress_value <= 100
+    ):
         fail("Percent progress is between 0 and 100.")
     db.add(entry)
     db.flush()
@@ -344,12 +374,33 @@ def number_or_none(value, field: str) -> float | None:
     if value is None or value == "":
         return None
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         fail(f"{field} must be a number.")
+    if isinstance(number, float) and not math.isfinite(number):
+        fail(f"{field} must be a number.")
+    return number
+
+
+def progress_number(value) -> float | None:
+    number = number_or_none(value, "Progress")
+    if number is not None and number < 0:
+        fail("Progress must be zero or more.")
+    return number
+
+
+def assert_review_base(entry: UserEntry, body: dict) -> None:
+    """409 when a note save started from a review the server no longer has."""
+    if "review" not in body or "review_base" not in body:
+        return
+    current = iso(entry.review_updated_at) or ""
+    incoming = body.get("review_base")
+    if ("" if incoming is None else str(incoming)) != current:
+        raise HTTPException(status_code=409, detail="This note changed in another tab.")
 
 
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
+    assert_review_base(entry, body)
     before_rating = entry.rating
     before_review = entry.review
     if "status" in body:
@@ -375,15 +426,31 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     if "anticipated" in body:
         entry.anticipated = bool(body.get("anticipated"))
     if "progress_value" in body:
-        entry.progress_value = number_or_none(body.get("progress_value"), "Progress")
+        entry.progress_value = progress_number(body.get("progress_value"))
     if "progress_unit" in body:
-        entry.progress_unit = choice(body.get("progress_unit"), PROGRESS_UNITS, "Progress unit") if body.get("progress_unit") else None
-    if entry.progress_unit == "percent" and entry.progress_value is not None and not 0 <= entry.progress_value <= 100:
+        entry.progress_unit = (
+            choice(body.get("progress_unit"), PROGRESS_UNITS, "Progress unit")
+            if body.get("progress_unit")
+            else None
+        )
+    if (
+        entry.progress_unit == "percent"
+        and entry.progress_value is not None
+        and not 0 <= entry.progress_value <= 100
+    ):
         fail("Percent progress is between 0 and 100.")
     if entry.review != before_review:
         entry.review_updated_at = utc_now()
     fill_only = entry.catalog.source != "manual"
-    apply_catalog_fields(entry.catalog, {key: body[key] for key in ("title", "creator", "year", "overview", "artwork_url") if key in body}, fill_blanks_only=fill_only)
+    apply_catalog_fields(
+        entry.catalog,
+        {
+            key: body[key]
+            for key in ("title", "creator", "year", "overview", "artwork_url")
+            if key in body
+        },
+        fill_blanks_only=fill_only,
+    )
     store_release(db, entry.catalog, body)
     entry.updated_at = utc_now()
     db.flush()
@@ -428,7 +495,9 @@ def patch_experience(row: Experience, body: dict) -> None:
         row.spoiler = bool(body.get("spoiler"))
 
 
-def list_library(db: Session, user_id: int, kind: str | None, status: str | None, query: str | None, sort: str) -> list[UserEntry]:
+def list_library(
+    db: Session, user_id: int, kind: str | None, status: str | None, query: str | None, sort: str
+) -> list[UserEntry]:
     rows = db.query(UserEntry).join(CatalogItem).filter(UserEntry.user_id == user_id)
     if kind:
         rows = rows.filter(CatalogItem.kind == choice(kind, KINDS, "Media type"))
@@ -437,18 +506,30 @@ def list_library(db: Session, user_id: int, kind: str | None, status: str | None
     if query:
         like = f"%{query.strip()}%"
         rows = rows.filter(or_(CatalogItem.title.ilike(like), CatalogItem.creator.ilike(like)))
-    rows = rows.all()
+    found: list[UserEntry] = list(rows.all())
     if sort == "rating":
-        rows.sort(key=lambda entry: (entry.rating is None, -(entry.rating or 0), entry.catalog.title.lower()))
+        found.sort(
+            key=lambda entry: (
+                entry.rating is None,
+                -(entry.rating or 0),
+                entry.catalog.title.lower(),
+            )
+        )
     elif sort == "release":
-        rows.sort(key=lambda entry: (entry.catalog.year is None, -(entry.catalog.year or 0), entry.catalog.title.lower()))
+        found.sort(
+            key=lambda entry: (
+                entry.catalog.year is None,
+                -(entry.catalog.year or 0),
+                entry.catalog.title.lower(),
+            )
+        )
     elif sort == "added":
-        rows.sort(key=lambda entry: entry.created_at, reverse=True)
+        found.sort(key=lambda entry: entry.created_at, reverse=True)
     elif sort == "title":
-        rows.sort(key=lambda entry: (entry.catalog.title.casefold(), entry.id))
+        found.sort(key=lambda entry: (entry.catalog.title.casefold(), entry.id))
     else:
-        rows.sort(key=lambda entry: entry.updated_at, reverse=True)
-    return rows
+        found.sort(key=lambda entry: entry.updated_at, reverse=True)
+    return found
 
 
 def episode_state(db: Session, user_id: int, catalog: CatalogItem) -> dict:
@@ -460,7 +541,10 @@ def episode_state(db: Session, user_id: int, catalog: CatalogItem) -> dict:
     )
     progress = {
         row.episode_id: row
-        for row in db.query(EpisodeProgress).filter(EpisodeProgress.user_id == user_id, EpisodeProgress.episode_id.in_([ep.id for ep in episodes] or [-1]))
+        for row in db.query(EpisodeProgress).filter(
+            EpisodeProgress.user_id == user_id,
+            EpisodeProgress.episode_id.in_([ep.id for ep in episodes] or [-1]),
+        )
     }
     current = today()
     serialized = []
@@ -503,7 +587,9 @@ def episode_state(db: Session, user_id: int, catalog: CatalogItem) -> dict:
     }
 
 
-def season_views(db: Session, user_id: int, entry_id: int | None, episodes: list[Episode]) -> list[dict]:
+def season_views(
+    db: Session, user_id: int, entry_id: int | None, episodes: list[Episode]
+) -> list[dict]:
     counts: dict[int, int] = {}
     for episode in episodes:
         counts[episode.season_number] = counts.get(episode.season_number, 0) + 1
@@ -517,12 +603,14 @@ def season_views(db: Session, user_id: int, entry_id: int | None, episodes: list
     views = []
     for number in sorted(set(counts) | set(progress)):
         row = progress.get(number)
-        views.append({
-            "season_number": number,
-            "episode_count": counts.get(number, 0),
-            "watched": bool(row.watched) if row is not None else False,
-            "rating": None if row is None else row.rating,
-        })
+        views.append(
+            {
+                "season_number": number,
+                "episode_count": counts.get(number, 0),
+                "watched": bool(row.watched) if row is not None else False,
+                "rating": None if row is None else row.rating,
+            }
+        )
     return views
 
 
@@ -564,7 +652,9 @@ def save_season(db: Session, entry: UserEntry, body: dict) -> None:
     db.flush()
 
 
-def mark_watched(db: Session, user_id: int, episode: Episode, watched: bool, watched_on: date | None) -> None:
+def mark_watched(
+    db: Session, user_id: int, episode: Episode, watched: bool, watched_on: date | None
+) -> None:
     row = (
         db.query(EpisodeProgress)
         .filter(EpisodeProgress.user_id == user_id, EpisodeProgress.episode_id == episode.id)
@@ -585,6 +675,7 @@ def mark_next(db: Session, user_id: int, entry: UserEntry) -> dict:
     nxt = state["next_episode"]
     if nxt is None:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=409, detail="Add episodes, or you are already caught up.")
     episode = db.get(Episode, nxt["id"])
     mark_watched(db, user_id, episode, True, today())
@@ -603,11 +694,15 @@ def store_collaborators(catalog: CatalogItem, rows) -> list[dict]:
     for row in rows or []:
         if not isinstance(row, dict) or not isinstance(row.get("name"), str):
             continue
-        clean.append({
-            "source_id": row.get("source_id") if isinstance(row.get("source_id"), str) else None,
-            "name": row["name"][:200],
-            "relation": str(row.get("relation") or "collaboration")[:40],
-        })
+        clean.append(
+            {
+                "source_id": row.get("source_id")
+                if isinstance(row.get("source_id"), str)
+                else None,
+                "name": row["name"][:200],
+                "relation": str(row.get("relation") or "collaboration")[:40],
+            }
+        )
     extra = _extra(catalog)
     extra["collaborators"] = clean[:16]
     _save_extra(catalog, extra)
@@ -686,7 +781,9 @@ def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None
                 .one_or_none()
             )
         if row is None:
-            row = MusicAlbum(catalog_id=catalog.id, title=title, source_id=source_id, position=index)
+            row = MusicAlbum(
+                catalog_id=catalog.id, title=title, source_id=source_id, position=index
+            )
             db.add(row)
         row.title = title
         row.position = index
@@ -770,7 +867,9 @@ def _store_tracks(db: Session, album: MusicAlbum, tracks) -> None:
                 .one_or_none()
             )
         if row is None:
-            row = MusicTrack(album_id=album.id, title=title, source_id=source_id, position=index + 1)
+            row = MusicTrack(
+                album_id=album.id, title=title, source_id=source_id, position=index + 1
+            )
             db.add(row)
         row.title = title
         position = item.get("position")
@@ -800,6 +899,7 @@ def add_album(db: Session, entry: UserEntry, body: dict) -> None:
         title=title,
         year=_year(body.get("year")),
         position=position,
+        artwork_url=http_url(body.get("artwork_url")) if body.get("artwork_url") else None,
     )
     db.add(row)
     db.flush()
@@ -886,25 +986,35 @@ def music_state(db: Session, entry: UserEntry) -> dict:
     )
     album_ids = [album.id for album in albums]
     tracks = (
-        db.query(MusicTrack).filter(MusicTrack.album_id.in_(album_ids)).order_by(MusicTrack.position, MusicTrack.id).all()
-        if album_ids else []
+        db.query(MusicTrack)
+        .filter(MusicTrack.album_id.in_(album_ids))
+        .order_by(MusicTrack.position, MusicTrack.id)
+        .all()
+        if album_ids
+        else []
     )
     album_scores = {
         row.album_id: row.rating
-        for row in db.query(AlbumRating).filter(AlbumRating.user_id == entry.user_id, AlbumRating.entry_id == entry.id)
+        for row in db.query(AlbumRating).filter(
+            AlbumRating.user_id == entry.user_id, AlbumRating.entry_id == entry.id
+        )
     }
     track_scores = {
         row.track_id: row.rating
-        for row in db.query(TrackRating).filter(TrackRating.user_id == entry.user_id, TrackRating.entry_id == entry.id)
+        for row in db.query(TrackRating).filter(
+            TrackRating.user_id == entry.user_id, TrackRating.entry_id == entry.id
+        )
     }
     grouped: dict[int, list] = {}
     for track in tracks:
-        grouped.setdefault(track.album_id, []).append({
-            "id": track.id,
-            "title": track.title,
-            "position": track.position,
-            "rating": track_scores.get(track.id),
-        })
+        grouped.setdefault(track.album_id, []).append(
+            {
+                "id": track.id,
+                "title": track.title,
+                "position": track.position,
+                "rating": track_scores.get(track.id),
+            }
+        )
     extra = loads(entry.catalog.extra, {})
     return {
         "partial": bool(isinstance(extra, dict) and extra.get("catalog_partial")),

@@ -43,7 +43,12 @@ def mount_path() -> str:
 
 
 def _open_path(path: str) -> bool:
-    return path in ("/api/health", "/tokens.css", "/controls.css", "/favicon.svg") or path.startswith("/static/")
+    return path in (
+        "/api/health",
+        "/tokens.css",
+        "/controls.css",
+        "/favicon.svg",
+    ) or path.startswith("/static/")
 
 
 @asynccontextmanager
@@ -55,7 +60,14 @@ async def lifespan(_app: FastAPI):
 def create_app(*, unified: bool = False) -> FastAPI:
     if not unified:
         load_dotenv()
-    application = FastAPI(title="Media", version="0.1.0", lifespan=lifespan, docs_url=None if unified else "/docs", redoc_url=None if unified else "/redoc", openapi_url=None if unified else "/openapi.json")
+    application = FastAPI(
+        title="Media",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url=None if unified else "/docs",
+        redoc_url=None if unified else "/redoc",
+        openapi_url=None if unified else "/openapi.json",
+    )
     application.state.principal_checker = None
 
     @application.middleware("http")
@@ -95,6 +107,7 @@ def create_app(*, unified: bool = False) -> FastAPI:
     def health():
         from sqlalchemy import text
         from apps.media.backend import database
+
         try:
             with database.engine.connect() as connection:
                 connection.execute(text("SELECT id FROM user_entries LIMIT 1"))
@@ -107,7 +120,9 @@ def create_app(*, unified: bool = False) -> FastAPI:
     if STATIC_DIR.is_dir():
         application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     if SHARED_BROWSER_DIR.is_dir():
-        application.mount("/shared-browser", StaticFiles(directory=SHARED_BROWSER_DIR), name="shared-browser")
+        application.mount(
+            "/shared-browser", StaticFiles(directory=SHARED_BROWSER_DIR), name="shared-browser"
+        )
 
     @application.get("/tokens.css")
     def tokens():
@@ -125,23 +140,28 @@ def create_app(*, unified: bool = False) -> FastAPI:
         return FileResponse(icon, media_type="image/svg+xml")
 
     @application.get("/")
-    def index():
+    def index(request: Request):
         page = STATIC_DIR / "index.html"
         if not page.is_file():
             return JSONResponse(status_code=404, content={"detail": "Media UI is not built."})
-        html = page.read_text(encoding="utf-8").replace("__MEDIA_ROOT__", mount_path())
+        root = str(request.scope.get("root_path") or mount_path() or "").rstrip("/")
+        html = page.read_text(encoding="utf-8").replace("__MEDIA_ROOT__", root)
         return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
     def screen_redirect(screen: str, request: Request):
         name = screen.strip().strip("/").lower()
         if name not in JOURNAL_SCREENS:
-            return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
+            return JSONResponse(
+                status_code=404,
+                content={"detail": "Not found"},
+                headers={"Cache-Control": "no-store"},
+            )
         query = f"?{request.url.query}" if request.url.query else ""
-        root = mount_path()
+        root = str(request.scope.get("root_path") or "").rstrip("/")
         target = f"{root}/#/{name}{query}" if root else f"/#/{name}{query}"
         return RedirectResponse(target, status_code=302)
 
-    application.add_api_route("/{screen}", screen_redirect, methods=["GET"])
-    application.add_api_route("/{screen}/", screen_redirect, methods=["GET"])
+    application.add_api_route("/{screen}", screen_redirect, methods=["GET", "HEAD"])
+    application.add_api_route("/{screen}/", screen_redirect, methods=["GET", "HEAD"])
 
     return application

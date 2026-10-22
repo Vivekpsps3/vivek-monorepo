@@ -32,15 +32,15 @@ test("month and year releases are not shown as a day", () => {
   assert.equal(dayLabel("2026-10-01"), "Thursday, October 1");
 });
 
-test("review drafts win only when they are newer than the server", () => {
-  const serverAt = "2026-10-21T20:00:00.000Z";
-  assert.equal(chooseReview("B", serverAt, null), "B");
-  assert.equal(chooseReview("B", serverAt, { text: "", at: "2026-10-22T00:00:00.000Z" }), "B");
-  assert.equal(chooseReview("B", serverAt, { text: "A", at: "2026-10-21T19:00:00.000Z" }), "B");
-  assert.equal(chooseReview("B", serverAt, { text: "A", at: "2026-10-21T21:00:00.000Z" }), "A");
-  assert.equal(chooseReview("B", serverAt, { text: "B", at: "2026-10-22T00:00:00.000Z" }), "B");
-  assert.equal(chooseReview("B", null, { text: "A" }), "B");
-  assert.equal(chooseReview(null, null, { text: "A", at: "2026-10-22T00:00:00.000Z" }), "A");
+test("review drafts win only when they still match the server base", () => {
+  const serverAt = "2026-10-21T20:00:00+00:00";
+  assert.deepEqual(chooseReview("B", serverAt, null), { text: "B", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "", base: serverAt }), { text: "B", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "A", base: "2000-01-01T00:00:00+00:00" }), { text: "B", restore: true });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "A", base: serverAt }), { text: "A", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "B", base: "other" }), { text: "B", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "A", at: "2099-01-01T00:00:00.000Z" }), { text: "B", restore: true });
+  assert.deepEqual(chooseReview("B", null, { text: "A", base: "" }), { text: "A", restore: false });
 });
 
 test("library query drops unknown sort, kind, and status", () => {
@@ -54,6 +54,10 @@ test("library query drops unknown sort, kind, and status", () => {
   const title = normalizeLibraryQuery("sort=title&kind=book");
   assert.equal(title.changed, false);
   assert.equal(title.params.get("sort"), "title");
+  const cased = normalizeLibraryQuery("sort=Title");
+  assert.equal(cased.droppedSort, false);
+  assert.equal(cased.changed, true);
+  assert.equal(cased.params.get("sort"), "title");
 });
 
 test("progress units and cover images stay inside their own fields", () => {
@@ -63,8 +67,8 @@ test("progress units and cover images stay inside their own fields", () => {
   assert.equal(progressPreview("42", "percent"), "42%");
   assert.equal(progressPreview("", "page"), "");
   assert.equal(coverImage("javascript:alert(1)"), "");
-  assert.equal(coverImage("https://covers.example/a).jpg"), '<img alt="" src="https://covers.example/a).jpg">');
-  assert.equal(coverImage('https://covers.example/a".jpg'), '<img alt="" src="https://covers.example/a%22.jpg">');
+  assert.equal(coverImage("https://covers.example/a).jpg"), '<img alt="" src="https://covers.example/a).jpg" width="300" height="300" loading="lazy" decoding="async">');
+  assert.equal(coverImage('https://covers.example/a".jpg'), '<img alt="" src="https://covers.example/a%22.jpg" width="300" height="300" loading="lazy" decoding="async">');
 });
 
 test("calendar months start on Monday and step across years", () => {

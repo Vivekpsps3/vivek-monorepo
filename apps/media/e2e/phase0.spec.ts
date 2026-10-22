@@ -1,4 +1,12 @@
+import path from 'node:path';
+
 import { expect, test } from '@playwright/test';
+
+function shot(name: string) {
+  const dir = process.env.SCREENSHOT_DIR;
+  if (dir) return path.join(dir, name);
+  return test.info().outputPath(name);
+}
 
 test('hub and screen URLs redirect into the journal', async ({ page, request }) => {
   const library = await request.get('/media/library?sort=title', { maxRedirects: 0 });
@@ -12,7 +20,7 @@ test('hub and screen URLs redirect into the journal', async ({ page, request }) 
   await page.goto('/hub/media');
   await expect(page).toHaveURL(/\/media\/$/);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/after-hub-media.png', fullPage: true });
+  await page.screenshot({ path: shot('after-hub-media.png'), fullPage: true });
 });
 
 test('progress saves with a unit and survives reload and Again', async ({ page }) => {
@@ -24,7 +32,7 @@ test('progress saves with a unit and survives reload and Again', async ({ page }
   await progress.press('Enter');
   await expect(page.locator('#progress-status')).toHaveText('Saved');
   await expect(page.locator('#progress-help')).toHaveText('p. 120');
-  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/after-progress.png', fullPage: true });
+  await page.screenshot({ path: shot('after-progress.png'), fullPage: true });
 
   await page.reload();
   await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('120');
@@ -44,7 +52,7 @@ test('title sort works and an unknown sort does not fail the page', async ({ pag
   await page.goto('/media/#/library?sort=title');
   await expect(page.getByLabel('Sort')).toHaveValue('title');
   await expect(page.locator('.card-title')).toHaveText(['Alpha', 'Dune', 'Zebra']);
-  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/after-library-sort.png', fullPage: true });
+  await page.screenshot({ path: shot('after-library-sort.png'), fullPage: true });
 
   await page.goto('/media/#/library?sort=nope');
   await expect(page.getByRole('heading', { name: 'Saved' })).toBeVisible();
@@ -64,33 +72,36 @@ test('a saved note clears its draft and an older draft loses', async ({ page }) 
   await page.reload();
   await expect(page.getByLabel('Note')).toHaveValue('A fresh note');
 
-  await page.evaluate(entryId => {
+  const base = await page.getByLabel('Note').evaluate(node => (node as HTMLTextAreaElement).dataset.reviewBase || '');
+  await page.evaluate(({ entryId, reviewBase }) => {
     localStorage.setItem(`media-review-draft:${entryId}`, JSON.stringify({
       text: 'OLD',
-      at: '2000-01-01T00:00:00.000Z',
+      base: '2000-01-01T00:00:00+00:00',
     }));
-  }, id);
+    return reviewBase;
+  }, { entryId: id, reviewBase: base });
   await page.reload();
   await expect(page.getByLabel('Note')).toHaveValue('A fresh note');
+  await expect(page.getByRole('button', { name: 'Restore unsaved note' })).toBeVisible();
 
   await page.evaluate(entryId => {
     localStorage.setItem(`media-review-draft:${entryId}`, JSON.stringify({
       text: '',
-      at: '2099-01-01T00:00:00.000Z',
+      base: '2099-01-01T00:00:00+00:00',
     }));
   }, id);
   await page.reload();
   await expect(page.getByLabel('Note')).toHaveValue('A fresh note');
 
-  await page.evaluate(entryId => {
+  await page.evaluate(({ entryId, reviewBase }) => {
     localStorage.setItem(`media-review-draft:${entryId}`, JSON.stringify({
       text: 'NEWER',
-      at: '2099-01-01T00:00:00.000Z',
+      base: reviewBase,
     }));
-  }, id);
+  }, { entryId: id, reviewBase: base });
   await page.reload();
   await expect(page.getByLabel('Note')).toHaveValue('NEWER');
-  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/after-review-draft.png', fullPage: true });
+  await page.screenshot({ path: shot('after-review-draft.png'), fullPage: true });
 });
 
 test('calendar marks today in the browser timezone', async ({ page }) => {
@@ -101,7 +112,45 @@ test('calendar marks today in the browser timezone', async ({ page }) => {
     return `${pick('year')}-${pick('month')}-${pick('day')}`;
   });
   await expect(page.locator('.cal-day.is-today time')).toHaveAttribute('datetime', today);
-  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/after-calendar-today.png', fullPage: true });
+  await expect(page.locator('.cal-day.is-today')).toHaveAttribute('aria-current', 'date');
+  await page.screenshot({ path: shot('after-calendar-today.png'), fullPage: true });
+});
+
+test('navigation does not wait for a slow progress save', async ({ page }) => {
+  await page.goto('/media/#/library');
+  await page.getByRole('link', { name: /Dune/ }).click();
+  let releaseSave: () => void = () => {};
+  const gate = new Promise<void>(resolve => {
+    releaseSave = resolve;
+  });
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH') await gate;
+    await route.continue();
+  });
+  await page.getByLabel('Progress', { exact: true }).fill('15');
+  await page.getByRole('navigation', { name: 'Media' }).getByRole('link', { name: 'Calendar', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/20\d\d/, { timeout: 3000 });
+  releaseSave();
+});
+
+test('blurring an unchanged note does not overwrite a newer save', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await page.goto(`/media/#/item/${dune.id}`);
+  const note = page.getByLabel('Note');
+  await expect(note).toBeVisible();
+  const changed = await request.patch(`/media/api/entries/${dune.id}`, { data: { review: 'Newer note from the other tab' } });
+  expect(changed.ok()).toBeTruthy();
+  await note.focus();
+  await note.blur();
+  const after = await request.get(`/media/api/entries/${dune.id}`);
+  expect((await after.json()).review).toBe('Newer note from the other tab');
+
+  await note.fill('from the stale tab');
+  await note.blur();
+  await expect(page.locator('#notice')).toHaveText('This note changed in another tab.');
+  const kept = await request.get(`/media/api/entries/${dune.id}`);
+  expect((await kept.json()).review).toBe('Newer note from the other tab');
 });
 
 test('a slower library response cannot replace a newer screen', async ({ page }) => {

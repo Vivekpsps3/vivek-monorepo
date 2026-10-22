@@ -18,15 +18,13 @@ TYPE_ORDER = {"episode": 0, "anticipated": 1, "sequel": 2, "spinoff": 3}
 WATCHED_EXPERIENCES = {"watch", "rewatch"}
 
 
-def build_calendar(db: Session, user_id: int, month_text: str | None, http: httpx.Client, tz: str | None = None) -> dict:
+def build_calendar(
+    db: Session, user_id: int, month_text: str | None, http: httpx.Client, tz: str | None = None
+) -> dict:
     current = today(tz)
     month = parse_month(month_text, current)
     budget = Budget()
-    entries = (
-        db.query(UserEntry)
-        .filter(UserEntry.user_id == user_id)
-        .all()
-    )
+    entries = db.query(UserEntry).filter(UserEntry.user_id == user_id).all()
     entries.sort(key=lambda entry: entry.id)
     experience_kinds = experience_kinds_for(db, user_id, entries)
     events = []
@@ -62,7 +60,9 @@ def parse_month(value: str | None, current: date) -> date:
         fail("Month must look like 2026-10.")
 
 
-def experience_kinds_for(db: Session, user_id: int, entries: list[UserEntry]) -> dict[int, set[str]]:
+def experience_kinds_for(
+    db: Session, user_id: int, entries: list[UserEntry]
+) -> dict[int, set[str]]:
     movie_ids = [entry.id for entry in entries if entry.catalog.kind == "movie"]
     if not movie_ids:
         return {}
@@ -94,7 +94,11 @@ def episode_events(db: Session, entry: UserEntry, month: date) -> list[dict]:
     end = next_month(start)
     episodes = (
         db.query(Episode)
-        .filter(Episode.catalog_id == entry.catalog_id, Episode.air_date >= start, Episode.air_date < end)
+        .filter(
+            Episode.catalog_id == entry.catalog_id,
+            Episode.air_date >= start,
+            Episode.air_date < end,
+        )
         .order_by(Episode.air_date, Episode.season_number, Episode.episode_number)
         .all()
     )
@@ -112,18 +116,20 @@ def episode_events(db: Session, entry: UserEntry, month: date) -> list[dict]:
         mark = progress.get(episode.id)
         short = f"S{episode.season_number} E{episode.episode_number}"
         title = episode.title or short
-        events.append({
-            "type": "episode",
-            "title": title,
-            "short": short,
-            "detail": entry.catalog.title,
-            "because": None,
-            "precision": "day",
-            "release_status": "scheduled",
-            "entry_id": entry.id,
-            "watched": bool(mark and mark.watched),
-            "_date": episode.air_date,
-        })
+        events.append(
+            {
+                "type": "episode",
+                "title": title,
+                "short": short,
+                "detail": entry.catalog.title,
+                "because": None,
+                "precision": "day",
+                "release_status": "scheduled",
+                "entry_id": entry.id,
+                "watched": bool(mark and mark.watched),
+                "_date": episode.air_date,
+            }
+        )
     return events
 
 
@@ -134,7 +140,11 @@ def anticipated_events(db: Session, entry: UserEntry) -> list[dict]:
     events = []
     seen = set()
     for release in releases:
-        precision = release.precision if release.precision in {"day", "month", "year", "unknown"} else "unknown"
+        precision = (
+            release.precision
+            if release.precision in {"day", "month", "year", "unknown"}
+            else "unknown"
+        )
         anchor = release.released_on if precision in {"day", "month", "year"} else None
         if precision in {"day", "month", "year"} and anchor is None:
             precision = "unknown"
@@ -147,7 +157,14 @@ def anticipated_events(db: Session, entry: UserEntry) -> list[dict]:
     return events
 
 
-def movie_event(entry: UserEntry, kind: str, anchor: date | None, precision: str, detail: str | None, status: str | None = None) -> dict:
+def movie_event(
+    entry: UserEntry,
+    kind: str,
+    anchor: date | None,
+    precision: str,
+    detail: str | None,
+    status: str | None = None,
+) -> dict:
     return {
         "type": kind if kind != "unknown" else "anticipated",
         "title": entry.catalog.title,
@@ -162,7 +179,9 @@ def movie_event(entry: UserEntry, kind: str, anchor: date | None, precision: str
     }
 
 
-def related_event(item: dict, source: UserEntry, match: UserEntry | None, experience_kinds: dict[int, set[str]]) -> dict | None:
+def related_event(
+    item: dict, source: UserEntry, match: UserEntry | None, experience_kinds: dict[int, set[str]]
+) -> dict | None:
     relation = item.get("relation")
     if relation not in {"sequel", "spinoff"}:
         return None
@@ -175,7 +194,11 @@ def related_event(item: dict, source: UserEntry, match: UserEntry | None, experi
         return None
     if match is not None and is_watched_movie(match, experience_kinds.get(match.id, set())):
         return None
-    precision = item.get("precision") if item.get("precision") in {"day", "month", "year", "unknown"} else "unknown"
+    precision = (
+        item.get("precision")
+        if item.get("precision") in {"day", "month", "year", "unknown"}
+        else "unknown"
+    )
     anchor = None
     if precision in {"day", "month", "year"}:
         anchor = parse_anchor(item.get("released_on"))
@@ -213,7 +236,11 @@ def find_library_movie(entries: list[UserEntry], item: dict) -> UserEntry | None
     if source and source_id:
         for entry in entries:
             catalog = entry.catalog
-            if catalog.kind == "movie" and catalog.source == source and catalog.source_id == source_id:
+            if (
+                catalog.kind == "movie"
+                and catalog.source == source
+                and catalog.source_id == source_id
+            ):
                 return entry
     for entry in entries:
         catalog = entry.catalog
@@ -231,9 +258,17 @@ def next_month(month: date) -> date:
 def bucket_for(event: dict, month: date, current: date):
     released = event.get("_date")
     precision = event.get("precision")
-    if precision == "day" and isinstance(released, date) and (released.year, released.month) == (month.year, month.month):
+    if (
+        precision == "day"
+        and isinstance(released, date)
+        and (released.year, released.month) == (month.year, month.month)
+    ):
         return ("day", released.isoformat())
-    if precision == "month" and isinstance(released, date) and (released.year, released.month) == (month.year, month.month):
+    if (
+        precision == "month"
+        and isinstance(released, date)
+        and (released.year, released.month) == (month.year, month.month)
+    ):
         return ("month",)
     if precision == "year" and isinstance(released, date) and released.year == month.year:
         return ("year",)
@@ -327,4 +362,8 @@ def pack(events: list[dict], month: date, current: date, partial: bool) -> dict:
 
 
 def sort_key(event: dict):
-    return (TYPE_ORDER.get(event["type"], 9), (event.get("title") or "").lower(), event.get("short") or "")
+    return (
+        TYPE_ORDER.get(event["type"], 9),
+        (event.get("title") or "").lower(),
+        event.get("short") or "",
+    )

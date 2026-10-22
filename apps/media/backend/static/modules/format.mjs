@@ -132,15 +132,20 @@ export function progressPreview(value, unit) {
   return text;
 }
 
-/** A draft wins only when it is non-empty, different, and newer than the server review. */
+/**
+ * One draft key per entry, shared by every tab. `base` is the server
+ * review_updated_at the draft started from, not the client clock.
+ * The draft is shown only while that base still matches. Otherwise the server
+ * text stays, and the caller can offer to restore the draft.
+ */
 export function chooseReview(serverReview, serverUpdatedAt, draft) {
   const server = serverReview ?? "";
-  if (!draft || typeof draft.text !== "string" || draft.text === "" || draft.text === server) return server;
-  const draftMs = Date.parse(draft.at || "");
-  if (!Number.isFinite(draftMs)) return server;
-  const serverMs = Date.parse(serverUpdatedAt || "");
-  if (!Number.isFinite(serverMs) || draftMs > serverMs) return draft.text;
-  return server;
+  const unchanged = !draft || typeof draft.text !== "string" || draft.text === "" || draft.text === server;
+  if (unchanged) return { text: server, restore: false };
+  const base = Object.prototype.hasOwnProperty.call(draft, "base") ? (draft.base ?? "") : null;
+  const serverBase = serverUpdatedAt ?? "";
+  if (base !== null && String(base) === String(serverBase)) return { text: draft.text, restore: false };
+  return { text: server, restore: true };
 }
 
 export function normalizeLibraryQuery(search) {
@@ -148,10 +153,16 @@ export function normalizeLibraryQuery(search) {
   let changed = false;
   let droppedSort = false;
   const sort = params.get("sort");
-  if (sort != null && sort !== "" && !LIBRARY_SORTS.has(sort)) {
-    params.delete("sort");
-    changed = true;
-    droppedSort = true;
+  if (sort != null && sort !== "") {
+    const normalized = sort.toLowerCase();
+    if (!LIBRARY_SORTS.has(normalized)) {
+      params.delete("sort");
+      changed = true;
+      droppedSort = true;
+    } else if (normalized !== sort) {
+      params.set("sort", normalized);
+      changed = true;
+    }
   }
   const kind = params.get("kind");
   if (kind != null && kind !== "" && !LIBRARY_KINDS.has(kind)) {
@@ -169,7 +180,7 @@ export function normalizeLibraryQuery(search) {
 export function coverImage(url) {
   const safe = safeUrl(url);
   if (!safe) return "";
-  return `<img alt="" src="${escapeHtml(safe)}">`;
+  return `<img alt="" src="${escapeHtml(safe)}" width="300" height="300" loading="lazy" decoding="async">`;
 }
 
 export function monthLabel(month) {

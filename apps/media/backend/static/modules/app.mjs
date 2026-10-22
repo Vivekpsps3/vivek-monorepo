@@ -141,8 +141,9 @@ async function viewCalendar(params, ticket) {
     if (!day) return `<div class="cal-day is-outside"></div>`;
     const events = byDay.get(day) || [];
     const todayClass = day === today ? " is-today" : "";
+    const current = day === today ? ` aria-current="date"` : "";
     const chips = events.map(event => eventChip(event, true)).join("");
-    return `<div class="cal-day${todayClass}"><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${chips}</div>`;
+    return `<div class="cal-day${todayClass}"${current}><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${chips}</div>`;
   }).join("");
   const agendaDays = (data.days || []).filter(day => (day.events || []).length);
   const agenda = agendaDays.length
@@ -426,7 +427,8 @@ async function viewItem(id, ticket, forcedSeason = null) {
             <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" aria-pressed="${entry.favorite ? "true" : "false"}">Favorite</button>
             <button type="button" class="flag${entry.anticipated ? " is-on" : ""}" data-flag="anticipated" aria-pressed="${entry.anticipated ? "true" : "false"}">Soon</button>
           </div>
-          <textarea name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="3" aria-label="Note">${esc(review)}</textarea>
+          <textarea name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="3" aria-label="Note">${esc(review.text)}</textarea>
+          ${review.restore ? `<p class="meta"><button type="button" data-restore-note="${entry.id}">Restore unsaved note</button></p>` : ""}
           ${progress ? progressField(entry) : ""}
         </div>
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
@@ -435,18 +437,27 @@ async function viewItem(id, ticket, forcedSeason = null) {
       </div>
     </article>
   `;
+  const note = app.querySelector("textarea[data-review]");
+  if (note instanceof HTMLTextAreaElement) {
+    note.dataset.saved = entry.review ?? "";
+    note.dataset.reviewBase = entry.review_updated_at ?? "";
+  }
+  if (readProgressDraft(entry.id)) setProgressStatus("Progress wasn't saved", true);
   loadWeb(entry, ticket);
 }
 
 function progressField(entry) {
   const units = progressUnits(entry.kind);
-  const unit = units.some(item => item.value === entry.progress_unit) ? entry.progress_unit : units[0].value;
-  const value = entry.progress_value ?? "";
+  const serverUnit = units.some(item => item.value === entry.progress_unit) ? entry.progress_unit : units[0].value;
+  const serverValue = entry.progress_value ?? "";
+  const draft = readProgressDraft(entry.id);
+  const unit = draft && units.some(item => item.value === draft.unit) ? draft.unit : serverUnit;
+  const value = draft ? draft.value : serverValue;
   const preview = progressPreview(value, unit);
   return `<div class="progress-field">
     <label for="progress">Progress</label>
     <div class="progress-controls">
-      <input id="progress" name="progress_value" type="text" inputmode="decimal" autocomplete="off" data-progress="${entry.id}" data-saved="${esc(`${value}|${unit}`)}" value="${esc(value)}" aria-describedby="progress-help">
+      <input id="progress" name="progress_value" type="text" inputmode="decimal" autocomplete="off" data-progress="${entry.id}" data-saved="${esc(`${serverValue}|${serverUnit}`)}" value="${esc(value)}" aria-invalid="false" aria-describedby="progress-help progress-status">
       <select id="progress-unit" aria-label="Unit" data-progress-unit="${entry.id}">${units.map(item => `<option value="${esc(item.value)}"${item.value === unit ? " selected" : ""}>${esc(item.label)}</option>`).join("")}</select>
     </div>
     <p id="progress-help" class="meta">${esc(preview)}</p>
@@ -611,16 +622,48 @@ function readDraftRecord(id) {
     if (!raw || !raw.startsWith("{")) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.text !== "string") return null;
-    return { text: parsed.text, at: typeof parsed.at === "string" ? parsed.at : "" };
+    const record = { text: parsed.text, at: typeof parsed.at === "string" ? parsed.at : "" };
+    if (Object.prototype.hasOwnProperty.call(parsed, "base")) record.base = parsed.base ?? "";
+    return record;
   } catch {
     return null;
   }
 }
 
-function writeDraft(id, text) {
+function writeDraft(id, text, base) {
   try {
-    localStorage.setItem(draftKey(id), JSON.stringify({ text, at: new Date().toISOString() }));
+    localStorage.setItem(draftKey(id), JSON.stringify({
+      text,
+      at: new Date().toISOString(),
+      base: base ?? "",
+    }));
   } catch { /* private mode */ }
+}
+
+function progressDraftKey(id) {
+  return `media-progress-draft:${id}`;
+}
+
+function readProgressDraft(id) {
+  try {
+    const raw = localStorage.getItem(progressDraftKey(id));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.value !== "string" || typeof parsed.unit !== "string") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeProgressDraft(id, value, unit) {
+  try {
+    localStorage.setItem(progressDraftKey(id), JSON.stringify({ value, unit }));
+  } catch { /* private mode */ }
+}
+
+function clearProgressDraft(id) {
+  try { localStorage.removeItem(progressDraftKey(id)); } catch { /* ignore */ }
 }
 
 function clearDraft(id) {
@@ -676,7 +719,7 @@ function settleLibraryHash() {
 }
 
 async function render() {
-  await saveProgress();
+  saveProgress();
   searchLoads.start("");
   const ticket = routeLoads.start();
   const libraryNotice = settleLibraryHash();
@@ -866,6 +909,17 @@ document.addEventListener("click", async event => {
     keepButtonClick(event, target);
     const tracks = cover.parentElement?.querySelector(".cover-tracks");
     if (tracks) tracks.hidden = !tracks.hidden;
+    return;
+  }
+  const restore = target.closest("[data-restore-note]");
+  if (restore) {
+    keepButtonClick(event, target);
+    const draft = readDraftRecord(restore.getAttribute("data-restore-note"));
+    const box = document.querySelector("textarea[data-review]");
+    if (draft && box instanceof HTMLTextAreaElement) {
+      box.value = draft.text;
+      box.focus();
+    }
     return;
   }
   const button = target.closest("[data-action]");
@@ -1073,14 +1127,24 @@ document.addEventListener("focusout", async event => {
     return;
   }
   if (!(box instanceof HTMLTextAreaElement) || !box.dataset.review) return;
+  if (box.value === (box.dataset.saved ?? "")) return;
   const id = box.dataset.review;
+  const sent = box.value;
   try {
-    await api(`/api/entries/${id}`, {
+    const updated = await api(`/api/entries/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ review: box.value }),
+      body: JSON.stringify({ review: sent, review_base: box.dataset.reviewBase ?? "" }),
     });
-    clearDraft(id);
+    if (readDraftRecord(id)?.text === sent) clearDraft(id);
+    if (box.isConnected) {
+      box.dataset.saved = sent;
+      box.dataset.reviewBase = updated?.review_updated_at || "";
+    }
   } catch (error) {
+    if (error?.status === 409) {
+      setNotice("This note changed in another tab.", "alert");
+      return;
+    }
     fail(error);
   }
 });
@@ -1088,7 +1152,7 @@ document.addEventListener("focusout", async event => {
 document.addEventListener("input", event => {
   const target = event.target;
   if (target instanceof HTMLTextAreaElement && target.dataset.review) {
-    writeDraft(target.dataset.review, target.value);
+    writeDraft(target.dataset.review, target.value, target.dataset.reviewBase ?? "");
   }
   if (target instanceof HTMLInputElement && target.id === "progress") {
     const help = document.querySelector("#progress-help");
@@ -1179,9 +1243,12 @@ function progressSnapshot() {
 
 function setProgressStatus(message, failed = false) {
   const status = document.querySelector("#progress-status");
+  const input = document.querySelector("#progress");
   if (!status) return;
   status.textContent = message;
   status.classList.toggle("is-error", failed);
+  status.setAttribute("role", failed ? "alert" : "status");
+  if (input) input.setAttribute("aria-invalid", failed ? "true" : "false");
   if (message === "Saved") {
     window.setTimeout(() => {
       if (status.isConnected && status.textContent === "Saved") status.textContent = "";
@@ -1189,39 +1256,67 @@ function setProgressStatus(message, failed = false) {
   }
 }
 
+function progressProblem(value, unit) {
+  if (value === "") return "";
+  if (!/^\d+(\.\d+)?$/.test(value)) return "Progress must be a number.";
+  if (unit === "percent" && Number(value) > 100) return "Percent progress is between 0 and 100.";
+  return "";
+}
+
+let progressFailure = "";
+
+function failProgress(payload, message) {
+  writeProgressDraft(payload.id, payload.value, payload.unit);
+  progressFailure = "Progress wasn't saved";
+  if (payload.input?.isConnected) {
+    setProgressStatus(message || progressFailure, true);
+    return;
+  }
+  setNotice(progressFailure, "alert");
+}
+
 function saveProgress() {
   const snap = progressSnapshot();
   if (!snap) return progressChain;
   const key = `${snap.value}|${snap.unit}`;
   if (snap.input.dataset.saved === key) return progressChain;
-  const task = progressChain.then(async () => {
-    const current = progressSnapshot();
-    if (!current || current.id !== snap.id) return;
-    const nowKey = `${current.value}|${current.unit}`;
-    if (current.input.dataset.saved === nowKey) return;
-    try {
-      await api(`/api/entries/${current.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          progress_value: current.value === "" ? null : current.value,
-          progress_unit: current.unit,
-        }),
-      });
-      if (current.input.isConnected) {
-        current.input.dataset.saved = nowKey;
-        setProgressStatus("Saved");
-      }
-    } catch (error) {
-      if (error?.name === "AbortError") return;
-      if (error?.status === 401) {
-        fail(error);
-        return;
-      }
-      setProgressStatus(error?.message || "Not saved", true);
-    }
-  });
+  const payload = { id: snap.id, value: snap.value, unit: snap.unit, key, input: snap.input };
+  const task = progressChain.then(() => commitProgress(payload));
   progressChain = task.catch(() => {});
   return task;
+}
+
+async function commitProgress(payload) {
+  if (payload.input.isConnected && payload.input.dataset.saved === payload.key) return;
+  const problem = progressProblem(payload.value, payload.unit);
+  if (problem) {
+    failProgress(payload, problem);
+    return;
+  }
+  try {
+    await api(`/api/entries/${payload.id}`, {
+      method: "PATCH",
+      keepalive: true,
+      signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({
+        progress_value: payload.value === "" ? null : payload.value,
+        progress_unit: payload.unit,
+      }),
+    });
+    clearProgressDraft(payload.id);
+    progressFailure = "";
+    if (payload.input.isConnected) {
+      payload.input.dataset.saved = payload.key;
+      setProgressStatus("Saved");
+    }
+  } catch (error) {
+    if (error?.status === 401) {
+      fail(error);
+      return;
+    }
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    failProgress(payload, timedOut ? "Progress wasn't saved" : (error?.message || "Progress wasn't saved"));
+  }
 }
 
 document.addEventListener("keydown", event => {
@@ -1244,5 +1339,27 @@ try {
   });
 } catch { /* older browsers */ }
 
-window.addEventListener("hashchange", () => { setNotice(""); render(); });
+function paintToday() {
+  const today = localTodayIso();
+  document.querySelectorAll(".cal-day").forEach(cell => {
+    const time = cell.querySelector("time");
+    const on = Boolean(time && time.getAttribute("datetime") === today);
+    cell.classList.toggle("is-today", on);
+    if (on) cell.setAttribute("aria-current", "date");
+    else cell.removeAttribute("aria-current");
+  });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") paintToday();
+});
+
+window.addEventListener("hashchange", () => {
+  setNotice("");
+  render().then(() => {
+    if (!progressFailure) return;
+    setNotice(progressFailure, "alert");
+    progressFailure = "";
+  });
+});
 render();
