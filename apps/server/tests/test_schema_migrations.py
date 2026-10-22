@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from alembic import command
 
 from apps.server.migrations import (
+    _diff_summary,
     adopt_or_upgrade,
     check_drift,
     connect,
@@ -507,7 +508,22 @@ def test_in_place_baseline_edit_is_caught_by_model_diff(tmp_path, monkeypatch):
     assert model_diff(fresh) == []
     diff = model_diff(published)
     assert any(item and item[0] == "add_column" for item in diff)
+    assert "add_column settings.note" in _diff_summary(diff)
     assert current_revision(published) == head_revision()
+
+
+def test_diff_summary_names_the_table_and_column():
+    summary = _diff_summary(
+        [
+            ("add_column", None, "settings", Column("note", Integer())),
+            ("add_table", type("Table", (), {"name": "widgets"})()),
+            ("modify_nullable", None, "settings", "note"),
+            (),
+        ]
+    )
+    assert summary == (
+        "add_column settings.note, add_table widgets, modify_nullable settings.note, change"
+    )
 
 
 def test_sqlite_url_opens_a_database_whose_name_contains_reserved_characters(tmp_path):

@@ -180,6 +180,10 @@ try {
   await authed.goto(base + '/finance/embed', { waitUntil: 'networkidle' });
   await authed.locator('app-net-worth-embed').waitFor();
   await assertClean(authed, 'signed-in embed');
+  // A Trusted Types sink that fires after the first paint is still a violation.
+  // pageerror does not see an exception the page caught, so settle and check again.
+  await authed.waitForTimeout(1000);
+  await assertClean(authed, 'signed-in embed settled');
   assert.deepEqual(authedErrors, [], `Signed-in browser errors: ${authedErrors.join('\n')}`);
   await signedIn.close();
   console.log('Browser checks passed: desktop/mobile portfolio, crypto demo, shared login, signed-in finance, all protected apps, and zero CSP violations');

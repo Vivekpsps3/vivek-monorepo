@@ -244,9 +244,18 @@ def model_diff(path: Path, *, readonly: bool = False):
 
 
 def _diff_summary(diff) -> str:
+    """Name the drifting object. Column ops are ``(op, schema, table, column)``."""
     parts = []
     for item in diff:
-        kind = item[0] if item else "change"
+        if not item:
+            parts.append("change")
+            continue
+        kind = item[0]
+        if len(item) >= 4:
+            column = item[3]
+            column_name = getattr(column, "name", column)
+            parts.append(f"{kind} {item[2]}.{column_name}")
+            continue
         subject = item[1] if len(item) > 1 else ""
         name = getattr(subject, "name", None) or (subject if isinstance(subject, str) else "")
         parts.append(f"{kind} {name}".strip())

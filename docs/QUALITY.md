@@ -68,12 +68,12 @@ Prettier is not configured. The tree has no formatter today, and formatting both
 
 | Suite | Statements | Missed | Measured | Floor |
 | --- | ---: | ---: | ---: | ---: |
-| Finance | 2265 | 356 | 84.28% | 83.28% |
+| Finance | 2265 | 354 | 84.37% | 83.28% |
 | Travel | 2092 | 389 | 81.41% | 80.41% |
 | Media | 2377 | 675 | 71.60% | 70.60% |
-| Server | 1254 | 483 | 61.48% | 60.48% |
+| Server | 1264 | 482 | 61.87% | 61.53% |
 
-Server coverage rose once migrations, schema, redirects, and the security-header middleware gained tests. Auth, checks, database, main, and monitor are still untested, and the floor still counts those modules. Omitting them would make the gate look healthier than the package is. Finance is pinned from CI's 84.28% (356 missed). A local run measures 84.37% because two `rate_limit.py` statements depend on the environment, so `make coverage-pin` on a laptop would move that row.
+Server coverage rose once migrations, schema, redirects, and the security-header middleware gained tests. Auth, checks, database, main, and monitor are still untested, and the floor still counts those modules. Omitting them would make the gate look healthier than the package is. The server fail-under floor is 61.53%. This branch measures 61.87% (1264 statements, 482 missed); the schema-diff failure now names the table and column, and those lines are tested. Finance's floor stays 83.28%. Its measured total is stable at 84.37% (354 missed): `tests/conftest.py` shifts the rate-limit clock so the two `rate_limit.py` statements that depend on host uptime always run, and it clears limiter env vars before each test.
 
 Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json`. `scripts/karma-coverage-summary.mjs` appends the totals to the GitHub step summary. Karma only instruments files the specs actually load, so these totals are not whole-app coverage. Measured totals are finance 61.46 / 53.32 / 57.12 / 63.53 and site 62.72 / 48.48 / 56 / 64. Thresholds sit about 1 point below those totals:
 
@@ -90,4 +90,4 @@ Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json
 
 `npm run e2e` in `apps/finance/frontend` still uses `ng serve` at `/`. The container route check stays `make docker-build && make test-suite-routes` (`python -m apps.server.checks`).
 
-Traces and screenshots are kept on failure (`trace: retain-on-failure`, retries stay 0). CI uploads `test-results` and `playwright-report` when the job fails. Playwright's browser download is cached on the `@playwright/test` version and shared by the e2e job and the image job. A cache hit installs operating-system dependencies only.
+Traces and screenshots are kept on failure (`trace: retain-on-failure`, retries stay 0). CI uploads `test-results` and `playwright-report` when the job fails. Playwright's browser download is cached on the `@playwright/test` version and shared by the finance e2e job, the media e2e job, and the image job. Finance and the image install operating-system dependencies on a cache hit. Media installs Chromium only: the GitHub-hosted image already has the shared libraries, and `--with-deps` was spending about 16 minutes downloading fonts.
