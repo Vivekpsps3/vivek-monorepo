@@ -7,7 +7,7 @@ release="${1:?Usage: deploy-site.sh <tested-sha> <image.tar.gz>}"
 archive="${2:?Image artifact required}"
 [[ "$release" =~ ^[0-9a-f]{40}$ ]]
 read -r -a docker_cmd <<< "${DOCKER_COMMAND:-docker}"
-env_file="${SITE_ENV_FILE:-$root/.env}"
+env_file="${SITE_ENV_FILE:-/home/vivek/Deployments/personal-site/.env}"
 exec 9>/tmp/personal-site-deploy.lock
 flock -w 30 9
 scratch="$(mktemp -d)"

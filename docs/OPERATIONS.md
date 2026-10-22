@@ -12,7 +12,9 @@ ports, mounts, limits, health checks, backup schedule, and monitoring helper.
 The root Dockerfile builds both UIs and the modular FastAPI service. Its pinned
 base images and hashed Python lock make builds reproducible.
 
-Secrets are supplied through the existing private repo-root `.env` (mode 600).
+Secrets are supplied through `/home/vivek/Deployments/personal-site/.env`
+(mode 600, parent directory mode 700), outside all Git checkouts. Deployment and
+backup scripts accept `SITE_ENV_FILE` to override this path.
 Do not bake secrets into Compose, the Dockerfile, or images. The shared nginx-edge
 and its Let's Encrypt certificates remain existing host infrastructure. The site's
 edge vhost source is ops/nginx/site.conf; adding/replacing this vhost requires a
@@ -65,8 +67,13 @@ checks run against the built image. Official Actions and image bases are pinned.
 
 The Deploy workflow accepts only successful trusted main push artifacts. It
 rejects stale SHAs; manual runs also require a successful main artifact. The
-existing runner downloads the image and checks out the tested deployment definition
-in the canonical repo, then runs scripts/deploy-site.sh. It does not build images
+existing runner downloads the image and checks out the exact tested SHA into a
+unique private directory under `RUNNER_TEMP`, then runs scripts/deploy-site.sh.
+Git authentication uses the job token through an ephemeral credential helper; no
+credential is stored in Git configuration. An `always()` step removes the source
+and image artifact on success or failure. Forced host/process termination can
+interrupt cleanup; the runner also cleans its temporary area between jobs. There
+is no permanent monorepo checkout or copied deployment configuration on the host. It does not build images
 or install npm/pip packages on production. Runtime code is baked into the image,
 so changing the checkout does not change the running application.
 
@@ -81,17 +88,28 @@ Database restoration is never automatic after users may have written data. Futur
 schema changes require explicit migration and backward-compatibility planning.
 Keep preceding images available; do not prune rollback images indiscriminately.
 
-Commands from the canonical checkout (as vivek):
+Commands from any directory on the host (as vivek):
 
 ```sh
-sudo -n docker compose ps
+sudo -n docker ps --filter label=com.docker.compose.project=personal-site
 sudo -n docker logs --tail 100 personal-site-site-1
 curl -fsS http://127.0.0.1:8085/health/ready
-DOCKER_COMMAND='sudo -n docker' ./scripts/backup-site.sh
+sudo -n docker exec personal-site-maintenance-1 python /app/backup-site.py --source /data/site.db --directory /backups
 ```
+
+For Compose administration, use a temporary checkout of the running image
+revision or extract `/app/compose.yml` from that image into a temporary directory.
+Pass `--env-file /home/vivek/Deployments/personal-site/.env` and select the running
+image explicitly; do not accidentally build/start the default development image.
+Docker restart policies restore containers after reboot without source files.
 
 The old `_control` finance-tracker stack must stay stopped; do not start its old
 containers against retired databases or compete for :8085.
+
+Legacy cutover databases and pre-existing local backups are temporarily retained
+under `/home/vivek/Deployments/personal-site/recovery/`, separate from active Docker
+volumes. Review removal after the original recovery window (2026-10-29) and restore
+validation. This directory is recovery material, not an application dependency.
 
 ## First database consolidation
 
