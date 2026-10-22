@@ -123,9 +123,9 @@ tests also upgrade an empty database and stamp a fixture built the way
 production was built (`create_all`, `site_schema` version 1, Finance revision
 `e0f6a2b3c4d5`).
 
-See what a database would do before changing it. The check-in rehearsal builds
-a prod-shaped file from current `main` (that tree's own `create_all` path,
-including the Finance `alembic_version` row) and fills it through the app:
+See what a database would do before changing it. The check-in script runs two
+rehearsals. The mode is an argument (`REHEARSAL=adopt`, `upgrade`, or `both`);
+it is not inferred from whatever `origin/main` creates today.
 
 ```sh
 make db-seed-dev
@@ -134,12 +134,31 @@ bash scripts/validate-seeded-adoption.sh
 
 `make db-seed-dev` creates `.local/data/site.db` with this branch's migrations,
 starts the app, and inserts synthetic Finance, Travel, and Media rows through
-the HTTP handlers. `scripts/validate-seeded-adoption.sh` is the deploy
-rehearsal: it builds the unstamped database from a `main` worktree, seeds it
-through that app, runs `--plan --require-existing` on a copy, then runs the
-backup, migrate, and site containers. `--plan` reads that copy and does not
-write it. A successful adopt reports `schema_diff` and `foreign_key_check`
-as empty lists.
+the HTTP handlers.
+
+`adopt` builds an unstamped v1 file from the pinned pre-adoption commit
+`8dc554e8094237419571551ff82b0fbfe115bfbd` (that commit's own `create_all`
+path, including the Finance `alembic_version` row), seeds it through that
+app, and requires `--plan` to stamp `site_schema_v1` with an empty diff.
+Later commits on `main` do not change that fixture.
+
+`upgrade` builds a database from `UPGRADE_FROM` (default `origin/main`).
+CI sets that to the pull request base, or to the push's previous commit, so
+the merge rehearses the migrations that just landed against the previous
+main. `--plan` must be the forward action (`current` when the revisions
+match, `upgrade` when this branch is a descendant). Applying it keeps the
+row counts of the tables that already existed, and the schema diff of the
+result against this branch's models must be empty. A `current` plan does
+not excuse a revision that was edited in place.
+
+Both rehearsals then run backup, migrate, and the site container. `--plan`
+reads its copy and does not write it. A successful adopt reports
+`schema_diff` and `foreign_key_check` as empty lists. Every push to `main`
+runs both rehearsals, and Deploy requires that step to have succeeded.
+Pull requests run them when the diff touches models, the Alembic tree,
+Compose, the image, or the deploy scripts. Files already in
+`apps/server/alembic/versions/` are append-only: a pull request or push
+that modifies or deletes one fails CI. New revision files are fine.
 
 ```sh
 SITE_DATABASE_URL=sqlite:////absolute/site-plan.db python -m apps.server.migrations --plan --require-existing

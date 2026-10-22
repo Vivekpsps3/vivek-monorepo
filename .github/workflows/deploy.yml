@@ -46,6 +46,18 @@ jobs:
           test "$sha" = "$current"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      - name: Require the seeded schema rehearsal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ steps.release.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" --jq '[.jobs[] | select(.name == "Unified Site Release") | .steps[] | select(.name == "Seeded schema rehearsals") | .conclusion] | first // ""')"
+          if [ "$conclusion" != "success" ]; then
+            echo "Seeded schema rehearsals concluded '${conclusion:-missing}'; refusing to deploy" >&2
+            exit 1
+          fi
       - name: Create temporary deployment workspace
         run: |
           set -euo pipefail
