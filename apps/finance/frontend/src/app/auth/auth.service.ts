@@ -263,7 +263,7 @@ export class AuthService {
     } catch {
       // Same failure shape for wrong passphrase and unknown username (decoy wraps).
       throw new Error(
-        'Sign-in failed. Check username (not email, unless that is your enrolled username) and vault passphrase. ' +
+        'Sign-in failed. Check your username, not your email, and your vault passphrase. ' +
           'A browser that is already signed in only needs the passphrase on Unlock vault—use that username on new browsers.'
       );
     }

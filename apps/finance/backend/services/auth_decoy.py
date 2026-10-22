@@ -14,6 +14,8 @@ import hmac
 import logging
 import os
 import secrets
+import tempfile
+import threading
 from pathlib import Path
 
 from apps.finance.backend.kdf_policy import MIN_PBKDF2_ITERATIONS
@@ -28,6 +30,7 @@ AUTH_WRAP_BYTES = _AES_GCM_PACKING + _P256_PKCS8_BYTES
 _SALT_BYTES = 16
 _cached_key: bytes | None = None
 _warned_ephemeral = False
+_decoy_lock = threading.Lock()
 
 
 def _sqlite_file() -> Path | None:
@@ -42,14 +45,26 @@ def _sqlite_file() -> Path | None:
     return Path(path)
 
 
-def _read_secret_file(path: Path) -> bytes | None:
+def _classify_secret(path: Path) -> tuple[str, bytes | None]:
+    """Return ``ok``, ``absent``, ``short``, or ``error``.
+
+    ``error`` means the file may be intact but could not be read. Callers must
+    not replace it.
+    """
     try:
         raw = path.read_bytes()
-    except OSError:
-        return None
+    except FileNotFoundError:
+        return "absent", None
+    except OSError as exc:
+        logger.error(
+            "auth decoy secret at %s cannot be read (%s); leaving the file in place",
+            path,
+            getattr(exc, "errno", exc),
+        )
+        return "error", None
     if len(raw) < 32:
-        return None
-    return raw
+        return "short", None
+    return "ok", raw
 
 
 def _fsync_dir(directory: Path) -> None:
@@ -66,94 +81,91 @@ def _fsync_dir(directory: Path) -> None:
 
 
 def _publish_secret(path: Path, raw: bytes, *, exclusive: bool) -> bool:
-    """Write a temp file, fsync, then link or replace into place.
+    """Write a unique temp file, fsync, then link or replace into place.
 
-    ``exclusive`` uses ``os.link`` so two processes creating the file keep the
-    first complete secret. A corrupt file is replaced instead.
+    ``exclusive`` uses ``os.link`` so two creators keep the first complete secret.
+    A short file is replaced instead.
     """
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     except OSError:
         return False
+    tmp = Path(tmp_name)
     try:
-        os.fchmod(fd, 0o600)
-        os.write(fd, raw)
-        os.fsync(fd)
-    except OSError:
         try:
-            os.unlink(tmp)
+            os.fchmod(fd, 0o600)
+            os.write(fd, raw)
+            os.fsync(fd)
         except OSError:
-            pass
-        return False
-    finally:
-        os.close(fd)
-    try:
-        if exclusive:
-            os.link(tmp, path)
-        else:
-            os.replace(tmp, path)
-    except FileExistsError:
-        return False
-    except OSError:
-        return False
-    else:
-        if exclusive:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
+            return False
+        finally:
+            os.close(fd)
+        try:
+            if exclusive:
+                os.link(tmp, path)
+            else:
+                os.replace(tmp, path)
+        except FileExistsError:
+            return False
+        except OSError:
+            return False
         _fsync_dir(path.parent)
         return True
     finally:
         try:
-            if tmp.exists():
-                os.unlink(tmp)
+            tmp.unlink()
         except OSError:
             pass
 
 
 def _ensure_secret_file(path: Path) -> bytes | None:
-    existing = _read_secret_file(path)
-    if existing is not None:
+    status, existing = _classify_secret(path)
+    if status == "ok":
         return existing
+    if status == "error":
+        return None
     fresh = secrets.token_bytes(32)
-    if path.exists():
-        logger.error("auth decoy secret at %s is missing or short; regenerating", path)
-        if _publish_secret(path, fresh, exclusive=False):
-            return fresh
-        return _read_secret_file(path)
-    if _publish_secret(path, fresh, exclusive=True):
-        return fresh
-    # Another process published a complete file between the read and the link.
-    return _read_secret_file(path)
+    if status == "short":
+        logger.error("auth decoy secret at %s is short; regenerating", path)
+        published = _publish_secret(path, fresh, exclusive=False)
+    else:
+        published = _publish_secret(path, fresh, exclusive=True)
+    if not published and status == "absent":
+        status, existing = _classify_secret(path)
+        return existing if status == "ok" else None
+    status, on_disk = _classify_secret(path)
+    if status == "ok":
+        return on_disk
+    return None
 
 
 def reset_decoy_state() -> None:
     """Drop the process cache. Tests use this to simulate a restart."""
     global _cached_key, _warned_ephemeral
-    _cached_key = None
-    _warned_ephemeral = False
+    with _decoy_lock:
+        _cached_key = None
+        _warned_ephemeral = False
 
 
 def _persistent_key() -> bytes:
     global _cached_key, _warned_ephemeral
-    if _cached_key is not None:
+    with _decoy_lock:
+        if _cached_key is not None:
+            return _cached_key
+        database = _sqlite_file()
+        raw: bytes | None = None
+        if database is not None:
+            raw = _ensure_secret_file(database.parent / "auth-decoy-secret")
+        if raw is None:
+            raw = secrets.token_bytes(32)
+            if database is not None and not _warned_ephemeral:
+                _warned_ephemeral = True
+                logger.error(
+                    "auth decoy secret is process-local; set AUTH_DECOY_SECRET to keep responses stable across restarts"
+                )
+        _cached_key = hashlib.sha256(b"finance-auth-decoy-v1\0" + raw).digest()
         return _cached_key
-    database = _sqlite_file()
-    raw: bytes | None = None
-    if database is not None:
-        raw = _ensure_secret_file(database.parent / "auth-decoy-secret")
-    if raw is None:
-        raw = secrets.token_bytes(32)
-        if database is not None and not _warned_ephemeral:
-            _warned_ephemeral = True
-            logger.error(
-                "auth decoy secret is process-local; set AUTH_DECOY_SECRET to keep responses stable across restarts"
-            )
-    _cached_key = hashlib.sha256(b"finance-auth-decoy-v1\0" + raw).digest()
-    return _cached_key
 
 
 def decoy_key() -> bytes:

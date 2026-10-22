@@ -3,7 +3,8 @@
 ``RATE_LIMIT_PER_MIN`` remains an optional shared cap (auth POSTs and market
 research). Auth endpoints also have an always-on per-IP limit. Challenge and
 verify are limited per (account, IP), and failed verifies have a separate
-higher per-account cap. Lookup is per-IP only: its body is deterministic, so a
+higher per-account cap. That cap rejects only further failures. A valid
+signature is never counted or blocked. Lookup is per-IP only: its body is deterministic, so a
 repeat teaches an attacker nothing, and a per-account cap there lets one IP
 hold the owner's login at 429.
 
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import threading
 import time
 from collections import OrderedDict
 from typing import Callable
@@ -39,6 +41,8 @@ _auth_failed_verify_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
 
 _MAX_BUCKETS = 10_000
 _WINDOW_SECONDS = 60.0
+# Sync routes run on the threadpool while the IP middleware runs on the event loop.
+_lock = threading.Lock()
 
 _AUTH_POSTS = {
     "/api/auth/passwordless/lookup",
@@ -52,11 +56,12 @@ _RATE_DETAIL = "Rate limit exceeded; retry later"
 
 
 def clear_limits() -> None:
-    _buckets.clear()
-    _auth_ip_buckets.clear()
-    _auth_account_buckets.clear()
-    _auth_pair_buckets.clear()
-    _auth_failed_verify_buckets.clear()
+    with _lock:
+        _buckets.clear()
+        _auth_ip_buckets.clear()
+        _auth_account_buckets.clear()
+        _auth_pair_buckets.clear()
+        _auth_failed_verify_buckets.clear()
 
 
 def _positive_int(name: str, default: int) -> int:
@@ -136,14 +141,15 @@ def _touch(buckets: OrderedDict[str, tuple[int, float]], key: str) -> None:
 
 def _consume(buckets: OrderedDict[str, tuple[int, float]], key: str, limit: int) -> bool:
     now = time.monotonic()
-    _touch(buckets, key)
-    count, window_start = buckets.get(key, (0, 0.0))
-    if now - window_start >= _WINDOW_SECONDS:
-        count, window_start = 0, now
-    count += 1
-    buckets[key] = (count, window_start)
-    buckets.move_to_end(key)
-    return count <= limit
+    with _lock:
+        _touch(buckets, key)
+        count, window_start = buckets.get(key, (0, 0.0))
+        if now - window_start >= _WINDOW_SECONDS:
+            count, window_start = 0, now
+        count += 1
+        buckets[key] = (count, window_start)
+        buckets.move_to_end(key)
+        return count <= limit
 
 
 def _account_key(account: str) -> str:
@@ -174,15 +180,16 @@ def enforce_login_pair_limit(account: str, request: Request) -> None:
 def failed_verify_blocked(account: str) -> bool:
     """True when this account has already used its failed-verify budget.
 
-    A successful verify is not counted. Callers still reject when this is true,
-    so a distributed flood of failures can pause verifies for the window. One
-    IP cannot reach the default on its own: the pair cap is lower.
+    Only further failures are rejected. A valid signature is never counted and
+    is never blocked by this cap. One IP cannot reach the default on its own:
+    the pair cap is lower.
     """
     normalized = _account_key(account)
     if not normalized:
         return False
     limit = _positive_int("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", 60)
-    count, window_start = _auth_failed_verify_buckets.get(normalized, (0, 0.0))
+    with _lock:
+        count, window_start = _auth_failed_verify_buckets.get(normalized, (0, 0.0))
     if time.monotonic() - window_start >= _WINDOW_SECONDS:
         return False
     return count >= limit

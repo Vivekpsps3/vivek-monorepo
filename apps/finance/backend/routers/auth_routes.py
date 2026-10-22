@@ -342,15 +342,19 @@ def update_passwordless_wraps(
 @router.post("/auth/passwordless/verify", response_model=LoginResponse)
 def passwordless_verify(body: PasswordlessVerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     enforce_login_pair_limit(body.username, request)
+    user = _find_passwordless_user(db, body.username)
+    # The challenge row is checked before ECDSA, so a forged id is a lookup, not a signature.
+    # A correct signature is never turned into a 429. The failed-verify cap applies only after a failure.
+    if user and user.is_active and verify_challenge(
+        db, user, body.challenge_id, body.challenge, body.message, body.signature_b64
+    ):
+        csrf = create_session(db, user, request, response)
+        db.refresh(user)
+        return {"user": _user_response(user), "csrf_token": csrf}
     if failed_verify_blocked(body.username):
         raise HTTPException(status_code=429, detail="Rate limit exceeded; retry later")
-    user = _find_passwordless_user(db, body.username)
-    if not user or not user.is_active or not verify_challenge(db, user, body.challenge_id, body.challenge, body.message, body.signature_b64):
-        note_failed_verify(body.username)
-        raise HTTPException(status_code=401, detail="Invalid or expired vault authentication challenge")
-    csrf = create_session(db, user, request, response)
-    db.refresh(user)
-    return {"user": _user_response(user), "csrf_token": csrf}
+    note_failed_verify(body.username)
+    raise HTTPException(status_code=401, detail="Invalid or expired vault authentication challenge")
 
 
 def _invitation_for_token(db: Session, token: str) -> tuple[AuthEnrollment, User]:

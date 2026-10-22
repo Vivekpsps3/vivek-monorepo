@@ -569,6 +569,32 @@ def test_failed_verify_cap_counts_failures_for_the_account(monkeypatch):
     unknown = other.post("/api/auth/passwordless/verify", json={"username": "nobody.user", **forged})
     assert blocked.status_code == 429
     assert unknown.status_code == 401
+    _verify(TestClient(app, client=("203.0.113.10", 50000)), private_key, "legacy.user")
+
+
+def test_valid_signature_succeeds_while_the_failed_verify_cap_is_tripped(monkeypatch):
+    monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "20")
+    monkeypatch.setenv("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", "60")
+    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "100")
+    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "")
+    clear_limits()
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    _enroll_legacy_user(private_key)
+    forged = {
+        "username": "legacy.user",
+        "challenge_id": "not-a-real-challenge",
+        "challenge": "y" * 32,
+        "message": "not-a-real-challenge-message",
+        "signature_b64": _b64(64),
+    }
+    for host in ("198.51.100.1", "198.51.100.2", "198.51.100.3"):
+        attacker = TestClient(app, client=(host, 50000))
+        for _ in range(20):
+            assert attacker.post("/api/auth/passwordless/verify", json=forged).status_code == 401
+    assert TestClient(app, client=("198.51.100.4", 50000)).post(
+        "/api/auth/passwordless/verify", json=forged
+    ).status_code == 429
+    _verify(TestClient(app, client=("203.0.113.9", 50000)), private_key, "legacy.user")
 
 
 def test_session_wrap_updates_are_not_on_the_login_budget(monkeypatch):
@@ -684,9 +710,41 @@ def test_decoy_secret_file_survives_restart_and_a_short_file_is_replaced(tmp_pat
     assert "regenerating" in caplog.text
     assert regenerated != first
     assert secret.stat().st_size >= 32
-    assert not list(tmp_path.glob(".auth-decoy-secret.*.tmp"))
+    assert not list(tmp_path.glob(".auth-decoy-secret.*"))
     reset_decoy_state()
     assert decoy_passwordless_material("ghost.user") == regenerated
+    reset_decoy_state()
+
+
+def test_unreadable_decoy_secret_is_left_in_place(tmp_path, monkeypatch, caplog):
+    from pathlib import Path
+
+    from apps.finance.backend.services.auth_decoy import decoy_passwordless_material, reset_decoy_state
+
+    monkeypatch.delenv("AUTH_DECOY_SECRET", raising=False)
+    database = tmp_path / "site.db"
+    database.write_bytes(b"")
+    secret = tmp_path / "auth-decoy-secret"
+    original = b"k" * 32
+    secret.write_bytes(original)
+    monkeypatch.setattr(
+        "apps.finance.backend.database.SQLALCHEMY_DATABASE_URL",
+        f"sqlite:///{database}",
+    )
+    original_read = Path.read_bytes
+
+    def deny(self, *args, **kwargs):
+        if self == secret:
+            raise PermissionError(13, "Permission denied")
+        return original_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", deny)
+    reset_decoy_state()
+    with caplog.at_level(logging.ERROR, logger="finance.auth"):
+        decoy_passwordless_material("ghost.user")
+    assert "cannot be read" in caplog.text
+    assert "process-local" in caplog.text
+    assert original_read(secret) == original
     reset_decoy_state()
 
 

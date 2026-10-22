@@ -35,4 +35,30 @@ describe('LoginComponent', () => {
     expect(component.error).toBe('Setup failed');
     expect(cdr.markForCheck).toHaveBeenCalled();
   });
+
+  it('tells the user to sign in with a username and rejects an email', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['bootstrapStatus', 'signupPolicy', 'loginWithVault']);
+    auth.bootstrapStatus.and.returnValue(of({ needs_setup: false }));
+    auth.signupPolicy.and.resolveTo({ mode: 'closed', signup_open: false, invite_code_required: false });
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [LoginComponent],
+      providers: [
+        { provide: AuthService, useValue: auth },
+        provideRouter([]),
+      ],
+    });
+    const fixture: ComponentFixture<LoginComponent> = TestBed.createComponent(LoginComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Use your enrolled username');
+    expect(fixture.nativeElement.textContent).not.toContain('email linked');
+    fixture.componentInstance.username = 'vivek@pending.local';
+    fixture.componentInstance.password = 'correct horse battery staple';
+    fixture.componentInstance.submit();
+    expect(fixture.componentInstance.error).toBe('Sign in with your username, not your email.');
+    expect(auth.loginWithVault).not.toHaveBeenCalled();
+  });
 });

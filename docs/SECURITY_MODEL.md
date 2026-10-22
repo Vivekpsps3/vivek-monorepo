@@ -60,7 +60,7 @@ Unknown usernames get a deterministic decoy of the same shape and wrap length, d
 
 The wrapping KDF is PBKDF2-HMAC-SHA256. New wraps use at least 600,000 iterations and at most 5,000,000. A stored 310,000-iteration wrap still unlocks. The browser re-wraps it on the next successful unlock, including the unlock screen for a session that is already signed in. WebCrypto does not provide Argon2id; `kdf_algorithm` on the vault is the field a later algorithm would use.
 
-Lookup, challenge, verify, signup, and bootstrap are rate limited per IP inside the one server process. Lookup has no per-account limit. Challenge and verify share a per-(account, IP) budget, and failed verifies have a separate higher per-account cap. A signed-in wrap update is not counted against those budgets. The client address is the peer uvicorn accepted after `FORWARDED_ALLOW_IPS`; the application does not read `X-Forwarded-For`.
+Lookup, challenge, verify, signup, and bootstrap are rate limited per IP inside the one server process. Lookup has no per-account limit. Challenge and verify share a per-(account, IP) budget, and failed verifies have a separate higher per-account cap. Once that cap is reached, only further failures are rejected. A valid signature is never counted or blocked. A signed-in wrap update is not counted against those budgets. The client address is the peer uvicorn accepted after `FORWARDED_ALLOW_IPS`; the application does not read `X-Forwarded-For`. Passwordless sign-in uses the enrolled username. An email is not accepted.
 
 ## Recovery rules
 
