@@ -1,7 +1,5 @@
 import os
 import sys
-import time
-import types
 from pathlib import Path
 
 import pytest
@@ -44,26 +42,12 @@ def _reset_rate_limits():
 
 
 @pytest.fixture(autouse=True)
-def _pin_rate_limit_coverage(monkeypatch):
-    """Make the two uptime-dependent rate-limit statements always run.
+def _clear_rate_limit_env(monkeypatch):
+    """Drop limiter env vars a ``.env`` may have loaded.
 
-    A missing bucket is stored with window_start 0. ``time.monotonic() - 0``
-    is at least 60 only after the host has been up for a minute, so
-    ``_consume``'s window reset and ``failed_verify_blocked``'s early return
-    are covered on a warm machine and missed on a fresh CI runner. That is
-    two statements, and it moves the finance total between 84.28% and 84.37%.
-    Shift the clock rate_limit reads, and drop limiter env vars a ``.env``
-    may have loaded, so both paths are stable. Tests that need a cap set it
-    themselves after this fixture.
+    A missing bucket starts at ``float('-inf')``, so the window reset does
+    not depend on how long the host has been up.
     """
-    from apps.finance.backend import rate_limit
-
-    started = time.monotonic()
-
-    def shifted() -> float:
-        return 10_000.0 + (time.monotonic() - started)
-
-    monkeypatch.setattr(rate_limit, "time", types.SimpleNamespace(monotonic=shifted))
     for name in (
         "AUTH_IP_RATE_LIMIT_PER_MIN",
         "AUTH_ACCOUNT_RATE_LIMIT_PER_MIN",

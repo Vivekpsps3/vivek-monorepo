@@ -928,19 +928,19 @@ def test_client_key_buckets_ipv6_by_prefix_and_ignores_forwarded_for():
     assert _client_key(request_from("::ffff:203.0.113.5")) == "203.0.113.5"
 
 
-def test_new_rate_limit_bucket_uses_a_clock_past_the_first_minute():
-    """A missing bucket must open its window even when the host just booted.
+def test_new_rate_limit_bucket_opens_even_in_the_first_minute(monkeypatch):
+    """A missing bucket starts its window now, even when uptime is under 60s.
 
-    ``window_start`` defaults to 0. On a machine up for less than 60 seconds,
-    ``time.monotonic() - 0 < 60`` and the reset in ``_consume`` does not run.
-    The finance conftest shifts that clock so coverage does not depend on uptime.
+    The default window is ``float('-inf')``. A default of 0 would leave
+    ``window_start`` at 0 while ``time.monotonic()`` is 30.
     """
     from apps.finance.backend import rate_limit
 
+    monkeypatch.setattr(rate_limit.time, "monotonic", lambda: 30.0)
     clear_limits()
     assert rate_limit._consume(rate_limit._auth_ip_buckets, "203.0.113.77", 5) is True
     _count, window_start = rate_limit._auth_ip_buckets["203.0.113.77"]
-    assert window_start >= 10_000
+    assert window_start == 30.0
 
 
 def test_rate_limit_table_evicts_the_oldest_key():

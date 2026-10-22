@@ -40,6 +40,9 @@ _auth_pair_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
 _auth_failed_verify_buckets: OrderedDict[str, tuple[int, float]] = OrderedDict()
 
 _MAX_BUCKETS = 10_000
+# A missing bucket has no window yet. 0 would mean "since boot", so a host
+# that has been up for less than a minute would not reset the window.
+_MISSING_WINDOW = float("-inf")
 _WINDOW_SECONDS = 60.0
 # Sync routes run on the threadpool while the IP middleware runs on the event loop.
 _lock = threading.Lock()
@@ -141,7 +144,7 @@ def _consume(buckets: OrderedDict[str, tuple[int, float]], key: str, limit: int)
     now = time.monotonic()
     with _lock:
         _touch(buckets, key)
-        count, window_start = buckets.get(key, (0, 0.0))
+        count, window_start = buckets.get(key, (0, _MISSING_WINDOW))
         if now - window_start >= _WINDOW_SECONDS:
             count, window_start = 0, now
         count += 1
@@ -187,7 +190,7 @@ def failed_verify_blocked(account: str) -> bool:
         return False
     limit = _positive_int("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", 60)
     with _lock:
-        count, window_start = _auth_failed_verify_buckets.get(normalized, (0, 0.0))
+        count, window_start = _auth_failed_verify_buckets.get(normalized, (0, _MISSING_WINDOW))
     if time.monotonic() - window_start >= _WINDOW_SECONDS:
         return False
     return count >= limit
