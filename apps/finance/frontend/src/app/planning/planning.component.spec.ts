@@ -1,21 +1,24 @@
 import { of, Subject, throwError } from 'rxjs';
+import { failureCopy } from '@vivek/ui';
 import { PlanningComponent } from './planning.component';
 import { DEFAULT_MC_ASSUMPTIONS, PlanningProfile } from '../models/planning.model';
 import { lastThreeCompletedMonths } from '../utils/planning-spending.util';
 
 function createComponent() {
   const planning = jasmine.createSpyObj('PlanningService', [
-    'createProfile', 'updateProfile', 'createRun', 'getInputs', 'getSpendingSuggestionContext', 'listProfiles',
+    'createProfile', 'updateProfile', 'deleteProfile', 'createRun', 'getInputs', 'getSpendingSuggestionContext', 'listProfiles',
   ]);
+  planning.deleteProfile.and.returnValue(of(undefined));
   const toast = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
+  const cdr = jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck']);
   const component = new PlanningComponent(
     planning as any,
     { ask: jasmine.createSpy('ask').and.resolveTo(true) } as any,
     toast as any,
-    { markForCheck: () => undefined } as any,
+    cdr,
     { dataChanges$: new Subject<any>() } as any
   );
-  return { component, planning, toast };
+  return { component, planning, toast, cdr };
 }
 
 function suggestionContext(component: PlanningComponent, withCoverage: boolean): void {
@@ -206,5 +209,29 @@ describe('PlanningComponent spending acceptance', () => {
     expect(component.acceptingSpendingSuggestion).toBeFalse();
     expect(component.error).toBe("Couldn't save the spending estimate.");
     expect(component.error).not.toContain('vault write failed');
+  });
+
+  it('keeps the saved profile and shows the delete error when delete returns 503', async () => {
+    const { component, planning, toast, cdr } = createComponent();
+    const profile: PlanningProfile = {
+      id: 4,
+      name: 'Probe profile',
+      base_currency: 'USD',
+      payload: structuredClone(DEFAULT_MC_ASSUMPTIONS),
+      created_at: '',
+      updated_at: '',
+    };
+    planning.deleteProfile.and.returnValue(throwError(() => ({ status: 503 })));
+    component.profiles = [profile];
+    component.selectedProfileId = profile.id;
+    component.savedInputName = profile.name;
+
+    await component.deleteSelectedProfile();
+
+    expect(component.error).toBe(failureCopy('delete', 'these saved inputs'));
+    expect(component.profiles).toEqual([profile]);
+    expect(component.selectedProfileId).toBe(profile.id);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(cdr.markForCheck).toHaveBeenCalled();
   });
 });

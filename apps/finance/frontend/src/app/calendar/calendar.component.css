@@ -74,7 +74,7 @@
 
 .top-purchase-link:hover .top-desc,
 .top-purchase-link:focus-visible .top-desc { color: var(--accent); }
-.top-purchase-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.top-purchase-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 .top-row {
   display: flex;
@@ -215,7 +215,7 @@
 }
 
 .day-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -269,7 +269,7 @@
 
 .tx-item-link:hover .calendar-edit-hint,
 .tx-item-link:focus-visible .calendar-edit-hint { color: var(--accent); }
-.tx-item-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tx-item-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .calendar-edit-hint { color: var(--text-secondary); font-size: var(--text-xs); }
 
 .tx-item .desc {

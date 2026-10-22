@@ -611,6 +611,10 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
           this.savedInputName = '';
           this.cdr.markForCheck();
         },
+        error: () => {
+          this.error = failureCopy('delete', 'these saved inputs');
+          this.cdr.markForCheck();
+        },
       });
   }
 

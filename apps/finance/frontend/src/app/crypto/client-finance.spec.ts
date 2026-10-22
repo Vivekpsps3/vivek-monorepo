@@ -530,7 +530,8 @@ describe('client-finance', () => {
     } as Transaction;
     expect(transactionEffects(tx, { flagDisallowed: true })).toEqual({ income: 0, spending: 0, excluded: true });
     expect(transactionEffects(tx, { flagDisallowed: false })).toEqual({ income: 0, spending: 45.67 });
-    expect(transactionEffects(tx).excluded).toBe(FLAG_DISALLOWED_TRANSACTION_SIGNS);
+    expect(!!transactionEffects(tx).excluded).toBe(FLAG_DISALLOWED_TRANSACTION_SIGNS);
+    expect(transactionEffects(tx, { flagDisallowed: false }).excluded ?? false).toBe(false);
   });
 
   it('returns the same nullable next due date for bills and subscriptions', () => {

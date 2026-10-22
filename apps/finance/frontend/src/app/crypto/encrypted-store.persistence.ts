@@ -47,8 +47,8 @@ export class EncryptedRecordPersistence {
   private changesSubject = new Subject<EncryptedStoreChange>();
   readonly changes$ = this.changesSubject.asObservable();
   private loaded = false;
-  private loadingGeneration = -1;
-  private loadingPromise: Promise<void> | null = null;
+  /** First-load promises are shared only with callers that use the same silence. */
+  private inflightLoads = new Map<string, Promise<void>>();
   private reservedIds = new Set<number>();
   private recordQueues = new Map<string, Promise<unknown>>();
   private reloadQueues = new Map<CollectionName, Promise<void>>();
@@ -72,8 +72,7 @@ export class EncryptedRecordPersistence {
 
   clear(): void {
     this.loaded = false;
-    this.loadingGeneration = -1;
-    this.loadingPromise = null;
+    this.inflightLoads.clear();
     this.reservedIds.clear();
     this.recordQueues.clear();
     this.reloadQueues.clear();
@@ -128,26 +127,19 @@ export class EncryptedRecordPersistence {
     if (this.loaded) return;
     if (!this.vault.isUnlocked) throw new Error('Vault locked');
     const generation = this.getSessionToken();
-    if (this.loadingPromise && this.loadingGeneration === generation) return this.loadingPromise;
-    const promise = this.loadStore(generation, options);
-    this.loadingPromise = promise;
-    this.loadingGeneration = generation;
-    try {
-      await promise;
+    const silent = options?.silent === true;
+    const key = `${generation}:${silent ? 'silent' : 'open'}`;
+    const existing = this.inflightLoads.get(key);
+    if (existing) return existing;
+    const promise = this.loadStore(generation, options).then(() => {
       if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
       if (!this.loaded) throw new Error('Vault data could not be loaded');
-    } catch (error) {
-      if (this.getSessionToken() === generation && this.loadingPromise === promise) {
-        this.loaded = false;
-        this.loadingPromise = null;
-        this.loadingGeneration = -1;
-      }
-      throw error;
+    });
+    this.inflightLoads.set(key, promise);
+    try {
+      await promise;
     } finally {
-      if (this.loadingPromise === promise) {
-        this.loadingPromise = null;
-        this.loadingGeneration = -1;
-      }
+      if (this.inflightLoads.get(key) === promise) this.inflightLoads.delete(key);
     }
   }
 
@@ -284,7 +276,7 @@ export class EncryptedRecordPersistence {
         let latestLoaded = false;
         if (this.loaded && generation === this.getSessionToken()) {
           try {
-            await this.reloadCollections([collection]);
+            await this.reloadCollections([collection], options);
             latestLoaded = true;
             this.changesSubject.next({ collection, source: 'remote' });
           } catch {
@@ -411,12 +403,12 @@ export class EncryptedRecordPersistence {
   }
 
   /** Reloads encrypted records after another same-account tab changes them. */
-  async reloadCollections(collections: EncryptedCollection[]): Promise<void> {
+  async reloadCollections(collections: EncryptedCollection[], options?: VaultWriteOptions): Promise<void> {
     const generation = this.getSessionToken();
-    await this.ensureLoaded();
+    await this.ensureLoaded(options);
     for (const collection of [...new Set(collections)]) {
       const previous = this.reloadQueues.get(collection) ?? Promise.resolve();
-      const pending = previous.catch(() => undefined).then(() => this.reloadCollectionSnapshot(collection, generation));
+      const pending = previous.catch(() => undefined).then(() => this.reloadCollectionSnapshot(collection, generation, options));
       this.reloadQueues.set(collection, pending);
       try {
         await pending;
@@ -426,11 +418,11 @@ export class EncryptedRecordPersistence {
     }
   }
 
-  private async reloadCollectionSnapshot(collection: CollectionName, generation: number): Promise<void> {
+  private async reloadCollectionSnapshot(collection: CollectionName, generation: number, options?: VaultWriteOptions): Promise<void> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       this.assertSession(generation);
       const version = this.collectionVersions.get(collection) ?? 0;
-      const records = await firstValueFrom(this.vault.listRecords(collection));
+      const records = await firstValueFrom(this.vault.listRecords(collection, options));
       this.assertSession(generation);
       const latest = new Map<string, StoredEnvelope<any>>();
       const decoded: Array<{ record: any; data: any }> = [];
