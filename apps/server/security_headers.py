@@ -4,6 +4,7 @@ HTML shells are rewritten per request with a nonce. Travel and Media stay on
 this origin, so the policies reduce how an XSS payload can execute; they do
 not isolate the finance vault. See docs/SECURITY_MODEL.md.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -46,12 +47,31 @@ PERMISSIONS_POLICY = (
 SHELL_HEADER = "x-csp-shell"
 _MAX_REPORT_BYTES = 16384
 _DIRECTIVE_RE = re.compile(r"^[a-z0-9-]{1,64}$")
-_KNOWN_DIRECTIVES = frozenset({
-    "base-uri", "connect-src", "default-src", "font-src", "form-action", "frame-ancestors",
-    "frame-src", "img-src", "manifest-src", "object-src", "report-to", "report-uri",
-    "require-trusted-types-for", "script-src", "script-src-attr", "script-src-elem",
-    "style-src", "style-src-attr", "style-src-elem", "trusted-types", "worker-src",
-})
+_KNOWN_DIRECTIVES = frozenset(
+    {
+        "base-uri",
+        "connect-src",
+        "default-src",
+        "font-src",
+        "form-action",
+        "frame-ancestors",
+        "frame-src",
+        "img-src",
+        "manifest-src",
+        "object-src",
+        "report-to",
+        "report-uri",
+        "require-trusted-types-for",
+        "script-src",
+        "script-src-attr",
+        "script-src-elem",
+        "style-src",
+        "style-src-attr",
+        "style-src-elem",
+        "trusted-types",
+        "worker-src",
+    }
+)
 _SCRIPT_OPEN = re.compile(r"<script\b([^>]*)>", re.IGNORECASE)
 _STYLE_OPEN = re.compile(r"<style\b([^>]*)>", re.IGNORECASE)
 _LINK_OPEN = re.compile(r"<link\b([^>]*)>", re.IGNORECASE)
@@ -103,9 +123,12 @@ def classify(path: str) -> str:
     if normalized == "/media" or normalized.startswith("/media/"):
         return "media"
     if (
-        normalized == "/finance" or normalized.startswith("/finance/")
-        or normalized == "/hub" or normalized.startswith("/hub/")
-        or normalized == "/auth" or normalized.startswith("/auth/")
+        normalized == "/finance"
+        or normalized.startswith("/finance/")
+        or normalized == "/hub"
+        or normalized.startswith("/hub/")
+        or normalized == "/auth"
+        or normalized.startswith("/auth/")
     ):
         return "finance"
     return "portfolio"
@@ -339,7 +362,11 @@ def validate_response_headers(headers, path: str, body: bytes | str = b"") -> No
     assert _header(headers, "reporting-endpoints") == REPORTING_ENDPOINTS, path
     assert json.loads(_header(headers, "report-to"))["group"] == REPORT_GROUP
     permissions = _header(headers, "permissions-policy")
-    assert "camera=()" in permissions and "geolocation=()" in permissions and "microphone=()" in permissions
+    assert (
+        "camera=()" in permissions
+        and "geolocation=()" in permissions
+        and "microphone=()" in permissions
+    )
     frame = directives(policy)["frame-ancestors"]
     expected_frame = "SAMEORIGIN" if frame == "'self'" else "DENY"
     assert _header(headers, "x-frame-options") == expected_frame, path
@@ -390,7 +417,11 @@ class SecurityHeadersMiddleware:
                 if SHELL_HEADER in headers:
                     del headers[SHELL_HEADER]
                 _apply_headers(headers, policy)
-                if shell and _is_html(headers.get("content-type", "")) and scope.get("method") != "HEAD":
+                if (
+                    shell
+                    and _is_html(headers.get("content-type", ""))
+                    and scope.get("method") != "HEAD"
+                ):
                     held = message
                     return
                 await send(message)
@@ -444,7 +475,9 @@ def report_log_key(ip: str) -> str:
 
 
 def _drop_expired(now: float) -> None:
-    expired = [key for key, (opened, _) in _log_windows.items() if now - opened >= _LOG_WINDOW_SECONDS]
+    expired = [
+        key for key, (opened, _) in _log_windows.items() if now - opened >= _LOG_WINDOW_SECONDS
+    ]
     for key in expired:
         del _log_windows[key]
 
@@ -567,12 +600,24 @@ async def csp_report(request: Request) -> Response:
         CSP_REPORTS.labels("unknown", "unparsed").inc()
         _log_report(ip, app="unknown", directive="unparsed", blocked="", document="")
     for index, report in enumerate(reports):
-        directive = _directive_label(_field(report, "effective-directive", "effectiveDirective", "violated-directive", "violatedDirective"))
+        directive = _directive_label(
+            _field(
+                report,
+                "effective-directive",
+                "effectiveDirective",
+                "violated-directive",
+                "violatedDirective",
+            )
+        )
         app_name = _app_label(_field(report, "document-uri", "documentURL", "document-url"))
         CSP_REPORTS.labels(app_name, directive or "other").inc()
         if index >= _LOG_PER_REQUEST:
             continue
-        blocked = _clean(_field(report, "blocked-uri", "blockedURL", "blocked-url")).split("?", 1)[0]
+        blocked = _clean(_field(report, "blocked-uri", "blockedURL", "blocked-url")).split("?", 1)[
+            0
+        ]
         document = _clean(_field(report, "document-uri", "documentURL")).split("?", 1)[0]
-        _log_report(ip, app=app_name, directive=directive or "other", blocked=blocked, document=document)
+        _log_report(
+            ip, app=app_name, directive=directive or "other", blocked=blocked, document=document
+        )
     return Response(status_code=204)

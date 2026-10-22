@@ -202,7 +202,9 @@ def test_historical_finance_chain_refuses_a_unified_site_database():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
         assert_not_unified_site_database(connection)
-        connection.execute(text("CREATE TABLE site_schema (id INTEGER PRIMARY KEY, version INTEGER)"))
+        connection.execute(
+            text("CREATE TABLE site_schema (id INTEGER PRIMARY KEY, version INTEGER)")
+        )
         with pytest.raises(RuntimeError, match="unified site database"):
             assert_not_unified_site_database(connection)
     engine.dispose()

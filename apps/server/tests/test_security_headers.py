@@ -1,4 +1,5 @@
 """Per-route enforced CSP, companion headers, and the violation report sink."""
+
 import json
 import re
 
@@ -25,7 +26,7 @@ from apps.server.security_headers import (
 
 
 FINANCE_PAGE = "<!doctype html><head><script>var finance = 1;</script></head><body><app-root></app-root></body>"
-PLAIN_PAGE = "<!doctype html><script>var ready = 1;</script><link rel=\"stylesheet\" href=\"/app.css\"><link rel=\"modulepreload\" href=\"/chunk.js\">"
+PLAIN_PAGE = '<!doctype html><script>var ready = 1;</script><link rel="stylesheet" href="/app.css"><link rel="modulepreload" href="/chunk.js">'
 
 
 def _app() -> FastAPI:
@@ -50,7 +51,11 @@ def _app() -> FastAPI:
 
     @application.get("/finance/main.js")
     def finance_script():
-        return Response("console.log(1)\n", media_type="text/javascript", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+        return Response(
+            "console.log(1)\n",
+            media_type="text/javascript",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
 
     @application.get("/travel/")
     def travel():
@@ -163,9 +168,9 @@ def test_finance_policy_is_stricter_than_travel_and_media():
 def test_inject_nonce_covers_scripts_styles_modulepreload_and_angular_root():
     html = (
         "<!doctype html><style>a{}</style>"
-        "<link rel=\"stylesheet\" href=\"/app.css\">"
-        "<link rel=\"modulepreload\" href=\"/chunk.js\">"
-        "<script src=\"/main.js\"></script><script>var a=1;</script>"
+        '<link rel="stylesheet" href="/app.css">'
+        '<link rel="modulepreload" href="/chunk.js">'
+        '<script src="/main.js"></script><script>var a=1;</script>'
         "<app-root></app-root>"
     )
     rewritten = inject_nonce(html, "abc_123")
@@ -177,7 +182,15 @@ def test_inject_nonce_covers_scripts_styles_modulepreload_and_angular_root():
 
 @pytest.mark.parametrize(
     "path",
-    ["/", "/finance/", "/finance/main.js", "/travel/", "/media/", "/api/health", "/travel/api/health"],
+    [
+        "/",
+        "/finance/",
+        "/finance/main.js",
+        "/travel/",
+        "/media/",
+        "/api/health",
+        "/travel/api/health",
+    ],
 )
 def test_headers_for_each_route(client, path):
     response = client.get(path)
@@ -221,17 +234,27 @@ def test_csp_report_accepts_legacy_and_reporting_api_bodies_without_echoing_samp
         }
     }
     with caplog.at_level("INFO", logger="site.csp"):
-        legacy_response = client.post("/csp-report", content=json.dumps(legacy), headers={"content-type": "application/csp-report"})
-        modern = [{
-            "type": "csp-violation",
-            "body": {
-                "documentURL": "https://testserver/finance/",
-                "effectiveDirective": "img-src",
-                "blockedURL": "https://image.tmdb.org/t/p/w342/x.jpg?user=secret",
-                "sample": "should-not-be-logged",
-            },
-        }]
-        modern_response = client.post("/csp-report", content=json.dumps(modern), headers={"content-type": "application/reports+json"})
+        legacy_response = client.post(
+            "/csp-report",
+            content=json.dumps(legacy),
+            headers={"content-type": "application/csp-report"},
+        )
+        modern = [
+            {
+                "type": "csp-violation",
+                "body": {
+                    "documentURL": "https://testserver/finance/",
+                    "effectiveDirective": "img-src",
+                    "blockedURL": "https://image.tmdb.org/t/p/w342/x.jpg?user=secret",
+                    "sample": "should-not-be-logged",
+                },
+            }
+        ]
+        modern_response = client.post(
+            "/csp-report",
+            content=json.dumps(modern),
+            headers={"content-type": "application/reports+json"},
+        )
     assert legacy_response.status_code == 204
     assert modern_response.status_code == 204
     assert legacy_response.content == b""
@@ -239,11 +262,18 @@ def test_csp_report_accepts_legacy_and_reporting_api_bodies_without_echoing_samp
     assert "should-not-be-logged" not in caplog.text
     assert "token=secret" not in caplog.text
     assert "user=secret" not in caplog.text
-    events = [json.loads(record.message) for record in caplog.records if record.message.startswith("{")]
-    assert {(event["app"], event["directive"]) for event in events} >= {("travel", "script-src"), ("finance", "img-src")}
+    events = [
+        json.loads(record.message) for record in caplog.records if record.message.startswith("{")
+    ]
+    assert {(event["app"], event["directive"]) for event in events} >= {
+        ("travel", "script-src"),
+        ("finance", "img-src"),
+    }
     assert all(" " not in event["directive"] for event in events)
     validate_response_headers(legacy_response.headers, "/csp-report")
-    oversized = client.post("/csp-report", content=b"x" * 16385, headers={"content-type": "application/csp-report"})
+    oversized = client.post(
+        "/csp-report", content=b"x" * 16385, headers={"content-type": "application/csp-report"}
+    )
     assert oversized.status_code == 413
 
 
@@ -258,7 +288,11 @@ def test_csp_report_log_is_json_and_stops_a_chunked_body_at_the_cap(client, capl
         }
     }
     with caplog.at_level("INFO", logger="site.csp"):
-        response = client.post("/csp-report", content=json.dumps(payload), headers={"content-type": "application/csp-report"})
+        response = client.post(
+            "/csp-report",
+            content=json.dumps(payload),
+            headers={"content-type": "application/csp-report"},
+        )
     assert response.status_code == 204
     event = json.loads(caplog.records[-1].message)
     assert event["event"] == "csp_report"
@@ -272,7 +306,9 @@ def test_csp_report_log_is_json_and_stops_a_chunked_body_at_the_cap(client, capl
         yield b"y" * 10000
         yield b"z" * 8000
 
-    streamed = client.post("/csp-report", content=chunks(), headers={"content-type": "application/csp-report"})
+    streamed = client.post(
+        "/csp-report", content=chunks(), headers={"content-type": "application/csp-report"}
+    )
     assert streamed.status_code == 413
 
 
@@ -342,7 +378,9 @@ def test_full_report_log_table_refuses_new_keys_without_clearing():
     security_headers._LOG_GLOBAL_LIMIT = 10_000
     try:
         keys = [f"198.51.{i // 256}.{i % 256}" for i in range(security_headers._LOG_MAX_IPS + 1)]
-        assert [allow_report_log(key) for key in keys[:-1]] == [True] * security_headers._LOG_MAX_IPS
+        assert [allow_report_log(key) for key in keys[:-1]] == [
+            True
+        ] * security_headers._LOG_MAX_IPS
         assert allow_report_log(keys[-1]) is False
         assert len(security_headers._log_windows) == security_headers._LOG_MAX_IPS
         assert allow_report_log(keys[0]) is True
@@ -380,8 +418,14 @@ def test_csp_report_logs_at_most_five_entries_per_request(client, caplog):
                 headers={"content-type": "application/reports+json"},
             )
         assert response.status_code == 204
-        events = [json.loads(record.message) for record in caplog.records if record.message.startswith("{")]
+        events = [
+            json.loads(record.message)
+            for record in caplog.records
+            if record.message.startswith("{")
+        ]
         assert len(events) == 5
-        assert [event["blocked"] for event in events] == [f"https://evil.example/{index}" for index in range(5)]
+        assert [event["blocked"] for event in events] == [
+            f"https://evil.example/{index}" for index in range(5)
+        ]
     finally:
         reset_report_logs()

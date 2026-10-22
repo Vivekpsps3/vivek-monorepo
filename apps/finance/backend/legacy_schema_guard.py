@@ -69,7 +69,12 @@ def _same_sqlite(left: str, right: str) -> bool:
         return False
     if not (first.drivername.startswith("sqlite") and second.drivername.startswith("sqlite")):
         return False
-    if not first.database or not second.database or first.database == ":memory:" or second.database == ":memory:":
+    if (
+        not first.database
+        or not second.database
+        or first.database == ":memory:"
+        or second.database == ":memory:"
+    ):
         return False
     return Path(first.database).resolve() == Path(second.database).resolve()
 
