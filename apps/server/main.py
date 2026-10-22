@@ -29,6 +29,7 @@ from apps.travel.backend import app as travel, database as travel_db, deps as tr
 from apps.media.backend import app as media, database as media_db, deps as media_deps
 from apps.server.auth import principal_checker
 from apps.server.schema import assert_ready
+from apps.server.security_headers import SHELL_HEADER, SecurityHeadersMiddleware, csp_report
 
 configure_engine(engine)
 travel_db.bind_database(engine)
@@ -72,9 +73,6 @@ async def observe(request: Request, call_next):
     REQUESTS.labels(method, str(response.status_code)).inc()
     LATENCY.labels(method).observe(time.monotonic() - started)
     response.headers["X-Request-ID"] = request_id
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "same-origin"
-    response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if "/api/" in request.url.path or request.url.path.endswith("/api"):
         response.headers["Cache-Control"] = "no-store, private"
     logger.info(json.dumps({"event": "request", "request_id": request_id, "method": request.method,
@@ -122,9 +120,26 @@ for exception, handler in finance.exception_handlers.items():
     app.add_exception_handler(exception, handler)
 
 
+def _static_headers(file: Path, root: Path, immutable: bool) -> dict[str, str]:
+    if file.suffix == ".html":
+        headers = {"Cache-Control": "no-store"}
+        # Only the web-root index.html is a shell. Nested index.html files stay
+        # unmarked, matching the fixed paths in expects_shell().
+        if file.resolve() == (root / "index.html").resolve():
+            headers[SHELL_HEADER] = "1"
+        return headers
+    if immutable:
+        return {"Cache-Control": "public, max-age=31536000, immutable"}
+    return {"Cache-Control": "no-cache"}
+
+
+def _shell_headers() -> dict[str, str]:
+    return {"Cache-Control": "no-store", SHELL_HEADER: "1"}
+
+
 @app.get("/")
 def home():
-    return FileResponse(PORTFOLIO_ROOT / "index.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(PORTFOLIO_ROOT / "index.html", headers=_shell_headers())
 
 
 @app.get("/api")
@@ -159,14 +174,14 @@ def finance_page(path: str):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
     if path and file.is_file():
         immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-        return FileResponse(file, headers={"Cache-Control": "no-store" if file.suffix == ".html" else "public, max-age=31536000, immutable" if immutable else "no-cache"})
+        return FileResponse(file, headers=_static_headers(file, WEB_ROOT, immutable))
     if path and (Path(path).suffix or path.startswith("assets/")):
         return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
     return shell()
 
 
 def shell():
-    return FileResponse(WEB_ROOT / "index.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(WEB_ROOT / "index.html", headers=_shell_headers())
 
 
 @app.get("/hub")
@@ -189,6 +204,11 @@ def enroll(request: Request):
     return RedirectResponse("/auth/signup" + ("?" + request.url.query if request.url.query else ""), status_code=302)
 
 
+@app.post("/csp-report")
+async def csp_report_route(request: Request):
+    return await csp_report(request)
+
+
 @app.get("/{path:path}")
 def portfolio_page(path: str):
     file = (PORTFOLIO_ROOT / path).resolve()
@@ -196,7 +216,11 @@ def portfolio_page(path: str):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
     if file.is_file():
         immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-        return FileResponse(file, headers={"Cache-Control": "no-store" if file.suffix == ".html" else "public, max-age=31536000, immutable" if immutable else "no-cache"})
+        return FileResponse(file, headers=_static_headers(file, PORTFOLIO_ROOT, immutable))
     if path in {"home", "work", "about", "secrets"}:
-        return FileResponse(PORTFOLIO_ROOT / "index.html", headers={"Cache-Control": "no-store"})
+        return FileResponse(PORTFOLIO_ROOT / "index.html", headers=_shell_headers())
     return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
+
+
+# Outermost so short-circuited auth and rate-limit responses still carry the policy.
+app.add_middleware(SecurityHeadersMiddleware)

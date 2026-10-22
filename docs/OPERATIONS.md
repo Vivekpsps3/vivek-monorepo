@@ -21,11 +21,16 @@ Do not bake secrets into Compose, the Dockerfile, or images.
 
 Auth defaults live in the process and in `compose.yml`. `AUTH_SIGNUP_MODE` defaults to `closed` (`open`, `invite`, or `allowlist` opt in). `AUTH_INVITE_CODES` and `AUTH_SIGNUP_ALLOWLIST` are comma-separated and empty by default. `AUTH_IP_RATE_LIMIT_PER_MIN` defaults to 60. `AUTH_PAIR_RATE_LIMIT_PER_MIN` defaults to 20 and applies to challenge and verify for one username from one client address. `AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN` defaults to 60 and counts failed verifies for that username from every address. `AUTH_ACCOUNT_RATE_LIMIT_PER_MIN` defaults to 20 and applies to signup and bootstrap only. Lookup is limited per IP, not per account. `AUTH_DECOY_SECRET` is optional; when it is unset the server writes `auth-decoy-secret` beside the database file so unknown-user responses stay stable across restarts. A missing or short file is replaced. An unreadable file is left in place and logged, so a restore with the wrong owner does not rotate the decoys. Put that secret in the private env file if a database restore should keep the same decoys. `RATE_LIMIT_PER_MIN` remains the optional shared cap. Passwordless sign-in takes the enrolled username. An email address is not an alias and gets a decoy wrap, so existing users must sign in with the username, not the account email.
 
-`FORWARDED_ALLOW_IPS` must be the gateway of `SITE_SUBNET` (today `10.85.0.1` for `10.85.0.0/28`). Uvicorn only trusts forwarded client addresses from that peer. If the value does not match the gateway, every visitor shares one per-IP bucket. nginx overwrites `X-Forwarded-For` with `$remote_addr`, and the application does not read that header itself.
+`FORWARDED_ALLOW_IPS` must be the gateway of `SITE_SUBNET` (today `10.85.0.1` for `10.85.0.0/28`). Uvicorn only trusts forwarded client addresses from that peer. If the value does not match the gateway, every visitor shares one per-IP bucket. nginx overwrites `X-Forwarded-For` with `$remote_addr`, and the application does not read that header itself. The CSP report log uses `request.client.host`, which is that uvicorn address, and does not read `X-Forwarded-For` either.
 
-The shared nginx-edge and its Let's Encrypt certificates remain existing host infrastructure. The site's
-edge vhost source is ops/nginx/site.conf; adding/replacing this vhost requires a
-config test and reload. Other hostnames are unaffected.
+The shared nginx-edge and its Let's Encrypt certificates remain existing host infrastructure. The site's edge vhost source is ops/nginx/site.conf. The deploy workflow does not install that file. Other hostnames are unaffected. Never add an enforced `Content-Security-Policy` on the edge: the application sends the one enforced policy, and a second enforced policy would be applied as well. When a release changes the vhost, use this order:
+
+1. Deploy the app.
+2. `curl -sI https://vivekpanchagnula.com/media/` and confirm there is exactly one `Content-Security-Policy` header (not Report-Only) and that it includes `*.archive.org`.
+3. On nginx-edge, `nginx -t && nginx -s reload`.
+4. `curl -sI https://vivekpanchagnula.com/media/` again and confirm `Content-Security-Policy-Report-Only` and `X-Frame-Options: SAMEORIGIN` are gone.
+
+Until step 3, the edge still adds the previous report-only policy and `X-Frame-Options: SAMEORIGIN` beside the app headers. The report-only policy does not block. Modern browsers apply `frame-ancestors` rather than `X-Frame-Options` when both are present.
 
 The existing self-hosted runner and its Docker privilege are retained by explicit
 user preference. It remains capable of modifying host resources and reading site
