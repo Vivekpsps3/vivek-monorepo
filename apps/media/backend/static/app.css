@@ -607,7 +607,7 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
   background: var(--surface); color: inherit; cursor: pointer;
 }
 .season-chip.is-current { box-shadow: inset 0 0 0 2px var(--accent); }
-.season-chip.is-done { background: color-mix(in srgb, var(--text) 16%, transparent); color: var(--text-secondary); }
+.season-chip.is-done { background: color-mix(in srgb, var(--text) 12%, var(--bg)); color: var(--text-secondary); }
 .season-score { width: 3.2rem; border: 0; background: transparent; color: inherit; font: inherit; }
 .episode-tiles { flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
 .episode-tiles li { position: relative; }
