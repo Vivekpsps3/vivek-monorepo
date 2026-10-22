@@ -179,6 +179,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   private allTransactionsLoaded = false;
   private queryInitialized = false;
   private lastDeepLinkedEdit = '';
+  /** The edit id already opened, so a later ledger refresh does not reopen a closed dialog. */
+  private consumedEditLink = '';
 
   constructor(
     private financeService: FinanceService,
@@ -313,6 +315,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     const editId = params.get('edit') || '';
     if (editId !== this.lastDeepLinkedEdit) {
       this.lastDeepLinkedEdit = editId;
+      this.consumedEditLink = '';
       this.openRouteTransactionIfReady();
     }
     this.queryInitialized = true;
@@ -348,6 +351,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   private openRouteTransactionIfReady(): void {
     if (!this.lastDeepLinkedEdit || !this.allTransactionsLoaded) return;
+    if (this.consumedEditLink === this.lastDeepLinkedEdit) return;
     const transaction = this.allTransactions.find(row => row.id === Number(this.lastDeepLinkedEdit));
     if (transaction) this.openTransactionEditor(transaction, false);
   }
@@ -917,6 +921,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   private openTransactionEditor(tx: Transaction, updateUrl: boolean): void {
     this.transactionEditor.openTransactionEditor(tx);
+    this.consumedEditLink = String(tx.id);
     if (updateUrl) {
       this.lastDeepLinkedEdit = String(tx.id);
       void this.router.navigate([], {
