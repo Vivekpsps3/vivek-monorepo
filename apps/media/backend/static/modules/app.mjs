@@ -124,6 +124,11 @@ function trimToasts() {
 function pushToast({ message, kind = "status", action = null, key = "", persist = false }) {
   const region = kind === "alert" ? toastAlerts : toasts;
   if (!region || !message) return;
+  // A late failure can land after the reader has opened another item.
+  // That toast belongs to the item it names, so it does not appear here.
+  const itemKey = ITEM_TOAST_KEY.exec(key || "");
+  const openItem = itemIdFromHash(location.hash);
+  if (itemKey && openItem && itemKey[1] !== openItem) return;
   if (key) dismissToast(key);
   const order = ++toastSerial;
   const toast = document.createElement("div");
@@ -707,7 +712,7 @@ function libraryPage(kind, status, q, sort, body, resume, count, fav) {
     <div class="library-toolbar" id="library-toolbar">
       <label class="grow">Search your library <input id="library-q" type="search" value="${esc(q)}" placeholder="Filter by title or creator" autocomplete="off"></label>
       <label class="sort-field">Sort <select id="library-sort" data-library-sort aria-label="Sort">${options(sorts, sort)}</select></label>
-      <a class="flag${fav ? " is-on" : ""}" href="${libraryQuery(kind, status, q, sort, !fav)}" aria-pressed="${fav ? "true" : "false"}">★ Favorites</a>
+      <a class="flag${fav ? " is-on" : ""}" href="${libraryQuery(kind, status, q, sort, !fav)}" ${fav ? `aria-current="true"` : ""}>★ Favorites</a>
     </div>
     <div class="chip-row" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, status, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
     <div class="chip-row status-wide">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" ${item.value === status ? `aria-current="true"` : ""} href="${libraryQuery(kind, item.value, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>

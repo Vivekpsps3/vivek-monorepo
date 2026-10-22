@@ -75,14 +75,24 @@ def _cache_put(db: Session, key: str, payload) -> None:
     db.flush()
 
 
+def _now() -> float:
+    return time.monotonic()
+
+
 def _invoke(job):
     http = httpx.Client(
         timeout=SEARCH_TIMEOUT, headers={"User-Agent": UA, "Accept": "application/json"}
     )
+    started = _now()
     try:
-        return job(http)
+        payload = job(http)
     finally:
         http.close()
+    # The pool's wait is a backstop. A job that returns after its own budget
+    # is still a timeout, so tests can advance a fake clock instead of sleeping.
+    if _now() - started > SEARCH_TIMEOUT + 0.5:
+        raise FuturesTimeout()
+    return payload
 
 
 def search(db: Session, query: str, kind: str | None, client: httpx.Client | None = None) -> dict:
