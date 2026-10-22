@@ -22,8 +22,6 @@ jobs:
     runs-on: [self-hosted, linux, finance-prod]
     environment: production
     timeout-minutes: 15
-    env:
-      SITE_ENV_FILE: /home/vivek/Deployments/personal-site/.env
     steps:
       - name: Resolve tested release and reject stale candidates
         id: release

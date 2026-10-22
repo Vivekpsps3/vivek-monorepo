@@ -12,9 +12,11 @@ ports, mounts, limits, health checks, backup schedule, and monitoring helper.
 The root Dockerfile builds both UIs and the modular FastAPI service. Its pinned
 base images and hashed Python lock make builds reproducible.
 
-Secrets are supplied through `/home/vivek/Deployments/personal-site/.env`
-(mode 600, parent directory mode 700), outside all Git checkouts. Deployment and
-backup scripts accept `SITE_ENV_FILE` to override this path.
+Production currently has no configured API secrets and needs no host environment
+file or application directory. Deployment and backup scripts default to
+`--env-file /dev/null`, avoiding implicit dotenv discovery. If integrations need
+secrets later, set `SITE_ENV_FILE` to an explicit private file outside Git (mode
+600, parent directory mode 700). An explicit missing file fails deployment.
 Do not bake secrets into Compose, the Dockerfile, or images. The shared nginx-edge
 and its Let's Encrypt certificates remain existing host infrastructure. The site's
 edge vhost source is ops/nginx/site.conf; adding/replacing this vhost requires a
@@ -99,7 +101,7 @@ sudo -n docker exec personal-site-maintenance-1 python /app/backup-site.py --sou
 
 For Compose administration, use a temporary checkout of the running image
 revision or extract `/app/compose.yml` from that image into a temporary directory.
-Pass `--env-file /home/vivek/Deployments/personal-site/.env` and select the running
+Pass `--env-file "${SITE_ENV_FILE:-/dev/null}"` and select the running
 image explicitly; do not accidentally build/start the default development image.
 Docker restart policies restore containers after reboot without source files.
 
@@ -108,7 +110,7 @@ containers against retired databases or compete for :8085.
 
 By explicit user choice, legacy recovery copies and old backups are removed.
 Only the latest verified unified backup is retained; there is no historical
-point-in-time recovery window. Secrets remain outside Git in `personal-site/.env`.
+point-in-time recovery window. Any future secrets must remain outside Git.
 
 ## First database consolidation
 
