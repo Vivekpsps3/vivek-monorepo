@@ -1,4 +1,4 @@
-"""Production ASGI entrypoint. Explicit migration precedes startup."""
+"""Production ASGI entrypoint. Startup checks the schema revision and does not migrate."""
 import json
 import logging
 import os
@@ -43,10 +43,12 @@ LATENCY = Histogram("site_request_duration_seconds", "Request latency", ["method
 
 @asynccontextmanager
 async def lifespan(_app):
+    # The migrate job is the only writer. It backs up first. Startup fails fast
+    # when this image cannot serve the database, and it does not stamp or upgrade.
     with engine.connect() as connection:
         assert_ready(connection)
         if connection.exec_driver_sql("PRAGMA journal_mode").scalar_one().lower() != "wal":
-            raise RuntimeError("Site database must use WAL; run the migration command")
+            raise RuntimeError("Site database must use WAL; run python -m apps.server.migrations")
     if not all((root / "index.html").is_file() for root in (WEB_ROOT, PORTFOLIO_ROOT)):
         raise RuntimeError("Site frontend is missing")
     yield
