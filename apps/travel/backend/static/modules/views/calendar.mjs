@@ -2,23 +2,9 @@ import { api } from '../api.mjs';
 import { KINDS } from '../state.mjs';
 import { esc, banner, head, isoDate, prettyDate, labelOf } from '../helpers.mjs';
 import { browserTimeZone, localTodayIso } from '../../../shared-browser/today.mjs';
+import { barName, dayKicker, dayLinkName, monthMatrix, monthName, weekdayHeads } from '../calendar-model.mjs';
 
-export function monthMatrix(year, month) {
-  const first = new Date(year, month - 1, 1);
-  const start = new Date(first);
-  start.setDate(first.getDate() - first.getDay());
-  const weeks = [];
-  for (let week = 0; week < 6; week += 1) {
-    const days = [];
-    for (let offset = 0; offset < 7; offset += 1) {
-      const day = new Date(start);
-      day.setDate(start.getDate() + week * 7 + offset);
-      days.push(day);
-    }
-    weeks.push(days);
-  }
-  return weeks;
-}
+export { monthMatrix };
 export function shiftMonth(year, month, delta) {
   const date = new Date(year, month - 1 + delta, 1);
   return `#/calendar/${date.getFullYear()}/${date.getMonth() + 1}`;
@@ -40,7 +26,9 @@ export function renderCalendar(data, path, weeks, selected) {
     plans[plan.on_date] = plans[plan.on_date] || [];
     plans[plan.on_date].push(plan);
   });
-  const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<div>${day}</div>`).join("");
+  const dow = weekdayHeads().map((day) => `<div><abbr title="${esc(day.title)}">${esc(day.label)}</abbr></div>`).join("");
+  const todayParts = todayIso.split("-").map(Number);
+  const todayHref = `#/calendar/${todayParts[0]}/${todayParts[1]}/${todayIso}`;
   const weekHtml = weeks
     .map((week) => {
       const isos = week.map(isoDate);
@@ -71,12 +59,17 @@ export function renderCalendar(data, path, weeks, selected) {
           const muted = date.getMonth() !== path.month - 1 ? " cal-day--muted" : "";
           const today = iso === todayIso ? " cal-day--today" : "";
           const chosen = iso === selected ? " cal-day--selected" : "";
-          const dots = (plans[iso] || []).slice(0, 4).map(() => `<i class="dot"></i>`).join("");
-          return `<div class="cal-day${muted}${today}${chosen}"><a class="cal-num" href="#/calendar/${path.year}/${path.month}/${iso}">${date.getDate()}</a><div>${dots}</div></div>`;
+          const dayPlans = plans[iso] || [];
+          const titles = data.trips.filter((trip) => trip.start_date <= iso && trip.end_date >= iso).map((trip) => trip.title);
+          const name = dayLinkName({ iso, todayIso, day: date, planCount: dayPlans.length, tripTitles: titles });
+          const dots = dayPlans.slice(0, 4).map(() => `<i class="dot" aria-hidden="true"></i>`).join("");
+          const current = iso === todayIso ? ` aria-current="date"` : "";
+          const described = iso === selected ? ` aria-describedby="cal-selected"` : "";
+          return `<div class="cal-day${muted}${today}${chosen}"><a class="cal-num" href="#/calendar/${path.year}/${path.month}/${iso}" aria-label="${esc(name)}"${current}${described}>${date.getDate()}</a><div aria-hidden="true">${dots}</div></div>`;
         })
         .join("");
       const barHtml = bars
-        .map((bar) => `<a class="cal-bar cal-bar--${esc(bar.trip.phase)}" style="grid-column:${bar.start + 1} / ${bar.end + 2};grid-row:${bar.lane + 2}" href="#/trips/${bar.trip.id}">${esc(bar.trip.title)}</a>`)
+        .map((bar) => `<a class="cal-bar cal-bar--${esc(bar.trip.phase)}" style="grid-column:${bar.start + 1} / ${bar.end + 2};grid-row:${bar.lane + 2}" href="#/trips/${bar.trip.id}" aria-label="${esc(barName(bar.trip))}">${esc(bar.trip.title)}</a>`)
         .join("");
       return `<div class="cal-week">${days}${barHtml}</div>`;
     })
@@ -89,13 +82,23 @@ export function renderCalendar(data, path, weeks, selected) {
           const items = dayPlans.filter((plan) => plan.trip_id === trip.id);
           const lines = items.length
             ? items.map((plan) => `<p>${plan.start_time ? `${esc(plan.start_time)} · ` : ""}${esc(labelOf(KINDS, plan.kind))} · ${esc(plan.title)}${plan.place_name ? ` · ${esc(plan.place_name)}` : ""}</p>`).join("")
-            : `<p class="meta">No plans this day.</p>`;
-          return `<div class="agenda-block"><h3><a href="#/trips/${trip.id}/day/${selected}">${esc(trip.title)}</a></h3>${lines}</div>`;
+            : `<p class="meta">No plans this day.</p><p><a href="#/trips/${trip.id}/day/${selected}">Add a plan</a></p>`;
+          const kicker = dayKicker(selected, trip);
+          return `<div class="agenda-block">${kicker ? `<p class="kicker">${esc(kicker)}</p>` : ""}<h3><a href="#/trips/${trip.id}/day/${selected}">${esc(trip.title)}</a></h3>${lines}</div>`;
         })
         .join("")
-    : `<p class="meta">No trip on ${esc(prettyDate(selected))}.</p>`;
+    : `<p class="meta">No trip on ${esc(prettyDate(selected))}.</p><p><a href="#/trips/new?start=${esc(selected)}">Plan a trip starting this day</a></p>`;
+  const monthTrips = data.trips.some((trip) => trip.end_date >= `${path.year}-${String(path.month).padStart(2, "0")}-01` && trip.start_date <= isoDate(new Date(path.year, path.month, 0)));
+  const emptyMonth = monthTrips ? "" : `<p class="meta">No trips in ${esc(monthName(path.year, path.month).split(" ")[0])}.</p><p><a href="#/trips/new">Plan a trip</a></p>`;
+  const stripWeek = weeks.find((week) => week.some((day) => isoDate(day) === selected)) || weeks[0];
+  const strip = stripWeek.map((date) => {
+    const iso = isoDate(date);
+    const count = (plans[iso] || []).length;
+    const name = dayLinkName({ iso, todayIso, day: date, planCount: count, tripTitles: data.trips.filter((trip) => trip.start_date <= iso && trip.end_date >= iso).map((trip) => trip.title) });
+    return `<a class="strip-day${iso === selected ? " is-selected" : ""}" href="#/calendar/${path.year}/${path.month}/${iso}" aria-label="${esc(name)}"><span>${date.getDate()}</span><i aria-hidden="true">${count ? "•" : ""}</i></a>`;
+  }).join("");
   return `${banner()}${head("Calendar", "A bar is one trip, from the day you leave through the day you come back. Dots are plans on that day.")}
-    <div class="cal-toolbar"><h2>${esc(new Date(path.year, path.month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" }))}</h2><div class="row-actions"><a class="btn btn-secondary btn-sm" href="${shiftMonth(path.year, path.month, -1)}">Previous</a><a class="btn btn-secondary btn-sm" href="${shiftMonth(path.year, path.month, 1)}">Next</a></div></div>
-    <div class="cal-scroll"><div class="cal-dow">${dow}</div>${weekHtml}</div>
+    <div class="cal-toolbar"><h2>${esc(monthName(path.year, path.month))}</h2><div class="row-actions"><a class="btn btn-secondary btn-sm" href="${shiftMonth(path.year, path.month, -1)}">Previous</a><a class="btn btn-secondary btn-sm" href="${todayHref}">Today</a><a class="btn btn-secondary btn-sm" href="${shiftMonth(path.year, path.month, 1)}">Next</a><button class="btn btn-ghost btn-sm cal-layout" type="button" data-action="calendar-layout">Month</button></div></div>
+    <div class="cal-board"><span id="cal-selected" class="sr-only">Selected</span><div class="cal-strip">${strip}</div><div class="cal-scroll cal-month"><div class="cal-dow">${dow}</div>${weekHtml}</div>${emptyMonth}</div>
     <section class="card"><h2>${esc(prettyDate(selected))}</h2>${agenda}</section>`;
 }

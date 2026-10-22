@@ -254,7 +254,12 @@ export function renderTrip(trip, focusDay) {
     : `<input type="hidden" name="kind" value="general">`;
   const reminderForm = `<form class="add-row" data-form="reminder"><label class="add-label" for="add-reminder">Add a reminder</label>${textControl("title", "", { id: "add-reminder", placeholder: "Reminder", required: true })}<button class="btn btn-secondary btn-sm" type="submit">Add</button>${reminderKind}</form>`;
   const points = collectPoints(trip);
-  const mapCard = points.length ? `<aside class="card map-card"><div id="map" class="map" role="region" aria-label="Trip map"></div></aside>` : "";
+  const places = points.map((point, index) => {
+    const stay = point.kind === "City" ? trip.stays.find((item) => item.city === point.label) : null;
+    const when = stay ? ` · ${prettyRange(stay.arrive_on, stay.leave_on)}` : "";
+    return `<li><span>${index + 1} ${esc(point.label)}${esc(when)}</span> <button type="button" class="btn btn-ghost btn-sm" data-action="show-on-map" data-lat="${point.lat}" data-lng="${point.lng}">Show ${esc(point.label)} on map</button></li>`;
+  }).join("");
+  const mapCard = points.length ? `<aside class="card map-card"><details class="map-fold"><summary>Show map</summary><div id="map" class="map" role="region" aria-label="Trip map"></div><p class="meta" data-tile-error hidden>Map tiles couldn't load.</p></details><ol class="places">${places}</ol></aside>` : "";
   return `${banner()}${header}${metrics}<div class="split"><div>
       ${cityBlock}
       <section class="card"><h2>Getting there</h2>${transportHint ? `<p class="meta">${esc(transportHint)}</p>` : ""}${groups}</section>
@@ -312,8 +317,13 @@ export function mountMap() {
   });
   const route = points.filter((point) => point.kind === "City");
   if (route.length > 1) {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--city-1)";
+    document.body.append(probe);
+    const line = getComputedStyle(probe).color;
+    probe.remove();
     window.L.polyline(route.map((point) => [point.lat, point.lng]), {
-      color: "var(--city-1)",
+      color: line,
       weight: 3,
       opacity: 0.85,
     }).addTo(map);
@@ -337,5 +347,9 @@ export function mountMap() {
   window._travelMap = map;
   element.setAttribute("role", "region");
   element.setAttribute("aria-label", "Trip map");
+  const fold = element.closest("details");
+  fold?.addEventListener("toggle", () => map.invalidateSize());
+  const narrow = window.matchMedia?.("(max-width: 767px)").matches;
+  if (fold) fold.open = !(DECISIONS.mapCollapsedNarrow && narrow);
   setTimeout(() => map.invalidateSize(), 0);
 }
