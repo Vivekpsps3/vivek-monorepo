@@ -14,6 +14,8 @@ os.environ.pop("AUTH_SIGNUP_ALLOWLIST", None)
 os.environ.pop("AUTH_DECOY_SECRET", None)
 os.environ.pop("AUTH_IP_RATE_LIMIT_PER_MIN", None)
 os.environ.pop("AUTH_ACCOUNT_RATE_LIMIT_PER_MIN", None)
+os.environ.pop("AUTH_PAIR_RATE_LIMIT_PER_MIN", None)
+os.environ.pop("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", None)
 os.environ.pop("RATE_LIMIT_PER_MIN", None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))

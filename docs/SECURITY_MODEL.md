@@ -56,11 +56,11 @@ the operator controls the code delivered to browsers.
 
 Passwordless login has to give the browser its own wrapped signing key before a session exists. That response is unauthenticated. It does not include the vault data-key wrap or the unused recovery wraps; those stay on the authenticated vault status route for the signed-in account.
 
-Unknown usernames get a deterministic decoy of the same shape and wrap length, derived from `AUTH_DECOY_SECRET` or a secret file stored next to the database. Repeating a lookup must not show whether the account exists. Signup is closed by default (`AUTH_SIGNUP_MODE`). Invitation enrollment is unchanged. `open` mode still reports a taken username; `invite` and `allowlist` use one failure response for a bad code, a name that is not allowed, and a name that is already taken.
+Unknown usernames get a deterministic decoy of the same shape and wrap length, derived from `AUTH_DECOY_SECRET` or a secret file stored next to the database. Repeating a lookup must not show whether the account exists. The passwordless routes take a username only; an email is not an alias for that username, so the two identifiers do not return the same wrap. Signup is closed by default (`AUTH_SIGNUP_MODE`). Invitation enrollment is unchanged. `open` mode still reports a taken username; `invite` and `allowlist` use one failure response for a bad code, a name that is not allowed, and a name that is already taken.
 
-The wrapping KDF is PBKDF2-HMAC-SHA256. New wraps use at least 600,000 iterations. A stored 310,000-iteration wrap still unlocks, and the browser re-wraps it on the next successful unlock. WebCrypto does not provide Argon2id; `kdf_algorithm` on the vault is the field a later algorithm would use.
+The wrapping KDF is PBKDF2-HMAC-SHA256. New wraps use at least 600,000 iterations and at most 5,000,000. A stored 310,000-iteration wrap still unlocks. The browser re-wraps it on the next successful unlock, including the unlock screen for a session that is already signed in. WebCrypto does not provide Argon2id; `kdf_algorithm` on the vault is the field a later algorithm would use.
 
-Lookup, challenge, verify, signup, and bootstrap are rate limited per IP and per account inside the one server process.
+Lookup, challenge, verify, signup, and bootstrap are rate limited per IP inside the one server process. Lookup has no per-account limit. Challenge and verify share a per-(account, IP) budget, and failed verifies have a separate higher per-account cap. A signed-in wrap update is not counted against those budgets. The client address is the peer uvicorn accepted after `FORWARDED_ALLOW_IPS`; the application does not read `X-Forwarded-For`.
 
 ## Recovery rules
 

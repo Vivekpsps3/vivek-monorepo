@@ -12,6 +12,9 @@ describe('auth-crypto', () => {
     expect(material.wrapped.kdf_salt_b64).toBeTruthy();
     expect(material.wrapped.kdf_iterations).toBe(120_000);
     expect(material.wrapped.recovery_wrapped_private_key_b64).toBe('');
+    // Decoys use this length (AUTH_WRAP_BYTES in the finance backend). A shorter
+    // WebCrypto PKCS8 export would make unknown-user responses distinguishable.
+    expect(decodeBase64(material.wrapped.wrapped_private_key_b64).byteLength).toBe(166);
   });
 
   it('rewraps the same signing key at a higher iteration count', async () => {

@@ -1,3 +1,4 @@
+import logging
 import os
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -113,7 +114,7 @@ def test_passwordless_lookup_returns_signing_wrap_and_keeps_the_vault_on_the_ses
     assert TestClient(app).get("/api/vault/status").status_code == 401
 
 
-def test_passwordless_lookup_accepts_account_email_without_echoing_a_different_username():
+def test_passwordless_lookup_does_not_link_a_username_to_its_email():
     client = TestClient(app)
     material = passwordless_material()
     assert client.post("/api/auth/bootstrap/passwordless", json={
@@ -125,8 +126,15 @@ def test_passwordless_lookup_accepts_account_email_without_echoing_a_different_u
         json={"username": "first.admin@pending.local"},
     )
     by_name = TestClient(app).post("/api/auth/passwordless/lookup", json={"username": "first.admin"})
+    repeated = TestClient(app).post(
+        "/api/auth/passwordless/lookup",
+        json={"username": "first.admin@pending.local"},
+    )
     assert by_email.status_code == 200
-    assert by_email.json() == by_name.json()
+    assert by_email.json() == repeated.json()
+    assert by_email.json()["auth"]["wrapped_private_key_b64"] != by_name.json()["auth"]["wrapped_private_key_b64"]
+    assert by_email.json()["auth"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
+    assert by_name.json()["auth"]["wrapped_private_key_b64"] == material["auth"]["wrapped_private_key_b64"]
     assert "username" not in by_email.text
     assert "wrapped_dek" not in by_email.text
 
@@ -169,17 +177,20 @@ def test_passwordless_endpoints_are_rate_limited(monkeypatch):
     clear_limits()
 
 
-def test_passwordless_lookup_is_limited_per_account_and_per_ip(monkeypatch):
+def test_passwordless_lookup_is_not_limited_per_account(monkeypatch):
     monkeypatch.setenv("AUTH_ACCOUNT_RATE_LIMIT_PER_MIN", "1")
+    monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "1")
     monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "10")
     clear_limits()
     client = TestClient(app)
 
     assert client.post("/api/auth/passwordless/lookup", json={"username": "alice.user"}).status_code == 200
-    assert client.post("/api/auth/passwordless/lookup", json={"username": "alice.user"}).status_code == 429
-    assert client.post("/api/auth/passwordless/lookup", json={"username": "bob.user"}).status_code == 200
+    assert client.post("/api/auth/passwordless/lookup", json={"username": "alice.user"}).status_code == 200
+    assert client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code == 200
+    assert client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code == 429
+    assert client.post("/api/auth/passwordless/challenge", json={"username": "bob.user"}).status_code == 200
 
-    monkeypatch.setenv("AUTH_ACCOUNT_RATE_LIMIT_PER_MIN", "10")
+    monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "10")
     monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "1")
     clear_limits()
     assert client.post("/api/auth/passwordless/challenge", json={"username": "alice.user"}).status_code == 200
@@ -395,7 +406,7 @@ def _verify(client: TestClient, private_key, username: str) -> dict:
     return response.json()
 
 
-def test_existing_user_with_legacy_kdf_can_still_log_in_and_rewrap():
+def test_existing_user_with_legacy_kdf_can_still_log_in_and_rewrap(caplog):
     private_key = ec.generate_private_key(ec.SECP256R1())
     _enroll_legacy_user(private_key)
     anonymous = TestClient(app)
@@ -407,11 +418,17 @@ def test_existing_user_with_legacy_kdf_can_still_log_in_and_rewrap():
     assert "legacy-auth-recovery" not in lookup.text
     assert "legacy-dek-recovery" not in lookup.text
     by_email = anonymous.post("/api/auth/passwordless/lookup", json={"username": "legacy.user@pending.local"})
-    assert by_email.json()["auth"]["wrapped_private_key_b64"] == lookup.json()["auth"]["wrapped_private_key_b64"]
+    assert by_email.json()["auth"]["wrapped_private_key_b64"] != lookup.json()["auth"]["wrapped_private_key_b64"]
+    assert by_email.json()["auth"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
 
     client = TestClient(app)
     session = _verify(client, private_key, "legacy.user")
     client.headers["X-CSRF-Token"] = session["csrf_token"]
+    stored = client.get("/api/auth/passwordless/wraps")
+    assert stored.status_code == 200
+    assert stored.json()["auth"]["kdf_iterations"] == LEGACY_PBKDF2_ITERATIONS
+    assert "legacy-auth-recovery" not in stored.text
+    assert TestClient(app).get("/api/auth/passwordless/wraps").status_code == 401
     vault = client.get("/api/vault/status")
     assert vault.status_code == 200
     assert vault.json()["kdf_iterations"] == LEGACY_PBKDF2_ITERATIONS
@@ -424,16 +441,19 @@ def test_existing_user_with_legacy_kdf_can_still_log_in_and_rewrap():
         "wrapped_private_key_b64": _b64(AUTH_WRAP_BYTES),
         "recovery_wrapped_private_key_b64": "",
     }
-    assert client.put("/api/auth/passwordless/wraps", json=upgraded_auth).status_code == 200
-    assert client.put("/api/vault/wraps", json={
-        "kdf_salt_b64": _b64(16),
-        "kdf_iterations": MIN_PBKDF2_ITERATIONS,
-        "wrapped_dek_b64": _b64(60),
-    }).status_code == 200
+    with caplog.at_level(logging.INFO, logger="finance.auth"):
+        assert client.put("/api/auth/passwordless/wraps", json=upgraded_auth).status_code == 200
+        assert client.put("/api/vault/wraps", json={
+            "kdf_salt_b64": _b64(16),
+            "kdf_iterations": MIN_PBKDF2_ITERATIONS,
+            "wrapped_dek_b64": _b64(60),
+        }).status_code == 200
+    assert "signing-key wrap KDF iterations raised" in caplog.text
+    assert "vault wrap KDF iterations raised" in caplog.text
 
     again = TestClient(app)
     assert again.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).json()["auth"]["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
-    _verify(again, private_key, "legacy.user@pending.local")
+    _verify(again, private_key, "legacy.user")
     assert again.get("/api/vault/status").json()["kdf_iterations"] == MIN_PBKDF2_ITERATIONS
 
 
@@ -505,6 +525,169 @@ def test_signup_invite_code_and_allowlist(monkeypatch):
     })
     assert taken_allowance.status_code == 403
     assert taken_allowance.json() == blocked.json()
+
+
+def test_attacker_pair_budget_does_not_block_login_from_another_ip(monkeypatch):
+    monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "2")
+    monkeypatch.setenv("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", "60")
+    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "100")
+    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "")
+    clear_limits()
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    _enroll_legacy_user(private_key)
+    attacker = TestClient(app, client=("203.0.113.5", 50000))
+    owner = TestClient(app, client=("203.0.113.9", 50000))
+
+    assert attacker.post("/api/auth/passwordless/challenge", json={"username": "legacy.user"}).status_code == 200
+    assert attacker.post("/api/auth/passwordless/challenge", json={"username": "legacy.user"}).status_code == 200
+    assert attacker.post("/api/auth/passwordless/challenge", json={"username": "legacy.user"}).status_code == 429
+    assert attacker.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 200
+    assert attacker.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 200
+
+    _verify(owner, private_key, "legacy.user")
+    assert owner.get("/api/vault/status").status_code == 200
+
+
+def test_failed_verify_cap_counts_failures_for_the_account(monkeypatch):
+    monkeypatch.setenv("AUTH_PAIR_RATE_LIMIT_PER_MIN", "20")
+    monkeypatch.setenv("AUTH_FAILED_VERIFY_RATE_LIMIT_PER_MIN", "1")
+    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "100")
+    clear_limits()
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    _enroll_legacy_user(private_key)
+    attacker = TestClient(app, client=("203.0.113.5", 50000))
+    other = TestClient(app, client=("203.0.113.9", 50000))
+    forged = {
+        "challenge_id": "not-a-real-challenge",
+        "challenge": "y" * 32,
+        "message": "not-a-real-challenge-message",
+        "signature_b64": _b64(64),
+    }
+    bad = attacker.post("/api/auth/passwordless/verify", json={"username": "legacy.user", **forged})
+    assert bad.status_code == 401
+    blocked = other.post("/api/auth/passwordless/verify", json={"username": "legacy.user", **forged})
+    unknown = other.post("/api/auth/passwordless/verify", json={"username": "nobody.user", **forged})
+    assert blocked.status_code == 429
+    assert unknown.status_code == 401
+
+
+def test_session_wrap_updates_are_not_on_the_login_budget(monkeypatch):
+    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "10")
+    monkeypatch.setenv("AUTH_ACCOUNT_RATE_LIMIT_PER_MIN", "1")
+    clear_limits()
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    _enroll_legacy_user(private_key)
+    client = TestClient(app, client=("203.0.113.8", 50000))
+    session = _verify(client, private_key, "legacy.user")
+    client.headers["X-CSRF-Token"] = session["csrf_token"]
+    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "1")
+    clear_limits()
+    body = {
+        "kdf_salt_b64": _b64(16),
+        "kdf_iterations": MIN_PBKDF2_ITERATIONS,
+        "wrapped_private_key_b64": _b64(AUTH_WRAP_BYTES),
+        "recovery_wrapped_private_key_b64": "",
+    }
+    assert client.put("/api/auth/passwordless/wraps", json=body).status_code == 200
+    assert client.put("/api/auth/passwordless/wraps", json=body).status_code == 200
+    anonymous = TestClient(app, client=("203.0.113.8", 50000))
+    assert anonymous.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 200
+    assert anonymous.post("/api/auth/passwordless/lookup", json={"username": "legacy.user"}).status_code == 429
+
+
+def test_spoofed_forwarded_for_does_not_split_the_ip_bucket(monkeypatch):
+    monkeypatch.setenv("AUTH_IP_RATE_LIMIT_PER_MIN", "1")
+    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "")
+    clear_limits()
+    client = TestClient(app, client=("203.0.113.7", 50000))
+    first = client.post(
+        "/api/auth/passwordless/lookup",
+        json={"username": "alice.user"},
+        headers={"X-Forwarded-For": "198.51.100.1"},
+    )
+    second = client.post(
+        "/api/auth/passwordless/lookup",
+        json={"username": "alice.user"},
+        headers={"X-Forwarded-For": "198.51.100.2"},
+    )
+    assert first.status_code == 200
+    assert second.status_code == 429
+
+
+def test_client_key_buckets_ipv6_by_prefix_and_ignores_forwarded_for():
+    from starlette.requests import Request
+
+    from apps.finance.backend.rate_limit import _client_key
+
+    def request_from(host: str, forwarded: str | None = None) -> Request:
+        headers = []
+        if forwarded is not None:
+            headers.append((b"x-forwarded-for", forwarded.encode()))
+        return Request({
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/",
+            "raw_path": b"/",
+            "query_string": b"",
+            "headers": headers,
+            "client": (host, 1234),
+            "server": ("test", 80),
+        })
+
+    left = _client_key(request_from("203.0.113.5", "198.51.100.9"))
+    right = _client_key(request_from("203.0.113.5", "198.51.100.10"))
+    assert left == right == "203.0.113.5"
+    assert _client_key(request_from("2001:db8:1:2::1")) == _client_key(request_from("2001:db8:1:2::abcd"))
+    assert _client_key(request_from("2001:db8:1:2::1")) != _client_key(request_from("2001:db8:1:3::1"))
+    assert _client_key(request_from("::ffff:203.0.113.5")) == "203.0.113.5"
+
+
+def test_rate_limit_table_evicts_the_oldest_key():
+    from apps.finance.backend import rate_limit
+
+    clear_limits()
+    for index in range(rate_limit._MAX_BUCKETS):
+        assert rate_limit._consume(rate_limit._auth_ip_buckets, f"198.51.100.{index}", 2)
+    assert rate_limit._consume(rate_limit._auth_ip_buckets, "203.0.113.50", 2) is True
+    assert "203.0.113.50" in rate_limit._auth_ip_buckets
+    assert "198.51.100.0" not in rate_limit._auth_ip_buckets
+    assert len(rate_limit._auth_ip_buckets) == rate_limit._MAX_BUCKETS
+    assert rate_limit._consume(rate_limit._auth_ip_buckets, "203.0.113.50", 2) is True
+    assert rate_limit._consume(rate_limit._auth_ip_buckets, "203.0.113.50", 2) is False
+
+
+def test_decoy_secret_file_survives_restart_and_a_short_file_is_replaced(tmp_path, monkeypatch, caplog):
+    from apps.finance.backend.services.auth_decoy import decoy_passwordless_material, reset_decoy_state
+
+    monkeypatch.delenv("AUTH_DECOY_SECRET", raising=False)
+    database = tmp_path / "site.db"
+    database.write_bytes(b"")
+    monkeypatch.setattr(
+        "apps.finance.backend.database.SQLALCHEMY_DATABASE_URL",
+        f"sqlite:///{database}",
+    )
+    reset_decoy_state()
+    first = decoy_passwordless_material("ghost.user")
+    secret = tmp_path / "auth-decoy-secret"
+    assert secret.stat().st_size >= 32
+    assert secret.stat().st_mode & 0o777 == 0o600
+    reset_decoy_state()
+    assert decoy_passwordless_material("ghost.user") == first
+
+    secret.write_bytes(b"short")
+    reset_decoy_state()
+    with caplog.at_level(logging.ERROR, logger="finance.auth"):
+        regenerated = decoy_passwordless_material("ghost.user")
+    assert "regenerating" in caplog.text
+    assert regenerated != first
+    assert secret.stat().st_size >= 32
+    assert not list(tmp_path.glob(".auth-decoy-secret.*.tmp"))
+    reset_decoy_state()
+    assert decoy_passwordless_material("ghost.user") == regenerated
+    reset_decoy_state()
 
 
 def test_bootstrap_rejects_a_weaker_than_current_kdf():

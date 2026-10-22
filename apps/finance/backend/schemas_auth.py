@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from apps.finance.backend.kdf_policy import MIN_PBKDF2_ITERATIONS
+from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.schemas_vault import VaultCreateRequest
 
 UserRoleValue = Literal["admin", "user"]
@@ -46,7 +46,7 @@ class LoginResponse(BaseModel):
 
 class AuthPrivateKeyWrap(BaseModel):
     kdf_salt_b64: str = Field(..., min_length=16, max_length=4096)
-    kdf_iterations: int = Field(MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=10_000_000)
+    kdf_iterations: int = Field(MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS)
     wrapped_private_key_b64: str = Field(..., min_length=16, max_length=8192)
     # Legacy field; recovery-key path removed. Empty string means unused.
     recovery_wrapped_private_key_b64: str = Field("", max_length=8192)

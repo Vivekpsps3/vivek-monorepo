@@ -244,7 +244,7 @@ export class AuthService {
     if (!lookup?.auth?.wrapped_private_key_b64 || !lookup.auth.kdf_salt_b64 || !lookup.auth.kdf_iterations) {
       throw new Error('Unable to retrieve vault authentication material');
     }
-    // The same identifier is sent to challenge and verify. Email still resolves server-side.
+    // The same username is sent to challenge and verify. Email is not an alias.
     const handle = identifier;
     this.vault.loadAuthWrap(lookup.auth);
     const challenge = await firstValueFrom(
@@ -293,11 +293,12 @@ export class AuthService {
       // DEK wraps are session-only. Fetch them after the signature check, then unlock.
       await this.vault.refreshStatus();
       await this.vault.unlock(vaultPassphrase);
-      await this.vault.upgradeKdfIfNeeded(vaultPassphrase);
     } catch {
       this.clearLocalSession();
       throw new Error('Vault authentication succeeded, but this passphrase cannot unlock the vault.');
     }
+    // Another PBKDF2 pass. It must not delay navigation, and a failed upgrade must not log the user out.
+    void this.vault.upgradeKdfIfNeeded(vaultPassphrase);
     return response.user;
   }
 

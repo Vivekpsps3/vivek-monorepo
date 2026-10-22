@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.auth import get_current_user
-from apps.finance.backend.rate_limit import enforce_account_rate_limit
 from apps.finance.backend.database import get_db
 from apps.finance.backend.models import User
 from apps.finance.backend.schemas_vault import (
@@ -19,6 +20,7 @@ from apps.finance.backend.schemas_vault import (
 from apps.finance.backend.services import encrypted_storage as store
 
 router = APIRouter(prefix="/vault", tags=["vault"])
+logger = logging.getLogger("finance.auth")
 
 
 def _iso(dt) -> str | None:
@@ -73,7 +75,9 @@ def vault_update_wraps(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    enforce_account_rate_limit(current_user.username or current_user.email)
+    # Session cookie plus CSRF. Not counted against the login IP or account budgets.
+    previous = store.get_vault(db, current_user.id)
+    previous_iterations = previous.kdf_iterations if previous else None
     store.update_vault_wraps(
         db,
         current_user.id,
@@ -83,6 +87,13 @@ def vault_update_wraps(
         recovery_wrapped_dek_b64=body.recovery_wrapped_dek_b64,
         key_version=body.key_version,
     )
+    if previous_iterations is not None and body.kdf_iterations is not None and body.kdf_iterations > previous_iterations:
+        logger.info(
+            "vault wrap KDF iterations raised user_id=%s from=%s to=%s",
+            current_user.id,
+            previous_iterations,
+            body.kdf_iterations,
+        )
     db.commit()
     return _vault_response(db, current_user.id)
 

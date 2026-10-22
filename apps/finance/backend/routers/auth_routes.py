@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import logging
 import secrets
 from datetime import timedelta
 
@@ -32,7 +33,12 @@ from apps.finance.backend.auth import (
 )
 from apps.finance.backend.database import get_db
 from apps.finance.backend.models import AuthEnrollment, User, UserRole, UserSession
-from apps.finance.backend.rate_limit import enforce_account_rate_limit
+from apps.finance.backend.rate_limit import (
+    enforce_account_rate_limit,
+    enforce_login_pair_limit,
+    failed_verify_blocked,
+    note_failed_verify,
+)
 from apps.finance.backend.services.auth_decoy import decoy_passwordless_material
 from apps.finance.backend.services.challenge_auth import CHALLENGE_TTL, PROTOCOL, issue_challenge, verify_challenge
 from apps.finance.backend.services.signup_gate import (
@@ -67,6 +73,7 @@ from apps.finance.backend.schemas_auth import (
 )
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger("finance.auth")
 
 
 def _origin(request: Request) -> str:
@@ -74,16 +81,15 @@ def _origin(request: Request) -> str:
 
 
 def _find_passwordless_user(db: Session, identifier: str) -> User | None:
-    """Resolve passwordless login by username, or by email for legacy convenience."""
+    """Resolve passwordless login by username only.
+
+    Email is not an alias. The same wrap for ``alice`` and ``alice@example.com``
+    would confirm that both identifiers exist and belong to one account.
+    """
     key = normalize_email(identifier)
-    if not key:
+    if not key or "@" in key:
         return None
-    user = db.query(User).filter(User.username == key).first()
-    if user:
-        return user
-    if "@" in key:
-        return db.query(User).filter(User.email == normalize_email(key)).first()
-    return None
+    return db.query(User).filter(User.username == key).first()
 
 
 def _user_response(user: User) -> UserPublic:
@@ -122,7 +128,7 @@ def _auth_material(user: User) -> dict:
     }
 
 
-def _passwordless_record_complete(db: Session, user: User | None) -> bool:
+def _passwordless_record_complete(user: User | None, vault: object | None) -> bool:
     if (
         not user
         or not user.is_active
@@ -130,10 +136,21 @@ def _passwordless_record_complete(db: Session, user: User | None) -> bool:
         or not user.auth_wrapped_private_key_b64
         or not user.auth_kdf_salt_b64
         or not user.auth_kdf_iterations
-        or not vault_store.get_vault(db, user.id)
+        or vault is None
     ):
         return False
     return True
+
+
+def _user_and_vault(db: Session, identifier: str) -> tuple[User | None, object | None]:
+    """Load the account and always query the vault table.
+
+    A miss used to return before ``get_vault``. That extra query on a hit was a
+    repeatable timing difference. Unknown identifiers still run the vault read.
+    """
+    user = _find_passwordless_user(db, identifier)
+    vault = vault_store.get_vault(db, user.id if user is not None else 0)
+    return user, vault
 
 
 def _decoy_challenge(request: Request) -> dict:
@@ -273,18 +290,19 @@ def enroll_passwordless(
 
 @router.post("/auth/passwordless/lookup")
 def passwordless_lookup(body: PasswordlessChallengeRequest, db: Session = Depends(get_db)):
-    enforce_account_rate_limit(body.username)
-    # Build the decoy on every call so a miss is not cheaper in a way that depends on the branch taken later.
+    # No per-account limit. The response is deterministic, and sharing a budget
+    # with verify let one IP hold the owner's login at 429. The IP limiter still applies.
     decoy = decoy_passwordless_material(body.username)
-    user = _find_passwordless_user(db, body.username)
-    if not _passwordless_record_complete(db, user) or user is None:
+    user, vault = _user_and_vault(db, body.username)
+    if not _passwordless_record_complete(user, vault):
         return decoy
+    assert user is not None
     return _auth_material(user)
 
 
 @router.post("/auth/passwordless/challenge", response_model=PasswordlessChallengeResponse)
 def passwordless_challenge(body: PasswordlessChallengeRequest, request: Request, db: Session = Depends(get_db)):
-    enforce_account_rate_limit(body.username)
+    enforce_login_pair_limit(body.username, request)
     user = _find_passwordless_user(db, body.username)
     if not user or not user.is_active or not user.auth_public_key_b64:
         return _decoy_challenge(request)
@@ -293,23 +311,42 @@ def passwordless_challenge(body: PasswordlessChallengeRequest, request: Request,
     return {"challenge_id": challenge.challenge_id, "challenge": raw, "message": message, "expires_at": challenge.expires_at}
 
 
+@router.get("/auth/passwordless/wraps")
+def read_passwordless_wraps(current_user: User = Depends(get_current_user)):
+    """Signing-key wrap for the signed-in account. Unlock uses this when the browser has no cached wrap."""
+    if not current_user.auth_wrapped_private_key_b64 or not current_user.auth_kdf_salt_b64 or not current_user.auth_kdf_iterations:
+        raise HTTPException(status_code=404, detail="Authentication key is not enrolled")
+    return _auth_material(current_user)
+
+
 @router.put("/auth/passwordless/wraps")
 def update_passwordless_wraps(
     body: AuthPrivateKeyWrap,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    enforce_account_rate_limit(current_user.username or current_user.email)
+    # Session cookie plus CSRF. Not counted against the login IP or account budgets.
+    previous = current_user.auth_kdf_iterations
     _store_auth_wrap(current_user, body)
+    if previous is not None and body.kdf_iterations > previous:
+        logger.info(
+            "signing-key wrap KDF iterations raised user_id=%s from=%s to=%s",
+            current_user.id,
+            previous,
+            body.kdf_iterations,
+        )
     db.commit()
     return {"ok": True}
 
 
 @router.post("/auth/passwordless/verify", response_model=LoginResponse)
 def passwordless_verify(body: PasswordlessVerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
-    enforce_account_rate_limit(body.username)
+    enforce_login_pair_limit(body.username, request)
+    if failed_verify_blocked(body.username):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded; retry later")
     user = _find_passwordless_user(db, body.username)
     if not user or not user.is_active or not verify_challenge(db, user, body.challenge_id, body.challenge, body.message, body.signature_b64):
+        note_failed_verify(body.username)
         raise HTTPException(status_code=401, detail="Invalid or expired vault authentication challenge")
     csrf = create_session(db, user, request, response)
     db.refresh(user)
