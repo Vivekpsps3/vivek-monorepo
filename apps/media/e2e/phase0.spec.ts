@@ -160,6 +160,7 @@ test('a failed progress draft does not overwrite a newer save', async ({ page, r
   await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('200');
   const choice = page.locator('#progress-draft');
   await expect(choice).toContainText("Progress wasn't saved (p. 40).");
+  await expect(choice).toContainText('Saved elsewhere since: p. 200.');
   await expect(choice.getByRole('button', { name: 'Restore' })).toBeVisible();
   await expect(choice.getByRole('button', { name: 'Discard' })).toBeVisible();
 
@@ -167,6 +168,90 @@ test('a failed progress draft does not overwrite a newer save', async ({ page, r
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/20\d\d/);
   const after = await request.get(`/media/api/entries/${dune.id}`);
   expect((await after.json()).progress_value).toBe(200);
+});
+
+test('restoring a progress draft saves on blur and navigation', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  const seeded = await request.patch(`/media/api/entries/${dune.id}`, {
+    data: { progress_value: 200, progress_unit: 'page' },
+  });
+  expect(seeded.ok()).toBeTruthy();
+
+  const plant = (base: string) => page.evaluate(({ id, base }) => {
+    localStorage.setItem(`media-progress-draft:${id}`, JSON.stringify({
+      value: '40',
+      unit: 'page',
+      base,
+    }));
+  }, { id: dune.id, base });
+
+  await page.goto(`/media/#/item/${dune.id}`);
+  await plant('10|page');
+  await page.reload();
+  const progress = page.getByLabel('Progress', { exact: true });
+  await expect(progress).toHaveValue('200');
+  const choice = page.locator('#progress-draft');
+  await expect(choice).toContainText("Progress wasn't saved (p. 40).");
+  await expect(choice).toContainText('Saved elsewhere since: p. 200.');
+  await choice.getByRole('button', { name: 'Restore' }).click();
+  await expect(progress).toHaveValue('40');
+  await progress.blur();
+  await expect(page.locator('#progress-draft')).toHaveCount(0);
+  await expect(page.locator('#progress-status')).toHaveText('Saved');
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(40);
+
+  const again = await request.patch(`/media/api/entries/${dune.id}`, {
+    data: { progress_value: 200, progress_unit: 'page' },
+  });
+  expect(again.ok()).toBeTruthy();
+  await plant('10|page');
+  await page.reload();
+  await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('200');
+  await page.locator('#progress-draft').getByRole('button', { name: 'Restore' }).click();
+  await page.evaluate(() => { location.hash = '#/calendar'; });
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/20\d\d/);
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(40);
+  await page.goto(`/media/#/item/${dune.id}`);
+  await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('40');
+  await expect(page.locator('#progress-draft')).toHaveCount(0);
+});
+
+test('an unknown progress draft unit is not saved as null', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await page.goto(`/media/#/item/${dune.id}`);
+  await page.evaluate(id => {
+    localStorage.setItem(`media-progress-draft:${id}`, JSON.stringify({
+      value: '7',
+      unit: 'hours',
+      base: '40|page',
+    }));
+  }, dune.id);
+  await page.reload();
+  const unit = page.getByLabel('Unit');
+  await expect(unit).toHaveValue('page');
+  const choice = page.locator('#progress-draft');
+  await choice.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('7');
+  await expect(unit).toHaveValue('page');
+  await page.getByLabel('Progress', { exact: true }).blur();
+  await expect(page.locator('#progress-draft')).toHaveCount(0);
+  const saved = await (await request.get(`/media/api/entries/${dune.id}`)).json();
+  expect(saved.progress_value).toBe(7);
+  expect(saved.progress_unit).toBe('page');
+
+  await page.evaluate(id => {
+    localStorage.setItem(`media-progress-draft:${id}`, JSON.stringify({
+      value: '8',
+      unit: 'page',
+      base: '7|page',
+    }));
+  }, dune.id);
+  await page.reload();
+  await page.locator('#progress-draft').getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByLabel('Progress', { exact: true })).toBeFocused();
+  await expect(page.locator('#progress-draft')).toHaveCount(0);
 });
 
 test('blurring an unchanged note does not overwrite a newer save', async ({ page, request }) => {

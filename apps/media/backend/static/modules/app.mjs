@@ -463,16 +463,29 @@ function progressField(entry) {
   </div>`;
 }
 
+function offeredUnit(select, preferred) {
+  const values = select instanceof HTMLSelectElement
+    ? [...select.options].map(option => option.value).filter(Boolean)
+    : [];
+  if (preferred && values.includes(preferred)) return preferred;
+  if (select instanceof HTMLSelectElement && select.value && values.includes(select.value)) return select.value;
+  return values[0] || "";
+}
+
 function progressDraftChoice(entry, serverValue, serverUnit) {
   const draft = readProgressDraft(entry.id);
   if (!draft) return "";
+  const units = progressUnits(entry.kind);
+  const draftUnit = units.some(item => item.value === draft.unit) ? draft.unit : serverUnit;
   const serverKey = `${serverValue}|${serverUnit}`;
-  if (`${draft.value}|${draft.unit}` === serverKey) {
+  if (`${draft.value}|${draftUnit}` === serverKey) {
     clearProgressDraft(entry.id);
     return "";
   }
-  const preview = progressPreview(draft.value, draft.unit) || draft.value;
-  return `<p id="progress-draft" class="progress-draft">Progress wasn't saved (${esc(preview)}). <button type="button" data-restore-progress="${entry.id}">Restore</button> <button type="button" data-discard-progress="${entry.id}">Discard</button></p>`;
+  const preview = progressPreview(draft.value, draftUnit) || draft.value;
+  const serverPreview = progressPreview(serverValue, serverUnit) || String(serverValue || "cleared");
+  const elsewhere = draft.base !== serverKey ? ` Saved elsewhere since: ${esc(serverPreview)}.` : "";
+  return `<p id="progress-draft" class="progress-draft">Progress wasn't saved (${esc(preview)}).${elsewhere} <button type="button" data-restore-progress="${entry.id}">Restore</button> <button type="button" data-discard-progress="${entry.id}">Discard</button></p>`;
 }
 
 function externalRatings(rows) {
@@ -948,11 +961,18 @@ document.addEventListener("click", async event => {
     const input = document.querySelector("#progress");
     const unit = document.querySelector("#progress-unit");
     if (draft && input instanceof HTMLInputElement) {
+      const chosen = offeredUnit(unit, draft.unit);
+      if (unit instanceof HTMLSelectElement && chosen) unit.value = chosen;
       input.value = draft.value;
-      delete input.dataset.dirty;
-      if (unit instanceof HTMLSelectElement && draft.unit) unit.value = draft.unit;
       const help = document.querySelector("#progress-help");
-      if (help) help.textContent = progressPreview(input.value, unit instanceof HTMLSelectElement ? unit.value : "");
+      if (help) help.textContent = progressPreview(input.value, chosen);
+      const key = `${input.value.trim()}|${chosen}`;
+      if (input.dataset.saved === key) {
+        clearProgressDraft(restoreProgress.getAttribute("data-restore-progress"));
+        document.querySelector("#progress-draft")?.remove();
+      } else {
+        input.dataset.dirty = "true";
+      }
       input.focus();
     }
     return;
@@ -962,6 +982,7 @@ document.addEventListener("click", async event => {
     keepButtonClick(event, target);
     clearProgressDraft(discardProgress.getAttribute("data-discard-progress"));
     document.querySelector("#progress-draft")?.remove();
+    document.querySelector("#progress")?.focus();
     return;
   }
   const button = target.closest("[data-action]");
@@ -1280,7 +1301,7 @@ function progressSnapshot() {
     input,
     id: input.dataset.progress,
     value: input.value.trim(),
-    unit: unit instanceof HTMLSelectElement ? unit.value : (input.dataset.unit || "percent"),
+    unit: offeredUnit(unit, "") || "percent",
   };
 }
 
@@ -1352,6 +1373,7 @@ async function commitProgress(payload) {
     });
     clearProgressDraft(payload.id);
     progressFailure = "";
+    document.querySelector("#progress-draft")?.remove();
     if (payload.input.isConnected) {
       payload.input.dataset.saved = payload.key;
       delete payload.input.dataset.dirty;
