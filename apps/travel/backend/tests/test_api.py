@@ -1,7 +1,6 @@
 """A trip is one leave-to-return span, with plans visible on the home payload."""
 
 from datetime import date, timedelta
-from decimal import Decimal
 
 
 def monday_on_or_after(start: date) -> date:

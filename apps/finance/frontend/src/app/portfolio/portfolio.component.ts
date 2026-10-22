@@ -15,9 +15,7 @@ import {
   HoldingCreate,
   MarketPriceQuote,
   NetWorth,
-  FidelityImportOption,
   FidelityPreviewResult,
-  FidelityPreviewRow,
   FidelityCommitResult,
 } from '../models/transaction.model';
 import { ToastService } from '@vivek/ui';

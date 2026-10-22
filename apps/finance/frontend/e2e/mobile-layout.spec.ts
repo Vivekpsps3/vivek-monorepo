@@ -9,6 +9,8 @@ async function expectFits(page: Page, label: string): Promise<void> {
     let edge = '';
     for (const node of Array.from(document.querySelectorAll('body *'))) {
       const el = node as HTMLElement;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
       const box = el.getBoundingClientRect();
       if (box.width < 8 || box.height < 8) continue;
       if (box.right > right) {

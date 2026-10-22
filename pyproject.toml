@@ -9,3 +9,48 @@ extend-exclude = [
   # Applied migrations. Reformatting them only adds blame noise.
   "**/alembic/versions",
 ]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+  # The formatter owns wrapping. Long strings and URLs stay as they are.
+  "E501",
+  # FastAPI uses Query, Depends, and File in argument defaults on purpose.
+  "B008",
+  # Titles and prose use en dashes on purpose.
+  "RUF001",
+  "RUF002",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic inserts the repo root on sys.path before importing the models.
+"apps/finance/backend/alembic/env.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+show_error_codes = true
+pretty = false
+files = ["apps", "scripts"]
+exclude = [
+  "apps/site/flask/",
+  "alembic/versions/",
+]
+
+[tool.coverage.run]
+branch = false
+omit = [
+  "*/tests/*",
+  "*/alembic/*",
+  "apps/site/flask/*",
+]
+
+[tool.coverage.report]
+precision = 0
+show_missing = false
+skip_empty = true

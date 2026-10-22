@@ -377,7 +377,6 @@ def number_or_none(value, field: str) -> float | None:
 
 
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
-    before_rating = entry.rating
     before_review = entry.review
     if "status" in body:
         entry.status = choice(body.get("status"), STATUSES, "Status")

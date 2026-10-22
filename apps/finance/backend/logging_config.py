@@ -81,6 +81,6 @@ def redact_database_url(url: str) -> str:
     if "@" in url and "://" in url:
         scheme, rest = url.split("://", 1)
         if "@" in rest:
-            creds, host = rest.rsplit("@", 1)
+            _creds, host = rest.rsplit("@", 1)
             return f"{scheme}://***@{host}"
     return url

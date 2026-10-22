@@ -78,7 +78,7 @@ export function paydayDatesBetween(row: PaySchedule, start: string, end: string)
     const dayMs = 86_400_000;
     const anchorMs = Date.parse(`${anchor}T00:00:00Z`);
     const fromMs = Date.parse(`${from}T00:00:00Z`);
-    let index = Math.max(0, Math.ceil((fromMs - anchorMs) / (step * dayMs)));
+    const index = Math.max(0, Math.ceil((fromMs - anchorMs) / (step * dayMs)));
     const result: string[] = [];
     for (let ms = anchorMs + index * step * dayMs; ms <= Date.parse(`${to}T00:00:00Z`); ms += step * dayMs) {
       result.push(new Date(ms).toISOString().slice(0, 10));
@@ -391,7 +391,7 @@ export function jobHistoryError(row: JobIncomeCreate): string | null {
     if (Number(row.second_pay_day) === Number(row.first_pay_date?.slice(-2))) return 'Semimonthly paydays must use different days.';
   }
   const stockSymbol = row.stock_symbol?.trim();
-  if (stockSymbol && !/^[A-Z0-9.\-]{1,10}$/i.test(stockSymbol)) return 'Stock ticker must be 1–10 letters, numbers, dots, or hyphens.';
+  if (stockSymbol && !/^[A-Z0-9.-]{1,10}$/i.test(stockSymbol)) return 'Stock ticker must be 1–10 letters, numbers, dots, or hyphens.';
   const dates = new Set<string>();
   for (const promotion of row.promotions || []) {
     if (!isValidIsoDate(promotion.date) || promotion.date <= row.effective_date || (row.end_date && promotion.date > row.end_date)) return 'Promotion dates must be after the start date and on or before the end date.';
@@ -413,7 +413,7 @@ export function jobHistoryError(row: JobIncomeCreate): string | null {
       const observedDate = valuation.observed_date
         || valuation.price_as_of?.slice(0, 10)
         || valuation.date;
-      if (!/^[A-Z0-9.\-]{1,10}$/i.test(valuation.symbol || '')
+      if (!/^[A-Z0-9.-]{1,10}$/i.test(valuation.symbol || '')
         || !isValidIsoDate(observedDate)
         || observedDate > todayIsoDate()
         || valuation.date > observedDate) {

@@ -2,6 +2,7 @@
 
 > Current unified development/deployment commands are in [Operations](OPERATIONS.md).
 > Standalone app commands below are historical domain references.
+> Lint, type checks, coverage floors, and Playwright are in [Quality gates](QUALITY.md).
 
 ## Prerequisites
 

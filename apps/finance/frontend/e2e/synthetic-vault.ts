@@ -1,6 +1,11 @@
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { Page } from '@playwright/test';
 
+/** Form control with this accessible name. Ignores an info-tip button that repeats the label. */
+export function field(target: Page, name: string) {
+  return target.locator('input, select, textarea').and(target.getByLabel(name, { exact: true }));
+}
+
 type Payload = Record<string, any>;
 type QuoteResponse = {
   status?: number;
@@ -153,18 +158,36 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
   const enteredPages = new WeakSet<Page>();
   async function unlock(target: Page = page) {
     attach(target);
-    await target.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(passphrase);
-    await target.getByRole('button', { name: 'Unlock', exact: true }).click();
-    await target.waitForURL(url => url.pathname === '/');
+    const leftVault = (url: URL) => !url.pathname.startsWith('/vault/');
+    const passphraseBox = target.getByRole('textbox', { name: 'Vault passphrase', exact: true });
+    // A second tab restores the key and continues to /hub before the form can be submitted.
+    try {
+      await passphraseBox.waitFor({ state: 'visible', timeout: 5_000 });
+      if (new URL(target.url()).pathname.startsWith('/vault/')) {
+        await passphraseBox.fill(passphrase, { timeout: 2_000 });
+        if (new URL(target.url()).pathname.startsWith('/vault/')) {
+          await target.getByRole('button', { name: 'Unlock', exact: true }).click({ timeout: 2_000 });
+        }
+      }
+    } catch {
+      // The form was replaced by the restored-session redirect.
+    }
+    // Unlock continues to /hub (or a next= path). The caller then opens the route it wants.
+    await target.waitForURL(leftVault);
     enteredPages.add(target);
   }
   async function navigate(path: string, target: Page = page) {
     // Browser history navigation exercises Angular guards without replacing the unlocked session.
+    // Legacy routes rewrite the query before the requested URL can be observed.
     await target.evaluate(nextPath => {
       history.pushState(null, '', nextPath);
       window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
     }, path);
-    await target.waitForURL(url => url.pathname + url.search === path);
+    await target.waitForFunction(requested => {
+      const here = `${location.pathname}${location.search}`;
+      if (here === requested) return true;
+      return !location.pathname.startsWith('/vault/') && here !== requested;
+    }, path);
   }
   return {
     quoteRequests, quoteRequestDetails, mutations,

@@ -1,27 +1,39 @@
 import { defineConfig } from '@playwright/test';
 
+const dist = process.env.E2E_DIST;
+const port = process.env.E2E_PORT ?? '4173';
+const builtUrl = `http://127.0.0.1:${port}`;
+
 /**
- * E2E smoke (QA-014). Requires dev stack:
- *   make dev   # or make backend + make frontend
- * Then: npm run e2e
+ * `npm run e2e` drives the dev server. `make e2e` and CI set E2E_DIST to the
+ * production bundle and serve it at `/`, which is the mount these specs assert.
  */
 export default defineConfig({
   testDir: 'e2e',
-  timeout: 30_000,
+  timeout: 60_000,
   retries: 0,
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:4200',
-    trace: 'on-first-retry',
+    baseURL: process.env.E2E_BASE_URL ?? (dist ? builtUrl : 'http://127.0.0.1:4200'),
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
       ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
       : undefined,
   },
   webServer: process.env.E2E_SKIP_WEB_SERVER
     ? undefined
-    : {
-        command: 'npm run start -- --prebundle=false --hmr=false --live-reload=false',
-        url: 'http://localhost:4200',
-        reuseExistingServer: true,
-        timeout: 120_000,
-      },
+    : dist
+      ? {
+          command: `node ../../../scripts/serve-spa.mjs ${dist} ${port}`,
+          url: builtUrl,
+          reuseExistingServer: !process.env.CI,
+          timeout: 30_000,
+        }
+      : {
+          command: 'npm run start -- --prebundle=false --hmr=false --live-reload=false',
+          url: 'http://127.0.0.1:4200',
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
 });

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { test, expect } from '@playwright/test';
-import { syntheticVault } from './synthetic-vault';
+import { field, syntheticVault } from './synthetic-vault';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const nativeHoverTitleSelector = 'ui-card[title], ui-page-header[title], ui-empty-state[title], nav [title], ui-button[title], button[title], a[title]';
@@ -263,22 +263,22 @@ test('legacy spending links translate to Activity filters and five navigation hu
 test('planning accepts only covered selected spending and persists its composition without changing actual balances', async ({ page }) => {
   const vault = await syntheticVault(page, { ...spendingPlanSeed(), assets: seed().assets });
   await vault.open('/planning');
-  await page.getByLabel('Spending basis', { exact: true }).selectOption('components');
-  await expect(page.getByLabel('Fixed annual spending', { exact: true })).toHaveValue('120');
-  await page.getByLabel('Irregular annual spending', { exact: true }).fill('600');
-  await page.getByText('Suggest variable spending from the last three completed months', { exact: true }).click();
+  await page.getByRole('combobox', { name: 'Spending basis', exact: true }).selectOption('components');
+  await expect(field(page, 'Fixed annual spending')).toHaveValue('120');
+  await field(page, 'Irregular annual spending').fill('600');
+  await page.locator('details.spending-suggestion-details > summary').click({ position: { x: 8, y: 8 } });
   await page.getByLabel('Select account Daily card', { exact: true }).check();
   await page.getByLabel('Select category Food', { exact: true }).check();
   await expect(page.locator('.spending-suggestion-result')).toContainText('$324');
   expect(vault.data('planning_profiles')).toHaveLength(0);
-  await expect(page.getByLabel('Variable annual spending', { exact: true })).toHaveValue('0');
+  await expect(field(page, 'Variable annual spending')).toHaveValue('0');
   vault.failWriteIn('planning_profiles');
   await page.getByRole('button', { name: 'Accept spending suggestion', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Accept spending suggestion', exact: true })).toBeEnabled();
   expect(vault.data('planning_profiles')).toHaveLength(0);
-  await expect(page.getByLabel('Variable annual spending', { exact: true })).toHaveValue('0');
+  await expect(field(page, 'Variable annual spending')).toHaveValue('0');
   await page.getByRole('button', { name: 'Accept spending suggestion', exact: true }).click();
-  await expect(page.getByLabel('Variable annual spending', { exact: true })).toHaveValue('324');
+  await expect(field(page, 'Variable annual spending')).toHaveValue('324');
   await expect(page.getByLabel('Composed annual spending', { exact: true })).toContainText('$1,044');
   const stored = vault.data('planning_profiles')[0];
   const payload = typeof stored.payload_json === 'string' ? JSON.parse(stored.payload_json) : stored.payload;
@@ -294,16 +294,16 @@ test('a coverage gap prevents a planning estimate and preserves a legacy manual 
     id: 90, name: 'Legacy manual plan', base_currency: 'USD', payload_json: JSON.stringify({ annual_spending: 7777 }),
   }] });
   await vault.open('/planning?t=path&tool=simulation');
-  await expect(page.getByLabel('Planning question', { exact: true })).toHaveValue('simulation');
+  await expect(field(page, 'Planning question')).toHaveValue('simulation');
   await page.getByRole('combobox', { name: 'Load saved inputs', exact: true }).selectOption('90');
-  await expect(page.getByLabel('Spending basis', { exact: true })).toHaveValue('manual');
-  await expect(page.getByLabel('Manual annual spending', { exact: true })).toHaveValue('7777');
-  await page.getByText('Suggest variable spending from the last three completed months', { exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Spending basis', exact: true })).toHaveValue('manual');
+  await expect(field(page, 'Manual annual spending')).toHaveValue('7777');
+  await page.locator('details.spending-suggestion-details > summary').click({ position: { x: 8, y: 8 } });
   await page.getByLabel('Select account Daily card', { exact: true }).check();
   await page.getByLabel('Select category Food', { exact: true }).check();
   await expect(page.getByText(/Coverage is incomplete/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Accept spending suggestion', exact: true })).toBeDisabled();
-  await expect(page.getByLabel('Manual annual spending', { exact: true })).toHaveValue('7777');
+  await expect(field(page, 'Manual annual spending')).toHaveValue('7777');
   expect(JSON.parse(vault.data('planning_profiles')[0].payload_json).annual_spending).toBe(7777);
 });
 
@@ -383,7 +383,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   await dialog.locator('input[type=file]').setInputFiles({ name: 'legacy.csv', mimeType: 'text/csv', buffer: csv });
   await dialog.getByLabel('Bank for legacy.csv', { exact: true }).selectOption('chase');
   await dialog.getByRole('combobox', { name: /Account identity for this file/ }).selectOption('40');
-  const mapping = dialog.getByLabel('Map matching legacy transactions to this account', { exact: true });
+  const mapping = dialog.getByRole('checkbox', { name: /Map matching legacy transactions to this account/ });
   await expect(mapping).not.toBeChecked();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('1 new · 0 duplicate');
@@ -412,7 +412,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   await dialog.locator('input[type=file]').setInputFiles({ name: 'fresh-account.csv', mimeType: 'text/csv', buffer: csv });
   await dialog.getByLabel('Bank for fresh-account.csv', { exact: true }).selectOption('chase');
   await dialog.getByLabel('Account name', { exact: true }).fill('Chase account B');
-  await expect(dialog.getByLabel('Map matching legacy transactions to this account', { exact: true })).not.toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: /Map matching legacy transactions to this account/ })).not.toBeChecked();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('1 new · 0 duplicate');
   await dialog.getByRole('button', { name: 'Import 1 transaction(s)', exact: true }).click();

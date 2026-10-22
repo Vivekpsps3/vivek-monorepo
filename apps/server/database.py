@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from sqlalchemy import create_engine, event
+from sqlalchemy import event
 from sqlalchemy.engine import make_url
 
 

@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
 import { BehaviorSubject, of } from 'rxjs';
 import { IncomeComponent } from './income.component';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';

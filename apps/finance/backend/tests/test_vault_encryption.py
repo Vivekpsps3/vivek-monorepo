@@ -8,7 +8,6 @@ from sqlalchemy import delete
 
 from conftest import authenticated_client
 from apps.finance.backend.main import Base, app, engine
-from apps.finance.backend.models import UserRole
 
 
 @pytest.fixture(autouse=True)

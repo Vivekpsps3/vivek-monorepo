@@ -58,7 +58,7 @@ def get_market_research(
     try:
         return market_data.get_research(upper, period=clean_period, force_refresh=refresh, db=db)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)[:200])
+        raise HTTPException(status_code=502, detail=str(exc)[:200]) from exc
 
 
 @router.post("/market/research/batch", response_model=MarketResearchBatchResponse)
