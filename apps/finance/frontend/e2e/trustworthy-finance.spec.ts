@@ -129,6 +129,8 @@ test('Spending opens on Activity without review controls and Home has no review 
 
   await vault.open('/spending');
   await expect(page.getByRole('link', { name: 'Activity', exact: true })).toHaveClass(/on/);
+  await expect(page.getByRole('link', { name: 'Imports', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('all');
   await expect(page.locator('app-transactions')).toBeVisible();
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveCount(0);
@@ -251,9 +253,12 @@ test('legacy spending links translate to Activity filters and five navigation hu
   const vault = await syntheticVault(page, seed());
   await vault.open('/spending?t=pay');
   await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).toContainText('Activity');
-  await expect(page.getByRole('button', { name: 'Income', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).not.toContainText('Imports');
+  await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('income');
+  await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toBeVisible();
   await vault.open('/spending?t=spend');
-  await expect(page.getByRole('button', { name: 'Spending', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('spending');
+  await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toHaveCount(0);
   await vault.open('/planning');
   await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Retirement & goals');
   await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Portfolio projection');
@@ -471,7 +476,7 @@ test('bank imports require account identity, resume one receipt, and undo retain
   await editor.getByLabel('Merchant (optional)', { exact: true }).fill('Coffee shop');
   await editor.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(editor).toBeHidden();
-  await page.getByRole('link', { name: 'Imports', exact: true }).click();
+  await page.getByText(/Import receipts \(/).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   await expect.poll(() => vault.data('transactions').length).toBe(1);

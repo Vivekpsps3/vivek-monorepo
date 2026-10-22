@@ -529,10 +529,10 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
     account_key: 'card', start_date: coverageStart, end_date: coverageEnd, confirmed: true,
   });
 
-  const history = page.getByText(/Import receipts \(/);
-  if (await history.count()) await history.click();
-  const receipt = page.locator('.import-history-row').filter({ hasText: 'confirmed-coverage.csv' });
-  await receipt.getByRole('button', { name: 'Undo', exact: true }).click();
+  const receipt = page.locator('.ledger-receipts .import-history-row').filter({ hasText: 'confirmed-coverage.csv' });
+  const undo = receipt.getByRole('button', { name: 'Undo', exact: true });
+  if (!(await undo.isVisible())) await page.locator('.ledger-receipts summary').click();
+  await undo.click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   await expect.poll(() => vault.data('import_batches')[0]?.status).toBe('withdrawn');
   await expect(activityTab.getByRole('row').filter({ hasText: 'COVERAGE PURCHASE' })).toHaveCount(0);
