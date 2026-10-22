@@ -39,9 +39,13 @@ application authorization and a single private data mount are the boundaries.
 - [ ] **Retention for Docker images and GitHub release artifacts.** Keep preceding
   image digests for rollback and establish a measured disk budget before pruning.
   CI artifacts currently retain 14 days; this is not disaster recovery storage.
-- [ ] **Future schema evolution.** Unified schema v1 is explicit and migrated offline.
-  Implement reviewed numbered migrations and compatibility windows for future versions;
-  do not use create_all or historical Finance Alembic against the unified production DB.
+- [x] **Site schema migrations.** Alembic history for the unified database starts
+  at baseline `site_schema_v1`. An existing production database is stamped onto
+  that baseline with no application-data changes; a fresh database is created by
+  the revisions. Deploy backs up, runs `python -m apps.server.migrations`, and
+  startup upgrades again. Image rollback still does not roll back the database,
+  so a future revision needs an expand/contract window before it is merged.
+  Do not run `create_all` or the historical Finance Alembic chain against `site.db`.
 
 - [x] **Recovery-copy retention decision.** User explicitly requested deletion of
   old backups and legacy recovery material. Only the latest verified unified
@@ -67,7 +71,7 @@ application authorization and a single private data mount are the boundaries.
 | 52–53 health and recovery | DB/schema/frontend preflight, exact release readiness, local probes; running-unhealthy recovery is manual to avoid another privileged helper. |
 | 54–58 routing and request policy | One edge route, app-owned paths, compatibility redirects, correct 404s/cache policy, request/time budgets and security headers. CSP enforcement deferred. |
 | 59–66 monitoring and logs | Metrics/probes/rules, request IDs/timing, bounded Docker logs, all-app diagnostics. External monitor and notification delivery deferred. |
-| 67–70 schema / SQLite | Explicit consolidated schema, offline verified migration, foreign keys, WAL, busy timeout, local filesystem requirement. Future migration framework and load exercises remain TODOs. |
+| 67–70 schema / SQLite | Explicit consolidated schema, site Alembic revisions, foreign keys, WAL, busy timeout, local filesystem requirement. Load exercises remain a TODO. |
 | 71–72 external providers | Existing timeout/budget behavior retained; quotas, total deadlines and stress exercises remain TODOs. |
 | 73–76 ownership / docs / TLS / bootstrap | Current operations map and image/Compose bootstrap; broader TLS/host cleanup and full replacement-machine proof remain TODOs. |
 | 77–78 production coverage / exercises | Both production frontends, all-domain release checks, real migration rehearsal and browser checks; comprehensive fault-injection remains TODO. |

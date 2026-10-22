@@ -54,6 +54,23 @@ def legacy_schema_blockers(connection) -> list[str]:
     return blockers
 
 
+def assert_not_unified_site_database(connection) -> None:
+    """The historical Finance chain must not revise the unified site database."""
+    if getattr(connection.dialect, "name", None) != "sqlite":
+        return
+    found = connection.execute(
+        text(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('site_schema', 'site_alembic_version')"
+        )
+    ).fetchall()
+    if found:
+        raise RuntimeError(
+            "Refusing to run historical Finance migrations against the unified site database. "
+            "Use python -m apps.server.migrations."
+        )
+
+
 def assert_safe_to_remove_legacy_schema(connection) -> None:
     blockers = legacy_schema_blockers(connection)
     if blockers:

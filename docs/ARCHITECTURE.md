@@ -94,7 +94,10 @@ Browser -> nginx-edge TLS -> unified site :8000 -> site.db
 
 Both frontend builds are in the same immutable image. All domains share one
 SQLite engine and identity store; Travel and Media authenticate in process.
-See [Operations](OPERATIONS.md) for exact paths, deployment, schema migration,
+The unified `site.db` is versioned by `apps/server/alembic` (baseline
+`site_schema_v1`), not by the historical Finance Alembic chain whose head
+remains `e0f6a2b3c4d5`. See [Migrations](MIGRATIONS.md) and
+[Operations](OPERATIONS.md) for exact paths, deployment, schema migration,
 and recovery. Historical standalone domain entrypoints remain test helpers.
 
 ## Auth And Users

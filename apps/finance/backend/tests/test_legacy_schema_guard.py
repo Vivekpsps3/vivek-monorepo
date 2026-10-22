@@ -130,3 +130,15 @@ def test_fresh_file_startup_creates_only_current_schema(tmp_path, monkeypatch):
         "ticker_quotes", "market_research_cache",
     }
     engine.dispose()
+
+
+def test_historical_finance_chain_refuses_a_unified_site_database():
+    from apps.finance.backend.legacy_schema_guard import assert_not_unified_site_database
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        assert_not_unified_site_database(connection)
+        connection.execute(text("CREATE TABLE site_schema (id INTEGER PRIMARY KEY, version INTEGER)"))
+        with pytest.raises(RuntimeError, match="unified site database"):
+            assert_not_unified_site_database(connection)
+    engine.dispose()

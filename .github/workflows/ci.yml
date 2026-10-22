@@ -105,6 +105,8 @@ jobs:
           python -m pytest -q apps/server/tests
           python -m pip install pip-audit
           pip-audit --disable-pip --no-deps -r apps/server/requirements.lock
+      - name: Check model/migration drift
+        run: python -m apps.server.migrations --check
       - name: Build immutable production image
         run: docker build --build-arg SITE_RELEASE=${{ github.sha }} --tag personal-site:${{ github.sha }} .
       - name: Exercise unified release

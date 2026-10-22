@@ -52,10 +52,18 @@ Flask/Socket.IO/LLM backend and standalone Docker/nginx definitions are retired.
   the last success after recreation. It mounts data for SQLite coordination and
   backups for writing. The source database connection is read-only.
 - **backup**: an on-demand `ops` profile job using the same image for immediate
-  backup, verification, or explicit migration commands. It does not run permanently.
+  backup or verification. It does not run permanently.
+- **migrate**: an on-demand `ops` profile job. It mounts the data and backup
+  volumes, takes a fresh backup, then stamps or upgrades `/data/site.db`. It
+  refuses to create a missing production database.
 
-Readiness checks schema and all domain tables. Startup refuses a missing database,
-missing frontend, wrong schema version, or non-WAL database, and runs no DDL.
+Readiness checks the site schema version, the site migration revision, and all
+domain tables. Startup refuses a missing database, missing frontend, database
+behind the migration head, or non-WAL database. Before serving, the process
+applies pending revisions and exits if that fails. The root filesystem stays
+read-only; the only database writes are on the data volume. See
+[MIGRATIONS.md](./MIGRATIONS.md).
+
 Only the app and maintenance helper restart automatically on process exit.
 A running unhealthy container needs investigation; no Docker socket is exposed
 to an autoheal helper.
@@ -81,13 +89,20 @@ so changing the checkout does not change the running application.
 
 The deploy script uses a temporary lock, reads the preceding image from Docker's
 existing metadata, runs image checks without production data/network, verifies a
-backup, starts the new image, and checks exact-SHA readiness plus HTTPS routes.
-On failure it restores the prior image and its Compose definition embedded in
-that image. Rollback material is temporary; release identity lives in image labels
-and Docker metadata. No separate release database/history file is needed.
+backup, runs the migrate job, starts the new image, and checks exact-SHA
+readiness plus HTTPS routes. The migrate job backs up again and then stamps or
+upgrades the database. If that command fails, the script exits before replacing
+the running container. On a failed start it restores the prior image and its
+Compose definition embedded in that image. Rollback material is temporary;
+release identity lives in image labels and Docker metadata. No separate release
+database/history file is needed.
 
-Database restoration is never automatic after users may have written data. Future
-schema changes require explicit migration and backward-compatibility planning.
+Database restoration is never automatic after users may have written data.
+Image rollback does not roll the database back. The baseline stamp only adds
+`site_alembic_version`, which the previous release ignores. A later revision
+that changes live tables needs an expand/contract plan before it is merged,
+because deploy migrates while the previous process may still be serving and a
+failed probe after a successful migration leaves the new schema in place.
 Keep preceding images available; do not prune rollback images indiscriminately.
 
 Commands from any directory on the host (as vivek):

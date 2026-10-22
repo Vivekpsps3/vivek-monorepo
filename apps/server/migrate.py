@@ -12,7 +12,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 
-from sqlalchemy import create_engine
+from apps.server.migrations import adopt_or_upgrade, sqlite_url
 from apps.server.schema import VERSION, OWNER_TABLES, metadata
 
 FINANCE_REVISION = "e0f6a2b3c4d5"
@@ -57,13 +57,15 @@ def migrate(output: Path, source_dir: Path | None = None):
     with tempfile.TemporaryDirectory(prefix="site-migration-", dir=output.parent) as temporary:
         target = Path(temporary) / "site.db"
         schema = metadata()
-        engine = create_engine(f"sqlite:///{target}")
-        schema.create_all(engine)
-        engine.dispose()
+        adopt_or_upgrade(sqlite_url(target))
         connection = sqlite3.connect(target)
         try:
             connection.execute("PRAGMA foreign_keys=OFF")
             connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT version FROM site_schema WHERE id=1").fetchone() != (VERSION,):
+                raise RuntimeError("Baseline site schema version is missing")
+            if connection.execute("SELECT version_num FROM alembic_version").fetchone() != (FINANCE_REVISION,):
+                raise RuntimeError("Baseline Finance revision marker is missing")
             if source_dir:
                 for domain, filename in (("finance", "finance.db"), ("travel", "travel.db"), ("media", "media.db")):
                     source_path = source_dir.resolve() / filename
@@ -103,8 +105,6 @@ def migrate(output: Path, source_dir: Path | None = None):
                                 raise RuntimeError(f"Copy verification failed: {table}")
                             report["tables"][table] = {"rows": before[1], "sha256": before[0]}
                         report["sources"][domain] = hashlib.sha256(snapshot_path.read_bytes()).hexdigest()
-            connection.execute("INSERT INTO site_schema VALUES (1, ?)", (VERSION,))
-            connection.execute("INSERT INTO alembic_version VALUES (?)", (FINANCE_REVISION,))
             check_integrity(connection)
             connection.commit()
             connection.execute("PRAGMA foreign_keys=ON")
@@ -139,6 +139,7 @@ def main():
     parser.add_argument("--if-missing", action="store_true", help="Validate an existing v1 database instead of overwriting it")
     args = parser.parse_args()
     if args.if_missing and args.output.is_file():
+        adopt_or_upgrade(sqlite_url(args.output))
         with sqlite3.connect(args.output.resolve().as_uri() + "?mode=ro", uri=True) as existing:
             if existing.execute("SELECT version FROM site_schema WHERE id=1").fetchone() != (VERSION,):
                 raise RuntimeError("Existing schema is incompatible")

@@ -24,6 +24,8 @@ printf 'SITE_IMAGE=%s\n' "$image" > "$scratch/image.env"
 compose=("${docker_cmd[@]}" compose --project-directory "$root" --env-file "$env_file" --env-file "$scratch/image.env" -f "$root/compose.yml")
 "${docker_cmd[@]}" run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:rw,size=128m,mode=1777 "$image" python -m apps.server.checks
 "${compose[@]}" --profile ops run --rm --no-deps backup
+# Migrate only after the backup. Failure exits before the running container is replaced.
+"${compose[@]}" --profile ops run --rm --no-deps migrate
 probe() {
   local intended="$1"
   local response=""
