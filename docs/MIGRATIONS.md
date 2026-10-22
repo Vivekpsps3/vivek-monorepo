@@ -123,9 +123,9 @@ tests also upgrade an empty database and stamp a fixture built the way
 production was built (`create_all`, `site_schema` version 1, Finance revision
 `e0f6a2b3c4d5`).
 
-See what a database would do before changing it. The check-in rehearsal builds
-a prod-shaped file from current `main` (that tree's own `create_all` path,
-including the Finance `alembic_version` row) and fills it through the app:
+See what a database would do before changing it. The check-in script runs two
+rehearsals. The mode is an argument (`REHEARSAL=adopt`, `upgrade`, or `both`);
+it is not inferred from whatever `origin/main` creates today.
 
 ```sh
 make db-seed-dev
@@ -134,12 +134,25 @@ bash scripts/validate-seeded-adoption.sh
 
 `make db-seed-dev` creates `.local/data/site.db` with this branch's migrations,
 starts the app, and inserts synthetic Finance, Travel, and Media rows through
-the HTTP handlers. `scripts/validate-seeded-adoption.sh` is the deploy
-rehearsal: it builds the unstamped database from a `main` worktree, seeds it
-through that app, runs `--plan --require-existing` on a copy, then runs the
-backup, migrate, and site containers. `--plan` reads that copy and does not
-write it. A successful adopt reports `schema_diff` and `foreign_key_check`
-as empty lists.
+the HTTP handlers.
+
+`adopt` builds an unstamped v1 file from the pinned pre-adoption commit
+`8dc554e8094237419571551ff82b0fbfe115bfbd` (that commit's own `create_all`
+path, including the Finance `alembic_version` row), seeds it through that
+app, and requires `--plan` to stamp `site_schema_v1` with an empty diff.
+Later commits on `main` do not change that fixture.
+
+`upgrade` builds a database with current `origin/main`, which is already
+adopted, seeds it through that app, and requires `--plan` to be the forward
+action from main's revision to this branch's head (`current` when they match,
+`upgrade` when this branch is a descendant). Applying that plan keeps the
+row counts of the tables that already existed.
+
+Both rehearsals then run backup, migrate, and the site container. `--plan`
+reads its copy and does not write it. A successful adopt reports
+`schema_diff` and `foreign_key_check` as empty lists. CI runs both on pull
+requests and on pushes to `main` when models, migrations, or these scripts
+change.
 
 ```sh
 SITE_DATABASE_URL=sqlite:////absolute/site-plan.db python -m apps.server.migrations --plan --require-existing

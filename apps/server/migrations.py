@@ -26,6 +26,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+from urllib.parse import unquote, urlparse
 
 from alembic import command
 from alembic.autogenerate import compare_metadata
@@ -78,23 +79,36 @@ def package_dir() -> Path:
 def make_config(url: str) -> Config:
     cfg = Config(str(package_dir() / "alembic.ini"))
     cfg.set_main_option("script_location", str(package_dir() / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", url)
+    # ConfigParser treats % as interpolation. as_uri() percent-encodes the
+    # path, so the stored value has to escape those percents.
+    cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
     return cfg
 
 
 def sqlite_url(path: Path, *, readonly: bool = False) -> str:
     resolved = path.resolve()
+    # as_uri() percent-encodes ?, #, and %. A raw path is parsed as a URL, so
+    # the first ? becomes the query and SQLite creates the truncated name.
+    # uri=true makes SQLite open that file URI. mode=ro cannot change the main
+    # file; a WAL database still needs a writable directory and may leave
+    # empty -wal and -shm sidecars.
     if readonly:
-        # as_uri() percent-encodes ?, #, and % so they stay inside the filename.
         return f"sqlite:///{resolved.as_uri()}?mode=ro&uri=true"
-    return f"sqlite:///{resolved}"
+    return f"sqlite:///{resolved.as_uri()}?uri=true"
 
 
 def database_path(url: str) -> Path:
     parsed = make_url(url)
     if parsed.drivername != "sqlite" or not parsed.database or parsed.database == ":memory:":
         raise RuntimeError("Migrations require an on-disk SQLite database")
-    path = Path(parsed.database)
+    database = parsed.database
+    if database.startswith("file:"):
+        uri = urlparse(database)
+        if uri.scheme != "file" or not uri.path.startswith("/"):
+            raise RuntimeError("SITE_DATABASE_URL must name an absolute SQLite path")
+        path = Path(unquote(uri.path))
+    else:
+        path = Path(database)
     if not path.is_absolute():
         raise RuntimeError("SITE_DATABASE_URL must name an absolute SQLite path")
     return path

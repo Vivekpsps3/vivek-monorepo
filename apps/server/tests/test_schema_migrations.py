@@ -13,9 +13,12 @@ from alembic import command
 from apps.server.migrations import (
     adopt_or_upgrade,
     check_drift,
+    connect,
     current_revision,
+    database_path,
     head_revision,
     make_config,
+    model_diff,
     plan,
     schema_signature,
     sqlite_url,
@@ -423,10 +426,21 @@ def test_batch_recreate_of_user_entries_keeps_cascade_experiences(tmp_path):
         assert "batch_marker" not in {row[1] for row in db.execute("PRAGMA table_info(users)")}
 
 
-def test_readonly_sqlite_url_percent_encodes_the_path(tmp_path):
+def test_sqlite_url_opens_a_database_whose_name_contains_reserved_characters(tmp_path):
     database = tmp_path / "q?mark#hash%.db"
-    url = sqlite_url(database, readonly=True)
-    assert url == f"sqlite:///{database.resolve().as_uri()}?mode=ro&uri=true"
+    url = sqlite_url(database)
+    readonly = sqlite_url(database, readonly=True)
+    assert url == f"sqlite:///{database.resolve().as_uri()}?uri=true"
+    assert readonly == f"sqlite:///{database.resolve().as_uri()}?mode=ro&uri=true"
+    assert database_path(url) == database.resolve()
+    assert database_path(readonly) == database.resolve()
+    assert database_path("sqlite:////data/site.db") == Path("/data/site.db")
+    adopt_or_upgrade(url)
+    assert database.is_file()
+    assert not (tmp_path / "q").exists()
+    assert model_diff(database, readonly=True) == []
+    with connect(database, readonly=True) as db:
+        assert db.execute("SELECT version_num FROM site_alembic_version").fetchone()[0] == head_revision()
 
 
 def test_foreign_key_violation_rolls_the_revision_back(tmp_path):

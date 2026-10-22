@@ -107,10 +107,14 @@ jobs:
           pip-audit --disable-pip --no-deps -r apps/server/requirements.lock
       - name: Check model/migration drift
         run: python -m apps.server.migrations --check
-      - name: Decide whether to rehearse schema adoption
+      - name: Decide whether to rehearse schema changes
         id: migrations
         run: |
           set -euo pipefail
+          # pull_request and push to main use the same gate. A push with no
+          # usable before SHA still runs the rehearsals, so main cannot skip
+          # them by losing that commit. The script pins the un-adopted
+          # fixture itself; it does not treat origin/main as unstamped.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "${{ github.base_ref }}"
             range="FETCH_HEAD"
@@ -137,11 +141,12 @@ jobs:
         run: docker build --build-arg SITE_RELEASE=${{ github.sha }} --tag personal-site:${{ github.sha }} .
       - name: Exercise unified release
         run: docker run --rm --network none --read-only --tmpfs /tmp:rw,size=128m,mode=1777 personal-site:${{ github.sha }} python -m apps.server.checks
-      - name: Seeded adoption rehearsal
+      - name: Seeded schema rehearsals
         if: steps.migrations.outputs.run == 'true'
         env:
           SITE_IMAGE: personal-site:${{ github.sha }}
           PY: python
+          REHEARSAL: both
         run: bash scripts/validate-seeded-adoption.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
