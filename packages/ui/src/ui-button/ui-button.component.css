@@ -85,3 +85,19 @@
 .ui-btn--danger:hover:not(:disabled) {
   background: var(--danger-hover);
 }
+
+.ui-btn[aria-busy="true"]::before {
+  content: "";
+  width: 0.8em;
+  height: 0.8em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ui-btn-spin 0.8s linear infinite;
+}
+
+@keyframes ui-btn-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-btn[aria-busy="true"]::before { animation: none; }
+}

@@ -14,6 +14,7 @@ export class UiButtonComponent {
   variant = input<UiButtonVariant>('primary');
   size = input<UiButtonSize>('md');
   disabled = input(false);
+  busy = input(false);
   type = input<'button' | 'submit' | 'reset'>('button');
   ariaLabel = input<string | undefined>(undefined);
   tooltip = input<string | undefined>(undefined);

@@ -14,6 +14,7 @@ import {
   financeSnapshot,
   hasManualCashAndBrokerage,
   largestPositions,
+  journalKindLabel,
   mediaReleaseLabel,
   portfolioAccounts,
   priceFreshnessSummary,
@@ -197,6 +198,16 @@ export class HubComponent implements OnInit {
       this.trip = null;
     }
     this.cdr.markForCheck();
+  }
+
+  retryMedia(): void {
+    this.mediaState = 'loading';
+    this.cdr.markForCheck();
+    void this.loadMedia();
+  }
+
+  kindLabel(kind: string): string {
+    return journalKindLabel(kind);
   }
 
   private async loadMedia(): Promise<void> {

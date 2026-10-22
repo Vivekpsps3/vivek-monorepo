@@ -37,11 +37,27 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="favicon.svg">
   <meta name="apple-mobile-web-app-title" content="Finance">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Self-hosted personal finance tracker with browser-owned encryption.">
 </head>
 <body>
-  <app-root></app-root>
+  <app-root>
+    <main id="auth-static-shell" class="login-shell" hidden>
+      <section class="auth-layout">
+        <div class="auth-intro">
+          <p class="brand-lockup">Account</p>
+          <h1>Create account</h1>
+          <p class="privacy-note">One account for Hub, Media, Travel and Finance.</p>
+        </div>
+      </section>
+    </main>
+  </app-root>
+  <script>
+    if (location.pathname === '/auth/signup' || location.pathname === '/auth/signup/') {
+      var shell = document.getElementById('auth-static-shell');
+      if (shell) shell.hidden = false;
+    }
+  </script>
 </body>
 </html>
