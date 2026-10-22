@@ -401,7 +401,10 @@ function setTheme(choice) {
     : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.setAttribute("data-theme-choice", choice);
-  try { localStorage.setItem("media-theme", choice); } catch { /* private mode */ }
+  try {
+    localStorage.setItem("suite-theme", choice);
+    localStorage.setItem("media-theme", choice);
+  } catch { /* private mode */ }
   syncTheme();
 }
 

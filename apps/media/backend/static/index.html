@@ -9,8 +9,11 @@
     (function () {
       var choice = "system";
       try {
-        var stored = localStorage.getItem("media-theme");
-        if (stored === "light" || stored === "dark" || stored === "system") choice = stored;
+        var stored = localStorage.getItem("suite-theme") || localStorage.getItem("media-theme") || localStorage.getItem("ft-theme") || localStorage.getItem("travel-theme");
+        if (stored === "light" || stored === "dark" || stored === "system") {
+          choice = stored;
+          if (!localStorage.getItem("suite-theme")) localStorage.setItem("suite-theme", stored);
+        }
       } catch (error) {}
       var theme = choice;
       if (choice !== "light" && choice !== "dark") {

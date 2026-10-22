@@ -43,8 +43,9 @@ export const SAVED_HOLD_MS = 2000;
 export const TOAST_MS = 5000;
 export const TOAST_ACTION_MS = 8000;
 
-/** 0 = Sunday (en-US default). Set to 1 for a Monday week. */
-export const WEEK_STARTS_ON = 0;
+import { WEEK_STARTS_ON, weekStartsOn } from "../../shared-browser/week.mjs";
+
+export { WEEK_STARTS_ON, weekStartsOn };
 
 const EXPERIENCE = {
   movie: [["watch", "Watched"], ["rewatch", "Rewatched"]],
@@ -237,7 +238,8 @@ export function shiftMonth(month, delta) {
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function weekDayLabels() {
-  return [...WEEKDAY_SHORT.slice(WEEK_STARTS_ON), ...WEEKDAY_SHORT.slice(0, WEEK_STARTS_ON)];
+  const start = weekStartsOn();
+  return [...WEEKDAY_SHORT.slice(start), ...WEEKDAY_SHORT.slice(0, start)];
 }
 
 const ROUTE_TITLES = {
@@ -312,7 +314,7 @@ export function emptyState({ title = "", body = "", primary = null, secondary = 
   const extra = secondary
     ? `<a href="${escapeHtml(secondary.href)}">${escapeHtml(secondary.label)}</a>`
     : "";
-  return `<div class="empty">${glyph}${heading}${sentence}${cta}${extra}</div>`;
+  return `<div class="empty suite-empty">${glyph}${heading}${sentence}${cta}${extra}</div>`;
 }
 
 export function monthCells(month) {
@@ -321,7 +323,7 @@ export function monthCells(month) {
   const year = Number(match[1]);
   const monthIndex = Number(match[2]) - 1;
   const weekday = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay();
-  const offset = (weekday - WEEK_STARTS_ON + 7) % 7;
+  const offset = (weekday - weekStartsOn() + 7) % 7;
   const count = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
   const cells = Array.from({ length: offset }, () => null);
   for (let day = 1; day <= count; day += 1) {

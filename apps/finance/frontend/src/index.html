@@ -11,7 +11,12 @@
   <script>
     (function () {
       var choice = null;
-      try { choice = localStorage.getItem('ft-theme'); } catch (e) {}
+      try {
+        choice = localStorage.getItem('suite-theme') || localStorage.getItem('ft-theme');
+        if (!localStorage.getItem('suite-theme') && (choice === 'light' || choice === 'dark' || choice === 'system')) {
+          localStorage.setItem('suite-theme', choice);
+        }
+      } catch (e) {}
       var theme = choice;
       if (choice !== 'light' && choice !== 'dark') {
         choice = 'system';

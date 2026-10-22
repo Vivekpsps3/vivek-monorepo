@@ -1,4 +1,5 @@
 import { api } from '../api.mjs';
+import { weekStartsOn } from '../../../shared-browser/week.mjs';
 
 const COLORS = ['var(--accent)', '#c4a574', '#7d9a78', '#8d7ea8', '#c47c6a'];
 
@@ -121,7 +122,8 @@ export function mountComposer() {
     const month = monthDate.getMonth();
     const first = new Date(year, month, 1);
     const start = new Date(first);
-    start.setDate(1 - first.getDay());
+    const offset = (first.getDay() - weekStartsOn() + 7) % 7;
+    start.setDate(1 - offset);
     const days = [];
     for (let index = 0; index < 42; index += 1) {
       const date = new Date(start);
