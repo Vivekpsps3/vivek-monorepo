@@ -12,10 +12,10 @@ from fastapi import FastAPI
 def main() -> None:
     root = Path(os.environ.get("TRAVEL_E2E_ROOT", "/tmp/travel-ux-e2e"))
     root.mkdir(parents=True, exist_ok=True)
-    database = root / "travel.db"
-    if database.exists():
-        database.unlink()
-    os.environ["TRAVEL_DATABASE_URL"] = f"sqlite:///{database}"
+    db_file = root / "travel.db"
+    if db_file.exists():
+        db_file.unlink()
+    os.environ["TRAVEL_DATABASE_URL"] = f"sqlite:///{db_file}"
     os.environ.pop("FLIGHTAWARE_API_KEY", None)
 
     from apps.travel.backend import database
