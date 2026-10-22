@@ -4,21 +4,23 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 
-load_dotenv()
+if not os.getenv("SITE_DATABASE_URL"):
+    load_dotenv()
 
-from local_dev import load_dev_env_file
+from apps.finance.backend.local_dev import load_dev_env_file
 
-load_dev_env_file()
+if not os.getenv("SITE_DATABASE_URL"):
+    load_dev_env_file()
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from logging_config import get_logger, redact_database_url, setup_logging, uvicorn_log_config
-from api_auth import ApiKeyMiddleware
-from rate_limit import RateLimitMiddleware
-from request_logging import RequestLoggingMiddleware
-from routers import auth_routes, health, market, vault
+from apps.finance.backend.logging_config import get_logger, redact_database_url, setup_logging, uvicorn_log_config
+from apps.finance.backend.api_auth import ApiKeyMiddleware
+from apps.finance.backend.rate_limit import RateLimitMiddleware
+from apps.finance.backend.request_logging import RequestLoggingMiddleware
+from apps.finance.backend.routers import auth_routes, health, market, vault
 
 setup_logging()
 logger = get_logger()
@@ -32,7 +34,7 @@ CORS_ORIGINS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from database import SQLALCHEMY_DATABASE_URL, init_database
+    from apps.finance.backend.database import SQLALCHEMY_DATABASE_URL, init_database
 
     init_database()
     logger.info(

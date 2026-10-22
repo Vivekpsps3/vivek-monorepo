@@ -1,0 +1,6 @@
+[Unit]
+Description=Recover a continuously unhealthy personal site
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/personal-site-release recover
+TimeoutStartSec=90

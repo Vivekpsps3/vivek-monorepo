@@ -5,8 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from database import get_db
-from services.assemble import build_calendar, build_home, build_summary
+from apps.travel.backend.database import get_db
+from apps.travel.backend.services.assemble import build_calendar, build_home, build_summary
 
 router = APIRouter()
 

@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from models import Base
+from apps.finance.backend.models import Base
 
 
 def _resolve_database_url(raw_url: str) -> str:
@@ -35,7 +35,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_database() -> None:
-    from legacy_schema_guard import assert_safe_to_remove_legacy_schema
+    from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
     from sqlalchemy import inspect
 
     # Check before create_all or any historical upgrade can change the source DB.

@@ -56,6 +56,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         key = _client_key(request)
         now = time.monotonic()
+        if len(_buckets) >= 10000:
+            stale = [ip for ip, (_, start) in _buckets.items() if now - start >= 60]
+            for ip in stale:
+                _buckets.pop(ip, None)
+            if key not in _buckets and len(_buckets) >= 10000:
+                return JSONResponse(status_code=429, content={"detail": "Service busy; retry later"})
         count, window_start = _buckets[key]
         if now - window_start >= 60.0:
             count, window_start = 0, now

@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from deps import AuthResult, Principal
+from apps.media.backend.deps import AuthResult, Principal
 
 
 def _seasons(payload):

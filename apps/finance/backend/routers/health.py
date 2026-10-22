@@ -5,8 +5,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from database import get_db
-from services.market_data import market_data
+from apps.finance.backend.database import get_db
+from apps.finance.backend.services.market_data import market_data
 
 router = APIRouter(tags=["health"])
 

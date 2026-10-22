@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import delete
 
 from conftest import authenticated_client
-from main import Base, app, engine, market_data
-from schemas_market import MarketResearchResponse
+from apps.finance.backend.main import Base, app, engine, market_data
+from apps.finance.backend.schemas_market import MarketResearchResponse
 
 
 @pytest.fixture(autouse=True)
@@ -52,7 +52,7 @@ class FakeMarketData:
 
 
 def test_market_research_single_endpoint(client, monkeypatch):
-    from routers import market as market_router
+    from apps.finance.backend.routers import market as market_router
 
     fake = FakeMarketData()
     monkeypatch.setattr(market_router, "market_data", fake)
@@ -81,7 +81,7 @@ def test_market_research_batch_caps_symbol_count(client):
 
 
 def test_market_research_batch_partial_failure(client, monkeypatch):
-    from routers import market as market_router
+    from apps.finance.backend.routers import market as market_router
 
     fake = FakeMarketData()
     monkeypatch.setattr(market_router, "market_data", fake)

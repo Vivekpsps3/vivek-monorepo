@@ -1,0 +1,14 @@
+/home/vivek/Deployments/nginx/logs/*.log {
+    daily
+    rotate 14
+    maxsize 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root adm
+    sharedscripts
+    postrotate
+        /usr/bin/docker exec nginx-edge nginx -s reopen >/dev/null 2>&1 || true
+    endscript
+}

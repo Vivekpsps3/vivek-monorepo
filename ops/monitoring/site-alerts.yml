@@ -1,0 +1,34 @@
+groups:
+  - name: personal-site
+    rules:
+      - alert: PersonalSiteProbeFailed
+        expr: site_probe_success == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Personal site probe {{ $labels.target }} is failing'
+      - alert: PersonalSiteExporterMissing
+        expr: up{job=~"personal-site|personal-site-probes"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: Personal site monitoring target is missing}
+      - alert: PersonalSiteBackupStale
+        expr: time() - site_backup_last_success_timestamp_seconds > 7500
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: No verified personal site backup in over two hours}
+      - alert: PersonalSiteCertificateExpiring
+        expr: site_tls_expiry_timestamp_seconds - time() < 1209600
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: Personal site certificate expires within fourteen days}
+      - alert: PersonalSiteErrorsHigh
+        expr: sum(rate(site_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(site_requests_total[5m])), 0.01) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: Personal site server error ratio exceeds five percent}
+      - alert: PersonalSiteLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(site_request_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: Personal site p95 response time exceeds two seconds}

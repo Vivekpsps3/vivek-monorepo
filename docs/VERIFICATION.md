@@ -1,5 +1,8 @@
 # Verification tiers
 
+> Current unified development/deployment commands are in [Operations](OPERATIONS.md).
+> Standalone app commands below are historical domain references.
+
 Named quality gates for local development and CI (TEST-001).
 
 | Tier | Command | Covers | Owner |

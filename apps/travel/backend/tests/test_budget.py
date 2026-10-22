@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from services.budget import BudgetInput, category_for_transport, rollup
+from apps.travel.backend.services.budget import BudgetInput, category_for_transport, rollup
 
 
 def test_flight_roles_land_in_outbound_and_inbound_buckets():

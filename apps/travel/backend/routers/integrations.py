@@ -3,12 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db
-from deps import flightaware_key, get_flight_lookup, get_geocoder, require_actor, settings_key
-from models import Setting
-from schemas import FlightAwareKeyIn, FlightLookupIn
-from services.flights import FlightAwareError, normalize_ident
-from services.places import cached_search
+from apps.travel.backend.database import get_db
+from apps.travel.backend.deps import flightaware_key, get_flight_lookup, get_geocoder, require_actor, settings_key
+from apps.travel.backend.models import Setting
+from apps.travel.backend.schemas import FlightAwareKeyIn, FlightLookupIn
+from apps.travel.backend.services.flights import FlightAwareError, normalize_ident
+from apps.travel.backend.services.places import cached_search
 
 router = APIRouter()
 

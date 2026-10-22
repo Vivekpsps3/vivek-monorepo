@@ -1,87 +1,58 @@
 name: Deploy
-
 on:
   workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
-    branches:
-      - main
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
+  actions: read
 concurrency:
   group: vivek-monorepo-production
   cancel-in-progress: false
-
 jobs:
   deploy:
-    name: Deploy All Apps
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on:
-      - self-hosted
-      - linux
-      - finance-prod
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: [self-hosted, linux, finance-prod]
     environment: production
-    env:
-      MONOREPO: /home/vivek/Deployments/vivek-monorepo
-      ENV_FILE: /home/vivek/Deployments/vivek-monorepo/.env
-      CONTROL: /home/vivek/Deployments/_control
+    timeout-minutes: 15
     steps:
-      - name: Resolve SHA
-        id: sha
+      - name: Resolve tested release and reject stale candidates
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+          CI_RUN: ${{ github.event.workflow_run.id }}
+          MANUAL_SHA: ${{ github.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ "$EVENT" = workflow_run ]; then
+            sha="$CI_SHA"
+            run_id="$CI_RUN"
           else
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            sha="$MANUAL_SHA"
+            run_id="$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=30" --jq ".workflow_runs[] | select(.head_sha == \"$sha\") | .id" | head -1)"
+            test -n "$run_id"
           fi
-
-      - name: Sync live tree to deployed SHA
-        run: |
-          test -f "$ENV_FILE"
-          git -C "$MONOREPO" fetch origin
-          git -C "$MONOREPO" checkout -B main "${{ steps.sha.outputs.sha }}"
-
-      - name: Prepare finance data directories
-        run: |
-          set -a
-          # shellcheck disable=SC1090
-          . "$ENV_FILE"
-          set +a
-          mkdir -p "$FINANCE_DATA_DIR" "$FINANCE_BACKUP_DIR"
-
-      - name: Verify Docker access
-        run: sudo -n docker compose version
-
-      - name: Backup SQLite database
-        run: |
-          set -a
-          # shellcheck disable=SC1090
-          . "$ENV_FILE"
-          set +a
-          "$MONOREPO/scripts/backup-db.sh"
-
-      - name: Build finance image
-        run: make -C "$CONTROL" build STACK=finance-tracker
-
-      - name: Restart finance stack
-        run: make -C "$CONTROL" up STACK=finance-tracker
-
-      - name: Deploy personal site
-        run: make -C "$CONTROL" site-deploy
-
-      - name: Health check finance
-        run: |
-          for attempt in {1..30}; do
-            if curl -fsS "http://127.0.0.1:8085/api/health"; then
-              exit 0
-            fi
-            sleep 2
-          done
-          sudo -n docker ps --format 'table {{.Names}}\t{{.Status}}'
-          sudo -n docker logs finance_tracker-api-1 --tail=100
-          exit 1
+          current="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          test "$sha" = "$current"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: personal-site-release
+          path: release
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.release.outputs.run_id }}
+      - name: Deploy tested image with verified backup and rollback
+        env:
+          RELEASE: ${{ steps.release.outputs.sha }}
+        run: python3 /home/vivek/Deployments/personal-site-config/release-site.py deploy "$GITHUB_WORKSPACE/release/image.tar.gz" "$RELEASE"

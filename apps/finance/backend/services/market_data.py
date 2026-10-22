@@ -10,9 +10,9 @@ import yfinance as yf
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from logging_config import get_logger
-from models import MarketResearchCache, TickerQuote
-from schemas_market import (
+from apps.finance.backend.logging_config import get_logger
+from apps.finance.backend.models import MarketResearchCache, TickerQuote
+from apps.finance.backend.schemas_market import (
     MarketDividendEvent,
     MarketInstrumentProfile,
     MarketPricePoint,

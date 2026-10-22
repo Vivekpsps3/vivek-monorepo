@@ -2,15 +2,15 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from database import get_db
-from deps import require_actor
-from models import Episode, Experience
-from services import providers, records
-from services.calendar import build_calendar
-from services import providers
-from services.providers import UA
-from services.summary import build_summary
-from services.validate import clean_text
+from apps.media.backend.database import get_db
+from apps.media.backend.deps import require_actor
+from apps.media.backend.models import Episode, Experience
+from apps.media.backend.services import providers, records
+from apps.media.backend.services.calendar import build_calendar
+from apps.media.backend.services import providers
+from apps.media.backend.services.providers import UA
+from apps.media.backend.services.summary import build_summary
+from apps.media.backend.services.validate import clean_text
 
 router = APIRouter()
 
@@ -80,7 +80,7 @@ def patch_entry(entry_id: int, body: dict, db: Session = Depends(get_db)):
 def delete_entry(entry_id: int, db: Session = Depends(get_db)):
     entry = records.owned_entry(db, require_actor().id, entry_id)
     db.query(Experience).filter(Experience.entry_id == entry.id, Experience.user_id == entry.user_id).delete()
-    from models import AlbumRating, EpisodeProgress, SeasonProgress, TrackRating
+    from apps.media.backend.models import AlbumRating, EpisodeProgress, SeasonProgress, TrackRating
     db.query(SeasonProgress).filter(
         SeasonProgress.user_id == entry.user_id,
         SeasonProgress.entry_id == entry.id,
@@ -268,7 +268,7 @@ def entry_web(entry_id: int, db: Session = Depends(get_db)):
                 http.close()
         return {"kind": "artist", "nodes": nodes or []}
     if catalog.kind in {"movie", "tv"}:
-        from services.followups import Budget, follow_ups
+        from apps.media.backend.services.followups import Budget, follow_ups
 
         http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
         try:

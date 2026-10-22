@@ -1,5 +1,8 @@
 # Development guide
 
+> Current unified development/deployment commands are in [Operations](OPERATIONS.md).
+> Standalone app commands below are historical domain references.
+
 ## Prerequisites
 
 - **Python 3.11+** (3.12 OK)

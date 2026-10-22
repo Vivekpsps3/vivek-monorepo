@@ -15,8 +15,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
 
-from services.dates import weekday_count
-from services.money import DAY_STEP, fmt_days, parse_days, stored_days
+from apps.travel.backend.services.dates import weekday_count
+from apps.travel.backend.services.money import DAY_STEP, fmt_days, parse_days, stored_days
 
 PERIOD_DAYS = {
     "weekly": Fraction(7),
@@ -114,7 +114,7 @@ def effective_pto_days(pto_days: str | None, start: date, end: date) -> tuple[De
 
 def sync_trip_pto(db, trip) -> None:
     """Keep one PTO row aligned with the trip. Manual rows are left alone."""
-    from models import PtoEntry
+    from apps.travel.backend.models import PtoEntry
 
     entry = db.query(PtoEntry).filter(PtoEntry.trip_id == trip.id).one_or_none()
     if not trip.counts_as_pto:

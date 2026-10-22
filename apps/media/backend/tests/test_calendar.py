@@ -7,10 +7,10 @@ import pytest
 
 
 def silence(monkeypatch, wiki=None, parts=None, tvmaze=None, tmdb_episodes=None):
-    monkeypatch.setattr("services.followups.wikidata_related", wiki or (lambda *_args, **_kwargs: []))
-    monkeypatch.setattr("services.followups.tmdb_collection_parts", parts or (lambda *_args, **_kwargs: []))
-    monkeypatch.setattr("services.followups.tvmaze_episodes", tvmaze or (lambda *_args, **_kwargs: []))
-    monkeypatch.setattr("services.followups.tmdb_episodes", tmdb_episodes or (lambda *_args, **_kwargs: []))
+    monkeypatch.setattr("apps.media.backend.services.followups.wikidata_related", wiki or (lambda *_args, **_kwargs: []))
+    monkeypatch.setattr("apps.media.backend.services.followups.tmdb_collection_parts", parts or (lambda *_args, **_kwargs: []))
+    monkeypatch.setattr("apps.media.backend.services.followups.tvmaze_episodes", tvmaze or (lambda *_args, **_kwargs: []))
+    monkeypatch.setattr("apps.media.backend.services.followups.tmdb_episodes", tmdb_episodes or (lambda *_args, **_kwargs: []))
 
 
 def add_movie(client, title, **extra):
@@ -44,7 +44,7 @@ def by_title(payload, title):
 
 
 def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monkeypatch):
-    from deps import AuthResult, Principal
+    from apps.media.backend.deps import AuthResult, Principal
 
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-16")
     seen = []
@@ -266,7 +266,7 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
         tmdb_calls.append("again")
         raise RuntimeError("tmdb down")
 
-    monkeypatch.setattr("services.followups.tmdb_episodes", tmdb_down)
+    monkeypatch.setattr("apps.media.backend.services.followups.tmdb_episodes", tmdb_down)
     cached = client.get("/api/calendar", params={"month": "2026-10"}).json()
     assert by_title(cached, "New")
     assert by_title(cached, "From TMDB")
@@ -346,7 +346,7 @@ def test_follow_up_queries_keep_precision_and_keys_off_the_response(client, monk
         def close(self):
             self._client.close()
 
-    monkeypatch.setattr("routers.journal.httpx.Client", FakeClient)
+    monkeypatch.setattr("apps.media.backend.routers.journal.httpx.Client", FakeClient)
     saved = client.post("/api/library/from-provider", json={
         "source": "tmdb",
         "source_id": "movie:11",
@@ -426,7 +426,7 @@ def test_uncached_follow_ups_finish_on_the_next_view(client, monkeypatch):
 
 
 def test_public_follow_up_parsers_do_not_pin_a_month_to_a_day():
-    from services.followups import release_from_wikidata, tmdb_collection_parts, tvmaze_episodes
+    from apps.media.backend.services.followups import release_from_wikidata, tmdb_collection_parts, tvmaze_episodes
 
     assert release_from_wikidata("+2026-10-01T00:00:00Z", "10")[0] == "month"
     assert release_from_wikidata("+2026-10-21T00:00:00Z", "11") == ("day", "2026-10-21", 2026)

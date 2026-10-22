@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models import EncryptedRecord, EncryptedRecordIndex, UserVault, utc_now
+from apps.finance.backend.models import EncryptedRecord, EncryptedRecordIndex, UserVault, utc_now
 
 ALLOWED_COLLECTIONS = frozenset(
     {

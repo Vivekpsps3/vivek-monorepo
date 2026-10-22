@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from models import (
+from apps.media.backend.models import (
     AlbumRating,
     CatalogItem,
     Episode,
@@ -21,8 +21,8 @@ from models import (
     UserEntry,
     utc_now,
 )
-from services.clock import today
-from services.validate import (
+from apps.media.backend.services.clock import today
+from apps.media.backend.services.validate import (
     EXPERIENCE_KINDS,
     KINDS,
     PRECISIONS,
@@ -705,7 +705,7 @@ def backfill_missing_tracks(db: Session, catalog: CatalogItem, http, limit: int 
     Albums that already failed a lookup wait until every other album has been
     tried, so one empty release group cannot block the rest of the discography.
     """
-    from services.providers import release_group_tracks
+    from apps.media.backend.services.providers import release_group_tracks
 
     extra = _extra(catalog)
     failed = set(extra.get("track_lookup_failed") or [])

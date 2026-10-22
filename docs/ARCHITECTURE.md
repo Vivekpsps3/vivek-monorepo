@@ -81,17 +81,21 @@ Browser (:4200 dev proxy, or :8080 Docker web)
   → SQLite finance.db
 ```
 
-The Hub is a route in the finance Angular app because net worth exists only after the browser unlocks the vault. Travel (`/travel/api/summary`) and Media (`/media/api/summary`) expose small authenticated summaries. Those endpoints do not read the finance vault. The public portfolio site stays a separate app and is not part of the private Hub.
+The Hub is a route in the finance Angular app because net worth exists only after the browser unlocks the vault. Travel (`/travel/api/summary`) and Media (`/media/api/summary`) expose small authenticated summaries. Those endpoints do not read the finance vault. The public portfolio is served at the root of the same site, with links to the private tools.
 
-Docker production-like topology:
+Production is now one modular application, not separately deployed backends:
 
 ```
-Browser/domain proxy
-  -> web (Nginx: /hub and /finance/ from the Angular build, /api to finance, /travel/ and /media/)
-  -> api (FastAPI, private Compose network) -> finance.db
-  -> travel -> travel.db
-  -> media -> media.db
+Browser -> nginx-edge TLS -> unified site :8000 -> site.db
+                             | portfolio at /
+                             | shared auth and Hub
+                             | Finance, Travel, Media modules
 ```
+
+Both frontend builds are in the same immutable image. All domains share one
+SQLite engine and identity store; Travel and Media authenticate in process.
+See [Operations](OPERATIONS.md) for exact paths, deployment, schema migration,
+and recovery. Historical standalone domain entrypoints remain test helpers.
 
 ## Auth And Users
 

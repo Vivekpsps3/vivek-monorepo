@@ -10,10 +10,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from database import init_db
-from deps import actor
-import deps
-from routers import board, integrations, pto, trips
+from apps.travel.backend.database import init_db
+from apps.travel.backend.deps import actor
+from apps.travel.backend import deps
+from apps.travel.backend.routers import board, integrations, pto, trips
 
 BACKEND_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BACKEND_DIR / "static"
@@ -54,18 +54,20 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-def create_app() -> FastAPI:
-    load_dotenv()
-    application = FastAPI(title="Travel", version="0.1.0", lifespan=lifespan)
+def create_app(*, unified: bool = False) -> FastAPI:
+    if not unified:
+        load_dotenv()
+    application = FastAPI(title="Travel", version="0.1.0", lifespan=lifespan, docs_url=None if unified else "/docs", redoc_url=None if unified else "/redoc", openapi_url=None if unified else "/openapi.json")
     application.state.principal_checker = None
 
     @application.middleware("http")
     async def finance_session(request: Request, call_next):
-        if not request.url.path.startswith("/api/"):
+        path = request.url.path.removeprefix(request.scope.get("root_path", ""))
+        if not path.startswith("/api/"):
             return await call_next(request)
         result = None
         token = None
-        if not _open_path(request.url.path):
+        if not _open_path(path):
             checker = request.app.state.principal_checker
             try:
                 result = await deps.check_principal(request, checker)
@@ -102,6 +104,13 @@ def create_app() -> FastAPI:
 
     @application.get("/api/health")
     def health():
+        from sqlalchemy import text
+        from apps.travel.backend import database
+        try:
+            with database.engine.connect() as connection:
+                connection.execute(text("SELECT id FROM trips LIMIT 1"))
+        except Exception:
+            return JSONResponse(status_code=503, content={"status": "unavailable", "app": "travel"})
         return {"status": "ok", "app": "travel"}
 
     application.include_router(board.router, prefix="/api")

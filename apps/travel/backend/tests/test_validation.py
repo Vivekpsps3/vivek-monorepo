@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from services.money import parse_days, parse_money
+from apps.travel.backend.services.money import parse_days, parse_money
 
 
 @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "1e9999", "oops"])

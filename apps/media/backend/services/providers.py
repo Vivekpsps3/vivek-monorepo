@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from sqlalchemy.orm import Session
 
-from models import ProviderCache, utc_now
+from apps.media.backend.models import ProviderCache, utc_now
 
 UA = "VivekMedia/1.0 (personal media journal)"
 TTL = timedelta(hours=24)

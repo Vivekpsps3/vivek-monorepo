@@ -3,9 +3,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models import BudgetLine, Note, Parking, PlanItem, Reminder, Stay, Transport, Trip
-from schemas import (
+from apps.travel.backend.database import get_db
+from apps.travel.backend.models import BudgetLine, Note, Parking, PlanItem, Reminder, Stay, Transport, Trip
+from apps.travel.backend.schemas import (
     BudgetLineIn,
     NoteIn,
     ParkingIn,
@@ -16,12 +16,12 @@ from schemas import (
     TripCreate,
     TripPatch,
 )
-from deps import get_geocoder, require_actor
-from services.assemble import build_trip, load_trip, pto_context
-from services.dates import ensure_stay_inside
-from services.places import pin_trip
-from services.pto import sync_trip_pto
-from services.records import (
+from apps.travel.backend.deps import get_geocoder, require_actor
+from apps.travel.backend.services.assemble import build_trip, load_trip, pto_context
+from apps.travel.backend.services.dates import ensure_stay_inside
+from apps.travel.backend.services.places import pin_trip
+from apps.travel.backend.services.pto import sync_trip_pto
+from apps.travel.backend.services.records import (
     apply_budget_line,
     apply_parking,
     apply_plan,

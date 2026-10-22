@@ -13,9 +13,9 @@ from datetime import date, datetime, timezone
 import httpx
 from sqlalchemy.orm import Session
 
-from models import CatalogItem, ProviderCache
-from services import providers, records
-from services.providers import plain_text
+from apps.media.backend.models import CatalogItem, ProviderCache
+from apps.media.backend.services import providers, records
+from apps.media.backend.services.providers import plain_text
 
 FETCH_LIMIT = 8
 WIKIDATA_URL = "https://query.wikidata.org/sparql"

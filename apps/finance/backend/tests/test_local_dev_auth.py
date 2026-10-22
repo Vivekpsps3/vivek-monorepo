@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from conftest import TEST_PASSWORD, seed_user
-from database import SessionLocal
-from main import Base, app, engine, market_data
-from models import UserSession
+from apps.finance.backend.database import SessionLocal
+from apps.finance.backend.main import Base, app, engine, market_data
+from apps.finance.backend.models import UserSession
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +64,7 @@ def test_flag_on_localhost_opens_a_deterministic_dev_session(monkeypatch):
 def test_dev_env_file_allows_a_non_local_host(tmp_path, monkeypatch):
     dev_file = tmp_path / ".env.development"
     dev_file.write_text("LOCAL_DEV_AUTH=1\n", encoding="utf-8")
-    monkeypatch.setattr("local_dev.dev_env_file", lambda: dev_file)
+    monkeypatch.setattr("apps.finance.backend.local_dev.dev_env_file", lambda: dev_file)
     monkeypatch.setenv("LOCAL_DEV_AUTH", "1")
     monkeypatch.setenv("FINANCE_DEV_ENV_FILE", str(dev_file.resolve()))
     response = TestClient(app, base_url="http://devbox.internal").get("/api/auth/me")
@@ -75,7 +75,7 @@ def test_dev_env_file_allows_a_non_local_host(tmp_path, monkeypatch):
 def test_dev_env_file_without_the_flag_does_not_activate(tmp_path, monkeypatch):
     dev_file = tmp_path / ".env.development"
     dev_file.write_text("LOG_LEVEL=debug\n", encoding="utf-8")
-    monkeypatch.setattr("local_dev.dev_env_file", lambda: dev_file)
+    monkeypatch.setattr("apps.finance.backend.local_dev.dev_env_file", lambda: dev_file)
     monkeypatch.setenv("LOCAL_DEV_AUTH", "1")
     monkeypatch.setenv("FINANCE_DEV_ENV_FILE", str(dev_file.resolve()))
     response = TestClient(app, base_url="http://devbox.internal").get("/api/auth/me")
@@ -112,7 +112,7 @@ def test_local_dev_does_not_replace_a_real_session(monkeypatch):
 def test_vault_passphrase_is_generated_for_the_dev_user_only(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCAL_DEV_AUTH", "1")
     monkeypatch.delenv("FINANCE_DEV_ENV_FILE", raising=False)
-    monkeypatch.setattr("local_dev.passphrase_file", lambda: tmp_path / "vault-passphrase")
+    monkeypatch.setattr("apps.finance.backend.local_dev.passphrase_file", lambda: tmp_path / "vault-passphrase")
     client = _local_client()
     first = client.get("/api/auth/local-dev/vault")
     assert first.status_code == 200, first.text

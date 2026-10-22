@@ -9,8 +9,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from sqlalchemy.orm import Session
 
-from auth import utc_now_naive
-from models import AuthChallenge, User
+from apps.finance.backend.auth import utc_now_naive
+from apps.finance.backend.models import AuthChallenge, User
 
 CHALLENGE_TTL = timedelta(minutes=5)
 PROTOCOL = "vault-auth-v1"
