@@ -28,6 +28,7 @@ export function externalPath(internal: string): string {
 
 function routeReady(target: Page, pathname: string) {
   const bare = pathname.replace(/^\/finance(?=\/|$)/, '') || '/';
+  if (bare === '/hub/admin' || bare.startsWith('/hub/admin/')) return target.locator('app-suite-admin');
   if (bare === '/hub' || bare.startsWith('/hub/')) return target.locator('app-hub');
   if (bare === '/') return target.getByRole('heading', { level: 1, name: 'Home', exact: true });
   if (bare === '/have' || bare.startsWith('/have/')) return target.getByRole('heading', { level: 1, name: 'What you have', exact: true });
@@ -66,7 +67,11 @@ function lastCompletedTradingDate(now = new Date()): string {
 }
 
 /** Each test uses a fresh key and an in-memory ciphertext server; no real API or vault. */
-export async function syntheticVault(page: Page, seed: Record<string, Payload[]> = {}) {
+export async function syntheticVault(
+  page: Page,
+  seed: Record<string, Payload[]> = {},
+  options: { role?: 'user' | 'admin' } = {},
+) {
   const context = page.context();
   const attachedPages = new WeakSet<Page>();
   const attach = (target: Page) => {
@@ -125,7 +130,12 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const respond = (body: any, status = 200) => route.fulfill({ status, json: body });
-    if (path === '/api/auth/me') return respond({ user: { id: 987, username: 'synthetic', display_name: 'Synthetic user', role: 'user', is_active: true } });
+    if (path === '/api/auth/me') return respond({ user: { id: 987, username: 'synthetic', display_name: 'Synthetic user', role: options.role ?? 'user', is_active: true } });
+    if (path === '/api/admin/users') return respond([
+      { id: 987, username: 'synthetic', display_name: 'Synthetic user', role: 'admin', is_active: true, has_vault: true, last_login_at: '2026-10-22T12:00:00Z' },
+      { id: 988, username: 'member', display_name: 'Synthetic member', role: 'user', is_active: true, has_vault: false, last_login_at: null },
+    ]);
+    if (path === '/api/admin/metrics') return respond({ totals: {}, finance_rows: {}, per_user: [], tables: [], recent: [] });
     if (path === '/api/vault/status') return respond({ exists: true, key_version: 1,
       kdf_algorithm: 'PBKDF2', kdf_salt_b64: salt.toString('base64'), kdf_iterations: 1000, wrapped_dek_b64: wrappedKey });
     if (path === '/api/health') return respond({ status: 'ok' });

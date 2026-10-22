@@ -1,10 +1,13 @@
 import {
   MAX_AMOUNT_MESSAGE,
+  PLURAL_ZERO_IS_NO,
   formatCompactMoney,
   formatMoney,
+  formatPercent,
   fromDollars,
   parseMoneyInput,
   plural,
+  roundHalfAwayFromZero,
   toDollars,
 } from '@vivek/browser';
 
@@ -52,5 +55,53 @@ describe('formatMoney', () => {
     const compact = formatCompactMoney(1_250_000);
     expect(compact).toContain('12');
     expect(compact).toMatch(/\$|USD/);
+  });
+
+  it('rounds half away from zero, including values Math.round gets wrong', () => {
+    expect(PLURAL_ZERO_IS_NO).toBeTrue();
+    expect(roundHalfAwayFromZero(-0.5)).toBe(-1);
+    expect(roundHalfAwayFromZero(0.5)).toBe(1);
+    expect(roundHalfAwayFromZero(-1.5)).toBe(-2);
+    expect(Math.round(-0.5)).not.toBe(-1);
+    expect(fromDollars(-0.005)).toBe(-1);
+    expect(fromDollars(2.675)).toBe(268);
+    expect(formatMoney(fromDollars(2.675))).toBe('$2.68');
+  });
+
+  it('displays untouched x.xx5 stored dollars the way main did', () => {
+    const rows: Array<[number, string]> = [
+      [1.005, '$1.01'],
+      [0.285, '$0.29'],
+      [2.675, '$2.68'],
+      [19.995, '$20.00'],
+      [-1.005, '−$1.01'],
+      [-0.285, '−$0.29'],
+      [-2.675, '−$2.68'],
+      [-0.005, '−$0.01'],
+    ];
+    for (const [amount, display] of rows) {
+      expect(formatMoney(fromDollars(amount))).withContext(String(amount)).toBe(display);
+    }
+  });
+
+  it('rejects blank, hex, boolean, and badly grouped money text', () => {
+    expect(fromDollars('')).toBeNull();
+    expect(fromDollars('0x10')).toBeNull();
+    expect(fromDollars(true)).toBeNull();
+    expect(fromDollars(false)).toBeNull();
+    expect(fromDollars('1,234')).toBeNull();
+    expect(fromDollars(Number.NaN)).toBeNull();
+    expect(parseMoneyInput('1,2,3')).toEqual({ error: MAX_AMOUNT_MESSAGE });
+    expect(parseMoneyInput('1,234.50')).toEqual({ cents: 123450 });
+  });
+
+  it('uses a true minus sign for percents and does not print −$0', () => {
+    expect(formatPercent(-3, 0)).toBe('−3%');
+    expect(formatPercent(3.25, 1)).toBe('3.3%');
+    expect(formatPercent(null)).toBe('—');
+    expect(formatCompactMoney(-4)).toBe('$0');
+    expect(formatCompactMoney(-4)).not.toContain('−');
+    expect(formatCompactMoney(-5)).toBe('−$0.1');
+    expect(plural(0, 'deposit')).toBe('No deposits');
   });
 });

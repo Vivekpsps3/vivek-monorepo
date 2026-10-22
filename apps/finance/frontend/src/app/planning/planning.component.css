@@ -404,6 +404,12 @@ app-monte-carlo-fan-chart {
   cursor: not-allowed;
 }
 
+.mc-field input[readonly] {
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--bg));
+  color: var(--text);
+  cursor: default;
+}
+
 .mc-field-hint {
   font-size: 0.72rem;
   font-weight: 500;

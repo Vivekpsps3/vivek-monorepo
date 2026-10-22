@@ -19,7 +19,7 @@ import {
   UiDialogComponent,
 } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
-import { fieldMessage, focusField, focusFirstInvalid } from '../shared/form-validation';
+import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary, focusField } from '../shared/form-validation';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
@@ -154,7 +154,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.formSubmitted = true;
     if (errors.length) {
       this.cdr.markForCheck();
-      setTimeout(() => focusFirstInvalid(document.getElementById('subscription-form')));
+      setTimeout(() => focusErrorSummary(document.getElementById('subscription-form')));
       return;
     }
     const parsed = validateMoney(this.form.amount, {
@@ -187,10 +187,9 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.saving = false;
-        this.toast.error(failureCopy('save', 'this subscription', 'Try again.'), {
-          label: 'Try again',
-          run: () => this.saveSubscription(),
-        });
+        this.saveError = dialogSaveAlert();
+        this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.getElementById('subscription-form')));
         this.cdr.markForCheck();
       },
     });
@@ -201,7 +200,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     if (!ok) return;
     this.finance.deleteSubscription(row.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toast.success('Subscription deleted'),
-      error: () => this.toast.error(failureCopy('delete', 'this subscription', 'Try again.'), {
+      error: () => this.toast.error(failureCopy('delete', 'this subscription'), {
         label: 'Try again',
         run: () => this.deleteSubscription(row),
       }),

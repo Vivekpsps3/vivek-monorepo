@@ -30,7 +30,7 @@ import {
 } from '../utils/job-compensation.util';
 import { formatDate, todayIsoDate, toDollars, validateJob, validateMoney, type FieldIssue } from '@vivek/browser';
 import { formatEstimate } from '../shared/stored-money';
-import { focusFirstInvalid } from '../shared/form-validation';
+import { dialogSaveAlert, focusDialogAlert, focusErrorSummary } from '../shared/form-validation';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
@@ -98,6 +98,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
   private savingStockPriceIds = new Set<number>();
   showModal = false;
   saving = false;
+  jobSaveError = '';
   fieldErrors: FieldIssue[] = [];
   formSubmitted = false;
   editingId: number | null = null;
@@ -297,12 +298,18 @@ export class IncomeComponent implements OnInit, OnDestroy {
   openAddModal(): void {
     this.editingId = null;
     this.editingJobSnapshot = null;
+    this.jobSaveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.form = this.emptyForm();
     this.taxEstimator = { state: 'average', filingStatus: 'single', preTaxDeductionsPerPeriod: 0 };
     this.showModal = true;
   }
 
   openEditModal(row: JobIncome): void {
+    this.jobSaveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.editingId = row.id;
     this.editingJobSnapshot = {
       ...row,
@@ -598,6 +605,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.showModal = false;
     this.editingId = null;
     this.editingJobSnapshot = null;
+    this.jobSaveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.form = this.emptyForm();
   }
 
@@ -613,6 +623,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
     if (!this.form.employer.trim()) {
       this.fieldErrors = [{ field: 'employer', label: 'Employer', message: 'Enter the employer.' }];
       this.formSubmitted = true;
+      this.jobSaveError = '';
+      this.cdr.markForCheck();
+      setTimeout(() => focusErrorSummary(document.getElementById('job-form')));
       return;
     }
     const jobIssues = validateJob({
@@ -630,8 +643,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.fieldErrors = jobIssues;
     this.formSubmitted = true;
     if (jobIssues.length) {
+      this.jobSaveError = '';
       this.cdr.markForCheck();
-      setTimeout(() => focusFirstInvalid(document.getElementById('job-form')));
+      setTimeout(() => focusErrorSummary(document.getElementById('job-form')));
       return;
     }
     const pay = validateMoney(this.form.base_pay, {
@@ -695,6 +709,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       annual_taxes: this.roundMoney((this.form.taxes_per_period || 0) * this.payPeriodsPerYear),
       annual_deductions: this.roundMoney((this.form.deductions_per_period || 0) * this.payPeriodsPerYear),
     };
+    this.jobSaveError = '';
     const saveId = this.editingId;
     const request =
       saveId !== null
@@ -708,8 +723,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
       next: saved => {
         this.saving = false;
         if (!saved) {
-          this.toastService.error(failureCopy('update', 'this job', 'Reload this page.'));
+          this.jobSaveError = dialogSaveAlert();
           this.cdr.markForCheck();
+          setTimeout(() => focusDialogAlert(document.getElementById('job-form')));
           return;
         }
         this.closeModal();
@@ -719,11 +735,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.saving = false;
-        this.toastService.error(failureCopy('save', 'this job', 'Try again.'), {
-          label: 'Try again',
-          run: () => this.saveIncome(),
-        });
+        this.jobSaveError = dialogSaveAlert();
         this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.getElementById('job-form')));
       },
     });
   }
@@ -738,7 +752,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
     if (!ok) return;
     this.financeService.deleteJobIncome(row.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Job deleted'),
-      error: () => this.toastService.error(failureCopy('delete', 'this job', 'Try again.'), {
+      error: () => this.toastService.error(failureCopy('delete', 'this job'), {
         label: 'Try again',
         run: () => { void this.deleteIncome(row); },
       }),

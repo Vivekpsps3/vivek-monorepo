@@ -76,7 +76,7 @@
                   <a [routerLink]="['/spending']" [queryParams]="{ t: 'activity', v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
                 </td>
                 <td>{{ row.value | money }}</td>
-                <td>{{ row.pct | number: '1.0-0' }}%</td>
+                <td>{{ formatShare(row.pct) }}</td>
               </tr>
             }
           </tbody>

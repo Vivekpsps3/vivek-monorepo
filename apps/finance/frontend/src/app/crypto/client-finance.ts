@@ -20,6 +20,14 @@ import {
 } from '../utils/job-compensation.util';
 import { countableCents, dollarsFromCountedCents, fromDollars, roundHalfAwayFromZero, todayIsoDate, type Cents } from '@vivek/browser';
 
+/**
+ * Decision pending Vivek.
+ * true: a legacy transaction whose sign isn't allowed is excluded and badged.
+ * false: count the absolute value, which is what main did before F1.
+ * The default never applies abs and never drops the row without a badge.
+ */
+export const FLAG_DISALLOWED_TRANSACTION_SIGNS = true;
+
 function dollarsFromCents(cents: Cents): number {
   const dollars = dollarsFromCountedCents(cents);
   return Number.isFinite(dollars) ? dollars : 0;
@@ -97,13 +105,11 @@ export function computeNetWorth(
 export interface TransactionEffects {
   income: number;
   spending: number;
+  /** Present when the stored amount is left out of totals. */
+  excluded?: boolean;
 }
 
-/** Shared recorded-ledger semantics. Legacy rows without `kind` keep their income/expense behavior. */
-export function transactionEffects(tx: Transaction): TransactionEffects {
-  const raw = Number(tx.amount);
-  const cents = Number.isFinite(raw) && raw >= 0 ? countableCents(raw, 'nonNegative') : null;
-  const amount = cents == null ? 0 : dollarsFromCents(cents);
+function directedEffects(tx: Transaction, amount: number): TransactionEffects {
   switch (tx.kind) {
     case 'purchase': return { income: 0, spending: amount };
     case 'refund': return { income: 0, spending: -amount };
@@ -114,6 +120,21 @@ export function transactionEffects(tx: Transaction): TransactionEffects {
     default:
       return tx.type === 'income' ? { income: amount, spending: 0 } : { income: 0, spending: amount };
   }
+}
+
+/** Shared recorded-ledger semantics. Legacy rows without `kind` keep their income/expense behavior. */
+export function transactionEffects(tx: Transaction): TransactionEffects {
+  const raw = Number(tx.amount);
+  const cents = Number.isFinite(raw) ? fromDollars(raw) : null;
+  const signDisallowed = cents != null && cents < 0;
+  if (cents == null || (signDisallowed && FLAG_DISALLOWED_TRANSACTION_SIGNS)) {
+    return { income: 0, spending: 0, excluded: true };
+  }
+  if (signDisallowed) {
+    const absolute = fromDollars(Math.abs(raw));
+    return directedEffects(tx, absolute == null ? 0 : dollarsFromCents(absolute));
+  }
+  return directedEffects(tx, dollarsFromCents(cents));
 }
 
 export function transactionIncome(tx: Transaction): number {
@@ -404,9 +425,12 @@ export function computeCashflowSummary(
   subscriptions: Subscription[]
 ): CashflowSummary {
   const income_occurrences: IncomeCashflowOccurrence[] = [];
-  let transaction_income = 0;
-  let transaction_expenses = 0;
-  const money = (value: number) => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
+  let transactionIncomeCents = 0;
+  let transactionExpenseCents = 0;
+  const money = (value: number) => {
+    const cents = fromDollars(value);
+    return cents == null ? 0 : dollarsFromCents(cents);
+  };
   const pushIncome = (
     id: string,
     date: string | null,
@@ -422,8 +446,10 @@ export function computeCashflowSummary(
   for (const tx of transactions) {
     if (tx.date < start || tx.date > end) continue;
     const effect = transactionEffects(tx);
-    transaction_income += effect.income;
-    transaction_expenses += effect.spending;
+    if (!effect.excluded) {
+      transactionIncomeCents += fromDollars(effect.income) ?? 0;
+      transactionExpenseCents += fromDollars(effect.spending) ?? 0;
+    }
     if (effect.income > 0) {
       pushIncome(
         `posted:${tx.id}`,
@@ -513,34 +539,49 @@ export function computeCashflowSummary(
   const planned_income = money(income_occurrences
     .filter(row => row.kind !== 'posted' && row.kind !== 'overlap')
     .reduce((sum, row) => sum + row.amount, 0));
+  const occurrenceAmount = (raw: unknown): number | null => {
+    const cents = countableCents(raw, 'positive');
+    return cents == null ? null : dollarsFromCents(cents);
+  };
   const fixedOccurrences = fixedExpenses
     .filter(row => row.is_active)
-    .flatMap(row => occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date, row.due_day).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
+    .flatMap(row => {
+      const amount = occurrenceAmount(row.amount);
+      if (amount == null) return [];
+      return occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date, row.due_day)
+        .map(date => ({ date, name: row.name, category: row.category, amount }));
+    });
   const subscriptionOccurrences = subscriptions
     .filter(row => row.is_active)
-    .flatMap(row => occurrencesBetween(row.next_bill_date, row.frequency, start, end, row.end_date).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
-  const fixed_total = fixedOccurrences.reduce((sum, row) => sum + row.amount, 0);
-  const sub_total = subscriptionOccurrences.reduce((sum, row) => sum + row.amount, 0);
+    .flatMap(row => {
+      const amount = occurrenceAmount(row.amount);
+      if (amount == null) return [];
+      return occurrencesBetween(row.next_bill_date, row.frequency, start, end, row.end_date)
+        .map(date => ({ date, name: row.name, category: row.category, amount }));
+    });
+  const centsOf = (rows: Array<{ amount: number }>) => rows.reduce((sum, row) => sum + (fromDollars(row.amount) ?? 0), 0);
+  const fixed_total = centsOf(fixedOccurrences);
+  const sub_total = centsOf(subscriptionOccurrences);
   const roundedIncome = planned_income;
-  const roundedFixed = Math.round(fixed_total * 100) / 100;
-  const roundedSubscriptions = Math.round(sub_total * 100) / 100;
+  const roundedFixed = dollarsFromCents(fixed_total);
+  const roundedSubscriptions = dollarsFromCents(sub_total);
   // Use the same per-row rounding shown in Home so the visible source lines
   // reconcile exactly with the ledger side of the monthly total.
   const observed_income = money(income_occurrences
     .filter(row => row.kind === 'posted')
     .reduce((sum, row) => sum + row.amount, 0));
-  const observed_expenses = Math.round(transaction_expenses * 100) / 100;
-  const observed_net_cashflow = Math.round((observed_income - observed_expenses) * 100) / 100;
+  const observed_expenses = dollarsFromCents(transactionExpenseCents);
+  const observed_net_cashflow = dollarsFromCents((fromDollars(observed_income) ?? 0) - transactionExpenseCents);
   const scheduled_income = roundedIncome;
-  const scheduled_expenses = Math.round((roundedFixed + roundedSubscriptions) * 100) / 100;
-  const scheduled_net_cashflow = Math.round((scheduled_income - scheduled_expenses) * 100) / 100;
+  const scheduled_expenses = dollarsFromCents(fixed_total + sub_total);
+  const scheduled_net_cashflow = dollarsFromCents((fromDollars(scheduled_income) ?? 0) - fixed_total - sub_total);
   const counted_occurrences = unmatchedScheduledExpenses(
     transactions,
     [...fixedOccurrences, ...subscriptionOccurrences],
     start,
     end,
   );
-  const repeatingExpenses = Math.round(counted_occurrences.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
+  const repeatingCents = centsOf(counted_occurrences);
   // One cashflow: posted activity plus repeating pay and bills that are not already posted.
   const total_income = unifyIncome(observed_income, scheduled_income);
   const income_overlap_adjustment = money(total_income - observed_income - scheduled_income);
@@ -556,13 +597,13 @@ export function computeCashflowSummary(
     });
   }
   income_occurrences.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31') || a.label.localeCompare(b.label));
-  const total_expenses = Math.round((observed_expenses + repeatingExpenses) * 100) / 100;
-  const net_cashflow = Math.round((total_income - total_expenses) * 100) / 100;
+  const total_expenses = dollarsFromCents(transactionExpenseCents + repeatingCents);
+  const net_cashflow = dollarsFromCents((fromDollars(total_income) ?? 0) - transactionExpenseCents - repeatingCents);
   return {
     start_date: start,
     end_date: end,
-    transaction_income,
-    transaction_expenses,
+    transaction_income: dollarsFromCents(transactionIncomeCents),
+    transaction_expenses: observed_expenses,
     planned_income: roundedIncome,
     fixed_expenses: roundedFixed,
     subscriptions: roundedSubscriptions,

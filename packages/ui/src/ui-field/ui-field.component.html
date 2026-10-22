@@ -11,7 +11,6 @@
   <p
     class="ui-field__error"
     [id]="resolvedId() + '-error'"
-    [attr.role]="error() && announceError() ? 'alert' : null"
   >
     @if (error()) {
       <span aria-hidden="true">⚠</span>

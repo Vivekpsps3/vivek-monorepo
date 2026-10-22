@@ -17,9 +17,11 @@ export {
   MAX_AMOUNT_MESSAGE,
   MAX_CENTS,
   MINUS_SIGN,
+  PLURAL_ZERO_IS_NO,
   dollarsFromCountedCents,
   formatCompactMoney,
   formatMoney,
+  formatPercent,
   fromDollars,
   isSafeCents,
   moneyAriaLabel,
@@ -51,6 +53,8 @@ export {
   validateSubscription,
   validateSymbol,
   validateTransaction,
+  validateUnitPrice,
+  unitPriceToNumber,
 } from './validators';
 export type { AmountMode, FieldIssue } from './validators';
 export { downloadCsv } from './export';

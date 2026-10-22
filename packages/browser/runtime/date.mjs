@@ -76,6 +76,7 @@ export function formatDate(value, style = "table", now = new Date(), timeZone = 
   if (typeof value !== "string") return "No date";
   const dateOnly = parseDateOnly(value);
   if (dateOnly) return formatCalendarDate(dateOnly, style, now);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return "No date";
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return "No date";
   return formatInstant(instant, style, now, timeZone);

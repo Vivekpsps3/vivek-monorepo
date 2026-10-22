@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { PlanningService } from './planning.service';
 import { MC_TOOL_ID } from '../models/planning.model';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { formatStoredMoney } from '../shared/stored-money';
 
 describe('PlanningService', () => {
   let service: PlanningService;
@@ -81,6 +83,27 @@ describe('PlanningService', () => {
         expect(inputs.undated_portfolio_positions).toBe(2);
         expect(inputs.undated_portfolio_values).toBe(1);
         expect(inputs.snapshot_hash).toContain('portfolio-dates:');
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('prints the same net worth as Home and drops a negative subscription', done => {
+    encStore.getNetWorth.and.resolveTo({ total: 1234.5, portfolio: 1000, liabilities: 0 });
+    encStore.getJobIncomes.and.resolveTo([]);
+    encStore.getFixedExpenses.and.resolveTo([]);
+    encStore.getSubscriptions.and.resolveTo([
+      { name: 'Legacy', annual_amount: -480, is_active: true },
+      { name: 'Kept', annual_amount: 191.88, is_active: true },
+    ]);
+    encStore.getTransactions.and.resolveTo([]);
+    service.getInputs().subscribe({
+      next: inputs => {
+        expect(inputs.annual_subscriptions).toBe(191.88);
+        expect(inputs.annual_subscriptions).not.toBe(480);
+        expect(formatStoredMoney(inputs.net_worth_total)).toBe(new MoneyPipe().transform(inputs.net_worth_total));
+        expect(formatStoredMoney(inputs.net_worth_total)).toBe('$1,234.50');
         done();
       },
       error: done.fail,

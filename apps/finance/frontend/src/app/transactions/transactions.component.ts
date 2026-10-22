@@ -36,7 +36,7 @@ import {
 } from '../models/transaction.model';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
-import { downloadCsv, plural } from '@vivek/browser';
+import { downloadCsv, excludedAmountNote, plural } from '@vivek/browser';
 import { focusField } from '../shared/form-validation';
 import {
   normalizeSpendingLabel,
@@ -161,6 +161,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   monthIncomeTotal = 0;
   purchaseCount = 0;
   incomeCount = 0;
+  excludedCount = 0;
   categoryMergeFrom = '';
   categoryMergeTo = '';
   categoryMergeSaving = false;
@@ -670,6 +671,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.monthIncomeTotal = totals.monthIncomeTotal;
     this.purchaseCount = totals.purchaseCount;
     this.incomeCount = totals.incomeCount;
+    this.excludedCount = totals.excludedCount;
     this.cdr.markForCheck();
   }
 
@@ -701,6 +703,14 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   transactionLabel(tx: Transaction): string {
     return tx.kind === 'ambiguous_credit' ? 'Credit type needed' : tx.kind || tx.type;
+  }
+
+  transactionNeedsFixing(tx: Transaction): boolean {
+    return !!transactionEffects(tx).excluded;
+  }
+
+  excludedNote(): string | null {
+    return excludedAmountNote(this.excludedCount);
   }
 
   transactionAmountPrefix(tx: Transaction): string {

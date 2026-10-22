@@ -14,6 +14,7 @@ import { Router, RouterLink } from '@angular/router';
 import { FinanceService } from '../services/finance.service';
 import { FixedExpense, Holding, JobIncome, Subscription, Transaction } from '../models/transaction.model';
 import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '../crypto/client-finance';
+import { formatPercent } from '@vivek/browser';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { UiCardComponent, UiEmptyStateComponent } from '@vivek/ui';
@@ -25,6 +26,7 @@ import {
   chartSuccessColor,
   chartDangerColor,
   chartAccentColor,
+  chartSliceBorder,
 } from '@vivek/ui';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 type ChartConstructor = new (
@@ -42,6 +44,9 @@ type ChartConstructor = new (
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
+  formatShare(value: number | null | undefined): string {
+    return formatPercent(value, 1);
+  }
   @Input() embedded = false;
 
   @ViewChild('incomeExpenseChart') incomeExpenseCanvas!: ElementRef<HTMLCanvasElement>;
@@ -409,6 +414,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           backgroundColor: hasRefundEffects
             ? this.categoryRows.map(row => row.value < 0 ? chartDangerColor() : chartAccentColor())
             : this.chartColors(this.categoryRows.length),
+          ...(hasRefundEffects ? {} : chartSliceBorder()),
         }],
       },
       options: {
@@ -450,6 +456,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           data: this.allocationRows.map(r => r.value),
           backgroundColor: this.chartColors(this.allocationRows.length),
+          ...chartSliceBorder(),
         }],
       },
       options: {

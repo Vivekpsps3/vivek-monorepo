@@ -21,6 +21,7 @@ export interface TransactionActivityTotals {
   monthIncomeTotal: number;
   purchaseCount: number;
   incomeCount: number;
+  excludedCount: number;
 }
 
 /** Applies the Activity page's search and exact context filters without mutating source rows. */
@@ -29,9 +30,12 @@ export function filterTransactionActivity(rows: Transaction[], filters: Transact
   return rows.filter(row => {
     if (query && ![row.description, row.category, row.merchant, row.account_display, row.kind]
       .some(value => String(value || '').toLocaleLowerCase().includes(query))) return false;
-    if (filters.typeFilter !== 'all' && (filters.typeFilter === 'income'
-      ? transactionEffects(row).income === 0
-      : transactionEffects(row).spending === 0 && row.kind !== 'ambiguous_credit')) return false;
+    const effects = transactionEffects(row);
+    if (!effects.excluded && filters.typeFilter !== 'all' && (filters.typeFilter === 'income'
+      ? effects.income === 0
+      : effects.spending === 0 && row.kind !== 'ambiguous_credit')) return false;
+    if (effects.excluded && filters.typeFilter === 'income' && row.type !== 'income') return false;
+    if (effects.excluded && filters.typeFilter === 'expense' && row.type === 'income') return false;
     if (filters.summaryMonth && !row.date.startsWith(`${filters.summaryMonth}-`)) return false;
     if (filters.fromDate && row.date < filters.fromDate) return false;
     if (filters.throughDate && row.date > filters.throughDate) return false;
@@ -72,9 +76,14 @@ export function transactionActivityTotals(rows: Transaction[]): TransactionActiv
   let incomeCents = 0;
   let purchaseCount = 0;
   let incomeCount = 0;
+  let excludedCount = 0;
   for (const row of rows) {
     if (['payment', 'transfer', 'ambiguous_credit'].includes(row.kind || '')) continue;
     const effects = transactionEffects(row);
+    if (effects.excluded) {
+      excludedCount += 1;
+      continue;
+    }
     if (effects.spending !== 0) {
       purchaseCount += 1;
       expenseCents += fromDollars(effects.spending) ?? 0;
@@ -89,5 +98,6 @@ export function transactionActivityTotals(rows: Transaction[]): TransactionActiv
     monthIncomeTotal: incomeCents / 100,
     purchaseCount,
     incomeCount,
+    excludedCount,
   };
 }

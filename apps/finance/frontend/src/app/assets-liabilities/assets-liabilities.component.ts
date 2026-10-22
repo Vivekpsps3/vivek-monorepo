@@ -17,7 +17,7 @@ import {
   LiabilityCreate,
   NetWorth,
 } from '../models/transaction.model';
-import { ConfirmService, ToastService, UiBadgeComponent, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
+import { ConfirmService, ToastService, UiBadgeComponent, UiFieldComponent, UiFieldControlDirective, successCopy } from '@vivek/ui';
 import { amountProblem, excludedAmountNote, todayIsoDate, toDollars, validateAsset, validateDebt, validateMoney, type FieldIssue } from '@vivek/browser';
 import {
   UiButtonComponent,
@@ -33,7 +33,7 @@ import {
 import { FormatCategoryPipe } from '../shared/pipes/format-category.pipe';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
-import { errorSummary, fieldMessage, focusField, focusFirstInvalid } from '../shared/form-validation';
+import { dialogSaveAlert, errorSummary, fieldMessage, focusDialogAlert, focusField, focusFirstInvalid } from '../shared/form-validation';
 import { InfoTipComponent } from '../shared/info-tip.component';
 import { portfolioDateSummary } from '../utils/portfolio.util';
 
@@ -74,6 +74,8 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
   assetErrors: FieldIssue[] = [];
   liabilityErrors: FieldIssue[] = [];
   assetSubmitted = false;
+  assetSaveError = '';
+  liabilitySaveError = '';
   liabilitySubmitted = false;
   readonly amountProblem = amountProblem;
   readonly errorSummary = errorSummary;
@@ -195,6 +197,8 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
   closeModals() {
     this.showAssetModal = false;
     this.showLiabilityModal = false;
+    this.assetSaveError = '';
+    this.liabilitySaveError = '';
   }
 
   saveAsset() {
@@ -232,11 +236,9 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.saving = false;
-        this.toastService.error(failureCopy('save', 'this asset', 'Try again.'), {
-          label: 'Try again',
-          run: () => this.saveAsset(),
-        });
+        this.assetSaveError = dialogSaveAlert();
         this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.getElementById('asset-form')));
       },
     });
   }
@@ -276,11 +278,9 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.saving = false;
-        this.toastService.error(failureCopy('save', 'this debt', 'Try again.'), {
-          label: 'Try again',
-          run: () => this.saveLiability(),
-        });
+        this.liabilitySaveError = dialogSaveAlert();
         this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.getElementById('liability-form')));
       },
     });
   }

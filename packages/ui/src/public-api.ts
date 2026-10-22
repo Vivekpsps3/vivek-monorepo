@@ -13,6 +13,7 @@ export {
   chartPalette,
   CHART_COLORS,
   chartColorAt,
+  chartSliceBorder,
   chartTextMuted,
   chartAccentColor,
   chartSuccessColor,

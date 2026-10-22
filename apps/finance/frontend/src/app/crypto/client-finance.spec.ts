@@ -1,4 +1,5 @@
 import {
+  FLAG_DISALLOWED_TRANSACTION_SIGNS,
   computeCashflowSummary,
   computeNetWorth,
   enrichFixedExpense,
@@ -7,6 +8,7 @@ import {
   enrichSubscription,
   monthlyCashflowSeries,
   nextDueDate,
+  transactionEffects,
 } from './client-finance';
 import {
   Asset,
@@ -496,6 +498,39 @@ describe('client-finance', () => {
       '2024-02-29', '2025-02-28', '2026-02-28', '2027-02-28', '2028-02-29',
       '2029-02-28', '2030-02-28', '2031-02-28', '2032-02-29',
     ]);
+  });
+
+  it('leaves a negative subscription out of spending and sums half-cent rows in cents', () => {
+    const kept = {
+      id: 1, name: 'Cloud', category: 'software', amount: 15.99, frequency: 'monthly',
+      next_bill_date: '2026-01-15', is_active: true,
+    } as Subscription;
+    const negative = {
+      id: 2, name: 'Legacy credit', category: 'software', amount: -480, frequency: 'annual',
+      next_bill_date: '2026-01-15', is_active: true,
+    } as Subscription;
+    const month = computeCashflowSummary('2026-01-01', '2026-01-31', [], [], [], [kept, negative]);
+    expect(month.subscriptions).toBe(15.99);
+    expect(month.subscription_occurrences.map(row => row.name)).toEqual(['Cloud']);
+    expect(month.total_expenses).toBe(15.99);
+
+    const odd = {
+      id: 3, name: 'Odd', category: 'software', amount: 2.675, frequency: 'monthly',
+      next_bill_date: '2026-01-01', is_active: true,
+    } as Subscription;
+    const span = computeCashflowSummary('2026-01-01', '2027-08-01', [], [], [], [odd]);
+    expect(span.subscription_occurrences.length).toBe(20);
+    expect(span.subscriptions).toBe(53.6);
+    expect(span.total_expenses).toBe(53.6);
+  });
+
+  it('badges a disallowed negative transaction by leaving it out of totals', () => {
+    expect(FLAG_DISALLOWED_TRANSACTION_SIGNS).toBeTrue();
+    const effects = transactionEffects({
+      id: 1, amount: -45.67, type: 'expense', kind: 'purchase', date: '2026-01-02', category: 'Food',
+    } as Transaction);
+    expect(effects).toEqual({ income: 0, spending: 0, excluded: true });
+    expect(effects.spending).not.toBe(45.67);
   });
 
   it('returns the same nullable next due date for bills and subscriptions', () => {

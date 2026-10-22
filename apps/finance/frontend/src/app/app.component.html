@@ -46,9 +46,9 @@
   (focusin)="pauseToasts()"
   (focusout)="resumeToasts()"
 >
-  <div class="toast-region" aria-live="polite" aria-relevant="additions">
+  <div class="toast-region" role="status" aria-live="polite" aria-relevant="additions">
     @for (toast of politeToasts; track toast.id) {
-      <div class="toast" role="status" [class.success]="toast.kind === 'success'" [class.info]="toast.kind === 'info'">
+      <div class="toast" [class.success]="toast.kind === 'success'" [class.info]="toast.kind === 'info'">
         <p class="toast-copy">{{ toast.message }}</p>
         <div class="toast-actions">
           @if (toast.action || toast.undo) {
@@ -59,10 +59,10 @@
       </div>
     }
   </div>
-  <div class="toast-region" aria-live="assertive" aria-relevant="additions">
+  <div class="toast-region" role="alert" aria-live="assertive" aria-relevant="additions">
     @for (toast of alertToasts; track toast.id) {
-      <div class="toast error" role="alert">
-        <p class="toast-copy">{{ toast.message }}</p>
+      <div class="toast error">
+        <p class="toast-copy"><span class="toast-glyph" aria-hidden="true">⚠</span> {{ toast.message }}</p>
         <div class="toast-actions">
           @if (toast.action) {
             <button type="button" class="toast-action" (click)="runToastAction(toast)">{{ toast.action.label }}</button>

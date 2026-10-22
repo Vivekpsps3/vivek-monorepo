@@ -32,8 +32,6 @@ export class UiFieldComponent {
   optional = input(false);
   hint = input<string | undefined>(undefined);
   error = input<string | null | undefined>(undefined);
-  /** Wide dialogs announce once through the error summary instead of each field. */
-  announceError = input(true);
   fieldId = input<string | undefined>(undefined);
 
   private readonly control = contentChild(UiFieldControlDirective);
@@ -51,7 +49,7 @@ export class UiFieldComponent {
       const hintId = `${id}-hint`;
       if (error) {
         control.setAttribute('aria-invalid', 'true');
-        control.setAttribute('aria-describedby', errorId);
+        control.setAttribute('aria-describedby', [hint ? hintId : '', errorId].filter(Boolean).join(' '));
       } else {
         control.removeAttribute('aria-invalid');
         if (hint) control.setAttribute('aria-describedby', hintId);

@@ -18,6 +18,7 @@ import {
   take,
 } from 'rxjs';
 import { apiUrl } from '../core/api-url';
+import { silentErrorToast } from '../core/http-error.interceptor';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
@@ -477,7 +478,7 @@ export class FinanceService {
   }
 
   resetMyData(): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>(apiUrl('/auth/reset-data'), { confirm: 'CLEAR MY DATA' }).pipe(
+    return this.http.post<{ ok: boolean }>(apiUrl('/auth/reset-data'), { confirm: 'CLEAR MY DATA' }, { context: silentErrorToast() }).pipe(
       tap(() => this.clearSessionState())
     );
   }
@@ -612,7 +613,7 @@ export class FinanceService {
     const upper = symbol.trim().toUpperCase();
     let params = new HttpParams();
     if (refresh) params = params.set('refresh', 'true');
-    return this.http.get<MarketPriceQuote>(apiUrl(`/market/price/${encodeURIComponent(upper)}`), { params });
+    return this.http.get<MarketPriceQuote>(apiUrl(`/market/price/${encodeURIComponent(upper)}`), { params, context: silentErrorToast() });
   }
 
   addHolding(holding: HoldingCreate): Observable<Holding> {

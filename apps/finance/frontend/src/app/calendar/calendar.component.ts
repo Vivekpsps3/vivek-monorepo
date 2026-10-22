@@ -24,12 +24,13 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
-import { WEEK_STARTS_ON, todayIsoDate, weekStartIndex } from '@vivek/browser';
+import { WEEK_STARTS_ON, formatPercent, todayIsoDate, weekStartIndex } from '@vivek/browser';
 import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
   chartColorAt,
   chartLegendBottom,
+  chartSliceBorder,
 } from '@vivek/ui';
 import {
   UiBadgeComponent,
@@ -74,6 +75,9 @@ type ChartConstructor = new (item: ChartItem, config: unknown) => ChartInstance;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
+  formatShare(value: number | null | undefined): string {
+    return formatPercent(value, 0);
+  }
   @Input() embedded = false;
   readonly transactionEffects = transactionEffects;
   @ViewChild('categoryChart') categoryCanvas?: ElementRef<HTMLCanvasElement>;
@@ -243,6 +247,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       datasets: [{
         data: rows.map(row => row.value),
         backgroundColor: rows.map((_, i) => chartColorAt(i)),
+        ...chartSliceBorder(),
       }],
     };
     if (this.categoryChart) {

@@ -7,7 +7,6 @@ import {
   fromDollars,
   isSafeCents,
   parseMoneyInput,
-  roundHalfAwayFromZero,
   dollarsFromCountedCents,
   toDollars,
   type Cents,
@@ -35,7 +34,7 @@ export function validateMoney(
   if (raw == null || raw === '') return { error: options.emptyMessage };
   if (typeof raw === 'number') {
     if (!Number.isFinite(raw)) return { error: MAX_AMOUNT_MESSAGE };
-    const text = negativeToInput(raw);
+    const text = Object.is(raw, -0) ? '0' : String(raw);
     return validateMoney(text, options);
   }
   if (typeof raw !== 'string') return { error: options.emptyMessage };
@@ -48,11 +47,23 @@ export function validateMoney(
   return { cents: parsed.cents };
 }
 
-function negativeToInput(value: number): string {
-  if (Object.is(value, -0)) return '0.00';
-  const cents = roundHalfAwayFromZero(Math.abs(value) * 100);
-  const body = (cents / 100).toFixed(2);
-  return value < 0 ? `-${body}` : body;
+/** Per-share prices keep 4 decimal places (§5.2). Empty is optional. */
+export function validateUnitPrice(raw: unknown): string | null {
+  if (raw == null || String(raw).trim() === '') return null;
+  const text = typeof raw === 'number' ? (Object.is(raw, -0) ? '0' : String(raw)) : String(raw).trim();
+  if (/^[-\u2212]/.test(text)) return "Cost basis can't be negative.";
+  if (!/^\d+(\.\d+)?$/.test(text)) return 'Enter a price with up to 4 decimal places.';
+  const fraction = text.split('.')[1] ?? '';
+  if (fraction.length > 4) return 'Enter a price with up to 4 decimal places.';
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0) return "Cost basis can't be negative.";
+  return null;
+}
+
+export function unitPriceToNumber(raw: unknown): number | null {
+  if (validateUnitPrice(raw)) return null;
+  if (raw == null || String(raw).trim() === '') return null;
+  return typeof raw === 'number' ? raw : Number(String(raw).trim());
 }
 
 /** Null when the stored dollar amount can be included in a total. */
@@ -125,8 +136,8 @@ function moneyIssue(
 export function validateAsset(input: { name: unknown; value: unknown }): FieldIssue[] {
   const errors: FieldIssue[] = [];
   const name = String(input.name ?? '').trim();
-  if (!name) errors.push(issue('name', 'Name', 'Enter a name.'));
-  else if (name.length > 80) errors.push(issue('name', 'Name', 'Enter a name.'));
+  const nameError = nameIssue(name);
+  if (nameError) errors.push(nameError);
   const valueError = moneyIssue(input.value, 'value', 'Value', true, 'Enter a value of $0 or more.');
   if (valueError) errors.push(valueError);
   return errors;
@@ -134,7 +145,8 @@ export function validateAsset(input: { name: unknown; value: unknown }): FieldIs
 
 export function validateDebt(input: { name: unknown; amount: unknown }): FieldIssue[] {
   const errors: FieldIssue[] = [];
-  if (!String(input.name ?? '').trim()) errors.push(issue('name', 'Name', 'Enter a name.'));
+  const nameError = nameIssue(input.name);
+  if (nameError) errors.push(nameError);
   const amountError = moneyIssue(input.amount, 'amount', 'Amount owed', true, 'Enter what you owe as a positive amount.');
   if (amountError) errors.push(amountError);
   return errors;
@@ -169,8 +181,8 @@ export function validateHolding(input: {
   if (sharesError) errors.push(issue('shares', 'Shares', sharesError));
   const cost = input.costBasis;
   if (cost != null && String(cost).trim() !== '') {
-    const costError = moneyIssue(cost, 'costBasis', 'Cost basis', true, "Cost basis can't be negative.");
-    if (costError) errors.push(costError);
+    const priceError = validateUnitPrice(cost);
+    if (priceError) errors.push(issue('costBasis', 'Cost basis', priceError));
   }
   if (input.requirePurchaseDate && !parseDateOnly(String(input.purchaseDate ?? ''))) {
     errors.push(issue('purchaseDate', 'Purchase date', 'Enter a purchase date.'));
@@ -182,7 +194,7 @@ export function validateTransaction(input: { amount: unknown; date: unknown; cat
   const errors: FieldIssue[] = [];
   const date = String(input.date ?? '');
   if (!parseDateOnly(date)) errors.push(issue('date', 'Date', 'Enter a date.'));
-  else if (maxAhead(date, today)) errors.push(issue('date', 'Date', 'Enter a date.'));
+  else if (maxAhead(date, today)) errors.push(issue('date', 'Date', 'Use a date within a year.'));
   if (!String(input.category ?? '').trim()) errors.push(issue('category', 'Category', 'Enter a category.'));
   const amountError = moneyIssue(
     input.amount,
@@ -216,7 +228,8 @@ export function validateDueDay(raw: unknown): string | null {
 
 export function validateBill(input: { name: unknown; category: unknown; amount: unknown; dueDay: unknown }): FieldIssue[] {
   const errors: FieldIssue[] = [];
-  if (!String(input.name ?? '').trim()) errors.push(issue('name', 'Name', 'Enter a name.'));
+  const billName = nameIssue(input.name);
+  if (billName) errors.push(billName);
   if (!String(input.category ?? '').trim()) errors.push(issue('category', 'Category', 'Enter a category.'));
   const amountError = moneyIssue(input.amount, 'amount', 'Amount', false, 'Enter an amount above $0.');
   if (amountError) errors.push(amountError);
@@ -227,7 +240,8 @@ export function validateBill(input: { name: unknown; category: unknown; amount: 
 
 export function validateSubscription(input: { name: unknown; amount: unknown }): FieldIssue[] {
   const errors: FieldIssue[] = [];
-  if (!String(input.name ?? '').trim()) errors.push(issue('name', 'Name', 'Enter a name.'));
+  const subscriptionName = nameIssue(input.name);
+  if (subscriptionName) errors.push(subscriptionName);
   const amountError = moneyIssue(input.amount, 'amount', 'Amount', false, 'Enter an amount above $0.');
   if (amountError) errors.push(amountError);
   return errors;
@@ -244,7 +258,9 @@ export function validateJob(input: {
   deductions: unknown;
 }): FieldIssue[] {
   const errors: FieldIssue[] = [];
-  if (!String(input.employer ?? '').trim()) errors.push(issue('employer', 'Employer', 'Enter the employer.'));
+  const employer = String(input.employer ?? '').trim();
+  if (!employer) errors.push(issue('employer', 'Employer', 'Enter the employer.'));
+  else if (employer.length > 80) errors.push(issue('employer', 'Employer', 'Use 80 characters or fewer.'));
   const payError = moneyIssue(input.basePay, 'basePay', 'Base pay', false, 'Enter yearly pay above $0.');
   if (payError) errors.push(payError);
   if (String(input.payFrequency ?? '') === 'hourly') {
@@ -263,6 +279,13 @@ export function validateJob(input: {
   const deductionError = moneyIssue(blankAsZero(input.deductions), 'deductions', 'Deductions', true, "Deductions can't be negative.");
   if (deductionError) errors.push(deductionError);
   return errors;
+}
+
+function nameIssue(raw: unknown, field = 'name', label = 'Name'): FieldIssue | null {
+  const name = String(raw ?? '').trim();
+  if (!name) return issue(field, label, 'Enter a name.');
+  if (name.length > 80) return issue(field, label, 'Use 80 characters or fewer.');
+  return null;
 }
 
 function blankAsZero(value: unknown): unknown {

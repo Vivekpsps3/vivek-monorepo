@@ -10,6 +10,12 @@ export const MAX_AMOUNT_MESSAGE = 'Enter an amount up to $999,999,999,999.99.';
 export const DEFAULT_MONEY_LOCALE = 'en-US';
 export const MINUS_SIGN = '\u2212';
 
+/**
+ * Decision pending Vivek. true: plural(0) is "No X" (spec §5).
+ * false: "0 X", which reads more naturally mid-sentence.
+ */
+export const PLURAL_ZERO_IS_NO = true;
+
 export type Cents = number;
 
 export type MoneyStyle = 'standard' | 'whole' | 'compact';
@@ -38,13 +44,41 @@ export function isSafeCents(value: number): value is Cents {
   return Number.isSafeInteger(value) && Math.abs(value) <= MAX_CENTS;
 }
 
+/**
+ * Cents from a decimal string. Half-away rounding goes through roundHalfAwayFromZero
+ * so 1.005 and −0.005 are not subject to binary float multiplication.
+ */
+function centsFromDecimalText(text: string): Cents | null {
+  const trimmed = text.trim();
+  const negative = trimmed.startsWith('-') || trimmed.startsWith(MINUS_SIGN);
+  const unsigned = trimmed.replace(/^[+\-\u2212]/, '');
+  if (!/^\d+(\.\d+)?$/.test(unsigned)) return null;
+  const [whole, fraction = ''] = unsigned.split('.');
+  if (whole.length > 15) return null;
+  const hundredths = Number((fraction + '00').slice(0, 2));
+  const extra = fraction.length > 2 ? Number(`0.${fraction.slice(2)}`) : 0;
+  const magnitude = Number(whole) * 100 + hundredths + extra;
+  if (!Number.isFinite(magnitude)) return null;
+  const cents = roundHalfAwayFromZero(negative ? -magnitude : magnitude);
+  if (!isSafeCents(cents)) return null;
+  return cents === 0 ? 0 : cents;
+}
+
 /** Migrate a stored dollar amount to integer cents. Does not rewrite the record. */
-export function fromDollars(dollars: number | null | undefined): Cents | null {
-  if (dollars == null) return null;
-  const amount = typeof dollars === 'number' ? dollars : Number(dollars);
-  if (!Number.isFinite(amount)) return null;
-  const cents = roundHalfAwayFromZero(amount * 100);
-  return isSafeCents(cents) ? cents : null;
+export function fromDollars(dollars: unknown): Cents | null {
+  if (dollars == null || dollars === '') return null;
+  if (typeof dollars === 'number') {
+    if (!Number.isFinite(dollars)) return null;
+    const text = Object.is(dollars, -0) ? '0' : String(dollars);
+    if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return null;
+    return centsFromDecimalText(text);
+  }
+  if (typeof dollars === 'string') {
+    const trimmed = dollars.trim();
+    if (!/^[+-]?\d+(\.\d+)?$/.test(trimmed)) return null;
+    return centsFromDecimalText(trimmed);
+  }
+  return null;
 }
 
 /**
@@ -85,22 +119,25 @@ export interface MoneyParseError {
   error: string;
 }
 
-/** Digits, optional grouping commas, optional $, up to 2 decimals. Rejects 1e20. */
+/** Digits, thousands-grouped commas, optional $, up to 2 decimals. Rejects 1e20 and "1,2,3". */
 export function parseMoneyInput(raw: string): ParsedMoney | MoneyParseError {
   const trimmed = raw.trim();
   if (!trimmed) return { error: 'Enter an amount.' };
   if (/e/i.test(trimmed)) return { error: MAX_AMOUNT_MESSAGE };
   const negative = /^[-\u2212]/.test(trimmed);
-  const unsigned = trimmed.replace(/^[+\-\u2212]/, '').replace(/[$,\s]/g, '');
+  let unsigned = trimmed.replace(/^[+\-\u2212]/, '').replace(/[$\s]/g, '');
+  if (unsigned.includes(',')) {
+    if (!/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(unsigned)) return { error: MAX_AMOUNT_MESSAGE };
+    unsigned = unsigned.replace(/,/g, '');
+  }
   if (!/^\d+(\.\d+)?$/.test(unsigned)) return { error: MAX_AMOUNT_MESSAGE };
   const [whole, fraction = ''] = unsigned.split('.');
   if (fraction.length > 2) return { error: 'Enter an amount with up to 2 decimal places.' };
   const significant = `${whole.replace(/^0+/, '')}${fraction}`.length;
   if (significant > 15 || whole.length > 15) return { error: MAX_AMOUNT_MESSAGE };
-  const cents = roundHalfAwayFromZero(Number(unsigned) * 100);
-  const signed = negative ? -cents : cents;
-  if (!isSafeCents(signed)) return { error: MAX_AMOUNT_MESSAGE };
-  return { cents: signed === 0 ? 0 : signed };
+  const cents = centsFromDecimalText(`${negative ? '-' : ''}${unsigned}`);
+  if (cents == null || !isSafeCents(cents)) return { error: MAX_AMOUNT_MESSAGE };
+  return { cents };
 }
 
 export function formatMoney(
@@ -154,8 +191,20 @@ export function plural(
   const n = Number.isFinite(count) ? Math.abs(Math.trunc(count)) : 0;
   const category = new Intl.PluralRules(DEFAULT_MONEY_LOCALE).select(n);
   const word = category === 'one' ? singular : (pluralForm ?? `${singular}s`);
-  if (n === 0) return `No ${word}`;
+  if (n === 0 && PLURAL_ZERO_IS_NO) return `No ${word}`;
   return `${n.toLocaleString(DEFAULT_MONEY_LOCALE)} ${word}`;
+}
+
+/** Percent text with the true minus sign. Null is an em dash. */
+export function formatPercent(value: number | null | undefined, digits = 0): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const scale = 10 ** digits;
+  const rounded = roundHalfAwayFromZero(value * scale) / scale;
+  const body = Math.abs(rounded).toLocaleString(DEFAULT_MONEY_LOCALE, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  return `${rounded < 0 ? MINUS_SIGN : ''}${body}%`;
 }
 
 function displayedAmount(cents: number, style: MoneyStyle): { amount: number; digits: number; compact: boolean } {
@@ -163,7 +212,8 @@ function displayedAmount(cents: number, style: MoneyStyle): { amount: number; di
     return { amount: roundHalfAwayFromZero(cents / 100), digits: 0, compact: false };
   }
   if (style === 'compact') {
-    return { amount: cents / 100, digits: 1, compact: true };
+    const rounded = roundHalfAwayFromZero(cents / 10) / 10;
+    return { amount: rounded === 0 ? 0 : rounded, digits: 1, compact: true };
   }
   return { amount: cents / 100, digits: 2, compact: false };
 }

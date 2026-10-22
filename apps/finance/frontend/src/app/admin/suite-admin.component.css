@@ -55,9 +55,11 @@ h2 { margin: 0 0 var(--space-3); font-size: 0.8rem; font-weight: 650; letter-spa
 .facts ui-icon { color: var(--text-tertiary); }
 .person-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-3); }
 .person-actions button { min-height: 44px; }
-.person-actions button:disabled { color: var(--text-tertiary); cursor: not-allowed; opacity: 0.45; }
+.person-actions button:disabled,
+.person-actions button[aria-disabled="true"] { color: var(--text-tertiary); cursor: not-allowed; opacity: 0.45; }
 .person-actions .is-danger { color: var(--danger, #b42318); }
-.person-actions .is-danger:disabled { color: var(--text-tertiary); }
+.person-actions .is-danger:disabled,
+.person-actions .is-danger[aria-disabled="true"] { color: var(--text-tertiary); }
 
 .invite {
   display: grid; gap: var(--space-3); margin-bottom: var(--space-4);

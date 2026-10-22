@@ -380,7 +380,7 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
         await this.finance.refreshCollectionsFromAnotherTab(message.collections);
       } catch {
         if (this.vault.isUnlocked) {
-          this.toast.error(failureCopy('refresh', 'this vault', 'Reload this page.'), {
+          this.toast.error(failureCopy('refresh', 'this vault'), {
             label: 'Reload',
             run: () => window.location.reload(),
           });

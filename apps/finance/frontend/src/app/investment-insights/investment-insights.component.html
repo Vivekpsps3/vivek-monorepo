@@ -65,7 +65,7 @@
                   variant="secondary"
                   size="sm"
                   [ariaLabel]="rate + '% annual growth preset'"
-                  [disabled]="annualGrowthRate === rate"
+                  [pressed]="annualGrowthRate === rate"
                   (clicked)="setGrowthPreset(rate)">
                   {{ rate }}%
                 </ui-button>
@@ -123,7 +123,7 @@
             </div>
             <div>
               <span>Years to double</span>
-              <strong>{{ yearsToDouble === null ? '-' : (yearsToDouble | number: '1.1-1') }}</strong>
+              <strong>{{ yearsToDouble === null ? '—' : (yearsToDouble | number: '1.1-1') }}</strong>
             </div>
           </div>
           <div class="projection-comparison" aria-label="Contribution baseline and scenario comparison">

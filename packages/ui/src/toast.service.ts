@@ -41,7 +41,7 @@ export class ToastService {
     dropped.forEach(item => this.clearTimer(item.id));
     this.toastsSubject.next(next);
     this.newestSubject.next(toast);
-    this.arm(toast);
+    this.schedule(toast);
   }
 
   success(message: string, undo?: () => void): void {
@@ -74,10 +74,13 @@ export class ToastService {
     this.paused = true;
     const now = Date.now();
     for (const toast of this.toastsSubject.value) {
+      if (this.persists(toast)) continue;
       const timer = this.timers.get(toast.id);
       if (timer) clearTimeout(timer);
       this.timers.delete(toast.id);
-      this.remaining.set(toast.id, Math.max(0, (this.deadlines.get(toast.id) ?? now) - now));
+      const deadline = this.deadlines.get(toast.id);
+      if (deadline != null) this.remaining.set(toast.id, Math.max(0, deadline - now));
+      this.deadlines.delete(toast.id);
     }
   }
 
@@ -85,13 +88,29 @@ export class ToastService {
     if (!this.paused) return;
     this.paused = false;
     for (const toast of this.toastsSubject.value) {
+      if (this.persists(toast)) continue;
       const delay = this.remaining.get(toast.id) ?? toastDuration(!!toast.action);
       this.arm(toast, delay);
     }
   }
 
+  /** Error toasts whose only recovery is the action stay until dismissed. */
+  private persists(toast: ToastPayload): boolean {
+    return toast.kind === 'error' && !!toast.action;
+  }
+
+  private schedule(toast: ToastPayload): void {
+    if (this.persists(toast)) return;
+    const delay = toastDuration(!!toast.action);
+    this.remaining.set(toast.id, delay);
+    if (this.paused) return;
+    this.arm(toast, delay);
+  }
+
   private arm(toast: ToastPayload, delay = toastDuration(!!toast.action)): void {
+    if (this.persists(toast) || this.paused) return;
     this.clearTimer(toast.id);
+    this.remaining.set(toast.id, delay);
     this.deadlines.set(toast.id, Date.now() + delay);
     this.timers.set(toast.id, setTimeout(() => this.dismiss(toast.id), delay));
   }

@@ -143,12 +143,15 @@
 
 <ui-dialog scrollTarget=".main-content" [open]="showAssetModal" labelledBy="asset-modal-title" (closed)="closeModals()">
   <h3 id="asset-modal-title">{{ editingAssetId ? 'Edit asset' : 'Add asset' }}</h3>
+  @if (assetSaveError) {
+    <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ assetSaveError }}</p>
+  }
   <form id="asset-form" class="sheet-form" novalidate (ngSubmit)="saveAsset()">
-    <ui-field label="Name" [error]="assetFieldError('name')" [announceError]="assetErrors[0]?.field === 'name'">
+    <ui-field label="Name" [error]="assetFieldError('name')">
       <input uiFieldControl data-field="name" name="asset-name" [(ngModel)]="assetForm.name" data-dialog-initial-focus (blur)="revalidateAsset()" />
     </ui-field>
     <ui-select label="Category" [options]="assetCategoryOptions" [(value)]="assetForm.category" />
-    <ui-field label="Value" [error]="assetFieldError('value')" [announceError]="assetErrors[0]?.field === 'value'">
+    <ui-field label="Value" [error]="assetFieldError('value')">
       <input uiFieldControl data-field="value" name="asset-value" type="text" inputmode="decimal" [(ngModel)]="assetForm.current_value" (blur)="revalidateAsset()" />
     </ui-field>
     <ui-field label="As of" [optional]="true">
@@ -159,21 +162,24 @@
     </ui-field>
     <div class="modal-actions">
       <ui-button type="button" variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
-      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving' : 'Save' }}</ui-button>
+      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
     </div>
   </form>
 </ui-dialog>
 <ui-dialog scrollTarget=".main-content" [open]="showLiabilityModal" labelledBy="liability-modal-title" (closed)="closeModals()">
   <h3 id="liability-modal-title">{{ editingLiabilityId ? 'Edit liability' : 'Add liability' }}</h3>
+  @if (liabilitySaveError) {
+    <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ liabilitySaveError }}</p>
+  }
   <form id="liability-form" class="sheet-form" novalidate (ngSubmit)="saveLiability()">
-    <ui-field label="Name" [error]="liabilityFieldError('name')" [announceError]="liabilityErrors[0]?.field === 'name'">
+    <ui-field label="Name" [error]="liabilityFieldError('name')">
       <input uiFieldControl data-field="name" name="debt-name" [(ngModel)]="liabilityForm.name" data-dialog-initial-focus (blur)="revalidateLiability()" />
     </ui-field>
     <ui-select
       label="Category"
       [options]="liabilityCategoryOptions"
       [(value)]="liabilityForm.category" />
-    <ui-field label="Amount owed" [error]="liabilityFieldError('amount')" [announceError]="liabilityErrors[0]?.field === 'amount'">
+    <ui-field label="Amount owed" [error]="liabilityFieldError('amount')">
       <input uiFieldControl data-field="amount" name="debt-amount" type="text" inputmode="decimal" [(ngModel)]="liabilityForm.balance_owed" (blur)="revalidateLiability()" />
     </ui-field>
     <ui-field label="As of" [optional]="true">
@@ -184,7 +190,7 @@
     </ui-field>
     <div class="modal-actions">
       <ui-button type="button" variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
-      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving' : 'Save' }}</ui-button>
+      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
     </div>
   </form>
 </ui-dialog>

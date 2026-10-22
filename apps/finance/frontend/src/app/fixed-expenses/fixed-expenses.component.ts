@@ -31,7 +31,7 @@ import {
   UiDialogComponent,
 } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
-import { fieldMessage, focusField, focusFirstInvalid } from '../shared/form-validation';
+import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary, focusField } from '../shared/form-validation';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
@@ -195,7 +195,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     this.formSubmitted = true;
     if (errors.length) {
       this.cdr.markForCheck();
-      setTimeout(() => focusFirstInvalid(document.getElementById('bill-form')));
+      setTimeout(() => focusErrorSummary(document.getElementById('bill-form')));
       return;
     }
     const parsed = validateMoney(this.form.amount, {
@@ -229,11 +229,8 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.saving = false;
-        this.saveError = 'This bill could not be saved. Your details are still here; check your vault and try again.';
-        this.toastService.error(failureCopy('save', 'this bill', 'Try again.'), {
-          label: 'Try again',
-          run: () => this.saveExpense(),
-        });
+        this.saveError = dialogSaveAlert();
+        setTimeout(() => focusDialogAlert(document.getElementById('bill-form')));
         this.cdr.markForCheck();
       },
     });
@@ -249,7 +246,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     if (!ok) return;
     this.financeService.deleteFixedExpense(row.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Bill deleted'),
-      error: () => this.toastService.error(failureCopy('delete', 'this bill', 'Try again.'), {
+      error: () => this.toastService.error(failureCopy('delete', 'this bill'), {
         label: 'Try again',
         run: () => { void this.deleteExpense(row); },
       }),

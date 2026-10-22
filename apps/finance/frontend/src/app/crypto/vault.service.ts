@@ -16,7 +16,8 @@ import {
 } from './vault-crypto';
 import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
-import { ToastService, failureCopy } from '@vivek/ui';
+import { ToastService } from '@vivek/ui';
+import { silentErrorToast } from '../core/http-error.interceptor';
 
 export interface VaultStatus {
   exists: boolean;
@@ -160,14 +161,14 @@ export class VaultService {
       await this.applyKdfUpgrade(passphrase);
     } catch {
       this.kdfUpgradeFailures += 1;
-      this.toast.error(failureCopy('upgrade', 'vault protection', 'Lock and unlock again.'));
+      this.toast.error("Couldn't finish a security upgrade. We'll retry next time you unlock.");
     }
   }
 
   private async ensureAuthWrap(): Promise<void> {
     if (this.authWrap?.wrapped_private_key_b64 && this.authWrap.kdf_iterations) return;
     const body = await firstValueFrom(
-      this.http.get<{ auth: WrappedSigningKey }>(apiUrl('/auth/passwordless/wraps'))
+      this.http.get<{ auth: WrappedSigningKey }>(apiUrl('/auth/passwordless/wraps'), { context: silentErrorToast() })
     );
     if (body?.auth?.wrapped_private_key_b64) this.authWrap = body.auth;
   }
@@ -180,13 +181,13 @@ export class VaultService {
     if (!authStale && !vaultStale) return;
     if (authStale && auth) {
       const wrapped = await this.rewrapAuthWrap(passphrase, auth);
-      await firstValueFrom(this.http.put(apiUrl('/auth/passwordless/wraps'), wrapped));
+      await firstValueFrom(this.http.put(apiUrl('/auth/passwordless/wraps'), wrapped, { context: silentErrorToast() }));
       this.authWrap = wrapped;
     }
     if (vaultStale && this.dek && status) {
       const rewrap = await this.rewrapVaultDek(passphrase);
       const updated = await firstValueFrom(
-        this.http.put<VaultStatus>(apiUrl('/vault/wraps'), rewrap)
+        this.http.put<VaultStatus>(apiUrl('/vault/wraps'), rewrap, { context: silentErrorToast() })
       );
       this.statusSubject.next(updated);
       this.unlockedWrap = updated.wrapped_dek_b64 ?? this.unlockedWrap;
@@ -276,13 +277,13 @@ export class VaultService {
       indexes?: Array<{ index_name: string; index_value_b64: string }>;
     }>
   ): Observable<EncryptedRecordDto[]> {
-    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records });
+    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records }, { context: silentErrorToast() });
   }
 
   deleteRecords(
     records: Array<{ collection: string; client_id: string; expected_revision: number }>
   ): Observable<{ deleted: number }> {
-    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records });
+    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records }, { context: silentErrorToast() });
   }
 
   getCounts(): Observable<{ counts: Record<string, number> }> {

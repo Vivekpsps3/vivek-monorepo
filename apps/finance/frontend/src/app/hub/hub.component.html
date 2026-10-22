@@ -131,7 +131,7 @@
           <dl class="split">
             <div><dt>Assets</dt><dd>{{ netWorth.other_assets | money }}</dd></div>
             <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | money }}</dd></div>
-            <div><dt>Debts</dt><dd>{{ netWorth.liabilities | money }}</dd></div>
+            <div><dt>Debts</dt><dd>{{ (-netWorth.liabilities) | money }}</dd></div>
           </dl>
           @if (fidelityAccounts().length) {
             <h3>Fidelity</h3>

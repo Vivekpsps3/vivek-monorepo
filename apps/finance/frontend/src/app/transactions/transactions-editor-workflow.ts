@@ -2,10 +2,10 @@ import { ChangeDetectorRef, Injectable, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
-import { ToastService, failureCopy, successCopy } from '@vivek/ui';
+import { ToastService, successCopy } from '@vivek/ui';
 import { Transaction, TransactionCreate } from '../models/transaction.model';
 import { todayIsoDate, toDollars, validateMoney, validateTransaction, type FieldIssue } from '@vivek/browser';
-import { fieldMessage, focusFirstInvalid } from '../shared/form-validation';
+import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary } from '../shared/form-validation';
 
 @Injectable()
 export class TransactionsEditorWorkflow implements OnDestroy {
@@ -17,6 +17,8 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   transactionSaveError = '';
   fieldErrors: FieldIssue[] = [];
   formSubmitted = false;
+  private originalAmount: number | null = null;
+  private amountDirty = false;
   private readonly destroy$ = new Subject<void>();
 
   constructor(
@@ -28,14 +30,24 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   ) {}
 
   private emptyTx(): TransactionCreate {
-    return { date: todayIsoDate(), type: 'expense', category: '', amount: 0, description: '' };
+    return { date: todayIsoDate(), type: 'expense', category: '', amount: '' as unknown as number, description: '' };
   }
 
   openAddModal(selectedCalendarDate: string | null): void {
     this.editingTxId = null;
     this.editingImported = false;
+    this.originalAmount = null;
+    this.amountDirty = false;
+    this.transactionSaveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.newTx = { ...this.emptyTx(), ...(selectedCalendarDate ? { date: selectedCalendarDate } : {}) };
     this.showModal = true;
+  }
+
+  onAmountChange(value: number | string): void {
+    this.newTx.amount = value as unknown as number;
+    this.amountDirty = true;
   }
 
   fieldError(field: string): string | null {
@@ -44,31 +56,36 @@ export class TransactionsEditorWorkflow implements OnDestroy {
 
   saveTransaction(): void {
     if (this.saving) return;
+    const preserveAmount = !this.amountDirty && this.originalAmount != null;
     const errors = validateTransaction({
-      amount: this.newTx.amount,
+      amount: preserveAmount ? '1.00' : this.newTx.amount,
       date: this.newTx.date,
       category: this.newTx.category,
     });
     this.fieldErrors = errors;
     this.formSubmitted = true;
+    this.transactionSaveError = '';
     if (errors.length) {
       this.cdr.markForCheck();
-      setTimeout(() => focusFirstInvalid(document.getElementById('transaction-form')));
+      setTimeout(() => focusErrorSummary(document.getElementById('transaction-form')));
       return;
     }
-    const parsed = validateMoney(this.newTx.amount, {
-      allowZero: false,
-      negativeMessage: 'Enter an amount above $0. Choose Refund or Income for money coming in.',
-      emptyMessage: 'Enter an amount above $0. Choose Refund or Income for money coming in.',
-    });
-    if (!('cents' in parsed)) return;
+    let amount = this.originalAmount ?? 0;
+    if (!preserveAmount) {
+      const parsed = validateMoney(this.newTx.amount, {
+        allowZero: false,
+        negativeMessage: 'Enter an amount above $0. Choose Refund or Income for money coming in.',
+        emptyMessage: 'Enter an amount above $0. Choose Refund or Income for money coming in.',
+      });
+      if (!('cents' in parsed)) return;
+      amount = toDollars(parsed.cents);
+    }
 
     this.saving = true;
-    this.transactionSaveError = '';
     const payload: TransactionCreate = {
       ...this.newTx,
       category: this.newTx.category.trim(),
-      amount: toDollars(parsed.cents),
+      amount,
     };
     const request = this.editingTxId !== null
       ? this.financeService.updateTransaction(this.editingTxId, payload)
@@ -84,12 +101,9 @@ export class TransactionsEditorWorkflow implements OnDestroy {
       },
       error: () => {
         this.saving = false;
-        this.transactionSaveError = 'Could not save this transaction. Your changes are still here; try again.';
-        this.toastService.error(failureCopy('save', 'this transaction', 'Try again.'), {
-          label: 'Try again',
-          run: () => this.saveTransaction(),
-        });
+        this.transactionSaveError = dialogSaveAlert();
         this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.getElementById('transaction-form')));
       },
     });
   }
@@ -98,6 +112,10 @@ export class TransactionsEditorWorkflow implements OnDestroy {
     this.editingTxId = tx.id;
     this.editingImported = tx.source === 'import';
     this.transactionSaveError = '';
+    this.originalAmount = tx.amount;
+    this.amountDirty = false;
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.newTx = {
       date: tx.date,
       type: tx.type,

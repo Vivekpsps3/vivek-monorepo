@@ -75,6 +75,56 @@ describe('PortfolioComponent', () => {
     jasmine.clock().uninstall();
   });
 
+  it('keeps a stored 0.1234 unit price when the field was not edited', () => {
+    const { component, finance } = componentWithFinance();
+    finance.updateHolding = jasmine.createSpy('updateHolding').and.returnValue(of({}));
+    component.editHolding({
+      id: 9,
+      symbol: 'ABC',
+      shares: 1000,
+      purchase_price: 0.1234,
+      purchase_date: '2026-01-15',
+    } as Holding);
+    component.addOrUpdateHolding();
+    expect(finance.updateHolding).toHaveBeenCalled();
+    expect(finance.updateHolding.calls.mostRecent().args[1].purchase_price).toBe(0.1234);
+    expect(component.holdingSaveError).toBe('');
+  });
+
+  it('keeps four decimal places when the unit price was edited', () => {
+    const { component, finance } = componentWithFinance();
+    finance.updateHolding = jasmine.createSpy('updateHolding').and.returnValue(of({}));
+    component.editHolding({
+      id: 9,
+      symbol: 'ABC',
+      shares: 1000,
+      purchase_price: 0.1234,
+      purchase_date: '2026-01-15',
+    } as Holding);
+    component.markPurchasePriceDirty();
+    component.newHolding.purchase_price = 0.1234;
+    component.addOrUpdateHolding();
+    expect(finance.updateHolding.calls.mostRecent().args[1].purchase_price).toBe(0.1234);
+  });
+
+  it('keeps the holding dialog open with an inline alert when save fails', () => {
+    const { component, finance, toast } = componentWithFinance();
+    finance.updateHolding = jasmine.createSpy('updateHolding').and.returnValue(throwError(() => ({ error: { detail: 'Synthetic save failed' } })));
+    component.editHolding({
+      id: 9,
+      symbol: 'ABC',
+      shares: 1000,
+      purchase_price: 0.1234,
+      purchase_date: '2026-01-15',
+    } as Holding);
+    component.addOrUpdateHolding();
+    expect(component.showModal).toBeTrue();
+    expect(component.holdingSaveError).toBe("Couldn't save. Something went wrong. Try again.");
+    expect(component.holdingSaveError).not.toContain('Synthetic');
+    expect(component.newHolding.purchase_price).toBe(0.1234);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('resumes a verified staged Fidelity replacement from the explicit recovery action', () => {
     const { component, finance, toast } = componentWithFinance();
     const stage = {

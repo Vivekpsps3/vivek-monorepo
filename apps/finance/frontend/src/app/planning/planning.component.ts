@@ -650,6 +650,18 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
+  onStartingNetWorthInput(value: number | null): void {
+    if (!this.useLedgerStartingNetWorth) this.startingNetWorth = value;
+  }
+
+  onNetCashflowInput(value: number | null): void {
+    if (this.useNetCashflowOverride) this.assumptions.net_annual_cashflow_override = value;
+  }
+
+  onAllocationInput(value: number | null): void {
+    if (!this.useInferredAllocation) this.assumptions.portfolio_allocation = this.fromPercent(value);
+  }
+
   setUseTxIncome(useCurrent: boolean): void {
     if (!useCurrent && this.assumptions.monthly_income == null) {
       this.assumptions.monthly_income = this.inputs?.avg_monthly_income ?? 0;

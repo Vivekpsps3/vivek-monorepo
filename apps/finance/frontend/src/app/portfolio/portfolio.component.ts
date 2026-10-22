@@ -21,9 +21,9 @@ import {
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ConfirmService } from '@vivek/ui';
-import { downloadCsv, formatDate, formatMoney, fromDollars, plural, todayIsoDate, toDollars, validateHolding, validateMoney, type FieldIssue } from '@vivek/browser';
-import { failureCopy, successCopy } from '@vivek/ui';
-import { focusFirstInvalid } from '../shared/form-validation';
+import { downloadCsv, formatDate, formatMoney, fromDollars, plural, todayIsoDate, unitPriceToNumber, validateHolding, validateUnitPrice, type FieldIssue } from '@vivek/browser';
+import { successCopy } from '@vivek/ui';
+import { dialogSaveAlert, focusDialogAlert, focusFirstInvalid } from '../shared/form-validation';
 import {
   holdingGain,
   holdingGainPercent,
@@ -170,6 +170,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   openAddModal() {
     this.editingId = null;
+    this.originalPurchasePrice = undefined;
+    this.purchasePriceDirty = false;
+    this.holdingSaveError = '';
     this.newHolding = this.emptyHolding();
     this.priceCheck = null;
     this.showModal = true;
@@ -271,9 +274,16 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   holdingErrors: FieldIssue[] = [];
   holdingSubmitted = false;
+  holdingSaveError = '';
+  private originalPurchasePrice: number | null | undefined = undefined;
+  private purchasePriceDirty = false;
 
   holdingFieldError(field: string): string | null {
     return this.holdingSubmitted ? this.holdingErrors.find(error => error.field === field)?.message ?? null : null;
+  }
+
+  markPurchasePriceDirty(): void {
+    this.purchasePriceDirty = true;
   }
 
   addOrUpdateHolding() {
@@ -293,20 +303,25 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       return;
     }
     const symbol = this.newHolding.symbol.trim().toUpperCase();
-    const cost = this.newHolding.purchase_price;
-    if (cost != null && String(cost).trim() !== '') {
-      const parsed = validateMoney(cost, {
-        allowZero: true,
-        negativeMessage: "Cost basis can't be negative.",
-        emptyMessage: "Cost basis can't be negative.",
-      });
-      if ('cents' in parsed) this.newHolding.purchase_price = toDollars(parsed.cents);
+    const keepStoredPrice = this.editingId !== null && !this.purchasePriceDirty;
+    if (!keepStoredPrice) {
+      const priceError = validateUnitPrice(this.newHolding.purchase_price);
+      if (priceError) {
+        this.holdingErrors = [...issues, { field: 'costBasis', label: 'Cost basis', message: priceError }];
+        this.cdr.markForCheck();
+        setTimeout(() => focusFirstInvalid(document.querySelector('.holding-form')));
+        return;
+      }
     }
 
     this.saving = true;
+    this.holdingSaveError = '';
     const payload: HoldingCreate = {
       ...this.newHolding,
       symbol,
+      purchase_price: keepStoredPrice
+        ? this.originalPurchasePrice ?? null
+        : unitPriceToNumber(this.newHolding.purchase_price),
     };
     if (this.editingId !== null && !payload.purchase_date) delete (payload as Partial<HoldingCreate>).purchase_date;
 
@@ -318,17 +333,16 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     req.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
+        const wasEditing = this.editingId !== null;
         this.closeModal();
-        this.toastService.success(successCopy('Holding', this.editingId ? 'saved' : 'added'));
+        this.toastService.success(successCopy('Holding', wasEditing ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
-        this.toastService.error(failureCopy('save', 'this holding', 'Try again.'), {
-          label: 'Try again',
-          run: () => this.addOrUpdateHolding(),
-        });
+        this.holdingSaveError = dialogSaveAlert();
         this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.querySelector('.holding-form')));
       },
     });
   }
@@ -336,6 +350,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   editHolding(h: Holding) {
     this.editingId = h.id;
     const purchaseDate = h.purchase_date ? String(h.purchase_date).split('T')[0] : '';
+    this.originalPurchasePrice = h.purchase_price;
+    this.purchasePriceDirty = false;
+    this.holdingSaveError = '';
     this.newHolding = {
       symbol: h.symbol,
       shares: h.shares,
@@ -349,6 +366,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   closeModal() {
     this.showModal = false;
     this.editingId = null;
+    this.holdingSaveError = '';
     this.newHolding = this.emptyHolding();
     this.priceCheck = null;
   }

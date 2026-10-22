@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
   WEEK_STARTS_ON,
@@ -32,6 +33,34 @@ test('a Pacific 6pm instant stays on October 21', () => {
   assert.match(formatted, /Oct 21/);
   assert.equal(formatDate('2026-10-21', 'table', new Date('2026-10-22T12:00:00Z')), 'Oct 21');
   assert.equal(formatDate(null), 'No date');
+});
+
+test('a date-only value is the same calendar day in Los Angeles and Kolkata', () => {
+  const script = `
+    import { formatDate, parseDateOnly } from ${JSON.stringify(new URL('./date.mjs', import.meta.url).href)};
+    const now = new Date('2026-11-01T12:00:00Z');
+    console.log(JSON.stringify({
+      valid: formatDate('2026-03-01', 'table', now),
+      leap: formatDate('2026-02-29', 'table', now),
+      parsed: parseDateOnly('2026-02-29'),
+    }));
+  `;
+  const run = (timeZone) => {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      env: { ...process.env, TZ: timeZone },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  const losAngeles = run('America/Los_Angeles');
+  const kolkata = run('Asia/Kolkata');
+  assert.equal(losAngeles.valid, 'Mar 1');
+  assert.equal(kolkata.valid, losAngeles.valid);
+  assert.equal(losAngeles.leap, 'No date');
+  assert.equal(kolkata.leap, 'No date');
+  assert.equal(losAngeles.parsed, null);
+  assert.equal(kolkata.parsed, null);
 });
 
 test('Tokyo evening is the next local date and planning uses that today', () => {

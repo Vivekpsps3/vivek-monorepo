@@ -27,7 +27,8 @@
   outline-offset: 2px;
 }
 
-.ui-btn:disabled {
+.ui-btn:disabled,
+.ui-btn[aria-disabled="true"] {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;

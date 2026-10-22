@@ -83,10 +83,10 @@
 
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="fixed-expense-modal-title" (closed)="closeModal()">
       <h3 id="fixed-expense-modal-title">{{ editingId ? 'Edit bill' : 'Add bill' }}</h3>
-      @if (saveError) { <p role="alert" class="form-error">{{ saveError }}</p> }
+      @if (saveError) { <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ saveError }}</p> }
       <form id="bill-form" novalidate (ngSubmit)="saveExpense()" #expenseForm="ngForm">
         @if (formSubmitted && fieldErrors.length) {
-          <div class="form-error-summary" role="alert">
+          <div class="form-error-summary" role="alert" tabindex="-1" data-error-summary>
             <p>Fix {{ fieldErrors.length }} {{ fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
             <ul>
               @for (error of fieldErrors; track error.field) {
@@ -165,7 +165,7 @@
         </label>
 
         <div class="form-actions">
-          <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving' : 'Save' }}</ui-button>
+          <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
           <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
         </div>
       </form>

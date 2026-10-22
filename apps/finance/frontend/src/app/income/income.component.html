@@ -144,7 +144,7 @@
                         {{ isStockPriceSaving(row.id) ? 'Saving…' : 'Save current manual price' }}
                       </ui-button>
                       @if (stockPriceErrors[row.id]) {
-                        <p class="field-error" role="alert">{{ stockPriceErrors[row.id] }}</p>
+                        <p class="field-error">{{ stockPriceErrors[row.id] }}</p>
                       }
                       @if (row.stock_symbol) {
                         <ui-button variant="ghost" size="sm" [disabled]="isStockTickerRefreshing(row.stock_symbol)" [ariaLabel]="'Refresh market price for ' + row.stock_symbol" (clicked)="refreshStockTicker(row.stock_symbol)">
@@ -186,8 +186,11 @@
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="income-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeModal()">
       <h3 id="income-modal-title">{{ editingId ? 'Edit job' : 'Add job' }}</h3>
       <form id="job-form" novalidate (ngSubmit)="saveIncome()" #incomeForm="ngForm">
+        @if (jobSaveError) {
+          <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ jobSaveError }}</p>
+        }
         @if (formSubmitted && fieldErrors.length) {
-          <div class="form-error-summary" role="alert">
+          <div class="form-error-summary" role="alert" tabindex="-1" data-error-summary>
             <p>Fix {{ fieldErrors.length }} {{ fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
             <ul>
               @for (error of fieldErrors; track error.field) {
@@ -587,7 +590,7 @@
         </label>
 
         <div class="form-actions">
-          <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving' : 'Save' }}</ui-button>
+          <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
           <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
         </div>
       </form>

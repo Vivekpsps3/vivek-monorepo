@@ -37,10 +37,13 @@
         @if (typeFilter !== 'expense') {
           <div class="month-total month-total--income">
             <span class="month-total__label">
-              {{ typeFilter === 'income' ? 'Recorded income' : 'Income' }} · {{ incomeCount | plural:'income':'incomes' }}
+              {{ typeFilter === 'income' ? 'Recorded income' : 'Income' }} · {{ incomeCount | plural:'deposit':'deposits' }}
             </span>
             <strong class="money">{{ monthIncomeTotal | money }}</strong>
           </div>
+        }
+        @if (excludedNote()) {
+          <p class="month-total__note">{{ excludedNote() }}</p>
         }
         @if (typeFilter === 'all') {
           <div class="month-total month-total--net">
@@ -310,7 +313,7 @@
           <tr *ngFor="let tx of filteredTransactions; trackBy: trackByTxId">
             <td>{{ tx.date | appDate }}</td>
             <td>
-              <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ transactionLabel(tx) }}</ui-badge>
+              <ui-badge [variant]="transactionNeedsFixing(tx) ? 'warning' : transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ transactionNeedsFixing(tx) ? 'Needs fixing' : transactionLabel(tx) }}</ui-badge>
               <span class="import-tag" *ngIf="tx.source === 'import'">import</span>
             </td>
             <td class="account-cell">{{ tx.account_display || '—' }}</td>
@@ -336,6 +339,9 @@
             <span class="tx-mobile-main">
               <strong>{{ tx.merchant || tx.category || 'Transaction' }}</strong>
               <small>{{ tx.date | appDate }} · {{ tx.category }}</small>
+              @if (transactionNeedsFixing(tx)) {
+                <ui-badge variant="warning">Needs fixing</ui-badge>
+              }
             </span>
             <span class="tx-mobile-amount" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
               {{ transactionAmountPrefix(tx) }}{{ tx.amount | money }}
@@ -344,7 +350,7 @@
           <div class="tx-mobile-details">
             <p><strong>Source description</strong><span>{{ tx.description || '—' }}</span></p>
             <p><strong>Account</strong><span>{{ tx.account_display || '—' }}</span></p>
-            <p><strong>Kind</strong><span>{{ transactionLabel(tx) }}</span></p>
+            <p><strong>Kind</strong><span>{{ transactionNeedsFixing(tx) ? 'Needs fixing' : transactionLabel(tx) }}</span></p>
             @if (tx.kind === 'ambiguous_credit') { <p><strong>Classification</strong><span>Choose a type to include this credit in spending or income totals.</span></p> }
             <div class="actions actions--row">
               <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
@@ -665,8 +671,11 @@
 <ui-dialog scrollTarget=".main-content" [open]="transactionEditor.showModal" labelledBy="tx-modal-title" panelClass="tx-sheet" (closed)="transactionEditor.closeModal()">
     <h3 id="tx-modal-title">{{ transactionEditor.editingTxId ? 'Edit transaction' : 'Add transaction' }}</h3>
     <form id="transaction-form" novalidate (ngSubmit)="transactionEditor.saveTransaction()" #txForm="ngForm">
+      @if (transactionEditor.transactionSaveError) {
+        <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ transactionEditor.transactionSaveError }}</p>
+      }
       @if (transactionEditor.formSubmitted && transactionEditor.fieldErrors.length) {
-        <div class="form-error-summary" role="alert">
+        <div class="form-error-summary" role="alert" tabindex="-1" data-error-summary>
           <p>Fix {{ transactionEditor.fieldErrors.length }} {{ transactionEditor.fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
           <ul>
             @for (error of transactionEditor.fieldErrors; track error.field) {
@@ -678,8 +687,8 @@
       <div class="form-row">
         <div class="form-group">
           <label for="tx-date">Date</label>
-          <input id="tx-date" data-field="date" type="date" [(ngModel)]="transactionEditor.newTx.date" name="date" data-dialog-initial-focus [attr.aria-invalid]="transactionEditor.fieldError('date') ? true : null" [attr.data-field-invalid]="transactionEditor.fieldError('date') ? true : null" />
-          @if (transactionEditor.fieldError('date')) { <span class="ui-field__error">{{ transactionEditor.fieldError('date') }}</span> }
+          <input id="tx-date" data-field="date" type="date" [(ngModel)]="transactionEditor.newTx.date" name="date" data-dialog-initial-focus [attr.aria-invalid]="transactionEditor.fieldError('date') ? true : null" [attr.aria-describedby]="transactionEditor.fieldError('date') ? 'tx-date-error' : null" [attr.data-field-invalid]="transactionEditor.fieldError('date') ? true : null" />
+          @if (transactionEditor.fieldError('date')) { <span id="tx-date-error" class="ui-field__error">{{ transactionEditor.fieldError('date') }}</span> }
         </div>
         <div class="form-group">
           <label for="tx-type">Type</label>
@@ -692,13 +701,13 @@
       <div class="form-row">
         <div class="form-group">
           <label for="tx-category">Category</label>
-          <input id="tx-category" data-field="category" type="text" [(ngModel)]="transactionEditor.newTx.category" name="category" [attr.aria-invalid]="transactionEditor.fieldError('category') ? true : null" [attr.data-field-invalid]="transactionEditor.fieldError('category') ? true : null" />
-          @if (transactionEditor.fieldError('category')) { <span class="ui-field__error">{{ transactionEditor.fieldError('category') }}</span> }
+          <input id="tx-category" data-field="category" type="text" [(ngModel)]="transactionEditor.newTx.category" name="category" [attr.aria-invalid]="transactionEditor.fieldError('category') ? true : null" [attr.aria-describedby]="transactionEditor.fieldError('category') ? 'tx-category-error' : null" [attr.data-field-invalid]="transactionEditor.fieldError('category') ? true : null" />
+          @if (transactionEditor.fieldError('category')) { <span id="tx-category-error" class="ui-field__error">{{ transactionEditor.fieldError('category') }}</span> }
         </div>
         <div class="form-group">
           <label for="tx-amount">Amount</label>
-          <input id="tx-amount" data-field="amount" type="text" inputmode="decimal" [(ngModel)]="transactionEditor.newTx.amount" name="amount" [attr.aria-invalid]="transactionEditor.fieldError('amount') ? true : null" [attr.data-field-invalid]="transactionEditor.fieldError('amount') ? true : null" />
-          @if (transactionEditor.fieldError('amount')) { <span class="ui-field__error">{{ transactionEditor.fieldError('amount') }}</span> }
+          <input id="tx-amount" data-field="amount" type="text" inputmode="decimal" [ngModel]="transactionEditor.newTx.amount" (ngModelChange)="transactionEditor.onAmountChange($event)" name="amount" [attr.aria-invalid]="transactionEditor.fieldError('amount') ? true : null" [attr.aria-describedby]="transactionEditor.fieldError('amount') ? 'tx-amount-error' : null" [attr.data-field-invalid]="transactionEditor.fieldError('amount') ? true : null" />
+          @if (transactionEditor.fieldError('amount')) { <span id="tx-amount-error" class="ui-field__error">{{ transactionEditor.fieldError('amount') }}</span> }
         </div>
       </div>
       <div class="form-group">
@@ -724,7 +733,7 @@
         </div>
       </div>
       <div class="form-actions">
-        <ui-button type="submit" variant="primary" [disabled]="transactionEditor.saving">{{ transactionEditor.saving ? 'Saving' : 'Save' }}</ui-button>
+        <ui-button type="submit" variant="primary" [disabled]="transactionEditor.saving">{{ transactionEditor.saving ? 'Saving…' : 'Save' }}</ui-button>
         <ui-button variant="secondary" (clicked)="transactionEditor.closeModal()">Cancel</ui-button>
       </div>
     </form>
