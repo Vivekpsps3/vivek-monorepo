@@ -1,6 +1,10 @@
 """Refuse startup while server-side plaintext Finance data still exists."""
 
+import os
+from pathlib import Path
+
 from sqlalchemy import inspect, text
+from sqlalchemy.engine import make_url
 
 
 LEGACY_FINANCE_TABLES = (
@@ -52,6 +56,52 @@ def legacy_schema_blockers(connection) -> list[str]:
                 blockers.append(f"password-only users={legacy_auth}")
 
     return blockers
+
+
+def _same_sqlite(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    try:
+        first, second = make_url(left), make_url(right)
+    except Exception:
+        return False
+    if not (first.drivername.startswith("sqlite") and second.drivername.startswith("sqlite")):
+        return False
+    if not first.database or not second.database or first.database == ":memory:" or second.database == ":memory:":
+        return False
+    return Path(first.database).resolve() == Path(second.database).resolve()
+
+
+def assert_offline_not_site_database(url: str) -> None:
+    """Refuse to emit historical Finance SQL for the unified site file.
+
+    Offline ``--sql`` mode has no connection, so the sqlite_master guard cannot run.
+    """
+    site = os.environ.get("SITE_DATABASE_URL", "")
+    if site and _same_sqlite(url or "", site):
+        raise RuntimeError(
+            "Refusing to emit historical Finance SQL for the unified site database. "
+            "Use python -m apps.server.migrations."
+        )
+
+
+def assert_not_unified_site_database(connection) -> None:
+    """The historical Finance chain must not revise the unified site database."""
+    if getattr(connection.dialect, "name", None) != "sqlite":
+        return
+    found = connection.execute(
+        text(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('site_schema', 'site_alembic_version')"
+        )
+    ).fetchall()
+    if found:
+        raise RuntimeError(
+            "Refusing to run historical Finance migrations against the unified site database. "
+            "Use python -m apps.server.migrations."
+        )
 
 
 def assert_safe_to_remove_legacy_schema(connection) -> None:

@@ -15,6 +15,10 @@ IMPORT_RE = re.compile(
 GENERIC_UI_RE = re.compile(
     r"selector\s*:\s*['\"]ui-(?:badge|confirm-dialog|data-table|dialog|select|skeleton)['\"]"
 )
+SINK_SUFFIXES = {".ts", ".mts", ".js", ".mjs", ".html"}
+SINK_RE = re.compile(
+    r"bypass(?:Security|Sanitization)Trust|innerHTML|outerHTML|insertAdjacentHTML|document\.write"
+)
 GENERIC_UI_PATHS = (
     "apps/finance/frontend/src/app/shared/ui/ui-badge",
     "apps/finance/frontend/src/app/shared/ui/ui-data-table",
@@ -70,6 +74,9 @@ def main() -> int:
     for app_root in app_roots:
         for source in source_files(app_root):
             source_app = app_name(source)
+            # The Media browser harness wires site redirects. It is not shipped.
+            if source.is_relative_to(ROOT / "apps/media/e2e"):
+                continue
             for match in IMPORT_RE.finditer(source.read_text(encoding="utf-8", errors="replace")):
                 module = match.group(1) or match.group(2)
                 target = import_target(source, module)
@@ -87,6 +94,23 @@ def main() -> int:
     for relative in GENERIC_UI_PATHS:
         if (ROOT / relative).exists():
             errors.append(f"generic Finance UI implementation belongs in packages/ui: {relative}")
+
+    sink_roots = [ROOT / "apps/finance/frontend/src"]
+    packages = ROOT / "packages"
+    if packages.is_dir():
+        sink_roots.extend(path / "src" for path in packages.iterdir() if (path / "src").is_dir())
+    for base in sink_roots:
+        if not base.is_dir():
+            continue
+        for source in base.rglob("*"):
+            if any(part in SKIP_DIRS for part in source.parts):
+                continue
+            if not source.is_file() or source.suffix not in SINK_SUFFIXES:
+                continue
+            if SINK_RE.search(source.read_text(encoding="utf-8", errors="replace")):
+                errors.append(
+                    f"Trusted Types sink in finance or a package it bundles: {source.relative_to(ROOT)}"
+                )
 
     finance_shared = ROOT / "apps/finance/frontend/src/app/shared"
     if finance_shared.exists():

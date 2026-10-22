@@ -19,10 +19,13 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # Use the project's models
 import sys
-
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[4]))
 from apps.finance.backend.models import Base
-from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
+from apps.finance.backend.legacy_schema_guard import (
+    assert_not_unified_site_database,
+    assert_offline_not_site_database,
+    assert_safe_to_remove_legacy_schema,
+)
 
 target_metadata = Base.metadata
 
@@ -50,6 +53,7 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
+    assert_offline_not_site_database(url)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -75,7 +79,13 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
+        # After configure(). A query beforehand autobegins a transaction, and
+        # Alembic then treats the connection as externally managed and rolls
+        # the revision back when the connection closes.
+        assert_not_unified_site_database(connection)
 
         target = context.get_revision_argument()
         if target in ("head", "heads", "e0f6a2b3c4d5"):

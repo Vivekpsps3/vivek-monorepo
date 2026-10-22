@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dayLabel, draftKey, escapeHtml, monthCells, monthLabel, ratingText, releaseLabel, safeUrl, seasonLabel, shiftMonth, statusLabel, whenLabel } from "../modules/format.mjs";
+import { chooseReview, coverImage, dayLabel, draftKey, escapeHtml, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, safeUrl, seasonLabel, shiftMonth, statusLabel, whenLabel } from "../modules/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
@@ -30,6 +30,45 @@ test("month and year releases are not shown as a day", () => {
   assert.equal(draftKey(12), "media-review-draft:12");
   assert.equal(dayLabel("2026-10"), "");
   assert.equal(dayLabel("2026-10-01"), "Thursday, October 1");
+});
+
+test("review drafts win only when they still match the server base", () => {
+  const serverAt = "2026-10-21T20:00:00+00:00";
+  assert.deepEqual(chooseReview("B", serverAt, null), { text: "B", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "", base: serverAt }), { text: "B", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "A", base: "2000-01-01T00:00:00+00:00" }), { text: "B", restore: true });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "A", base: serverAt }), { text: "A", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "B", base: "other" }), { text: "B", restore: false });
+  assert.deepEqual(chooseReview("B", serverAt, { text: "A", at: "2099-01-01T00:00:00.000Z" }), { text: "B", restore: true });
+  assert.deepEqual(chooseReview("B", null, { text: "A", base: "" }), { text: "A", restore: false });
+});
+
+test("library query drops unknown sort, kind, and status", () => {
+  const cleaned = normalizeLibraryQuery("sort=nope&kind=poster&status=nope&q=dune");
+  assert.equal(cleaned.droppedSort, true);
+  assert.equal(cleaned.changed, true);
+  assert.equal(cleaned.params.get("sort"), null);
+  assert.equal(cleaned.params.get("kind"), null);
+  assert.equal(cleaned.params.get("status"), null);
+  assert.equal(cleaned.params.get("q"), "dune");
+  const title = normalizeLibraryQuery("sort=title&kind=book");
+  assert.equal(title.changed, false);
+  assert.equal(title.params.get("sort"), "title");
+  const cased = normalizeLibraryQuery("sort=Title");
+  assert.equal(cased.droppedSort, false);
+  assert.equal(cased.changed, true);
+  assert.equal(cased.params.get("sort"), "title");
+});
+
+test("progress units and cover images stay inside their own fields", () => {
+  assert.deepEqual(progressUnits("book").map(item => item.value), ["page", "percent"]);
+  assert.deepEqual(progressUnits("game").map(item => item.value), ["percent", "hour"]);
+  assert.equal(progressPreview("120", "page"), "p. 120");
+  assert.equal(progressPreview("42", "percent"), "42%");
+  assert.equal(progressPreview("", "page"), "");
+  assert.equal(coverImage("javascript:alert(1)"), "");
+  assert.equal(coverImage("https://covers.example/a).jpg"), '<img alt="" src="https://covers.example/a).jpg" width="300" height="300" loading="lazy" decoding="async">');
+  assert.equal(coverImage('https://covers.example/a".jpg'), '<img alt="" src="https://covers.example/a%22.jpg" width="300" height="300" loading="lazy" decoding="async">');
 });
 
 test("calendar months start on Monday and step across years", () => {

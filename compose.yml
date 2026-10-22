@@ -64,6 +64,18 @@ services:
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 32
+  migrate:
+    <<: *runtime
+    profiles: [ops]
+    environment:
+      SITE_DATABASE_URL: sqlite:////data/site.db
+      SITE_BACKUP_DIR: /backups
+    command: [python, -m, apps.server.migrations, --require-existing]
+    volumes: [data:/data, backups:/backups]
+    network_mode: none
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 32
   maintenance:
     <<: *runtime
     command: [python, -m, apps.server.monitor]

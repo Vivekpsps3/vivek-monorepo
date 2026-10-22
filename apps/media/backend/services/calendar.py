@@ -18,8 +18,10 @@ TYPE_ORDER = {"episode": 0, "anticipated": 1, "sequel": 2, "spinoff": 3}
 WATCHED_EXPERIENCES = {"watch", "rewatch"}
 
 
-def build_calendar(db: Session, user_id: int, month_text: str | None, http: httpx.Client) -> dict:
-    current = today()
+def build_calendar(
+    db: Session, user_id: int, month_text: str | None, http: httpx.Client, tz: str | None = None
+) -> dict:
+    current = today(tz)
     month = parse_month(month_text, current)
     budget = Budget()
     entries = db.query(UserEntry).filter(UserEntry.user_id == user_id).all()

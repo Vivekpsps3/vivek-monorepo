@@ -1,9 +1,11 @@
 """Personal library reads and writes. Metadata refreshes never touch reviews."""
 
 import json
+import math
 import time
 from datetime import date, datetime, timezone
 
+from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -349,7 +351,7 @@ def new_entry(db: Session, user_id: int, catalog: CatalogItem, body: dict) -> Us
         summary=clean_text(body.get("summary"), 400, "Summary"),
         favorite=bool(body.get("favorite")),
         anticipated=bool(body.get("anticipated")) or body.get("status") == "anticipating",
-        progress_value=number_or_none(body.get("progress_value"), "Progress"),
+        progress_value=progress_number(body.get("progress_value")),
         progress_unit=choice(body.get("progress_unit"), PROGRESS_UNITS, "Progress unit", None)
         if body.get("progress_unit")
         else None,
@@ -371,12 +373,34 @@ def number_or_none(value, field: str) -> float | None:
     if value is None or value == "":
         return None
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         fail(f"{field} must be a number.")
+    if isinstance(number, float) and not math.isfinite(number):
+        fail(f"{field} must be a number.")
+    return number
+
+
+def progress_number(value) -> float | None:
+    number = number_or_none(value, "Progress")
+    if number is not None and number < 0:
+        fail("Progress must be zero or more.")
+    return number
+
+
+def assert_review_base(entry: UserEntry, body: dict) -> None:
+    """409 when a note save started from a review the server no longer has."""
+    if "review" not in body or "review_base" not in body:
+        return
+    current = iso(entry.review_updated_at) or ""
+    incoming = body.get("review_base")
+    if ("" if incoming is None else str(incoming)) != current:
+        raise HTTPException(status_code=409, detail="This note changed in another tab.")
 
 
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
+    assert_review_base(entry, body)
+    before_rating = entry.rating
     before_review = entry.review
     if "status" in body:
         entry.status = choice(body.get("status"), STATUSES, "Status")
@@ -401,7 +425,7 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     if "anticipated" in body:
         entry.anticipated = bool(body.get("anticipated"))
     if "progress_value" in body:
-        entry.progress_value = number_or_none(body.get("progress_value"), "Progress")
+        entry.progress_value = progress_number(body.get("progress_value"))
     if "progress_unit" in body:
         entry.progress_unit = (
             choice(body.get("progress_unit"), PROGRESS_UNITS, "Progress unit")
@@ -481,9 +505,9 @@ def list_library(
     if query:
         like = f"%{query.strip()}%"
         rows = rows.filter(or_(CatalogItem.title.ilike(like), CatalogItem.creator.ilike(like)))
-    rows = rows.all()
+    found: list[UserEntry] = list(rows.all())
     if sort == "rating":
-        rows.sort(
+        found.sort(
             key=lambda entry: (
                 entry.rating is None,
                 -(entry.rating or 0),
@@ -491,7 +515,7 @@ def list_library(
             )
         )
     elif sort == "release":
-        rows.sort(
+        found.sort(
             key=lambda entry: (
                 entry.catalog.year is None,
                 -(entry.catalog.year or 0),
@@ -499,10 +523,12 @@ def list_library(
             )
         )
     elif sort == "added":
-        rows.sort(key=lambda entry: entry.created_at, reverse=True)
+        found.sort(key=lambda entry: entry.created_at, reverse=True)
+    elif sort == "title":
+        found.sort(key=lambda entry: (entry.catalog.title.casefold(), entry.id))
     else:
-        rows.sort(key=lambda entry: entry.updated_at, reverse=True)
-    return rows
+        found.sort(key=lambda entry: entry.updated_at, reverse=True)
+    return found
 
 
 def episode_state(db: Session, user_id: int, catalog: CatalogItem) -> dict:
@@ -872,6 +898,7 @@ def add_album(db: Session, entry: UserEntry, body: dict) -> None:
         title=title,
         year=_year(body.get("year")),
         position=position,
+        artwork_url=http_url(body.get("artwork_url")) if body.get("artwork_url") else None,
     )
     db.add(row)
     db.flush()

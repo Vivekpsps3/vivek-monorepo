@@ -3,7 +3,6 @@
 Usage: python -m apps.server.migrate --output /absolute/site.db [--source-dir /snapshots]
 Stop legacy writers before taking the final snapshots. Rehearsals may use live read-only backups.
 """
-
 import argparse
 from collections import Counter
 import hashlib
@@ -13,8 +12,8 @@ from pathlib import Path
 import sqlite3
 import tempfile
 
-from sqlalchemy import create_engine
-from apps.server.schema import VERSION, metadata
+from apps.server.migrations import adopt_or_upgrade, sqlite_url
+from apps.server.schema import VERSION, OWNER_TABLES, metadata
 
 FINANCE_REVISION = "e0f6a2b3c4d5"
 
@@ -27,9 +26,7 @@ def digest_rows(connection, table, columns):
     # Count duplicate rows too; report only digests and row counts, never user data.
     rows = connection.execute(f"SELECT {','.join(map(quote, columns))} FROM {quote(table)}")
     counts = Counter(hashlib.sha256(repr(tuple(row)).encode()).hexdigest() for row in rows)
-    return hashlib.sha256(json.dumps(sorted(counts.items())).encode()).hexdigest(), sum(
-        counts.values()
-    )
+    return hashlib.sha256(json.dumps(sorted(counts.items())).encode()).hexdigest(), sum(counts.values())
 
 
 def check_integrity(connection):
@@ -39,9 +36,7 @@ def check_integrity(connection):
         raise RuntimeError("Foreign key validation failed")
     # Personal child rows must agree with their owning entry, beyond individual FKs.
     for table in ("experiences", "season_progress", "album_ratings", "track_ratings"):
-        if connection.execute(
-            f"SELECT 1 FROM {table} c JOIN user_entries e ON e.id=c.entry_id WHERE c.user_id != e.user_id LIMIT 1"
-        ).fetchone():
+        if connection.execute(f"SELECT 1 FROM {table} c JOIN user_entries e ON e.id=c.entry_id WHERE c.user_id != e.user_id LIMIT 1").fetchone():
             raise RuntimeError(f"Ownership mismatch in {table}")
     for (key,) in connection.execute("SELECT key FROM settings"):
         if key.startswith("user:"):
@@ -62,19 +57,17 @@ def migrate(output: Path, source_dir: Path | None = None):
     with tempfile.TemporaryDirectory(prefix="site-migration-", dir=output.parent) as temporary:
         target = Path(temporary) / "site.db"
         schema = metadata()
-        engine = create_engine(f"sqlite:///{target}")
-        schema.create_all(engine)
-        engine.dispose()
+        adopt_or_upgrade(sqlite_url(target))
         connection = sqlite3.connect(target)
         try:
             connection.execute("PRAGMA foreign_keys=OFF")
             connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT version FROM site_schema WHERE id=1").fetchone() != (VERSION,):
+                raise RuntimeError("Baseline site schema version is missing")
+            if connection.execute("SELECT version_num FROM alembic_version").fetchone() != (FINANCE_REVISION,):
+                raise RuntimeError("Baseline Finance revision marker is missing")
             if source_dir:
-                for domain, filename in (
-                    ("finance", "finance.db"),
-                    ("travel", "travel.db"),
-                    ("media", "media.db"),
-                ):
+                for domain, filename in (("finance", "finance.db"), ("travel", "travel.db"), ("media", "media.db")):
                     source_path = source_dir.resolve() / filename
                     if not source_path.is_file():
                         raise RuntimeError(f"Required source missing: {filename}")
@@ -86,60 +79,32 @@ def migrate(output: Path, source_dir: Path | None = None):
                         if source.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                             raise RuntimeError(f"Source integrity check failed: {filename}")
                         from importlib import import_module
-
-                        domain_tables = set(
-                            import_module(f"apps.{domain}.backend.models").Base.metadata.tables
-                        )
-                        actual = {
-                            row[0]
-                            for row in source.execute(
-                                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                            )
-                        }
+                        domain_tables = set(import_module(f"apps.{domain}.backend.models").Base.metadata.tables)
+                        actual = {row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
                         missing = domain_tables - actual
                         if missing:
-                            raise RuntimeError(
-                                f"Missing source tables in {domain}: {sorted(missing)}"
-                            )
+                            raise RuntimeError(f"Missing source tables in {domain}: {sorted(missing)}")
                         if domain == "finance":
-                            revision = source.execute(
-                                "SELECT version_num FROM alembic_version"
-                            ).fetchone()
+                            revision = source.execute("SELECT version_num FROM alembic_version").fetchone()
                             if revision != (FINANCE_REVISION,):
-                                raise RuntimeError(
-                                    "Upgrade Finance using its existing migration path before consolidation"
-                                )
+                                raise RuntimeError("Upgrade Finance using its existing migration path before consolidation")
                         for table in actual - domain_tables - {"alembic_version"}:
                             if source.execute(f"SELECT 1 FROM {quote(table)} LIMIT 1").fetchone():
-                                raise RuntimeError(
-                                    f"Unrecognized nonempty source table: {domain}.{table}"
-                                )
+                                raise RuntimeError(f"Unrecognized nonempty source table: {domain}.{table}")
                         for table in sorted(domain_tables):
-                            columns = [
-                                row[1]
-                                for row in source.execute(f"PRAGMA table_info({quote(table)})")
-                            ]
+                            columns = [row[1] for row in source.execute(f"PRAGMA table_info({quote(table)})")]
                             expected = {column.name for column in schema.tables[table].columns}
                             if set(columns) != expected:
-                                raise RuntimeError(
-                                    f"Schema mismatch: {domain}.{table}; migrate source before consolidation"
-                                )
-                            names = ",".join(map(quote, columns))
+                                raise RuntimeError(f"Schema mismatch: {domain}.{table}; migrate source before consolidation")
+                            names = ','.join(map(quote, columns))
                             rows = source.execute(f"SELECT {names} FROM {quote(table)}")
-                            connection.executemany(
-                                f"INSERT INTO {quote(table)} ({names}) VALUES ({','.join('?' for _ in columns)})",
-                                rows,
-                            )
+                            connection.executemany(f"INSERT INTO {quote(table)} ({names}) VALUES ({','.join('?' for _ in columns)})", rows)
                             before = digest_rows(source, table, columns)
                             after = digest_rows(connection, table, columns)
                             if before != after:
                                 raise RuntimeError(f"Copy verification failed: {table}")
                             report["tables"][table] = {"rows": before[1], "sha256": before[0]}
-                        report["sources"][domain] = hashlib.sha256(
-                            snapshot_path.read_bytes()
-                        ).hexdigest()
-            connection.execute("INSERT INTO site_schema VALUES (1, ?)", (VERSION,))
-            connection.execute("INSERT INTO alembic_version VALUES (?)", (FINANCE_REVISION,))
+                        report["sources"][domain] = hashlib.sha256(snapshot_path.read_bytes()).hexdigest()
             check_integrity(connection)
             connection.commit()
             connection.execute("PRAGMA foreign_keys=ON")
@@ -171,31 +136,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--source-dir", type=Path)
-    parser.add_argument(
-        "--if-missing",
-        action="store_true",
-        help="Validate an existing v1 database instead of overwriting it",
-    )
+    parser.add_argument("--if-missing", action="store_true", help="Validate an existing v1 database instead of overwriting it")
     args = parser.parse_args()
     if args.if_missing and args.output.is_file():
+        adopt_or_upgrade(sqlite_url(args.output))
         with sqlite3.connect(args.output.resolve().as_uri() + "?mode=ro", uri=True) as existing:
-            if existing.execute("SELECT version FROM site_schema WHERE id=1").fetchone() != (
-                VERSION,
-            ):
+            if existing.execute("SELECT version FROM site_schema WHERE id=1").fetchone() != (VERSION,):
                 raise RuntimeError("Existing schema is incompatible")
             check_integrity(existing)
         print("Existing site database verified")
         return
     report = migrate(args.output, args.source_dir)
-    print(
-        json.dumps(
-            {
-                "schema": VERSION,
-                "tables": len(report["tables"]),
-                "rows": sum(t["rows"] for t in report["tables"].values()),
-            }
-        )
-    )
+    print(json.dumps({"schema": VERSION, "tables": len(report["tables"]), "rows": sum(t["rows"] for t in report["tables"].values())}))
 
 
 if __name__ == "__main__":

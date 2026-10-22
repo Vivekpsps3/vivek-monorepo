@@ -110,6 +110,22 @@ Override ports:
 make dev API_PORT=8001 WEB_PORT=4300
 ```
 
+## Site database migrations
+
+The running site uses one SQLite file, `.local/data/site.db` in local development
+and `/data/site.db` in Docker. Create a revision and apply it with:
+
+```bash
+make db-revision MESSAGE="describe the change"
+make db-upgrade
+make db-check
+```
+
+`make dev` applies pending revisions before the process starts. The process
+then only checks that the file is at a revision it can serve. Production
+behavior, the baseline stamp, `--plan`, and columns that are candidates for a
+later removal are documented in [MIGRATIONS.md](./MIGRATIONS.md).
+
 ## Backend layout
 
 ```

@@ -210,6 +210,26 @@ def test_missing_songs_resume_on_the_next_view(client, monkeypatch):
     assert lookups == [f"rg-{number}" for number in range(1, 11)]
 
 
+def test_manual_album_artwork_url_must_be_http(client):
+    created = client.post(
+        "/api/library", json={"kind": "artist", "title": "Synthetic Band", "status": "want"}
+    )
+    assert created.status_code == 200, created.text
+    artist_id = created.json()["id"]
+    rejected = client.post(
+        f"/api/entries/{artist_id}/albums",
+        json={"title": "Nope", "artwork_url": "javascript:alert(1)"},
+    )
+    assert rejected.status_code == 422, rejected.text
+    accepted = client.post(
+        f"/api/entries/{artist_id}/albums",
+        json={"title": "Yes", "artwork_url": "https://example.invalid/cover.png"},
+    )
+    assert accepted.status_code == 200, accepted.text
+    album = accepted.json()["music"]["albums"][0]
+    assert album["artwork_url"] == "https://example.invalid/cover.png"
+
+
 def test_disc_two_keeps_its_place_in_the_song_order():
     from apps.media.backend.services.providers import _tracks_from_release
 

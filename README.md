@@ -22,6 +22,7 @@ production. `make test` runs the regression suites; `make docker-build` builds
 the production image; `make test-suite-routes` checks the assembled release.
 
 [Operations and recovery](docs/OPERATIONS.md) is the current deployment reference.
+[Schema migrations](docs/MIGRATIONS.md) covers creating and applying revisions.
 [Remaining SRE work](docs/SRE-FOLLOWUPS.md) records accepted constraints and TODOs.
 [Architecture](docs/ARCHITECTURE.md), [data model](docs/DATA_MODEL.md), and
 [security model](docs/SECURITY_MODEL.md) describe domain behavior.

@@ -177,3 +177,32 @@ def test_fresh_file_startup_creates_only_current_schema(tmp_path, monkeypatch):
         "market_research_cache",
     }
     engine.dispose()
+
+
+def test_finance_offline_sql_refuses_the_site_database_url(tmp_path, monkeypatch):
+    from pathlib import Path
+    from alembic import command
+    from alembic.config import Config
+
+    url = f"sqlite:///{tmp_path / 'site.db'}"
+    monkeypatch.setenv("SITE_DATABASE_URL", url)
+    monkeypatch.setenv("DATABASE_URL", url)
+    backend = Path(__file__).resolve().parent.parent
+    cfg = Config(str(backend / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend / "alembic"))
+    cfg.set_main_option("sqlalchemy.url", url)
+    with pytest.raises(RuntimeError, match="unified site database"):
+        command.upgrade(cfg, "head", sql=True)
+    assert not (tmp_path / "site.db").exists()
+
+
+def test_historical_finance_chain_refuses_a_unified_site_database():
+    from apps.finance.backend.legacy_schema_guard import assert_not_unified_site_database
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        assert_not_unified_site_database(connection)
+        connection.execute(text("CREATE TABLE site_schema (id INTEGER PRIMARY KEY, version INTEGER)"))
+        with pytest.raises(RuntimeError, match="unified site database"):
+            assert_not_unified_site_database(connection)
+    engine.dispose()

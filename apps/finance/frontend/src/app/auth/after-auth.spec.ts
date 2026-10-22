@@ -42,6 +42,17 @@ describe('shared-auth return paths', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
+  it('sends a hub media return through a full page load so the server can redirect', async () => {
+    history.replaceState({}, '', '/auth/signup?next=%2Fhub%2Fmedia');
+    const assign = spyOn(authNavigation, 'assignPath');
+    const router = { navigateByUrl: jasmine.createSpy('navigateByUrl').and.resolveTo(true) } as any;
+
+    await continueAfterAuth(router);
+
+    expect(assign).toHaveBeenCalledWith('/hub/media');
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
   it('keeps Media return paths on a full-page navigation', async () => {
     history.replaceState({}, '', '/auth/login?next=%2Fmedia%2Flibrary');
     const assign = spyOn(authNavigation, 'assignPath');
