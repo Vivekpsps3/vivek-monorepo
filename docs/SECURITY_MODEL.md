@@ -205,11 +205,15 @@ cannot run while ancestors are denied.
 Browsers POST violations to `/csp-report` (`report-uri` and `report-to` /
 `Reporting-Endpoints`). The handler returns 204, counts a directive label, and
 logs one JSON object per report (directive, app, blocked URL without its query,
-and client address). It reads the body with a running 16 KiB cap, including
-chunked requests that omit `Content-Length`. The edge `location = /csp-report`
-sets `client_max_body_size 16k`. The log budget is 30 lines per minute per
-client address, so one flooder does not suppress the others. The handler does
-not store or log `script-sample`, which could contain page text.
+and client address). The address is `request.client.host`. Uvicorn fills that
+from the forwarded client only when the peer is `FORWARDED_ALLOW_IPS`; the
+handler does not read `X-Forwarded-For`. It reads the body with a running
+16 KiB cap, including chunked requests that omit `Content-Length`. The edge
+`location = /csp-report` sets `client_max_body_size 16k`. Each request logs at
+most 5 reports. Each budget key logs at most 30 lines per minute, IPv6 keys
+are the /64 prefix, and the whole process logs at most 300 lines per minute.
+A full key table drops expired entries and otherwise refuses new keys. The
+handler does not store or log `script-sample`, which could contain page text.
 
 Trusted Types are enforced on the finance shell only, with an empty
 `trusted-types` allowlist. Finance source does not call `bypassSecurityTrust*`
@@ -285,6 +289,7 @@ server {
     add_header Referrer-Policy same-origin always;
     location = /csp-report {
         client_max_body_size 16k;
+        proxy_hide_header x-csp-shell;
         proxy_pass http://127.0.0.1:8085;
         proxy_http_version 1.1;
         proxy_set_header Host finance.vivekpanchagnula.com;
@@ -297,6 +302,7 @@ server {
         proxy_send_timeout 60s;
     }
     location / {
+        proxy_hide_header x-csp-shell;
         proxy_pass http://127.0.0.1:8085;
         proxy_http_version 1.1;
         proxy_set_header Host finance.vivekpanchagnula.com;

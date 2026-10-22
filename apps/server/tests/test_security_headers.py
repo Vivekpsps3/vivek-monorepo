@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.testclient import TestClient
 from starlette.responses import Response
 
+import apps.server.security_headers as security_headers
 from apps.server.security_headers import (
     SHELL_HEADER,
     SecurityHeadersMiddleware,
@@ -17,6 +18,7 @@ from apps.server.security_headers import (
     csp_report,
     directives,
     inject_nonce,
+    report_log_key,
     reset_report_logs,
     validate_response_headers,
 )
@@ -302,5 +304,84 @@ def test_report_log_budget_is_per_address():
         assert all(allow_report_log("203.0.113.5") for _ in range(30))
         assert allow_report_log("203.0.113.5") is False
         assert allow_report_log("203.0.113.9") is True
+    finally:
+        reset_report_logs()
+
+
+def test_report_log_keys_ipv6_by_prefix_and_keeps_ipv4():
+    assert report_log_key("2001:db8:1:2::1") == report_log_key("2001:0db8:0001:0002::abcd")
+    assert report_log_key("2001:db8:1:2::1") != report_log_key("2001:db8:1:3::1")
+    assert report_log_key("203.0.113.5") == "203.0.113.5"
+    assert report_log_key("203.0.113.5") != report_log_key("203.0.113.6")
+    reset_report_logs()
+    try:
+        assert all(allow_report_log("2001:db8:1:2::1") for _ in range(30))
+        assert allow_report_log("2001:db8:1:2::abcd") is False
+        assert allow_report_log("2001:db8:1:3::1") is True
+    finally:
+        reset_report_logs()
+
+
+def test_report_log_global_ceiling_bounds_address_rotation():
+    reset_report_logs()
+    try:
+        allowed = sum(allow_report_log(f"203.0.113.{i}") for i in range(400))
+        assert allowed == security_headers._LOG_GLOBAL_LIMIT
+        first = report_log_key("203.0.113.0")
+        assert security_headers._log_windows[first][1] == 1
+        assert allow_report_log("203.0.113.0") is False
+        assert security_headers._log_windows[first][1] == 1
+        assert allow_report_log("198.51.100.9") is False
+    finally:
+        reset_report_logs()
+
+
+def test_full_report_log_table_refuses_new_keys_without_clearing():
+    reset_report_logs()
+    original_global = security_headers._LOG_GLOBAL_LIMIT
+    security_headers._LOG_GLOBAL_LIMIT = 10_000
+    try:
+        keys = [f"198.51.{i // 256}.{i % 256}" for i in range(security_headers._LOG_MAX_IPS + 1)]
+        assert [allow_report_log(key) for key in keys[:-1]] == [True] * security_headers._LOG_MAX_IPS
+        assert allow_report_log(keys[-1]) is False
+        assert len(security_headers._log_windows) == security_headers._LOG_MAX_IPS
+        assert allow_report_log(keys[0]) is True
+        assert security_headers._log_windows[report_log_key(keys[0])][1] == 2
+        assert allow_report_log(keys[-1]) is False
+        now = __import__("time").monotonic()
+        for key in list(security_headers._log_windows):
+            security_headers._log_windows[key] = (now - security_headers._LOG_WINDOW_SECONDS - 1, 1)
+        assert allow_report_log("203.0.113.50") is True
+        assert report_log_key("203.0.113.50") in security_headers._log_windows
+        assert len(security_headers._log_windows) == 1
+    finally:
+        security_headers._LOG_GLOBAL_LIMIT = original_global
+        reset_report_logs()
+
+
+def test_csp_report_logs_at_most_five_entries_per_request(client, caplog):
+    reset_report_logs()
+    payload = [
+        {
+            "type": "csp-violation",
+            "body": {
+                "documentURL": "https://testserver/media/",
+                "effectiveDirective": "img-src",
+                "blockedURL": f"https://evil.example/{index}",
+            },
+        }
+        for index in range(8)
+    ]
+    try:
+        with caplog.at_level("INFO", logger="site.csp"):
+            response = client.post(
+                "/csp-report",
+                content=json.dumps(payload),
+                headers={"content-type": "application/reports+json"},
+            )
+        assert response.status_code == 204
+        events = [json.loads(record.message) for record in caplog.records if record.message.startswith("{")]
+        assert len(events) == 5
+        assert [event["blocked"] for event in events] == [f"https://evil.example/{index}" for index in range(5)]
     finally:
         reset_report_logs()

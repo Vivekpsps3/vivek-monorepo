@@ -6,6 +6,7 @@ not isolate the finance vault. See docs/SECURITY_MODEL.md.
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import re
@@ -57,9 +58,13 @@ _LINK_OPEN = re.compile(r"<link\b([^>]*)>", re.IGNORECASE)
 _APP_ROOT = re.compile(r"<app-root\b([^>]*)>", re.IGNORECASE)
 _NONCE_ATTR = re.compile(r"\bnonce\s*=", re.IGNORECASE)
 _LOG_LIMIT = 30
+_LOG_GLOBAL_LIMIT = 300
+_LOG_PER_REQUEST = 5
 _LOG_WINDOW_SECONDS = 60.0
 _LOG_MAX_IPS = 1024
 _log_windows: dict[str, tuple[float, int]] = {}
+_global_window_start: float | None = None
+_global_count = 0
 
 # Finance source does not call bypassSecurityTrust* or assign innerHTML.
 # ngx-markdown is the portfolio app, and that shell does not enable Trusted
@@ -417,40 +422,72 @@ class SecurityHeadersMiddleware:
 
 
 def reset_report_logs() -> None:
+    global _global_window_start, _global_count
     _log_windows.clear()
+    _global_window_start = None
+    _global_count = 0
+
+
+def report_log_key(ip: str) -> str:
+    """Budget key. IPv6 addresses share a /64 so rotation inside one prefix cannot multiply the table."""
+    text = (ip or "").strip().split("%", 1)[0]
+    if not text:
+        return "unknown"
+    try:
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return text[:80]
+    if isinstance(address, ipaddress.IPv6Address):
+        network = ipaddress.IPv6Network((address, 64), strict=False)
+        return f"{network.network_address}/64"
+    return str(address)
+
+
+def _drop_expired(now: float) -> None:
+    expired = [key for key, (opened, _) in _log_windows.items() if now - opened >= _LOG_WINDOW_SECONDS]
+    for key in expired:
+        del _log_windows[key]
 
 
 def allow_report_log(ip: str) -> bool:
-    """Per-address log budget. One flooder does not silence every other client."""
+    """Per-key and global log budget.
+
+    A full table drops expired keys and otherwise refuses the new key. It does
+    not clear the table, so one address rotation cannot refresh every budget.
+    """
+    global _global_window_start, _global_count
     now = time.monotonic()
-    start, count = _log_windows.get(ip, (now, 0))
+    if _global_window_start is None or now - _global_window_start >= _LOG_WINDOW_SECONDS:
+        _global_window_start = now
+        _global_count = 0
+        _drop_expired(now)
+    if _global_count >= _LOG_GLOBAL_LIMIT:
+        return False
+    key = report_log_key(ip)
+    if key not in _log_windows and len(_log_windows) >= _LOG_MAX_IPS:
+        _drop_expired(now)
+        if key not in _log_windows and len(_log_windows) >= _LOG_MAX_IPS:
+            return False
+    start, count = _log_windows.get(key, (now, 0))
     if now - start >= _LOG_WINDOW_SECONDS:
         start, count = now, 0
-    count += 1
-    if len(_log_windows) >= _LOG_MAX_IPS and ip not in _log_windows:
-        expired = [key for key, (opened, _) in _log_windows.items() if now - opened >= _LOG_WINDOW_SECONDS]
-        for key in expired:
-            del _log_windows[key]
-        if len(_log_windows) >= _LOG_MAX_IPS:
-            _log_windows.clear()
-    _log_windows[ip] = (start, count)
-    return count <= _LOG_LIMIT
+    if count >= _LOG_LIMIT:
+        return False
+    _log_windows[key] = (start, count + 1)
+    _global_count += 1
+    return True
 
 
 def client_address(request: Request) -> str:
-    """Client address for the report log.
+    """Peer address uvicorn stored on the request.
 
-    nginx replaces X-Forwarded-For and X-Real-IP with $remote_addr. Trust those
-    only when the peer is loopback, which is the edge proxy. A direct client
-    cannot pick the bucket by sending the header.
+    Production sets ``FORWARDED_ALLOW_IPS`` to the Docker gateway. Uvicorn
+    rewrites ``request.client`` from the forwarded address only for that peer.
+    nginx overwrites ``X-Forwarded-For`` before the request reaches uvicorn.
+    This function does not read that header.
     """
-    peer = request.client.host if request.client and request.client.host else ""
-    if peer in {"127.0.0.1", "::1"}:
-        forwarded = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for") or ""
-        candidate = forwarded.split(",")[-1].strip()
-        if candidate:
-            return candidate[:80]
-    return peer or "unknown"
+    host = request.client.host if request.client and request.client.host else ""
+    return host or "unknown"
 
 
 def _clean(value: object, limit: int = 180) -> str:
@@ -529,10 +566,12 @@ async def csp_report(request: Request) -> Response:
         reports = []
         CSP_REPORTS.labels("unknown", "unparsed").inc()
         _log_report(ip, app="unknown", directive="unparsed", blocked="", document="")
-    for report in reports:
+    for index, report in enumerate(reports):
         directive = _directive_label(_field(report, "effective-directive", "effectiveDirective", "violated-directive", "violatedDirective"))
         app_name = _app_label(_field(report, "document-uri", "documentURL", "document-url"))
         CSP_REPORTS.labels(app_name, directive or "other").inc()
+        if index >= _LOG_PER_REQUEST:
+            continue
         blocked = _clean(_field(report, "blocked-uri", "blockedURL", "blocked-url")).split("?", 1)[0]
         document = _clean(_field(report, "document-uri", "documentURL")).split("?", 1)[0]
         _log_report(ip, app=app_name, directive=directive or "other", blocked=blocked, document=document)

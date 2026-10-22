@@ -118,10 +118,12 @@ for exception, handler in finance.exception_handlers.items():
     app.add_exception_handler(exception, handler)
 
 
-def _static_headers(file: Path, immutable: bool) -> dict[str, str]:
+def _static_headers(file: Path, root: Path, immutable: bool) -> dict[str, str]:
     if file.suffix == ".html":
         headers = {"Cache-Control": "no-store"}
-        if file.name == "index.html":
+        # Only the web-root index.html is a shell. Nested index.html files stay
+        # unmarked, matching the fixed paths in expects_shell().
+        if file.resolve() == (root / "index.html").resolve():
             headers[SHELL_HEADER] = "1"
         return headers
     if immutable:
@@ -170,7 +172,7 @@ def finance_page(path: str):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
     if path and file.is_file():
         immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-        return FileResponse(file, headers=_static_headers(file, immutable))
+        return FileResponse(file, headers=_static_headers(file, WEB_ROOT, immutable))
     if path and (Path(path).suffix or path.startswith("assets/")):
         return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
     return shell()
@@ -212,7 +214,7 @@ def portfolio_page(path: str):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
     if file.is_file():
         immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-        return FileResponse(file, headers=_static_headers(file, immutable))
+        return FileResponse(file, headers=_static_headers(file, PORTFOLIO_ROOT, immutable))
     if path in {"home", "work", "about", "secrets"}:
         return FileResponse(PORTFOLIO_ROOT / "index.html", headers=_shell_headers())
     return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
