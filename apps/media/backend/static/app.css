@@ -655,7 +655,7 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 .exp-list { list-style: none; margin: var(--space-3) 0; padding: 0; }
 .exp { display: flex; gap: var(--space-3); align-items: center; color: var(--text-secondary); }
 .overview { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.continue:focus-visible, .episode-open:focus-visible, .episode-toggle:focus-visible {
+.continue:focus-visible, .episode-toggle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -685,10 +685,6 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 .episode-tile span { display: block; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .episode-tile strong { display: block; font-weight: 600; }
 .episode-tile.is-watched { background: transparent; color: var(--text-tertiary); box-shadow: inset 0 0 0 1px var(--border-subtle); }
-.episode-open {
-  position: absolute; right: 0.4rem; bottom: 0.4rem;
-  width: 0.7rem; height: 0.7rem; border-radius: 99px; background: var(--text-tertiary);
-}
 .covers { overflow-x: auto; list-style: none; margin: var(--space-4) 0; padding: 0 0 var(--space-2); }
 .cover { flex: 0 0 9rem; }
 .cover-face {

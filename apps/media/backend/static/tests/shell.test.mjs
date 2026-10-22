@@ -72,7 +72,7 @@ test("the shell has five mobile tabs and a currentColor favicon", () => {
   assert.match(favicon, /prefers-color-scheme:\s*dark/);
   assert.doesNotMatch(favicon, /#0f6e6a/);
   const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
-  assert.doesNotMatch(css, /\.season-row|\.episode-row|\.album-block/);
+  assert.doesNotMatch(css, /\.season-row|\.episode-row|\.album-block|\.episode-open/);
   assert.doesNotMatch(css, /min-height:\s*40px/);
 });
 
