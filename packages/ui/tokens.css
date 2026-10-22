@@ -51,11 +51,20 @@
   --text-xl: 1.25rem;
   --text-2xl: 1.5rem;
   --text-display: 1.75rem;
+  --text-display-lg: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem);
 
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  --focus-ring: var(--accent);
+  --event-episode: var(--accent);
+  --event-anticipated: var(--warning);
+  --event-sequel: var(--text-secondary);
+  --event-spinoff: var(--success);
+  --text-watched: var(--text-secondary);
   --shadow-sm: 0 1px 2px rgba(28, 25, 22, 0.05);
   --shadow-card: 0 1px 2px rgba(28, 25, 22, 0.04), 0 14px 36px rgba(28, 25, 22, 0.06);
   --shadow-lg: 0 18px 44px rgba(28, 25, 22, 0.14), 0 2px 6px rgba(28, 25, 22, 0.06);
@@ -109,6 +118,12 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
     --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px rgba(0, 0, 0, 0.28);
     --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.46), 0 4px 12px rgba(0, 0, 0, 0.24);
+    --focus-ring: var(--accent);
+    --event-episode: var(--accent);
+    --event-anticipated: var(--warning);
+    --event-sequel: var(--text-secondary);
+    --event-spinoff: var(--success);
+    --text-watched: var(--text-secondary);
     --chart-1: #8fd0c8;
     --chart-2: #e0b56a;
     --chart-3: #e0a49a;

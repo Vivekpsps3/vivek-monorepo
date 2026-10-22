@@ -42,21 +42,145 @@ body {
   gap: 2px;
   max-width: 100%;
   padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
   background: var(--card-bg);
 }
 .theme-switch .btn { border: 0; background: transparent; color: var(--text-secondary); }
 .theme-switch .btn[aria-pressed="true"] { background: var(--text); color: var(--bg); }
 
 .shell { padding: var(--space-8) 0 var(--space-16); }
-.notice:empty { display: none; }
-.notice {
-  width: min(72rem, calc(100% - 2rem));
-  margin: var(--space-3) auto 0;
-  color: var(--accent);
+
+.toasts {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  left: var(--space-6);
+  bottom: var(--space-6);
+  width: min(400px, calc(100% - var(--space-8)));
+  pointer-events: none;
 }
-.notice[data-kind="alert"] { color: var(--danger); }
+/* The two live regions share one flex order so the newest toast is last.
+   display:contents is what makes that possible. WebKit has dropped roles on
+   display:contents boxes, so a VoiceOver/Safari pass still has to confirm a
+   toast is announced. A role on a real wrapper would split the stack in two. */
+#toasts,
+#toast-alerts {
+  display: contents;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 400px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+.toast.is-alert { box-shadow: inset 3px 0 0 var(--danger), var(--shadow-lg); }
+.toast p { margin: 0; flex: 1; }
+.toast button {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bg);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.toast button.toast-dismiss { text-decoration: none; }
+.toast-icon { flex: none; line-height: 1.2; }
+.toast button:focus-visible {
+  outline: 2px solid var(--bg);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .toast button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+@media (max-width: 767px) {
+  .toasts {
+    left: 50%;
+    bottom: calc(56px + env(safe-area-inset-bottom) + var(--space-3));
+    align-items: center;
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: toast-in var(--motion-base) var(--ease-emphasized); }
+  .skeleton { animation: skeleton-pulse 1.2s ease-in-out infinite; }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.skeleton {
+  display: block;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.skeleton-h1 { height: 2.5rem; width: 40%; margin-bottom: var(--space-3); }
+.skeleton-stats { height: 1rem; width: 30%; margin-bottom: var(--space-6); }
+.skeleton-row { height: 3rem; margin-bottom: var(--space-2); }
+.skeleton-card { aspect-ratio: 2 / 3; }
+.skeleton-line { height: 1rem; margin-bottom: var(--space-3); }
+.skeleton-w60 { width: 60%; }
+.skeleton-w40 { width: 40%; }
+.skeleton-w30 { width: 30%; }
+.skeleton-poster { width: min(100%, 240px); aspect-ratio: 2 / 3; }
+.skeleton-chips { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); }
+.skeleton-chip { width: 6rem; height: 2rem; border-radius: var(--radius-pill); }
+.skeleton-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-2); }
+.skeleton-day { height: 4.5rem; }
+.skeleton-home, .skeleton-item { display: grid; gap: var(--space-2); }
+
+.empty {
+  max-width: 360px;
+  margin-inline: auto;
+  padding: var(--space-10);
+  text-align: center;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+.empty-icon {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  margin: 0 auto var(--space-3);
+  font-size: 2rem;
+  line-height: 1;
+}
+.empty h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  margin: 0 0 var(--space-3);
+}
+.empty p { color: var(--text-secondary); margin: 0 0 var(--space-4); }
+.empty .btn { margin-bottom: var(--space-2); }
+
+.error-panel { max-width: 36rem; }
+.error-panel h1:focus { outline: none; }
+.error-panel h1:focus-visible,
+.error-panel h2:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
 
 .hero { justify-content: space-between; align-items: end; margin-bottom: var(--space-8); }
 h1, h2, .card-title {
@@ -109,8 +233,40 @@ section { margin: 0 0 var(--space-10); }
 .stack { max-width: 38rem; margin-bottom: var(--space-8); }
 label { display: grid; gap: var(--space-1); color: var(--text-secondary); font-size: var(--text-sm); }
 .check { grid-template-columns: auto 1fr; align-items: center; }
-a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
-  outline: 2px solid var(--accent);
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  vertical-align: middle;
+  border: 1px solid var(--border-control);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--on-accent);
+}
+input[type="checkbox"]::before {
+  content: "";
+  width: 0.6em;
+  height: 0.32em;
+  border: 2px solid transparent;
+  border-top: 0;
+  border-right: 0;
+  transform: rotate(-45deg) translateY(-0.05em);
+}
+input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input[type="checkbox"]:checked::before { border-color: currentColor; }
+input[type="checkbox"][hidden] { display: none; }
+a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible,
+.status-mark:focus-visible, .flag:focus-visible, .mark:focus-visible, .season-chip:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -130,7 +286,7 @@ a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visib
 dialog {
   width: min(440px, calc(100% - 32px));
   padding: var(--space-5);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-lg);
   background: var(--card-bg);
   color: var(--text);
@@ -378,18 +534,27 @@ dialog form { display: grid; gap: var(--space-3); }
 .episode-page .eyebrow a { color: inherit; text-decoration: none; }
 .marks { display: flex; gap: 4px; align-items: center; min-height: 44px; }
 .mark {
-  width: 14px; height: 14px; padding: 0; border: 0; border-radius: 99px;
-  background: var(--border-subtle, var(--surface)); cursor: pointer;
+  width: 14px; height: 14px; padding: 0;
+  border: 1.5px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  cursor: pointer;
 }
-.mark.is-on { background: var(--accent); }
+.mark.is-on { background: var(--accent); border-color: var(--accent); }
 .song-name { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 0; }
 .status-row, .flag-row, .exp-list { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items: center; }
 .status-mark, .flag {
-  min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: 999px;
+  min-height: 36px; padding: 0 var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
   background: var(--surface); color: inherit; font: inherit; cursor: pointer;
 }
-.status-mark.is-on, .flag.is-on, .status-mark:has(input:checked) { background: var(--text); color: var(--bg); }
+.status-mark.is-on, .flag.is-on, .status-mark:has(input:checked) {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
 .status-mark input { position: absolute; opacity: 0; pointer-events: none; }
 .opinion textarea {
   width: 100%;
@@ -426,6 +591,7 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 }
 .progress-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
 }
@@ -445,19 +611,43 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
   width: auto;
   min-width: 8rem;
 }
+.progress-field .meta {
+  margin: 0;
+  min-height: 1.25rem;
+  line-height: 1.25rem;
+}
+.progress-field .meta:empty { display: none; }
 .progress-status {
-  min-height: 1.2em;
+  min-height: 1.25rem;
   margin: 0;
   color: var(--success);
   font-size: var(--text-sm);
+  line-height: 1.25rem;
 }
 .progress-status.is-error { color: var(--danger); }
-.progress-draft {
+.progress-status button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.progress-status button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.save-draft {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
-.progress-draft button {
+.save-draft button {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -470,34 +660,36 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
   text-decoration: underline;
   cursor: pointer;
 }
-.progress-draft button:focus-visible {
-  outline: 2px solid var(--accent);
+.save-draft button:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 @media (pointer: coarse) {
-  .progress-draft button { min-height: 44px; }
+  .save-draft button,
+  .progress-status button { min-height: 44px; }
 }
 .exp-list { list-style: none; margin: var(--space-3) 0; padding: 0; }
 .exp { display: flex; gap: var(--space-3); align-items: center; color: var(--text-secondary); }
 .overview { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .continue:focus-visible, .episode-open:focus-visible, .episode-toggle:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { scroll-behavior: auto !important; transition: none !important; }
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
 
 .season-strip, .covers, .episode-tiles { display: flex; gap: var(--space-2); align-items: center; }
 .season-strip { overflow-x: auto; margin-bottom: var(--space-4); }
 .season-chip {
   flex: 0 0 auto;
-  width: 2.4rem; height: 2.4rem; border-radius: 999px;
-  border: 0; background: var(--surface); color: inherit; cursor: pointer;
+  width: 2.4rem; height: 2.4rem; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-control);
+  background: var(--surface); color: inherit; cursor: pointer;
 }
 .season-chip.is-current { box-shadow: inset 0 0 0 2px var(--accent); }
-.season-chip.is-done { background: color-mix(in srgb, var(--text) 16%, transparent); color: var(--text-secondary); }
+.season-chip.is-done { background: color-mix(in srgb, var(--text) 12%, var(--bg)); color: var(--text-secondary); }
 .season-score { width: 3.2rem; border: 0; background: transparent; color: inherit; font: inherit; }
 .episode-tiles { flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
 .episode-tiles li { position: relative; }
@@ -533,7 +725,13 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 .cover input[name="rating"], .cover-tracks input { width: 3rem; border: 0; background: transparent; color: inherit; }
 .cover-tracks { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
 .cover-add { display: grid; gap: var(--space-2); }
-.cover-add input, .cover-add button { border: 0; background: var(--surface); color: inherit; border-radius: 0.8rem; padding: var(--space-2); }
+.cover-add input, .cover-add button {
+  border: 1px solid var(--border-control);
+  background: var(--bg-elevated);
+  color: inherit;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+}
 .cover-add button { height: 9rem; font-size: 1.8rem; cursor: pointer; }
 .web svg { width: min(100%, 36rem); height: auto; }
 .web line { stroke: var(--border-subtle); }
