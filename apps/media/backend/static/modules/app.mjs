@@ -72,8 +72,9 @@ function dismissToast(key) {
 function trimToasts() {
   const live = toastNodes().sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order));
   while (live.length > 3) {
-    const index = live.findIndex(node => node.dataset.persist !== "true");
-    if (index < 0) break;
+    let index = live.findIndex(node => node.dataset.persist !== "true");
+    // The cap still holds when every toast is persistent: drop the oldest.
+    if (index < 0) index = 0;
     live[index].remove();
     live.splice(index, 1);
   }
@@ -154,6 +155,74 @@ function toast(message, kind = "status", action = null) {
     key: action?.key || "",
     persist: action?.persist === true,
   });
+}
+
+const WRITE_TIMEOUT_MS = 10_000;
+
+function writeTimedOut(error) {
+  return error?.name === "AbortError" || error?.name === "TimeoutError";
+}
+
+function showWriteTimeout(key, retry) {
+  toast(NOT_SAVED_LABEL, "alert", {
+    label: "Retry",
+    persist: true,
+    key,
+    onClick: () => { void retry(); },
+  });
+}
+
+function patchOpinion(id, body) {
+  return api(`/api/entries/${id}`, {
+    method: "PATCH",
+    signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
+    body: JSON.stringify(body),
+  });
+}
+
+async function saveStatus(id, status) {
+  const key = `status:${id}`;
+  try {
+    await patchOpinion(id, { status });
+    dismissToast(key);
+    await render();
+  } catch (error) {
+    if (writeTimedOut(error)) {
+      showWriteTimeout(key, () => saveStatus(id, status));
+      return;
+    }
+    fail(error);
+  }
+}
+
+async function saveFlag(id, flag, on) {
+  const key = `${flag}:${id}`;
+  try {
+    await patchOpinion(id, { [flag]: on });
+    dismissToast(key);
+    await render();
+  } catch (error) {
+    if (writeTimedOut(error)) {
+      showWriteTimeout(key, () => saveFlag(id, flag, on));
+      return;
+    }
+    fail(error);
+  }
+}
+
+async function saveRating(id, rating) {
+  const key = `rating:${id}`;
+  try {
+    await patchOpinion(id, { rating });
+    dismissToast(key);
+  } catch (error) {
+    if (writeTimedOut(error)) {
+      showWriteTimeout(key, () => saveRating(id, rating));
+      return;
+    }
+    fail(error);
+    await render();
+  }
 }
 
 function fail(error, action = null) {
@@ -248,6 +317,15 @@ function restoreFocus(key) {
 function itemIdFromHash(hash) {
   const match = /^#\/item\/(\d+)/.exec(String(hash || ""));
   return match ? match[1] : "";
+}
+
+const ITEM_TOAST_KEY = /^(?:progress|note|note-conflict|status|favorite|anticipated|rating):(.+)$/;
+
+function retireOtherItemToasts(itemId) {
+  for (const node of toastNodes()) {
+    const match = ITEM_TOAST_KEY.exec(node.dataset.toastKey || "");
+    if (match && match[1] !== String(itemId)) node.remove();
+  }
 }
 
 function armSaving(status) {
@@ -1010,8 +1088,12 @@ function settleLibraryHash() {
 async function render() {
   const focusKey = focusKeyOf(document.activeElement);
   const progress = document.querySelector("#progress");
+  const nextItem = itemIdFromHash(location.hash);
   const staying = itemIdFromHash(app.dataset.view) !== ""
-    && itemIdFromHash(app.dataset.view) === itemIdFromHash(location.hash);
+    && itemIdFromHash(app.dataset.view) === nextItem;
+  // A toast keyed to an item belongs to that item. Library and other routes
+  // keep it; opening a different item drops it.
+  if (nextItem && !staying) retireOtherItemToasts(nextItem);
   if (progress instanceof HTMLInputElement && progress.dataset.dirty === "true") saveProgress();
   searchLoads.start("");
   const ticket = routeLoads.start();
@@ -1110,10 +1192,7 @@ document.addEventListener("click", async event => {
           body: JSON.stringify({ rating: next }),
         });
       } else if (opinion) {
-        await api(`/api/entries/${opinion.dataset.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ rating: next }),
-        });
+        await saveRating(opinion.dataset.id, next);
       }
     } catch (error) {
       fail(error);
@@ -1125,15 +1204,7 @@ document.addEventListener("click", async event => {
   if (statusButton) {
     keepButtonClick(event, target);
     const opinion = statusButton.closest(".opinion");
-    try {
-      await api(`/api/entries/${opinion.dataset.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: statusButton.dataset.setStatus }),
-      });
-      await render();
-    } catch (error) {
-      fail(error);
-    }
+    await saveStatus(opinion.dataset.id, statusButton.dataset.setStatus);
     return;
   }
   const flag = target.closest("[data-flag]");
@@ -1141,15 +1212,7 @@ document.addEventListener("click", async event => {
     keepButtonClick(event, target);
     const opinion = flag.closest(".opinion");
     const on = flag.getAttribute("aria-pressed") !== "true";
-    try {
-      await api(`/api/entries/${opinion.dataset.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ [flag.dataset.flag]: on }),
-      });
-      await render();
-    } catch (error) {
-      fail(error);
-    }
+    await saveFlag(opinion.dataset.id, flag.dataset.flag, on);
     return;
   }
   const episodePage = target.closest("[data-episode-page]");
@@ -1549,7 +1612,7 @@ async function commitNote(id) {
   try {
     const updated = await api(`/api/entries/${id}`, {
       method: "PATCH",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
       body: JSON.stringify({ review: sent, review_base: base }),
     });
     stopSaving();
@@ -1770,7 +1833,7 @@ async function commitProgress(payload) {
     await api(`/api/entries/${payload.id}`, {
       method: "PATCH",
       keepalive: true,
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
       body: JSON.stringify({
         progress_value: payload.value === "" ? null : payload.value,
         progress_unit: payload.unit,

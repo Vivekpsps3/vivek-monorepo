@@ -32,7 +32,14 @@ export async function api(path, options = {}) {
   let response;
   try {
     if (!["GET", "HEAD", "OPTIONS"].includes(method) && !readCookie("finance_csrf")) {
-      await fetch(`${root}/api/summary`, { credentials: "include", headers: { accept: "application/json" } });
+      // Share the caller's budget when it has one. Otherwise a stalled
+      // preflight would sit forever, before the real request even starts.
+      const signal = options.signal ?? AbortSignal.timeout(10_000);
+      await fetch(`${root}/api/summary`, {
+        credentials: "include",
+        headers: { accept: "application/json" },
+        signal,
+      });
     }
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
       const csrf = readCookie("finance_csrf");

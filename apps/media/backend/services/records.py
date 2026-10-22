@@ -389,8 +389,14 @@ def progress_number(value) -> float | None:
 
 
 def assert_review_base(entry: UserEntry, body: dict) -> None:
-    """409 when a note save started from a review the server no longer has."""
+    """409 when a note save started from a review the server no longer has.
+
+    The same text is a no-op success. A client can time out after the server
+    has already stored the note, then retry with the base it started from.
+    """
     if "review" not in body or "review_base" not in body:
+        return
+    if clean_text(body.get("review"), 20000, "Review") == entry.review:
         return
     current = iso(entry.review_updated_at) or ""
     incoming = body.get("review_base")
