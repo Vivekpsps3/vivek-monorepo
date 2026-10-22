@@ -17,10 +17,14 @@ describe('AuthService passwordless login', () => {
       'loadPublicStatus',
       'loadAuthWrap',
       'unlock',
+      'refreshStatus',
+      'upgradeKdfIfNeeded',
       'adoptBootstrapVault',
       'ensureLocalDevUnlocked',
     ]);
     vault.unlock.and.resolveTo();
+    vault.refreshStatus.and.resolveTo({ exists: true });
+    vault.upgradeKdfIfNeeded.and.resolveTo();
     vault.ensureLocalDevUnlocked.and.resolveTo();
     finance = { clearSessionState: jasmine.createSpy('clearSessionState') };
     TestBed.configureTestingModule({
@@ -40,34 +44,22 @@ describe('AuthService passwordless login', () => {
     http.verify();
   });
 
-  it('marks lookup wraps as an existing vault so a new browser can unlock with only the passphrase', async () => {
+  it('signs in from the auth wrap alone and loads the vault only after verify', async () => {
     const loginPromise = service.loginWithVault('vivek', 'correct horse battery staple');
 
     http.expectOne(`${api}/auth/passwordless/lookup`).flush({
-      vault: {
-        kdf_algorithm: 'PBKDF2',
-        kdf_salt_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==',
-        kdf_iterations: 310000,
-        wrapped_dek_b64: 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
-        recovery_wrapped_dek_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==.YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
-        key_version: 1,
-      },
       auth: {
         kdf_salt_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==',
         kdf_iterations: 310000,
         wrapped_private_key_b64: 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
-        recovery_wrapped_private_key_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==.YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
+        recovery_wrapped_private_key_b64: '',
       },
     });
 
     await Promise.resolve();
-    expect(vault.loadPublicStatus).toHaveBeenCalledWith(jasmine.objectContaining({
-      exists: true,
-      kdf_salt_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==',
-      wrapped_dek_b64: 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
-      kdf_iterations: 310000,
-    }));
+    expect(vault.loadPublicStatus).not.toHaveBeenCalled();
     expect(vault.loadAuthWrap).toHaveBeenCalled();
+    expect(vault.refreshStatus).not.toHaveBeenCalled();
 
     http.expectOne(`${api}/auth/passwordless/challenge`).flush({
       challenge_id: 'c1',

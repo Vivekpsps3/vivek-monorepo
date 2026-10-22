@@ -11,9 +11,11 @@ import {
   persistDekLocal,
   recordAad,
   restoreDekLocal,
+  rewrapDekWithPassphrase,
   unlockWithPassphrase,
 } from './vault-crypto';
-import { WrappedSigningKey } from '@vivek/auth';
+import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
+import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
 
 export interface VaultStatus {
   exists: boolean;
@@ -43,6 +45,8 @@ export class VaultService {
   private unlockedSubject = new BehaviorSubject<boolean>(false);
   private authWrap: WrappedSigningKey | null = null;
   private boot: Promise<void>;
+  /** Failed KDF upgrades since this page loaded. The session stays unlocked either way. */
+  kdfUpgradeFailures = 0;
 
   readonly status$ = this.statusSubject.asObservable();
   readonly unlocked$ = this.unlockedSubject.asObservable();
@@ -140,6 +144,59 @@ export class VaultService {
   async adoptBootstrapVault(dek: CryptoKey): Promise<void> {
     await this.refreshStatus();
     this.hold(dek);
+  }
+
+  /**
+   * After a successful unlock, raise stored PBKDF2 iterations to the current floor.
+   * The same DEK and signing key are kept, so existing ciphertext and the public key stay valid.
+   * Callers on the login and unlock screens must not await this: the extra PBKDF2 work
+   * must not delay navigation. A failed write leaves the previous wraps in place.
+   */
+  async upgradeKdfIfNeeded(passphrase: string): Promise<void> {
+    try {
+      await this.ensureAuthWrap();
+      await this.applyKdfUpgrade(passphrase);
+    } catch (err) {
+      this.kdfUpgradeFailures += 1;
+      console.warn('Vault KDF upgrade failed; will retry on the next unlock', err);
+    }
+  }
+
+  private async ensureAuthWrap(): Promise<void> {
+    if (this.authWrap?.wrapped_private_key_b64 && this.authWrap.kdf_iterations) return;
+    const body = await firstValueFrom(
+      this.http.get<{ auth: WrappedSigningKey }>(apiUrl('/auth/passwordless/wraps'))
+    );
+    if (body?.auth?.wrapped_private_key_b64) this.authWrap = body.auth;
+  }
+
+  private async applyKdfUpgrade(passphrase: string): Promise<void> {
+    const status = this.statusSubject.value;
+    const auth = this.authWrap;
+    const authStale = !!auth && auth.kdf_iterations < DEFAULT_PBKDF2_ITERATIONS;
+    const vaultStale = !!status?.kdf_iterations && status.kdf_iterations < DEFAULT_PBKDF2_ITERATIONS && !!this.dek;
+    if (!authStale && !vaultStale) return;
+    if (authStale && auth) {
+      const wrapped = await this.rewrapAuthWrap(passphrase, auth);
+      await firstValueFrom(this.http.put(apiUrl('/auth/passwordless/wraps'), wrapped));
+      this.authWrap = wrapped;
+    }
+    if (vaultStale && this.dek && status) {
+      const rewrap = await this.rewrapVaultDek(passphrase);
+      const updated = await firstValueFrom(
+        this.http.put<VaultStatus>(apiUrl('/vault/wraps'), rewrap)
+      );
+      this.statusSubject.next(updated);
+      this.unlockedWrap = updated.wrapped_dek_b64 ?? this.unlockedWrap;
+    }
+  }
+
+  private rewrapAuthWrap(passphrase: string, auth: WrappedSigningKey): Promise<WrappedSigningKey> {
+    return rewrapSigningKey(passphrase, auth, DEFAULT_PBKDF2_ITERATIONS);
+  }
+
+  private rewrapVaultDek(passphrase: string): Promise<{ kdf_salt_b64: string; kdf_iterations: number; wrapped_dek_b64: string }> {
+    return rewrapDekWithPassphrase(this.requireDek(), passphrase, DEFAULT_PBKDF2_ITERATIONS);
   }
 
   async unlock(passphrase: string): Promise<void> {

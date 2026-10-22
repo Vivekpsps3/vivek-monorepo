@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.models import EncryptedRecord, EncryptedRecordIndex, UserVault, utc_now
 
 ALLOWED_COLLECTIONS = frozenset(
@@ -81,7 +82,7 @@ def create_vault(
         raise HTTPException(status_code=409, detail="Vault already exists")
     if kdf_algorithm != "PBKDF2":
         raise HTTPException(status_code=400, detail="Only PBKDF2 is supported")
-    if kdf_iterations < 100_000 or kdf_iterations > 5_000_000:
+    if kdf_iterations < MIN_PBKDF2_ITERATIONS or kdf_iterations > MAX_PBKDF2_ITERATIONS:
         raise HTTPException(status_code=400, detail="Invalid KDF iterations")
     if _b64_len(kdf_salt_b64) < 16:
         raise HTTPException(status_code=400, detail="KDF salt too short")
@@ -118,7 +119,7 @@ def update_vault_wraps(
             raise HTTPException(status_code=400, detail="KDF salt too short")
         vault.kdf_salt_b64 = kdf_salt_b64
     if kdf_iterations is not None:
-        if kdf_iterations < 100_000 or kdf_iterations > 5_000_000:
+        if kdf_iterations < MIN_PBKDF2_ITERATIONS or kdf_iterations > MAX_PBKDF2_ITERATIONS:
             raise HTTPException(status_code=400, detail="Invalid KDF iterations")
         vault.kdf_iterations = kdf_iterations
     if wrapped_dek_b64 is not None:

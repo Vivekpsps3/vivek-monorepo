@@ -27,7 +27,7 @@
             {{ loading ? (needsDisplayName ? 'Creating account' : (legacyMode ? 'Migrating' : 'Signing in')) : (setupMode ? 'Create admin account' : (legacyMode ? 'Migrate and sign in' : 'Sign in')) }}
           </ui-button>
         </form>
-        @if (!setupMode) {
+        @if (!setupMode && showSignup) {
           <a class="mode-link" [href]="pageHref('signup')">Create an account</a>
           <button type="button" class="mode-link" (click)="toggleLegacyMode()">
             {{ legacyMode ? 'Back to sign in' : 'Migrate old account' }}
