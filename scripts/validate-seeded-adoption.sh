@@ -112,15 +112,23 @@ if ! git merge-base --is-ancestor "$LEGACY_UNADOPTED_SHA" "$main_sha"; then
   echo "pinned pre-adoption commit $LEGACY_UNADOPTED_SHA is not an ancestor of origin/main ($main_sha)" >&2
   exit 1
 fi
-if [[ "$upgrade_from" != "origin/main" ]]; then
+# A branch name (UPGRADE_FROM=main) updates FETCH_HEAD. rev-parse of the
+# local branch can be stale or missing on a detached checkout, so the
+# rehearsal uses the fetched object.
+if [[ "$upgrade_from" == "origin/main" ]]; then
+  upgrade_from_sha="$main_sha"
+else
   if ! git fetch --no-tags origin "$upgrade_from"; then
     echo "could not fetch UPGRADE_FROM commit $upgrade_from from origin" >&2
     exit 1
   fi
-  if ! git cat-file -e "${upgrade_from}^{commit}" 2>/dev/null; then
+  if ! upgrade_from_sha="$(git rev-parse "FETCH_HEAD^{commit}")"; then
     echo "UPGRADE_FROM $upgrade_from is not a commit after fetching it from origin" >&2
     exit 1
   fi
+fi
+if ! git merge-base --is-ancestor "$upgrade_from_sha" HEAD; then
+  echo "warning: UPGRADE_FROM $upgrade_from is not an ancestor of HEAD (force-push?); the upgrade rehearsal starts from a commit outside this history" >&2
 fi
 if [[ "${PREFLIGHT_ONLY:-}" == 1 ]]; then
   echo "rehearsal preflight ok"
@@ -341,16 +349,10 @@ PY
     PYTHONPATH="$root" "$py" - "$out_dir/migrated.db" <<'PY'
 import sys
 from pathlib import Path
-from apps.server.migrations import model_diff
+from apps.server.migrations import _diff_summary, model_diff
 diff = model_diff(Path(sys.argv[1]), readonly=True)
 if diff:
-    parts = []
-    for item in diff:
-        kind = item[0] if item else "change"
-        subject = item[1] if len(item) > 1 else ""
-        name = getattr(subject, "name", None) or (subject if isinstance(subject, str) else "")
-        parts.append(f"{kind} {name}".strip())
-    raise SystemExit("schema diff after upgrade is not empty: " + ", ".join(parts[:12]))
+    raise SystemExit("schema diff after upgrade is not empty: " + _diff_summary(diff))
 print("upgrade schema diff is empty")
 PY
   fi
@@ -648,21 +650,8 @@ PY
 
 run_upgrade() {
   local sha main_head dir sha_before sha_after
-  if [[ "$upgrade_from" == "origin/main" ]]; then
-    if ! sha="$(git rev-parse origin/main)"; then
-      echo "origin/main is not available for the upgrade rehearsal" >&2
-      exit 1
-    fi
-  else
-    if ! git fetch --no-tags origin "$upgrade_from"; then
-      echo "could not fetch UPGRADE_FROM commit $upgrade_from from origin" >&2
-      exit 1
-    fi
-    if ! sha="$(git rev-parse "${upgrade_from}^{commit}")"; then
-      echo "UPGRADE_FROM $upgrade_from is not a commit after fetching it from origin" >&2
-      exit 1
-    fi
-  fi
+  # Resolved from FETCH_HEAD when UPGRADE_FROM is a branch. See the preflight.
+  sha="$upgrade_from_sha"
   echo "Upgrade rehearsal from $sha"
   dir="$work/upgrade"
   mkdir -p "$dir"

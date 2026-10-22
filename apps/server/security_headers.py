@@ -24,7 +24,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 logger = logging.getLogger("site.csp")
 CSP_REPORTS = Counter(
     "site_csp_reports_total",
-    "Content-Security-Policy violation reports",
+    "CSP violation reports. Authoritative count; log lines are samples.",
     ["app", "directive"],
 )
 
@@ -77,6 +77,9 @@ _STYLE_OPEN = re.compile(r"<style\b([^>]*)>", re.IGNORECASE)
 _LINK_OPEN = re.compile(r"<link\b([^>]*)>", re.IGNORECASE)
 _APP_ROOT = re.compile(r"<app-root\b([^>]*)>", re.IGNORECASE)
 _NONCE_ATTR = re.compile(r"\bnonce\s*=", re.IGNORECASE)
+# site_csp_reports_total counts every parsed report and is authoritative.
+# The log is a sample: 30 lines per key and 300 per process each minute, so
+# a few keys can mute logs for up to 60 seconds without dropping the metric.
 _LOG_LIMIT = 30
 _LOG_GLOBAL_LIMIT = 300
 _LOG_PER_REQUEST = 5
@@ -460,7 +463,12 @@ def reset_report_logs() -> None:
 
 
 def report_log_key(ip: str) -> str:
-    """Budget key. IPv6 addresses share a /64 so rotation inside one prefix cannot multiply the table."""
+    """Budget key.
+
+    IPv6 addresses share a /64 so rotation inside one prefix cannot multiply
+    the table. An IPv4-mapped address (``::ffff:a.b.c.d``) is keyed as that
+    IPv4 address. A /64 of the mapped form is ``::/64`` for every IPv4.
+    """
     text = (ip or "").strip().split("%", 1)[0]
     if not text:
         return "unknown"
@@ -469,6 +477,9 @@ def report_log_key(ip: str) -> str:
     except ValueError:
         return text[:80]
     if isinstance(address, ipaddress.IPv6Address):
+        mapped = address.ipv4_mapped
+        if mapped is not None:
+            return str(mapped)
         network = ipaddress.IPv6Network((address, 64), strict=False)
         return f"{network.network_address}/64"
     return str(address)
