@@ -5,6 +5,7 @@ import {
   ElementRef,
   afterRenderEffect,
   contentChild,
+  inject,
   input,
 } from '@angular/core';
 
@@ -16,7 +17,7 @@ let uiFieldSeq = 0;
   standalone: true,
 })
 export class UiFieldControlDirective {
-  constructor(readonly element: ElementRef<HTMLElement>) {}
+  readonly element = inject(ElementRef<HTMLElement>);
 }
 
 @Component({

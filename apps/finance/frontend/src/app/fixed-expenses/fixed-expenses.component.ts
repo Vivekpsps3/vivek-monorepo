@@ -230,6 +230,10 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       error: () => {
         this.saving = false;
         this.saveError = 'This bill could not be saved. Your details are still here; check your vault and try again.';
+        this.toastService.error(failureCopy('save', 'this bill', 'Try again.'), {
+          label: 'Try again',
+          run: () => this.saveExpense(),
+        });
         this.cdr.markForCheck();
       },
     });
@@ -244,8 +248,11 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     );
     if (!ok) return;
     this.financeService.deleteFixedExpense(row.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success('Fixed expense deleted'),
-      error: () => this.toastService.error('This bill could not be deleted. Try again.'),
+      next: () => this.toastService.success('Bill deleted'),
+      error: () => this.toastService.error(failureCopy('delete', 'this bill', 'Try again.'), {
+        label: 'Try again',
+        run: () => { void this.deleteExpense(row); },
+      }),
     });
   }
 

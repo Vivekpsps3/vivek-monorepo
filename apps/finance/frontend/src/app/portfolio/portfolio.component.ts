@@ -322,7 +322,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         this.toastService.success(successCopy('Holding', this.editingId ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
-      error: (err) => {
+      error: () => {
         this.saving = false;
         this.toastService.error(failureCopy('save', 'this holding', 'Try again.'), {
           label: 'Try again',

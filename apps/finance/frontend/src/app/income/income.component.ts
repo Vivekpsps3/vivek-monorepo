@@ -463,7 +463,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
             ? `Manual price could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
             : 'Manual price could not be saved. Grant and ESPP purchase prices remain the valuation fallback.',
         };
-        this.toastService.error('Could not save the current manual share price.');
+        this.toastService.error(failureCopy('save', 'this share price', 'Try again.'));
       }
     }).finally(() => {
       this.savingStockPriceIds.delete(row.id);
@@ -708,7 +708,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       next: saved => {
         this.saving = false;
         if (!saved) {
-          this.toastService.error('This income entry is no longer available to update.');
+          this.toastService.error(failureCopy('update', 'this job', 'Reload this page.'));
           this.cdr.markForCheck();
           return;
         }
@@ -719,6 +719,10 @@ export class IncomeComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.saving = false;
+        this.toastService.error(failureCopy('save', 'this job', 'Try again.'), {
+          label: 'Try again',
+          run: () => this.saveIncome(),
+        });
         this.cdr.markForCheck();
       },
     });
@@ -733,7 +737,11 @@ export class IncomeComponent implements OnInit, OnDestroy {
     );
     if (!ok) return;
     this.financeService.deleteJobIncome(row.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success('Income deleted'),
+      next: () => this.toastService.success('Job deleted'),
+      error: () => this.toastService.error(failureCopy('delete', 'this job', 'Try again.'), {
+        label: 'Try again',
+        run: () => { void this.deleteIncome(row); },
+      }),
     });
   }
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Grep gates for Finance UX batch F1. Fails on money pipes, plurals, and UTC dates."""
 
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "apps" / "finance" / "frontend" / "src"
 problems = []

@@ -142,7 +142,7 @@ export function validateDebt(input: { name: unknown; amount: unknown }): FieldIs
 
 export function validateSymbol(raw: unknown): string | null {
   const symbol = String(raw ?? '').trim().toUpperCase();
-  if (!/^[A-Z0-9.\-]{1,10}$/.test(symbol)) return 'Enter a ticker like VOO.';
+  if (!/^[A-Z0-9.-]{1,10}$/.test(symbol)) return 'Enter a ticker like VOO.';
   return null;
 }
 
