@@ -90,12 +90,44 @@ describe('PlanningService', () => {
   });
 
   it('prints the same net worth as Home and drops a negative subscription', done => {
-    encStore.getNetWorth.and.resolveTo({ total: 1234.5, portfolio: 1000, liabilities: 0 });
+    encStore.getNetWorth.and.resolveTo({
+      other_assets: 234.5,
+      portfolio: 1000,
+      liabilities: 0,
+      total_assets: 1234.5,
+      total: 1234.5,
+    });
     encStore.getJobIncomes.and.resolveTo([]);
     encStore.getFixedExpenses.and.resolveTo([]);
     encStore.getSubscriptions.and.resolveTo([
-      { name: 'Legacy', annual_amount: -480, is_active: true },
-      { name: 'Kept', annual_amount: 191.88, is_active: true },
+      {
+        id: 1,
+        name: 'Legacy',
+        category: 'Other',
+        amount: -40,
+        frequency: 'monthly',
+        next_bill_date: '2026-01-01',
+        is_active: true,
+        next_due_date: '2026-01-01',
+        monthly_amount: -40,
+        annual_amount: -480,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 2,
+        name: 'Kept',
+        category: 'Other',
+        amount: 15.99,
+        frequency: 'monthly',
+        next_bill_date: '2026-01-01',
+        is_active: true,
+        next_due_date: '2026-01-01',
+        monthly_amount: 15.99,
+        annual_amount: 191.88,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
     ]);
     encStore.getTransactions.and.resolveTo([]);
     service.getInputs().subscribe({
