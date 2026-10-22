@@ -57,9 +57,9 @@ docker-build:
 
 docker-up: init-db
 	docker network inspect monitoring >/dev/null 2>&1 || docker network create monitoring
-	SITE_PORT=8086 SITE_SUBNET=172.30.86.0/28 SESSION_COOKIE_SECURE=0 docker compose -p personal-site-dev build site
+	SITE_PORT=8086 SITE_SUBNET=10.86.0.0/28 SESSION_COOKIE_SECURE=0 docker compose -p personal-site-dev build site
 	docker compose -p personal-site-dev --profile ops run --rm backup python -m apps.server.migrate --output /data/site.db --if-missing
-	SITE_PORT=8086 SITE_SUBNET=172.30.86.0/28 SESSION_COOKIE_SECURE=0 docker compose -p personal-site-dev up -d site
+	SITE_PORT=8086 SITE_SUBNET=10.86.0.0/28 SESSION_COOKIE_SECURE=0 docker compose -p personal-site-dev up -d site
 
 docker-down:
 	docker compose -p personal-site-dev down

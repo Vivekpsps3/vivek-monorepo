@@ -18,7 +18,9 @@ services:
     build:
       context: .
       args: {SITE_RELEASE: "${SITE_RELEASE:-development}"}
+    command: [uvicorn, apps.server.main:app, --host, 0.0.0.0, --port, "8000", --limit-concurrency, "100", --timeout-keep-alive, "5", --no-access-log]
     environment:
+      FORWARDED_ALLOW_IPS: 10.85.0.1
       SITE_DATABASE_URL: sqlite:////data/site.db
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-1}
       SESSION_COOKIE_SAMESITE: lax
@@ -74,4 +76,4 @@ networks:
     name: monitoring
   site:
     ipam:
-      config: [{subnet: "${SITE_SUBNET:-172.30.85.0/28}"}]
+      config: [{subnet: "${SITE_SUBNET:-10.85.0.0/28}"}]

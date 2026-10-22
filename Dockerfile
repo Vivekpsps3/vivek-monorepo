@@ -16,7 +16,7 @@ COPY apps/site ./
 RUN npx ng build --configuration production
 
 FROM python:3.12-slim@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2 AS runtime
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 SESSION_COOKIE_SECURE=1 SESSION_COOKIE_SAMESITE=lax DISABLE_OPENAPI=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY apps/server/requirements.lock /tmp/requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.lock \
@@ -37,4 +37,4 @@ ENV SITE_RELEASE=$SITE_RELEASE
 LABEL org.opencontainers.image.revision=$SITE_RELEASE
 USER 10001:10001
 EXPOSE 8000
-CMD ["uvicorn", "apps.server.main:app", "--host", "0.0.0.0", "--port", "8000", "--limit-concurrency", "100", "--timeout-keep-alive", "5", "--no-access-log", "--forwarded-allow-ips", "172.30.85.1"]
+CMD ["uvicorn", "apps.server.main:app", "--host", "0.0.0.0", "--port", "8000"]
