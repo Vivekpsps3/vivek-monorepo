@@ -124,7 +124,9 @@ def _is_shared_limited(request: Request) -> bool:
 
 def _is_auth_ip_limited(request: Request) -> bool:
     path = _path(request)
-    if request.method == "POST" and (path in _AUTH_POSTS or path.startswith("/api/auth/invitations/")):
+    if request.method == "POST" and (
+        path in _AUTH_POSTS or path.startswith("/api/auth/invitations/")
+    ):
         return True
     if request.method == "GET" and path.startswith("/api/auth/invitations/"):
         return True

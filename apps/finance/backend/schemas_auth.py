@@ -46,7 +46,9 @@ class LoginResponse(BaseModel):
 
 class AuthPrivateKeyWrap(BaseModel):
     kdf_salt_b64: str = Field(..., min_length=16, max_length=4096)
-    kdf_iterations: int = Field(MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS)
+    kdf_iterations: int = Field(
+        MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS
+    )
     wrapped_private_key_b64: str = Field(..., min_length=16, max_length=8192)
     # Legacy field; recovery-key path removed. Empty string means unused.
     recovery_wrapped_private_key_b64: str = Field("", max_length=8192)
@@ -76,6 +78,7 @@ class PasswordlessBootstrapRequest(BaseModel):
 
 class PasswordlessSignupRequest(BaseModel):
     """Self-signup. Closed unless AUTH_SIGNUP_MODE opens it."""
+
     username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
     display_name: str = Field("", max_length=160)
     public_key_b64: str = Field(..., min_length=16, max_length=4096)

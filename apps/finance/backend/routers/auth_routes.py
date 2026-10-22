@@ -40,7 +40,12 @@ from apps.finance.backend.rate_limit import (
     note_failed_verify,
 )
 from apps.finance.backend.services.auth_decoy import decoy_passwordless_material
-from apps.finance.backend.services.challenge_auth import CHALLENGE_TTL, PROTOCOL, issue_challenge, verify_challenge
+from apps.finance.backend.services.challenge_auth import (
+    CHALLENGE_TTL,
+    PROTOCOL,
+    issue_challenge,
+    verify_challenge,
+)
 from apps.finance.backend.services.signup_gate import (
     SIGNUP_UNAVAILABLE,
     invite_code_matches,
@@ -175,7 +180,10 @@ def passwordless_signup_policy():
 
 @router.post("/auth/bootstrap/passwordless", response_model=LoginResponse)
 def passwordless_bootstrap_first_admin(
-    body: PasswordlessBootstrapRequest, request: Request, response: Response, db: Session = Depends(get_db)
+    body: PasswordlessBootstrapRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
     enforce_account_rate_limit(body.username)
     if db.query(User).count() != 0:
@@ -207,7 +215,10 @@ def passwordless_bootstrap_first_admin(
 
 @router.post("/auth/signup/passwordless", response_model=LoginResponse)
 def passwordless_signup(
-    body: PasswordlessSignupRequest, request: Request, response: Response, db: Session = Depends(get_db)
+    body: PasswordlessSignupRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
     """Create an account when signup policy allows it. Closed by default."""
     enforce_account_rate_limit(body.username)
@@ -251,9 +262,16 @@ def passwordless_signup(
 
 
 @router.post("/auth/login/migrate", response_model=LoginResponse)
-def login_migrate(body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+def login_migrate(
+    body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.email == normalize_email(body.email)).first()
-    if not user or user.auth_public_key_b64 or not user.is_active or not verify_password(body.password, user.password_hash):
+    if (
+        not user
+        or user.auth_public_key_b64
+        or not user.is_active
+        or not verify_password(body.password, user.password_hash)
+    ):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     csrf = create_session(db, user, request, response, migration_only=True)
     db.refresh(user)
@@ -283,7 +301,9 @@ def enroll_passwordless(
     current_user.must_change_password = False
     vault_store.create_vault(db, current_user.id, **body.vault.model_dump())
     complete_migration_session(db, request)
-    audit_event(db, "passwordless_enrolled", actor_user_id=current_user.id, target_user_id=current_user.id)
+    audit_event(
+        db, "passwordless_enrolled", actor_user_id=current_user.id, target_user_id=current_user.id
+    )
     db.commit()
     return {"ok": True}
 
@@ -301,20 +321,31 @@ def passwordless_lookup(body: PasswordlessChallengeRequest, db: Session = Depend
 
 
 @router.post("/auth/passwordless/challenge", response_model=PasswordlessChallengeResponse)
-def passwordless_challenge(body: PasswordlessChallengeRequest, request: Request, db: Session = Depends(get_db)):
+def passwordless_challenge(
+    body: PasswordlessChallengeRequest, request: Request, db: Session = Depends(get_db)
+):
     enforce_login_pair_limit(body.username, request)
     user = _find_passwordless_user(db, body.username)
     if not user or not user.is_active or not user.auth_public_key_b64:
         return _decoy_challenge(request)
     challenge, raw, message = issue_challenge(db, user, _origin(request))
     db.commit()
-    return {"challenge_id": challenge.challenge_id, "challenge": raw, "message": message, "expires_at": challenge.expires_at}
+    return {
+        "challenge_id": challenge.challenge_id,
+        "challenge": raw,
+        "message": message,
+        "expires_at": challenge.expires_at,
+    }
 
 
 @router.get("/auth/passwordless/wraps")
 def read_passwordless_wraps(current_user: User = Depends(get_current_user)):
     """Signing-key wrap for the signed-in account. Unlock uses this when the browser has no cached wrap."""
-    if not current_user.auth_wrapped_private_key_b64 or not current_user.auth_kdf_salt_b64 or not current_user.auth_kdf_iterations:
+    if (
+        not current_user.auth_wrapped_private_key_b64
+        or not current_user.auth_kdf_salt_b64
+        or not current_user.auth_kdf_iterations
+    ):
         raise HTTPException(status_code=404, detail="Authentication key is not enrolled")
     return _auth_material(current_user)
 
@@ -340,13 +371,22 @@ def update_passwordless_wraps(
 
 
 @router.post("/auth/passwordless/verify", response_model=LoginResponse)
-def passwordless_verify(body: PasswordlessVerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+def passwordless_verify(
+    body: PasswordlessVerifyRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     enforce_login_pair_limit(body.username, request)
     user = _find_passwordless_user(db, body.username)
     # The challenge row is checked before ECDSA, so a forged id is a lookup, not a signature.
     # A correct signature is never turned into a 429. The failed-verify cap applies only after a failure.
-    if user and user.is_active and verify_challenge(
-        db, user, body.challenge_id, body.challenge, body.message, body.signature_b64
+    if (
+        user
+        and user.is_active
+        and verify_challenge(
+            db, user, body.challenge_id, body.challenge, body.message, body.signature_b64
+        )
     ):
         csrf = create_session(db, user, request, response)
         db.refresh(user)
@@ -358,9 +398,11 @@ def passwordless_verify(body: PasswordlessVerifyRequest, request: Request, respo
 
 
 def _invitation_for_token(db: Session, token: str) -> tuple[AuthEnrollment, User]:
-    enrollment = db.query(AuthEnrollment).filter(
-        AuthEnrollment.token_hash == hashlib.sha256(token.encode()).hexdigest()
-    ).first()
+    enrollment = (
+        db.query(AuthEnrollment)
+        .filter(AuthEnrollment.token_hash == hashlib.sha256(token.encode()).hexdigest())
+        .first()
+    )
     if not enrollment or enrollment.consumed_at or enrollment.expires_at <= utc_now_naive():
         raise HTTPException(status_code=401, detail="Authentication failed")
     user = db.get(User, enrollment.user_id)
@@ -417,7 +459,9 @@ def logout(
     if token:
         from apps.finance.backend.auth import _hash_secret
 
-        session = db.query(UserSession).filter(UserSession.token_hash == _hash_secret(token)).first()
+        session = (
+            db.query(UserSession).filter(UserSession.token_hash == _hash_secret(token)).first()
+        )
         if session and session.revoked_at is None:
             session.revoked_at = utc_now_naive()
     audit_event(db, "logout", actor_user_id=current_user.id, target_user_id=current_user.id)
@@ -444,7 +488,11 @@ def me(request: Request, current_user: User = Depends(get_current_user)):
 @router.get("/auth/local-dev/vault")
 def local_dev_vault(request: Request, current_user: User = Depends(get_current_user)):
     """Passphrase for the local-dev user's vault. 404 for every other account and when the bypass is off."""
-    from apps.finance.backend.local_dev import is_local_dev_identity, local_dev_override_active, local_dev_vault_passphrase
+    from apps.finance.backend.local_dev import (
+        is_local_dev_identity,
+        local_dev_override_active,
+        local_dev_vault_passphrase,
+    )
 
     if not local_dev_override_active(request) or not is_local_dev_identity(current_user):
         raise HTTPException(status_code=404, detail="Not found")
@@ -464,7 +512,9 @@ def reset_my_data(
     current_user: User = Depends(get_current_user),
 ):
     if body.confirm != "CLEAR MY DATA":
-        raise HTTPException(status_code=400, detail='Confirm with "CLEAR MY DATA" to reset your data')
+        raise HTTPException(
+            status_code=400, detail='Confirm with "CLEAR MY DATA" to reset your data'
+        )
     reset_user_contents(db, current_user, actor_user_id=current_user.id, revoke_sessions=False)
     db.commit()
     return {"ok": True}
@@ -513,7 +563,9 @@ def _active_admin_count(db: Session, *, exclude_user_id: int | None = None) -> i
     return sum(1 for user in query.all() if _role_value(user.role) == UserRole.admin.value)
 
 
-def _ensure_not_last_admin(db: Session, target: User, new_role: str | None, new_active: bool | None) -> None:
+def _ensure_not_last_admin(
+    db: Session, target: User, new_role: str | None, new_active: bool | None
+) -> None:
     target_role = _role_value(target.role)
     target_is_active = bool(target.is_active)
     will_stop_being_active_admin = (
@@ -596,12 +648,14 @@ def _issue_enrollment(db: Session, user: User, admin: User) -> str:
         AuthEnrollment.consumed_at.is_(None),
     ).update({AuthEnrollment.consumed_at: now}, synchronize_session=False)
     token = secrets.token_urlsafe(32)
-    db.add(AuthEnrollment(
-        user_id=user.id,
-        token_hash=hashlib.sha256(token.encode()).hexdigest(),
-        expires_at=now + timedelta(hours=24),
-        created_by_user_id=admin.id,
-    ))
+    db.add(
+        AuthEnrollment(
+            user_id=user.id,
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            expires_at=now + timedelta(hours=24),
+            created_by_user_id=admin.id,
+        )
+    )
     return token
 
 
@@ -637,7 +691,11 @@ def admin_reissue_enrollment(
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    if target.auth_public_key_b64 or target.passwordless_enrolled_at or vault_store.get_vault(db, target.id):
+    if (
+        target.auth_public_key_b64
+        or target.passwordless_enrolled_at
+        or vault_store.get_vault(db, target.id)
+    ):
         raise HTTPException(status_code=409, detail="Enrollment is already complete")
     token = _issue_enrollment(db, target, admin)
     audit_event(db, "enrollment_reissued", actor_user_id=admin.id, target_user_id=target.id)

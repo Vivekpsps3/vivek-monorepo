@@ -181,7 +181,9 @@ def _stretch(purpose: str, identifier: str, size: int) -> bytes:
     out = bytearray()
     counter = 1
     while len(out) < size:
-        out += hmac.new(key, purpose.encode() + b"\0" + label + b"\0" + str(counter).encode(), hashlib.sha256).digest()
+        out += hmac.new(
+            key, purpose.encode() + b"\0" + label + b"\0" + str(counter).encode(), hashlib.sha256
+        ).digest()
         counter += 1
     return bytes(out[:size])
 

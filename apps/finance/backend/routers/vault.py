@@ -87,7 +87,11 @@ def vault_update_wraps(
         recovery_wrapped_dek_b64=body.recovery_wrapped_dek_b64,
         key_version=body.key_version,
     )
-    if previous_iterations is not None and body.kdf_iterations is not None and body.kdf_iterations > previous_iterations:
+    if (
+        previous_iterations is not None
+        and body.kdf_iterations is not None
+        and body.kdf_iterations > previous_iterations
+    ):
         logger.info(
             "vault wrap KDF iterations raised user_id=%s from=%s to=%s",
             current_user.id,
