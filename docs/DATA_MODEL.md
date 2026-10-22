@@ -218,7 +218,7 @@ Stock Lab scenarios do not mutate holdings, assets, liabilities, transactions, r
 
 ## Site schema revisions
 
-Unified SQL changes are Alembic revisions under `apps/server/alembic`, applied by `python -m apps.server.migrations`. The procedure and the reason the historical Finance chain is not reused are in [MIGRATIONS.md](./MIGRATIONS.md).
+Unified SQL changes are Alembic revisions under `apps/server/alembic`, applied by `python -m apps.server.migrations`. Startup does not apply them. An older image serves a newer revision only when `site_revision_compatibility` lists that image's head for the database revision. The procedure and the reason the historical Finance chain is not reused are in [MIGRATIONS.md](./MIGRATIONS.md).
 
 These recovery-key columns are removal candidates. This change does not drop them. Auth and vault routes still read and write them, often as empty strings, and `user_vaults.recovery_wrapped_dek_b64` is `NOT NULL`. Dropping either column is a later revision that has to change those writers in the same release.
 

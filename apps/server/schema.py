@@ -10,6 +10,10 @@ from sqlalchemy import Column, ForeignKeyConstraint, Integer, MetaData, String, 
 VERSION = 1
 # Separate from the historical Finance row stored in alembic_version.
 MIGRATION_VERSION_TABLE = "site_alembic_version"
+# Written by a later revision that old images may still serve. Not part of the
+# baseline, so adopting a current production file does not require the table.
+COMPATIBILITY_TABLE = "site_revision_compatibility"
+FINANCE_REVISION = "e0f6a2b3c4d5"
 OWNER_TABLES = {"trips", "pto_policy", "pto_entries", "user_entries", "experiences",
                 "season_progress", "episode_progress", "album_ratings", "track_ratings"}
 
@@ -33,6 +37,12 @@ def metadata():
 
 
 def assert_ready(connection):
+    """Fail startup unless this image can serve the database as it is.
+
+    Exact head is always accepted. A newer revision is accepted only when
+    ``site_revision_compatibility`` lists this image's head for that revision.
+    A database behind head is not upgraded here.
+    """
     from sqlalchemy import text
     from apps.server.migrations import head_revision
 
@@ -41,5 +51,28 @@ def assert_ready(connection):
         raise RuntimeError(f"Database schema {row}; application requires {VERSION}. Run python -m apps.server.migrations.")
     revision = connection.execute(text(f'SELECT version_num FROM "{MIGRATION_VERSION_TABLE}"')).scalar_one()
     expected = head_revision()
-    if revision != expected:
-        raise RuntimeError(f"Database revision {revision}; application requires {expected}. Run python -m apps.server.migrations.")
+    if revision == expected or _forward_compatible(connection, revision, expected):
+        return
+    raise RuntimeError(
+        f"Database revision {revision}; this image's head is {expected}. "
+        "Refusing to migrate at startup. Run python -m apps.server.migrations."
+    )
+
+
+def _forward_compatible(connection, revision, image_head) -> bool:
+    from sqlalchemy import text
+
+    present = connection.execute(
+        text("SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name"),
+        {"name": COMPATIBILITY_TABLE},
+    ).first()
+    if not present:
+        return False
+    match = connection.execute(
+        text(
+            f'SELECT 1 FROM "{COMPATIBILITY_TABLE}" '
+            "WHERE revision = :revision AND compatible_head = :head"
+        ),
+        {"revision": revision, "head": image_head},
+    ).first()
+    return match is not None

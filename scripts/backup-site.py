@@ -7,10 +7,17 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import tempfile
 import time
 import uuid
+
+# Hourly snapshots use the site- prefix and SITE_BACKUP_KEEP (usually 1).
+# Pre-migration snapshots use premigrate-<rev>- and are never pruned by that glob.
+PREMIGRATE_KEEP = 3
+_HOURLY_GLOB = "site-????????T??????-????????.db"
+_PREMIGRATE_NAME = re.compile(r"^premigrate-[A-Za-z0-9_.-]+-\d{8}T\d{6}-[0-9a-f]{8}\.db$")
 
 
 def verify(path):
@@ -28,25 +35,42 @@ def verify(path):
     return {"schema": version[0], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def backup(source, directory, keep=1):
-    if keep < 1:
-        raise ValueError("At least one verified backup must be retained")
+def backup(source, directory, keep=1, *, kind="hourly", revision=None):
+    if kind == "hourly":
+        if keep < 1:
+            raise ValueError("At least one verified backup must be retained")
+        name_prefix = "site"
+    elif kind == "premigrate":
+        keep = max(int(keep), PREMIGRATE_KEEP)
+        token = re.sub(r"[^A-Za-z0-9_.-]", "_", revision or "none") or "none"
+        name_prefix = f"premigrate-{token}"
+    else:
+        raise ValueError("Unknown backup kind")
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     # Lock the directory inode: scheduled and manual jobs share no extra state file.
     descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
-        return _backup_locked(source, directory, keep)
+        return _backup_locked(source, directory, keep, name_prefix=name_prefix, kind=kind, revision=revision)
     finally:
         os.close(descriptor)
 
 
-def _backup_locked(source, directory, keep):
+def _snapshot_paths(directory: Path, kind: str) -> list[Path]:
+    if kind == "hourly":
+        matches = directory.glob(_HOURLY_GLOB)
+    else:
+        matches = [path for path in directory.glob("premigrate-*.db") if _PREMIGRATE_NAME.match(path.name)]
+    return sorted(matches, key=lambda path: path.stat().st_mtime_ns, reverse=True)
+
+
+def _backup_locked(source, directory, keep, *, name_prefix, kind, revision):
     if not source.is_file():
         raise RuntimeError("Source database missing; refusing to report backup success")
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(directory, 0o700)
-    name = datetime.now(timezone.utc).strftime("site-%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8] + ".db"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    name = f"{name_prefix}-{stamp}-{uuid.uuid4().hex[:8]}.db"
     with tempfile.TemporaryDirectory(prefix=".backup-", dir=directory) as temporary:
         candidate = Path(temporary) / name
         with sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True, timeout=10) as src:
@@ -68,9 +92,12 @@ def _backup_locked(source, directory, keep):
         manifest = final.with_suffix(".json")
         with manifest.open("x") as file:
             os.chmod(manifest, 0o600)
-            json.dump({**result, "created_at": datetime.now(timezone.utc).isoformat(), "restore_checked": True}, file)
-    # Publish and restore-check the replacement before deleting any older snapshot.
-    snapshots = sorted(directory.glob("site-????????T??????-????????.db"), key=lambda p: p.stat().st_mtime_ns, reverse=True)
+            payload = {**result, "created_at": datetime.now(timezone.utc).isoformat(), "restore_checked": True, "kind": kind}
+            if kind == "premigrate":
+                payload["revision"] = revision or "none"
+            json.dump(payload, file)
+    # Publish and restore-check the replacement before deleting any older snapshot of this kind.
+    snapshots = _snapshot_paths(directory, kind)
     for old in snapshots[keep:]:
         old.unlink()
         old.with_suffix(".json").unlink(missing_ok=True)

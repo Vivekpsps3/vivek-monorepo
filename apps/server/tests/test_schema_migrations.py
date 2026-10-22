@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
+import threading
+import time
 
 import pytest
 from sqlalchemy import Column, Integer, Table, create_engine, text
@@ -14,6 +16,7 @@ from apps.server.migrations import (
     current_revision,
     head_revision,
     make_config,
+    plan,
     schema_signature,
     sqlite_url,
     table_names,
@@ -191,7 +194,10 @@ def test_backup_hook_runs_before_stamp_and_failure_leaves_the_database(tmp_path,
     monkeypatch.setenv("SITE_BACKUP_DIR", str(backups))
     monkeypatch.setenv("SITE_BACKUP_KEEP", "1")
     assert adopt_or_upgrade(sqlite_url(database)) == "stamped"
-    snapshot = next(backups.glob("site-*.db"))
+    snapshot = next(backups.glob("premigrate-*.db"))
+    manifest = __import__("json").loads(snapshot.with_suffix(".json").read_text())
+    assert manifest["kind"] == "premigrate"
+    assert manifest["revision"] == "none"
     with sqlite3.connect(snapshot) as db:
         names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "site_alembic_version" not in names
@@ -210,3 +216,228 @@ def test_backup_hook_runs_before_stamp_and_failure_leaves_the_database(tmp_path,
     with pytest.raises(RuntimeError, match="disk full"):
         adopt_or_upgrade(sqlite_url(adoptable))
     assert current_revision(adoptable) is None
+
+
+def test_require_existing_refuses_a_zero_byte_database(tmp_path):
+    database = tmp_path / "site.db"
+    database.write_bytes(b"")
+    with pytest.raises(RuntimeError, match="empty"):
+        adopt_or_upgrade(sqlite_url(database), require_existing=True)
+    assert database.read_bytes() == b""
+    assert current_revision(database) is None
+
+
+def test_stamp_refuses_a_missing_finance_revision_marker(tmp_path):
+    database = tmp_path / "site.db"
+    legacy_site_database(database)
+    with sqlite3.connect(database) as db:
+        db.execute("DELETE FROM alembic_version")
+    with pytest.raises(RuntimeError, match="alembic_version"):
+        adopt_or_upgrade(sqlite_url(database))
+    assert current_revision(database) is None
+    assert "site_alembic_version" not in table_names(database)
+
+
+def test_empty_version_table_is_refused(tmp_path):
+    database = tmp_path / "site.db"
+    adopt_or_upgrade(sqlite_url(database))
+    with sqlite3.connect(database) as db:
+        db.execute("DELETE FROM site_alembic_version")
+    with pytest.raises(RuntimeError, match="present but has no revision"):
+        adopt_or_upgrade(sqlite_url(database))
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT COUNT(*) FROM site_alembic_version").fetchone() == (0,)
+        assert db.execute("SELECT version FROM site_schema WHERE id=1").fetchone() == (VERSION,)
+
+
+def test_plan_prints_sql_without_writing(tmp_path, capsys):
+    missing = tmp_path / "new.db"
+    assert plan(sqlite_url(missing)) == 0
+    assert not missing.exists()
+    created = capsys.readouterr().out
+    assert '"action": "upgrade"' in created
+    assert "CREATE TABLE users" in created
+
+    database = tmp_path / "site.db"
+    legacy_site_database(database)
+    signature = schema_signature(database)
+    mode = database.stat().st_mode
+    assert plan(sqlite_url(database)) == 0
+    assert schema_signature(database) == signature
+    assert database.stat().st_mode == mode
+    assert current_revision(database) is None
+    stamped = capsys.readouterr().out
+    assert '"action": "stamp"' in stamped
+    assert "INSERT INTO site_alembic_version" in stamped
+    assert "CREATE TABLE users" not in stamped
+
+    database.write_bytes(b"")
+    assert plan(sqlite_url(database), require_existing=True) == 1
+    assert database.read_bytes() == b""
+    refused = capsys.readouterr().out
+    assert '"action": "refuse"' in refused
+
+
+def test_baseline_downgrade_is_refused(tmp_path):
+    database = tmp_path / "site.db"
+    url = sqlite_url(database)
+    adopt_or_upgrade(url)
+    with pytest.raises(NotImplementedError, match="not reversible"):
+        command.downgrade(make_config(url), "base")
+    assert current_revision(database) == head_revision()
+    assert "users" in table_names(database)
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT COUNT(*) FROM site_schema").fetchone() == (1,)
+
+
+def _apply_extra(database: Path, source: str, rev_id: str):
+    extra = database.parent / f"versions-{rev_id}"
+    extra.mkdir()
+    (extra / f"{rev_id}.py").write_text(source)
+    cfg = make_config(sqlite_url(database))
+    real_versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+    cfg.set_main_option("version_path_separator", "os")
+    cfg.set_main_option("version_locations", os.pathsep.join((str(real_versions), str(extra))))
+    command.upgrade(cfg, "head")
+
+
+def test_batch_recreate_keeps_cascade_and_non_cascade_children(tmp_path):
+    database = tmp_path / "site.db"
+    adopt_or_upgrade(sqlite_url(database))
+    with sqlite3.connect(database) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        db.execute(
+            "INSERT INTO users (email, display_name, role, is_active, must_change_password, created_at, updated_at) "
+            "VALUES ('parent@example.invalid', 'Parent', 'user', 1, 0, '2026-01-01', '2026-01-01')"
+        )
+        db.execute(
+            "INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
+            "VALUES (1, 'Non cascade', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')"
+        )
+        db.execute(
+            "INSERT INTO catalog_items (kind, title, source, created_at, updated_at) "
+            "VALUES ('movie', 'Child film', 'manual', '2026-01-01', '2026-01-01')"
+        )
+        db.execute(
+            "INSERT INTO user_entries (user_id, catalog_id, status, review_spoiler, favorite, anticipated, created_at, updated_at) "
+            "VALUES (1, 1, 'want', 0, 0, 0, '2026-01-01', '2026-01-01')"
+        )
+        db.execute(
+            "INSERT INTO experiences (user_id, entry_id, kind, spoiler, created_at) "
+            "VALUES (1, 1, 'watch', 0, '2026-01-01')"
+        )
+        db.commit()
+    _apply_extra(
+        database,
+        "import sqlalchemy as sa\n"
+        "from alembic import op\n"
+        'revision = "batch0000001"\n'
+        'down_revision = "site_schema_v1"\n'
+        "branch_labels = None\ndepends_on = None\n"
+        "def upgrade():\n"
+        "    with op.batch_alter_table('users') as batch:\n"
+        "        batch.add_column(sa.Column('batch_marker', sa.Integer(), nullable=True))\n"
+        "    with op.batch_alter_table('user_entries') as batch:\n"
+        "        batch.add_column(sa.Column('batch_marker', sa.Integer(), nullable=True))\n"
+        "def downgrade():\n"
+        "    pass\n",
+        "batch0000001",
+    )
+    with sqlite3.connect(database) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        assert db.execute("SELECT COUNT(*) FROM trips").fetchone() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM user_entries").fetchone() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM experiences").fetchone() == (1,)
+        assert db.execute("SELECT title FROM trips").fetchone() == ("Non cascade",)
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert "batch_marker" in {row[1] for row in db.execute("PRAGMA table_info(users)")}
+        assert "batch_marker" in {row[1] for row in db.execute("PRAGMA table_info(user_entries)")}
+
+
+def test_foreign_key_violation_rolls_the_revision_back(tmp_path):
+    database = tmp_path / "site.db"
+    adopt_or_upgrade(sqlite_url(database))
+    with pytest.raises(RuntimeError, match="foreign_key_check"):
+        _apply_extra(
+            database,
+            "from alembic import op\n"
+            'revision = "fkviol00001"\n'
+            'down_revision = "site_schema_v1"\n'
+            "branch_labels = None\ndepends_on = None\n"
+            "def upgrade():\n"
+            "    op.execute(\"INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
+            "VALUES (999, 'orphan', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')\")\n"
+            "def downgrade():\n"
+            "    pass\n",
+            "fkviol00001",
+        )
+    assert current_revision(database) == "site_schema_v1"
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT COUNT(*) FROM trips").fetchone() == (0,)
+
+
+def test_startup_accepts_only_recorded_forward_compatible_descendants(tmp_path, monkeypatch):
+    database = tmp_path / "site.db"
+    adopt_or_upgrade(sqlite_url(database))
+    engine = create_engine(sqlite_url(database))
+    with sqlite3.connect(database) as db:
+        db.execute("UPDATE site_alembic_version SET version_num='site_schema_v2'")
+    with engine.connect() as connection:
+        with pytest.raises(RuntimeError, match="Refusing to migrate at startup"):
+            assert_ready(connection)
+    assert current_revision(database) == "site_schema_v2"
+    with sqlite3.connect(database) as db:
+        db.execute(
+            "CREATE TABLE site_revision_compatibility ("
+            "revision VARCHAR(32) NOT NULL, compatible_head VARCHAR(32) NOT NULL, "
+            "PRIMARY KEY (revision, compatible_head))"
+        )
+        db.execute(
+            "INSERT INTO site_revision_compatibility (revision, compatible_head) "
+            "VALUES ('site_schema_v2', 'other_head')"
+        )
+    with engine.connect() as connection:
+        with pytest.raises(RuntimeError, match="Refusing to migrate at startup"):
+            assert_ready(connection)
+    with sqlite3.connect(database) as db:
+        db.execute(
+            "INSERT INTO site_revision_compatibility (revision, compatible_head) "
+            "VALUES ('site_schema_v2', 'site_schema_v1')"
+        )
+    with engine.connect() as connection:
+        assert_ready(connection)
+    monkeypatch.setattr("apps.server.migrations.head_revision", lambda: "site_schema_v2")
+    with sqlite3.connect(database) as db:
+        db.execute("UPDATE site_alembic_version SET version_num='site_schema_v1'")
+    with engine.connect() as connection:
+        with pytest.raises(RuntimeError, match="Refusing to migrate at startup"):
+            assert_ready(connection)
+    assert current_revision(database) == "site_schema_v1"
+    engine.dispose()
+
+
+def test_stamp_waits_out_a_writer_without_a_partial_revision(tmp_path):
+    database = tmp_path / "site.db"
+    legacy_site_database(database)
+    holder = sqlite3.connect(database, timeout=30)
+    holder.execute("BEGIN IMMEDIATE")
+    holder.execute("UPDATE trips SET title='locked'")
+    errors = []
+
+    def run():
+        try:
+            adopt_or_upgrade(sqlite_url(database))
+        except Exception as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    time.sleep(6)
+    assert current_revision(database) is None
+    holder.commit()
+    holder.close()
+    worker.join(timeout=15)
+    assert not errors
+    assert current_revision(database) == head_revision()
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT title FROM trips").fetchone() == ("locked",)

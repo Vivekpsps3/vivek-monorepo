@@ -36,12 +36,23 @@ also inserts `site_schema (1, 1)` and the historical Finance revision marker.
 - A database that does not match the baseline and has no site revision is
   refused. Nothing is written.
 - Each upgrade runs in one SQLite transaction. A failing revision rolls back
-  instead of leaving a half-applied schema. The process exits non-zero.
+  instead of leaving a half-applied schema, and the process exits non-zero.
+  Migration connections set `PRAGMA foreign_keys=OFF` before the transaction
+  starts. SQLite ignores that pragma inside a transaction, and batch mode's
+  `DROP TABLE` would otherwise delete `ON DELETE CASCADE` children or reject
+  non-cascade children. `PRAGMA foreign_key_check` runs before commit and
+  aborts the revision on any violation. The transaction is `BEGIN IMMEDIATE`,
+  so a writer already holding the file makes this job wait on `busy_timeout`
+  instead of failing immediately when a read lock would otherwise be upgraded.
+- `site_schema_v1` downgrade raises. Restore a backup instead of dropping tables.
+  Later revisions should still implement a real downgrade only when it is safe.
 
-Startup in `apps/server/main.py` repeats the upgrade before it serves traffic.
 The container root filesystem is read-only and the process is uid 10001. The
 database file is on the `data` volume, which is writable. Alembic does not need
 to write revision scripts at runtime (`PYTHONDONTWRITEBYTECODE` is set).
+Startup does not migrate. `assert_ready` fails the process unless the database
+is already at this image's head, or a newer revision has recorded that this
+head can still serve it.
 
 ## Deploy
 
@@ -51,19 +62,34 @@ replacing the running container:
 1. Image checks, with no production database mounted.
 2. `backup` profile job: online backup of `/data/site.db` into the backups volume.
 3. `migrate` profile job: the same image, still read-only except for the `data`
-   and `backups` volumes, with `SITE_BACKUP_DIR=/backups`. It backs up again
-   and then stamps or upgrades. `--require-existing` refuses to invent a new
-   production file. If this command fails, deploy exits and the running
-   container stays.
-4. `compose up` and the route probes. Startup upgrades again; at that point the
-   database is already at head.
+   and `backups` volumes, with `SITE_BACKUP_DIR=/backups`. It writes a
+   `premigrate-<revision>-<timestamp>` snapshot, then stamps or upgrades.
+   Those files are not part of the hourly `site-*` set. At least three are
+   kept. `--require-existing` refuses a missing or zero-byte production file.
+   If this command fails, deploy exits and the running container stays.
+4. `compose up` and the route probes. Startup only checks that this image can
+   serve the revision already in the file.
 
 Image rollback does not restore the database. The baseline stamp is safe for
 the previous release because that release ignores `site_alembic_version`. A
-later revision that changes columns the running process uses needs an
-expand/contract plan: the migrate job runs while the previous process may
+later revision that changes columns the running process reads or writes needs
+an expand/contract plan: the migrate job runs while the previous process may
 still be serving, and a probe failure after a successful migration leaves the
-new schema behind.
+new schema in place. A forward-compatible revision must create
+`site_revision_compatibility(revision, compatible_head)` if needed and insert
+`(new_revision, older_head)` for every older head that can still run, including
+`site_schema_v1` when that is true. Startup accepts the database when
+`site_alembic_version` equals this image's head, or when that table names this
+image's head for the database's revision. Anything else, including a database
+behind head, fails startup. Do not insert a compatibility row for a revision
+that drops, renames, retypes, or tightens a column the old code uses. Restore
+the matching `premigrate-*` snapshot instead of starting the old image.
+
+The migrate job and the old container share one SQLite file. Stamping is one
+small write, and migration connections wait up to 30 seconds (`busy_timeout`)
+for a writer. A later revision that recreates a table holds the write lock for
+the whole copy, so the old container's writes wait and then fail. That is
+acceptable only together with the expand/contract rule above.
 
 ## Commands
 
@@ -80,8 +106,8 @@ comparing `.local/data/site.db` with the models. Review the file. Do not edit
 `site_schema_v1_baseline_schema.py` to follow later model changes.
 
 `make db-upgrade` creates `.local/data/site.db` or applies pending revisions.
-`make dev` does this before uvicorn starts, and the process upgrades again on
-startup.
+`make dev` does this before uvicorn starts. The process then only checks the
+revision; it does not migrate again.
 
 `make db-check` upgrades a temporary database and fails if autogenerate finds
 a difference. CI runs the same command in the unified site job. The server
@@ -89,19 +115,37 @@ tests also upgrade an empty database and stamp a fixture built the way
 production was built (`create_all`, `site_schema` version 1, Finance revision
 `e0f6a2b3c4d5`).
 
+See what a database would do before changing it. Copy a backup off the server
+first; `--plan` reads that copy and does not write it:
+
+```sh
+# On the server, copy the latest premigrate or hourly snapshot, not the live file.
+sudo -n docker cp personal-site-maintenance-1:/backups/<snapshot>.db /tmp/site-plan.db
+# On a machine with this repo, against that copy:
+SITE_DATABASE_URL=sqlite:////absolute/site-plan.db python -m apps.server.migrations --plan --require-existing
+```
+
+The JSON line is the detected state (`empty`, `adopt`, or `managed`), the
+action (`upgrade`, `stamp`, `current`, or `refuse`), and the reason. The SQL
+that would run follows. `stamp` SQL is only the `site_alembic_version`
+bookkeeping. `refuse` exits non-zero and prints no SQL. A zero-byte file is
+`empty` and, with `--require-existing`, is refused.
+
 Equivalent invocations:
 
 ```sh
 SITE_DATABASE_URL=sqlite:////absolute/site.db python -m apps.server.migrations
+SITE_DATABASE_URL=sqlite:////absolute/site.db python -m apps.server.migrations --plan
 SITE_DATABASE_URL=sqlite:////absolute/site.db python -m apps.server.migrations revision --autogenerate -m "describe the change"
 python -m apps.server.migrations --check
 ```
 
 The URL must be an absolute SQLite path. Set `SITE_BACKUP_DIR` to take a
-verified backup before touching a database that already has tables. A backup
-failure aborts before the stamp or upgrade. The site service does not mount
-`/backups`, so its startup upgrade does not take one; the deploy migrate job
-does.
+verified `premigrate-<revision>-<timestamp>` backup before touching a database
+that already has tables. A backup failure aborts before the stamp or upgrade.
+Hourly `site-*` snapshots stay on their own retention (`SITE_BACKUP_KEEP`,
+one in production) and are not deleted by the pre-migration backup. The site
+service does not mount `/backups` and does not migrate on startup.
 
 ## Removal candidates
 

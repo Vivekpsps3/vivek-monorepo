@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import sqlite3
 import sys
@@ -85,3 +86,30 @@ def test_latest_backup_replaces_previous_only_after_verification(tmp_path, monke
         tool.backup(database, directory)
     assert list(directory.glob("*.db")) == [second]
     assert second.with_suffix(".json").is_file()
+
+
+def test_premigrate_backups_stay_when_hourly_retention_deletes_site_snapshots(tmp_path):
+    database = tmp_path / "site.db"
+    migrate(database)
+    spec = importlib.util.spec_from_file_location(
+        "backup_retention_kinds", Path(__file__).resolve().parents[3] / "scripts/backup-site.py"
+    )
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    directory = tmp_path / "backups"
+    hourly = tool.backup(database, directory, keep=1)
+    premigrate = [
+        tool.backup(database, directory, kind="premigrate", revision="site_schema_v1")
+        for _ in range(4)
+    ]
+    kept = sorted(directory.glob("premigrate-*.db"))
+    assert len(kept) == 3
+    assert hourly.is_file()
+    assert not premigrate[0].exists()
+    manifest = json.loads(kept[-1].with_suffix(".json").read_text())
+    assert manifest["kind"] == "premigrate"
+    assert manifest["revision"] == "site_schema_v1"
+    replacement = tool.backup(database, directory, keep=1)
+    assert replacement.is_file()
+    assert not hourly.exists()
+    assert len(list(directory.glob("premigrate-*.db"))) == 3

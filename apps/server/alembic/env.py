@@ -55,21 +55,36 @@ def run_migrations_online() -> None:
 
     @event.listens_for(connectable, "connect")
     def _pragmas(dbapi_connection, _record):
-        # Python 3.12 sqlite3 legacy transaction control autocommits DDL unless
-        # a BEGIN is already open, and SELECT does not open one. Without this,
-        # a failed revision can leave its CREATE TABLE behind while rolling
-        # back the following INSERT. PRAGMAs are set first; foreign_keys cannot
-        # be changed inside a transaction.
+        # PRAGMAs first. foreign_keys cannot be changed inside a transaction.
+        # Batch mode copies a table, DROP TABLEs it, then renames the copy.
+        # With foreign_keys ON, that DROP deletes ON DELETE CASCADE children
+        # and rejects non-cascade children. Alembic's SQLite batch docs require
+        # foreign keys off for the migration connection. foreign_key_check
+        # below still runs before commit.
+        # isolation_level None stops sqlite3 from opening a deferred read
+        # transaction on SELECT. Upgrading that read lock to a write returns
+        # SQLITE_LOCKED immediately and ignores busy_timeout. The begin
+        # listener opens BEGIN IMMEDIATE instead, which waits.
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA foreign_keys=OFF")
         cursor.execute("PRAGMA busy_timeout=30000")
         cursor.close()
-        dbapi_connection.autocommit = False
+        dbapi_connection.isolation_level = None
+
+    @event.listens_for(connectable, "begin")
+    def _begin_immediate(connection):
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
 
     with connectable.connect() as connection:
         _configure(connection=connection)
         with context.begin_transaction():
             context.run_migrations()
+            violations = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                preview = "; ".join(str(tuple(row)) for row in violations[:20])
+                raise RuntimeError(
+                    "foreign_key_check failed after migration; rolling back. " + preview
+                )
     connectable.dispose()
 
 

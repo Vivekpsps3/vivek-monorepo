@@ -54,15 +54,15 @@ Flask/Socket.IO/LLM backend and standalone Docker/nginx definitions are retired.
 - **backup**: an on-demand `ops` profile job using the same image for immediate
   backup or verification. It does not run permanently.
 - **migrate**: an on-demand `ops` profile job. It mounts the data and backup
-  volumes, takes a fresh backup, then stamps or upgrades `/data/site.db`. It
-  refuses to create a missing production database.
+  volumes, writes a `premigrate-*` snapshot, then stamps or upgrades
+  `/data/site.db`. It refuses a missing or empty production database.
 
 Readiness checks the site schema version, the site migration revision, and all
-domain tables. Startup refuses a missing database, missing frontend, database
-behind the migration head, or non-WAL database. Before serving, the process
-applies pending revisions and exits if that fails. The root filesystem stays
-read-only; the only database writes are on the data volume. See
-[MIGRATIONS.md](./MIGRATIONS.md).
+domain tables. Startup refuses a missing database, missing frontend, non-WAL
+database, a revision this image does not know how to serve, or a database
+behind the image's head. It does not stamp or upgrade. The migrate job is the
+only schema writer. The root filesystem stays read-only; the only database
+writes are on the data volume. See [MIGRATIONS.md](./MIGRATIONS.md).
 
 Only the app and maintenance helper restart automatically on process exit.
 A running unhealthy container needs investigation; no Docker socket is exposed
@@ -90,20 +90,23 @@ so changing the checkout does not change the running application.
 The deploy script uses a temporary lock, reads the preceding image from Docker's
 existing metadata, runs image checks without production data/network, verifies a
 backup, runs the migrate job, starts the new image, and checks exact-SHA
-readiness plus HTTPS routes. The migrate job backs up again and then stamps or
-upgrades the database. If that command fails, the script exits before replacing
-the running container. On a failed start it restores the prior image and its
-Compose definition embedded in that image. Rollback material is temporary;
-release identity lives in image labels and Docker metadata. No separate release
-database/history file is needed.
+readiness plus HTTPS routes. The migrate job writes a separate pre-migration
+snapshot and then stamps or upgrades the database. If that command fails, the
+script exits before replacing the running container. On a failed start it
+restores the prior image and its Compose definition embedded in that image.
+Rollback material is temporary; release identity lives in image labels and
+Docker metadata. No separate release database/history file is needed.
 
 Database restoration is never automatic after users may have written data.
 Image rollback does not roll the database back. The baseline stamp only adds
-`site_alembic_version`, which the previous release ignores. A later revision
-that changes live tables needs an expand/contract plan before it is merged,
-because deploy migrates while the previous process may still be serving and a
-failed probe after a successful migration leaves the new schema in place.
-Keep preceding images available; do not prune rollback images indiscriminately.
+`site_alembic_version`, which the previous release ignores. Once a newer
+revision exists, the previous image starts only when that revision recorded
+this image's head in `site_revision_compatibility`. A database behind the
+image's head fails startup instead of migrating. A later revision that changes
+live tables needs an expand/contract plan before it is merged, because deploy
+migrates while the previous process may still be serving and a failed probe
+after a successful migration leaves the new schema in place. Keep preceding
+images available; do not prune rollback images indiscriminately.
 
 Commands from any directory on the host (as vivek):
 
@@ -148,8 +151,12 @@ Maintenance checks once a minute and backs up when the most recent verified
 backup is an hour old. It uses SQLite's online backup API, checks integrity and
 foreign keys, restores into a separate verification copy, and atomically publishes
 a private snapshot with a checksum/verification manifest. `SITE_BACKUP_KEEP: "1"`
-in Compose retains only the latest verified snapshot, by user choice. Scheduled
-and manual jobs lock the backup directory to serialize publication and pruning.
+in Compose retains only the latest hourly `site-*` snapshot, by user choice.
+Pre-migration snapshots use the `premigrate-<revision>-<timestamp>` prefix,
+which that glob does not match, and at least three of them are kept so a bad
+revision can still be restored after the hourly snapshot has rotated. The
+manifest records the revision. Scheduled and manual jobs lock the backup
+directory to serialize publication and pruning.
 Older snapshots are removed only after the replacement passes verification and
 a separate restore check. Failed backups preserve the preceding snapshot. Missing
 source databases fail rather than silently skip.

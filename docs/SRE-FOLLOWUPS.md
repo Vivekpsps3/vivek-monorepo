@@ -42,14 +42,19 @@ application authorization and a single private data mount are the boundaries.
 - [x] **Site schema migrations.** Alembic history for the unified database starts
   at baseline `site_schema_v1`. An existing production database is stamped onto
   that baseline with no application-data changes; a fresh database is created by
-  the revisions. Deploy backs up, runs `python -m apps.server.migrations`, and
-  startup upgrades again. Image rollback still does not roll back the database,
-  so a future revision needs an expand/contract window before it is merged.
+  the revisions. Deploy backs up, then the migrate job writes a separate
+  `premigrate-*` snapshot (three kept) and runs `python -m apps.server.migrations`.
+  Startup does not migrate; it accepts this image's head or a newer revision
+  that recorded this head as forward-compatible. Image rollback still does not
+  roll back the database, so a future revision needs an expand/contract window
+  before it is merged.
   Do not run `create_all` or the historical Finance Alembic chain against `site.db`.
 
 - [x] **Recovery-copy retention decision.** User explicitly requested deletion of
   old backups and legacy recovery material. Only the latest verified unified
   snapshot is kept; historical point-in-time recovery is intentionally unavailable.
+  Pre-migration snapshots are the exception: three `premigrate-*` files are kept
+  apart from that hourly snapshot.
 
 ## Traceability to the 80-point review
 

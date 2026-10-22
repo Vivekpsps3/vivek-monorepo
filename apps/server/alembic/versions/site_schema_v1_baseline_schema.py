@@ -130,57 +130,14 @@ STATEMENTS = (
     'CREATE INDEX ix_track_ratings_entry_id ON track_ratings (entry_id)',
 )
 
-TABLES = (
-    'market_research_cache',
-    'ticker_quotes',
-    'users',
-    'place_cache',
-    'settings',
-    'catalog_items',
-    'provider_cache',
-    'site_schema',
-    'alembic_version',
-    'audit_events',
-    'auth_challenges',
-    'auth_enrollments',
-    'encrypted_record_indexes',
-    'encrypted_records',
-    'user_sessions',
-    'user_vaults',
-    'pto_policy',
-    'trips',
-    'episodes',
-    'music_albums',
-    'releases',
-    'user_entries',
-    'budget_lines',
-    'notes',
-    'pto_entries',
-    'reminders',
-    'stays',
-    'transports',
-    'album_ratings',
-    'episode_progress',
-    'experiences',
-    'music_tracks',
-    'season_progress',
-    'parking',
-    'plan_items',
-    'track_ratings',
-)
-
 
 def upgrade() -> None:
-    bind = op.get_bind()
+    # op.execute renders in offline --sql mode. exec_driver_sql does not.
     for statement in STATEMENTS:
-        bind.exec_driver_sql(statement)
-    bind.exec_driver_sql("INSERT INTO site_schema (id, version) VALUES (1, 1)")
-    bind.exec_driver_sql(
-        "INSERT INTO alembic_version (version_num) VALUES ('e0f6a2b3c4d5')"
-    )
+        op.execute(statement)
+    op.execute("INSERT INTO site_schema (id, version) VALUES (1, 1)")
+    op.execute("INSERT INTO alembic_version (version_num) VALUES ('e0f6a2b3c4d5')")
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    for name in reversed(TABLES):
-        bind.exec_driver_sql(f'DROP TABLE "{name}"')
+    raise NotImplementedError("baseline is not reversible; restore from backup")

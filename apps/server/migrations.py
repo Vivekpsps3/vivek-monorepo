@@ -3,7 +3,8 @@
 Production state is the SQLite file named by SITE_DATABASE_URL
 (sqlite:////data/site.db in Compose). The site container's root filesystem is
 read-only; this command writes only that database file, plus a backup when
-SITE_BACKUP_DIR is mounted (the deploy one-shot mounts /backups).
+SITE_BACKUP_DIR is mounted (the deploy one-shot mounts /backups). Startup does
+not call this module.
 
 An existing v1 database is stamped at the baseline revision. Stamp writes the
 site_alembic_version table and does not rewrite application rows. A missing
@@ -12,12 +13,14 @@ chain is a different environment and must not be pointed at this file.
 
 Usage:
     python -m apps.server.migrations
+    python -m apps.server.migrations --plan
     python -m apps.server.migrations --check
     python -m apps.server.migrations revision --autogenerate -m "describe the change"
 """
 import argparse
 import ast
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -29,23 +32,30 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
-from apps.server.schema import MIGRATION_VERSION_TABLE, VERSION
+from apps.server.schema import COMPATIBILITY_TABLE, FINANCE_REVISION, MIGRATION_VERSION_TABLE, VERSION
+
+SQLITE_TIMEOUT_SECONDS = 30
+_IGNORED_TABLES = {MIGRATION_VERSION_TABLE, COMPATIBILITY_TABLE}
 
 _HEAD = None
 
 
 def include_name(name, type_, parent_names):
     del parent_names
-    return not (type_ == "table" and name == MIGRATION_VERSION_TABLE)
+    return not (type_ == "table" and name in _IGNORED_TABLES)
 
 
 def include_object(object_, name, type_, reflected, compare_to):
     del object_, reflected, compare_to
-    return not (type_ == "table" and name == MIGRATION_VERSION_TABLE)
+    return not (type_ == "table" and name in _IGNORED_TABLES)
+
+
+def connect(path: Path) -> sqlite3.Connection:
+    return sqlite3.connect(path, timeout=SQLITE_TIMEOUT_SECONDS)
 
 
 def package_dir() -> Path:
@@ -86,7 +96,7 @@ def head_revision() -> str:
 
 def schema_signature(path: Path) -> tuple:
     """Schema objects except the site revision table, in a stable order."""
-    with sqlite3.connect(path) as db:
+    with connect(path) as db:
         rows = db.execute(
             """
             SELECT type, name, tbl_name, COALESCE(sql, '')
@@ -100,14 +110,14 @@ def schema_signature(path: Path) -> tuple:
 
 
 def table_names(path: Path) -> set[str]:
-    with sqlite3.connect(path) as db:
+    with connect(path) as db:
         return {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
 
 
 def current_revision(path: Path) -> str | None:
     if not path.is_file() or path.stat().st_size == 0:
         return None
-    with sqlite3.connect(path) as db:
+    with connect(path) as db:
         present = db.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
             (MIGRATION_VERSION_TABLE,),
@@ -125,10 +135,15 @@ def classify(path: Path) -> str:
     if not names:
         return "empty"
     if MIGRATION_VERSION_TABLE in names:
+        if current_revision(path) is None:
+            raise RuntimeError(
+                "site_alembic_version is present but has no revision row. "
+                "Refusing to upgrade from base. Restore from a pre-migration backup."
+            )
         return "managed"
     if "site_schema" not in names:
         raise RuntimeError("Database is not a site database; refusing to migrate")
-    with sqlite3.connect(path) as db:
+    with connect(path) as db:
         version = db.execute("SELECT version FROM site_schema WHERE id=1").fetchone()
     if version != (VERSION,):
         raise RuntimeError(f"Database schema {version[0] if version else 'missing'}; refusing to adopt. Expected site schema version {VERSION}.")
@@ -144,7 +159,18 @@ def model_diff(path: Path):
     from apps.server.schema import metadata
 
     current = metadata()
-    engine = create_engine(sqlite_url(path), poolclass=NullPool)
+    engine = create_engine(
+        sqlite_url(path),
+        poolclass=NullPool,
+        connect_args={"timeout": SQLITE_TIMEOUT_SECONDS},
+    )
+
+    @event.listens_for(engine, "connect")
+    def _busy(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute(f"PRAGMA busy_timeout={SQLITE_TIMEOUT_SECONDS * 1000}")
+        cursor.close()
+
     try:
         with engine.connect() as connection:
             context = MigrationContext.configure(
@@ -189,16 +215,137 @@ def backup_if_configured(path: Path) -> None:
         return
     if not path.is_file() or path.stat().st_size == 0:
         return
-    keep = int(os.environ.get("SITE_BACKUP_KEEP", "1"))
-    _load_backup().backup(path, Path(directory), keep)
+    revision = current_revision(path) or "none"
+    # Retention is separate from hourly SITE_BACKUP_KEEP. The backup tool keeps
+    # at least three premigrate-* files and does not prune site-* snapshots.
+    _load_backup().backup(path, Path(directory), kind="premigrate", revision=revision)
 
 
 def _enable_wal(path: Path) -> None:
-    with sqlite3.connect(path) as db:
+    mode_bits = path.stat().st_mode & 0o777
+    with connect(path) as db:
+        mode = db.execute("PRAGMA journal_mode").fetchone()
+        if mode and str(mode[0]).lower() == "wal":
+            if mode_bits != 0o600:
+                os.chmod(path, 0o600)
+            return
         mode = db.execute("PRAGMA journal_mode=WAL").fetchone()
         if not mode or str(mode[0]).lower() != "wal":
             raise RuntimeError("Failed to enable WAL")
         db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    os.chmod(path, 0o600)
+
+
+def _finance_marker(path: Path) -> str | None:
+    with connect(path) as db:
+        try:
+            rows = db.execute("SELECT version_num FROM alembic_version ORDER BY version_num").fetchall()
+        except sqlite3.OperationalError:
+            return None
+    if rows == [(FINANCE_REVISION,)]:
+        return FINANCE_REVISION
+    return None
+
+
+def _reject_adopt(path: Path) -> str | None:
+    """Return a refusal reason, or None when the database may be stamped."""
+    diff = model_diff(path)
+    if diff:
+        return (
+            "Refusing to stamp this database; its schema does not match the site baseline. "
+            "No changes were applied. " + _diff_summary(diff)
+        )
+    if _finance_marker(path) != FINANCE_REVISION:
+        return (
+            "Refusing to stamp this database; alembic_version is not "
+            f"{FINANCE_REVISION}. No changes were applied."
+        )
+    return None
+
+
+def _stamp_sql(revision: str) -> str:
+    table = MIGRATION_VERSION_TABLE
+    return (
+        f"CREATE TABLE {table} (\n"
+        "    version_num VARCHAR(32) NOT NULL,\n"
+        f"    CONSTRAINT {table}_pkc PRIMARY KEY (version_num)\n"
+        ");\n\n"
+        f"INSERT INTO {table} (version_num) VALUES ('{revision}');\n"
+    )
+
+
+def _offline_sql(url: str, start: str, end: str) -> str:
+    buffer = io.StringIO()
+    cfg = make_config(url)
+    cfg.stdout = buffer
+    command.upgrade(cfg, f"{start}:{end}", sql=True)
+    return buffer.getvalue()
+
+
+def plan(url: str, *, require_existing: bool = False) -> int:
+    """Print the migration decision and SQL. Does not create or modify the file."""
+    path = database_path(url)
+    if not path.exists():
+        state = "missing"
+        revision = None
+    elif path.stat().st_size == 0:
+        state = "empty"
+        revision = None
+    else:
+        try:
+            state = classify(path)
+        except RuntimeError as exc:
+            print(json.dumps({
+                "event": "schema_migration_plan",
+                "state": "refuse",
+                "revision": current_revision(path),
+                "head": head_revision(),
+                "action": "refuse",
+                "detail": str(exc),
+            }), flush=True)
+            return 1
+        revision = current_revision(path) if state == "managed" else None
+    head = head_revision()
+    reported = "empty" if state == "missing" else state
+    report = {
+        "event": "schema_migration_plan",
+        "state": reported,
+        "revision": revision,
+        "head": head,
+        "action": None,
+        "detail": "",
+    }
+    sql = ""
+    code = 0
+    if require_existing and state in {"missing", "empty"}:
+        report["action"] = "refuse"
+        report["detail"] = "Site database is missing or empty; refusing to create one"
+        code = 1
+    elif state == "adopt":
+        reason = _reject_adopt(path)
+        if reason:
+            report["action"] = "refuse"
+            report["detail"] = reason
+            code = 1
+        else:
+            report["action"] = "stamp"
+            report["detail"] = "Would record the baseline revision and not rewrite application tables"
+            sql = _stamp_sql(head)
+    elif state in {"missing", "empty"}:
+        report["action"] = "upgrade"
+        report["detail"] = "Would create the schema by running revisions from base to head"
+        sql = _offline_sql(url, "base", head)
+    elif revision == head:
+        report["action"] = "current"
+        report["detail"] = "Already at head"
+    else:
+        report["action"] = "upgrade"
+        report["detail"] = f"Would upgrade {revision} to {head}"
+        sql = _offline_sql(url, revision, head)
+    print(json.dumps(report), flush=True)
+    if sql:
+        print(sql, end="" if sql.endswith("\n") else "\n", flush=True)
+    return code
 
 
 def adopt_or_upgrade(url: str, *, require_existing: bool = False) -> str:
@@ -212,23 +359,22 @@ def adopt_or_upgrade(url: str, *, require_existing: bool = False) -> str:
         raise RuntimeError("Site database is missing; refusing to create one")
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     state = classify(path)
+    if require_existing and state == "empty":
+        raise RuntimeError("Site database is empty; refusing to create one")
     before = current_revision(path) if state == "managed" else None
+    if state == "adopt":
+        reason = _reject_adopt(path)
+        if reason:
+            raise RuntimeError(reason)
     if state != "empty":
         backup_if_configured(path)
     if state == "adopt":
-        diff = model_diff(path)
-        if diff:
-            raise RuntimeError(
-                "Refusing to stamp this database; its schema does not match the site baseline. "
-                "No changes were applied. " + _diff_summary(diff)
-            )
         command.stamp(make_config(url), "head")
         action = "stamped"
     else:
         command.upgrade(make_config(url), "head")
         action = "upgraded" if current_revision(path) != before else "current"
     _enable_wal(path)
-    os.chmod(path, 0o600)
     revision = current_revision(path)
     expected = head_revision()
     if revision != expected:
@@ -278,17 +424,22 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=os.environ.get("SITE_DATABASE_URL", ""))
     parser.add_argument("--check", action="store_true", help="Fail if models differ from the migrations")
-    parser.add_argument("--require-existing", action="store_true", help="Refuse to create a missing database")
+    parser.add_argument("--plan", action="store_true", help="Print the decision and SQL without writing")
+    parser.add_argument("--require-existing", action="store_true", help="Refuse to create a missing or empty database")
     sub = parser.add_subparsers(dest="command")
     revision = sub.add_parser("revision", help="Create a new revision script")
     revision.add_argument("-m", "--message", required=True)
     revision.add_argument("--autogenerate", action="store_true")
     args = parser.parse_args(argv)
+    if args.check and args.plan:
+        parser.error("--check and --plan are mutually exclusive")
     if args.check:
         check_drift()
         return
     if not args.url:
         parser.error("Set SITE_DATABASE_URL or pass --url")
+    if args.plan:
+        raise SystemExit(plan(args.url, require_existing=args.require_existing))
     if args.command == "revision":
         command.revision(make_config(args.url), message=args.message, autogenerate=args.autogenerate)
         return

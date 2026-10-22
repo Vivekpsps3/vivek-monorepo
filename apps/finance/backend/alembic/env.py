@@ -23,6 +23,7 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[4]
 from apps.finance.backend.models import Base
 from apps.finance.backend.legacy_schema_guard import (
     assert_not_unified_site_database,
+    assert_offline_not_site_database,
     assert_safe_to_remove_legacy_schema,
 )
 
@@ -52,6 +53,7 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
+    assert_offline_not_site_database(url)
     context.configure(
         url=url,
         target_metadata=target_metadata,

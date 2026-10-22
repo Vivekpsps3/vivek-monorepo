@@ -1,4 +1,4 @@
-"""Production ASGI entrypoint. Pending schema revisions run before serving."""
+"""Production ASGI entrypoint. Startup checks the schema revision and does not migrate."""
 import json
 import logging
 import os
@@ -28,7 +28,6 @@ from apps.finance.backend.database import engine
 from apps.travel.backend import app as travel, database as travel_db, deps as travel_deps
 from apps.media.backend import app as media, database as media_db, deps as media_deps
 from apps.server.auth import principal_checker
-from apps.server.migrations import adopt_or_upgrade
 from apps.server.schema import assert_ready
 
 configure_engine(engine)
@@ -44,10 +43,8 @@ LATENCY = Histogram("site_request_duration_seconds", "Request latency", ["method
 
 @asynccontextmanager
 async def lifespan(_app):
-    # The deploy one-shot migrates after its backup. Startup repeats the upgrade
-    # so a restart cannot serve a database that is behind head. Failure raises
-    # and the process exits before it accepts traffic.
-    adopt_or_upgrade(os.environ["DATABASE_URL"])
+    # The migrate job is the only writer. It backs up first. Startup fails fast
+    # when this image cannot serve the database, and it does not stamp or upgrade.
     with engine.connect() as connection:
         assert_ready(connection)
         if connection.exec_driver_sql("PRAGMA journal_mode").scalar_one().lower() != "wal":

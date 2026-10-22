@@ -120,9 +120,10 @@ make db-upgrade
 make db-check
 ```
 
-`make dev` applies pending revisions before serving. Production behavior, the
-baseline stamp, and columns that are candidates for a later removal are
-documented in [MIGRATIONS.md](./MIGRATIONS.md).
+`make dev` applies pending revisions before the process starts. The process
+then only checks that the file is at a revision it can serve. Production
+behavior, the baseline stamp, `--plan`, and columns that are candidates for a
+later removal are documented in [MIGRATIONS.md](./MIGRATIONS.md).
 
 ## Backend layout
 

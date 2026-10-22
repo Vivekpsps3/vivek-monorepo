@@ -62,7 +62,6 @@ services:
     environment:
       SITE_DATABASE_URL: sqlite:////data/site.db
       SITE_BACKUP_DIR: /backups
-      SITE_BACKUP_KEEP: "1"
     command: [python, -m, apps.server.migrations, --require-existing]
     volumes: [data:/data, backups:/backups]
     network_mode: none
