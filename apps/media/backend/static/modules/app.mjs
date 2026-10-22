@@ -42,6 +42,7 @@ import {
 
 const app = document.querySelector("#app");
 const toasts = document.querySelector("#toasts");
+const toastAlerts = document.querySelector("#toast-alerts");
 const routeLoads = createSequence();
 const searchLoads = createKeyedFetch();
 let searchResults = [];
@@ -51,10 +52,17 @@ let progressPendingKey = "";
 let skeletonTimer = 0;
 
 function pushToast({ message, kind = "status", action = null }) {
-  if (!toasts || !message) return;
+  const region = kind === "alert" ? toastAlerts : toasts;
+  if (!region || !message) return;
   const toast = document.createElement("div");
   toast.className = kind === "alert" ? "toast is-alert" : "toast";
-  toast.setAttribute("role", kind === "alert" ? "alert" : "status");
+  if (kind === "alert") {
+    const icon = document.createElement("span");
+    icon.className = "toast-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "⚠";
+    toast.append(icon);
+  }
   const text = document.createElement("p");
   text.textContent = message;
   toast.append(text);
@@ -81,8 +89,8 @@ function pushToast({ message, kind = "status", action = null }) {
   close.textContent = "✕";
   close.addEventListener("click", dismiss);
   toast.append(close);
-  toasts.append(toast);
-  while (toasts.children.length > 3) toasts.firstElementChild?.remove();
+  region.append(toast);
+  while (region.children.length > 3) region.firstElementChild?.remove();
   let remaining = action ? TOAST_ACTION_MS : TOAST_MS;
   let started = Date.now();
   let timer = window.setTimeout(dismiss, remaining);
@@ -164,6 +172,13 @@ function errorPanelHtml(name, error) {
 function focusErrorTitle() {
   const heading = app.querySelector("[data-error-title]");
   if (heading instanceof HTMLElement) heading.focus();
+}
+
+function focusPageHeading() {
+  const heading = app.querySelector("h1");
+  if (!(heading instanceof HTMLElement)) return;
+  if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
+  heading.focus();
 }
 
 function focusKeyOf(node) {
@@ -429,13 +444,14 @@ async function viewLibrary(params, ticket) {
   if (status) query.set("status", status);
   if (q) query.set("q", q);
   query.set("sort", sort);
-  commitView(libraryPage(kind, status, q, sort, "", null), true);
+  const fromLibrary = String(app.dataset.view || "").startsWith("#/library");
+  const previousCards = fromLibrary ? (app.querySelector("[data-library-body]")?.innerHTML || "") : "";
+  commitView(libraryPage(kind, status, q, sort, previousCards, null), true);
   const cardsTimer = window.setTimeout(() => {
     if (!ticket.isCurrent()) return;
     const slot = app.querySelector("[data-library-body]");
-    if (slot && slot.childElementCount === 0) {
-      slot.innerHTML = `<div class="grid" aria-hidden="true">${skeletonBlocks(12, "skeleton-card")}</div>`;
-    }
+    if (!slot) return;
+    slot.innerHTML = `<div class="grid" aria-hidden="true">${skeletonBlocks(12, "skeleton-card")}</div>`;
   }, SKELETON_DELAY_MS);
   try {
     const [payload, summary] = await Promise.all([
@@ -502,7 +518,7 @@ function renderResults(payload) {
   return `${providerLine(payload.providers)}<div class="results">${rows}</div>`;
 }
 
-async function runSearch() {
+async function runSearch({ focusError = false } = {}) {
   const input = document.querySelector("#search-q");
   const kind = document.querySelector("#search-kind")?.value || "";
   const box = document.querySelector("#search-results");
@@ -511,10 +527,11 @@ async function runSearch() {
   if (q.length < 2) {
     searchLoads.start("");
     box.innerHTML = "";
+    box.setAttribute("aria-busy", "false");
     return;
   }
   const ticket = searchLoads.start(`${q}\u0000${kind}`);
-  app.setAttribute("aria-busy", "true");
+  box.setAttribute("aria-busy", "true");
   box.innerHTML = `<p class="quiet" role="status" data-search-status>Searching…</p>`;
   const resultsTimer = window.setTimeout(() => {
     if (!ticket.matches()) return;
@@ -529,14 +546,14 @@ async function runSearch() {
     if (`${liveQ}\u0000${liveKind}` !== `${q}\u0000${kind}`) return;
     searchResults = payload.results;
     box.innerHTML = renderResults(payload);
-    app.setAttribute("aria-busy", "false");
+    box.setAttribute("aria-busy", "false");
   } catch (error) {
     window.clearTimeout(resultsTimer);
     if (error?.name === "AbortError" || !ticket.matches()) return;
-    app.setAttribute("aria-busy", "false");
+    box.setAttribute("aria-busy", "false");
     const copy = routeErrorCopy("search", error);
     box.innerHTML = `<div class="error-panel" role="alert"><h2 tabindex="-1" data-error-title>${esc(copy.title)}</h2><p>${esc(copy.body)}</p><div class="hero-actions"><button type="button" class="btn btn-primary" data-action="retry-search">Try again</button><a class="btn" href="#/new?title=${encodeURIComponent(q)}">Add “${esc(q)}” by title</a></div></div>`;
-    focusErrorTitle();
+    if (focusError) focusErrorTitle();
   }
 }
 
@@ -663,7 +680,7 @@ function progressDraftChoice(entry, serverValue, serverUnit) {
   const preview = progressPreview(draft.value, draftUnit) || draft.value;
   const serverPreview = progressPreview(serverValue, serverUnit) || String(serverValue || "cleared");
   const elsewhere = draft.base !== serverKey ? ` Saved elsewhere since: ${esc(serverPreview)}.` : "";
-  return `<p id="progress-draft" class="save-draft">Progress wasn't saved (${esc(preview)}).${elsewhere} <button type="button" data-restore-progress="${entry.id}">Restore</button> <button type="button" data-discard-progress="${entry.id}">Discard</button></p>`;
+  return `<p id="progress-draft" class="save-draft">Unsaved progress from earlier (${esc(preview)}).${elsewhere} <button type="button" data-restore-progress="${entry.id}">Restore</button> <button type="button" data-discard-progress="${entry.id}">Discard</button></p>`;
 }
 
 function externalRatings(rows) {
@@ -951,10 +968,12 @@ async function render() {
   if (waits) {
     app.setAttribute("aria-busy", "true");
     clearSkeletonTimer();
-    skeletonTimer = window.setTimeout(() => {
-      if (!ticket.isCurrent()) return;
-      app.innerHTML = skeletonFor(current.name);
-    }, SKELETON_DELAY_MS);
+    if (!same && !staying) {
+      skeletonTimer = window.setTimeout(() => {
+        if (!ticket.isCurrent()) return;
+        app.innerHTML = skeletonFor(current.name);
+      }, SKELETON_DELAY_MS);
+    }
   }
   try {
     if (current.name === "home") await viewHome(ticket);
@@ -1198,10 +1217,11 @@ document.addEventListener("click", async event => {
   try {
     if (action === "retry-route") {
       await render();
+      if (!app.querySelector("[data-error-title]")) focusPageHeading();
       return;
     }
     if (action === "retry-search") {
-      await runSearch();
+      await runSearch({ focusError: true });
       return;
     }
     if (action === "open-quick" || action === "follow") {
@@ -1245,7 +1265,7 @@ document.addEventListener("submit", async event => {
       return;
     }
     if (form.dataset.action === "search-now") {
-      await runSearch();
+      await runSearch({ focusError: true });
       return;
     }
     if (form.dataset.action === "create-manual") {
@@ -1409,6 +1429,7 @@ document.addEventListener("focusout", async event => {
 
 async function saveNote(box) {
   if (!(box instanceof HTMLTextAreaElement) || !box.dataset.review) return;
+  if (box.dataset.conflict === "true") return;
   if (box.value === (box.dataset.saved ?? "")) return;
   const id = box.dataset.review;
   const sent = box.value;
@@ -1429,6 +1450,7 @@ async function saveNote(box) {
   } catch (error) {
     stopSaving();
     if (error?.status === 409) {
+      box.dataset.conflict = "true";
       if (status?.isConnected) status.textContent = "";
       toast(NOTE_CONFLICT_TOAST, "alert", { label: "Reload", onClick: () => { void render(); } });
       return;

@@ -276,7 +276,7 @@ export function routeErrorCopy(name, error) {
   }
   if (status === 503) {
     return {
-      title: "Sign-in is unavailable",
+      title: "Sign-in is unavailable right now",
       body: "Try again in a minute.",
       retry: true,
       links,
@@ -301,7 +301,8 @@ export function routeErrorCopy(name, error) {
   };
 }
 
-export function emptyState({ title = "", body = "", primary = null, secondary = null } = {}) {
+export function emptyState({ title = "", body = "", primary = null, secondary = null, icon = "" } = {}) {
+  const glyph = icon ? `<span class="empty-icon" aria-hidden="true">${escapeHtml(icon)}</span>` : "";
   const heading = title ? `<h2>${escapeHtml(title)}</h2>` : "";
   const sentence = body ? `<p>${escapeHtml(body)}</p>` : "";
   const cta = primary
@@ -310,7 +311,7 @@ export function emptyState({ title = "", body = "", primary = null, secondary = 
   const extra = secondary
     ? `<a href="${escapeHtml(secondary.href)}">${escapeHtml(secondary.label)}</a>`
     : "";
-  return `<div class="empty">${heading}${sentence}${cta}${extra}</div>`;
+  return `<div class="empty">${glyph}${heading}${sentence}${cta}${extra}</div>`;
 }
 
 export function monthCells(month) {

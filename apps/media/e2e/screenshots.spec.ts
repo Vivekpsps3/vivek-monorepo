@@ -56,4 +56,21 @@ test.describe('phase 0 screenshot matrix', () => {
       }
     }
   });
+
+  test('item controls at 390, 768, and 1280 in light and dark', async ({ page, request }) => {
+    const listed = await request.get('/media/api/library');
+    const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+    for (const width of [390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ['light', 'dark'] as const) {
+        await page.goto('/media/');
+        await page.evaluate(value => localStorage.setItem('media-theme', value), theme);
+        await page.goto(`/media/#/item/${dune.id}`);
+        await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
+        await expect(page.locator('.mark').first()).toBeVisible();
+        const file = path.join(dir as string, `batch1-item-${width}-${theme}.png`);
+        await page.screenshot({ path: file, fullPage: true });
+      }
+    }
+  });
 });

@@ -76,7 +76,8 @@ test("control boundaries stay at least 3:1 against their adjacent backgrounds", 
   const mark = block(appCss, /\.mark\s*\{/);
   const season = block(appCss, /\.season-chip\s*\{/);
   const fields = block(controlsCss, /input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)/);
-  const checkbox = block(controlsCss, /input\[type="checkbox"\]\s*\{/);
+  const checkbox = block(appCss, /input\[type="checkbox"\]\s*\{/);
+  const toastFocus = block(appCss, /\.toast button:focus-visible\s*\{/);
   assert.match(chip, /border:\s*1px solid var\(--border-control\)/);
   assert.match(chip, /background:\s*var\(--surface\)/);
   assert.match(mark, /border:\s*1\.5px solid var\(--border-control\)/);
@@ -85,9 +86,11 @@ test("control boundaries stay at least 3:1 against their adjacent backgrounds", 
   assert.match(season, /background:\s*var\(--surface\)/);
   assert.match(fields, /border:\s*1px solid var\(--border-control\)/);
   assert.match(fields, /background:\s*var\(--surface-2\)/);
+  assert.doesNotMatch(controlsCss, /input\[type="checkbox"\]/);
+  assert.match(checkbox, /appearance:\s*none/);
   assert.match(checkbox, /border:\s*1px solid var\(--border-control\)/);
   assert.match(checkbox, /background:\s*var\(--bg-elevated\)/);
-  assert.match(checkbox, /appearance:\s*none/);
+  assert.match(toastFocus, /outline:\s*2px solid var\(--bg\)/);
 
   const done = appCss.match(/\.season-chip\.is-done\s*\{[^}]*color-mix\(in srgb,\s*var\(--text\)\s+(\d+)%\s*,\s*var\(--bg\)\)/);
   assert.ok(done, "a watched season chip mixes --text over --bg");
@@ -116,6 +119,9 @@ test("control boundaries stay at least 3:1 against their adjacent backgrounds", 
     const washRatio = contrast(border, wash);
     measured.push(`${theme} watched season chip (${border} on ${wash}): ${washRatio.toFixed(2)}:1`);
     assert.ok(washRatio >= 3, `${theme} watched season chip is ${washRatio.toFixed(2)}:1`);
+    const toastRing = contrast(resolve(map, "--bg"), resolve(map, "--text"));
+    measured.push(`${theme} toast focus ring (${resolve(map, "--bg")} on ${resolve(map, "--text")}): ${toastRing.toFixed(2)}:1`);
+    assert.ok(toastRing >= 3, `${theme} toast focus ring is ${toastRing.toFixed(2)}:1`);
   }
   console.log(measured.join("\n"));
 });

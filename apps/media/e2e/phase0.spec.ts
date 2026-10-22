@@ -151,11 +151,10 @@ test('a failed progress draft does not overwrite a newer save', async ({ page, r
     route.continue();
   });
   await progress.fill('40');
-  await page.getByLabel('Unit').selectOption('page');
   await progress.press('Enter');
   await expect(page.locator('#progress-status')).toContainText('Not saved. Try again');
-  await expect(page.locator('#toasts')).toContainText("Couldn't save your progress. Try again.");
-  await expect(page.locator('#toasts').getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(page.locator('#toast-alerts')).toContainText("Couldn't save your progress. Try again.");
+  await expect(page.locator('#toast-alerts').getByRole('button', { name: 'Retry' })).toBeVisible();
   await expect.poll(() => page.evaluate(id => localStorage.getItem(`media-progress-draft:${id}`), dune.id)).toContain('40');
 
   const newer = await request.patch(`/media/api/entries/${dune.id}`, {
@@ -165,7 +164,7 @@ test('a failed progress draft does not overwrite a newer save', async ({ page, r
   await page.reload();
   await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('200');
   const choice = page.locator('#progress-draft');
-  await expect(choice).toContainText("Progress wasn't saved (p. 40).");
+  await expect(choice).toContainText("Unsaved progress from earlier (p. 40).");
   await expect(choice).toContainText('Saved elsewhere since: p. 200.');
   await expect(choice.getByRole('button', { name: 'Restore' })).toBeVisible();
   await expect(choice.getByRole('button', { name: 'Discard' })).toBeVisible();
@@ -198,7 +197,7 @@ test('restoring a progress draft saves on blur and navigation', async ({ page, r
   const progress = page.getByLabel('Progress', { exact: true });
   await expect(progress).toHaveValue('200');
   const choice = page.locator('#progress-draft');
-  await expect(choice).toContainText("Progress wasn't saved (p. 40).");
+  await expect(choice).toContainText("Unsaved progress from earlier (p. 40).");
   await expect(choice).toContainText('Saved elsewhere since: p. 200.');
   await choice.getByRole('button', { name: 'Restore' }).click();
   await expect(progress).toHaveValue('40');
@@ -276,8 +275,12 @@ test('blurring an unchanged note does not overwrite a newer save', async ({ page
 
   await note.fill('from the stale tab');
   await note.blur();
-  await expect(page.locator('#toasts')).toContainText('This note changed in another tab. Your text is kept as a draft.');
-  await expect(page.locator('#toasts').getByRole('button', { name: 'Reload' })).toBeVisible();
+  await expect(page.locator('#toast-alerts')).toContainText('This note changed in another tab. Your text is kept as a draft.');
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
+  await note.blur();
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
+  await page.locator('#toast-alerts').getByRole('button', { name: 'Reload' }).click();
+  await expect(page.locator('#note-draft')).toContainText('Unsaved note from earlier.');
   await expect(page.locator('#notice')).toHaveCount(0);
   const kept = await request.get(`/media/api/entries/${dune.id}`);
   expect((await kept.json()).review).toBe('Newer note from the other tab');
@@ -397,7 +400,8 @@ test('a missing item is one error panel and a success toast survives navigation'
   await expect(panel.getByRole('link', { name: 'Open library' })).toBeVisible();
   await expect(panel.getByRole('link', { name: 'Search' })).toBeVisible();
   await expect(page.locator('#toasts')).toBeEmpty();
-  await expect(page.getByRole('alert')).toHaveCount(1);
+  await expect(page.locator('#toast-alerts')).toBeEmpty();
+  await expect(page.locator('.error-panel[role="alert"]')).toHaveCount(1);
 
   await page.goto('/media/#/new');
   await page.getByLabel('Title').fill('Synthetic Toast Title');
@@ -421,18 +425,106 @@ test('a slow route shows a skeleton and a fast one does not flash', async ({ pag
   expect(await page.evaluate(() => (window as unknown as { __skeletonShown: boolean }).__skeletonShown)).toBe(false);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
 
+  await page.goto('/media/#/calendar');
+  await expect(page.locator('.calendar-grid')).toBeVisible();
   await page.route('**/api/summary', async route => {
     await new Promise(resolve => setTimeout(resolve, 400));
     await route.continue();
   });
-  await page.goto('/media/#/calendar');
-  await page.goto('/media/#/');
+  await page.evaluate(() => { location.hash = '#/'; });
   await expect(page.locator('.skeleton').first()).toBeVisible();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'true');
   await expect(page.locator('.skeleton-home')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('.skeleton')).toHaveCount(0);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
+});
+
+test('try again focuses the page heading when the route recovers', async ({ page }) => {
+  let failed = false;
+  await page.route('**/api/summary', async route => {
+    if (!failed) {
+      failed = true;
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'nope' }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto('/media/#/');
+  await expect(page.getByRole('heading', { name: "Couldn't load your journal" })).toBeFocused();
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.locator('.error-panel')).toHaveCount(0);
+  await expect(page.locator('#app h1')).toBeFocused();
+});
+
+test('a slow status change does not skeleton the open item', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await page.goto(`/media/#/item/${dune.id}`);
+  await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
+  await page.evaluate(() => {
+    (window as unknown as { __skeletonShown: boolean }).__skeletonShown = false;
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('.skeleton')) {
+        (window as unknown as { __skeletonShown: boolean }).__skeletonShown = true;
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  });
+  await page.route(`**/api/entries/${dune.id}`, async route => {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Paused' }).click();
+  await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+  await expect(page.locator('.skeleton')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __skeletonShown: boolean }).__skeletonShown)).toBe(false);
+});
+
+test('library keeps the current cards until the skeleton delay', async ({ page }) => {
+  await page.goto('/media/#/library');
+  await expect(page.locator('[data-library-body] .card').first()).toBeVisible();
+  await page.route('**/api/library**', async route => {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    await route.continue();
+  });
+  await page.evaluate(() => {
+    const state = { sawCards: false, sawSkeleton: false, blanked: false };
+    (window as unknown as { __library: typeof state }).__library = state;
+    const observer = new MutationObserver(() => {
+      const slot = document.querySelector('[data-library-body]');
+      if (!slot) return;
+      const cards = slot.querySelectorAll('.card').length;
+      const skeletons = slot.querySelectorAll('.skeleton').length;
+      if (cards > 0 && skeletons === 0) state.sawCards = true;
+      if (skeletons > 0) state.sawSkeleton = true;
+      if (cards === 0 && skeletons === 0) state.blanked = true;
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  });
+  await page.locator('a.status-mark', { hasText: /^Book$/ }).click();
+  await expect(page.locator('[data-library-body] .skeleton').first()).toBeVisible();
+  const trace = await page.evaluate(() => (window as unknown as { __library: { sawCards: boolean, sawSkeleton: boolean, blanked: boolean } }).__library);
+  expect(trace.sawCards).toBe(true);
+  expect(trace.sawSkeleton).toBe(true);
+  expect(trace.blanked).toBe(false);
+});
+
+test('typing a search does not move focus onto the error', async ({ page }) => {
+  await page.route('**/api/search**', async route => {
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'nope' }) });
+  });
+  await page.goto('/media/#/search');
+  const input = page.getByLabel('Search');
+  await input.fill('du');
+  await expect(page.locator('#search-results')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('main')).not.toHaveAttribute('aria-busy', 'true');
+  const error = page.getByRole('heading', { name: "Search isn't working right now" });
+  await expect(error).toBeVisible();
+  await expect(input).toBeFocused();
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(error).toBeFocused();
 });
 
 test('media routes stay quiet under the enforced content security policy', async ({ page }) => {
@@ -472,6 +564,15 @@ test('media routes stay quiet under the enforced content security policy', async
   await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
   await page.goto('/media/#/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.goto('/media/#/library');
+  await page.getByRole('link', { name: /Dune/ }).click();
+  await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
+  await page.goto('/media/#/calendar');
+  await expect(page.locator('.calendar-grid')).toBeVisible();
+  await page.goto('/media/#/library?sort=nope');
+  await expect(page.locator('#toasts')).toContainText("That sort isn't available. Showing recently active.");
+  await page.goto('/media/#/item/999');
+  await expect(page.getByRole('heading', { name: "This item isn't in your library" })).toBeVisible();
   expect(problems).toEqual([]);
 });
 
@@ -500,8 +601,8 @@ test('a finished progress save does not dismiss another item draft', async ({ pa
     }));
   }, alpha.id);
   await page.goto(`/media/#/item/${alpha.id}`);
-  await expect(page.locator('#progress-draft')).toContainText("Progress wasn't saved");
+  await expect(page.locator('#progress-draft')).toContainText('Unsaved progress from earlier');
   releaseSave();
   await page.waitForTimeout(400);
-  await expect(page.locator('#progress-draft')).toContainText("Progress wasn't saved");
+  await expect(page.locator('#progress-draft')).toContainText('Unsaved progress from earlier');
 });
