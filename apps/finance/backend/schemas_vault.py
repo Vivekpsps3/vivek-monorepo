@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
+
 
 class VaultCreateRequest(BaseModel):
     kdf_algorithm: str = "PBKDF2"
     kdf_salt_b64: str
-    kdf_iterations: int = 310000
+    kdf_iterations: int = Field(MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS)
     wrapped_dek_b64: str
     # Legacy column; recovery-key path removed. Empty string means unused.
     recovery_wrapped_dek_b64: str = ""
@@ -15,7 +17,7 @@ class VaultCreateRequest(BaseModel):
 
 class VaultUpdateRequest(BaseModel):
     kdf_salt_b64: str | None = None
-    kdf_iterations: int | None = None
+    kdf_iterations: int | None = Field(None, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS)
     wrapped_dek_b64: str | None = None
     recovery_wrapped_dek_b64: str | None = None
     key_version: int | None = None

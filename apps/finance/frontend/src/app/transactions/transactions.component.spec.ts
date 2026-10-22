@@ -454,4 +454,44 @@ describe('Transactions multi-file import UI', () => {
     component.fromDate = '';
     expect(component.workIncomePeriod).toBeNull();
   });
+
+  it('writes type and import actions onto Activity and opens receipts from the route', () => {
+    const router = TestBed.inject(Router) as unknown as { navigate: jasmine.Spy };
+    router.navigate = jasmine.createSpy('navigate').and.resolveTo(true);
+    component.closeImportModal();
+
+    component.onActivityViewChange('income');
+    expect(router.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
+      queryParams: { v: 'income' },
+      queryParamsHandling: 'merge',
+    }));
+
+    router.navigate.calls.reset();
+    component.openImportModal();
+    expect(router.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
+      queryParams: { t: 'activity', receipts: '1', add: '1' },
+      queryParamsHandling: 'merge',
+    }));
+
+    router.navigate.calls.reset();
+    component.viewImportedTransactions({ id: 4 } as any);
+    expect(router.navigate).toHaveBeenCalledWith(['/spending'], jasmine.objectContaining({
+      queryParams: jasmine.objectContaining({ t: 'activity', v: 'all', receipt: 4, receipts: null }),
+    }));
+
+    router.navigate.calls.reset();
+    component.reattachCorrectedCsv({ id: 9, filenames: ['statement.csv'], unresolved: [{ filename: 'statement.csv', reason: 'bad row' }] } as any);
+    expect(router.navigate).toHaveBeenCalledWith(['/spending'], jasmine.objectContaining({
+      queryParams: jasmine.objectContaining({ t: 'activity', receipts: '1', add: '1', reattach: 9, reattach_file: 'statement.csv' }),
+    }));
+
+    component.showImportModal = false;
+    routeQuery.next(convertToParamMap({ add: '1' }));
+    expect(component.showImportModal).toBeTrue();
+
+    component.receiptsOpen = true;
+    component.ngOnChanges({ receiptsOpen: { currentValue: true, previousValue: false, firstChange: false, isFirstChange: () => false } });
+    fixture.detectChanges();
+    expect((fixture.nativeElement.querySelector('details.ledger-receipts') as HTMLDetailsElement).open).toBeTrue();
+  });
 });

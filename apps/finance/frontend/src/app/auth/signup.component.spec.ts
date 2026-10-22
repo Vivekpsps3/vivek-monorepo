@@ -8,8 +8,9 @@ describe('SignupComponent', () => {
   let fixture: ComponentFixture<SignupComponent>;
   let auth: jasmine.SpyObj<AuthService>;
 
-  beforeEach(() => {
-    auth = jasmine.createSpyObj<AuthService>('AuthService', ['signupPasswordless']);
+  beforeEach(async () => {
+    auth = jasmine.createSpyObj<AuthService>('AuthService', ['signupPasswordless', 'signupPolicy']);
+    auth.signupPolicy.and.resolveTo({ mode: 'open', signup_open: true, invite_code_required: false });
     TestBed.configureTestingModule({
       imports: [SignupComponent],
       providers: [
@@ -21,6 +22,8 @@ describe('SignupComponent', () => {
     const router = TestBed.inject(Router);
     spyOn(router, 'navigateByUrl').and.resolveTo(true);
     fixture = TestBed.createComponent(SignupComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
   });
 
@@ -66,7 +69,7 @@ describe('SignupComponent', () => {
 
     submitButton().click();
     fixture.detectChanges();
-    expect(auth.signupPasswordless).toHaveBeenCalledOnceWith('Vivek.User', 'long secure passphrase');
+    expect(auth.signupPasswordless).toHaveBeenCalledOnceWith('Vivek.User', 'long secure passphrase', '', '');
     expect(submitButton().disabled).toBeTrue();
 
     await fixture.whenStable();
@@ -78,5 +81,18 @@ describe('SignupComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(auth.signupPasswordless).toHaveBeenCalledTimes(2);
+  });
+
+  it('hides the form when signup is closed', async () => {
+    auth.signupPasswordless.calls.reset();
+    auth.signupPolicy.and.resolveTo({ mode: 'closed', signup_open: false, invite_code_required: false });
+    const closed = TestBed.createComponent(SignupComponent);
+    closed.detectChanges();
+    await closed.whenStable();
+    closed.detectChanges();
+
+    expect(closed.nativeElement.textContent).toContain('Account creation is closed');
+    expect(closed.nativeElement.querySelector('button[type="submit"]')).toBeNull();
+    expect(auth.signupPasswordless).not.toHaveBeenCalled();
   });
 });

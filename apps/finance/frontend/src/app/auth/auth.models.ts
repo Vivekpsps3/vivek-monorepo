@@ -18,6 +18,12 @@ export interface LoginResponse {
   csrf_token: string;
 }
 
+export interface SignupPolicy {
+  mode: 'closed' | 'open' | 'invite' | 'allowlist';
+  signup_open: boolean;
+  invite_code_required: boolean;
+}
+
 export interface MeResponse {
   user: AuthUser;
   csrf_token?: string | null;
