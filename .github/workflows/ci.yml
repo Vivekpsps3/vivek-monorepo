@@ -116,6 +116,42 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # A depth-1 push checkout leaves origin/main with no parents, and
+          # github.event.before is not in the clone. The rehearsal also
+          # unshallows itself; this keeps the pre-merge commit in the graph.
+          fetch-depth: 0
+      - name: Rehearsal preflight survives a depth-1 clone
+        run: |
+          set -euo pipefail
+          origin="$(git remote get-url origin)"
+          probe="$(mktemp -d)"
+          shallow="$(mktemp -d)"
+          cleanup() { rm -rf "$probe" "$shallow"; }
+          trap cleanup EXIT
+          git clone --depth 2 --no-tags "$origin" "$probe"
+          upgrade_from="$(git -C "$probe" rev-parse HEAD^1)"
+          test -n "$upgrade_from"
+          git clone --depth 1 --no-tags "$origin" "$shallow"
+          test "$(git -C "$shallow" rev-parse --is-shallow-repository)" = true
+          legacy=8dc554e8094237419571551ff82b0fbfe115bfbd
+          grep -q "$legacy" scripts/validate-seeded-adoption.sh
+          git -C "$shallow" fetch --no-tags origin "$legacy"
+          git -C "$shallow" fetch --no-tags origin main
+          if git -C "$shallow" merge-base --is-ancestor "$legacy" "$(git -C "$shallow" rev-parse origin/main)"; then
+            echo "depth-1 origin/main already has ancestry to $legacy; self-test did not reproduce the failure" >&2
+            exit 1
+          fi
+          if git -C "$shallow" cat-file -e "${upgrade_from}^{commit}" 2>/dev/null; then
+            echo "depth-1 clone already contains UPGRADE_FROM $upgrade_from" >&2
+            exit 1
+          fi
+          cp scripts/validate-seeded-adoption.sh "$shallow/scripts/validate-seeded-adoption.sh"
+          PREFLIGHT_ONLY=1 UPGRADE_FROM="$upgrade_from" bash "$shallow/scripts/validate-seeded-adoption.sh"
+          git -C "$shallow" merge-base --is-ancestor "$legacy" "$(git -C "$shallow" rev-parse origin/main)"
+          git -C "$shallow" cat-file -e "${upgrade_from}^{commit}"
+          test "$(git -C "$shallow" rev-parse --is-shallow-repository)" = false
+          echo "depth-1 preflight passed for UPGRADE_FROM $upgrade_from"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"

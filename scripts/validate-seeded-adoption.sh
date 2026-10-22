@@ -15,6 +15,10 @@
 #
 # Set BATCH_PROOF=1 to also run the uncommitted batch-recreate check after
 # adopt. That proof is local only; CI leaves it unset.
+#
+# PREFLIGHT_ONLY=1 fetches history, checks the pinned commit and UPGRADE_FROM,
+# then exits. A depth-1 clone is unshallowed first: without that,
+# merge-base --is-ancestor exits 1 and bash -e stops the run with no message.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -77,11 +81,51 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# actions/checkout on a push is depth 1, so origin/main has no parents.
+# merge-base --is-ancestor then exits 1 with an empty message. Fetch the
+# full history before any ancestry check. A non-shallow clone skips this.
+if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+  echo "This clone is shallow, so origin/main has no parents. Fetching full history."
+  if ! git fetch --no-tags --unshallow origin; then
+    echo "could not unshallow this clone from origin" >&2
+    exit 1
+  fi
+fi
 echo "Fetching pinned legacy commit and origin/main"
-git fetch --no-tags origin "$LEGACY_UNADOPTED_SHA"
-git fetch --no-tags origin main
-git cat-file -e "${LEGACY_UNADOPTED_SHA}^{commit}"
-git merge-base --is-ancestor "$LEGACY_UNADOPTED_SHA" "$(git rev-parse origin/main)"
+if ! git fetch --no-tags origin "$LEGACY_UNADOPTED_SHA"; then
+  echo "could not fetch pinned pre-adoption commit $LEGACY_UNADOPTED_SHA from origin" >&2
+  exit 1
+fi
+if ! git cat-file -e "${LEGACY_UNADOPTED_SHA}^{commit}" 2>/dev/null; then
+  echo "pinned pre-adoption commit $LEGACY_UNADOPTED_SHA is not present after fetch" >&2
+  exit 1
+fi
+if ! git fetch --no-tags origin main; then
+  echo "could not fetch origin/main" >&2
+  exit 1
+fi
+if ! main_sha="$(git rev-parse origin/main)"; then
+  echo "origin/main is not a commit after fetching it" >&2
+  exit 1
+fi
+if ! git merge-base --is-ancestor "$LEGACY_UNADOPTED_SHA" "$main_sha"; then
+  echo "pinned pre-adoption commit $LEGACY_UNADOPTED_SHA is not an ancestor of origin/main ($main_sha)" >&2
+  exit 1
+fi
+if [[ "$upgrade_from" != "origin/main" ]]; then
+  if ! git fetch --no-tags origin "$upgrade_from"; then
+    echo "could not fetch UPGRADE_FROM commit $upgrade_from from origin" >&2
+    exit 1
+  fi
+  if ! git cat-file -e "${upgrade_from}^{commit}" 2>/dev/null; then
+    echo "UPGRADE_FROM $upgrade_from is not a commit after fetching it from origin" >&2
+    exit 1
+  fi
+fi
+if [[ "${PREFLIGHT_ONLY:-}" == 1 ]]; then
+  echo "rehearsal preflight ok"
+  exit 0
+fi
 if ! docker image inspect "$image" >/dev/null 2>&1; then
   echo "missing image $image; build it before the rehearsal" >&2
   exit 1
@@ -605,10 +649,19 @@ PY
 run_upgrade() {
   local sha main_head dir sha_before sha_after
   if [[ "$upgrade_from" == "origin/main" ]]; then
-    sha="$(git rev-parse origin/main)"
+    if ! sha="$(git rev-parse origin/main)"; then
+      echo "origin/main is not available for the upgrade rehearsal" >&2
+      exit 1
+    fi
   else
-    git fetch --no-tags origin "$upgrade_from"
-    sha="$(git rev-parse "${upgrade_from}^{commit}")"
+    if ! git fetch --no-tags origin "$upgrade_from"; then
+      echo "could not fetch UPGRADE_FROM commit $upgrade_from from origin" >&2
+      exit 1
+    fi
+    if ! sha="$(git rev-parse "${upgrade_from}^{commit}")"; then
+      echo "UPGRADE_FROM $upgrade_from is not a commit after fetching it from origin" >&2
+      exit 1
+    fi
   fi
   echo "Upgrade rehearsal from $sha"
   dir="$work/upgrade"
