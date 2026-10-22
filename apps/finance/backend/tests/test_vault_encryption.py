@@ -49,7 +49,7 @@ def test_vault_setup_and_record_roundtrip():
         json={
             "kdf_algorithm": "PBKDF2",
             "kdf_salt_b64": _b64(16),
-            "kdf_iterations": 310000,
+            "kdf_iterations": 600000,
             "wrapped_dek_b64": _b64(48),
             "recovery_wrapped_dek_b64": _b64(48),
             "key_version": 1,
@@ -133,7 +133,7 @@ def test_vault_setup_accepts_browser_packed_recovery_wrap():
         json={
             "kdf_algorithm": "PBKDF2",
             "kdf_salt_b64": "r9qDiTPiAKP3Ouf3/61xzQ==",
-            "kdf_iterations": 310000,
+            "kdf_iterations": 600000,
             "wrapped_dek_b64": "LqGH7LVNXPcZ5h9kpbk1wRSWCAV/DlqD0LQ5AHn4UlRh7/qKd6EllAwQH7GbW3qevfadFIKzgBQgo7TA",
             "recovery_wrapped_dek_b64": (
                 "bPvdPISm7G3VfHBXCUT+JQ==."
@@ -153,7 +153,7 @@ def test_vault_rejects_malformed_base64():
         json={
             "kdf_algorithm": "PBKDF2",
             "kdf_salt_b64": _b64(16) + "!",
-            "kdf_iterations": 310000,
+            "kdf_iterations": 600000,
             "wrapped_dek_b64": _b64(48),
             "recovery_wrapped_dek_b64": _b64(48),
             "key_version": 1,
@@ -170,7 +170,7 @@ def test_vault_rejects_urlsafe_or_unpadded_base64():
         json={
             "kdf_algorithm": "PBKDF2",
             "kdf_salt_b64": _b64(16).rstrip("="),
-            "kdf_iterations": 310000,
+            "kdf_iterations": 600000,
             "wrapped_dek_b64": _b64(48),
             "recovery_wrapped_dek_b64": _b64(48),
             "key_version": 1,
@@ -244,6 +244,25 @@ def test_vault_upsert_requires_explicit_revision_and_preserves_key_version():
     assert rewritten.json()[0]["key_version"] == 7
 
 
+def test_vault_wrap_update_rejects_a_weaker_kdf():
+    client = authenticated_client(app, email="vault-kdf@example.com")
+    setup = client.post(
+        "/api/vault/setup",
+        json={
+            "kdf_salt_b64": _b64(16),
+            "kdf_iterations": 600000,
+            "wrapped_dek_b64": _b64(48),
+            "recovery_wrapped_dek_b64": "",
+        },
+    )
+    assert setup.status_code == 200, setup.text
+    weaker = client.put(
+        "/api/vault/wraps",
+        json={"kdf_iterations": 310000, "wrapped_dek_b64": _b64(48)},
+    )
+    assert weaker.status_code == 422
+
+
 def test_plaintext_migration_endpoints_are_retired():
     client = authenticated_client(app, email="retired-migration@example.com")
     assert client.get("/api/vault/migration/export").status_code == 404
@@ -260,7 +279,7 @@ def test_vault_rejects_stale_record_delete():
         json={
             "kdf_algorithm": "PBKDF2",
             "kdf_salt_b64": _b64(16),
-            "kdf_iterations": 310000,
+            "kdf_iterations": 600000,
             "wrapped_dek_b64": _b64(48),
             "recovery_wrapped_dek_b64": _b64(48),
             "key_version": 1,
@@ -297,7 +316,7 @@ def test_vault_accepts_stock_lab_scenarios_collection():
         json={
             "kdf_algorithm": "PBKDF2",
             "kdf_salt_b64": _b64(16),
-            "kdf_iterations": 310000,
+            "kdf_iterations": 600000,
             "wrapped_dek_b64": _b64(48),
             "recovery_wrapped_dek_b64": _b64(48),
             "key_version": 1,

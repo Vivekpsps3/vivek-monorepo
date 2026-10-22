@@ -35,37 +35,29 @@ def issue_challenge(db: Session, user: User, origin: str) -> tuple[AuthChallenge
     return challenge, raw, message
 
 
-def verify_challenge(
-    db: Session, user: User, challenge_id: str, raw: str, message: str, signature_b64: str
-) -> bool:
+def _open_challenge(db: Session, user: User, challenge_id: str, raw: str) -> AuthChallenge | None:
+    """Cheap reject path. A missing, expired, consumed, or mismatched challenge never reaches ECDSA."""
     challenge = db.query(AuthChallenge).filter(AuthChallenge.challenge_id == challenge_id).first()
-    if (
-        not challenge
-        or challenge.user_id != user.id
-        or challenge.consumed_at
-        or challenge.expires_at < utc_now_naive()
-    ):
-        return False
-    if (
-        not secrets.compare_digest(challenge.challenge_hash, _hash(raw))
-        or not user.auth_public_key_b64
-    ):
+    if not challenge or challenge.user_id != user.id or challenge.consumed_at or challenge.expires_at < utc_now_naive():
+        return None
+    if not user.auth_public_key_b64 or not secrets.compare_digest(challenge.challenge_hash, _hash(raw)):
+        return None
+    return challenge
+
+
+def verify_challenge(db: Session, user: User, challenge_id: str, raw: str, message: str, signature_b64: str) -> bool:
+    challenge = _open_challenge(db, user, challenge_id, raw)
+    if challenge is None:
         return False
     try:
-        public_key = serialization.load_der_public_key(
-            base64.b64decode(user.auth_public_key_b64, validate=True)
-        )
-        if not isinstance(public_key, ec.EllipticCurvePublicKey) or not isinstance(
-            public_key.curve, ec.SECP256R1
-        ):
-            return False
         signature = base64.b64decode(signature_b64, validate=True)
         if len(signature) != 64:
             return False
+        public_key = serialization.load_der_public_key(base64.b64decode(user.auth_public_key_b64, validate=True))
+        if not isinstance(public_key, ec.EllipticCurvePublicKey) or not isinstance(public_key.curve, ec.SECP256R1):
+            return False
         public_key.verify(
-            encode_dss_signature(
-                int.from_bytes(signature[:32]), int.from_bytes(signature[32:], "big")
-            ),
+            encode_dss_signature(int.from_bytes(signature[:32]), int.from_bytes(signature[32:], "big")),
             message.encode(),
             ec.ECDSA(hashes.SHA256()),
         )
