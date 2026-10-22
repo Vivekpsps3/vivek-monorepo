@@ -186,7 +186,7 @@ export function mountComposer() {
     const cells = monthCells(monthDate);
     const rows = [];
     for (let index = 0; index < cells.length; index += 7) rows.push(cells.slice(index, index + 7));
-    const heads = weekdayHeads(narrow()).map((day) => `<abbr title="${escapeAttr(day.title)}">${escapeAttr(day.label)}</abbr>`).join("");
+    const heads = weekdayHeads(narrow()).map((day) => `<abbr role="columnheader" title="${escapeAttr(day.title)}">${escapeAttr(day.label)}</abbr>`).join("");
     const body = rows.map((row) => `<div role="row">${row.map((cell) => {
       const selected = Boolean(model.start && cell.iso >= model.start && model.end && cell.iso <= model.end) || cell.iso === model.start;
       const tab = cell.iso === focusIso ? "0" : "-1";

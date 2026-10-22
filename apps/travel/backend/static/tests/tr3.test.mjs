@@ -73,6 +73,7 @@ test("the composer grid and the pto cadence are in the page source", () => {
   const calendar = readFileSync(new URL("../modules/views/calendar.mjs", import.meta.url), "utf8");
   const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
   assert.match(composer, /role="grid"/);
+  assert.match(composer, /role="columnheader"/);
   assert.match(composer, /aria-label="Previous month"/);
   assert.match(composer, /Counts as PTO/);
   assert.match(composer, /aria-disabled/);
