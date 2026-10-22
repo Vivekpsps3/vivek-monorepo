@@ -138,7 +138,9 @@ def refresh_session_cookies(request: Request, response: Response, session: UserS
         set_csrf_cookie(response, csrf)
 
 
-def create_session(db: Session, user: User, request: Request, response: Response, *, migration_only: bool = False) -> str:
+def create_session(
+    db: Session, user: User, request: Request, response: Response, *, migration_only: bool = False
+) -> str:
     token = secrets.token_urlsafe(48)
     csrf = secrets.token_urlsafe(32)
     now = utc_now_naive()
@@ -162,7 +164,9 @@ def create_session(db: Session, user: User, request: Request, response: Response
     return csrf
 
 
-def _session_from_request(db: Session, request: Request, *, allow_migration: bool = False) -> tuple[UserSession, User]:
+def _session_from_request(
+    db: Session, request: Request, *, allow_migration: bool = False
+) -> tuple[UserSession, User]:
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
@@ -174,7 +178,10 @@ def _session_from_request(db: Session, request: Request, *, allow_migration: boo
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
     if session.migration_only and not allow_migration:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Complete passwordless enrollment before accessing the application")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Complete passwordless enrollment before accessing the application",
+        )
     session.last_seen_at = now
     return session, user
 
@@ -193,7 +200,9 @@ def get_current_user(request: Request, response: Response, db: Session = Depends
     try:
         session, user = _session_from_request(db, request)
     except HTTPException as exc:
-        if exc.status_code != status.HTTP_401_UNAUTHORIZED or not local_dev_override_active(request):
+        if exc.status_code != status.HTTP_401_UNAUTHORIZED or not local_dev_override_active(
+            request
+        ):
             raise
         return open_local_dev_session(db, request, response)
     require_csrf(request, session)
@@ -201,10 +210,15 @@ def get_current_user(request: Request, response: Response, db: Session = Depends
     return user
 
 
-def get_current_migration_user(request: Request, response: Response, db: Session = Depends(get_db)) -> User:
+def get_current_migration_user(
+    request: Request, response: Response, db: Session = Depends(get_db)
+) -> User:
     session, user = _session_from_request(db, request, allow_migration=True)
     if not session.migration_only:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Passwordless enrollment is only available during migration")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Passwordless enrollment is only available during migration",
+        )
     require_csrf(request, session)
     refresh_session_cookies(request, response, session)
     return user
@@ -216,7 +230,9 @@ def complete_migration_session(db: Session, request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
     session = db.query(UserSession).filter(UserSession.token_hash == _hash_secret(token)).first()
     if not session or not session.migration_only:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Migration session required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Migration session required"
+        )
     session.migration_only = False
 
 
@@ -265,7 +281,9 @@ def current_session_id(db: Session, request: Request) -> int | None:
 
 def revoke_user_sessions(db: Session, user_id: int, *, keep_session_id: int | None = None) -> int:
     now = utc_now_naive()
-    query = db.query(UserSession).filter(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+    query = db.query(UserSession).filter(
+        UserSession.user_id == user_id, UserSession.revoked_at.is_(None)
+    )
     if keep_session_id is not None:
         query = query.filter(UserSession.id != keep_session_id)
     rows = query.all()

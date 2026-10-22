@@ -1,7 +1,6 @@
 """A trip is one leave-to-return span, with plans visible on the home payload."""
 
 from datetime import date, timedelta
-from decimal import Decimal
 
 
 def monday_on_or_after(start: date) -> date:
@@ -28,8 +27,16 @@ def test_trip_flow_home_calendar_budget_and_pto(client):
             "status": "booked",
             "counts_as_pto": True,
             "stays": [
-                {"city": "Tokyo", "arrive_on": start.isoformat(), "leave_on": (start + timedelta(days=2)).isoformat()},
-                {"city": "Kyoto", "arrive_on": (start + timedelta(days=2)).isoformat(), "leave_on": end.isoformat()},
+                {
+                    "city": "Tokyo",
+                    "arrive_on": start.isoformat(),
+                    "leave_on": (start + timedelta(days=2)).isoformat(),
+                },
+                {
+                    "city": "Kyoto",
+                    "arrive_on": (start + timedelta(days=2)).isoformat(),
+                    "leave_on": end.isoformat(),
+                },
             ],
             "transports": [
                 {
@@ -80,7 +87,9 @@ def test_trip_flow_home_calendar_budget_and_pto(client):
         },
     )
     assert planned.status_code == 201, planned.text
-    assert any(item["title"] == "Sushi Saito" for day in planned.json()["days"] for item in day["items"])
+    assert any(
+        item["title"] == "Sushi Saito" for day in planned.json()["days"] for item in day["items"]
+    )
 
     parked = client.post(
         f"/api/trips/{trip['id']}/parking",
@@ -97,7 +106,12 @@ def test_trip_flow_home_calendar_budget_and_pto(client):
 
     extra = client.post(
         f"/api/trips/{trip['id']}/budget-lines",
-        json={"category": "other", "label": "Travel insurance", "amount": "30.00", "currency": "USD"},
+        json={
+            "category": "other",
+            "label": "Travel insurance",
+            "amount": "30.00",
+            "currency": "USD",
+        },
     )
     assert extra.status_code == 201, extra.text
     assert any(item["label"] == "Travel insurance" for item in extra.json()["budget"]["manual"])
@@ -106,7 +120,10 @@ def test_trip_flow_home_calendar_budget_and_pto(client):
         json={"category": "other", "label": "Transit card", "amount": "20.00", "currency": "EUR"},
     )
     assert euros.status_code == 201, euros.text
-    assert {item["label"] for item in euros.json()["budget"]["manual"]} >= {"Travel insurance", "Transit card"}
+    assert {item["label"] for item in euros.json()["budget"]["manual"]} >= {
+        "Travel insurance",
+        "Transit card",
+    }
 
     policy = client.put(
         "/api/pto/policy",
@@ -126,29 +143,44 @@ def test_trip_flow_home_calendar_budget_and_pto(client):
     body = home.json()
     upcoming = body["upcoming"][0]
     assert upcoming["title"] == "Japan"
-    dinner = [item for day in upcoming["days"] if day["on_date"] == start.isoformat() for item in day["items"]]
+    dinner = [
+        item
+        for day in upcoming["days"]
+        if day["on_date"] == start.isoformat()
+        for item in day["items"]
+    ]
     assert dinner[0]["title"] == "Sushi Saito"
     assert any(item["kind"] == "parking" for item in body["attention"])
     currencies = {item["currency"]: item for item in upcoming["budget"]["currencies"]}
     assert currencies["USD"]["total"] == "1020.00"
     assert currencies["USD"]["paid"] == "400.00"
     assert currencies["EUR"]["total"] == "20.00"
-    outbound = next(item for item in currencies["USD"]["categories"] if item["category"] == "outbound_flight")
-    inbound = next(item for item in currencies["USD"]["categories"] if item["category"] == "inbound_flight")
+    outbound = next(
+        item for item in currencies["USD"]["categories"] if item["category"] == "outbound_flight"
+    )
+    inbound = next(
+        item for item in currencies["USD"]["categories"] if item["category"] == "inbound_flight"
+    )
     assert outbound["amount"] == "400.00"
     assert inbound["amount"] == "350.00"
     assert upcoming["pto"]["balance_when_you_leave"] == "10.0000"
     assert upcoming["pto"]["leftover_after"] == "5.0000"
     assert body["next_pto"]["leftover_after"] == "5.0000"
 
-    calendar = client.get("/api/calendar", params={"start": start.isoformat(), "end": end.isoformat()})
+    calendar = client.get(
+        "/api/calendar", params={"start": start.isoformat(), "end": end.isoformat()}
+    )
     assert calendar.status_code == 200
     assert calendar.json()["trips"][0]["cities"] == ["Tokyo", "Kyoto"]
     assert calendar.json()["plans"][0]["title"] == "Sushi Saito"
 
     outside = client.post(
         f"/api/trips/{trip['id']}/stays",
-        json={"city": "Osaka", "arrive_on": (end + timedelta(days=3)).isoformat(), "leave_on": (end + timedelta(days=4)).isoformat()},
+        json={
+            "city": "Osaka",
+            "arrive_on": (end + timedelta(days=3)).isoformat(),
+            "leave_on": (end + timedelta(days=4)).isoformat(),
+        },
     )
     assert outside.status_code == 422
 
@@ -178,11 +210,18 @@ def test_manual_pto_and_preview(client):
     assert saved.status_code == 200
     created = client.post(
         "/api/pto/entries",
-        json={"label": "Appointment", "start_date": "2026-02-02", "end_date": "2026-02-02", "days": "1"},
+        json={
+            "label": "Appointment",
+            "start_date": "2026-02-02",
+            "end_date": "2026-02-02",
+            "days": "1",
+        },
     )
     assert created.status_code == 201
     entry_id = created.json()["entries"][0]["id"]
-    preview = client.get("/api/pto/preview", params={"start": "2026-03-02", "end": "2026-03-06", "days": "5"})
+    preview = client.get(
+        "/api/pto/preview", params={"start": "2026-03-02", "end": "2026-03-06", "days": "5"}
+    )
     assert preview.status_code == 200, preview.text
     assert preview.json()["balance_when_you_leave"] == "11.0000"
     assert preview.json()["leftover_after"] == "6.0000"
@@ -191,7 +230,9 @@ def test_manual_pto_and_preview(client):
 
 def test_flight_lookup_and_place_cache(client, monkeypatch):
     monkeypatch.delenv("FLIGHTAWARE_API_KEY", raising=False)
-    missing = client.post("/api/flights/lookup", json={"ident": "UA 837", "depart_on": "2026-11-02"})
+    missing = client.post(
+        "/api/flights/lookup", json={"ident": "UA 837", "depart_on": "2026-11-02"}
+    )
     assert missing.status_code == 503
 
     def fake_lookup(ident, _depart_on, api_key):
@@ -228,11 +269,19 @@ def test_trips_stay_with_the_finance_user(client):
 
     created = client.post(
         "/api/trips",
-        json={"title": "Mine", "start_date": "2026-11-02", "end_date": "2026-11-06", "stays": [], "transports": []},
+        json={
+            "title": "Mine",
+            "start_date": "2026-11-02",
+            "end_date": "2026-11-06",
+            "stays": [],
+            "transports": [],
+        },
     )
     assert created.status_code == 201, created.text
     trip_id = created.json()["id"]
-    client.app.state.principal_checker = lambda _request: AuthResult(Principal(2, "other", "Other"), [])
+    client.app.state.principal_checker = lambda _request: AuthResult(
+        Principal(2, "other", "Other"), []
+    )
     assert client.get(f"/api/trips/{trip_id}").status_code == 404
     assert client.get("/api/home").json()["upcoming"] == []
     assert client.get("/api/settings").json()["account"]["name"] == "Other"

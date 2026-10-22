@@ -47,7 +47,7 @@ def numeric_id(source_id: str | None, kind: str) -> str | None:
     text = str(source_id).strip()
     prefix = f"{kind}:"
     if text.startswith(prefix):
-        text = text[len(prefix):]
+        text = text[len(prefix) :]
     if text.isdigit() and int(text) > 0:
         return str(int(text))
     return None
@@ -55,7 +55,10 @@ def numeric_id(source_id: str | None, kind: str) -> str | None:
 
 def lookup(db: Session, key: str, job, budget: Budget):
     row = db.get(ProviderCache, key)
-    if row is not None and providers.as_utc(row.fetched_at) >= datetime.now(timezone.utc) - providers.TTL:
+    if (
+        row is not None
+        and providers.as_utc(row.fetched_at) >= datetime.now(timezone.utc) - providers.TTL
+    ):
         try:
             payload = json.loads(row.payload)
         except json.JSONDecodeError:
@@ -84,12 +87,16 @@ def refresh_show(db: Session, catalog: CatalogItem, http: httpx.Client, budget: 
             show_id = str(int(str(catalog.source_id).strip()))
         if not show_id:
             return
-        payload = lookup(db, f"tvmaze:episodes:{show_id}", lambda: tvmaze_episodes(http, show_id), budget)
+        payload = lookup(
+            db, f"tvmaze:episodes:{show_id}", lambda: tvmaze_episodes(http, show_id), budget
+        )
     elif catalog.source == "tmdb" and os.getenv("TMDB_API_KEY", "").strip():
         show_id = numeric_id(catalog.source_id, "tv")
         if not show_id:
             return
-        payload = lookup(db, f"tmdb:episodes:{show_id}", lambda: tmdb_episodes(http, show_id), budget)
+        payload = lookup(
+            db, f"tmdb:episodes:{show_id}", lambda: tmdb_episodes(http, show_id), budget
+        )
     else:
         return
     if not payload:
@@ -168,14 +175,16 @@ def tvmaze_episodes(http: httpx.Client, show_id: str) -> list[dict]:
         if not isinstance(number, int) or not isinstance(season, int):
             continue
         airdate = item.get("airdate") if isinstance(item.get("airdate"), str) else None
-        rows.append({
-            "season_number": season,
-            "episode_number": number,
-            "title": item.get("name") if isinstance(item.get("name"), str) else None,
-            "air_date": airdate,
-            "overview": item.get("summary") if isinstance(item.get("summary"), str) else None,
-            "source_id": str(item.get("id")) if item.get("id") else None,
-        })
+        rows.append(
+            {
+                "season_number": season,
+                "episode_number": number,
+                "title": item.get("name") if isinstance(item.get("name"), str) else None,
+                "air_date": airdate,
+                "overview": item.get("summary") if isinstance(item.get("summary"), str) else None,
+                "source_id": str(item.get("id")) if item.get("id") else None,
+            }
+        )
     return rows
 
 
@@ -206,14 +215,20 @@ def tmdb_episodes(http: httpx.Client, show_id: str) -> list[dict]:
         for item in episodes:
             if not isinstance(item, dict) or not isinstance(item.get("episode_number"), int):
                 continue
-            rows.append({
-                "season_number": number,
-                "episode_number": item["episode_number"],
-                "title": item.get("name") if isinstance(item.get("name"), str) else None,
-                "air_date": item.get("air_date") if isinstance(item.get("air_date"), str) else None,
-                "overview": item.get("overview") if isinstance(item.get("overview"), str) else None,
-                "source_id": str(item.get("id")) if item.get("id") else None,
-            })
+            rows.append(
+                {
+                    "season_number": number,
+                    "episode_number": item["episode_number"],
+                    "title": item.get("name") if isinstance(item.get("name"), str) else None,
+                    "air_date": item.get("air_date")
+                    if isinstance(item.get("air_date"), str)
+                    else None,
+                    "overview": item.get("overview")
+                    if isinstance(item.get("overview"), str)
+                    else None,
+                    "source_id": str(item.get("id")) if item.get("id") else None,
+                }
+            )
     return rows
 
 
@@ -224,11 +239,17 @@ def tmdb_collection_parts(http: httpx.Client, movie_id: str) -> list[dict]:
     movie = http.get(f"https://api.themoviedb.org/3/movie/{movie_id}", params={"api_key": key})
     movie.raise_for_status()
     body = movie.json() if isinstance(movie.json(), dict) else {}
-    collection = body.get("belongs_to_collection") if isinstance(body.get("belongs_to_collection"), dict) else {}
+    collection = (
+        body.get("belongs_to_collection")
+        if isinstance(body.get("belongs_to_collection"), dict)
+        else {}
+    )
     collection_id = collection.get("id")
     if not isinstance(collection_id, int) or collection_id <= 0:
         return []
-    coll = http.get(f"https://api.themoviedb.org/3/collection/{collection_id}", params={"api_key": key})
+    coll = http.get(
+        f"https://api.themoviedb.org/3/collection/{collection_id}", params={"api_key": key}
+    )
     coll.raise_for_status()
     parts = coll.json().get("parts") if isinstance(coll.json(), dict) else None
     if not isinstance(parts, list):
@@ -244,15 +265,17 @@ def tmdb_collection_parts(http: httpx.Client, movie_id: str) -> list[dict]:
         title = item.get("title") if isinstance(item.get("title"), str) else ""
         if not title.strip():
             continue
-        rows.append({
-            "relation": "sequel",
-            "title": title.strip(),
-            "year": year,
-            "precision": precision,
-            "released_on": released_on,
-            "source": "tmdb",
-            "source_id": f"movie:{item.get('id')}",
-        })
+        rows.append(
+            {
+                "relation": "sequel",
+                "title": title.strip(),
+                "year": year,
+                "precision": precision,
+                "released_on": released_on,
+                "source": "tmdb",
+                "source_id": f"movie:{item.get('id')}",
+            }
+        )
     return rows
 
 
@@ -335,7 +358,9 @@ def wikidata_related(http: httpx.Client, title: str, year: int | None) -> list[d
     )
     response.raise_for_status()
     body = response.json() if isinstance(response.json(), dict) else {}
-    bindings = body.get("results", {}).get("bindings", []) if isinstance(body.get("results"), dict) else []
+    bindings = (
+        body.get("results", {}).get("bindings", []) if isinstance(body.get("results"), dict) else []
+    )
     if not isinstance(bindings, list):
         return []
     rows = []
@@ -344,7 +369,11 @@ def wikidata_related(http: httpx.Client, title: str, year: int | None) -> list[d
             continue
         relation = binding_value(binding, "rel")
         label = binding_value(binding, "relatedLabel")
-        if relation not in {"sequel", "spinoff", "series"} or not isinstance(label, str) or not label.strip():
+        if (
+            relation not in {"sequel", "spinoff", "series"}
+            or not isinstance(label, str)
+            or not label.strip()
+        ):
             continue
         precision, released_on, item_year = release_from_wikidata(
             binding_value(binding, "date"),
@@ -357,15 +386,17 @@ def wikidata_related(http: httpx.Client, title: str, year: int | None) -> list[d
                 continue
             relation = "sequel"
         source_id = binding_value(binding, "related")
-        rows.append({
-            "relation": relation,
-            "title": label.strip(),
-            "year": item_year,
-            "precision": precision,
-            "released_on": released_on,
-            "source": "wikidata",
-            "source_id": source_id if isinstance(source_id, str) else None,
-        })
+        rows.append(
+            {
+                "relation": relation,
+                "title": label.strip(),
+                "year": item_year,
+                "precision": precision,
+                "released_on": released_on,
+                "source": "wikidata",
+                "source_id": source_id if isinstance(source_id, str) else None,
+            }
+        )
     return dedupe_related(rows, title, year)
 
 
@@ -436,7 +467,9 @@ def dedupe_related(rows: list[dict], title: str, year: int | None) -> list[dict]
             continue
         better_relation = rank[row["relation"]] < rank[current["relation"]]
         same = row["relation"] == current["relation"]
-        better_date = same and precision_rank.get(row.get("precision"), 9) < precision_rank.get(current.get("precision"), 9)
+        better_date = same and precision_rank.get(row.get("precision"), 9) < precision_rank.get(
+            current.get("precision"), 9
+        )
         if better_relation or better_date:
             chosen[key] = row
     return list(chosen.values())

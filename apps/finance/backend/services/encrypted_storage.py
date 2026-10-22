@@ -180,7 +180,9 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
         if row:
             expected_revision = item.get("expected_revision")
             if expected_revision is None:
-                raise HTTPException(status_code=400, detail="expected_revision is required for updates")
+                raise HTTPException(
+                    status_code=400, detail="expected_revision is required for updates"
+                )
             expected = int(expected_revision)
             if expected != row.revision:
                 raise HTTPException(

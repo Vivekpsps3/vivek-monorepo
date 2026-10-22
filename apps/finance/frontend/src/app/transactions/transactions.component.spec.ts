@@ -5,7 +5,7 @@ import { TransactionsComponent } from './transactions.component';
 import { FinanceService } from '../services/finance.service';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
-import { BankImportFilePreview } from '../models/transaction.model';
+import { BankImportFilePreview, ImportReceipt } from '../models/transaction.model';
 import { buildBankImportPreview, buildBankImportPreviews, listClientBankImports } from '../utils/bank-import.util';
 
 describe('Transactions multi-file import UI', () => {
@@ -473,14 +473,30 @@ describe('Transactions multi-file import UI', () => {
       queryParamsHandling: 'merge',
     }));
 
+    const receipt = (overrides: Partial<ImportReceipt> & Pick<ImportReceipt, 'id'>): ImportReceipt => ({
+      bank_slugs: [],
+      filenames: [],
+      status: 'complete',
+      started_at: '2026-01-01T00:00:00Z',
+      selected_row_count: 0,
+      inserted_count: 0,
+      unresolved: [],
+      account_displays: [],
+      ...overrides,
+    });
+
     router.navigate.calls.reset();
-    component.viewImportedTransactions({ id: 4 } as any);
+    component.viewImportedTransactions(receipt({ id: 4 }));
     expect(router.navigate).toHaveBeenCalledWith(['/spending'], jasmine.objectContaining({
       queryParams: jasmine.objectContaining({ t: 'activity', v: 'all', receipt: 4, receipts: null }),
     }));
 
     router.navigate.calls.reset();
-    component.reattachCorrectedCsv({ id: 9, filenames: ['statement.csv'], unresolved: [{ filename: 'statement.csv', reason: 'bad row' }] } as any);
+    component.reattachCorrectedCsv(receipt({
+      id: 9,
+      filenames: ['statement.csv'],
+      unresolved: [{ line: 1, filename: 'statement.csv', reason: 'bad row' }],
+    }));
     expect(router.navigate).toHaveBeenCalledWith(['/spending'], jasmine.objectContaining({
       queryParams: jasmine.objectContaining({ t: 'activity', receipts: '1', add: '1', reattach: 9, reattach_file: 'statement.csv' }),
     }));

@@ -9,6 +9,7 @@ signing-key wrap (WebCrypto PKCS8 is 138 bytes, packed AES-GCM adds 28).
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import logging
@@ -113,10 +114,8 @@ def _publish_secret(path: Path, raw: bytes, *, exclusive: bool) -> bool:
         _fsync_dir(path.parent)
         return True
     finally:
-        try:
+        with contextlib.suppress(OSError):
             tmp.unlink()
-        except OSError:
-            pass
 
 
 def _ensure_secret_file(path: Path) -> bytes | None:
@@ -181,7 +180,9 @@ def _stretch(purpose: str, identifier: str, size: int) -> bytes:
     out = bytearray()
     counter = 1
     while len(out) < size:
-        out += hmac.new(key, purpose.encode() + b"\0" + label + b"\0" + str(counter).encode(), hashlib.sha256).digest()
+        out += hmac.new(
+            key, purpose.encode() + b"\0" + label + b"\0" + str(counter).encode(), hashlib.sha256
+        ).digest()
         counter += 1
     return bytes(out[:size])
 

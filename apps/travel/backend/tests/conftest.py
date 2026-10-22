@@ -16,7 +16,9 @@ def client(tmp_path, monkeypatch):
     from apps.travel.backend.deps import AuthResult, Principal, get_geocoder
 
     application = create_app()
-    application.state.principal_checker = lambda _request: AuthResult(Principal(1, "tester", "Tester"), [])
+    application.state.principal_checker = lambda _request: AuthResult(
+        Principal(1, "tester", "Tester"), []
+    )
     application.dependency_overrides[get_geocoder] = lambda: (lambda _query: [])
     with TestClient(application) as test_client:
         yield test_client

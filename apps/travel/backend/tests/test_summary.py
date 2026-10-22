@@ -30,7 +30,13 @@ def test_summary_next_trip(client):
             "title": "Already home",
             "start_date": past_start.isoformat(),
             "end_date": past_end.isoformat(),
-            "stays": [{"city": "Oslo", "arrive_on": past_start.isoformat(), "leave_on": past_end.isoformat()}],
+            "stays": [
+                {
+                    "city": "Oslo",
+                    "arrive_on": past_start.isoformat(),
+                    "leave_on": past_end.isoformat(),
+                }
+            ],
         },
     )
     assert past.status_code == 201, past.text
@@ -46,8 +52,16 @@ def test_summary_next_trip(client):
             "end_date": end.isoformat(),
             "origin_label": "SFO",
             "stays": [
-                {"city": "Lisbon", "arrive_on": start.isoformat(), "leave_on": (start + timedelta(days=2)).isoformat()},
-                {"city": "Porto", "arrive_on": (start + timedelta(days=2)).isoformat(), "leave_on": end.isoformat()},
+                {
+                    "city": "Lisbon",
+                    "arrive_on": start.isoformat(),
+                    "leave_on": (start + timedelta(days=2)).isoformat(),
+                },
+                {
+                    "city": "Porto",
+                    "arrive_on": (start + timedelta(days=2)).isoformat(),
+                    "leave_on": end.isoformat(),
+                },
             ],
         },
     )
@@ -80,7 +94,13 @@ def test_summary_next_trip(client):
             "start_date": live_start.isoformat(),
             "end_date": live_end.isoformat(),
             "origin_label": "Home",
-            "stays": [{"city": "Oakland", "arrive_on": live_start.isoformat(), "leave_on": live_end.isoformat()}],
+            "stays": [
+                {
+                    "city": "Oakland",
+                    "arrive_on": live_start.isoformat(),
+                    "leave_on": live_end.isoformat(),
+                }
+            ],
         },
     )
     assert live.status_code == 201, live.text
@@ -104,7 +124,9 @@ def test_summary_leaves_tomorrow(client):
             "title": "Overnight",
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
-            "stays": [{"city": "Seattle", "arrive_on": start.isoformat(), "leave_on": end.isoformat()}],
+            "stays": [
+                {"city": "Seattle", "arrive_on": start.isoformat(), "leave_on": end.isoformat()}
+            ],
         },
     )
     assert created.status_code == 201, created.text

@@ -8,7 +8,9 @@ from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_IT
 class VaultCreateRequest(BaseModel):
     kdf_algorithm: str = "PBKDF2"
     kdf_salt_b64: str
-    kdf_iterations: int = Field(MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS)
+    kdf_iterations: int = Field(
+        MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=MAX_PBKDF2_ITERATIONS
+    )
     wrapped_dek_b64: str
     # Legacy column; recovery-key path removed. Empty string means unused.
     recovery_wrapped_dek_b64: str = ""

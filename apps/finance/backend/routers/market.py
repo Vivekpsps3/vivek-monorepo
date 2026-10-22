@@ -58,7 +58,7 @@ def get_market_research(
     try:
         return market_data.get_research(upper, period=clean_period, force_refresh=refresh, db=db)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)[:200])
+        raise HTTPException(status_code=502, detail=str(exc)[:200]) from exc
 
 
 @router.post("/market/research/batch", response_model=MarketResearchBatchResponse)
@@ -72,7 +72,9 @@ def get_market_research_batch(
     for symbol in body.symbols:
         try:
             results.append(
-                market_data.get_research(symbol, period=body.period, force_refresh=body.refresh, db=db)
+                market_data.get_research(
+                    symbol, period=body.period, force_refresh=body.refresh, db=db
+                )
             )
         except Exception as exc:
             failed.append(MarketResearchFailure(symbol=symbol, error=str(exc)[:200]))

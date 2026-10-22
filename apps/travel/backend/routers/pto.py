@@ -74,14 +74,20 @@ def save_policy(body: PtoPolicyIn, db: Session = Depends(get_db)):
     row.hours_per_day = fmt_days(_quantize(body.hours_per_day))
     row.balance_days = fmt_days(_quantize(body.balance_days))
     row.balance_as_of = body.balance_as_of
-    row.annual_cap_days = fmt_days(_quantize(body.annual_cap_days)) if body.annual_cap_days is not None else None
+    row.annual_cap_days = (
+        fmt_days(_quantize(body.annual_cap_days)) if body.annual_cap_days is not None else None
+    )
     db.flush()
     return _payload(db)
 
 
 @router.post("/pto/entries", status_code=201)
 def create_entry(body: PtoEntryIn, db: Session = Depends(get_db)):
-    days = body.days if body.days is not None else Decimal(weekday_count(body.start_date, body.end_date))
+    days = (
+        body.days
+        if body.days is not None
+        else Decimal(weekday_count(body.start_date, body.end_date))
+    )
     row = PtoEntry(
         user_id=require_actor().id,
         trip_id=None,
@@ -103,7 +109,9 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db)):
     if row is None or row.user_id != require_actor().id:
         raise HTTPException(status_code=404, detail="That PTO entry is not here.")
     if row.trip_id is not None:
-        raise HTTPException(status_code=400, detail="This PTO comes from a trip. Change it on the trip.")
+        raise HTTPException(
+            status_code=400, detail="This PTO comes from a trip. Change it on the trip."
+        )
     db.delete(row)
 
 

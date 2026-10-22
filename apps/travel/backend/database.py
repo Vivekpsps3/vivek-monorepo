@@ -17,7 +17,11 @@ SessionLocal = None
 
 def resolve_database_url(raw_url: str) -> str:
     """Keep relative SQLite files anchored to this backend directory."""
-    if not raw_url.startswith("sqlite:///") or raw_url.startswith("sqlite:////") or ":memory:" in raw_url:
+    if (
+        not raw_url.startswith("sqlite:///")
+        or raw_url.startswith("sqlite:////")
+        or ":memory:" in raw_url
+    ):
         return raw_url
     relative_path = raw_url.removeprefix("sqlite:///")
     if os.path.isabs(relative_path):
@@ -36,12 +40,16 @@ def _enable_foreign_keys(dbapi_connection, _connection_record) -> None:
 def init_db(url: str | None = None) -> str:
     """Create the engine and tables. Returns the resolved URL."""
     global engine, SessionLocal
-    resolved = resolve_database_url(url or os.getenv("TRAVEL_DATABASE_URL", "sqlite:///./travel.db"))
+    resolved = resolve_database_url(
+        url or os.getenv("TRAVEL_DATABASE_URL", "sqlite:///./travel.db")
+    )
     if engine is not None:
         engine.dispose()
     engine = create_engine(resolved, connect_args={"check_same_thread": False})
     event.listen(engine, "connect", _enable_foreign_keys)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=True, expire_on_commit=False, bind=engine)
+    SessionLocal = sessionmaker(
+        autocommit=False, autoflush=True, expire_on_commit=False, bind=engine
+    )
     Base.metadata.create_all(bind=engine)
     _ensure_user_columns()
     return resolved
@@ -58,8 +66,12 @@ def _ensure_user_columns() -> None:
                 continue
             conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN user_id INTEGER")
         conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_trips_user_id ON trips(user_id)")
-        conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_pto_entries_user_id ON pto_entries(user_id)")
-        conn.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS uq_pto_policy_user_id ON pto_policy(user_id)")
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_pto_entries_user_id ON pto_entries(user_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_pto_policy_user_id ON pto_policy(user_id)"
+        )
 
 
 def get_db():
@@ -80,4 +92,6 @@ def bind_database(shared_engine) -> None:
     """Bind the domain to the site's engine; schema changes run offline."""
     global engine, SessionLocal
     engine = shared_engine
-    SessionLocal = sessionmaker(autocommit=False, autoflush=True, expire_on_commit=False, bind=engine)
+    SessionLocal = sessionmaker(
+        autocommit=False, autoflush=True, expire_on_commit=False, bind=engine
+    )

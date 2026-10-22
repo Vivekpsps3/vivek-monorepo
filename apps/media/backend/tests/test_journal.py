@@ -7,16 +7,18 @@ from starlette.requests import Request
 
 
 def _request(method: str, headers: list[tuple[bytes, bytes]] | None = None) -> Request:
-    return Request({
-        "type": "http",
-        "method": method,
-        "path": "/api/library",
-        "headers": headers or [],
-        "query_string": b"",
-        "scheme": "http",
-        "server": ("test", 80),
-        "client": ("127.0.0.1", 9),
-    })
+    return Request(
+        {
+            "type": "http",
+            "method": method,
+            "path": "/api/library",
+            "headers": headers or [],
+            "query_string": b"",
+            "scheme": "http",
+            "server": ("test", 80),
+            "client": ("127.0.0.1", 9),
+        }
+    )
 
 
 def test_reads_and_writes_follow_the_finance_session(monkeypatch):
@@ -53,15 +55,18 @@ def test_private_routes_reject_a_signed_out_browser(client, monkeypatch):
 
 
 def test_manual_entry_rating_and_review_round_trip(client):
-    created = client.post("/api/library", json={
-        "kind": "movie",
-        "title": "Local Film",
-        "creator": "A Director",
-        "year": 2024,
-        "status": "completed",
-        "rating": 8.5,
-        "review": "A complete thought.",
-    })
+    created = client.post(
+        "/api/library",
+        json={
+            "kind": "movie",
+            "title": "Local Film",
+            "creator": "A Director",
+            "year": 2024,
+            "status": "completed",
+            "rating": 8.5,
+            "review": "A complete thought.",
+        },
+    )
     assert created.status_code == 200
     entry_id = created.json()["id"]
     assert created.json()["rating"] == 8.5
@@ -87,29 +92,38 @@ def test_manual_entry_rating_and_review_round_trip(client):
 
 
 def test_experiences_do_not_replace_the_overall_review(client):
-    created = client.post("/api/library", json={
-        "kind": "movie",
-        "title": "Rewatch",
-        "status": "completed",
-        "rating": 9,
-        "review": "Still the one.",
-    }).json()
-    first = client.post(f"/api/entries/{created['id']}/experiences", json={
-        "kind": "watch",
-        "finished_on": "2025-01-03",
-        "rating": 8,
-        "notes": "First time.",
-    })
+    created = client.post(
+        "/api/library",
+        json={
+            "kind": "movie",
+            "title": "Rewatch",
+            "status": "completed",
+            "rating": 9,
+            "review": "Still the one.",
+        },
+    ).json()
+    first = client.post(
+        f"/api/entries/{created['id']}/experiences",
+        json={
+            "kind": "watch",
+            "finished_on": "2025-01-03",
+            "rating": 8,
+            "notes": "First time.",
+        },
+    )
     assert first.status_code == 200
     assert first.json()["rating"] == 9
     assert first.json()["review"] == "Still the one."
-    second = client.post(f"/api/entries/{created['id']}/experiences", json={
-        "kind": "rewatch",
-        "finished_on": "2026-10-02",
-        "rating": 9.5,
-        "notes": "Better the second time.",
-        "spoiler": True,
-    })
+    second = client.post(
+        f"/api/entries/{created['id']}/experiences",
+        json={
+            "kind": "rewatch",
+            "finished_on": "2026-10-02",
+            "rating": 9.5,
+            "notes": "Better the second time.",
+            "spoiler": True,
+        },
+    )
     assert second.status_code == 200
     notes = [row["notes"] for row in second.json()["experiences"]]
     assert notes == ["First time.", "Better the second time."]
@@ -126,22 +140,48 @@ def test_experiences_do_not_replace_the_overall_review(client):
         f"/api/entries/{created['id']}/experiences/{second.json()['experiences'][1]['id']}"
     )
     assert [row["notes"] for row in removed.json()["experiences"]] == ["First time, revised."]
-    assert client.post(f"/api/entries/{created['id']}/experiences", json={
-        "kind": "watch",
-        "started_on": "2026-10-10",
-        "finished_on": "2026-10-01",
-    }).status_code == 422
+    assert (
+        client.post(
+            f"/api/entries/{created['id']}/experiences",
+            json={
+                "kind": "watch",
+                "started_on": "2026-10-10",
+                "finished_on": "2026-10-01",
+            },
+        ).status_code
+        == 422
+    )
 
 
 def test_episode_progress_survives_reload(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
-    show = client.post("/api/library", json={"kind": "tv", "title": "Serial", "status": "in_progress"}).json()
-    assert client.post(f"/api/entries/{show['id']}/episodes", json={
-        "season_number": 1, "episode_number": 1, "title": "Pilot", "air_date": "2026-09-01",
-    }).status_code == 200
-    assert client.post(f"/api/entries/{show['id']}/episodes", json={
-        "season_number": 1, "episode_number": 2, "title": "Next", "air_date": "2026-10-20",
-    }).status_code == 200
+    show = client.post(
+        "/api/library", json={"kind": "tv", "title": "Serial", "status": "in_progress"}
+    ).json()
+    assert (
+        client.post(
+            f"/api/entries/{show['id']}/episodes",
+            json={
+                "season_number": 1,
+                "episode_number": 1,
+                "title": "Pilot",
+                "air_date": "2026-09-01",
+            },
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            f"/api/entries/{show['id']}/episodes",
+            json={
+                "season_number": 1,
+                "episode_number": 2,
+                "title": "Next",
+                "air_date": "2026-10-20",
+            },
+        ).status_code
+        == 200
+    )
     stepped = client.post(f"/api/entries/{show['id']}/episodes/next")
     assert stepped.status_code == 200
     state = stepped.json()["show"]
@@ -187,14 +227,35 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
     assert classify_release(row("2026-01-01", "year", "scheduled"), date(2026, 1, 1)) == "upcoming"
 
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
-    assert client.post("/api/library", json={
-        "kind": "movie", "title": "Month", "status": "anticipating", "anticipated": True,
-        "release_on": "2026-10-20", "release_precision": "month", "release_status": "scheduled",
-    }).status_code == 200
-    assert client.post("/api/library", json={
-        "kind": "game", "title": "Today", "status": "anticipating", "anticipated": True,
-        "release_on": "2026-10-15", "release_precision": "day",
-    }).status_code == 200
+    assert (
+        client.post(
+            "/api/library",
+            json={
+                "kind": "movie",
+                "title": "Month",
+                "status": "anticipating",
+                "anticipated": True,
+                "release_on": "2026-10-20",
+                "release_precision": "month",
+                "release_status": "scheduled",
+            },
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/library",
+            json={
+                "kind": "game",
+                "title": "Today",
+                "status": "anticipating",
+                "anticipated": True,
+                "release_on": "2026-10-15",
+                "release_precision": "day",
+            },
+        ).status_code
+        == 200
+    )
     upcoming = {item["title"]: item for item in client.get("/api/summary").json()["upcoming"]}
     assert upcoming["Month"]["when"] == "this_month"
     assert upcoming["Month"]["release_on"] == "2026-10-01"
@@ -204,12 +265,25 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
 def test_library_filters_and_owner_isolation(client):
     from apps.media.backend.deps import AuthResult, Principal
 
-    movie = client.post("/api/library", json={"kind": "album", "title": "Secret", "creator": "Ada", "status": "completed", "rating": 10}).json()
-    client.app.state.principal_checker = lambda _request: AuthResult(Principal(2, "other", "Other"), [])
+    movie = client.post(
+        "/api/library",
+        json={
+            "kind": "album",
+            "title": "Secret",
+            "creator": "Ada",
+            "status": "completed",
+            "rating": 10,
+        },
+    ).json()
+    client.app.state.principal_checker = lambda _request: AuthResult(
+        Principal(2, "other", "Other"), []
+    )
     assert client.get(f"/api/entries/{movie['id']}").status_code == 404
     assert client.get("/api/library").json()["items"] == []
     assert client.get("/api/summary").json()["counts"]["library"] == 0
-    client.app.state.principal_checker = lambda _request: AuthResult(Principal(1, "tester", "Tester"), [])
+    client.app.state.principal_checker = lambda _request: AuthResult(
+        Principal(1, "tester", "Tester"), []
+    )
     listed = client.get("/api/library", params={"kind": "album", "sort": "rating"}).json()["items"]
     assert [item["title"] for item in listed] == ["Secret"]
     page = client.get("/")
@@ -217,30 +291,42 @@ def test_library_filters_and_owner_isolation(client):
     assert "Secret" not in page.text
 
 
-def test_provider_metadata_cannot_overwrite_a_review_and_outages_keep_saved_rows(client, monkeypatch):
-    saved = client.post("/api/library/from-provider", json={
-        "source": "openlibrary",
-        "source_id": "OL1W",
-        "kind": "book",
-        "title": "Original",
-        "creator": "Author",
-        "external_ratings": [{"provider": "openlibrary", "label": "Open Library", "value": 4.2, "scale": "0–5"}],
-        "review": "Mine.",
-        "rating": 7,
-    }).json()
+def test_provider_metadata_cannot_overwrite_a_review_and_outages_keep_saved_rows(
+    client, monkeypatch
+):
+    saved = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "openlibrary",
+            "source_id": "OL1W",
+            "kind": "book",
+            "title": "Original",
+            "creator": "Author",
+            "external_ratings": [
+                {"provider": "openlibrary", "label": "Open Library", "value": 4.2, "scale": "0–5"}
+            ],
+            "review": "Mine.",
+            "rating": 7,
+        },
+    ).json()
     assert saved["already_saved"] is False
-    again = client.post("/api/library/from-provider", json={
-        "source": "openlibrary",
-        "source_id": "OL1W",
-        "kind": "book",
-        "title": "Original",
-        "review": "Should not replace.",
-        "rating": 1,
-    }).json()
+    again = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "openlibrary",
+            "source_id": "OL1W",
+            "kind": "book",
+            "title": "Original",
+            "review": "Should not replace.",
+            "rating": 1,
+        },
+    ).json()
     assert again["already_saved"] is True
     assert again["review"] == "Mine."
     assert again["rating"] == 7
-    patched = client.patch(f"/api/entries/{saved['id']}", json={"title": "Changed", "overview": "Filled blank"}).json()
+    patched = client.patch(
+        f"/api/entries/{saved['id']}", json={"title": "Changed", "overview": "Filled blank"}
+    ).json()
     assert patched["catalog"]["title"] == "Original"
     assert patched["catalog"]["overview"] == "Filled blank"
     assert patched["catalog"]["external_ratings"][0]["scale"] == "0–5"
@@ -260,21 +346,25 @@ def test_search_uses_a_cache_and_marks_saved_items(client, monkeypatch):
 
     def once(*_args, **_kwargs):
         calls["n"] += 1
-        return [{
-            "source": "musicbrainz",
-            "source_id": "mb-1",
-            "kind": "track",
-            "title": "Song",
-            "creator": "Artist",
-            "year": 2020,
-            "overview": None,
-            "artwork_url": None,
-            "genres": [],
-            "external_ratings": [],
-            "extra": {},
-            "releases": [{"released_on": "2020-01-01", "precision": "year", "status": "released"}],
-            "episodes": [],
-        }]
+        return [
+            {
+                "source": "musicbrainz",
+                "source_id": "mb-1",
+                "kind": "track",
+                "title": "Song",
+                "creator": "Artist",
+                "year": 2020,
+                "overview": None,
+                "artwork_url": None,
+                "genres": [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [
+                    {"released_on": "2020-01-01", "precision": "year", "status": "released"}
+                ],
+                "episodes": [],
+            }
+        ]
 
     monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_search", once)
     first = client.get("/api/search", params={"q": "song", "kind": "track"}).json()
@@ -282,7 +372,10 @@ def test_search_uses_a_cache_and_marks_saved_items(client, monkeypatch):
     assert calls["n"] == 1
     assert second["results"][0]["title"] == "Song"
     assert first["results"][0]["already_saved"] is False
-    added = client.post("/api/library/from-provider", json={**first["results"][0], "status": "completed", "rating": 10}).json()
+    added = client.post(
+        "/api/library/from-provider",
+        json={**first["results"][0], "status": "completed", "rating": 10},
+    ).json()
     assert added["releases"][0]["precision"] == "year"
     marked = client.get("/api/search", params={"q": "song", "kind": "track"}).json()
     assert marked["results"][0]["already_saved"] is True
@@ -308,52 +401,59 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
     monkeypatch.setenv("TMDB_API_KEY", "test-key")
 
     def tmdb(*_args, **_kwargs):
-        return [{
-            "source": "tmdb",
-            "source_id": "movie:27205",
-            "kind": "movie",
-            "title": "Inception",
-            "creator": None,
-            "year": 2010,
-            "overview": "A dream.",
-            "artwork_url": None,
-            "genres": [],
-            "external_ratings": [],
-            "extra": {},
-            "releases": [{"released_on": "2010-07-16", "precision": "day", "status": "released"}],
-            "episodes": [],
-        }]
+        return [
+            {
+                "source": "tmdb",
+                "source_id": "movie:27205",
+                "kind": "movie",
+                "title": "Inception",
+                "creator": None,
+                "year": 2010,
+                "overview": "A dream.",
+                "artwork_url": None,
+                "genres": [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [
+                    {"released_on": "2010-07-16", "precision": "day", "status": "released"}
+                ],
+                "episodes": [],
+            }
+        ]
 
     def itunes(*_args, **_kwargs):
-        return [{
-            "source": "itunes",
-            "source_id": "413416",
-            "kind": "movie",
-            "title": "Inception",
-            "creator": "Christopher Nolan",
-            "year": 2010,
-            "overview": "From the store.",
-            "artwork_url": None,
-            "genres": ["Action"],
-            "external_ratings": [],
-            "extra": {},
-            "releases": [],
-            "episodes": [],
-        }, {
-            "source": "itunes",
-            "source_id": "99",
-            "kind": "movie",
-            "title": "Inception: The App",
-            "creator": None,
-            "year": 2010,
-            "overview": None,
-            "artwork_url": None,
-            "genres": [],
-            "external_ratings": [],
-            "extra": {},
-            "releases": [],
-            "episodes": [],
-        }]
+        return [
+            {
+                "source": "itunes",
+                "source_id": "413416",
+                "kind": "movie",
+                "title": "Inception",
+                "creator": "Christopher Nolan",
+                "year": 2010,
+                "overview": "From the store.",
+                "artwork_url": None,
+                "genres": ["Action"],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [],
+                "episodes": [],
+            },
+            {
+                "source": "itunes",
+                "source_id": "99",
+                "kind": "movie",
+                "title": "Inception: The App",
+                "creator": None,
+                "year": 2010,
+                "overview": None,
+                "artwork_url": None,
+                "genres": [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [],
+                "episodes": [],
+            },
+        ]
 
     monkeypatch.setattr("apps.media.backend.services.providers.tmdb_search", tmdb)
     monkeypatch.setattr("apps.media.backend.services.providers.itunes_search", itunes)
@@ -361,7 +461,9 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
     assert [item["source"] for item in found["results"]] == ["tmdb", "itunes"]
     assert found["results"][1]["title"] == "Inception: The App"
     assert found["providers"]["itunes"] == "ok"
-    saved = client.post("/api/library/from-provider", json={**found["results"][1], "status": "want"}).json()
+    saved = client.post(
+        "/api/library/from-provider", json={**found["results"][1], "status": "want"}
+    ).json()
     assert saved["catalog"]["source"] == "itunes"
     assert saved["catalog"]["title"] == "Inception: The App"
 
@@ -372,18 +474,25 @@ def test_tvmaze_summary_is_plain_text():
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.host == "api.tvmaze.com"
-        return httpx.Response(200, json=[{
-            "show": {
-                "id": 169,
-                "name": "Breaking Bad",
-                "premiered": "2008-01-20",
-                "summary": "<p>A <b>teacher</b> &amp; a student.</p>",
-                "image": {"medium": "https://static.tvmaze.com/uploads/images/medium_portrait/0/2400.jpg"},
-                "genres": ["Drama"],
-                "rating": {"average": 9.2},
-                "network": {"name": "AMC"},
-            }
-        }])
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "show": {
+                        "id": 169,
+                        "name": "Breaking Bad",
+                        "premiered": "2008-01-20",
+                        "summary": "<p>A <b>teacher</b> &amp; a student.</p>",
+                        "image": {
+                            "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/0/2400.jpg"
+                        },
+                        "genres": ["Drama"],
+                        "rating": {"average": 9.2},
+                        "network": {"name": "AMC"},
+                    }
+                }
+            ],
+        )
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         rows = tvmaze_search(http, "breaking bad")

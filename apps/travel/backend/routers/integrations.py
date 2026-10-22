@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from apps.travel.backend.database import get_db
-from apps.travel.backend.deps import flightaware_key, get_flight_lookup, get_geocoder, require_actor, settings_key
+from apps.travel.backend.deps import (
+    flightaware_key,
+    get_flight_lookup,
+    get_geocoder,
+    require_actor,
+    settings_key,
+)
 from apps.travel.backend.models import Setting
 from apps.travel.backend.schemas import FlightAwareKeyIn, FlightLookupIn
 from apps.travel.backend.services.flights import FlightAwareError, normalize_ident
@@ -93,6 +99,3 @@ def search_places(q: str, db: Session = Depends(get_db), fetch=Depends(get_geoco
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"results": results}
-
-
-

@@ -87,9 +87,7 @@ class MarketDataService:
             return True
         return False
 
-    def _sqlite_get(
-        self, db: Session, symbol: str
-    ) -> Optional[Tuple[float, datetime, str, date]]:
+    def _sqlite_get(self, db: Session, symbol: str) -> Optional[Tuple[float, datetime, str, date]]:
         row = db.query(TickerQuote).filter(TickerQuote.symbol == symbol).first()
         if not row:
             return None
@@ -248,7 +246,12 @@ class MarketDataService:
         if live_price is None:
             try:
                 fast_info = ticker.fast_info
-                for key in ("regularMarketPrice", "regular_market_price", "lastPrice", "last_price"):
+                for key in (
+                    "regularMarketPrice",
+                    "regular_market_price",
+                    "lastPrice",
+                    "last_price",
+                ):
                     try:
                         candidate = _finite_float(fast_info.get(key))
                     except Exception:
@@ -257,7 +260,9 @@ class MarketDataService:
                         live_price = candidate
                         break
             except Exception as exc:
-                logger.info("yfinance fast quote unavailable symbol=%s err=%s", symbol, str(exc)[:160])
+                logger.info(
+                    "yfinance fast quote unavailable symbol=%s err=%s", symbol, str(exc)[:160]
+                )
 
         historical = None
         try:
@@ -346,7 +351,9 @@ class MarketDataService:
                     if value is not None and value > 0:
                         dividends.append(
                             MarketDividendEvent(
-                                date=idx.date().isoformat() if hasattr(idx, "date") else str(idx)[:10],
+                                date=idx.date().isoformat()
+                                if hasattr(idx, "date")
+                                else str(idx)[:10],
                                 amount=value,
                             )
                         )
@@ -362,7 +369,9 @@ class MarketDataService:
                     if value is not None and value > 0:
                         splits.append(
                             MarketSplitEvent(
-                                date=idx.date().isoformat() if hasattr(idx, "date") else str(idx)[:10],
+                                date=idx.date().isoformat()
+                                if hasattr(idx, "date")
+                                else str(idx)[:10],
                                 ratio=value,
                             )
                         )
@@ -397,15 +406,38 @@ class MarketDataService:
             dividend_rate=_finite_float(info.get("dividendRate")),
             dividend_yield=_finite_float(info.get("dividendYield")),
         )
-        fundamentals = _compact_dict(
-            info,
-            ["marketCap", "trailingPE", "forwardPE", "trailingEps", "revenueGrowth", "profitMargins", "beta"],
-        ) or None
-        etf = _compact_dict(info, ["category", "expenseRatio", "navPrice", "yield", "totalAssets"]) or None
-        analyst = _compact_dict(
-            info,
-            ["targetHighPrice", "targetLowPrice", "targetMeanPrice", "recommendationKey", "numberOfAnalystOpinions"],
-        ) or None
+        fundamentals = (
+            _compact_dict(
+                info,
+                [
+                    "marketCap",
+                    "trailingPE",
+                    "forwardPE",
+                    "trailingEps",
+                    "revenueGrowth",
+                    "profitMargins",
+                    "beta",
+                ],
+            )
+            or None
+        )
+        etf = (
+            _compact_dict(info, ["category", "expenseRatio", "navPrice", "yield", "totalAssets"])
+            or None
+        )
+        analyst = (
+            _compact_dict(
+                info,
+                [
+                    "targetHighPrice",
+                    "targetLowPrice",
+                    "targetMeanPrice",
+                    "recommendationKey",
+                    "numberOfAnalystOpinions",
+                ],
+            )
+            or None
+        )
         return MarketResearchResponse(
             symbol=symbol,
             valid=bool(price or history_points),
@@ -461,11 +493,7 @@ class MarketDataService:
             logger.info("yfinance quote parse failed symbol=%s err=%s", symbol, str(exc)[:160])
             price, quote_date, source = None, None, "error"
         normalized_price = _finite_float(price)
-        if (
-            normalized_price is None
-            or normalized_price <= 0
-            or quote_date is None
-        ):
+        if normalized_price is None or normalized_price <= 0 or quote_date is None:
             self._failed[symbol] = now
             return 0.0, "error", None
 

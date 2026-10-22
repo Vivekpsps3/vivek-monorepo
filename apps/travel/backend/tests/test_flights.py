@@ -9,7 +9,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from apps.travel.backend.services.flights import FlightAwareError, lookup_flights, normalize_ident, parse_flights
+from apps.travel.backend.services.flights import (
+    FlightAwareError,
+    lookup_flights,
+    normalize_ident,
+    parse_flights,
+)
 
 SAMPLE = {
     "flights": [

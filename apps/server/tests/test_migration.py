@@ -18,7 +18,9 @@ def test_fresh_database_and_backup_restore(tmp_path):
     with sqlite3.connect(database) as db:
         check_integrity(db)
         assert db.execute("PRAGMA journal_mode").fetchone() == ("wal",)
-    spec = importlib.util.spec_from_file_location("backup_site", Path(__file__).resolve().parents[3] / "scripts/backup-site.py")
+    spec = importlib.util.spec_from_file_location(
+        "backup_site", Path(__file__).resolve().parents[3] / "scripts/backup-site.py"
+    )
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     snapshot = tool.backup(database, tmp_path / "backups")
@@ -43,7 +45,9 @@ def test_foreign_keys_and_owner_validation(tmp_path):
     database = tmp_path / "site.db"
     migrate(database)
     with sqlite3.connect(database) as db:
-        db.execute("INSERT INTO trips (id,user_id,title,start_date,end_date,status,counts_as_pto,created_at,updated_at) VALUES (1,999,'orphan','2026-01-01','2026-01-02','planning',1,'2026-01-01','2026-01-01')")
+        db.execute(
+            "INSERT INTO trips (id,user_id,title,start_date,end_date,status,counts_as_pto,created_at,updated_at) VALUES (1,999,'orphan','2026-01-01','2026-01-02','planning',1,'2026-01-01','2026-01-01')"
+        )
         with pytest.raises(RuntimeError, match="Foreign key"):
             check_integrity(db)
 
@@ -53,9 +57,14 @@ def test_migration_rejects_nonempty_unknown_tables(tmp_path):
     from apps.travel.backend.models import Base as Travel
     from apps.media.backend.models import Base as Media
     from sqlalchemy import create_engine
+
     sources = tmp_path / "sources"
     sources.mkdir()
-    for domain, schema in (("finance", Finance.metadata), ("travel", Travel.metadata), ("media", Media.metadata)):
+    for domain, schema in (
+        ("finance", Finance.metadata),
+        ("travel", Travel.metadata),
+        ("media", Media.metadata),
+    ):
         engine = create_engine(f"sqlite:///{sources}/{domain}.db")
         schema.create_all(engine)
         engine.dispose()
@@ -72,7 +81,9 @@ def test_migration_rejects_nonempty_unknown_tables(tmp_path):
 def test_latest_backup_replaces_previous_only_after_verification(tmp_path, monkeypatch):
     database = tmp_path / "site.db"
     migrate(database)
-    spec = importlib.util.spec_from_file_location("backup_retention", Path(__file__).resolve().parents[3] / "scripts/backup-site.py")
+    spec = importlib.util.spec_from_file_location(
+        "backup_retention", Path(__file__).resolve().parents[3] / "scripts/backup-site.py"
+    )
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     directory = tmp_path / "backups"
@@ -82,7 +93,9 @@ def test_latest_backup_replaces_previous_only_after_verification(tmp_path, monke
     assert not first.with_suffix(".json").exists()
     assert second.with_suffix(".json").is_file()
     assert tool.verify(second)["schema"] == 1
-    monkeypatch.setattr(tool, "verify", lambda _: (_ for _ in ()).throw(RuntimeError("verification failed")))
+    monkeypatch.setattr(
+        tool, "verify", lambda _: (_ for _ in ()).throw(RuntimeError("verification failed"))
+    )
     with pytest.raises(RuntimeError, match="verification failed"):
         tool.backup(database, directory)
     assert list(directory.glob("*.db")) == [second]

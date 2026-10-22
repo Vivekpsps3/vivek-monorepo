@@ -44,7 +44,11 @@ def admin_metrics(db: Session) -> dict[str, Any]:
     names = {user.id: user.display_name or user.username or user.email for user in users}
     active_users = sum(1 for u in users if u.is_active)
     admins = sum(1 for u in users if role_str(u.role) == "admin")
-    open_sessions = db.query(UserSession).filter(UserSession.revoked_at.is_(None), UserSession.expires_at > now).all()
+    open_sessions = (
+        db.query(UserSession)
+        .filter(UserSession.revoked_at.is_(None), UserSession.expires_at > now)
+        .all()
+    )
     sessions_by_user: dict[int, int] = {}
     for session in open_sessions:
         sessions_by_user[session.user_id] = sessions_by_user.get(session.user_id, 0) + 1
@@ -56,7 +60,9 @@ def admin_metrics(db: Session) -> dict[str, Any]:
     }
     vault_ids = {row[0] for row in db.query(UserVault.user_id).all()}
     record_counts = dict(
-        db.query(EncryptedRecord.user_id, func.count(EncryptedRecord.id)).group_by(EncryptedRecord.user_id).all()
+        db.query(EncryptedRecord.user_id, func.count(EncryptedRecord.id))
+        .group_by(EncryptedRecord.user_id)
+        .all()
     )
     totals = {
         "users": len(users),
@@ -72,19 +78,23 @@ def admin_metrics(db: Session) -> dict[str, Any]:
     }
     per_user = []
     for user in users:
-        per_user.append({
-            "id": user.id,
-            "email": user.email,
-            "display_name": user.display_name,
-            "role": role_str(user.role),
-            "is_active": user.is_active,
-            "has_vault": user.id in vault_ids,
-            "encrypted_records": record_counts.get(user.id, 0),
-            "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
-            "active_sessions": sessions_by_user.get(user.id, 0),
-            "enrolled": bool(user.passwordless_enrolled_at or user.auth_public_key_b64),
-            "enrollment_expires_at": pending_by_user[user.id].isoformat() if user.id in pending_by_user else None,
-        })
+        per_user.append(
+            {
+                "id": user.id,
+                "email": user.email,
+                "display_name": user.display_name,
+                "role": role_str(user.role),
+                "is_active": user.is_active,
+                "has_vault": user.id in vault_ids,
+                "encrypted_records": record_counts.get(user.id, 0),
+                "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+                "active_sessions": sessions_by_user.get(user.id, 0),
+                "enrolled": bool(user.passwordless_enrolled_at or user.auth_public_key_b64),
+                "enrollment_expires_at": pending_by_user[user.id].isoformat()
+                if user.id in pending_by_user
+                else None,
+            }
+        )
     recent = []
     events = (
         db.query(AuditEvent)
@@ -94,12 +104,14 @@ def admin_metrics(db: Session) -> dict[str, Any]:
         .all()
     )
     for event in events:
-        recent.append({
-            "id": event.id,
-            "event_type": event.event_type,
-            "created_at": event.created_at.isoformat() if event.created_at else None,
-            "summary": _audit_summary(event, names),
-        })
+        recent.append(
+            {
+                "id": event.id,
+                "event_type": event.event_type,
+                "created_at": event.created_at.isoformat() if event.created_at else None,
+                "summary": _audit_summary(event, names),
+            }
+        )
     inspector = inspect(db.connection())
     tables = []
     for table in inspector.get_table_names():
@@ -108,13 +120,23 @@ def admin_metrics(db: Session) -> dict[str, Any]:
         except Exception:
             count = None
         tables.append({"name": table, "rows": count})
-    return {"totals": totals, "finance_rows": finance_rows, "per_user": per_user, "tables": tables, "recent": recent}
+    return {
+        "totals": totals,
+        "finance_rows": finance_rows,
+        "per_user": per_user,
+        "tables": tables,
+        "recent": recent,
+    }
 
 
-def reset_user_contents(db: Session, user: User, *, actor_user_id: int, revoke_sessions: bool = True) -> None:
+def reset_user_contents(
+    db: Session, user: User, *, actor_user_id: int, revoke_sessions: bool = True
+) -> None:
     wipe_encrypted_user_data(db, user.id)
     if revoke_sessions:
-        db.query(UserSession).filter(UserSession.user_id == user.id).delete(synchronize_session=False)
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete(
+            synchronize_session=False
+        )
     audit = AuditEvent(
         actor_user_id=actor_user_id,
         target_user_id=user.id,
@@ -128,12 +150,30 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
     wipe_encrypted_user_data(db, user.id)
     if "site_schema" in inspect(db.connection()).get_table_names():
         # Unified ownership contract; delete personal rows, retain public catalogs.
-        for table in ("album_ratings", "track_ratings", "season_progress", "experiences", "episode_progress", "user_entries", "pto_entries", "pto_policy", "trips"):
+        for table in (
+            "album_ratings",
+            "track_ratings",
+            "season_progress",
+            "experiences",
+            "episode_progress",
+            "user_entries",
+            "pto_entries",
+            "pto_policy",
+            "trips",
+        ):
             db.execute(text(f'DELETE FROM "{table}" WHERE user_id=:owner'), {"owner": user.id})
-        db.execute(text("DELETE FROM settings WHERE key LIKE :prefix"), {"prefix": f"user:{user.id}:%"})
-    db.query(AuthChallenge).filter(AuthChallenge.user_id == user.id).delete(synchronize_session=False)
-    db.query(AuthEnrollment).filter(AuthEnrollment.user_id == user.id).delete(synchronize_session=False)
-    db.query(AuthEnrollment).filter(AuthEnrollment.created_by_user_id == user.id).update({AuthEnrollment.created_by_user_id: None}, synchronize_session=False)
+        db.execute(
+            text("DELETE FROM settings WHERE key LIKE :prefix"), {"prefix": f"user:{user.id}:%"}
+        )
+    db.query(AuthChallenge).filter(AuthChallenge.user_id == user.id).delete(
+        synchronize_session=False
+    )
+    db.query(AuthEnrollment).filter(AuthEnrollment.user_id == user.id).delete(
+        synchronize_session=False
+    )
+    db.query(AuthEnrollment).filter(AuthEnrollment.created_by_user_id == user.id).update(
+        {AuthEnrollment.created_by_user_id: None}, synchronize_session=False
+    )
     db.query(UserSession).filter(UserSession.user_id == user.id).delete(synchronize_session=False)
     db.query(AuditEvent).filter(AuditEvent.actor_user_id == user.id).update(
         {AuditEvent.actor_user_id: None}, synchronize_session=False

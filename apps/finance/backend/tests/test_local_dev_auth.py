@@ -84,7 +84,9 @@ def test_dev_env_file_without_the_flag_does_not_activate(tmp_path, monkeypatch):
 
 def _sign_in(client: TestClient, email: str) -> None:
     user = seed_user(email=email)
-    response = client.post("/api/auth/login/migrate", json={"email": email, "password": TEST_PASSWORD})
+    response = client.post(
+        "/api/auth/login/migrate", json={"email": email, "password": TEST_PASSWORD}
+    )
     assert response.status_code == 200, response.text
     db = SessionLocal()
     try:
@@ -112,7 +114,9 @@ def test_local_dev_does_not_replace_a_real_session(monkeypatch):
 def test_vault_passphrase_is_generated_for_the_dev_user_only(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCAL_DEV_AUTH", "1")
     monkeypatch.delenv("FINANCE_DEV_ENV_FILE", raising=False)
-    monkeypatch.setattr("apps.finance.backend.local_dev.passphrase_file", lambda: tmp_path / "vault-passphrase")
+    monkeypatch.setattr(
+        "apps.finance.backend.local_dev.passphrase_file", lambda: tmp_path / "vault-passphrase"
+    )
     client = _local_client()
     first = client.get("/api/auth/local-dev/vault")
     assert first.status_code == 200, first.text

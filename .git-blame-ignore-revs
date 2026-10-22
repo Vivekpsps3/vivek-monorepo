@@ -1,0 +1,7 @@
+# Pure formatting. Ignore when blaming so later edits stay readable.
+# Format Python sources with Ruff.
+0fcae8021f783f836160bcd8f6a86ad1a98eacbe
+# Format the auth-hardening Python with Ruff.
+2c41a00fecfabaefd4acab7229f613f7951a1d2a
+# Format the merged Python with Ruff.
+0ccfa2cb0696d2c6c278fa21093cdeb3828fb9de
