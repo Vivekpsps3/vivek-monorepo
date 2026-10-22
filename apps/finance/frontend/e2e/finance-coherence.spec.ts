@@ -332,7 +332,9 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   const startingNetWorth = page.locator('aside[aria-label="Scenario builder"]')
     .locator('label.mc-field', { hasText: 'Starting net worth' })
     .locator('input');
-  await expect(startingNetWorth).toBeDisabled();
+  await expect(startingNetWorth).toHaveJSProperty('readOnly', true);
+  await expect(startingNetWorth).toHaveValue(/1125/);
+  await expect(page.locator('#starting-net-worth-hint')).toContainText('Using ledger net worth');
 
   await page.getByLabel('Use ledger net worth at start', { exact: true }).uncheck();
   await startingNetWorth.fill('777');
