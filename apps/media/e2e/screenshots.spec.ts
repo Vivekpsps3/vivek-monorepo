@@ -205,4 +205,51 @@ test.describe('phase 0 screenshot matrix', () => {
       }
     }
   });
+
+  test('bundle M screens at 390, 768, and 1280 in light and dark', async ({ page }) => {
+    test.setTimeout(180_000);
+    const shots: Array<[string, string]> = [
+      ['#/', 'now'],
+      ['#/library', 'library'],
+      ['#/search', 'search'],
+      ['#/calendar', 'calendar'],
+      ['#/item/1', 'item'],
+      ['#/new', 'add'],
+    ];
+    const ready = async (name: string) => {
+      await expect(page.locator('.toast')).toHaveCount(0);
+      if (name === 'now') {
+        await expect(page.getByRole('heading', { name: 'Now' })).toBeVisible();
+        await expect(page.locator('.grid .card, .next-list, .empty, .quiet').first()).toBeVisible();
+      }
+      if (name === 'library') await expect(page.locator('.grid .card').first()).toBeVisible();
+      if (name === 'search') await expect(page.getByText('Results come from public catalogs.')).toBeVisible();
+      if (name === 'calendar') {
+        await expect(page.getByRole('link', { name: 'Today' })).toBeVisible();
+        await expect(page.locator('.calendar-grid [role="gridcell"][data-date]')).not.toHaveCount(0);
+      }
+      if (name === 'item') await expect(page.locator('.opinion .status-mark').first()).toBeVisible();
+      if (name === 'add') await expect(page.getByLabel('Title')).toBeVisible();
+    };
+    for (const width of [390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ['light', 'dark'] as const) {
+        for (const [hash, name] of shots) {
+          await openThemed(page, hash, theme);
+          if (name === 'item') await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+          await ready(name);
+          await assertTheme(page, theme);
+          await page.screenshot({ path: path.join(dir as string, `bundle-${name}-${width}-${theme}.png`), fullPage: true });
+        }
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await openThemed(page, '#/library', theme);
+        await ready('library');
+        const duration = await page.locator('.card').first().evaluate(node => getComputedStyle(node).transitionDuration);
+        expect(duration === '0s' || duration.startsWith('0s')).toBeTruthy();
+        await expect(page.locator('.toast')).toHaveCount(0);
+        await page.screenshot({ path: path.join(dir as string, `bundle-reduced-${width}-${theme}.png`), fullPage: true });
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+      }
+    }
+  });
 });

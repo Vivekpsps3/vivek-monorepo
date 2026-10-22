@@ -49,8 +49,13 @@ def library(
     sort = sort.strip().lower()
     if sort not in {"added", "rating", "activity", "release", "title"}:
         sort = "activity"
-    rows = records.list_library(db, require_actor().id, kind, status, q, sort)
-    return {"items": [records.entry_card(row) for row in rows]}
+    user_id = require_actor().id
+    rows = records.list_library(db, user_id, kind, status, q, sort)
+    summary = build_summary(db, user_id)
+    return {
+        "items": [records.entry_card(row) for row in rows],
+        "continue": summary["next_episodes"],
+    }
 
 
 @router.post("/library")
@@ -316,7 +321,10 @@ def search(q: str = Query(""), kind: str | None = None, db: Session = Depends(ge
         raise HTTPException(status_code=422, detail="Type at least two letters.")
     user_id = require_actor().id
     payload = providers.search(db, query, kind)
-    saved = records.saved_source_keys(db, user_id)
+    saved = records.saved_source_ids(db, user_id)
     for result in payload["results"]:
-        result["already_saved"] = (result.get("source"), result.get("source_id")) in saved
+        key = (result.get("source"), result.get("source_id"))
+        result["already_saved"] = key in saved
+        if key in saved:
+            result["saved_id"] = saved[key]
     return payload

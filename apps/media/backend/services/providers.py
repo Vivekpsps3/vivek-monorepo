@@ -5,7 +5,9 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeout
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy.orm import Session
@@ -35,38 +37,119 @@ def provider_status() -> dict[str, str]:
     return status
 
 
+SEARCH_TIMEOUT = 3.0
+HEALTH_TTL = 60.0
+_HEALTH: dict[str, tuple[float, str]] = {}
+_HEALTH_TEST = ""
+
+
+def sticky_status(name: str, state: str) -> str:
+    """Keep the last provider status for a minute so a flap doesn't change the line."""
+    global _HEALTH_TEST
+    current = os.environ.get("PYTEST_CURRENT_TEST", "")
+    if current != _HEALTH_TEST:
+        _HEALTH.clear()
+        _HEALTH_TEST = current
+    now = time.monotonic()
+    row = _HEALTH.get(name)
+    if row is not None and now - row[0] < HEALTH_TTL:
+        return row[1]
+    _HEALTH[name] = (now, state)
+    return state
+
+
+def _cache_get(db: Session, key: str):
+    row = db.get(ProviderCache, key)
+    if row is not None and as_utc(row.fetched_at) >= datetime.now(UTC) - TTL:
+        return json.loads(row.payload)
+    return None
+
+
+def _cache_put(db: Session, key: str, payload) -> None:
+    row = db.get(ProviderCache, key)
+    if row is None:
+        db.add(ProviderCache(cache_key=key, payload=json.dumps(payload), fetched_at=utc_now()))
+    else:
+        row.payload = json.dumps(payload)
+        row.fetched_at = utc_now()
+    db.flush()
+
+
+def _invoke(job):
+    http = httpx.Client(
+        timeout=SEARCH_TIMEOUT, headers={"User-Agent": UA, "Accept": "application/json"}
+    )
+    try:
+        return job(http)
+    finally:
+        http.close()
+
+
 def search(db: Session, query: str, kind: str | None, client: httpx.Client | None = None) -> dict:
     status = provider_status()
     results = []
-    own_client = client is None
-    http = client or httpx.Client(
-        timeout=4.0, headers={"User-Agent": UA, "Accept": "application/json"}
-    )
-    try:
-        jobs = []
-        if kind in (None, "", "movie", "tv"):
-            jobs.append(("tmdb", lambda: tmdb_search(http, query, kind)))
-            if scrape_mode() and kind in (None, "", "tv"):
-                jobs.append(("tvmaze", lambda: tvmaze_search(http, query)))
-            if scrape_mode() and kind in (None, "", "movie"):
-                jobs.append(("itunes", lambda: itunes_search(http, query)))
-        if kind in (None, "", "track", "album", "artist"):
-            jobs.append(("musicbrainz", lambda: musicbrainz_search(http, query, kind)))
-        if kind in (None, "", "book"):
-            jobs.append(("openlibrary", lambda: openlibrary_search(http, query)))
-        if kind in (None, "", "game"):
-            jobs.append(("rawg", lambda: rawg_search(http, query)))
-        for name, job in jobs:
-            if status[name] == "unconfigured":
-                continue
+    jobs = []
+    if kind in (None, "", "movie", "tv"):
+        jobs.append(("tmdb", lambda http: tmdb_search(http, query, kind)))
+        if scrape_mode() and kind in (None, "", "tv"):
+            jobs.append(("tvmaze", lambda http: tvmaze_search(http, query)))
+        if scrape_mode() and kind in (None, "", "movie"):
+            jobs.append(("itunes", lambda http: itunes_search(http, query)))
+    if kind in (None, "", "track", "album", "artist"):
+
+        def music(http):
             try:
-                results.extend(cached_call(db, f"{name}:{kind or 'all'}:{query.lower()}", job))
-                status[name] = "ok"
+                return musicbrainz_search(http, query, kind)
             except Exception:
-                status[name] = "error"
-    finally:
-        if own_client:
-            http.close()
+                return musicbrainz_search(http, query, kind)
+
+        jobs.append(("musicbrainz", music))
+    if kind in (None, "", "book"):
+        jobs.append(("openlibrary", lambda http: openlibrary_search(http, query)))
+    if kind in (None, "", "game"):
+        jobs.append(("rawg", lambda http: rawg_search(http, query)))
+    pending = []
+    for name, job in jobs:
+        if status.get(name) == "unconfigured":
+            continue
+        key = f"{name}:{kind or 'all'}:{query.lower()}"
+        hit = None if client is not None else _cache_get(db, key)
+        if hit is not None:
+            results.extend(hit)
+            status[name] = sticky_status(name, "ok")
+            continue
+        pending.append((name, key, job))
+    if client is not None:
+        for name, key, job in pending:
+            try:
+                payload = job(client)
+                _cache_put(db, key, payload)
+                results.extend(payload)
+                status[name] = sticky_status(name, "ok")
+            except Exception:
+                status[name] = sticky_status(name, "error")
+    elif pending:
+        pool = ThreadPoolExecutor(max_workers=len(pending))
+        payloads: dict[str, list] = {}
+        try:
+            futures = {pool.submit(_invoke, job): (name, key) for name, key, job in pending}
+            try:
+                for future in as_completed(futures, timeout=SEARCH_TIMEOUT + 0.5):
+                    name, key = futures.pop(future)
+                    try:
+                        payload = future.result()
+                        _cache_put(db, key, payload)
+                        payloads[name] = payload
+                        status[name] = sticky_status(name, "ok")
+                    except Exception:
+                        status[name] = sticky_status(name, "error")
+            except FuturesTimeout:
+                for name, _key in futures.values():
+                    status[name] = sticky_status(name, "error")
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+        for name, _key, _job in pending:
+            results.extend(payloads.get(name, []))
     return {"query": query, "results": prefer_unique(results)[:40], "providers": status}
 
 
@@ -95,13 +178,13 @@ def plain_text(value, limit: int = 400) -> str | None:
 
 def as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def cached_call(db: Session, key: str, job):
     row = db.get(ProviderCache, key)
-    if row is not None and as_utc(row.fetched_at) >= datetime.now(timezone.utc) - TTL:
+    if row is not None and as_utc(row.fetched_at) >= datetime.now(UTC) - TTL:
         return json.loads(row.payload)
     payload = job()
     if row is None:

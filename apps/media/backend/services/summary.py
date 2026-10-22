@@ -77,7 +77,9 @@ def build_summary(db: Session, user_id: int) -> dict:
         next_episodes.append(
             {
                 "entry_id": entry.id,
+                "episode_id": chosen["id"],
                 "show_title": entry.catalog.title,
+                "artwork_url": entry.catalog.artwork_url,
                 "season": chosen["season_number"],
                 "episode": chosen["episode_number"],
                 "title": chosen.get("title"),
