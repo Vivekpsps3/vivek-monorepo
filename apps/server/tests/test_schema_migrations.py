@@ -349,9 +349,7 @@ def _apply_extra(database: Path, source: str, rev_id: str):
     command.upgrade(cfg, "head")
 
 
-def test_batch_recreate_keeps_cascade_and_non_cascade_children(tmp_path):
-    database = tmp_path / "site.db"
-    adopt_or_upgrade(sqlite_url(database))
+def _seed_batch_children(database: Path) -> None:
     with sqlite3.connect(database) as db:
         db.execute("PRAGMA foreign_keys=ON")
         db.execute(
@@ -375,31 +373,60 @@ def test_batch_recreate_keeps_cascade_and_non_cascade_children(tmp_path):
             "VALUES (1, 1, 'watch', 0, '2026-01-01')"
         )
         db.commit()
+
+
+def _recreate_table(database: Path, table: str, rev_id: str) -> None:
     _apply_extra(
         database,
         "import sqlalchemy as sa\n"
         "from alembic import op\n"
-        'revision = "batch0000001"\n'
+        f'revision = "{rev_id}"\n'
         'down_revision = "site_schema_v1"\n'
         "branch_labels = None\ndepends_on = None\n"
         "def upgrade():\n"
-        "    with op.batch_alter_table('users', recreate='always') as batch:\n"
-        "        batch.add_column(sa.Column('batch_marker', sa.Integer(), nullable=True))\n"
-        "    with op.batch_alter_table('user_entries', recreate='always') as batch:\n"
+        f"    with op.batch_alter_table('{table}', recreate='always') as batch:\n"
         "        batch.add_column(sa.Column('batch_marker', sa.Integer(), nullable=True))\n"
         "def downgrade():\n"
         "    pass\n",
-        "batch0000001",
+        rev_id,
     )
+
+
+def test_batch_recreate_of_users_keeps_non_cascade_trips(tmp_path):
+    database = tmp_path / "site.db"
+    adopt_or_upgrade(sqlite_url(database))
+    _seed_batch_children(database)
+    _recreate_table(database, "users", "batchusers001")
     with sqlite3.connect(database) as db:
         db.execute("PRAGMA foreign_keys=ON")
         assert db.execute("SELECT COUNT(*) FROM trips").fetchone() == (1,)
+        assert db.execute("SELECT title FROM trips").fetchone() == ("Non cascade",)
         assert db.execute("SELECT COUNT(*) FROM user_entries").fetchone() == (1,)
         assert db.execute("SELECT COUNT(*) FROM experiences").fetchone() == (1,)
-        assert db.execute("SELECT title FROM trips").fetchone() == ("Non cascade",)
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert "batch_marker" in {row[1] for row in db.execute("PRAGMA table_info(users)")}
+        assert "batch_marker" not in {row[1] for row in db.execute("PRAGMA table_info(user_entries)")}
+
+
+def test_batch_recreate_of_user_entries_keeps_cascade_experiences(tmp_path):
+    database = tmp_path / "site.db"
+    adopt_or_upgrade(sqlite_url(database))
+    _seed_batch_children(database)
+    _recreate_table(database, "user_entries", "batchentry001")
+    with sqlite3.connect(database) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        assert db.execute("SELECT COUNT(*) FROM user_entries").fetchone() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM experiences").fetchone() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM trips").fetchone() == (1,)
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert "batch_marker" in {row[1] for row in db.execute("PRAGMA table_info(user_entries)")}
+        assert "batch_marker" not in {row[1] for row in db.execute("PRAGMA table_info(users)")}
+
+
+def test_readonly_sqlite_url_percent_encodes_the_path(tmp_path):
+    database = tmp_path / "q?mark#hash%.db"
+    url = sqlite_url(database, readonly=True)
+    assert url == f"sqlite:///{database.resolve().as_uri()}?mode=ro&uri=true"
 
 
 def test_foreign_key_violation_rolls_the_revision_back(tmp_path):

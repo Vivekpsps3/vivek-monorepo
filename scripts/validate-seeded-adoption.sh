@@ -20,6 +20,7 @@ project="seed-validate"
 seed_port="${SEED_PORT:-8091}"
 site_port="${SITE_PORT:-8095}"
 seed_pid=""
+created_network=0
 
 cleanup() {
   status=$?
@@ -29,6 +30,9 @@ cleanup() {
   fi
   if [[ -f "$work/compose.env" ]]; then
     docker compose -p "$project" --env-file "$work/compose.env" --profile ops down -v >/dev/null 2>&1 || true
+  fi
+  if [[ "$created_network" -eq 1 ]]; then
+    docker network rm monitoring >/dev/null 2>&1 || true
   fi
   if [[ -d "$worktree" ]]; then
     git worktree remove --force "$worktree" >/dev/null 2>&1 || true
@@ -172,7 +176,10 @@ json.dump(report, sys.stdout, indent=2)
 print()
 PY
 
-docker network inspect monitoring >/dev/null 2>&1 || docker network create monitoring
+if ! docker network inspect monitoring >/dev/null 2>&1; then
+  docker network create monitoring
+  created_network=1
+fi
 printf 'SESSION_COOKIE_SECURE=0\nSITE_PORT=%s\nSITE_IMAGE=%s\nSITE_SUBNET=10.87.0.0/28\n' \
   "$site_port" "$image" > "$work/compose.env"
 

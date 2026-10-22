@@ -20,6 +20,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -393,6 +394,33 @@ def users_present(path: Path) -> bool:
     return count > 0
 
 
+def _server_failure(log_file, message: str) -> str:
+    log_file.flush()
+    log_file.seek(0)
+    lines = log_file.read().splitlines()
+    tail = "\n".join(lines[-40:])
+    if tail:
+        return f"{message}\n{tail}"
+    return message
+
+
+def _stop_process_group(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        process.wait(timeout=5)
+
+
 def ensure_dev(args: argparse.Namespace) -> None:
     url = os.environ.get("SITE_DATABASE_URL", f"sqlite:///{REPO / '.local' / 'data' / 'site.db'}")
     path = database_path(url)
@@ -422,10 +450,14 @@ def ensure_dev(args: argparse.Namespace) -> None:
         "RATE_LIMIT_PER_MIN": "100000",
     })
     port = args.port
+    env["PYTHONUNBUFFERED"] = "1"
+    log_file = tempfile.NamedTemporaryFile("w+", prefix="seed-dev-server-", suffix=".log", delete=False)
     process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "apps.server.main:app", "--host", "127.0.0.1", "--port", str(port)],
         cwd=REPO,
         env=env,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
         start_new_session=True,
     )
     base_url = f"http://127.0.0.1:{port}"
@@ -433,7 +465,7 @@ def ensure_dev(args: argparse.Namespace) -> None:
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                raise SystemExit("dev server exited before it accepted connections")
+                raise SystemExit(_server_failure(log_file, "dev server exited before it accepted connections"))
             try:
                 response = httpx.get(f"{base_url}/api/auth/bootstrap-status", timeout=2.0)
             except httpx.HTTPError:
@@ -443,15 +475,13 @@ def ensure_dev(args: argparse.Namespace) -> None:
                 break
             time.sleep(0.2)
         else:
-            raise SystemExit("dev server did not become ready")
+            raise SystemExit(_server_failure(log_file, "dev server did not become ready"))
         seed(base_url, args)
     finally:
-        os.killpg(process.pid, signal.SIGTERM)
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait(timeout=5)
+        _stop_process_group(process)
+        log_name = log_file.name
+        log_file.close()
+        Path(log_name).unlink(missing_ok=True)
 
 
 def main() -> None:

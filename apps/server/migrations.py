@@ -55,7 +55,13 @@ def include_object(object_, name, type_, reflected, compare_to):
 
 
 def connect(path: Path, *, readonly: bool = False) -> sqlite3.Connection:
-    """Open SQLite. Inspection uses mode=ro so a plan cannot create -wal/-shm files."""
+    """Open SQLite.
+
+    ``readonly`` uses ``mode=ro``. That cannot change the main database file,
+    but a WAL open still needs a writable directory and may leave empty
+    ``-wal`` and ``-shm`` files behind. A read-only connection cannot remove
+    them on close.
+    """
     if readonly:
         return sqlite3.connect(
             f"{path.resolve().as_uri()}?mode=ro",
@@ -79,8 +85,8 @@ def make_config(url: str) -> Config:
 def sqlite_url(path: Path, *, readonly: bool = False) -> str:
     resolved = path.resolve()
     if readonly:
-        # SQLAlchemy's SQLite dialect treats uri=true as a URI filename.
-        return f"sqlite:///file:{resolved.as_posix()}?mode=ro&uri=true"
+        # as_uri() percent-encodes ?, #, and % so they stay inside the filename.
+        return f"sqlite:///{resolved.as_uri()}?mode=ro&uri=true"
     return f"sqlite:///{resolved}"
 
 
@@ -166,8 +172,9 @@ def model_diff(path: Path, *, readonly: bool = False):
 
     Constraint order inside CREATE TABLE is not significant; SQLite preserves
     the statement text, and that text is not stable across process hash seeds.
-    ``readonly`` opens the file with mode=ro. ``--plan`` uses that so the
-    comparison cannot create sidecar files or require a writable directory.
+    ``readonly`` opens the file with mode=ro, so ``--plan`` cannot change the
+    main database file. A WAL database still needs a writable directory and
+    may leave empty -wal and -shm sidecars.
     """
     from apps.server.schema import metadata
 
@@ -230,7 +237,9 @@ def backup_if_configured(path: Path) -> None:
         return
     revision = current_revision(path) or "none"
     # Retention is separate from hourly SITE_BACKUP_KEEP. The backup tool keeps
-    # at least three premigrate-* files and does not prune site-* snapshots.
+    # the newest premigrate snapshot of each of the last PREMIGRATE_KEEP
+    # revisions and does not prune site-* snapshots. Repeated snapshots of one
+    # revision collapse to that newest file.
     _load_backup().backup(path, Path(directory), kind="premigrate", revision=revision)
 
 
