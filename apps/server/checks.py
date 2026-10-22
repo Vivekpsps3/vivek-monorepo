@@ -38,6 +38,18 @@ def main():
             raise AssertionError("Authentication must be in process")
         httpx.request = no_auth_http
         with TestClient(app, base_url="https://testserver") as client:
+            for url, location in (
+                ("/hub/media", "/media/"),
+                ("/hub/media/", "/media/"),
+                ("/hub/media/extra", "/media/"),
+                ("/media/library", "/media/#/library"),
+                ("/media/search?q=dune", "/media/#/search?q=dune"),
+                ("/media/calendar", "/media/#/calendar"),
+                ("/media/new", "/media/#/new"),
+            ):
+                response = client.get(url, follow_redirects=False)
+                assert response.status_code == 302, (url, response.status_code, response.headers.get("location"))
+                assert response.headers.get("location") == location, (url, response.headers.get("location"))
             for url in ("/", "/home", "/work", "/about", "/secrets", "/hub", "/hub/admin", "/auth/login", "/auth/signup", "/finance/", "/travel/", "/media/", "/health/ready", "/api/health", "/travel/api/health", "/media/api/health"):
                 response = client.get(url)
                 assert response.status_code == 200, (url, response.status_code, response.text[:150])

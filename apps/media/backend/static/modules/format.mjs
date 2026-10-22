@@ -113,6 +113,65 @@ export function draftKey(entryId) {
   return `media-review-draft:${entryId}`;
 }
 
+const LIBRARY_SORTS = new Set(["activity", "added", "rating", "release", "title"]);
+const LIBRARY_KINDS = new Set(["movie", "tv", "book", "artist", "album", "track", "game"]);
+const LIBRARY_STATUSES = new Set(["want", "anticipating", "in_progress", "completed", "paused", "dropped"]);
+
+export function progressUnits(kind) {
+  if (kind === "book") return [{ value: "page", label: "Page" }, { value: "percent", label: "Percent" }];
+  return [{ value: "percent", label: "Percent" }, { value: "hour", label: "Hours" }];
+}
+
+export function progressPreview(value, unit) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (unit === "page") return `p. ${text}`;
+  if (unit === "percent") return `${text}%`;
+  if (unit === "hour") return `${text} h`;
+  if (unit === "episode") return `Episode ${text}`;
+  return text;
+}
+
+/** A draft wins only when it is non-empty, different, and newer than the server review. */
+export function chooseReview(serverReview, serverUpdatedAt, draft) {
+  const server = serverReview ?? "";
+  if (!draft || typeof draft.text !== "string" || draft.text === "" || draft.text === server) return server;
+  const draftMs = Date.parse(draft.at || "");
+  if (!Number.isFinite(draftMs)) return server;
+  const serverMs = Date.parse(serverUpdatedAt || "");
+  if (!Number.isFinite(serverMs) || draftMs > serverMs) return draft.text;
+  return server;
+}
+
+export function normalizeLibraryQuery(search) {
+  const params = new URLSearchParams(search);
+  let changed = false;
+  let droppedSort = false;
+  const sort = params.get("sort");
+  if (sort != null && sort !== "" && !LIBRARY_SORTS.has(sort)) {
+    params.delete("sort");
+    changed = true;
+    droppedSort = true;
+  }
+  const kind = params.get("kind");
+  if (kind != null && kind !== "" && !LIBRARY_KINDS.has(kind)) {
+    params.delete("kind");
+    changed = true;
+  }
+  const status = params.get("status");
+  if (status != null && status !== "" && !LIBRARY_STATUSES.has(status)) {
+    params.delete("status");
+    changed = true;
+  }
+  return { params, changed, droppedSort };
+}
+
+export function coverImage(url) {
+  const safe = safeUrl(url);
+  if (!safe) return "";
+  return `<img alt="" src="${escapeHtml(safe)}">`;
+}
+
 export function monthLabel(month) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
   if (!match) return "";

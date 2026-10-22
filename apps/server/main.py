@@ -28,6 +28,7 @@ from apps.finance.backend.database import engine
 from apps.travel.backend import app as travel, database as travel_db, deps as travel_deps
 from apps.media.backend import app as media, database as media_db, deps as media_deps
 from apps.server.auth import principal_checker
+from apps.server.redirects import register_hub_media_redirects
 from apps.server.schema import assert_ready
 
 configure_engine(engine)
@@ -165,6 +166,9 @@ def finance_page(path: str):
 
 def shell():
     return FileResponse(WEB_ROOT / "index.html", headers={"Cache-Control": "no-store"})
+
+
+register_hub_media_redirects(app)
 
 
 @app.get("/hub")

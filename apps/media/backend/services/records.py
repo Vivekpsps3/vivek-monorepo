@@ -444,6 +444,8 @@ def list_library(db: Session, user_id: int, kind: str | None, status: str | None
         rows.sort(key=lambda entry: (entry.catalog.year is None, -(entry.catalog.year or 0), entry.catalog.title.lower()))
     elif sort == "added":
         rows.sort(key=lambda entry: entry.created_at, reverse=True)
+    elif sort == "title":
+        rows.sort(key=lambda entry: (entry.catalog.title.casefold(), entry.id))
     else:
         rows.sort(key=lambda entry: entry.updated_at, reverse=True)
     return rows

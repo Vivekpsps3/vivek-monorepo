@@ -1,6 +1,7 @@
 import { api } from '../api.mjs';
 import { KINDS } from '../state.mjs';
 import { esc, banner, head, isoDate, prettyDate, labelOf } from '../helpers.mjs';
+import { browserTimeZone, localTodayIso } from '../../../shared-browser/today.mjs';
 
 export function monthMatrix(year, month) {
   const first = new Date(year, month - 1, 1);
@@ -26,12 +27,14 @@ export async function buildCalendar(path) {
   const weeks = monthMatrix(path.year, path.month);
   const start = isoDate(weeks[0][0]);
   const end = isoDate(weeks[5][6]);
-  const data = await api(`/api/calendar?start=${start}&end=${end}`);
+  const data = await api(`/api/calendar?start=${start}&end=${end}&tz=${encodeURIComponent(browserTimeZone())}`);
   const inGrid = (iso) => iso >= start && iso <= end;
-  const selected = inGrid(path.day) ? path.day : (inGrid(data.today) ? data.today : isoDate(new Date(path.year, path.month - 1, 1)));
+  const todayIso = localTodayIso();
+  const selected = inGrid(path.day) ? path.day : (inGrid(todayIso) ? todayIso : isoDate(new Date(path.year, path.month - 1, 1)));
   return { title: "Calendar", nav: "calendar", html: renderCalendar(data, path, weeks, selected) };
 }
 export function renderCalendar(data, path, weeks, selected) {
+  const todayIso = localTodayIso();
   const plans = {};
   data.plans.forEach((plan) => {
     plans[plan.on_date] = plans[plan.on_date] || [];
@@ -66,7 +69,7 @@ export function renderCalendar(data, path, weeks, selected) {
         .map((date) => {
           const iso = isoDate(date);
           const muted = date.getMonth() !== path.month - 1 ? " cal-day--muted" : "";
-          const today = iso === data.today ? " cal-day--today" : "";
+          const today = iso === todayIso ? " cal-day--today" : "";
           const chosen = iso === selected ? " cal-day--selected" : "";
           const dots = (plans[iso] || []).slice(0, 4).map(() => `<i class="dot"></i>`).join("");
           return `<div class="cal-day${muted}${today}${chosen}"><a class="cal-num" href="#/calendar/${path.year}/${path.month}/${iso}">${date.getDate()}</a><div>${dots}</div></div>`;

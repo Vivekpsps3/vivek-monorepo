@@ -21,14 +21,14 @@ def summary(db: Session = Depends(get_db)):
 
 
 @router.get("/calendar")
-def calendar(month: str | None = None, db: Session = Depends(get_db)):
+def calendar(month: str | None = None, tz: str | None = None, db: Session = Depends(get_db)):
     user_id = require_actor().id
     http = httpx.Client(
         timeout=8.0,
         headers={"User-Agent": UA, "Accept": "application/sparql-results+json, application/json"},
     )
     try:
-        return build_calendar(db, user_id, month, http)
+        return build_calendar(db, user_id, month, http, tz)
     finally:
         http.close()
 
@@ -41,8 +41,8 @@ def library(
     sort: str = "activity",
     db: Session = Depends(get_db),
 ):
-    if sort not in {"added", "rating", "activity", "release"}:
-        raise HTTPException(status_code=422, detail="Sort is not recognized.")
+    if sort not in {"added", "rating", "activity", "release", "title"}:
+        sort = "activity"
     rows = records.list_library(db, require_actor().id, kind, status, q, sort)
     return {"items": [records.entry_card(row) for row in rows]}
 

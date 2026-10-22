@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from apps.media.backend import deps
@@ -18,6 +18,10 @@ from apps.media.backend.routers import journal
 BACKEND_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BACKEND_DIR / "static"
 REPO_ROOT = BACKEND_DIR.parents[2] if len(BACKEND_DIR.parents) > 2 else BACKEND_DIR
+SHARED_BROWSER_DIR = REPO_ROOT / "packages" / "browser" / "runtime"
+if not SHARED_BROWSER_DIR.is_dir():
+    SHARED_BROWSER_DIR = BACKEND_DIR / "shared-browser"
+JOURNAL_SCREENS = {"library", "search", "calendar", "new"}
 
 
 def shared_stylesheet(name: str) -> Path:
@@ -102,6 +106,8 @@ def create_app(*, unified: bool = False) -> FastAPI:
 
     if STATIC_DIR.is_dir():
         application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    if SHARED_BROWSER_DIR.is_dir():
+        application.mount("/shared-browser", StaticFiles(directory=SHARED_BROWSER_DIR), name="shared-browser")
 
     @application.get("/tokens.css")
     def tokens():
@@ -125,5 +131,17 @@ def create_app(*, unified: bool = False) -> FastAPI:
             return JSONResponse(status_code=404, content={"detail": "Media UI is not built."})
         html = page.read_text(encoding="utf-8").replace("__MEDIA_ROOT__", mount_path())
         return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+    def screen_redirect(screen: str, request: Request):
+        name = screen.strip().strip("/").lower()
+        if name not in JOURNAL_SCREENS:
+            return JSONResponse(status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"})
+        query = f"?{request.url.query}" if request.url.query else ""
+        root = mount_path()
+        target = f"{root}/#/{name}{query}" if root else f"/#/{name}{query}"
+        return RedirectResponse(target, status_code=302)
+
+    application.add_api_route("/{screen}", screen_redirect, methods=["GET"])
+    application.add_api_route("/{screen}/", screen_redirect, methods=["GET"])
 
     return application
