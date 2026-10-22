@@ -9,6 +9,7 @@ import { renderTrip, mountMap } from './views/trip.mjs';
 import { renderPto, mountPto } from './views/pto.mjs';
 import { renderSettings, renderLogin } from './views/settings.mjs';
 import { SKELETON_DELAY_MS, errorPanel, routeProblem, skeletonFor } from './states.mjs';
+import { screenNav } from './screens.mjs';
 
 export function destroyMap() {
   if (window._travelMap) {
@@ -18,11 +19,7 @@ export function destroyMap() {
 }
 
 function navKey(path) {
-  if (path.name === "calendar") return "calendar";
-  if (path.name === "pto") return "pto";
-  if (path.name === "settings" || path.name === "new" || path.name === "not-found") return "";
-  if (path.name === "trip") return "home";
-  return "home";
+  return screenNav(path.name);
 }
 
 export function paint(html, nav, options = {}) {
@@ -37,6 +34,7 @@ export function paint(html, nav, options = {}) {
     form.noValidate = true;
   });
   root.setAttribute("aria-busy", options.busy ? "true" : "false");
+  document.body.classList.toggle("is-signed-out", Boolean(options.focusLogin));
   document.querySelectorAll("[data-nav]").forEach((link) => {
     if (nav && link.dataset.nav === nav) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -128,7 +126,7 @@ export async function render() {
 export async function build(path) {
   if (path.name === "home") return { title: "Upcoming", nav: "home", html: renderHome(await api("/api/home")) };
   if (path.name === "calendar") return buildCalendar(path);
-  if (path.name === "new") return { title: "New trip", nav: "home", html: renderNewTrip() };
+  if (path.name === "new") return { title: "New trip", nav: screenNav("new"), html: renderNewTrip() };
   if (path.name === "trip") {
     const trip = await api(`/api/trips/${path.id}`);
     return { title: trip.title, nav: "home", html: renderTrip(trip, path.focusDay), trip };

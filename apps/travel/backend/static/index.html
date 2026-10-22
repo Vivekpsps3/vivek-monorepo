@@ -42,14 +42,20 @@
         <a href="#/pto" data-nav="pto">PTO</a>
       </nav>
       <div class="topbar-actions">
-        <a class="btn btn-ghost btn-sm hub-link" href="/hub">Hub</a>
-        <a class="btn btn-primary btn-sm" href="#/trips/new">New trip</a>
-        <div class="theme-switch" role="group" aria-label="Theme">
-          <button class="btn btn-ghost btn-sm" type="button" data-action="theme" data-theme-value="system" aria-pressed="true">System</button>
-          <button class="btn btn-ghost btn-sm" type="button" data-action="theme" data-theme-value="light" aria-pressed="false">Light</button>
-          <button class="btn btn-ghost btn-sm" type="button" data-action="theme" data-theme-value="dark" aria-pressed="false">Dark</button>
+        <a class="btn btn-primary btn-sm new-trip" href="#/trips/new"><span class="new-wide">New trip</span><span class="new-narrow">+ New</span></a>
+        <a class="btn btn-ghost btn-sm settings-bar" href="#/settings" data-nav="settings" hidden>Settings</a>
+        <div class="more">
+          <button class="btn btn-ghost btn-sm" type="button" data-action="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More">⋯ More</button>
+          <div id="more-menu" class="more-menu" hidden>
+            <div class="theme-switch" role="radiogroup" aria-label="Theme">
+              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="system" aria-checked="true" aria-pressed="true">System</button>
+              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="light" aria-checked="false" aria-pressed="false">Light</button>
+              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="dark" aria-checked="false" aria-pressed="false">Dark</button>
+            </div>
+            <a href="#/settings" data-nav="settings">Settings</a>
+            <a href="/hub">Hub</a>
+          </div>
         </div>
-        <a class="btn btn-ghost btn-sm" href="#/settings" data-nav="settings">Settings</a>
       </div>
     </div>
   </header>
