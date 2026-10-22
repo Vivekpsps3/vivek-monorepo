@@ -2,11 +2,12 @@ import { defineConfig } from '@playwright/test';
 
 const dist = process.env.E2E_DIST;
 const port = process.env.E2E_PORT ?? '4173';
-const builtUrl = `http://127.0.0.1:${port}`;
+const builtUrl = `http://127.0.0.1:${port}/finance/`;
 
 /**
- * `npm run e2e` drives the dev server. `make e2e` and CI set E2E_DIST to the
- * production bundle and serve it at `/`, which is the mount these specs assert.
+ * `npm run e2e` drives the dev server at `/`. `make e2e` and CI set E2E_DIST
+ * and serve the production bundle at `/finance/`, the same base href as the image.
+ * /hub and /auth stay outside that prefix.
  */
 export default defineConfig({
   testDir: 'e2e',
@@ -25,9 +26,10 @@ export default defineConfig({
     ? undefined
     : dist
       ? {
-          command: `node ../../../scripts/serve-spa.mjs ${dist} ${port}`,
+          command: `node ../../../scripts/serve-spa.mjs ${dist} ${port} /finance`,
           url: builtUrl,
-          reuseExistingServer: !process.env.CI,
+          // A server left over from a / build would serve this bundle's scripts as HTML.
+          reuseExistingServer: false,
           timeout: 30_000,
         }
       : {

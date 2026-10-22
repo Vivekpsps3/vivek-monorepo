@@ -25,6 +25,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Alembic inserts the repo root on sys.path before importing the models.
 "apps/finance/backend/alembic/env.py" = ["E402"]
+"apps/server/alembic/env.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -51,6 +52,6 @@ omit = [
 ]
 
 [tool.coverage.report]
-precision = 0
+precision = 2
 show_missing = false
 skip_empty = true

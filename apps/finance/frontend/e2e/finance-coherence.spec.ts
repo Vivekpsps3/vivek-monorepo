@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { test, expect } from '@playwright/test';
-import { syntheticVault } from './synthetic-vault';
+import { field, syntheticVault } from './synthetic-vault';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -132,7 +132,11 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
     }],
   });
 
-  await vault.open('/planning?t=compensation&start=2024-01-01&end=2024-12-31');
+  await vault.open(
+    '/planning?t=compensation&start=2024-01-01&end=2024-12-31',
+    page,
+    '/recurring?t=pay&start=2024-01-01&end=2024-12-31&history=1',
+  );
   await expect(page).toHaveURL(/\/recurring\?/);
   const url = new URL(page.url());
   expect(url.searchParams.get('t')).toBe('pay');
@@ -148,8 +152,8 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
   const report = page.locator('app-compensation-report');
   await expect(report).toContainText('Former employer');
   await expect(report.getByRole('row').filter({ hasText: 'Former employer' })).toContainText('$5,000.00');
-  await expect(report.locator('input[name="compensation_start"]')).toHaveValue('2024-01-01');
-  await expect(report.locator('input[name="compensation_end"]')).toHaveValue('2024-12-31');
+  await expect(field(report, 'From')).toHaveValue('2024-01-01');
+  await expect(field(report, 'Through')).toHaveValue('2024-12-31');
   await expect(report.getByRole('button', { name: /Edit|Add job/ })).toHaveCount(0);
   expect(vault.data('job_incomes')[0].compensation_payments).toEqual([
     expect.objectContaining({ date: '2024-12-15', kind: 'bonus', label: 'Retention bonus', amount: 5000 }),
@@ -465,7 +469,7 @@ test('import account mapping refreshes the exact account label in another mounte
   };
   const vault = await syntheticVault(page, { transactions: [legacy] });
   const second = await page.context().newPage();
-  await vault.open('/spending?t=imports', page);
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await vault.open('/spending?t=activity', second);
   const secondRow = second.getByRole('row').filter({ hasText: description });
   await expect(secondRow).toContainText('—');
@@ -502,7 +506,7 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
   });
   const activityTab = await page.context().newPage();
   const homeTab = await page.context().newPage();
-  await vault.open('/spending?t=imports', page);
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await vault.open('/spending?t=activity', activityTab);
   await vault.open('/', homeTab);
   const homeMonth = homeTab.locator('.home-tile').filter({ hasText: 'This month' });
@@ -529,9 +533,12 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
     account_key: 'card', start_date: coverageStart, end_date: coverageEnd, confirmed: true,
   });
 
+  // t=imports rewrites to receipts=1, which opens the disclosure. Wait for the
+  // row instead of clicking the summary: that click toggles a panel the route
+  // already opened and hides Undo again.
   const receipt = page.locator('.ledger-receipts .import-history-row').filter({ hasText: 'confirmed-coverage.csv' });
   const undo = receipt.getByRole('button', { name: 'Undo', exact: true });
-  if (!(await undo.isVisible())) await page.locator('.ledger-receipts summary').click();
+  await expect(undo).toBeVisible();
   await undo.click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   await expect.poll(() => vault.data('import_batches')[0]?.status).toBe('withdrawn');

@@ -251,12 +251,12 @@ test('summaries include transactions beyond 5,000 while visible rows remain pagi
 
 test('legacy spending links translate to Activity filters and five navigation hubs remain accessible', async ({ page }) => {
   const vault = await syntheticVault(page, seed());
-  await vault.open('/spending?t=pay');
+  await vault.open('/spending?t=pay', page, '/spending?t=activity&v=income');
   await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).toContainText('Activity');
   await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).not.toContainText('Imports');
   await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('income');
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toBeVisible();
-  await vault.open('/spending?t=spend');
+  await vault.open('/spending?t=spend', page, '/spending?t=activity&v=spending');
   await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('spending');
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toHaveCount(0);
   await vault.open('/planning');
@@ -380,7 +380,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
     'Transaction Date,Post Date,Description,Category,Type,Amount,Memo',
     `${date},${date},${description},Food,Sale,-10,`,
   ].join('\n'));
-  await vault.open('/spending?t=imports');
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
 
   const importButton = page.getByRole('button', { name: 'Import from bank', exact: true });
   await importButton.click();
@@ -442,7 +442,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
 
 test('bank imports require account identity, resume one receipt, and undo retains edited records', async ({ page }) => {
   const vault = await syntheticVault(page);
-  await vault.open('/spending?t=imports');
+  await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
   await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({

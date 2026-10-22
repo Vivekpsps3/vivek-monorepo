@@ -1,4 +1,5 @@
-// Karma coverage gate. Thresholds are the current totals, truncated.
+// Karma coverage gate. Thresholds sit about 1 point below the measured totals.
+// Karma only instruments files the specs load, so these are not whole-app coverage.
 module.exports = function (config) {
   config.set({
     basePath: '',
@@ -23,10 +24,10 @@ module.exports = function (config) {
       reporters: [{ type: 'text-summary' }, { type: 'json-summary' }],
       check: {
         global: {
-          statements: 62,
-          branches: 48,
-          functions: 56,
-          lines: 64,
+          statements: 61,
+          branches: 47,
+          functions: 55,
+          lines: 63,
         },
       },
     },

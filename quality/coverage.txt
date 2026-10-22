@@ -1,0 +1,9 @@
+# Measured statement coverage and the fail-under floor.
+# The floor sits about 1 percentage point below the measured total.
+# coverage-gate.sh fails under the floor, and when the new total is more
+# than 1 point above the floor. Re-pin both numbers together.
+# suite  measured  floor
+finance 82.41 81.41
+travel 81.39 80.39
+media 70.51 69.51
+server 21.25 20.25

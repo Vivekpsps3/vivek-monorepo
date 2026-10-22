@@ -48,6 +48,76 @@ class RatchetTests(unittest.TestCase):
             path.write_text(text)
             self.assertEqual(self.ratchet.load(path), counts)
 
+    def test_mypy_notes_are_not_findings(self):
+        stdout = "\n".join(
+            [
+                "apps/a.py:10: error: bad assignment [assignment]",
+                "apps/a.py:10: note: See https://example.test/foo[bar]",
+                "apps/a.py:11: error: continued on the next line",
+            ]
+        )
+        self.assertEqual(
+            self.ratchet.parse_mypy_output(stdout),
+            [("apps/a.py", "assignment")],
+        )
+
+    def test_eslint_counts_warnings_and_rejects_parse_errors(self):
+        payload = [
+            {
+                "filePath": str(self.ratchet.ROOT / "apps/a.ts"),
+                "messages": [
+                    {
+                        "ruleId": "@typescript-eslint/no-explicit-any",
+                        "severity": 1,
+                        "message": "warn",
+                    },
+                    {"ruleId": "eqeqeq", "severity": 0, "message": "off"},
+                ],
+            }
+        ]
+        self.assertEqual(
+            self.ratchet.parse_eslint_report(payload),
+            [("apps/a.ts", "@typescript-eslint/no-explicit-any")],
+        )
+        broken = [
+            {
+                "filePath": str(self.ratchet.ROOT / "apps/a.ts"),
+                "messages": [{"ruleId": None, "severity": 2, "message": "Parsing error"}],
+            }
+        ]
+        with self.assertRaises(SystemExit):
+            self.ratchet.parse_eslint_report(broken)
+
+    def test_update_refuses_a_higher_count(self):
+        current = Counter({("apps/a.py", "F401"): 3})
+        baseline = Counter({("apps/a.py", "F401"): 2})
+        with self.assertRaises(SystemExit):
+            self.ratchet.guard_update(current, baseline, allow_increase=False)
+        self.ratchet.guard_update(current, baseline, allow_increase=True)
+        shrunk = Counter({("apps/a.py", "F401"): 1})
+        self.ratchet.guard_update(shrunk, baseline, allow_increase=False)
+
+    def test_base_allowance_ignores_shrinks(self):
+        proposed = Counter({("apps/a.py", "F401"): 1, ("apps/b.py", "I001"): 2})
+        base = Counter({("apps/a.py", "F401"): 4})
+        messages = self.ratchet.increase_messages(proposed, base, word="raised", label="base")
+        self.assertEqual(messages, ["raised apps/b.py I001: 2 (base 0)"])
+
+    def test_suppression_markers(self):
+        line = "x = 1  # noqa: F401, E402  # type: ignore[arg-type]"
+        self.assertEqual(
+            self.ratchet.suppression_markers(line),
+            ["noqa:F401", "noqa:E402", "type: ignore[arg-type]"],
+        )
+        self.assertEqual(
+            self.ratchet.suppression_markers("// eslint-disable-next-line eqeqeq"),
+            ["eqeqeq"],
+        )
+        self.assertEqual(
+            self.ratchet.suppression_markers("const value = 1; // @ts-expect-error narrow"),
+            ["@ts-expect-error"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

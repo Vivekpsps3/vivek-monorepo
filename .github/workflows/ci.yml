@@ -16,16 +16,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: apps/server/requirements.lock
-      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install -r requirements-dev.txt
+          cache-dependency-path: |
+            apps/server/requirements.lock
+            requirements-dev.txt
+      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install --require-hashes -r requirements-dev.txt
+      - name: Lint allowances did not rise
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          for tool in ruff mypy eslint-finance eslint-site eslint-packages suppressions; do
+            python3 scripts/quality_ratchet.py check-base "$tool" "origin/${{ github.base_ref }}"
+          done
       - run: ./scripts/coverage-gate.sh finance
+      - run: ./scripts/coverage-gate.sh server
       - run: make test-fast
       - run: make lint-python
       - run: make typecheck-python
+      - run: pip-audit --disable-pip --no-deps -r apps/server/requirements.lock
 
   travel-backend:
     name: Travel Backend
@@ -37,9 +50,11 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
+            apps/server/requirements.lock
+            requirements-dev.txt
             apps/travel/backend/requirements.txt
             apps/travel/backend/requirements-dev.txt
-      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install -r requirements-dev.txt
+      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install --require-hashes -r requirements-dev.txt
       - run: ./scripts/coverage-gate.sh travel
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -56,9 +71,11 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
+            apps/server/requirements.lock
+            requirements-dev.txt
             apps/media/backend/requirements.txt
             apps/media/backend/requirements-dev.txt
-      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install -r requirements-dev.txt
+      - run: python -m pip install --require-hashes -r apps/server/requirements.lock && python -m pip install --require-hashes -r requirements-dev.txt
       - run: ./scripts/coverage-gate.sh media
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -109,6 +126,9 @@ jobs:
         if: always()
         working-directory: ${{ matrix.app.dir }}
         run: |
+          if [ ! -d coverage ]; then
+            exit 0
+          fi
           summary=$(find coverage -name coverage-summary.json -print -quit)
           if [ -n "$summary" ]; then
             node "$GITHUB_WORKSPACE/scripts/karma-coverage-summary.mjs" "$summary" "${{ matrix.app.dir }}"
@@ -122,15 +142,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
-      - run: |
-          python -m pip install --require-hashes -r apps/server/requirements.lock
-          python -m pip install -r requirements-dev.txt
-          ./scripts/coverage-gate.sh server
-          python -m pip install pip-audit
-          pip-audit --disable-pip --no-deps -r apps/server/requirements.lock
       - name: Build immutable production image
         run: docker build --build-arg SITE_RELEASE=${{ github.sha }} --tag personal-site:${{ github.sha }} .
       - name: Exercise unified release
@@ -138,10 +149,22 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
+      - id: playwright-version
+        run: echo "version=$(node -p "require('./apps/finance/frontend/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       - name: Install browser tooling
+        working-directory: apps/finance/frontend
         run: |
-          npm ci --prefix apps/finance/frontend
-          cd apps/finance/frontend && npx playwright install --with-deps chromium
+          npm ci
+          if [ "${{ steps.playwright-browsers.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       - name: Browser checks against production image
         run: |
           set -euo pipefail
@@ -181,9 +204,22 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: apps/finance/frontend/package-lock.json
+      - id: playwright-version
+        run: echo "version=$(node -p "require('./apps/finance/frontend/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       - run: npm ci --prefix apps/finance/frontend
-      - working-directory: apps/finance/frontend
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browser
+        working-directory: apps/finance/frontend
+        run: |
+          if [ "${{ steps.playwright-browsers.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       - run: make e2e
       - name: Playwright traces
         if: failure()

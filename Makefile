@@ -19,7 +19,7 @@ help:
 install:
 	python3 -m venv .venv
 	$(PY) -m pip install --require-hashes -r apps/server/requirements.lock
-	$(PY) -m pip install -r requirements-dev.txt
+	$(PY) -m pip install --require-hashes -r requirements-dev.txt
 	npm ci --prefix apps/finance/frontend
 	npm ci --prefix apps/site
 
@@ -37,8 +37,10 @@ build-frontends:
 
 test-fast:
 	./scripts/check-doc-paths.sh
+	./scripts/check-blame-ignore-revs.sh
 	python3 scripts/check-shared-boundaries.py
 	python3 -m unittest scripts/test_quality_ratchet.py
+	node --test scripts/serve-spa.test.mjs
 
 test-backend:
 	./scripts/coverage-gate.sh finance
@@ -55,7 +57,8 @@ lint: lint-python lint-web
 lint-python:
 	@py='$(PY)'; [ -x "$$py" ] || py='$(PYTHON)'; \
 	 "$$py" -m ruff format --check apps scripts && \
-	 "$$py" scripts/quality_ratchet.py check ruff
+	 "$$py" scripts/quality_ratchet.py check ruff && \
+	 "$$py" scripts/quality_ratchet.py check suppressions
 
 lint-web:
 	$(PYTHON) scripts/quality_ratchet.py check eslint-finance
@@ -76,7 +79,7 @@ typecheck-web:
 	npx --prefix apps/site tsc -p apps/site/tsconfig.spec.json --noEmit --pretty false
 
 e2e:
-	cd apps/finance/frontend && npx ng build --configuration production && node scripts/write-release-manifest.mjs
+	cd apps/finance/frontend && npx ng build --configuration production --base-href /finance/ && node scripts/write-release-manifest.mjs
 	cd apps/finance/frontend && E2E_DIST=dist/finance-app/browser npx playwright test
 
 lint-baseline:
@@ -85,7 +88,8 @@ lint-baseline:
 	 "$$py" scripts/quality_ratchet.py update mypy && \
 	 $(PYTHON) scripts/quality_ratchet.py update eslint-finance && \
 	 $(PYTHON) scripts/quality_ratchet.py update eslint-site && \
-	 $(PYTHON) scripts/quality_ratchet.py update eslint-packages
+	 $(PYTHON) scripts/quality_ratchet.py update eslint-packages && \
+	 $(PYTHON) scripts/quality_ratchet.py update suppressions
 
 test: test-fast test-backend test-frontend
 	node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs
