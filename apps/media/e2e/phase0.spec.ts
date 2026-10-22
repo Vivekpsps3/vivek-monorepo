@@ -26,6 +26,14 @@ test('hub and screen URLs redirect into the journal', async ({ page, request }) 
 test('progress saves with a unit and survives reload and Again', async ({ page }) => {
   await page.goto('/media/#/library');
   await page.getByRole('link', { name: /Dune/ }).click();
+  await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
+  const gap = await page.evaluate(() => {
+    const row = document.querySelector('.progress-controls')?.getBoundingClientRect();
+    const again = document.querySelector('[data-action="log-again"]')?.getBoundingClientRect();
+    if (!row || !again) return 999;
+    return again.top - row.bottom;
+  });
+  expect(gap).toBeLessThan(32);
   const progress = page.getByLabel('Progress', { exact: true });
   await progress.fill('120');
   await page.getByLabel('Unit').selectOption('page');
@@ -152,7 +160,9 @@ test('a failed progress draft does not overwrite a newer save', async ({ page, r
   });
   await progress.fill('40');
   await progress.press('Enter');
+  await expect(progress).toHaveValue('40');
   await expect(page.locator('#progress-status')).toContainText('Not saved. Try again');
+  await expect(page.locator('#progress-status')).toHaveAttribute('aria-live', 'off');
   await expect(page.locator('#toast-alerts')).toContainText("Couldn't save your progress. Try again.");
   await expect(page.locator('#toast-alerts').getByRole('button', { name: 'Retry' })).toBeVisible();
   await expect.poll(() => page.evaluate(id => localStorage.getItem(`media-progress-draft:${id}`), dune.id)).toContain('40');
@@ -273,11 +283,25 @@ test('blurring an unchanged note does not overwrite a newer save', async ({ page
   const after = await request.get(`/media/api/entries/${dune.id}`);
   expect((await after.json()).review).toBe('Newer note from the other tab');
 
+  const reviewPatches: string[] = [];
+  page.on('request', request => {
+    if (request.method() !== 'PATCH') return;
+    const body = request.postData() || '';
+    if (body.includes('"review"')) reviewPatches.push(body);
+  });
   await note.fill('from the stale tab');
   await note.blur();
   await expect(page.locator('#toast-alerts')).toContainText('This note changed in another tab. Your text is kept as a draft.');
   await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
+  await expect(page.locator('#note-status')).toContainText('Not saved. This note changed elsewhere.');
+  await expect(page.locator('#note-status')).toHaveAttribute('aria-live', 'off');
+  await expect(page.locator('#note-status').getByRole('button', { name: 'Reload' })).toBeVisible();
+  await expect(note).toHaveValue('from the stale tab');
+  await note.focus();
+  await note.fill('still stale');
   await note.blur();
+  expect(reviewPatches).toHaveLength(1);
+  await expect(note).toHaveValue('still stale');
   await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
   await page.locator('#toast-alerts').getByRole('button', { name: 'Reload' }).click();
   await expect(page.locator('#note-draft')).toContainText('Unsaved note from earlier.');
@@ -367,8 +391,16 @@ test('progress stays 120 after a status change re-renders the item', async ({ pa
   const progress = page.getByLabel('Progress', { exact: true });
   await progress.fill('120');
   const status = page.getByRole('button', { name: 'Paused' });
+  const statusSent = page.waitForRequest(request => {
+    if (request.method() !== 'PATCH') return false;
+    try {
+      return Object.prototype.hasOwnProperty.call(request.postDataJSON() ?? {}, 'status');
+    } catch {
+      return false;
+    }
+  });
   const clicked = status.click();
-  await page.waitForTimeout(200);
+  await statusSent;
   releaseSave();
   await clicked;
   await expect(progress).toHaveValue('120');
@@ -376,18 +408,30 @@ test('progress stays 120 after a status change re-renders the item', async ({ pa
   await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(120);
 });
 
+async function settleControl(page: import('@playwright/test').Page, name: string, exact = false) {
+  const opinion = page.locator('.opinion');
+  await opinion.evaluate(node => { node.dataset.generation = 'old'; });
+  const refreshed = page.waitForResponse(response => (
+    response.request().method() === 'GET'
+    && /\/api\/entries\/\d+$/.test(response.url())
+    && response.ok()
+  ));
+  await page.getByRole('button', { name, exact }).click();
+  await refreshed;
+  await expect(opinion).not.toHaveAttribute('data-generation', 'old');
+  const button = page.getByRole('button', { name, exact });
+  await expect(button).toBeFocused();
+  return button;
+}
+
 test('status, favorite, and again keep focus on the same control', async ({ page }) => {
   await page.goto('/media/#/library');
   await page.getByRole('link', { name: /Dune/ }).click();
-  const paused = page.getByRole('button', { name: 'Paused' });
-  await paused.click();
-  await expect(paused).toBeFocused();
-  const favorite = page.getByRole('button', { name: 'Favorite', exact: true });
-  await favorite.click();
-  await expect(favorite).toBeFocused();
-  const again = page.getByRole('button', { name: 'Again' });
-  await again.click();
-  await expect(again).toBeFocused();
+  const paused = await settleControl(page, 'Paused');
+  await expect(paused).toHaveClass(/is-on/);
+  const favorite = await settleControl(page, 'Favorite', true);
+  await expect(favorite).toHaveAttribute('aria-pressed', 'true');
+  await settleControl(page, 'Again');
 });
 
 test('a missing item is one error panel and a success toast survives navigation', async ({ page }) => {
@@ -401,7 +445,7 @@ test('a missing item is one error panel and a success toast survives navigation'
   await expect(panel.getByRole('link', { name: 'Search' })).toBeVisible();
   await expect(page.locator('#toasts')).toBeEmpty();
   await expect(page.locator('#toast-alerts')).toBeEmpty();
-  await expect(page.locator('.error-panel[role="alert"]')).toHaveCount(1);
+  await expect(page.locator('.error-panel')).not.toHaveAttribute('role', 'alert');
 
   await page.goto('/media/#/new');
   await page.getByLabel('Title').fill('Synthetic Toast Title');
@@ -522,9 +566,41 @@ test('typing a search does not move focus onto the error', async ({ page }) => {
   await expect(page.locator('main')).not.toHaveAttribute('aria-busy', 'true');
   const error = page.getByRole('heading', { name: "Search isn't working right now" });
   await expect(error).toBeVisible();
+  await expect(page.locator('#search-results .error-panel')).toHaveAttribute('role', 'alert');
   await expect(input).toBeFocused();
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(error).toBeFocused();
+  await expect(page.locator('#search-results .error-panel')).not.toHaveAttribute('role', 'alert');
+
+  await page.unroute('**/api/search**');
+  await page.route('**/api/search**', async route => {
+    const url = new URL(route.request().url());
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: url.searchParams.get('q'),
+        results: [{
+          source: 'openlibrary',
+          source_id: 'synthetic-retry',
+          kind: 'book',
+          title: 'Retry Result',
+          creator: 'Synthetic',
+          year: 2001,
+          overview: '',
+          artwork_url: null,
+          genres: [],
+          external_ratings: [],
+          releases: [],
+          episodes: [],
+          already_saved: false,
+        }],
+        providers: { openlibrary: 'ok' },
+      }),
+    });
+  });
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('heading', { name: 'Retry Result' })).toBeFocused();
 });
 
 test('media routes stay quiet under the enforced content security policy', async ({ page }) => {
@@ -602,7 +678,226 @@ test('a finished progress save does not dismiss another item draft', async ({ pa
   }, alpha.id);
   await page.goto(`/media/#/item/${alpha.id}`);
   await expect(page.locator('#progress-draft')).toContainText('Unsaved progress from earlier');
+  const done = page.waitForResponse(response => (
+    response.request().method() === 'PATCH'
+    && response.url().includes(`/entries/${dune.id}`)
+    && response.ok()
+  ));
   releaseSave();
-  await page.waitForTimeout(400);
+  await done;
   await expect(page.locator('#progress-draft')).toContainText('Unsaved progress from earlier');
+});
+
+test('the theme toggle names the theme it applies', async ({ page }) => {
+  await page.goto('/media/');
+  await page.getByRole('button', { name: 'Dark', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('[data-theme-value="dark"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(20, 19, 17)');
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('[data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(246, 243, 238)');
+});
+
+test('two quick note saves use the base from the first response', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  let releaseFirst: () => void = () => {};
+  const gate = new Promise<void>(resolve => { releaseFirst = resolve; });
+  const bases: string[] = [];
+  let secondSent = false;
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as { review?: string; review_base?: string };
+      if (typeof body.review === 'string') {
+        bases.push(String(body.review_base ?? ''));
+        if (bases.length === 1) await gate;
+        else secondSent = true;
+      }
+    }
+    await route.continue();
+  });
+  await page.goto(`/media/#/item/${dune.id}`);
+  const note = page.getByLabel('Note');
+  await note.fill('first draft');
+  const first = note.blur();
+  await expect.poll(() => bases.length).toBe(1);
+  await note.focus();
+  await note.fill('second draft');
+  const second = note.blur();
+  await new Promise<void>(resolve => {
+    const timer = setInterval(() => {
+      if (secondSent) {
+        clearInterval(timer);
+        clearTimeout(limit);
+        resolve();
+      }
+    }, 20);
+    const limit = setTimeout(() => {
+      clearInterval(timer);
+      resolve();
+    }, 250);
+  });
+  expect(secondSent).toBe(false);
+  releaseFirst();
+  await expect.poll(() => bases.length).toBe(2);
+  expect(bases[1]).not.toBe(bases[0]);
+  await expect(note).toHaveValue('second draft');
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).review).toBe('second draft');
+  await note.fill('third draft');
+  await note.blur();
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).review).toBe('third draft');
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
+});
+
+test('a status click waits for the note save before drawing the new field', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  let releaseNote: () => void = () => {};
+  const gate = new Promise<void>(resolve => { releaseNote = resolve; });
+  const reviews: string[] = [];
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as { review?: string };
+      if (typeof body.review === 'string') {
+        reviews.push(body.review);
+        await gate;
+      }
+    }
+    await route.continue();
+  });
+  await page.goto(`/media/#/item/${dune.id}`);
+  const note = page.getByLabel('Note');
+  await note.fill('typed before pause');
+  const paused = page.getByRole('button', { name: 'Paused' });
+  const clicked = paused.click();
+  await expect.poll(() => reviews.length).toBe(1);
+  releaseNote();
+  await clicked;
+  await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+  await expect(page.getByLabel('Note')).toHaveValue('typed before pause');
+  const entry = await (await request.get(`/media/api/entries/${dune.id}`)).json();
+  expect(entry.review).toBe('typed before pause');
+  await expect(page.locator('textarea[data-review]')).toHaveAttribute('data-review-base', entry.review_updated_at || '');
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
+  await page.getByLabel('Note').fill('after pause');
+  await page.getByLabel('Note').blur();
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).review).toBe('after pause');
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
+});
+
+test('progress can change back to the previous value while a save is in flight', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await page.goto(`/media/#/item/${dune.id}`);
+  const progress = page.getByLabel('Progress', { exact: true });
+  await progress.fill('120');
+  await progress.press('Enter');
+  await expect(page.locator('#progress-status')).toHaveText('Saved ✓');
+  let release: () => void = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let held = false;
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      if (Object.prototype.hasOwnProperty.call(body, 'progress_value') && !held) {
+        held = true;
+        await gate;
+      }
+    }
+    await route.continue();
+  });
+  const sent = page.waitForRequest(req => req.method() === 'PATCH' && (req.postData() || '').includes('130'));
+  await progress.fill('130');
+  await progress.press('Enter');
+  await sent;
+  await progress.fill('120');
+  await progress.press('Enter');
+  release();
+  await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(120);
+  await expect(progress).toHaveValue('120');
+});
+
+test('a failed note save keeps the typed text', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  const before = await (await request.get(`/media/api/entries/${dune.id}`)).json();
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH' && (route.request().postData() || '').includes('"review"')) {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto(`/media/#/item/${dune.id}`);
+  const note = page.getByLabel('Note');
+  await note.fill('keep this draft');
+  await note.blur();
+  await expect(note).toHaveValue('keep this draft');
+  await expect(page.locator('#note-status')).toContainText('Not saved. Try again');
+  await expect(page.locator('#note-status')).toHaveAttribute('aria-live', 'off');
+  await expect(page.locator('#toast-alerts')).toContainText('Request failed (500).');
+  const kept = await (await request.get(`/media/api/entries/${dune.id}`)).json();
+  expect(kept.review).toBe(before.review);
+});
+
+test('a retry toast stays until it is dismissed', async ({ page, request }) => {
+  await page.clock.install();
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await page.route('**/api/entries/**', route => {
+    if (route.request().method() === 'PATCH') {
+      route.abort('failed');
+      return;
+    }
+    route.continue();
+  });
+  await page.goto(`/media/#/item/${dune.id}`);
+  await page.getByLabel('Progress', { exact: true }).fill('40');
+  await page.getByLabel('Progress', { exact: true }).press('Enter');
+  const retry = page.locator('#toast-alerts').getByRole('button', { name: 'Retry' });
+  await expect(retry).toBeVisible();
+  await page.clock.runFor(12_000);
+  await expect(retry).toBeVisible();
+  await page.locator('#toast-alerts').getByRole('button', { name: 'Dismiss' }).click();
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
+});
+
+test('at most three toasts are visible and the newest sits last', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  let n = 0;
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH' && (route.request().postData() || '').includes('"review"')) {
+      n += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: `Note failed ${n}` }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto(`/media/#/item/${dune.id}`);
+  const note = page.getByLabel('Note');
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    await note.fill(`draft ${attempt}`);
+    await note.blur();
+    await expect(page.locator('#toast-alerts')).toContainText(`Note failed ${attempt}`);
+  }
+  await expect(page.locator('.toast')).toHaveCount(3);
+  await expect(page.locator('#toast-alerts')).not.toContainText('Note failed 1');
+  await page.evaluate(() => { location.hash = '#/library?sort=nope'; });
+  await expect(page.locator('#toasts')).toContainText("That sort isn't available. Showing recently active.");
+  await expect(page.locator('.toast')).toHaveCount(3);
+  await expect(page.locator('#toast-alerts')).not.toContainText('Note failed 2');
+  const order = await page.locator('.toast').evaluateAll(nodes => nodes
+    .map(node => ({ top: node.getBoundingClientRect().top, text: node.textContent || '' }))
+    .sort((a, b) => a.top - b.top));
+  expect(order[order.length - 1].text).toContain("That sort isn't available");
+  await expect(page.locator('.toast.is-alert .toast-icon').first()).toHaveText('⚠');
 });

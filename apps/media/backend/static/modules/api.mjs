@@ -29,15 +29,15 @@ export async function api(path, options = {}) {
   const headers = { accept: "application/json", ...(options.headers || {}) };
   if (options.body) headers["Content-Type"] = "application/json";
   const root = window.MEDIA_ROOT || "";
-  if (!["GET", "HEAD", "OPTIONS"].includes(method) && !readCookie("finance_csrf")) {
-    await fetch(`${root}/api/summary`, { credentials: "include", headers: { accept: "application/json" } });
-  }
-  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const csrf = readCookie("finance_csrf");
-    if (csrf) headers["X-CSRF-Token"] = csrf;
-  }
   let response;
   try {
+    if (!["GET", "HEAD", "OPTIONS"].includes(method) && !readCookie("finance_csrf")) {
+      await fetch(`${root}/api/summary`, { credentials: "include", headers: { accept: "application/json" } });
+    }
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+      const csrf = readCookie("finance_csrf");
+      if (csrf) headers["X-CSRF-Token"] = csrf;
+    }
     response = await fetch(`${root}${path}`, { ...options, credentials: "include", headers });
   } catch (error) {
     if (error?.name === "AbortError" || error?.name === "TimeoutError") throw error;

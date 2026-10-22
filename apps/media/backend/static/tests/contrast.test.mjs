@@ -94,6 +94,7 @@ test("control boundaries stay at least 3:1 against their adjacent backgrounds", 
 
   const done = appCss.match(/\.season-chip\.is-done\s*\{[^}]*color-mix\(in srgb,\s*var\(--text\)\s+(\d+)%\s*,\s*var\(--bg\)\)/);
   assert.ok(done, "a watched season chip mixes --text over --bg");
+  assert.match(block(appCss, /\.season-chip\.is-done\s*\{/), /color:\s*var\(--text-secondary\)/);
   const amount = Number(done[1]) / 100;
 
   const pairs = [
@@ -119,6 +120,15 @@ test("control boundaries stay at least 3:1 against their adjacent backgrounds", 
     const washRatio = contrast(border, wash);
     measured.push(`${theme} watched season chip (${border} on ${wash}): ${washRatio.toFixed(2)}:1`);
     assert.ok(washRatio >= 3, `${theme} watched season chip is ${washRatio.toFixed(2)}:1`);
+    const seasonText = contrast(resolve(map, "--text-secondary"), wash);
+    measured.push(`${theme} season text on wash (${resolve(map, "--text-secondary")} on ${wash}): ${seasonText.toFixed(2)}:1`);
+    assert.ok(seasonText >= 4.5, `${theme} season text on wash is ${seasonText.toFixed(2)}:1`);
+    const hover = contrast(border, resolve(map, "--surface-hover"));
+    measured.push(`${theme} hover border (${border} on ${resolve(map, "--surface-hover")}): ${hover.toFixed(2)}:1`);
+    assert.ok(hover >= 3, `${theme} hover border is ${hover.toFixed(2)}:1`);
+    const card = contrast(border, resolve(map, "--card-bg"));
+    measured.push(`${theme} card border (${border} on ${resolve(map, "--card-bg")}): ${card.toFixed(2)}:1`);
+    assert.ok(card >= 3, `${theme} card border is ${card.toFixed(2)}:1`);
     const toastRing = contrast(resolve(map, "--bg"), resolve(map, "--text"));
     measured.push(`${theme} toast focus ring (${resolve(map, "--bg")} on ${resolve(map, "--text")}): ${toastRing.toFixed(2)}:1`);
     assert.ok(toastRing >= 3, `${theme} toast focus ring is ${toastRing.toFixed(2)}:1`);

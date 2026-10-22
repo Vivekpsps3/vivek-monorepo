@@ -2,6 +2,7 @@ import { api, loginHref } from "./api.mjs";
 import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
 import { createKeyedFetch, createSequence } from "./guard.mjs";
 import {
+  NOTE_CONFLICT_STATUS,
   NOTE_CONFLICT_TOAST,
   NOTE_RESTORE_LABEL,
   NOT_SAVED_LABEL,
@@ -48,14 +49,31 @@ const searchLoads = createKeyedFetch();
 let searchResults = [];
 let quickIndex = -1;
 let progressChain = Promise.resolve();
-let progressPendingKey = "";
+let progressQueuedKey = "";
+let noteChain = Promise.resolve();
+let toastSerial = 0;
 let skeletonTimer = 0;
+
+function toastNodes() {
+  return [
+    ...(toasts?.querySelectorAll(".toast") || []),
+    ...(toastAlerts?.querySelectorAll(".toast") || []),
+  ];
+}
+
+function trimToasts() {
+  const live = toastNodes().sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order));
+  while (live.length > 3) live.shift()?.remove();
+}
 
 function pushToast({ message, kind = "status", action = null }) {
   const region = kind === "alert" ? toastAlerts : toasts;
   if (!region || !message) return;
+  const order = ++toastSerial;
   const toast = document.createElement("div");
   toast.className = kind === "alert" ? "toast is-alert" : "toast";
+  toast.dataset.order = String(order);
+  toast.style.order = String(order);
   if (kind === "alert") {
     const icon = document.createElement("span");
     icon.className = "toast-icon";
@@ -90,10 +108,13 @@ function pushToast({ message, kind = "status", action = null }) {
   close.addEventListener("click", dismiss);
   toast.append(close);
   region.append(toast);
-  while (region.children.length > 3) region.firstElementChild?.remove();
+  trimToasts();
+  const sticky = kind === "alert" && (action?.label === "Retry" || action?.label === "Reload");
+  let timer = 0;
+  if (sticky) return;
   let remaining = action ? TOAST_ACTION_MS : TOAST_MS;
   let started = Date.now();
-  let timer = window.setTimeout(dismiss, remaining);
+  timer = window.setTimeout(dismiss, remaining);
   const pause = () => {
     window.clearTimeout(timer);
     remaining -= Date.now() - started;
@@ -166,7 +187,7 @@ function errorPanelHtml(name, error) {
   const copy = routeErrorCopy(name, error);
   const retry = copy.retry ? `<button type="button" class="btn btn-primary" data-action="retry-route">Try again</button>` : "";
   const links = copy.links.map(link => `<a class="btn" href="${esc(link.href)}">${esc(link.label)}</a>`).join("");
-  return `<section class="error-panel" role="alert"><h1 tabindex="-1" data-error-title>${esc(copy.title)}</h1><p>${esc(copy.body)}</p><div class="hero-actions">${retry}${links}</div></section>`;
+  return `<section class="error-panel"><h1 tabindex="-1" data-error-title>${esc(copy.title)}</h1><p>${esc(copy.body)}</p><div class="hero-actions">${retry}${links}</div></section>`;
 }
 
 function focusErrorTitle() {
@@ -179,6 +200,17 @@ function focusPageHeading() {
   if (!(heading instanceof HTMLElement)) return;
   if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
   heading.focus();
+}
+
+function focusSearchResult(box) {
+  const heading = box.querySelector("h2");
+  if (heading instanceof HTMLElement) {
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+    return;
+  }
+  const input = document.querySelector("#search-q");
+  if (input instanceof HTMLElement) input.focus({ preventScroll: true });
 }
 
 function focusKeyOf(node) {
@@ -209,6 +241,7 @@ function showSaved(status) {
   if (!status) return;
   status.classList.remove("is-error");
   status.setAttribute("role", "status");
+  status.removeAttribute("aria-live");
   status.textContent = SAVED_LABEL;
   if (status.id === "progress-status") {
     document.querySelector("#progress")?.setAttribute("aria-invalid", "false");
@@ -518,7 +551,7 @@ function renderResults(payload) {
   return `${providerLine(payload.providers)}<div class="results">${rows}</div>`;
 }
 
-async function runSearch({ focusError = false } = {}) {
+async function runSearch({ focusError = false, focusResult = false } = {}) {
   const input = document.querySelector("#search-q");
   const kind = document.querySelector("#search-kind")?.value || "";
   const box = document.querySelector("#search-results");
@@ -547,12 +580,14 @@ async function runSearch({ focusError = false } = {}) {
     searchResults = payload.results;
     box.innerHTML = renderResults(payload);
     box.setAttribute("aria-busy", "false");
+    if (focusResult) focusSearchResult(box);
   } catch (error) {
     window.clearTimeout(resultsTimer);
     if (error?.name === "AbortError" || !ticket.matches()) return;
     box.setAttribute("aria-busy", "false");
     const copy = routeErrorCopy("search", error);
-    box.innerHTML = `<div class="error-panel" role="alert"><h2 tabindex="-1" data-error-title>${esc(copy.title)}</h2><p>${esc(copy.body)}</p><div class="hero-actions"><button type="button" class="btn btn-primary" data-action="retry-search">Try again</button><a class="btn" href="#/new?title=${encodeURIComponent(q)}">Add “${esc(q)}” by title</a></div></div>`;
+    const alert = focusError ? "" : ` role="alert"`;
+    box.innerHTML = `<div class="error-panel"${alert}><h2 tabindex="-1" data-error-title>${esc(copy.title)}</h2><p>${esc(copy.body)}</p><div class="hero-actions"><button type="button" class="btn btn-primary" data-action="retry-search">Try again</button><a class="btn" href="#/new?title=${encodeURIComponent(q)}">Add “${esc(q)}” by title</a></div></div>`;
     if (focusError) focusErrorTitle();
   }
 }
@@ -651,9 +686,9 @@ function progressField(entry) {
     <div class="progress-controls">
       <input id="progress" name="progress_value" type="text" inputmode="decimal" autocomplete="off" data-progress="${entry.id}" data-saved="${esc(`${serverValue}|${serverUnit}`)}" value="${esc(serverValue)}" aria-invalid="false" aria-describedby="progress-help progress-status">
       <select id="progress-unit" aria-label="Unit" data-progress-unit="${entry.id}">${units.map(item => `<option value="${esc(item.value)}"${item.value === serverUnit ? " selected" : ""}>${esc(item.label)}</option>`).join("")}</select>
+      <p id="progress-status" class="progress-status" role="status"></p>
     </div>
     <p id="progress-help" class="meta">${esc(preview)}</p>
-    <p id="progress-status" class="progress-status" role="status"></p>
     ${progressDraftChoice(entry, serverValue, serverUnit)}
   </div>`;
 }
@@ -702,9 +737,10 @@ function experienceBlock(entry) {
       <span>${esc(row.finished_on || row.started_on || "")}</span>
       <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" aria-label="Remove">✕</button>
     </li>`).join("");
+  const list = rows ? `<ul class="exp-list">${rows}</ul>` : "";
   return `
     <section class="exps">
-      <ul class="exp-list">${rows}</ul>
+      ${list}
       <button type="button" class="flag" data-action="log-again" data-focus-key="again" data-id="${entry.id}" data-kind="${kind}">Again</button>
     </section>`;
 }
@@ -952,7 +988,7 @@ async function render() {
   if (progress instanceof HTMLInputElement && progress.dataset.dirty === "true") saveProgress();
   searchLoads.start("");
   const ticket = routeLoads.start();
-  if (staying) await progressChain;
+  if (staying) await Promise.all([progressChain, noteChain]);
   if (!ticket.isCurrent()) return;
   const libraryNotice = settleLibraryHash();
   document.querySelectorAll("[data-nav]").forEach(link => {
@@ -1221,7 +1257,7 @@ document.addEventListener("click", async event => {
       return;
     }
     if (action === "retry-search") {
-      await runSearch({ focusError: true });
+      await runSearch({ focusError: true, focusResult: true });
       return;
     }
     if (action === "open-quick" || action === "follow") {
@@ -1427,39 +1463,78 @@ document.addEventListener("focusout", async event => {
   await saveNote(box);
 });
 
+function noteBox(id) {
+  const box = document.querySelector(`textarea[data-review="${id}"]`);
+  return box instanceof HTMLTextAreaElement ? box : null;
+}
+
+function showNoteConflict() {
+  const status = document.querySelector("#note-status");
+  if (!status) return;
+  status.classList.add("is-error");
+  status.setAttribute("aria-live", "off");
+  status.replaceChildren(document.createTextNode(`${NOTE_CONFLICT_STATUS} `));
+  const reload = document.createElement("button");
+  reload.type = "button";
+  reload.textContent = "Reload";
+  reload.addEventListener("click", () => { void render(); });
+  status.append(reload);
+}
+
+function showNoteFailure(status) {
+  if (!status?.isConnected) return;
+  status.classList.add("is-error");
+  status.setAttribute("aria-live", "off");
+  status.textContent = NOT_SAVED_LABEL;
+}
+
+function enqueueNote(id) {
+  const task = noteChain.then(() => commitNote(id));
+  noteChain = task.catch(() => {});
+  return task;
+}
+
 async function saveNote(box) {
-  if (!(box instanceof HTMLTextAreaElement) || !box.dataset.review) return;
-  if (box.dataset.conflict === "true") return;
-  if (box.value === (box.dataset.saved ?? "")) return;
-  const id = box.dataset.review;
+  if (!(box instanceof HTMLTextAreaElement) || !box.dataset.review) return noteChain;
+  return enqueueNote(box.dataset.review);
+}
+
+async function commitNote(id) {
+  const box = noteBox(id);
+  if (!box) return;
+  if (box.dataset.conflict === "true") {
+    showNoteConflict();
+    return;
+  }
   const sent = box.value;
+  if (sent === (box.dataset.saved ?? "")) return;
+  const base = box.dataset.reviewBase ?? "";
   const status = document.querySelector("#note-status");
   const stopSaving = armSaving(status);
   try {
     const updated = await api(`/api/entries/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ review: sent, review_base: box.dataset.reviewBase ?? "" }),
+      body: JSON.stringify({ review: sent, review_base: base }),
     });
     stopSaving();
     if (readDraftRecord(id)?.text === sent) clearDraft(id);
-    if (box.isConnected) {
-      box.dataset.saved = sent;
-      box.dataset.reviewBase = updated?.review_updated_at || "";
-      showSaved(status);
-    }
+    const live = noteBox(id);
+    if (!live) return;
+    delete live.dataset.conflict;
+    live.dataset.saved = sent;
+    live.dataset.reviewBase = updated?.review_updated_at || "";
+    if (live.value === sent) showSaved(document.querySelector("#note-status"));
   } catch (error) {
     stopSaving();
+    const live = noteBox(id);
     if (error?.status === 409) {
-      box.dataset.conflict = "true";
-      if (status?.isConnected) status.textContent = "";
+      if (live) live.dataset.conflict = "true";
+      showNoteConflict();
       toast(NOTE_CONFLICT_TOAST, "alert", { label: "Reload", onClick: () => { void render(); } });
       return;
     }
-    if (status?.isConnected) {
-      status.classList.add("is-error");
-      status.textContent = NOT_SAVED_LABEL;
-    }
-    fail(error, { label: "Retry", onClick: () => { void saveNote(box); } });
+    showNoteFailure(document.querySelector("#note-status"));
+    fail(error, { label: "Retry", onClick: () => { const again = noteBox(id); if (again) void saveNote(again); } });
   }
 }
 
@@ -1563,6 +1638,8 @@ function setProgressStatus(message, failed = false, announce = false) {
   status.textContent = message;
   status.classList.toggle("is-error", failed);
   status.setAttribute("role", announce ? "alert" : "status");
+  if (failed && !announce) status.setAttribute("aria-live", "off");
+  else status.removeAttribute("aria-live");
   if (input) input.setAttribute("aria-invalid", failed ? "true" : "false");
 }
 
@@ -1572,6 +1649,14 @@ function progressProblem(value, unit) {
   if (Number(value) < 0) return "Progress must be zero or more.";
   if (unit === "percent" && Number(value) > 100) return "Percent progress is between 0 and 100.";
   return "";
+}
+
+function trackProgress(pending, task) {
+  const tracked = task.finally(() => {
+    if (progressQueuedKey === pending) progressQueuedKey = "";
+  });
+  progressChain = tracked.catch(() => {});
+  return task;
 }
 
 function retryProgress(payload) {
@@ -1587,9 +1672,9 @@ function retryProgress(payload) {
     input.dataset.dirty = "true";
     next = { ...payload, input };
   }
-  const task = progressChain.then(() => commitProgress(next));
-  progressChain = task.catch(() => {});
-  return task;
+  const pending = `${next.id}|${next.key}`;
+  progressQueuedKey = pending;
+  return trackProgress(pending, progressChain.then(() => commitProgress(next)));
 }
 
 function failProgress(payload, message, keepDraft = true) {
@@ -1606,17 +1691,12 @@ function saveProgress() {
   const snap = progressSnapshot();
   if (!snap) return progressChain;
   const key = `${snap.value}|${snap.unit}`;
-  if (snap.input.dataset.saved === key) return progressChain;
   const pending = `${snap.id}|${key}`;
-  if (progressPendingKey === pending) return progressChain;
-  progressPendingKey = pending;
+  if (progressQueuedKey === pending) return progressChain;
+  if (!progressQueuedKey && snap.input.dataset.saved === key) return progressChain;
+  progressQueuedKey = pending;
   const payload = { id: snap.id, value: snap.value, unit: snap.unit, key, input: snap.input };
-  const task = progressChain.then(() => commitProgress(payload));
-  const tracked = task.finally(() => {
-    if (progressPendingKey === pending) progressPendingKey = "";
-  });
-  progressChain = tracked.catch(() => {});
-  return task;
+  return trackProgress(pending, progressChain.then(() => commitProgress(payload)));
 }
 
 async function commitProgress(payload) {
