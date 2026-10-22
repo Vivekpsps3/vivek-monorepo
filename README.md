@@ -27,5 +27,5 @@ the production image; `make test-suite-routes` checks the assembled release.
 [security model](docs/SECURITY_MODEL.md) describe domain behavior.
 
 The historical standalone Flask backend and per-domain Docker definitions are
-not deployed. Production does not rebuild or check out this tree: it promotes
-the exact image tested by CI.
+not deployed. Production promotes the exact image tested by CI. The checkout
+supplies the versioned Compose definition; application code runs from the image.

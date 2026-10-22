@@ -10,7 +10,7 @@ application authorization and a single private data mount are the boundaries.
   independent credentials, retention and recovery-key custody; then perform a full
   restore from that destination. Current backups protect accidental changes, not
   host/disk loss or compromise.
-- [ ] **Dedicated runner and root-owned release controller. User chose to retain
+- [ ] **Runner isolation. User chose to retain
   the existing runner.** The user also requested a stateless deployment; controller/account/timer scaffolding was removed.
   The active runner retains Docker-equivalent host privilege and access to the
   operator account's state/config. No new account, sudoers, systemd units, copied config tree, or release history files are installed.
@@ -42,6 +42,12 @@ application authorization and a single private data mount are the boundaries.
 - [ ] **Future schema evolution.** Unified schema v1 is explicit and migrated offline.
   Implement reviewed numbered migrations and compatibility windows for future versions;
   do not use create_all or historical Finance Alembic against the unified production DB.
+
+- [ ] **Retire transition recovery copies after the recovery window.** The stopped
+  legacy containers and original database files are retained as temporary rollback
+  material, not active state. After a verified restore from the legacy archive,
+  review their removal on or after 2026-10-29. The unified database and backup
+  volumes are the only ongoing application persistence.
 
 ## Traceability to the 80-point review
 
