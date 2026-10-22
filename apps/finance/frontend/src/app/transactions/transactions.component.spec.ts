@@ -1,7 +1,10 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { BehaviorSubject, from, of, Subject, throwError } from 'rxjs';
 import { TransactionsComponent } from './transactions.component';
+import { TransactionsEditorWorkflow } from './transactions-editor-workflow';
+import { TransactionsImportWorkflow } from './transactions-import-workflow';
 import { FinanceService } from '../services/finance.service';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
@@ -513,5 +516,60 @@ describe('Transactions multi-file import UI', () => {
     component.ngOnChanges({ receiptsOpen: { currentValue: true, previousValue: false, firstChange: false, isFirstChange: () => false } });
     fixture.detectChanges();
     expect((fixture.nativeElement.querySelector('details.ledger-receipts') as HTMLDetailsElement).open).toBeTrue();
+  });
+});
+
+describe('Transactions delete and undo errors', () => {
+  function makeComponent() {
+    const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'addTransaction']);
+    const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
+    const component = new TransactionsComponent(
+      finance,
+      toast,
+      confirm,
+      { markForCheck() {} } as ChangeDetectorRef,
+      {} as ActivatedRoute,
+      {} as Router,
+      {} as TransactionsImportWorkflow,
+      {} as TransactionsEditorWorkflow,
+    );
+    return { component, finance, toast };
+  }
+
+  const transaction = {
+    id: 8, date: '2026-10-03', type: 'expense' as const, category: 'Food', amount: -45.67, description: 'Legacy return',
+  };
+
+  it('shows one retry toast when deleting a transaction fails', async () => {
+    const { component, finance, toast } = makeComponent();
+    finance.deleteTransaction.and.returnValue(throwError(() => new Error('nope')));
+    await component.deleteTransaction(transaction);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't delete this transaction.");
+    expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
+    expect(finance.deleteTransaction).toHaveBeenCalledWith(8, true);
+  });
+
+  it('shows one retry toast when undoing a transaction delete fails and keeps the amount', async () => {
+    const { component, finance, toast } = makeComponent();
+    finance.deleteTransaction.and.returnValue(of({ ok: true }));
+    finance.addTransaction.and.returnValue(throwError(() => new Error('nope')));
+    await component.deleteTransaction(transaction);
+    const undo = toast.success.calls.mostRecent().args[1] as () => void;
+    undo();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't restore this transaction.");
+    expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
+    expect(finance.addTransaction).toHaveBeenCalledWith(jasmine.objectContaining({
+      date: '2026-10-03', category: 'Food', amount: -45.67, description: 'Legacy return',
+    }), true);
+    const retry = toast.error.calls.mostRecent().args[1].run as () => void;
+    finance.addTransaction.calls.reset();
+    toast.error.calls.reset();
+    retry();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(finance.addTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
   });
 });

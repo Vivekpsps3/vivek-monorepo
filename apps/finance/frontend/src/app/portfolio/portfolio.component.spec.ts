@@ -1,4 +1,5 @@
 import { of, throwError } from 'rxjs';
+import { ConfirmService } from '@vivek/ui';
 import { Holding } from '../models/transaction.model';
 import { PortfolioComponent } from './portfolio.component';
 import { MarketRefreshState, MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
@@ -23,7 +24,8 @@ function componentWithFinance(overrides: Record<string, unknown> = {}) {
   market.refreshNow.and.resolveTo({ ...idle, phase: 'complete' });
   market.refreshSymbol.and.resolveTo({ symbol: 'VOO', holdingsUpdated: 1, employerValuationsUpdated: 0, failedRecords: [] });
   const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
-  const component = new PortfolioComponent(finance, market, toast, {} as any, { markForCheck: () => {} } as any);
+  const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
+  const component = new PortfolioComponent(finance, market, toast, confirm, { markForCheck: () => {} } as any);
   return { component, finance, market, toast };
 }
 
@@ -91,6 +93,25 @@ describe('PortfolioComponent', () => {
     expect(component.holdingSaveError).toBe('');
   });
 
+  it('keeps a stored price with more than 4 decimal places when only shares change', () => {
+    const { component, finance } = componentWithFinance();
+    finance.updateHolding = jasmine.createSpy('updateHolding').and.returnValue(of({}));
+    component.editHolding({
+      id: 9,
+      symbol: 'ABC',
+      shares: 1000,
+      purchase_price: 0.12345,
+      purchase_date: '2026-01-15',
+    } as Holding);
+    component.newHolding.shares = 1001;
+    component.addOrUpdateHolding();
+    expect(finance.updateHolding).toHaveBeenCalled();
+    expect(finance.updateHolding.calls.mostRecent().args[1].purchase_price).toBe(0.12345);
+    expect(finance.updateHolding.calls.mostRecent().args[1].shares).toBe(1001);
+    expect(component.holdingSaveError).toBe('');
+    expect(component.holdingErrors).toEqual([]);
+  });
+
   it('keeps four decimal places when the unit price was edited', () => {
     const { component, finance } = componentWithFinance();
     finance.updateHolding = jasmine.createSpy('updateHolding').and.returnValue(of({}));
@@ -123,6 +144,46 @@ describe('PortfolioComponent', () => {
     expect(component.holdingSaveError).not.toContain('Synthetic');
     expect(component.newHolding.purchase_price).toBe(0.1234);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('shows one retry toast when deleting a holding fails', async () => {
+    const { component, finance, toast } = componentWithFinance();
+    finance.deleteHolding = jasmine.createSpy('deleteHolding').and.returnValue(throwError(() => new Error('nope')));
+    const holding = {
+      id: 9, symbol: 'ABC', shares: 2, purchase_price: 0.12345, purchase_date: '2026-01-15',
+    } as Holding;
+    await component.deleteHolding(holding);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+    const [message, action] = toast.error.calls.mostRecent().args;
+    expect(message).toBe("Couldn't delete this holding.");
+    expect(message).not.toContain('Try again');
+    expect(action.label).toBe('Try again');
+    expect(finance.deleteHolding).toHaveBeenCalledWith(9, true);
+  });
+
+  it('shows one retry toast when undoing a holding delete fails and keeps the record', async () => {
+    const { component, finance, toast } = componentWithFinance();
+    finance.deleteHolding = jasmine.createSpy('deleteHolding').and.returnValue(of({ ok: true }));
+    finance.addHolding = jasmine.createSpy('addHolding').and.returnValue(throwError(() => new Error('nope')));
+    const holding = {
+      id: 9, symbol: 'ABC', shares: 2, purchase_price: 0.12345, purchase_date: '2026-01-15',
+    } as Holding;
+    await component.deleteHolding(holding);
+    const undo = toast.success.calls.mostRecent().args[1] as () => void;
+    undo();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't restore this holding.");
+    expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
+    expect(finance.addHolding).toHaveBeenCalledWith(jasmine.objectContaining({
+      symbol: 'ABC', shares: 2, purchase_price: 0.12345, purchase_date: '2026-01-15',
+    }), true);
+    const retry = toast.error.calls.mostRecent().args[1].run as () => void;
+    finance.addHolding.calls.reset();
+    toast.error.calls.reset();
+    retry();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(finance.addHolding.calls.mostRecent().args[0].purchase_price).toBe(0.12345);
   });
 
   it('resumes a verified staged Fidelity replacement from the explicit recovery action', () => {

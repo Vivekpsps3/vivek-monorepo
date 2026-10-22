@@ -17,7 +17,7 @@ import {
   LiabilityCreate,
   NetWorth,
 } from '../models/transaction.model';
-import { ConfirmService, ToastService, UiBadgeComponent, UiFieldComponent, UiFieldControlDirective, successCopy } from '@vivek/ui';
+import { ConfirmService, ToastService, UiBadgeComponent, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
 import { amountProblem, excludedAmountNote, todayIsoDate, toDollars, validateAsset, validateDebt, validateMoney, type FieldIssue } from '@vivek/browser';
 import {
   UiButtonComponent,
@@ -225,8 +225,8 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
     };
     const req =
       this.editingAssetId !== null
-        ? this.financeService.updateAsset(this.editingAssetId, payload)
-        : this.financeService.addAsset(payload);
+        ? this.financeService.updateAsset(this.editingAssetId, payload, true)
+        : this.financeService.addAsset(payload, true);
     req.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
@@ -267,8 +267,8 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
     };
     const req =
       this.editingLiabilityId !== null
-        ? this.financeService.updateLiability(this.editingLiabilityId, payload)
-        : this.financeService.addLiability(payload);
+        ? this.financeService.updateLiability(this.editingLiabilityId, payload, true)
+        : this.financeService.addLiability(payload, true);
     req.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
@@ -293,8 +293,14 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
-    this.financeService.deleteAsset(row.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.financeService.deleteAsset(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Asset deleted'),
+      error: () => {
+        this.toastService.error(failureCopy('delete', 'this asset'), {
+          label: 'Try again',
+          run: () => { void this.deleteAsset(row); },
+        });
+      },
     });
   }
 
@@ -306,8 +312,14 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
-    this.financeService.deleteLiability(row.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.financeService.deleteLiability(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Liability deleted'),
+      error: () => {
+        this.toastService.error(failureCopy('delete', 'this debt'), {
+          label: 'Try again',
+          run: () => { void this.deleteLiability(row); },
+        });
+      },
     });
   }
 

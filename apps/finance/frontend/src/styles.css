@@ -209,6 +209,24 @@
   font-feature-settings: 'tnum' 1;
 }
 
+.money {
+  white-space: nowrap;
+}
+
+h1:focus,
+h2:focus,
+.ui-page-header__title:focus {
+  outline: none;
+}
+
+h1:focus-visible,
+h2:focus-visible,
+.ui-page-header__title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
 .stat-display {
   font-weight: 600;
 }
@@ -429,6 +447,23 @@
   color: var(--danger);
 }
 
+.ui-field__error {
+  display: block;
+  margin: var(--space-1) 0 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.form-error-summary button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .dialog-save-alert:focus,
 .form-error-summary:focus {
   outline: 2px solid var(--accent);
@@ -621,6 +656,6 @@
   }
 
   body:has(app-main-layout) .toast-host {
-    bottom: var(--mobile-tab-offset);
+    bottom: calc(var(--mobile-tab-offset) + var(--space-2));
   }
 }

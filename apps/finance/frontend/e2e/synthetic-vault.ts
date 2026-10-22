@@ -190,6 +190,37 @@ export async function syntheticVault(
       });
       return respond(saved);
     }
+    if (path === '/api/market/research/batch') {
+      const body = request.postDataJSON() || {};
+      const symbols = Array.isArray(body.symbols) && body.symbols.length ? body.symbols : ['VOO'];
+      return respond({
+        results: symbols.map((symbol: string) => ({
+          symbol: String(symbol).trim().toUpperCase(),
+          valid: true,
+          source: 'synthetic',
+          fetched_at: '2026-10-08T00:00:00Z',
+          cache_status: 'hit',
+          warnings: [],
+          profile: { name: `${String(symbol).trim().toUpperCase()} fund` },
+          quote: { current_price: 125 },
+          history: [],
+          dividends: [],
+          splits: [],
+          fundamentals: null,
+          etf: null,
+          analyst: null,
+        })),
+        failed: [],
+      });
+    }
+    if (path.startsWith('/api/market/research/')) {
+      const symbol = decodeURIComponent(path.split('/').pop() || 'VOO').trim().toUpperCase();
+      return respond({
+        symbol, valid: true, source: 'synthetic', fetched_at: '2026-10-08T00:00:00Z', cache_status: 'hit',
+        warnings: [], profile: { name: `${symbol} fund` }, quote: { current_price: 125 },
+        history: [], dividends: [], splits: [], fundamentals: null, etf: null, analyst: null,
+      });
+    }
     if (path.startsWith('/api/market/price/')) {
       const symbol = decodeURIComponent(path.split('/').pop()!);
       const upperSymbol = symbol.trim().toUpperCase();

@@ -5,7 +5,7 @@
 apps/finance/frontend/e2e/finance-coherence.spec.ts	@typescript-eslint/no-explicit-any	10
 apps/finance/frontend/e2e/synthetic-vault.ts	@typescript-eslint/no-explicit-any	5
 apps/finance/frontend/src/app/app.component.ts	@angular-eslint/prefer-inject	3
-apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.spec.ts	@typescript-eslint/no-explicit-any	4
+apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.spec.ts	@typescript-eslint/no-explicit-any	3
 apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.ts	@angular-eslint/prefer-inject	4
 apps/finance/frontend/src/app/auth/auth.service.ts	@typescript-eslint/no-explicit-any	3
 apps/finance/frontend/src/app/auth/login.component.spec.ts	@typescript-eslint/no-explicit-any	1
@@ -44,7 +44,7 @@ apps/finance/frontend/src/app/planning/planning.component.spec.ts	@typescript-es
 apps/finance/frontend/src/app/planning/planning.component.ts	@angular-eslint/prefer-inject	5
 apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/eqeqeq	13
 apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/prefer-control-flow	5
-apps/finance/frontend/src/app/portfolio/portfolio.component.spec.ts	@typescript-eslint/no-explicit-any	6
+apps/finance/frontend/src/app/portfolio/portfolio.component.spec.ts	@typescript-eslint/no-explicit-any	5
 apps/finance/frontend/src/app/portfolio/portfolio.component.ts	@angular-eslint/prefer-inject	5
 apps/finance/frontend/src/app/services/api-health.service.ts	@angular-eslint/prefer-inject	1
 apps/finance/frontend/src/app/services/finance-import.service.ts	@angular-eslint/prefer-inject	1

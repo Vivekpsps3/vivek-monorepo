@@ -287,7 +287,7 @@
           <label for="h-symbol">Symbol</label>
           <div class="symbol-check">
             <input id="h-symbol" data-field="symbol" type="text" [(ngModel)]="newHolding.symbol" name="symbol" data-dialog-initial-focus [attr.aria-invalid]="holdingFieldError('symbol') ? true : null" [attr.aria-describedby]="holdingFieldError('symbol') ? 'h-symbol-error' : null" [attr.data-field-invalid]="holdingFieldError('symbol') ? true : null" />
-            @if (holdingFieldError('symbol')) { <span id="h-symbol-error" class="ui-field__error">{{ holdingFieldError('symbol') }}</span> }
+            @if (holdingFieldError('symbol')) { <span id="h-symbol-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ holdingFieldError('symbol') }}</span> }
             <ui-button variant="secondary" (clicked)="checkSharePrice()" [disabled]="checkingPrice">
               @if (checkingPrice) {
                 <span class="spinner-inline" aria-hidden="true"></span>
@@ -312,19 +312,19 @@
         <div class="form-group">
           <label for="h-shares">Shares</label>
           <input id="h-shares" data-field="shares" type="text" inputmode="decimal" [(ngModel)]="newHolding.shares" name="shares" [attr.aria-invalid]="holdingFieldError('shares') ? true : null" [attr.aria-describedby]="holdingFieldError('shares') ? 'h-shares-error' : null" [attr.data-field-invalid]="holdingFieldError('shares') ? true : null" />
-          @if (holdingFieldError('shares')) { <span id="h-shares-error" class="ui-field__error">{{ holdingFieldError('shares') }}</span> }
+          @if (holdingFieldError('shares')) { <span id="h-shares-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ holdingFieldError('shares') }}</span> }
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label for="h-cost">Cost basis (per share)</label>
           <input id="h-cost" data-field="costBasis" type="number" [(ngModel)]="newHolding.purchase_price" (input)="markPurchasePriceDirty()" name="purchase_price" step="0.0001" min="0" placeholder="Unknown" [attr.aria-invalid]="holdingFieldError('costBasis') ? true : null" [attr.aria-describedby]="holdingFieldError('costBasis') ? 'h-cost-error' : null" />
-          @if (holdingFieldError('costBasis')) { <span id="h-cost-error" class="ui-field__error">{{ holdingFieldError('costBasis') }}</span> }
+          @if (holdingFieldError('costBasis')) { <span id="h-cost-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ holdingFieldError('costBasis') }}</span> }
         </div>
         <div class="form-group">
           <label for="h-date">Purchase date</label>
           <input id="h-date" data-field="purchaseDate" type="date" [(ngModel)]="newHolding.purchase_date" name="purchase_date" [attr.aria-invalid]="holdingFieldError('purchaseDate') ? true : null" [attr.aria-describedby]="holdingFieldError('purchaseDate') ? 'h-date-error' : null" />
-          @if (holdingFieldError('purchaseDate')) { <span id="h-date-error" class="ui-field__error">{{ holdingFieldError('purchaseDate') }}</span> }
+          @if (holdingFieldError('purchaseDate')) { <span id="h-date-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ holdingFieldError('purchaseDate') }}</span> }
         </div>
       </div>
       <div class="form-actions">

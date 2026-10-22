@@ -96,16 +96,20 @@
           </div>
         }
         <div class="form-row">
-          <label class="form-group">
-            <span>Name</span>
-            <input uiFieldControl data-field="name" name="name" [(ngModel)]="form.name" data-dialog-initial-focus (blur)="revalidate()" [attr.aria-invalid]="fieldError('name') ? true : null" [attr.data-field-invalid]="fieldError('name') ? true : null" />
-            @if (fieldError('name')) { <span class="ui-field__error">{{ fieldError('name') }}</span> }
-          </label>
-          <label class="form-group">
-            <span>Category</span>
-            <input uiFieldControl data-field="category" name="category" list="fixed-expense-categories" [(ngModel)]="form.category" (blur)="revalidate()" [attr.aria-invalid]="fieldError('category') ? true : null" [attr.data-field-invalid]="fieldError('category') ? true : null" />
-            @if (fieldError('category')) { <span class="ui-field__error">{{ fieldError('category') }}</span> }
-          </label>
+          <div class="form-group">
+            <label>
+              <span>Name</span>
+              <input id="bill-name" uiFieldControl data-field="name" name="name" [(ngModel)]="form.name" data-dialog-initial-focus (blur)="revalidate()" [attr.aria-invalid]="fieldError('name') ? true : null" [attr.aria-describedby]="fieldError('name') ? 'bill-name-error' : null" [attr.data-field-invalid]="fieldError('name') ? true : null" />
+            </label>
+            @if (fieldError('name')) { <p id="bill-name-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ fieldError('name') }}</p> }
+          </div>
+          <div class="form-group">
+            <label>
+              <span>Category</span>
+              <input id="bill-category" uiFieldControl data-field="category" name="category" list="fixed-expense-categories" [(ngModel)]="form.category" (blur)="revalidate()" [attr.aria-invalid]="fieldError('category') ? true : null" [attr.aria-describedby]="fieldError('category') ? 'bill-category-error' : null" [attr.data-field-invalid]="fieldError('category') ? true : null" />
+            </label>
+            @if (fieldError('category')) { <p id="bill-category-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ fieldError('category') }}</p> }
+          </div>
         </div>
         <datalist id="fixed-expense-categories">
           @for (category of categoryOptions; track category) {
@@ -114,11 +118,13 @@
         </datalist>
 
         <div class="form-row">
-          <label class="form-group">
-            <span>Amount</span>
-            <input uiFieldControl data-field="amount" name="amount" type="text" inputmode="decimal" [(ngModel)]="form.amount" (blur)="revalidate()" [attr.aria-invalid]="fieldError('amount') ? true : null" [attr.data-field-invalid]="fieldError('amount') ? true : null" />
-            @if (fieldError('amount')) { <span class="ui-field__error">{{ fieldError('amount') }}</span> }
-          </label>
+          <div class="form-group">
+            <label>
+              <span>Amount</span>
+              <input id="bill-amount" uiFieldControl data-field="amount" name="amount" type="text" inputmode="decimal" [(ngModel)]="form.amount" (blur)="revalidate()" [attr.aria-invalid]="fieldError('amount') ? true : null" [attr.aria-describedby]="fieldError('amount') ? 'bill-amount-error' : null" [attr.data-field-invalid]="fieldError('amount') ? true : null" />
+            </label>
+            @if (fieldError('amount')) { <p id="bill-amount-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ fieldError('amount') }}</p> }
+          </div>
           <ui-select
             label="Frequency"
             [options]="frequencyOptions"
@@ -130,11 +136,13 @@
             <span>Start date</span>
             <input name="start_date" type="date" [(ngModel)]="form.start_date" required />
           </label>
-          <label class="form-group">
-            <span>Due day</span>
-            <input uiFieldControl data-field="dueDay" name="due_day" type="text" inputmode="numeric" [(ngModel)]="form.due_day" (blur)="revalidate()" [attr.aria-invalid]="fieldError('dueDay') ? true : null" [attr.data-field-invalid]="fieldError('dueDay') ? true : null" />
-            @if (fieldError('dueDay')) { <span class="ui-field__error">{{ fieldError('dueDay') }}</span> }
-          </label>
+          <div class="form-group">
+            <label>
+              <span>Due day</span>
+              <input id="bill-due-day" uiFieldControl data-field="dueDay" name="due_day" type="text" inputmode="numeric" [(ngModel)]="form.due_day" (blur)="revalidate()" [attr.aria-invalid]="fieldError('dueDay') ? true : null" [attr.aria-describedby]="fieldError('dueDay') ? 'bill-due-day-error' : null" [attr.data-field-invalid]="fieldError('dueDay') ? true : null" />
+            </label>
+            @if (fieldError('dueDay')) { <p id="bill-due-day-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ fieldError('dueDay') }}</p> }
+          </div>
         </div>
 
         <div class="form-row">

@@ -176,8 +176,8 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     const wasEditing = this.editingId !== null;
     const req =
       this.editingId !== null
-        ? this.finance.updateSubscription(this.editingId, payload)
-        : this.finance.addSubscription(payload);
+        ? this.finance.updateSubscription(this.editingId, payload, true)
+        : this.finance.addSubscription(payload, true);
     req.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
@@ -198,7 +198,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   async deleteSubscription(row: Subscription): Promise<void> {
     const ok = await this.confirm.ask('Delete subscription?', `Remove ${row.name}?`, 'Delete', 'Cancel');
     if (!ok) return;
-    this.finance.deleteSubscription(row.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.finance.deleteSubscription(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toast.success('Subscription deleted'),
       error: () => this.toast.error(failureCopy('delete', 'this subscription'), {
         label: 'Try again',

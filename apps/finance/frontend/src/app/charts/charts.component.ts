@@ -414,7 +414,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           backgroundColor: hasRefundEffects
             ? this.categoryRows.map(row => row.value < 0 ? chartDangerColor() : chartAccentColor())
             : this.chartColors(this.categoryRows.length),
-          ...(hasRefundEffects ? {} : chartSliceBorder()),
+          ...chartSliceBorder(),
         }],
       },
       options: {

@@ -34,8 +34,7 @@ import {
   Transaction,
   TransactionCreate,
 } from '../models/transaction.model';
-import { ToastService } from '@vivek/ui';
-import { ConfirmService } from '@vivek/ui';
+import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
 import { downloadCsv, excludedAmountNote, plural } from '@vivek/browser';
 import { focusField } from '../shared/form-validation';
 import {
@@ -949,10 +948,29 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
       description: tx.description,
     };
 
-    this.financeService.deleteTransaction(tx.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.removeTransaction(tx, backup);
+  }
+
+  private removeTransaction(tx: Transaction, backup: TransactionCreate): void {
+    this.financeService.deleteTransaction(tx.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
-        this.toastService.success('Transaction deleted', () => {
-          this.financeService.addTransaction(backup).subscribe();
+        this.toastService.success('Transaction deleted', () => this.restoreTransaction(backup));
+      },
+      error: () => {
+        this.toastService.error(failureCopy('delete', 'this transaction'), {
+          label: 'Try again',
+          run: () => this.removeTransaction(tx, backup),
+        });
+      },
+    });
+  }
+
+  private restoreTransaction(backup: TransactionCreate): void {
+    this.financeService.addTransaction(backup, true).pipe(takeUntil(this.destroy$)).subscribe({
+      error: () => {
+        this.toastService.error(failureCopy('restore', 'this transaction'), {
+          label: 'Try again',
+          run: () => this.restoreTransaction(backup),
         });
       },
     });

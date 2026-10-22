@@ -524,13 +524,13 @@ describe('client-finance', () => {
     expect(span.total_expenses).toBe(53.6);
   });
 
-  it('badges a disallowed negative transaction by leaving it out of totals', () => {
-    expect(FLAG_DISALLOWED_TRANSACTION_SIGNS).toBeTrue();
-    const effects = transactionEffects({
+  it('covers both settings of disallowed transaction signs', () => {
+    const tx = {
       id: 1, amount: -45.67, type: 'expense', kind: 'purchase', date: '2026-01-02', category: 'Food',
-    } as Transaction);
-    expect(effects).toEqual({ income: 0, spending: 0, excluded: true });
-    expect(effects.spending).not.toBe(45.67);
+    } as Transaction;
+    expect(transactionEffects(tx, { flagDisallowed: true })).toEqual({ income: 0, spending: 0, excluded: true });
+    expect(transactionEffects(tx, { flagDisallowed: false })).toEqual({ income: 0, spending: 45.67 });
+    expect(transactionEffects(tx).excluded).toBe(FLAG_DISALLOWED_TRANSACTION_SIGNS);
   });
 
   it('returns the same nullable next due date for bills and subscriptions', () => {

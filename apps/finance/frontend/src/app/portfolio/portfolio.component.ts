@@ -22,7 +22,7 @@ import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ConfirmService } from '@vivek/ui';
 import { downloadCsv, formatDate, formatMoney, fromDollars, plural, todayIsoDate, unitPriceToNumber, validateHolding, validateUnitPrice, type FieldIssue } from '@vivek/browser';
-import { successCopy } from '@vivek/ui';
+import { failureCopy, successCopy } from '@vivek/ui';
 import { dialogSaveAlert, focusDialogAlert, focusFirstInvalid } from '../shared/form-validation';
 import {
   holdingGain,
@@ -288,10 +288,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   addOrUpdateHolding() {
     if (this.saving) return;
+    const keepStoredPrice = this.editingId !== null && !this.purchasePriceDirty;
     const issues = validateHolding({
       symbol: this.newHolding.symbol,
       shares: this.newHolding.shares,
-      costBasis: this.newHolding.purchase_price,
+      costBasis: keepStoredPrice ? null : this.newHolding.purchase_price,
       purchaseDate: this.newHolding.purchase_date,
       requirePurchaseDate: this.editingId === null,
     });
@@ -303,7 +304,6 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       return;
     }
     const symbol = this.newHolding.symbol.trim().toUpperCase();
-    const keepStoredPrice = this.editingId !== null && !this.purchasePriceDirty;
     if (!keepStoredPrice) {
       const priceError = validateUnitPrice(this.newHolding.purchase_price);
       if (priceError) {
@@ -327,8 +327,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
     const req =
       this.editingId !== null
-        ? this.financeService.updateHolding(this.editingId, payload)
-        : this.financeService.addHolding(payload);
+        ? this.financeService.updateHolding(this.editingId, payload, true)
+        : this.financeService.addHolding(payload, true);
 
     req.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
@@ -556,10 +556,29 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       purchase_date: h.purchase_date,
     };
 
-    this.financeService.deleteHolding(h.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.removeHolding(h, backup);
+  }
+
+  private removeHolding(h: Holding, backup: HoldingCreate): void {
+    this.financeService.deleteHolding(h.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
-        this.toastService.success('Holding deleted', () => {
-          this.financeService.addHolding(backup).subscribe();
+        this.toastService.success('Holding deleted', () => this.restoreHolding(backup));
+      },
+      error: () => {
+        this.toastService.error(failureCopy('delete', 'this holding'), {
+          label: 'Try again',
+          run: () => this.removeHolding(h, backup),
+        });
+      },
+    });
+  }
+
+  private restoreHolding(backup: HoldingCreate): void {
+    this.financeService.addHolding(backup, true).pipe(takeUntil(this.destroy$)).subscribe({
+      error: () => {
+        this.toastService.error(failureCopy('restore', 'this holding'), {
+          label: 'Try again',
+          run: () => this.restoreHolding(backup),
         });
       },
     });

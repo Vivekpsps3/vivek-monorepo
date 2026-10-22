@@ -156,11 +156,11 @@ export class StockLabComponent implements OnInit, OnDestroy {
       next: batch => {
         if (request !== this.marketRequest) return;
         this.research = batch.results;
-        if (batch.failed.length) this.error = batch.failed.map(row => `${row.symbol}: ${row.error}`).join('; ');
+        if (batch.failed.length) this.error = "Couldn't load market data. Try again.";
       },
-      error: err => {
+      error: () => {
         if (request !== this.marketRequest) return;
-        this.error = err?.error?.detail || err?.message || 'Market research failed.';
+        this.error = "Couldn't load market data. Try again.";
       },
     });
   }
@@ -173,10 +173,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
         this.scenario = { ...this.scenarios[0] };
         this.loadMarketData(false);
       }
-    } catch (err: unknown) {
-      const message = this.errorMessage(err, 'Could not load scenarios.');
-      this.error = message;
-      this.toast.error(message);
+    } catch {
+      this.error = "Couldn't load saved scenarios.";
     }
     this.cdr.markForCheck();
   }
@@ -189,10 +187,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
       this.scenario = { ...saved };
       await this.loadScenarios();
       this.toast.success('Scenario saved.');
-    } catch (err: unknown) {
-      const message = this.errorMessage(err, 'Could not save scenario.');
-      this.error = message;
-      this.toast.error(message);
+    } catch {
+      this.error = "Couldn't save this scenario.";
     } finally {
       this.saving = false;
       this.cdr.markForCheck();
@@ -209,10 +205,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
       await this.loadScenarios();
       this.loadMarketData(false);
       this.toast.success('Scenario deleted.');
-    } catch (err: unknown) {
-      const message = this.errorMessage(err, 'Could not delete scenario.');
-      this.error = message;
-      this.toast.error(message);
+    } catch {
+      this.error = "Couldn't delete this scenario.";
     } finally {
       this.saving = false;
       this.cdr.markForCheck();
@@ -236,11 +230,6 @@ export class StockLabComponent implements OnInit, OnDestroy {
   setIncludeOwnedSymbols(include: boolean): void {
     this.scenario = { ...this.scenario, include_owned_symbols: include };
     this.loadMarketData(false);
-  }
-
-  private errorMessage(err: unknown, fallback: string): string {
-    const anyErr = err as { error?: { detail?: string }; message?: string } | null;
-    return anyErr?.error?.detail || anyErr?.message || fallback;
   }
 
   setPrimarySymbol(symbol: string): void {

@@ -48,7 +48,13 @@ describe('formatMoney', () => {
   it('pluralizes counts', () => {
     expect(plural(1, 'purchase')).toBe('1 purchase');
     expect(plural(110, 'purchase')).toBe('110 purchases');
-    expect(plural(0, 'transaction')).toBe('No transactions');
+    expect(plural(0, 'transaction')).toBe(PLURAL_ZERO_IS_NO ? 'No transactions' : '0 transactions');
+  });
+
+  it('covers both settings of a zero count', () => {
+    expect(plural(0, 'deposit', { zeroIsNo: true })).toBe('No deposits');
+    expect(plural(0, 'deposit', { zeroIsNo: false })).toBe('0 deposits');
+    expect(plural(0, 'deposit', 'deposits')).toBe(PLURAL_ZERO_IS_NO ? 'No deposits' : '0 deposits');
   });
 
   it('keeps compact amounts recognizable', () => {
@@ -58,7 +64,6 @@ describe('formatMoney', () => {
   });
 
   it('rounds half away from zero, including values Math.round gets wrong', () => {
-    expect(PLURAL_ZERO_IS_NO).toBeTrue();
     expect(roundHalfAwayFromZero(-0.5)).toBe(-1);
     expect(roundHalfAwayFromZero(0.5)).toBe(1);
     expect(roundHalfAwayFromZero(-1.5)).toBe(-2);
@@ -102,6 +107,6 @@ describe('formatMoney', () => {
     expect(formatCompactMoney(-4)).toBe('$0');
     expect(formatCompactMoney(-4)).not.toContain('−');
     expect(formatCompactMoney(-5)).toBe('−$0.1');
-    expect(plural(0, 'deposit')).toBe('No deposits');
+    expect(plural(0, 'deposit')).toBe(PLURAL_ZERO_IS_NO ? 'No deposits' : '0 deposits');
   });
 });

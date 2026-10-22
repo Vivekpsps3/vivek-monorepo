@@ -218,8 +218,8 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     };
     const request =
       this.editingId !== null
-        ? this.financeService.updateFixedExpense(this.editingId, payload)
-        : this.financeService.addFixedExpense(payload);
+        ? this.financeService.updateFixedExpense(this.editingId, payload, true)
+        : this.financeService.addFixedExpense(payload, true);
     request.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
@@ -244,7 +244,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
-    this.financeService.deleteFixedExpense(row.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.financeService.deleteFixedExpense(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Bill deleted'),
       error: () => this.toastService.error(failureCopy('delete', 'this bill'), {
         label: 'Try again',

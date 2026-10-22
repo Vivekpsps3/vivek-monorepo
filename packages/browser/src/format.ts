@@ -186,12 +186,15 @@ export function moneyAriaLabel(
 export function plural(
   count: number,
   singular: string,
-  pluralForm?: string,
+  pluralFormOrOptions?: string | { zeroIsNo?: boolean },
 ): string {
+  const options = pluralFormOrOptions && typeof pluralFormOrOptions === 'object' ? pluralFormOrOptions : undefined;
+  const pluralForm = typeof pluralFormOrOptions === 'string' ? pluralFormOrOptions : undefined;
+  const zeroIsNo = options?.zeroIsNo ?? PLURAL_ZERO_IS_NO;
   const n = Number.isFinite(count) ? Math.abs(Math.trunc(count)) : 0;
   const category = new Intl.PluralRules(DEFAULT_MONEY_LOCALE).select(n);
   const word = category === 'one' ? singular : (pluralForm ?? `${singular}s`);
-  if (n === 0 && PLURAL_ZERO_IS_NO) return `No ${word}`;
+  if (n === 0 && zeroIsNo) return `No ${word}`;
   return `${n.toLocaleString(DEFAULT_MONEY_LOCALE)} ${word}`;
 }
 

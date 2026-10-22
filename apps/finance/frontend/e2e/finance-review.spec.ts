@@ -32,7 +32,20 @@ test('an empty job form focuses the summary once', async ({ page }) => {
   await expect(summary).toBeVisible();
   await expect(summary).toBeFocused();
   await expect(summary).toContainText('Employer');
-  await expect(dialog.locator('.field-error, .ui-field__error')).toHaveCount(0);
+  await expect(dialog).toContainText('Enter the employer.');
+  await expect(dialog).toContainText('Enter yearly pay above $0.');
+  for (const [field, message] of [
+    ['employer', 'Enter the employer.'],
+    ['basePay', 'Enter yearly pay above $0.'],
+  ] as const) {
+    const input = dialog.locator(`[data-field="${field}"]`);
+    const describedBy = await input.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    const error = dialog.locator(`[id="${describedBy}"]`);
+    await expect(error).toContainText(message);
+    await expect(error).toContainText('⚠');
+    expect(await input.evaluate(el => !!el.closest('label')?.querySelector('.ui-field__error'))).toBe(false);
+  }
 });
 
 test('a negative subscription is rejected in the dialog', async ({ page }) => {

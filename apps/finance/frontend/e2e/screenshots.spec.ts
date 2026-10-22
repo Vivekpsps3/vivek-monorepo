@@ -19,15 +19,25 @@ async function assertTheme(page: Page, theme: 'light' | 'dark') {
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(backgrounds[theme]);
 }
 
+const upgradeToast = "Couldn't finish a security upgrade. We'll retry next time you unlock.";
+
+async function expectNoStrayToast(page: Page) {
+  const upgrade = page.locator('.toast', { hasText: upgradeToast });
+  await upgrade.waitFor({ state: 'visible', timeout: 2_000 }).catch(() => undefined);
+  if (await upgrade.count()) await upgrade.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(page.locator('.toast')).toHaveCount(0, { timeout: 1_000 });
+}
+
 async function chooseTheme(page: Page, vault: Awaited<ReturnType<typeof syntheticVault>>, theme: 'light' | 'dark') {
   await page.evaluate(value => localStorage.setItem('ft-theme', value), theme);
   await vault.reload();
-  await expect(page.locator('.toast')).toHaveCount(0, { timeout: 12_000 });
+  await expectNoStrayToast(page);
   await assertTheme(page, theme);
 }
 
 test.describe('finance F1 screenshot matrix', () => {
   test.skip(!dir, 'Set SCREENSHOT_DIR to capture the 390/768/1280 light and dark matrix.');
+  test.use({ reducedMotion: 'reduce' });
 
   test('review scenes at 390, 768, and 1280 in light and dark', async ({ page }) => {
     test.setTimeout(600_000);
@@ -54,12 +64,13 @@ test.describe('finance F1 screenshot matrix', () => {
 
     const shot = async (name: string, width: number, theme: 'light' | 'dark') => {
       await assertTheme(page, theme);
+      await expectNoStrayToast(page);
       const file = path.join(dir as string, `${name}-${width}-${theme}.png`);
       await page.screenshot({ path: file, fullPage: true });
     };
 
     await vault.open('/');
-    await expect(page.locator('.toast')).toHaveCount(0, { timeout: 12_000 });
+    await expectNoStrayToast(page);
 
     for (const width of [390, 768, 1280]) {
       await page.setViewportSize({ width, height: 900 });
@@ -106,7 +117,16 @@ test.describe('finance F1 screenshot matrix', () => {
         await shot('planning-locks', width, theme);
 
         await vault.open('/planning?t=growth');
-        await expect(page.getByRole('button', { name: '7% annual growth preset' })).toHaveAttribute('aria-pressed', 'true');
+        const selectedPreset = page.getByRole('button', { name: '7% annual growth preset' });
+        const otherPreset = page.getByRole('button', { name: '5% annual growth preset' });
+        await expect(selectedPreset).toHaveAttribute('aria-pressed', 'true');
+        const selectedStyle = await selectedPreset.evaluate(el => {
+          const style = getComputedStyle(el);
+          return { weight: style.fontWeight, shadow: style.boxShadow };
+        });
+        const otherWeight = await otherPreset.evaluate(el => getComputedStyle(el).fontWeight);
+        expect(Number(selectedStyle.weight)).toBeGreaterThan(Number(otherWeight));
+        expect(selectedStyle.shadow).toContain('inset');
         await shot('growth-presets', width, theme);
 
         await vault.open('/planning?t=stocks');
@@ -129,6 +149,7 @@ test.describe('finance F1 screenshot matrix', () => {
         const job = page.getByRole('dialog', { name: 'Add job' });
         await job.getByRole('button', { name: 'Save' }).click();
         await expect(job.locator('[data-error-summary]')).toBeFocused();
+        await expect(job).toContainText('Enter the employer.');
         await shot('job-empty', width, theme);
         await job.getByRole('button', { name: 'Cancel' }).click();
 
@@ -174,13 +195,13 @@ test.describe('finance F1 screenshot matrix', () => {
       await page.screenshot({ path: path.join(dir as string, `${name}-${width}-${theme}.png`), fullPage: false });
     };
     await vault.open('/');
-    await expect(page.locator('.toast')).toHaveCount(0, { timeout: 12_000 });
+    await expectNoStrayToast(page);
     for (const width of [390, 768, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       for (const theme of ['light', 'dark'] as const) {
         await vault.open('/');
         await chooseTheme(page, vault, theme);
-        await expect(page.locator('.toast')).toHaveCount(0, { timeout: 12_000 });
+        await expectNoStrayToast(page);
         await vault.open('/have?t=holdings');
         await page.getByRole('button', { name: 'Delete VOO' }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
@@ -200,7 +221,12 @@ test.describe('finance F1 screenshot matrix', () => {
         await expect(page.locator('.toast')).toHaveCount(3);
         await page.mouse.move(0, 0);
         await shot('toast-stack', width, theme);
-        await page.locator('.toast-dismiss').first().focus();
+        const dismiss = page.locator('.toast-dismiss').first();
+        await dismiss.focus();
+        await page.keyboard.press('Shift+Tab');
+        await page.keyboard.press('Tab');
+        await expect(dismiss).toBeFocused();
+        expect(await dismiss.evaluate(el => el.matches(':focus-visible'))).toBe(true);
         await shot('toast-dismiss-focused', width, theme);
         await page.getByRole('button', { name: 'Undo' }).click();
         await expect.poll(() => vault.data('holdings').some(row => row.symbol === 'VOO')).toBe(true);

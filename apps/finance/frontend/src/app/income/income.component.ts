@@ -94,6 +94,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
   incomes: JobIncome[] = [];
   stockPriceDrafts: Record<number, StockPriceDraft> = {};
   stockPriceErrors: Record<number, string> = {};
+  manualPriceNotice: Record<number, string> = {};
   stockQuoteStatuses: Record<string, StockQuoteStatus> = {};
   private savingStockPriceIds = new Set<number>();
   showModal = false;
@@ -451,8 +452,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     void this.enqueueJobIncomeUpdate(row.id, current => ({
       stock_valuations: replaceStockValuation(current.stock_valuations || [], valuation),
-    }), row).then(saved => {
+    }), row, true).then(saved => {
       if (!saved || this.destroyed) return;
+      delete this.manualPriceNotice[row.id];
       const symbol = this.normalizeStockSymbol(saved.stock_symbol || row.stock_symbol || '');
       if (symbol) this.stockQuoteStatuses[symbol] = {
           state: 'updated',
@@ -464,12 +466,11 @@ export class IncomeComponent implements OnInit, OnDestroy {
       if (!this.destroyed) {
         const symbol = this.normalizeStockSymbol(latest.stock_symbol || '');
         const saved = this.latestStockPrice(latest);
-        if (symbol) this.stockQuoteStatuses[symbol] = {
-          state: 'error',
-          message: saved
-            ? `Manual price could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
-            : 'Manual price could not be saved. Grant and ESPP purchase prices remain the valuation fallback.',
-        };
+        const message = saved
+          ? `Manual price could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
+          : 'Manual price could not be saved. Grant and ESPP purchase prices remain the valuation fallback.';
+        if (symbol) this.stockQuoteStatuses[symbol] = { state: 'error', message };
+        else this.manualPriceNotice[row.id] = message;
         this.toastService.error(failureCopy('save', 'this share price', 'Try again.'));
       }
     }).finally(() => {
@@ -546,7 +547,8 @@ export class IncomeComponent implements OnInit, OnDestroy {
   private async enqueueJobIncomeUpdate(
     id: number,
     buildBody: (latest: JobIncome) => Partial<JobIncomeCreate> | null,
-    fallback?: JobIncome
+    fallback?: JobIncome,
+    silent = false,
   ): Promise<JobIncome | null> {
     const previous = this.jobUpdateQueues.get(id) || Promise.resolve(null);
     const pending = previous.catch(() => null).then(async () => {
@@ -555,7 +557,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       if (!latest) return null;
       const body = buildBody(latest);
       if (!body || this.destroyed) return null;
-      return await firstValueFrom(this.financeService.updateJobIncome(id, body));
+      return await firstValueFrom(this.financeService.updateJobIncome(id, body, silent));
     });
     this.jobUpdateQueues.set(id, pending);
     try {
@@ -620,14 +622,6 @@ export class IncomeComponent implements OnInit, OnDestroy {
   }
 
   saveIncome(): void {
-    if (!this.form.employer.trim()) {
-      this.fieldErrors = [{ field: 'employer', label: 'Employer', message: 'Enter the employer.' }];
-      this.formSubmitted = true;
-      this.jobSaveError = '';
-      this.cdr.markForCheck();
-      setTimeout(() => focusErrorSummary(document.getElementById('job-form')));
-      return;
-    }
     const jobIssues = validateJob({
       employer: this.form.employer,
       basePay: this.form.base_pay,
@@ -716,8 +710,8 @@ export class IncomeComponent implements OnInit, OnDestroy {
         ? from(this.enqueueJobIncomeUpdate(saveId, latest => ({
             ...payload,
             stock_valuations: [...(latest.stock_valuations || [])],
-          }), this.editingJobSnapshot || undefined))
-        : this.financeService.addJobIncome(payload);
+          }), this.editingJobSnapshot || undefined, true))
+        : this.financeService.addJobIncome(payload, true);
 
     request.pipe(takeUntil(this.destroy$)).subscribe({
       next: saved => {
@@ -750,7 +744,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
-    this.financeService.deleteJobIncome(row.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.financeService.deleteJobIncome(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Job deleted'),
       error: () => this.toastService.error(failureCopy('delete', 'this job'), {
         label: 'Try again',

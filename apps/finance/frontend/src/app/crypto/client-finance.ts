@@ -123,11 +123,15 @@ function directedEffects(tx: Transaction, amount: number): TransactionEffects {
 }
 
 /** Shared recorded-ledger semantics. Legacy rows without `kind` keep their income/expense behavior. */
-export function transactionEffects(tx: Transaction): TransactionEffects {
+export function transactionEffects(
+  tx: Transaction,
+  options?: { flagDisallowed?: boolean },
+): TransactionEffects {
+  const flagDisallowed = options?.flagDisallowed ?? FLAG_DISALLOWED_TRANSACTION_SIGNS;
   const raw = Number(tx.amount);
   const cents = Number.isFinite(raw) ? fromDollars(raw) : null;
   const signDisallowed = cents != null && cents < 0;
-  if (cents == null || (signDisallowed && FLAG_DISALLOWED_TRANSACTION_SIGNS)) {
+  if (cents == null || (signDisallowed && flagDisallowed)) {
     return { income: 0, spending: 0, excluded: true };
   }
   if (signDisallowed) {

@@ -1,5 +1,5 @@
 :host { display: block; min-height: 100%; background: var(--bg); color: var(--text); }
-.desk { width: min(100%, 52rem); margin: 0 auto; padding: var(--space-6); }
+.desk { width: min(100%, 52rem); margin: 0 auto; padding: var(--space-6); box-sizing: border-box; }
 .desk-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-6); }
 .desk-mark, .desk-title { margin: 0; font-weight: 650; letter-spacing: -0.03em; text-decoration: none; color: inherit; }
 .desk-notice { margin: 0 0 var(--space-4); color: var(--text-secondary); }

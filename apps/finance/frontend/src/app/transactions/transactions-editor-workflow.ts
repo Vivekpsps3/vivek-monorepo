@@ -88,8 +88,8 @@ export class TransactionsEditorWorkflow implements OnDestroy {
       amount,
     };
     const request = this.editingTxId !== null
-      ? this.financeService.updateTransaction(this.editingTxId, payload)
-      : this.financeService.addTransaction(payload);
+      ? this.financeService.updateTransaction(this.editingTxId, payload, true)
+      : this.financeService.addTransaction(payload, true);
 
     request.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {

@@ -266,6 +266,23 @@ export class VaultService {
     return this.http.get<EncryptedRecordDto[]>(apiUrl(`/vault/records${q}`));
   }
 
+  /**
+   * Dialog saves and other callers that show their own error opt in.
+   * Every other upsert or delete keeps the interceptor toast.
+   */
+  private silentMutations = 0;
+
+  runSilent<T>(work: () => Promise<T>): Promise<T> {
+    this.silentMutations += 1;
+    return Promise.resolve().then(work).finally(() => {
+      this.silentMutations -= 1;
+    });
+  }
+
+  private mutationOptions(): { context: ReturnType<typeof silentErrorToast> } | undefined {
+    return this.silentMutations > 0 ? { context: silentErrorToast() } : undefined;
+  }
+
   upsertRecords(
     records: Array<{
       collection: string;
@@ -277,13 +294,13 @@ export class VaultService {
       indexes?: Array<{ index_name: string; index_value_b64: string }>;
     }>
   ): Observable<EncryptedRecordDto[]> {
-    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records }, { context: silentErrorToast() });
+    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records }, this.mutationOptions());
   }
 
   deleteRecords(
     records: Array<{ collection: string; client_id: string; expected_revision: number }>
   ): Observable<{ deleted: number }> {
-    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records }, { context: silentErrorToast() });
+    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records }, this.mutationOptions());
   }
 
   getCounts(): Observable<{ counts: Record<string, number> }> {
