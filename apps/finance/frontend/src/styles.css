@@ -235,7 +235,7 @@ h2:focus,
 h1:focus-visible,
 h2:focus-visible,
 .ui-page-header__title:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
   border-radius: var(--radius-sm);
 }
