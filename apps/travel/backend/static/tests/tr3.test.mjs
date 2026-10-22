@@ -17,6 +17,7 @@ import { blankRange } from "../modules/composer-model.mjs";
 test("tap then tap selects a range and a backwards tap swaps the ends", () => {
   let model = blankRange();
   model = pickDay(model, "2026-10-24");
+  assert.equal(summaryText("", ""), "Pick the day you leave.");
   assert.equal(summaryText(model.start, model.end), "Now pick the day you come back.");
   model = pickDay(model, "2026-10-30");
   assert.equal(model.start, "2026-10-24");
@@ -70,10 +71,12 @@ test("the composer grid and the pto cadence are in the page source", () => {
   const pto = readFileSync(new URL("../modules/views/pto.mjs", import.meta.url), "utf8");
   const trip = readFileSync(new URL("../modules/views/trip.mjs", import.meta.url), "utf8");
   const calendar = readFileSync(new URL("../modules/views/calendar.mjs", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
   assert.match(composer, /role="grid"/);
   assert.match(composer, /aria-label="Previous month"/);
   assert.match(composer, /Counts as PTO/);
   assert.match(composer, /aria-disabled/);
+  assert.match(composer, /input\.name = "city";\s*applyFieldError\(root, "city", "Name the city\."\)/);
   assert.match(composer, /Split…/);
   assert.match(pto, /role="radiogroup"/);
   assert.match(pto, /Set up PTO/);
@@ -81,7 +84,8 @@ test("the composer grid and the pto cadence are in the page source", () => {
   assert.match(trip, /Show \$\{esc\(point.label\)\} on map/);
   assert.match(trip, /City: \$\{point.label\}/);
   assert.match(trip, /Map tiles couldn't load/);
-  assert.match(calendar, /Today/);
+  assert.match(calendar, />Today<\/a>/);
   assert.match(calendar, /aria-current="date"/);
   assert.match(calendar, /cal-strip/);
+  assert.match(css, /\.composer-grid \[role="row"\]/);
 });

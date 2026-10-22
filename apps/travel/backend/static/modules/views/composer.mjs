@@ -111,6 +111,7 @@ export function mountComposer() {
       model.nameTouched = true;
       model.tripName = input.value;
     }
+    refreshGate();
   });
   root.addEventListener("click", async (event) => {
     const button = event.target.closest("button");
@@ -159,17 +160,25 @@ export function mountComposer() {
     const offsets = narrow() ? [0] : [0, 1];
     const months = offsets.map((offset) => new Date(model.anchor.getFullYear(), model.anchor.getMonth() + offset, 1));
     const summary = summaryText(model.start, model.end);
-    const gate = saveState({ ...model, tripName: model.tripName || defaultTripName(model) });
     const host = root.querySelector(".composer-months");
     if (host) host.innerHTML = months.map((month) => drawMonth(month)).join("");
-    const saveButton = root.querySelector("[data-save]");
-    saveButton?.setAttribute("aria-disabled", gate.ok ? "false" : "true");
-    const help = root.querySelector("#save-help");
-    if (help && !root.querySelector("[aria-invalid=true]")) help.textContent = gate.ok ? "" : "Pick dates and name at least one city.";
+    refreshGate();
     paintDays();
     paintCities();
     const live = document.querySelector("#composer-summary");
     if (live && (announce || !live.textContent)) live.textContent = summary;
+  }
+
+  function refreshGate() {
+    root.querySelectorAll("[data-city-start]").forEach((input) => {
+      model.cities[input.dataset.cityStart] = input.value;
+    });
+    const named = root.querySelector("[data-trip-name]");
+    if (named) model.tripName = named.value;
+    const gate = saveState({ ...model, tripName: model.tripName || defaultTripName(model) });
+    root.querySelector("[data-save]")?.setAttribute("aria-disabled", gate.ok ? "false" : "true");
+    const help = root.querySelector("#save-help");
+    if (help && !root.querySelector("[aria-invalid=true]")) help.textContent = gate.ok ? "" : "Pick dates and name at least one city.";
   }
 
   function drawMonth(monthDate) {
@@ -233,12 +242,8 @@ export function mountComposer() {
       if (gate.focus === "grid") root.querySelector("[role=grid]")?.querySelector("[data-day]")?.focus();
       if (gate.focus === "city") {
         const input = root.querySelector("[data-city-start]");
-        applyFieldError(root, input?.name || "city", "Name the city.");
-        if (input) {
-          input.name = "city";
-          input.setAttribute("aria-invalid", "true");
-          input.focus();
-        }
+        if (input) input.name = "city";
+        applyFieldError(root, "city", "Name the city.");
       }
       return;
     }
