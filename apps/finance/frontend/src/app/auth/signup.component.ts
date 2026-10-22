@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject }
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { authPath, continueAfterAuth } from './after-auth';
+import { SignupPolicy } from './auth.models';
 import { AuthService } from './auth.service';
 import { UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
 
@@ -20,13 +21,27 @@ export class SignupComponent implements OnInit {
 
   username = '';
   password = '';
+  inviteCode = '';
   inviteName = '';
   loading = false;
   error = '';
+  policy: SignupPolicy | null = null;
   readonly inviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 
   ngOnInit(): void {
-    if (!this.inviteToken) return;
+    if (!this.inviteToken) {
+      this.auth.signupPolicy().then(
+        policy => {
+          this.policy = policy;
+          this.cdr.markForCheck();
+        },
+        () => {
+          this.policy = { mode: 'closed', signup_open: false, invite_code_required: false };
+          this.cdr.markForCheck();
+        }
+      );
+      return;
+    }
     this.loading = true;
     this.auth.previewInvitation(this.inviteToken).then(
       preview => {
@@ -49,6 +64,7 @@ export class SignupComponent implements OnInit {
 
   submit(): void {
     if (this.loading) return;
+    if (!this.inviteToken && this.policy?.mode === 'closed') return;
     const validationError = this.validationError();
     if (validationError) {
       this.error = validationError;
@@ -61,7 +77,7 @@ export class SignupComponent implements OnInit {
     this.cdr.markForCheck();
     const pending = this.inviteToken
       ? this.auth.enrollInvitation(this.inviteToken, this.password)
-      : this.auth.signupPasswordless(this.username, this.password);
+      : this.auth.signupPasswordless(this.username, this.password, '', this.inviteCode);
     pending.then(
       () => {
         this.loading = false;
@@ -82,6 +98,9 @@ export class SignupComponent implements OnInit {
     if (!username) return this.inviteToken ? 'This enrollment link is invalid or expired. Ask an admin for a new one.' : 'Enter a username.';
     if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username)) {
       return 'Username must be 3–64 letters, numbers, dots, underscores, or hyphens.';
+    }
+    if (this.policy?.invite_code_required && !this.inviteCode.trim()) {
+      return 'Enter the invite code from your administrator.';
     }
     if (this.password.length < 12) {
       return 'Vault passphrase must be at least 12 characters.';

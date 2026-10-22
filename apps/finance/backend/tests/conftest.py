@@ -2,10 +2,19 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 # A developer shell or .env.development must not turn the local auth bypass on during tests.
 os.environ["LOCAL_DEV_AUTH"] = "0"
 os.environ.pop("FINANCE_DEV_ENV_FILE", None)
+os.environ.pop("AUTH_SIGNUP_MODE", None)
+os.environ.pop("AUTH_INVITE_CODES", None)
+os.environ.pop("AUTH_SIGNUP_ALLOWLIST", None)
+os.environ.pop("AUTH_DECOY_SECRET", None)
+os.environ.pop("AUTH_IP_RATE_LIMIT_PER_MIN", None)
+os.environ.pop("AUTH_ACCOUNT_RATE_LIMIT_PER_MIN", None)
+os.environ.pop("RATE_LIMIT_PER_MIN", None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
@@ -19,6 +28,15 @@ if ":memory:" not in SQLALCHEMY_DATABASE_URL:
     raise RuntimeError(f"Tests must not run against a file database: {SQLALCHEMY_DATABASE_URL}")
 
 TEST_PASSWORD = "correct-horse-battery-staple"
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    from apps.finance.backend.rate_limit import clear_limits
+
+    clear_limits()
+    yield
+    clear_limits()
 
 
 def seed_user(email: str = "user@example.com", role: UserRole = UserRole.user):

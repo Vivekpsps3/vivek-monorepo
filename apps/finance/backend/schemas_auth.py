@@ -3,6 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from apps.finance.backend.kdf_policy import MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.schemas_vault import VaultCreateRequest
 
 UserRoleValue = Literal["admin", "user"]
@@ -45,7 +46,7 @@ class LoginResponse(BaseModel):
 
 class AuthPrivateKeyWrap(BaseModel):
     kdf_salt_b64: str = Field(..., min_length=16, max_length=4096)
-    kdf_iterations: int = Field(310000, ge=100000, le=10000000)
+    kdf_iterations: int = Field(MIN_PBKDF2_ITERATIONS, ge=MIN_PBKDF2_ITERATIONS, le=10_000_000)
     wrapped_private_key_b64: str = Field(..., min_length=16, max_length=8192)
     # Legacy field; recovery-key path removed. Empty string means unused.
     recovery_wrapped_private_key_b64: str = Field("", max_length=8192)
@@ -74,12 +75,13 @@ class PasswordlessBootstrapRequest(BaseModel):
 
 
 class PasswordlessSignupRequest(BaseModel):
-    """Open self-signup: username + vault material. No invitation token."""
+    """Self-signup. Closed unless AUTH_SIGNUP_MODE opens it."""
     username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
     display_name: str = Field("", max_length=160)
     public_key_b64: str = Field(..., min_length=16, max_length=4096)
     vault: VaultCreateRequest
     auth: AuthPrivateKeyWrap
+    invite_code: str = Field("", max_length=256)
 
 
 class PasswordlessChallengeRequest(BaseModel):
@@ -140,3 +142,9 @@ class SelfDataResetRequest(BaseModel):
 
 class BootstrapStatusResponse(BaseModel):
     needs_setup: bool
+
+
+class SignupPolicyResponse(BaseModel):
+    mode: Literal["closed", "open", "invite", "allowlist"]
+    signup_open: bool
+    invite_code_required: bool

@@ -26,6 +26,7 @@ export class LoginComponent {
   vaultPassphrase = '';
   setupMode = false;
   legacyMode = false;
+  showSignup = false;
   loading = false;
   error = '';
 
@@ -44,6 +45,16 @@ export class LoginComponent {
         this.cdr.markForCheck();
       },
     });
+    this.auth.signupPolicy().then(
+      policy => {
+        this.showSignup = policy.mode !== 'closed';
+        this.cdr.markForCheck();
+      },
+      () => {
+        this.showSignup = false;
+        this.cdr.markForCheck();
+      }
+    );
   }
 
   submit(): void {

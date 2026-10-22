@@ -52,6 +52,16 @@ the operator controls the code delivered to browsers.
 - Planning profiles, assumptions, generated input snapshots, and run artifacts.
 - Tax document vault data. Tax document storage has been removed and should not be reintroduced without a new product/security decision.
 
+## Login material
+
+Passwordless login has to give the browser its own wrapped signing key before a session exists. That response is unauthenticated. It does not include the vault data-key wrap or the unused recovery wraps; those stay on the authenticated vault status route for the signed-in account.
+
+Unknown usernames get a deterministic decoy of the same shape and wrap length, derived from `AUTH_DECOY_SECRET` or a secret file stored next to the database. Repeating a lookup must not show whether the account exists. Signup is closed by default (`AUTH_SIGNUP_MODE`). Invitation enrollment is unchanged. `open` mode still reports a taken username; `invite` and `allowlist` use one failure response for a bad code, a name that is not allowed, and a name that is already taken.
+
+The wrapping KDF is PBKDF2-HMAC-SHA256. New wraps use at least 600,000 iterations. A stored 310,000-iteration wrap still unlocks, and the browser re-wraps it on the next successful unlock. WebCrypto does not provide Argon2id; `kdf_algorithm` on the vault is the field a later algorithm would use.
+
+Lookup, challenge, verify, signup, and bootstrap are rate limited per IP and per account inside the one server process.
+
 ## Recovery rules
 
 - There is no password reset. Admins cannot reset a vault passphrase, generate a signing key, or alter encrypted vault material.

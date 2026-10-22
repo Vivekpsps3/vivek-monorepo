@@ -11,9 +11,11 @@ import {
   persistDekLocal,
   recordAad,
   restoreDekLocal,
+  rewrapDekWithPassphrase,
   unlockWithPassphrase,
 } from './vault-crypto';
-import { WrappedSigningKey } from '@vivek/auth';
+import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
+import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
 
 export interface VaultStatus {
   exists: boolean;
@@ -140,6 +142,40 @@ export class VaultService {
   async adoptBootstrapVault(dek: CryptoKey): Promise<void> {
     await this.refreshStatus();
     this.hold(dek);
+  }
+
+  /**
+   * After a successful unlock, raise stored PBKDF2 iterations to the current floor.
+   * The same DEK and signing key are kept, so existing ciphertext and the public key stay valid.
+   * A failed write leaves the previous wraps in place and retries on the next unlock.
+   */
+  async upgradeKdfIfNeeded(passphrase: string): Promise<void> {
+    const status = this.statusSubject.value;
+    const auth = this.authWrap;
+    const authStale = !!auth && auth.kdf_iterations < DEFAULT_PBKDF2_ITERATIONS;
+    const vaultStale = !!status?.kdf_iterations && status.kdf_iterations < DEFAULT_PBKDF2_ITERATIONS && !!this.dek;
+    if (!authStale && !vaultStale) return;
+    try {
+      if (authStale && auth) {
+        const wrapped = await rewrapSigningKey(passphrase, auth, DEFAULT_PBKDF2_ITERATIONS);
+        await firstValueFrom(this.http.put(apiUrl('/auth/passwordless/wraps'), wrapped));
+        this.authWrap = wrapped;
+      }
+      if (vaultStale && this.dek && status) {
+        const rewrap = await rewrapDekWithPassphrase(this.dek, passphrase, DEFAULT_PBKDF2_ITERATIONS);
+        const updated = await firstValueFrom(
+          this.http.put<VaultStatus>(apiUrl('/vault/wraps'), {
+            kdf_salt_b64: rewrap.kdf_salt_b64,
+            kdf_iterations: rewrap.kdf_iterations,
+            wrapped_dek_b64: rewrap.wrapped_dek_b64,
+          })
+        );
+        this.statusSubject.next(updated);
+        this.unlockedWrap = updated.wrapped_dek_b64 ?? this.unlockedWrap;
+      }
+    } catch {
+      // The session and unlocked DEK stay. The next unlock tries the upgrade again.
+    }
   }
 
   async unlock(passphrase: string): Promise<void> {

@@ -17,8 +17,11 @@ file or application directory. Deployment and backup scripts default to
 `--env-file /dev/null`, avoiding implicit dotenv discovery. If integrations need
 secrets later, set `SITE_ENV_FILE` to an explicit private file outside Git (mode
 600, parent directory mode 700). An explicit missing file fails deployment.
-Do not bake secrets into Compose, the Dockerfile, or images. The shared nginx-edge
-and its Let's Encrypt certificates remain existing host infrastructure. The site's
+Do not bake secrets into Compose, the Dockerfile, or images.
+
+Auth defaults live in the process and in `compose.yml`. `AUTH_SIGNUP_MODE` defaults to `closed` (`open`, `invite`, or `allowlist` opt in). `AUTH_INVITE_CODES` and `AUTH_SIGNUP_ALLOWLIST` are comma-separated and empty by default. `AUTH_IP_RATE_LIMIT_PER_MIN` defaults to 60 and `AUTH_ACCOUNT_RATE_LIMIT_PER_MIN` to 20. `AUTH_DECOY_SECRET` is optional; when it is unset the server writes `auth-decoy-secret` beside the database file so unknown-user responses stay stable across restarts. Put that secret in the private env file if a database restore should keep the same decoys. `RATE_LIMIT_PER_MIN` remains the optional shared cap.
+
+The shared nginx-edge and its Let's Encrypt certificates remain existing host infrastructure. The site's
 edge vhost source is ops/nginx/site.conf; adding/replacing this vhost requires a
 config test and reload. Other hostnames are unaffected.
 

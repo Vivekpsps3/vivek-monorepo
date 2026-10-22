@@ -4,7 +4,7 @@ import { BehaviorSubject, Observable, catchError, firstValueFrom, from, map, of,
 import { environment } from '../../environments/environment';
 import { apiUrl } from '../core/api-url';
 import { authNavigation } from './after-auth';
-import { AuthUser, LoginResponse, MeResponse } from './auth.models';
+import { AuthUser, LoginResponse, MeResponse, SignupPolicy } from './auth.models';
 import { FinanceService } from '../services/finance.service';
 import { createSigningKey, signChallenge, WrappedSigningKey } from '@vivek/auth';
 import { createVaultMaterial } from '../crypto/vault-crypto';
@@ -98,11 +98,16 @@ export class AuthService {
     return response.user;
   }
 
+  signupPolicy(): Promise<SignupPolicy> {
+    return firstValueFrom(
+      this.http.get<SignupPolicy>(apiUrl('/auth/signup-policy'), { withCredentials: true })
+    );
+  }
+
   /**
-   * Open self-signup: username + vault passphrase (no invitation).
-   * Signs in and unlocks vault immediately.
+   * Self-signup when the server policy allows it. Signs in and unlocks the vault.
    */
-  async signupPasswordless(username: string, vaultPassphrase: string, displayName = ''): Promise<AuthUser> {
+  async signupPasswordless(username: string, vaultPassphrase: string, displayName = '', inviteCode = ''): Promise<AuthUser> {
     const normalized = username.trim().toLowerCase();
     if (!/^[a-z0-9_.-]{3,64}$/.test(normalized)) {
       throw new Error('Username must be 3-64 letters, numbers, dots, underscores, or hyphens');
@@ -121,6 +126,7 @@ export class AuthService {
           public_key_b64: signingMaterial.publicKeyB64,
           vault: vaultMaterial.setupPayload,
           auth: signingMaterial.wrapped,
+          invite_code: inviteCode,
         },
         { withCredentials: true }
       )
@@ -229,31 +235,17 @@ export class AuthService {
   async loginWithVault(username: string, vaultPassphrase: string): Promise<AuthUser> {
     const identifier = username.trim().toLowerCase();
     const lookup = await firstValueFrom(
-      this.http.post<{
-        vault: import('../crypto/vault.service').VaultStatus & { username?: string | null };
-        auth: WrappedSigningKey;
-      }>(apiUrl('/auth/passwordless/lookup'), { username: identifier }, { withCredentials: true })
+      this.http.post<{ auth: WrappedSigningKey }>(
+        apiUrl('/auth/passwordless/lookup'),
+        { username: identifier },
+        { withCredentials: true }
+      )
     );
-    if (
-      !lookup?.vault?.wrapped_dek_b64 ||
-      !lookup?.auth?.wrapped_private_key_b64 ||
-      !lookup.auth.kdf_salt_b64 ||
-      !lookup.auth.kdf_iterations
-    ) {
+    if (!lookup?.auth?.wrapped_private_key_b64 || !lookup.auth.kdf_salt_b64 || !lookup.auth.kdf_iterations) {
       throw new Error('Unable to retrieve vault authentication material');
     }
-    // Prefer server-resolved username (lookup accepts username or legacy email).
-    const handle = (lookup.vault.username || identifier).trim().toLowerCase();
-    // Lookup returns public wraps only; mark the vault as present so unlock works on a new browser.
-    this.vault.loadPublicStatus({
-      exists: true,
-      kdf_algorithm: lookup.vault.kdf_algorithm ?? 'PBKDF2',
-      kdf_salt_b64: lookup.vault.kdf_salt_b64,
-      kdf_iterations: lookup.vault.kdf_iterations,
-      wrapped_dek_b64: lookup.vault.wrapped_dek_b64,
-      recovery_wrapped_dek_b64: lookup.vault.recovery_wrapped_dek_b64,
-      key_version: lookup.vault.key_version ?? 1,
-    });
+    // The same identifier is sent to challenge and verify. Email still resolves server-side.
+    const handle = identifier;
     this.vault.loadAuthWrap(lookup.auth);
     const challenge = await firstValueFrom(
       this.http.post<{ challenge_id: string; challenge: string; message: string }>(
@@ -298,7 +290,10 @@ export class AuthService {
     this.finance.clearSessionState();
     this.userSubject.next(response.user);
     try {
+      // DEK wraps are session-only. Fetch them after the signature check, then unlock.
+      await this.vault.refreshStatus();
       await this.vault.unlock(vaultPassphrase);
+      await this.vault.upgradeKdfIfNeeded(vaultPassphrase);
     } catch {
       this.clearLocalSession();
       throw new Error('Vault authentication succeeded, but this passphrase cannot unlock the vault.');
