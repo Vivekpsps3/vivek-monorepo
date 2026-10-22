@@ -29,6 +29,7 @@ COPY apps/server /app/apps/server
 COPY scripts/backup-site.py /app/backup-site.py
 COPY compose.yml /app/compose.yml
 COPY packages/browser/runtime /app/packages/browser/runtime
+COPY packages/time /app/packages/time
 COPY packages/ui/*.css /app/packages/ui/
 COPY --from=finance /src/apps/finance/frontend/dist/finance-app/browser /app/web/finance
 COPY --from=portfolio /src/apps/site/dist/personal-website/browser /app/web/portfolio

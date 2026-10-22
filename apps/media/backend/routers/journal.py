@@ -21,14 +21,14 @@ def summary(db: Session = Depends(get_db)):
 
 
 @router.get("/calendar")
-def calendar(month: str | None = None, db: Session = Depends(get_db)):
+def calendar(month: str | None = None, tz: str | None = None, db: Session = Depends(get_db)):
     user_id = require_actor().id
     http = httpx.Client(
         timeout=8.0,
         headers={"User-Agent": UA, "Accept": "application/sparql-results+json, application/json"},
     )
     try:
-        return build_calendar(db, user_id, month, http)
+        return build_calendar(db, user_id, month, http, tz)
     finally:
         http.close()
 
@@ -41,8 +41,9 @@ def library(
     sort: str = "activity",
     db: Session = Depends(get_db),
 ):
-    if sort not in {"added", "rating", "activity", "release"}:
-        raise HTTPException(status_code=422, detail="Sort is not recognized.")
+    sort = sort.strip().lower()
+    if sort not in {"added", "rating", "activity", "release", "title"}:
+        sort = "activity"
     rows = records.list_library(db, require_actor().id, kind, status, q, sort)
     return {"items": [records.entry_card(row) for row in rows]}
 
@@ -79,13 +80,18 @@ def patch_entry(entry_id: int, body: dict, db: Session = Depends(get_db)):
 @router.delete("/entries/{entry_id}")
 def delete_entry(entry_id: int, db: Session = Depends(get_db)):
     entry = records.owned_entry(db, require_actor().id, entry_id)
-    db.query(Experience).filter(Experience.entry_id == entry.id, Experience.user_id == entry.user_id).delete()
+    db.query(Experience).filter(
+        Experience.entry_id == entry.id, Experience.user_id == entry.user_id
+    ).delete()
     from apps.media.backend.models import AlbumRating, EpisodeProgress, SeasonProgress, TrackRating
+
     db.query(SeasonProgress).filter(
         SeasonProgress.user_id == entry.user_id,
         SeasonProgress.entry_id == entry.id,
     ).delete(synchronize_session=False)
-    episode_ids = [row.id for row in db.query(Episode.id).filter(Episode.catalog_id == entry.catalog_id)]
+    episode_ids = [
+        row.id for row in db.query(Episode.id).filter(Episode.catalog_id == entry.catalog_id)
+    ]
     if episode_ids:
         db.query(EpisodeProgress).filter(
             EpisodeProgress.user_id == entry.user_id,
@@ -198,13 +204,17 @@ def _load_artist_catalog(db: Session, entry) -> None:
             if group_offset or release_offset:
                 payload = fetch_page()
             else:
-                payload = providers.cached_call(db, f"musicbrainz:artist-catalog:{source_id}", fetch_page)
+                payload = providers.cached_call(
+                    db, f"musicbrainz:artist-catalog:{source_id}", fetch_page
+                )
             if not isinstance(payload, dict):
                 return
             records.store_music_catalog(db, entry.catalog, payload.get("albums") or [])
             records.remember_catalog_page(entry.catalog, payload)
         remaining = records.backfill_missing_tracks(db, entry.catalog, http)
-        records.mark_catalog_loaded(entry.catalog, (not records.catalog_list_complete(entry.catalog)) or remaining)
+        records.mark_catalog_loaded(
+            entry.catalog, (not records.catalog_list_complete(entry.catalog)) or remaining
+        )
     except Exception:
         return
     finally:
@@ -237,8 +247,12 @@ def watched(entry_id: int, episode_id: int, body: dict, db: Session = Depends(ge
     episode = db.get(Episode, episode_id)
     if episode is None or episode.catalog_id != entry.catalog_id:
         raise HTTPException(status_code=404, detail="That episode is not on this show.")
-    watched_on = records.parse_date(body.get("watched_on"), "Watched on") if body.get("watched_on") else None
-    records.mark_watched(db, require_actor().id, episode, bool(body.get("watched", True)), watched_on)
+    watched_on = (
+        records.parse_date(body.get("watched_on"), "Watched on") if body.get("watched_on") else None
+    )
+    records.mark_watched(
+        db, require_actor().id, episode, bool(body.get("watched", True)), watched_on
+    )
     return records.detail(db, entry)
 
 
@@ -259,9 +273,13 @@ def entry_web(entry_id: int, db: Session = Depends(get_db)):
     if catalog.kind == "artist":
         nodes = records.cached_collaborators(catalog)
         if nodes is None and catalog.source == "musicbrainz" and catalog.source_id:
-            http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
+            http = httpx.Client(
+                timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"}
+            )
             try:
-                nodes = records.store_collaborators(catalog, providers.musicbrainz_collaborators(http, catalog.source_id))
+                nodes = records.store_collaborators(
+                    catalog, providers.musicbrainz_collaborators(http, catalog.source_id)
+                )
             except Exception:
                 nodes = records.store_collaborators(catalog, [])
             finally:

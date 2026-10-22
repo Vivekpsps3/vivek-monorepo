@@ -113,6 +113,76 @@ export function draftKey(entryId) {
   return `media-review-draft:${entryId}`;
 }
 
+const LIBRARY_SORTS = new Set(["activity", "added", "rating", "release", "title"]);
+const LIBRARY_KINDS = new Set(["movie", "tv", "book", "artist", "album", "track", "game"]);
+const LIBRARY_STATUSES = new Set(["want", "anticipating", "in_progress", "completed", "paused", "dropped"]);
+
+export function progressUnits(kind) {
+  if (kind === "book") return [{ value: "page", label: "Page" }, { value: "percent", label: "Percent" }];
+  return [{ value: "percent", label: "Percent" }, { value: "hour", label: "Hours" }];
+}
+
+export function progressPreview(value, unit) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (unit === "page") return `p. ${text}`;
+  if (unit === "percent") return `${text}%`;
+  if (unit === "hour") return `${text} h`;
+  if (unit === "episode") return `Episode ${text}`;
+  return text;
+}
+
+/**
+ * One draft key per entry, shared by every tab. `base` is the server
+ * review_updated_at the draft started from, not the client clock.
+ * The draft is shown only while that base still matches. Otherwise the server
+ * text stays, and the caller can offer to restore the draft.
+ */
+export function chooseReview(serverReview, serverUpdatedAt, draft) {
+  const server = serverReview ?? "";
+  const unchanged = !draft || typeof draft.text !== "string" || draft.text === "" || draft.text === server;
+  if (unchanged) return { text: server, restore: false };
+  const base = Object.prototype.hasOwnProperty.call(draft, "base") ? (draft.base ?? "") : null;
+  const serverBase = serverUpdatedAt ?? "";
+  if (base !== null && String(base) === String(serverBase)) return { text: draft.text, restore: false };
+  return { text: server, restore: true };
+}
+
+export function normalizeLibraryQuery(search) {
+  const params = new URLSearchParams(search);
+  let changed = false;
+  let droppedSort = false;
+  const sort = params.get("sort");
+  if (sort != null && sort !== "") {
+    const normalized = sort.toLowerCase();
+    if (!LIBRARY_SORTS.has(normalized)) {
+      params.delete("sort");
+      changed = true;
+      droppedSort = true;
+    } else if (normalized !== sort) {
+      params.set("sort", normalized);
+      changed = true;
+    }
+  }
+  const kind = params.get("kind");
+  if (kind != null && kind !== "" && !LIBRARY_KINDS.has(kind)) {
+    params.delete("kind");
+    changed = true;
+  }
+  const status = params.get("status");
+  if (status != null && status !== "" && !LIBRARY_STATUSES.has(status)) {
+    params.delete("status");
+    changed = true;
+  }
+  return { params, changed, droppedSort };
+}
+
+export function coverImage(url) {
+  const safe = safeUrl(url);
+  if (!safe) return "";
+  return `<img alt="" src="${escapeHtml(safe)}" width="300" height="300" loading="lazy" decoding="async">`;
+}
+
 export function monthLabel(month) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
   if (!match) return "";

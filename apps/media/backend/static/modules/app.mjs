@@ -1,5 +1,9 @@
 import { api, loginHref } from "./api.mjs";
+import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
+import { createKeyedFetch, createSequence } from "./guard.mjs";
 import {
+  chooseReview,
+  coverImage,
   dayLabel,
   draftKey,
   escapeHtml as esc,
@@ -8,6 +12,9 @@ import {
   kindLabel,
   monthCells,
   monthLabel,
+  normalizeLibraryQuery,
+  progressPreview,
+  progressUnits,
   ratingText,
   releaseLabel,
   seasonLabel,
@@ -20,8 +27,11 @@ import {
 
 const app = document.querySelector("#app");
 const notice = document.querySelector("#notice");
+const routeLoads = createSequence();
+const searchLoads = createKeyedFetch();
 let searchResults = [];
 let quickIndex = -1;
+let progressChain = Promise.resolve();
 
 function route() {
   const raw = location.hash.replace(/^#/, "") || "/";
@@ -43,6 +53,7 @@ function route() {
 function setNotice(message, kind = "status") {
   notice.textContent = message || "";
   notice.dataset.kind = kind;
+  notice.setAttribute("role", kind === "alert" ? "alert" : "status");
 }
 
 function fail(error) {
@@ -64,11 +75,12 @@ function poster(item) {
 }
 
 function card(item) {
+  const progress = item.progress_label ? ` · ${item.progress_label}` : "";
   return `<a class="card" href="#/item/${item.id}">
     <span class="poster">${poster(item)}</span>
     <span class="card-title">${esc(item.title)}</span>
     <span class="meta">${esc([kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · "))}</span>
-    <span class="meta">${esc(statusLabel(item.kind, item.status))} · ${esc(ratingText(item.rating))}</span>
+    <span class="meta">${esc(`${statusLabel(item.kind, item.status)} · ${ratingText(item.rating)}${progress}`)}</span>
   </a>`;
 }
 
@@ -90,8 +102,9 @@ function setTheme(choice) {
   syncTheme();
 }
 
-async function viewHome() {
-  const summary = await api("/api/summary");
+async function viewHome(ticket) {
+  const summary = await api("/api/summary", { signal: ticket.signal });
+  if (!ticket.isCurrent()) return;
   app.innerHTML = `
     <section class="hero">
       <div>
@@ -110,10 +123,14 @@ async function viewHome() {
   `;
 }
 
-async function viewCalendar(params) {
+async function viewCalendar(params, ticket) {
   const requested = params.get("month") || "";
-  const query = requested ? `?month=${encodeURIComponent(requested)}` : "";
-  const data = await api(`/api/calendar${query}`);
+  const query = new URLSearchParams();
+  if (requested) query.set("month", requested);
+  query.set("tz", browserTimeZone());
+  const data = await api(`/api/calendar?${query}`, { signal: ticket.signal });
+  if (!ticket.isCurrent()) return;
+  const today = localTodayIso();
   const label = monthLabel(data.month) || "Calendar";
   const [year] = String(data.month || "").split("-");
   const byDay = new Map((data.days || []).map(day => [day.date, day.events || []]));
@@ -124,9 +141,10 @@ async function viewCalendar(params) {
   const grid = cells.map(day => {
     if (!day) return `<div class="cal-day is-outside"></div>`;
     const events = byDay.get(day) || [];
-    const today = day === data.today ? " is-today" : "";
+    const todayClass = day === today ? " is-today" : "";
+    const current = day === today ? ` aria-current="date"` : "";
     const chips = events.map(event => eventChip(event, true)).join("");
-    return `<div class="cal-day${today}"><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${chips}</div>`;
+    return `<div class="cal-day${todayClass}"${current}><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${chips}</div>`;
   }).join("");
   const agendaDays = (data.days || []).filter(day => (day.events || []).length);
   const agenda = agendaDays.length
@@ -222,7 +240,7 @@ function reviewSection(items) {
   return `<section><h2>Recent notes</h2><ul class="plain">${rows}</ul></section>`;
 }
 
-async function viewLibrary(params) {
+async function viewLibrary(params, ticket) {
   const kind = params.get("kind") || "";
   const status = params.get("status") || "";
   const q = params.get("q") || "";
@@ -233,9 +251,10 @@ async function viewLibrary(params) {
   if (q) query.set("q", q);
   query.set("sort", sort);
   const [payload, summary] = await Promise.all([
-    api(`/api/library?${query}`),
-    api("/api/summary"),
+    api(`/api/library?${query}`, { signal: ticket.signal }),
+    api("/api/summary", { signal: ticket.signal }),
   ]);
+  if (!ticket.isCurrent()) return;
   const resume = (!kind || kind === "tv") ? continueItem(summary.next_episodes) : null;
   const kinds = ["", "movie", "tv", "book", "artist", "album", "track", "game"].map(value => ({
     value,
@@ -252,8 +271,16 @@ async function viewLibrary(params) {
       { value: "dropped", label: "Dropped" },
     );
   }
+  const sorts = [
+    { value: "activity", label: "Recently active" },
+    { value: "added", label: "Recently added" },
+    { value: "title", label: "Title A–Z" },
+    { value: "rating", label: "Your score" },
+    { value: "release", label: "Release year" },
+  ];
   app.innerHTML = `
     <section class="hero"><div><p class="eyebrow">Library</p><h1>Saved</h1></div></section>
+    <label class="sort-field">Sort <select id="library-sort" data-library-sort>${options(sorts, sort)}</select></label>
     ${continuePoint(resume)}
     <div class="status-row">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind: item.value, status, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
     <div class="status-row">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind, status: item.value, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
@@ -315,16 +342,22 @@ async function runSearch() {
   if (!input || !box) return;
   const q = input.value.trim();
   if (q.length < 2) {
+    searchLoads.start("");
     box.innerHTML = "";
     return;
   }
+  const ticket = searchLoads.start(`${q}\u0000${kind}`);
   box.innerHTML = `<p class="quiet" role="status">Searching…</p>`;
   try {
-    const payload = await api(`/api/search?${new URLSearchParams({ q, kind })}`);
-    if (document.querySelector("#search-q")?.value.trim() !== q) return;
+    const payload = await api(`/api/search?${new URLSearchParams({ q, kind })}`, { signal: ticket.signal });
+    if (!ticket.matches()) return;
+    const liveQ = document.querySelector("#search-q")?.value.trim() || "";
+    const liveKind = document.querySelector("#search-kind")?.value || "";
+    if (`${liveQ}\u0000${liveKind}` !== `${q}\u0000${kind}`) return;
     searchResults = payload.results;
     box.innerHTML = renderResults(payload);
   } catch (error) {
+    if (error?.name === "AbortError" || !ticket.matches()) return;
     fail(error);
     box.innerHTML = `<p class="quiet" role="alert">${esc(error.message)}</p><p class="quiet"><a href="#/new">Add it manually</a></p>`;
   }
@@ -364,8 +397,9 @@ function chooseSeason(entry, forcedSeason) {
   return seasons[0]?.season_number ?? null;
 }
 
-async function viewItem(id, forcedSeason = null) {
-  const entry = await api(`/api/entries/${id}`);
+async function viewItem(id, ticket, forcedSeason = null) {
+  const entry = await api(`/api/entries/${id}`, { signal: ticket.signal });
+  if (!ticket.isCurrent()) return;
   const seasonNumber = entry.kind === "tv" ? chooseSeason(entry, forcedSeason) : null;
   if (entry.kind === "tv" && seasonNumber != null) {
     const desired = `#/item/${id}?season=${seasonNumber}`;
@@ -373,8 +407,7 @@ async function viewItem(id, forcedSeason = null) {
       history.replaceState(null, "", `${location.pathname}${location.search}${desired}`);
     }
   }
-  const draft = readDraft(id);
-  const review = draft ?? entry.review ?? "";
+  const review = chooseReview(entry.review, entry.review_updated_at, readDraftRecord(id));
   const progress = entry.kind === "book" || entry.kind === "game";
   app.innerHTML = `
     <article class="detail">
@@ -395,8 +428,9 @@ async function viewItem(id, forcedSeason = null) {
             <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" aria-pressed="${entry.favorite ? "true" : "false"}">Favorite</button>
             <button type="button" class="flag${entry.anticipated ? " is-on" : ""}" data-flag="anticipated" aria-pressed="${entry.anticipated ? "true" : "false"}">Soon</button>
           </div>
-          <textarea name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="3" aria-label="Note">${esc(review)}</textarea>
-          ${progress ? `<input name="progress_value" data-progress="${entry.id}" data-unit="${esc(entry.progress_unit || "percent")}" inputmode="decimal" value="${entry.progress_value ?? ""}" aria-label="Progress">` : ""}
+          <textarea name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="3" aria-label="Note">${esc(review.text)}</textarea>
+          ${review.restore ? `<p class="meta"><button type="button" data-restore-note="${entry.id}">Restore unsaved note</button></p>` : ""}
+          ${progress ? progressField(entry) : ""}
         </div>
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
         ${experienceBlock(entry)}
@@ -404,12 +438,54 @@ async function viewItem(id, forcedSeason = null) {
       </div>
     </article>
   `;
-  loadWeb(entry);
+  const note = app.querySelector("textarea[data-review]");
+  if (note instanceof HTMLTextAreaElement) {
+    note.dataset.saved = entry.review ?? "";
+    note.dataset.reviewBase = entry.review_updated_at ?? "";
+  }
+  loadWeb(entry, ticket);
 }
 
-function progressUnits(kind) {
-  if (kind === "book") return [{ value: "page", label: "Pages" }, { value: "percent", label: "Percent" }];
-  return [{ value: "percent", label: "Percent" }, { value: "hour", label: "Hours" }];
+function progressField(entry) {
+  const units = progressUnits(entry.kind);
+  const serverUnit = units.some(item => item.value === entry.progress_unit) ? entry.progress_unit : units[0].value;
+  const serverValue = entry.progress_value ?? "";
+  const preview = progressPreview(serverValue, serverUnit);
+  return `<div class="progress-field">
+    <label for="progress">Progress</label>
+    <div class="progress-controls">
+      <input id="progress" name="progress_value" type="text" inputmode="decimal" autocomplete="off" data-progress="${entry.id}" data-saved="${esc(`${serverValue}|${serverUnit}`)}" value="${esc(serverValue)}" aria-invalid="false" aria-describedby="progress-help progress-status">
+      <select id="progress-unit" aria-label="Unit" data-progress-unit="${entry.id}">${units.map(item => `<option value="${esc(item.value)}"${item.value === serverUnit ? " selected" : ""}>${esc(item.label)}</option>`).join("")}</select>
+    </div>
+    <p id="progress-help" class="meta">${esc(preview)}</p>
+    <p id="progress-status" class="progress-status" role="status"></p>
+    ${progressDraftChoice(entry, serverValue, serverUnit)}
+  </div>`;
+}
+
+function offeredUnit(select, preferred) {
+  const values = select instanceof HTMLSelectElement
+    ? [...select.options].map(option => option.value).filter(Boolean)
+    : [];
+  if (preferred && values.includes(preferred)) return preferred;
+  if (select instanceof HTMLSelectElement && select.value && values.includes(select.value)) return select.value;
+  return values[0] || "";
+}
+
+function progressDraftChoice(entry, serverValue, serverUnit) {
+  const draft = readProgressDraft(entry.id);
+  if (!draft) return "";
+  const units = progressUnits(entry.kind);
+  const draftUnit = units.some(item => item.value === draft.unit) ? draft.unit : serverUnit;
+  const serverKey = `${serverValue}|${serverUnit}`;
+  if (`${draft.value}|${draftUnit}` === serverKey) {
+    clearProgressDraft(entry.id);
+    return "";
+  }
+  const preview = progressPreview(draft.value, draftUnit) || draft.value;
+  const serverPreview = progressPreview(serverValue, serverUnit) || String(serverValue || "cleared");
+  const elsewhere = draft.base !== serverKey ? ` Saved elsewhere since: ${esc(serverPreview)}.` : "";
+  return `<p id="progress-draft" class="progress-draft">Progress wasn't saved (${esc(preview)}).${elsewhere} <button type="button" data-restore-progress="${entry.id}">Restore</button> <button type="button" data-discard-progress="${entry.id}">Discard</button></p>`;
 }
 
 function externalRatings(rows) {
@@ -463,8 +539,9 @@ function showEpisodes(entry, seasonNumber) {
   </section>`;
 }
 
-async function viewEpisode(entryId, episodeId) {
-  const entry = await api(`/api/entries/${entryId}`);
+async function viewEpisode(entryId, episodeId, ticket) {
+  const entry = await api(`/api/entries/${entryId}`, { signal: ticket.signal });
+  if (!ticket.isCurrent()) return;
   const episode = (entry.show?.episodes || []).find(item => item.id === episodeId);
   if (!episode) {
     app.innerHTML = `<p class="quiet">That episode is not on this show.</p>`;
@@ -486,7 +563,8 @@ function musicBlock(entry) {
   const music = entry.music || { albums: [], partial: false };
   const albums = music.albums.map(album => `
     <li class="cover" data-album-row data-id="${entry.id}" data-album="${album.id}">
-      <button type="button" class="cover-face" data-album-open style="${album.artwork_url ? `background-image:url(${esc(album.artwork_url)})` : ""}" aria-label="${esc(album.title)}">
+      <button type="button" class="cover-face" data-album-open aria-label="${esc(album.title)}">
+        ${coverImage(album.artwork_url)}
         <span>${esc(album.title)}</span>
       </button>
       ${scoreMarks(album.rating, album.title)}
@@ -528,10 +606,11 @@ function paintWeb(center, nodes = webNodes) {
   box.innerHTML = `<svg viewBox="0 0 320 240" role="img" aria-label="Connections"><g>${marks}</g><circle cx="${cx}" cy="${cy}" r="26"></circle><text x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(String(center).slice(0, 16))}</text></svg>`;
 }
 
-async function loadWeb(entry) {
+async function loadWeb(entry, ticket) {
   if (entry.kind !== "artist" && entry.kind !== "movie" && entry.kind !== "tv") return;
   try {
-    const web = await api(`/api/entries/${entry.id}/web`);
+    const web = await api(`/api/entries/${entry.id}/web`, { signal: ticket?.signal });
+    if (ticket && !ticket.isCurrent()) return;
     const current = route();
     if (current.name !== "item" || current.id !== entry.id) return;
     paintWeb(entry.title, web.nodes || []);
@@ -560,13 +639,62 @@ function releaseForm(entry) {
     </form>`;
 }
 
-function readDraft(id) {
+function readDraftRecord(id) {
   try {
-    const value = localStorage.getItem(draftKey(id));
-    return value;
+    const raw = localStorage.getItem(draftKey(id));
+    if (!raw || !raw.startsWith("{")) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.text !== "string") return null;
+    const record = { text: parsed.text, at: typeof parsed.at === "string" ? parsed.at : "" };
+    if (Object.prototype.hasOwnProperty.call(parsed, "base")) record.base = parsed.base ?? "";
+    return record;
   } catch {
     return null;
   }
+}
+
+function writeDraft(id, text, base) {
+  try {
+    localStorage.setItem(draftKey(id), JSON.stringify({
+      text,
+      at: new Date().toISOString(),
+      base: base ?? "",
+    }));
+  } catch { /* private mode */ }
+}
+
+function progressDraftKey(id) {
+  return `media-progress-draft:${id}`;
+}
+
+function readProgressDraft(id) {
+  try {
+    const raw = localStorage.getItem(progressDraftKey(id));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.value !== "string" || typeof parsed.unit !== "string") return null;
+    return {
+      value: parsed.value,
+      unit: parsed.unit,
+      base: typeof parsed.base === "string" ? parsed.base : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeProgressDraft(id, value, unit, base) {
+  try {
+    localStorage.setItem(progressDraftKey(id), JSON.stringify({
+      value,
+      unit,
+      base: base ?? "",
+    }));
+  } catch { /* private mode */ }
+}
+
+function clearProgressDraft(id) {
+  try { localStorage.removeItem(progressDraftKey(id)); } catch { /* ignore */ }
 }
 
 function clearDraft(id) {
@@ -610,26 +738,45 @@ function keepButtonClick(event, target) {
   if (button && button.getAttribute("type") !== "submit") event.preventDefault();
 }
 
+function settleLibraryHash() {
+  const current = route();
+  if (current.name !== "library") return { droppedSort: false };
+  const normalized = normalizeLibraryQuery(current.params);
+  if (!normalized.changed) return { droppedSort: false };
+  const query = normalized.params.toString();
+  const hash = query ? `#/library?${query}` : "#/library";
+  history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+  return { droppedSort: normalized.droppedSort };
+}
+
 async function render() {
+  const progress = document.querySelector("#progress");
+  if (progress instanceof HTMLInputElement && progress.dataset.dirty === "true") saveProgress();
+  searchLoads.start("");
+  const ticket = routeLoads.start();
+  const libraryNotice = settleLibraryHash();
   document.querySelectorAll("[data-nav]").forEach(link => {
     link.setAttribute("aria-current", link.dataset.nav === route().name ? "page" : "false");
   });
   syncTheme();
+  if (libraryNotice.droppedSort) setNotice("That sort isn't available. Showing recently active.");
   const current = route();
   const scrolling = document.scrollingElement;
   const scrollY = scrolling ? scrolling.scrollTop : 0;
   const same = app.dataset.view === location.hash;
   try {
-    if (current.name === "home") await viewHome();
-    else if (current.name === "calendar") await viewCalendar(current.params);
-    else if (current.name === "library") await viewLibrary(current.params);
+    if (current.name === "home") await viewHome(ticket);
+    else if (current.name === "calendar") await viewCalendar(current.params, ticket);
+    else if (current.name === "library") await viewLibrary(current.params, ticket);
     else if (current.name === "search") viewSearch(current.params);
     else if (current.name === "new") viewNew(current.params);
-    else if (current.name === "episode") await viewEpisode(current.id, current.episodeId);
-    else await viewItem(current.id, current.name === "season" ? current.seasonNumber : null);
+    else if (current.name === "episode") await viewEpisode(current.id, current.episodeId, ticket);
+    else await viewItem(current.id, ticket, current.name === "season" ? current.seasonNumber : null);
+    if (!ticket.isCurrent()) return;
     app.dataset.view = location.hash;
     if (scrolling) scrolling.scrollTop = same ? scrollY : 0;
   } catch (error) {
+    if (error?.name === "AbortError" || !ticket.isCurrent()) return;
     app.innerHTML = `<p class="quiet" role="alert">${esc(error.message || "Could not load this page.")}</p>`;
     fail(error);
   }
@@ -794,6 +941,48 @@ document.addEventListener("click", async event => {
     keepButtonClick(event, target);
     const tracks = cover.parentElement?.querySelector(".cover-tracks");
     if (tracks) tracks.hidden = !tracks.hidden;
+    return;
+  }
+  const restore = target.closest("[data-restore-note]");
+  if (restore) {
+    keepButtonClick(event, target);
+    const draft = readDraftRecord(restore.getAttribute("data-restore-note"));
+    const box = document.querySelector("textarea[data-review]");
+    if (draft && box instanceof HTMLTextAreaElement) {
+      box.value = draft.text;
+      box.focus();
+    }
+    return;
+  }
+  const restoreProgress = target.closest("[data-restore-progress]");
+  if (restoreProgress) {
+    keepButtonClick(event, target);
+    const draft = readProgressDraft(restoreProgress.getAttribute("data-restore-progress"));
+    const input = document.querySelector("#progress");
+    const unit = document.querySelector("#progress-unit");
+    if (draft && input instanceof HTMLInputElement) {
+      const chosen = offeredUnit(unit, draft.unit);
+      if (unit instanceof HTMLSelectElement && chosen) unit.value = chosen;
+      input.value = draft.value;
+      const help = document.querySelector("#progress-help");
+      if (help) help.textContent = progressPreview(input.value, chosen);
+      const key = `${input.value.trim()}|${chosen}`;
+      if (input.dataset.saved === key) {
+        clearProgressDraft(restoreProgress.getAttribute("data-restore-progress"));
+        document.querySelector("#progress-draft")?.remove();
+      } else {
+        input.dataset.dirty = "true";
+      }
+      input.focus();
+    }
+    return;
+  }
+  const discardProgress = target.closest("[data-discard-progress]");
+  if (discardProgress) {
+    keepButtonClick(event, target);
+    clearProgressDraft(discardProgress.getAttribute("data-discard-progress"));
+    document.querySelector("#progress-draft")?.remove();
+    document.querySelector("#progress")?.focus();
     return;
   }
   const button = target.closest("[data-action]");
@@ -996,21 +1185,43 @@ document.addEventListener("submit", async event => {
 let searchTimer = 0;
 document.addEventListener("focusout", async event => {
   const box = event.target;
+  if (box instanceof HTMLInputElement && box.dataset.progress) {
+    if (box.dataset.dirty === "true") await saveProgress();
+    return;
+  }
   if (!(box instanceof HTMLTextAreaElement) || !box.dataset.review) return;
+  if (box.value === (box.dataset.saved ?? "")) return;
+  const id = box.dataset.review;
+  const sent = box.value;
   try {
-    await api(`/api/entries/${box.dataset.review}`, {
+    const updated = await api(`/api/entries/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ review: box.value }),
+      body: JSON.stringify({ review: sent, review_base: box.dataset.reviewBase ?? "" }),
     });
+    if (readDraftRecord(id)?.text === sent) clearDraft(id);
+    if (box.isConnected) {
+      box.dataset.saved = sent;
+      box.dataset.reviewBase = updated?.review_updated_at || "";
+    }
   } catch (error) {
+    if (error?.status === 409) {
+      setNotice("This note changed in another tab.", "alert");
+      return;
+    }
     fail(error);
   }
 });
 
 document.addEventListener("input", event => {
   const target = event.target;
-  if (target instanceof HTMLTextAreaElement && target.dataset.draft) {
-    try { localStorage.setItem(target.dataset.draft, target.value); } catch { /* ignore */ }
+  if (target instanceof HTMLTextAreaElement && target.dataset.review) {
+    writeDraft(target.dataset.review, target.value, target.dataset.reviewBase ?? "");
+  }
+  if (target instanceof HTMLInputElement && target.id === "progress") {
+    target.dataset.dirty = "true";
+    const help = document.querySelector("#progress-help");
+    const unit = document.querySelector("#progress-unit");
+    if (help) help.textContent = progressPreview(target.value, unit instanceof HTMLSelectElement ? unit.value : "");
   }
   if (target instanceof HTMLInputElement && target.id === "search-q") {
     window.clearTimeout(searchTimer);
@@ -1020,6 +1231,21 @@ document.addEventListener("input", event => {
 
 document.addEventListener("change", async event => {
   const target = event.target;
+  if (target instanceof HTMLSelectElement && target.id === "progress-unit") {
+    const help = document.querySelector("#progress-help");
+    const input = document.querySelector("#progress");
+    if (help && input instanceof HTMLInputElement) help.textContent = progressPreview(input.value, target.value);
+    await saveProgress();
+    return;
+  }
+  if (target instanceof HTMLSelectElement && target.dataset.librarySort != null) {
+    const params = new URLSearchParams(route().params);
+    if (!target.value || target.value === "activity") params.delete("sort");
+    else params.set("sort", target.value);
+    const query = params.toString();
+    location.hash = query ? `#/library?${query}` : "#/library";
+    return;
+  }
   if (target instanceof HTMLSelectElement && target.id === "search-kind") runSearch();
   if (target instanceof HTMLInputElement && target.name === "rating") {
     const track = target.closest("[data-track-row]");
@@ -1067,7 +1293,109 @@ async function saveMusicScore(row, kind, itemId, notice, input) {
   }
 }
 
+function progressSnapshot() {
+  const input = document.querySelector("#progress");
+  const unit = document.querySelector("#progress-unit");
+  if (!(input instanceof HTMLInputElement) || !input.dataset.progress) return null;
+  return {
+    input,
+    id: input.dataset.progress,
+    value: input.value.trim(),
+    unit: offeredUnit(unit, "") || "percent",
+  };
+}
+
+function setProgressStatus(message, failed = false) {
+  const status = document.querySelector("#progress-status");
+  const input = document.querySelector("#progress");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("is-error", failed);
+  status.setAttribute("role", failed ? "alert" : "status");
+  if (input) input.setAttribute("aria-invalid", failed ? "true" : "false");
+  if (message === "Saved") {
+    window.setTimeout(() => {
+      if (status.isConnected && status.textContent === "Saved") status.textContent = "";
+    }, 2000);
+  }
+}
+
+function progressProblem(value, unit) {
+  if (value === "") return "";
+  if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) return "Progress must be a number.";
+  if (Number(value) < 0) return "Progress must be zero or more.";
+  if (unit === "percent" && Number(value) > 100) return "Percent progress is between 0 and 100.";
+  return "";
+}
+
+let progressFailure = "";
+
+function failProgress(payload, message, keepDraft = true) {
+  if (keepDraft) {
+    writeProgressDraft(payload.id, payload.value, payload.unit, payload.input?.dataset.saved || "");
+  }
+  if (payload.input?.isConnected) {
+    progressFailure = "Progress wasn't saved";
+    setProgressStatus(message || progressFailure, true);
+    return;
+  }
+  setNotice("Progress wasn't saved", "alert");
+  progressFailure = "";
+}
+
+function saveProgress() {
+  const snap = progressSnapshot();
+  if (!snap) return progressChain;
+  const key = `${snap.value}|${snap.unit}`;
+  if (snap.input.dataset.saved === key) return progressChain;
+  const payload = { id: snap.id, value: snap.value, unit: snap.unit, key, input: snap.input };
+  const task = progressChain.then(() => commitProgress(payload));
+  progressChain = task.catch(() => {});
+  return task;
+}
+
+async function commitProgress(payload) {
+  if (payload.input.isConnected && payload.input.dataset.saved === payload.key) return;
+  const problem = progressProblem(payload.value, payload.unit);
+  if (problem) {
+    failProgress(payload, problem, false);
+    return;
+  }
+  try {
+    await api(`/api/entries/${payload.id}`, {
+      method: "PATCH",
+      keepalive: true,
+      signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({
+        progress_value: payload.value === "" ? null : payload.value,
+        progress_unit: payload.unit,
+      }),
+    });
+    clearProgressDraft(payload.id);
+    progressFailure = "";
+    document.querySelector("#progress-draft")?.remove();
+    if (payload.input.isConnected) {
+      payload.input.dataset.saved = payload.key;
+      delete payload.input.dataset.dirty;
+      setProgressStatus("Saved");
+    }
+  } catch (error) {
+    if (error?.status === 401) {
+      fail(error);
+      return;
+    }
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    const unreachable = timedOut || !error?.status;
+    failProgress(payload, unreachable ? "Progress wasn't saved" : (error?.message || "Progress wasn't saved"));
+  }
+}
+
 document.addEventListener("keydown", event => {
+  if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.dataset.progress) {
+    event.preventDefault();
+    saveProgress();
+    return;
+  }
   if (event.key !== "ArrowDown" || document.activeElement?.id !== "search-q") return;
   const first = document.querySelector("#search-results button, #search-results a");
   if (first) {
@@ -1082,5 +1410,27 @@ try {
   });
 } catch { /* older browsers */ }
 
-window.addEventListener("hashchange", () => { setNotice(""); render(); });
+function paintToday() {
+  const today = localTodayIso();
+  document.querySelectorAll(".cal-day").forEach(cell => {
+    const time = cell.querySelector("time");
+    const on = Boolean(time && time.getAttribute("datetime") === today);
+    cell.classList.toggle("is-today", on);
+    if (on) cell.setAttribute("aria-current", "date");
+    else cell.removeAttribute("aria-current");
+  });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") paintToday();
+});
+
+window.addEventListener("hashchange", () => {
+  setNotice("");
+  render().then(() => {
+    if (!progressFailure) return;
+    setNotice(progressFailure, "alert");
+    progressFailure = "";
+  });
+});
 render();

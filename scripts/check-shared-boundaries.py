@@ -12,7 +12,9 @@ SKIP_DIRS = {"node_modules", ".angular", "dist", "coverage", ".venv", "__pycache
 IMPORT_RE = re.compile(
     r"(?:\bfrom\s+|\bimport\s*(?:\(\s*)?)(?:['\"]([^'\"]+)['\"]|([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*))"
 )
-GENERIC_UI_RE = re.compile(r"selector\s*:\s*['\"]ui-(?:badge|confirm-dialog|data-table|dialog|select|skeleton)['\"]")
+GENERIC_UI_RE = re.compile(
+    r"selector\s*:\s*['\"]ui-(?:badge|confirm-dialog|data-table|dialog|select|skeleton)['\"]"
+)
 SINK_SUFFIXES = {".ts", ".mts", ".js", ".mjs", ".html"}
 SINK_RE = re.compile(
     r"bypass(?:Security|Sanitization)Trust|innerHTML|outerHTML|insertAdjacentHTML|document\.write"
@@ -64,17 +66,27 @@ def main() -> int:
             module = match.group(1) or match.group(2)
             target = import_target(package_file, module)
             if target and app_name(target):
-                errors.append(f"shared package imports app code: {package_file.relative_to(ROOT)} -> {module}")
+                errors.append(
+                    f"shared package imports app code: {package_file.relative_to(ROOT)} -> {module}"
+                )
 
     app_roots = [path for path in (ROOT / "apps").iterdir() if path.is_dir()]
     for app_root in app_roots:
         for source in source_files(app_root):
             source_app = app_name(source)
+            # The Media browser harness wires site redirects. It is not shipped.
+            if source.is_relative_to(ROOT / "apps/media/e2e"):
+                continue
             for match in IMPORT_RE.finditer(source.read_text(encoding="utf-8", errors="replace")):
                 module = match.group(1) or match.group(2)
                 target = import_target(source, module)
                 target_app = app_name(target) if target else None
-                if target_app and source_app and target_app != source_app and source_app != "server":
+                if (
+                    target_app
+                    and source_app
+                    and target_app != source_app
+                    and source_app != "server"
+                ):
                     errors.append(
                         f"cross-app source import: {source.relative_to(ROOT)} -> {module} (apps/{target_app})"
                     )
@@ -105,7 +117,9 @@ def main() -> int:
         for source in source_files(finance_shared):
             contents = source.read_text(encoding="utf-8", errors="replace")
             if GENERIC_UI_RE.search(contents):
-                errors.append(f"generic UI selector reintroduced under Finance shared code: {source.relative_to(ROOT)}")
+                errors.append(
+                    f"generic UI selector reintroduced under Finance shared code: {source.relative_to(ROOT)}"
+                )
 
     if errors:
         print("check-shared-boundaries: FAILED")

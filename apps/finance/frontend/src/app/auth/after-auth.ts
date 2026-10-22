@@ -86,7 +86,8 @@ export function continueAfterAuth(router: Router): Promise<boolean> {
     const path = decodeURIComponent(url.pathname).replace(/\/{2,}/g, '/');
     if (
       path === '/travel' || path.startsWith('/travel/') ||
-      path === '/media' || path.startsWith('/media/')
+      path === '/media' || path.startsWith('/media/') ||
+      path === '/hub/media' || path.startsWith('/hub/media/')
     ) {
       const encodedPath = path === '/travel' || path === '/media'
         ? `${path}/`
