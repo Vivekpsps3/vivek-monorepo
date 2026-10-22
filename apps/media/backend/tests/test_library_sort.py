@@ -87,6 +87,7 @@ def test_same_review_text_with_a_stale_base_is_a_noop(client):
     body = replay.json()
     assert body["review"] == "mine"
     assert body["review_updated_at"] == saved_at
+    assert body["updated_at"] == first.json()["updated_at"]
     blank = client.patch(
         f"/api/entries/{entry['id']}",
         json={"review": "", "review_base": saved_at},
@@ -100,6 +101,32 @@ def test_same_review_text_with_a_stale_base_is_a_noop(client):
     assert again.status_code == 200, again.text
     assert again.json()["review"] is None
     assert again.json()["review_updated_at"] == cleared_at
+
+
+def test_identical_review_does_not_skip_the_base_check_for_other_fields(client):
+    entry = _add(client, "Dune")
+    first = client.patch(
+        f"/api/entries/{entry['id']}",
+        json={"review": "mine", "status": "want"},
+    )
+    assert first.status_code == 200, first.text
+    base = first.json()["review_updated_at"]
+    stale = client.patch(
+        f"/api/entries/{entry['id']}",
+        json={"review": "mine", "review_base": "2000-01-01T00:00:00+00:00", "status": "paused"},
+    )
+    assert stale.status_code == 409, stale.text
+    kept = client.get(f"/api/entries/{entry['id']}").json()
+    assert kept["status"] == "want"
+    assert kept["review"] == "mine"
+    moved = client.patch(
+        f"/api/entries/{entry['id']}",
+        json={"review": "mine", "review_base": base, "status": "paused"},
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["status"] == "paused"
+    assert moved.json()["review_updated_at"] == base
+    assert moved.json()["updated_at"] != first.json()["updated_at"]
 
 
 def test_progress_survives_a_reload(client):

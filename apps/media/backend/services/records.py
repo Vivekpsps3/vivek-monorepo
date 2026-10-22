@@ -388,15 +388,22 @@ def progress_number(value) -> float | None:
     return number
 
 
+_REVIEW_KEYS = {"review", "review_base"}
+
+
 def assert_review_base(entry: UserEntry, body: dict) -> None:
     """409 when a note save started from a review the server no longer has.
 
-    The same text is a no-op success. A client can time out after the server
-    has already stored the note, then retry with the base it started from.
+    An identical review, and nothing else, is a no-op success: a client can
+    time out after the server stored the note, then retry with the base it
+    started from. Other fields in the same body are still checked against
+    that base, so a stale note cannot ride along with a status change.
     """
     if "review" not in body or "review_base" not in body:
         return
-    if clean_text(body.get("review"), 20000, "Review") == entry.review:
+    same_review = clean_text(body.get("review"), 20000, "Review") == entry.review
+    other_fields = any(key not in _REVIEW_KEYS for key in body)
+    if same_review and not other_fields:
         return
     current = iso(entry.review_updated_at) or ""
     incoming = body.get("review_base")
@@ -404,9 +411,34 @@ def assert_review_base(entry: UserEntry, body: dict) -> None:
         raise HTTPException(status_code=409, detail="This note changed in another tab.")
 
 
+def _entry_snapshot(entry: UserEntry) -> tuple:
+    catalog = entry.catalog
+    return (
+        entry.status,
+        entry.rating,
+        entry.review,
+        bool(entry.review_spoiler),
+        entry.summary,
+        entry.tags,
+        bool(entry.favorite),
+        bool(entry.anticipated),
+        entry.progress_value,
+        entry.progress_unit,
+        catalog.title,
+        catalog.creator,
+        catalog.year,
+        catalog.overview,
+        catalog.artwork_url,
+    )
+
+
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     assert_review_base(entry, body)
+    before = _entry_snapshot(entry)
     before_review = entry.review
+    records_release = any(
+        key in body for key in ("release_on", "release_precision", "release_status", "releases")
+    )
     if "status" in body:
         entry.status = choice(body.get("status"), STATUSES, "Status")
     if "rating" in body:
@@ -456,7 +488,8 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
         fill_blanks_only=fill_only,
     )
     store_release(db, entry.catalog, body)
-    entry.updated_at = utc_now()
+    if _entry_snapshot(entry) != before or records_release:
+        entry.updated_at = utc_now()
     db.flush()
     return entry
 
