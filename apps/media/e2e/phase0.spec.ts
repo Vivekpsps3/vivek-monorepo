@@ -293,9 +293,13 @@ test('blurring an unchanged note does not overwrite a newer save', async ({ page
   await note.blur();
   await expect(page.locator('#toast-alerts')).toContainText('This note changed in another tab. Your text is kept as a draft.');
   await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
-  await expect(page.locator('#note-status')).toContainText('Not saved. This note changed elsewhere.');
+  await expect(page.locator('#note-status')).toContainText('Not saved. This note changed in another tab.');
   await expect(page.locator('#note-status')).toHaveAttribute('aria-live', 'off');
-  await expect(page.locator('#note-status').getByRole('button', { name: 'Reload' })).toBeVisible();
+  const reload = page.locator('#note-status').getByRole('button', { name: 'Reload' });
+  await expect(reload).toBeVisible();
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+  await expect.poll(async () => (await reload.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await expect(note).toHaveValue('from the stale tab');
   await note.focus();
   await note.fill('still stale');
@@ -303,7 +307,8 @@ test('blurring an unchanged note does not overwrite a newer save', async ({ page
   expect(reviewPatches).toHaveLength(1);
   await expect(note).toHaveValue('still stale');
   await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
-  await page.locator('#toast-alerts').getByRole('button', { name: 'Reload' }).click();
+  await reload.click();
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
   await expect(page.locator('#note-draft')).toContainText('Unsaved note from earlier.');
   await expect(page.locator('#notice')).toHaveCount(0);
   const kept = await request.get(`/media/api/entries/${dune.id}`);
@@ -379,13 +384,20 @@ test('progress stays 120 after a status change re-renders the item', async ({ pa
   const gate = new Promise<void>(resolve => {
     releaseSave = resolve;
   });
+  let holdingProgress = false;
+  let earlyGets = 0;
   await page.route('**/api/entries/**', async route => {
-    if (route.request().method() !== 'PATCH') {
-      await route.continue();
-      return;
+    const entryGet = route.request().method() === 'GET' && /\/api\/entries\/\d+$/.test(route.request().url());
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      if (Object.prototype.hasOwnProperty.call(body, 'progress_value')) {
+        holdingProgress = true;
+        await gate;
+        holdingProgress = false;
+      }
+    } else if (entryGet && holdingProgress) {
+      earlyGets += 1;
     }
-    const body = route.request().postDataJSON() as Record<string, unknown>;
-    if (Object.prototype.hasOwnProperty.call(body, 'progress_value')) await gate;
     await route.continue();
   });
   const progress = page.getByLabel('Progress', { exact: true });
@@ -399,8 +411,15 @@ test('progress stays 120 after a status change re-renders the item', async ({ pa
       return false;
     }
   });
+  const statusDone = page.waitForResponse(response => (
+    response.request().method() === 'PATCH'
+    && (response.request().postData() || '').includes('"status"')
+  ));
   const clicked = status.click();
   await statusSent;
+  await statusDone;
+  await page.evaluate(() => true);
+  expect(earlyGets).toBe(0);
   releaseSave();
   await clicked;
   await expect(progress).toHaveValue('120');
@@ -794,8 +813,21 @@ test('progress can change back to the previous value while a save is in flight',
   const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
   await page.goto(`/media/#/item/${dune.id}`);
   const progress = page.getByLabel('Progress', { exact: true });
+  const seed = (await progress.inputValue()) === '15' ? '16' : '15';
+  const seedSaved = page.waitForResponse(response => {
+    if (response.request().method() !== 'PATCH') return false;
+    try { return String(response.request().postDataJSON()?.progress_value) === seed; } catch { return false; }
+  });
+  await progress.fill(seed);
+  await progress.press('Enter');
+  await seedSaved;
+  const saved120 = page.waitForResponse(response => {
+    if (response.request().method() !== 'PATCH') return false;
+    try { return String(response.request().postDataJSON()?.progress_value) === '120'; } catch { return false; }
+  });
   await progress.fill('120');
   await progress.press('Enter');
+  await saved120;
   await expect(page.locator('#progress-status')).toHaveText('Saved ✓');
   let release: () => void = () => {};
   const gate = new Promise<void>(resolve => { release = resolve; });
@@ -816,7 +848,11 @@ test('progress can change back to the previous value while a save is in flight',
   await sent;
   await progress.fill('120');
   await progress.press('Enter');
+  const landed = page.waitForResponse(response => (
+    response.request().method() === 'PATCH' && (response.request().postData() || '').includes('130')
+  ));
   release();
+  await landed;
   await expect.poll(async () => (await (await request.get(`/media/api/entries/${dune.id}`)).json()).progress_value).toBe(120);
   await expect(progress).toHaveValue('120');
 });
@@ -866,17 +902,15 @@ test('a retry toast stays until it is dismissed', async ({ page, request }) => {
   await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
 });
 
-test('at most three toasts are visible and the newest sits last', async ({ page, request }) => {
+test('the toast cap keeps a persistent toast and evicts an older transient one', async ({ page, request }) => {
   const listed = await request.get('/media/api/library');
   const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
-  let n = 0;
   await page.route('**/api/entries/**', async route => {
     if (route.request().method() === 'PATCH' && (route.request().postData() || '').includes('"review"')) {
-      n += 1;
       await route.fulfill({
         status: 500,
         contentType: 'application/json',
-        body: JSON.stringify({ detail: `Note failed ${n}` }),
+        body: JSON.stringify({ detail: 'Keep this retry' }),
       });
       return;
     }
@@ -884,20 +918,139 @@ test('at most three toasts are visible and the newest sits last', async ({ page,
   });
   await page.goto(`/media/#/item/${dune.id}`);
   const note = page.getByLabel('Note');
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
-    await note.fill(`draft ${attempt}`);
-    await note.blur();
-    await expect(page.locator('#toast-alerts')).toContainText(`Note failed ${attempt}`);
+  await note.fill('cap draft');
+  await note.blur();
+  await expect(page.locator('#toast-alerts')).toContainText('Keep this retry');
+  for (const sort of ['nope', 'bad', 'worse']) {
+    const listedAgain = page.waitForResponse(response => response.url().includes('/api/library') && response.ok());
+    await page.evaluate(value => { location.hash = `#/library?sort=${value}`; }, sort);
+    await listedAgain;
   }
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
+  await expect(page.locator('#toasts .toast')).toHaveCount(2);
   await expect(page.locator('.toast')).toHaveCount(3);
-  await expect(page.locator('#toast-alerts')).not.toContainText('Note failed 1');
-  await page.evaluate(() => { location.hash = '#/library?sort=nope'; });
-  await expect(page.locator('#toasts')).toContainText("That sort isn't available. Showing recently active.");
-  await expect(page.locator('.toast')).toHaveCount(3);
-  await expect(page.locator('#toast-alerts')).not.toContainText('Note failed 2');
+  await expect(page.locator('.toast.is-alert .toast-icon')).toHaveText('⚠');
   const order = await page.locator('.toast').evaluateAll(nodes => nodes
     .map(node => ({ top: node.getBoundingClientRect().top, text: node.textContent || '' }))
     .sort((a, b) => a.top - b.top));
   expect(order[order.length - 1].text).toContain("That sort isn't available");
-  await expect(page.locator('.toast.is-alert .toast-icon').first()).toHaveText('⚠');
+  expect(order[0].text).toContain('Keep this retry');
+});
+
+test('a later progress save retires the persistent retry toast', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  let failed = false;
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      if (Object.prototype.hasOwnProperty.call(body, 'progress_value') && !failed) {
+        failed = true;
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+        return;
+      }
+    }
+    await route.continue();
+  });
+  await page.goto(`/media/#/item/${dune.id}`);
+  const progress = page.getByLabel('Progress', { exact: true });
+  await progress.fill('40');
+  await progress.press('Enter');
+  await expect(page.locator('#toast-alerts')).toContainText("Couldn't save your progress. Try again.");
+  await progress.fill('41');
+  await progress.press('Enter');
+  await expect(page.locator('#progress-status')).toHaveText('Saved ✓');
+  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
+});
+
+test('a same-item render waits for the in-flight note save', async ({ page, request }) => {
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  let releaseNote: () => void = () => {};
+  const gate = new Promise<void>(resolve => { releaseNote = resolve; });
+  let holdingNote = false;
+  let earlyGets = 0;
+  await page.route('**/api/entries/**', async route => {
+    const entryGet = route.request().method() === 'GET' && /\/api\/entries\/\d+$/.test(route.request().url());
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as { review?: string };
+      if (typeof body.review === 'string') {
+        holdingNote = true;
+        await gate;
+        holdingNote = false;
+      }
+    } else if (entryGet && holdingNote) {
+      earlyGets += 1;
+    }
+    await route.continue();
+  });
+  await page.goto(`/media/#/item/${dune.id}`);
+  const note = page.getByLabel('Note');
+  await note.fill('held note');
+  const reviewSent = page.waitForRequest(req => (
+    req.method() === 'PATCH' && (req.postData() || '').includes('held note')
+  ));
+  const started = note.blur();
+  await reviewSent;
+  await page.evaluate(id => localStorage.removeItem(`media-review-draft:${id}`), String(dune.id));
+  const statusDone = page.waitForResponse(response => (
+    response.request().method() === 'PATCH'
+    && (response.request().postData() || '').includes('"status"')
+  ));
+  const clicked = page.getByRole('button', { name: 'Paused' }).click();
+  await statusDone;
+  await page.evaluate(() => true);
+  expect(earlyGets).toBe(0);
+  releaseNote();
+  await clicked;
+  await started;
+  await expect(page.getByLabel('Note')).toHaveValue('held note');
+  await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+});
+
+test('a stalled note save times out and lets the item render', async ({ page, request }) => {
+  test.setTimeout(45_000);
+  const listed = await request.get('/media/api/library');
+  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  await request.patch(`/media/api/entries/${dune.id}`, { data: { favorite: false } });
+  let releaseStall: () => void = () => {};
+  const stall = new Promise<void>(resolve => { releaseStall = resolve; });
+  await page.route('**/api/entries/**', async route => {
+    if (route.request().method() === 'PATCH') {
+      let body: { review?: string } = {};
+      try { body = route.request().postDataJSON() as { review?: string }; } catch { body = {}; }
+      if (typeof body.review === 'string') {
+        await stall;
+        try { await route.abort(); } catch { /* the page already aborted this request */ }
+        return;
+      }
+    }
+    await route.continue();
+  });
+  try {
+    await page.goto(`/media/#/item/${dune.id}`);
+    const note = page.getByLabel('Note');
+    await note.fill('stalled draft');
+    const reviewSent = page.waitForRequest(req => (
+      req.method() === 'PATCH' && (req.postData() || '').includes('"review"')
+    ));
+    await note.blur();
+    await reviewSent;
+    const favoriteSaved = page.waitForResponse(response => {
+      if (response.request().method() !== 'PATCH') return false;
+      try { return response.request().postDataJSON()?.favorite === true; } catch { return false; }
+    });
+    await page.getByRole('button', { name: 'Paused' }).click();
+    await page.getByRole('button', { name: 'Favorite', exact: true }).click();
+    await favoriteSaved;
+    await expect(page.getByRole('button', { name: 'Favorite', exact: true })).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
+    await expect(page.locator('#note-status')).toContainText('Not saved. Try again');
+    await expect(page.locator('#toast-alerts')).toContainText("Can't reach Media. Check your connection and try again.");
+    await expect(page.getByLabel('Note')).toHaveValue('stalled draft');
+    const entry = await (await request.get(`/media/api/entries/${dune.id}`)).json();
+    expect(entry.favorite).toBe(true);
+    expect(entry.review).not.toBe('stalled draft');
+  } finally {
+    releaseStall();
+  }
 });

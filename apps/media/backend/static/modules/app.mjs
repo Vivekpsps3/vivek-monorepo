@@ -1,4 +1,4 @@
-import { api, loginHref } from "./api.mjs";
+import { NETWORK_MESSAGE, api, loginHref } from "./api.mjs";
 import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
 import { createKeyedFetch, createSequence } from "./guard.mjs";
 import {
@@ -51,6 +51,7 @@ let quickIndex = -1;
 let progressChain = Promise.resolve();
 let progressQueuedKey = "";
 let noteChain = Promise.resolve();
+let noteOutcome = null;
 let toastSerial = 0;
 let skeletonTimer = 0;
 
@@ -61,19 +62,34 @@ function toastNodes() {
   ];
 }
 
-function trimToasts() {
-  const live = toastNodes().sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order));
-  while (live.length > 3) live.shift()?.remove();
+function dismissToast(key) {
+  if (!key) return;
+  for (const node of toastNodes()) {
+    if (node.dataset.toastKey === key) node.remove();
+  }
 }
 
-function pushToast({ message, kind = "status", action = null }) {
+function trimToasts() {
+  const live = toastNodes().sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order));
+  while (live.length > 3) {
+    const index = live.findIndex(node => node.dataset.persist !== "true");
+    if (index < 0) break;
+    live[index].remove();
+    live.splice(index, 1);
+  }
+}
+
+function pushToast({ message, kind = "status", action = null, key = "", persist = false }) {
   const region = kind === "alert" ? toastAlerts : toasts;
   if (!region || !message) return;
+  if (key) dismissToast(key);
   const order = ++toastSerial;
   const toast = document.createElement("div");
   toast.className = kind === "alert" ? "toast is-alert" : "toast";
   toast.dataset.order = String(order);
   toast.style.order = String(order);
+  if (key) toast.dataset.toastKey = key;
+  if (persist) toast.dataset.persist = "true";
   if (kind === "alert") {
     const icon = document.createElement("span");
     icon.className = "toast-icon";
@@ -109,9 +125,8 @@ function pushToast({ message, kind = "status", action = null }) {
   toast.append(close);
   region.append(toast);
   trimToasts();
-  const sticky = kind === "alert" && (action?.label === "Retry" || action?.label === "Reload");
   let timer = 0;
-  if (sticky) return;
+  if (persist) return;
   let remaining = action ? TOAST_ACTION_MS : TOAST_MS;
   let started = Date.now();
   timer = window.setTimeout(dismiss, remaining);
@@ -132,7 +147,13 @@ function pushToast({ message, kind = "status", action = null }) {
 }
 
 function toast(message, kind = "status", action = null) {
-  pushToast({ message, kind, action });
+  pushToast({
+    message,
+    kind,
+    action,
+    key: action?.key || "",
+    persist: action?.persist === true,
+  });
 }
 
 function fail(error, action = null) {
@@ -672,7 +693,13 @@ async function viewItem(id, ticket, forcedSeason = null) {
   if (note instanceof HTMLTextAreaElement) {
     note.dataset.saved = entry.review ?? "";
     note.dataset.reviewBase = entry.review_updated_at ?? "";
+    if (String(noteOutcome?.id) === String(id) && note.value !== (entry.review ?? "")) {
+      showNoteFailure(document.querySelector("#note-status"));
+    } else if (String(noteOutcome?.id) === String(id)) {
+      noteOutcome = null;
+    }
   }
+  dismissToast(`note-conflict:${id}`);
   loadWeb(entry, ticket);
 }
 
@@ -988,6 +1015,8 @@ async function render() {
   if (progress instanceof HTMLInputElement && progress.dataset.dirty === "true") saveProgress();
   searchLoads.start("");
   const ticket = routeLoads.start();
+  // Wait for an in-flight note save so this refetch cannot paint the pre-save
+  // text. The note PATCH aborts after 10s, so the wait cannot wedge the view.
   if (staying) await Promise.all([progressChain, noteChain]);
   if (!ticket.isCurrent()) return;
   const libraryNotice = settleLibraryHash();
@@ -1511,13 +1540,23 @@ async function commitNote(id) {
   const base = box.dataset.reviewBase ?? "";
   const status = document.querySelector("#note-status");
   const stopSaving = armSaving(status);
+  const retry = {
+    label: "Retry",
+    persist: true,
+    key: `note:${id}`,
+    onClick: () => { const again = noteBox(id); if (again) void saveNote(again); },
+  };
   try {
     const updated = await api(`/api/entries/${id}`, {
       method: "PATCH",
+      signal: AbortSignal.timeout(10_000),
       body: JSON.stringify({ review: sent, review_base: base }),
     });
     stopSaving();
     if (readDraftRecord(id)?.text === sent) clearDraft(id);
+    dismissToast(`note:${id}`);
+    dismissToast(`note-conflict:${id}`);
+    if (String(noteOutcome?.id) === String(id)) noteOutcome = null;
     const live = noteBox(id);
     if (!live) return;
     delete live.dataset.conflict;
@@ -1528,13 +1567,27 @@ async function commitNote(id) {
     stopSaving();
     const live = noteBox(id);
     if (error?.status === 409) {
+      noteOutcome = null;
       if (live) live.dataset.conflict = "true";
       showNoteConflict();
-      toast(NOTE_CONFLICT_TOAST, "alert", { label: "Reload", onClick: () => { void render(); } });
+      toast(NOTE_CONFLICT_TOAST, "alert", {
+        label: "Reload",
+        persist: true,
+        key: `note-conflict:${id}`,
+        onClick: () => { void render(); },
+      });
       return;
     }
+    // fail() drops TimeoutError and AbortError, so a stalled save has to
+    // surface here or the chain would unblock with no Retry toast.
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    noteOutcome = { id: String(id), kind: "failure" };
     showNoteFailure(document.querySelector("#note-status"));
-    fail(error, { label: "Retry", onClick: () => { const again = noteBox(id); if (again) void saveNote(again); } });
+    if (timedOut) {
+      toast(NETWORK_MESSAGE, "alert", retry);
+      return;
+    }
+    fail(error, retry);
   }
 }
 
@@ -1683,7 +1736,12 @@ function failProgress(payload, message, keepDraft = true) {
   }
   if (payload.input?.isConnected) setProgressStatus(keepDraft ? NOT_SAVED_LABEL : message, true, !keepDraft);
   if (keepDraft) {
-    toast(PROGRESS_TOAST, "alert", { label: "Retry", onClick: () => { void retryProgress(payload); } });
+    toast(PROGRESS_TOAST, "alert", {
+      label: "Retry",
+      persist: true,
+      key: `progress:${payload.id}`,
+      onClick: () => { void retryProgress(payload); },
+    });
   }
 }
 
@@ -1720,6 +1778,7 @@ async function commitProgress(payload) {
     });
     stopSaving();
     clearProgressDraft(payload.id);
+    dismissToast(`progress:${payload.id}`);
     document.querySelector(`[data-restore-progress="${payload.id}"]`)?.closest("#progress-draft")?.remove();
     if (payload.input.isConnected) {
       payload.input.dataset.saved = payload.key;

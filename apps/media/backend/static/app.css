@@ -62,6 +62,10 @@ body {
   width: min(400px, calc(100% - var(--space-8)));
   pointer-events: none;
 }
+/* The two live regions share one flex order so the newest toast is last.
+   display:contents is what makes that possible. WebKit has dropped roles on
+   display:contents boxes, so a VoiceOver/Safari pass still has to confirm a
+   toast is announced. A role on a real wrapper would split the stack in two. */
 #toasts,
 #toast-alerts {
   display: contents;
@@ -661,7 +665,8 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
   outline-offset: 2px;
 }
 @media (pointer: coarse) {
-  .save-draft button { min-height: 44px; }
+  .save-draft button,
+  .progress-status button { min-height: 44px; }
 }
 .exp-list { list-style: none; margin: var(--space-3) 0; padding: 0; }
 .exp { display: flex; gap: var(--space-3); align-items: center; color: var(--text-secondary); }
