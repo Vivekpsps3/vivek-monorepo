@@ -20,7 +20,7 @@ apps/finance/frontend/src/app/charts/charts.component.ts	@angular-eslint/prefer-
 apps/finance/frontend/src/app/crypto/client-finance.spec.ts	@typescript-eslint/no-explicit-any	1
 apps/finance/frontend/src/app/crypto/encrypted-store.bank-imports.ts	@typescript-eslint/no-explicit-any	10
 apps/finance/frontend/src/app/crypto/encrypted-store.brokerage-stages.ts	@typescript-eslint/no-explicit-any	14
-apps/finance/frontend/src/app/crypto/encrypted-store.persistence.ts	@typescript-eslint/no-explicit-any	14
+apps/finance/frontend/src/app/crypto/encrypted-store.persistence.ts	@typescript-eslint/no-explicit-any	13
 apps/finance/frontend/src/app/crypto/encrypted-store.recovery.spec.ts	@typescript-eslint/no-explicit-any	13
 apps/finance/frontend/src/app/crypto/encrypted-store.service.spec.ts	@typescript-eslint/no-explicit-any	23
 apps/finance/frontend/src/app/crypto/encrypted-store.service.ts	@angular-eslint/prefer-inject	1
