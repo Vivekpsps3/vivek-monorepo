@@ -20,8 +20,8 @@ gzip -dc "$archive" | "${docker_cmd[@]}" load
 image="personal-site:$release"
 actual="$("${docker_cmd[@]}" image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
 test "$actual" = "$release"
-export SITE_IMAGE="$image"
-compose=("${docker_cmd[@]}" compose --project-directory "$root" --env-file "$env_file" -f "$root/compose.yml")
+printf 'SITE_IMAGE=%s\n' "$image" > "$scratch/image.env"
+compose=("${docker_cmd[@]}" compose --project-directory "$root" --env-file "$env_file" --env-file "$scratch/image.env" -f "$root/compose.yml")
 "${docker_cmd[@]}" run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:rw,size=128m,mode=1777 "$image" python -m apps.server.checks
 "${compose[@]}" --profile ops run --rm --no-deps backup
 probe() {
@@ -45,8 +45,8 @@ else
   "${docker_cmd[@]}" logs --tail 80 personal-site-site-1 || true
   "${docker_cmd[@]}" logs --tail 30 personal-site-maintenance-1 || true
   if [[ -n "$previous" ]]; then
-    export SITE_IMAGE="$previous"
-    "${docker_cmd[@]}" compose -p personal-site --project-directory "$root" --env-file "$env_file" -f "$scratch/previous.yml" up -d --no-build --wait --wait-timeout 90
+    printf 'SITE_IMAGE=%s\n' "$previous" > "$scratch/image.env"
+    "${docker_cmd[@]}" compose -p personal-site --project-directory "$root" --env-file "$env_file" --env-file "$scratch/image.env" -f "$scratch/previous.yml" up -d --no-build --wait --wait-timeout 90
     old_sha="$("${docker_cmd[@]}" image inspect "$previous" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
     probe "$old_sha"
   fi

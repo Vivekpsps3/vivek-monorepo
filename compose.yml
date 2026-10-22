@@ -5,7 +5,7 @@ x-runtime: &runtime
   image: ${SITE_IMAGE:-personal-site:development}
   user: "10001:10001"
   read_only: true
-  tmpfs: [/tmp:size=64m,mode=1777]
+  tmpfs: ["/tmp:size=64m,mode=1777"]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   init: true

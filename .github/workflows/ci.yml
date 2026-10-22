@@ -119,19 +119,18 @@ jobs:
       - name: Browser checks against production image
         run: |
           set -euo pipefail
-          mkdir -p /tmp/site-browser-data
-          docker run --rm --user "$(id -u):$(id -g)" -v /tmp/site-browser-data:/data personal-site:${{ github.sha }} python -m apps.server.migrate --output /data/site.db
-          docker run -d --name site-browser --user "$(id -u):$(id -g)" -v /tmp/site-browser-data:/data -e SITE_DATABASE_URL=sqlite:////data/site.db -p 127.0.0.1:8086:8000 personal-site:${{ github.sha }}
-          for attempt in {1..30}; do
-            if curl -fsS http://127.0.0.1:8086/health/ready; then break; fi
-            sleep 1
-          done
+          docker network create monitoring
+          printf 'SESSION_COOKIE_SECURE=0\nSITE_PORT=8086\nSITE_IMAGE=personal-site:${{ github.sha }}\n' > /tmp/site-ci.env
+          docker compose --env-file /tmp/site-ci.env --profile ops run --rm --no-deps backup python -m apps.server.migrate --output /data/site.db
+          docker compose --env-file /tmp/site-ci.env up -d --no-build --wait --wait-timeout 60
           node scripts/test-site-browser.mjs
       - name: Browser container diagnostics and cleanup
         if: always()
         run: |
-          docker logs --tail 30 site-browser || true
-          docker rm -f site-browser || true
+          if [ -f /tmp/site-ci.env ]; then
+            docker compose --env-file /tmp/site-ci.env logs --tail 30 || true
+            docker compose --env-file /tmp/site-ci.env --profile ops down -v || true
+          fi
       - name: Package tested image
         run: |
           set -euo pipefail
