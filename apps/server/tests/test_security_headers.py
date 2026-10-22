@@ -349,6 +349,9 @@ def test_report_log_keys_ipv6_by_prefix_and_keeps_ipv4():
     assert report_log_key("2001:db8:1:2::1") != report_log_key("2001:db8:1:3::1")
     assert report_log_key("203.0.113.5") == "203.0.113.5"
     assert report_log_key("203.0.113.5") != report_log_key("203.0.113.6")
+    assert report_log_key("::ffff:203.0.113.5") == "203.0.113.5"
+    assert report_log_key("::ffff:203.0.113.5") != report_log_key("::ffff:198.51.100.5")
+    assert report_log_key("::ffff:203.0.113.5") != "::/64"
     reset_report_logs()
     try:
         assert all(allow_report_log("2001:db8:1:2::1") for _ in range(30))

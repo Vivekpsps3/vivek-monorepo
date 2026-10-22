@@ -211,9 +211,14 @@ handler does not read `X-Forwarded-For`. It reads the body with a running
 16 KiB cap, including chunked requests that omit `Content-Length`. The edge
 `location = /csp-report` sets `client_max_body_size 16k`. Each request logs at
 most 5 reports. Each budget key logs at most 30 lines per minute, IPv6 keys
-are the /64 prefix, and the whole process logs at most 300 lines per minute.
-A full key table drops expired entries and otherwise refuses new keys. The
-handler does not store or log `script-sample`, which could contain page text.
+are the /64 prefix, IPv4-mapped addresses (`::ffff:a.b.c.d`) use the embedded
+IPv4 address, and the whole process logs at most 300 lines per minute.
+A full key table drops expired entries and otherwise refuses new keys.
+`site_csp_reports_total` counts every parsed report and is the authoritative
+record. The log lines are samples: ten keys at the per-key cap fill the
+process budget and can mute further logs for up to 60 seconds, while the
+counter still increments. The handler does not store or log `script-sample`,
+which could contain page text.
 
 Trusted Types are enforced on the finance shell only, with an empty
 `trusted-types` allowlist. Finance source does not call `bypassSecurityTrust*`

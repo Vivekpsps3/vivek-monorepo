@@ -16,8 +16,12 @@ GENERIC_UI_RE = re.compile(
     r"selector\s*:\s*['\"]ui-(?:badge|confirm-dialog|data-table|dialog|select|skeleton)['\"]"
 )
 SINK_SUFFIXES = {".ts", ".mts", ".js", ".mjs", ".html"}
+# Case-insensitive: Angular maps [innerHtml] onto innerHTML. The extra names
+# are DOM sinks that never spell innerHTML.
 SINK_RE = re.compile(
-    r"bypass(?:Security|Sanitization)Trust|innerHTML|outerHTML|insertAdjacentHTML|document\.write"
+    r"bypass(?:Security|Sanitization)Trust|innerHTML|outerHTML|insertAdjacentHTML|"
+    r"document\.write|createContextualFragment|setHTMLUnsafe|srcdoc",
+    re.IGNORECASE,
 )
 GENERIC_UI_PATHS = (
     "apps/finance/frontend/src/app/shared/ui/ui-badge",
