@@ -928,6 +928,21 @@ def test_client_key_buckets_ipv6_by_prefix_and_ignores_forwarded_for():
     assert _client_key(request_from("::ffff:203.0.113.5")) == "203.0.113.5"
 
 
+def test_new_rate_limit_bucket_uses_a_clock_past_the_first_minute():
+    """A missing bucket must open its window even when the host just booted.
+
+    ``window_start`` defaults to 0. On a machine up for less than 60 seconds,
+    ``time.monotonic() - 0 < 60`` and the reset in ``_consume`` does not run.
+    The finance conftest shifts that clock so coverage does not depend on uptime.
+    """
+    from apps.finance.backend import rate_limit
+
+    clear_limits()
+    assert rate_limit._consume(rate_limit._auth_ip_buckets, "203.0.113.77", 5) is True
+    _count, window_start = rate_limit._auth_ip_buckets["203.0.113.77"]
+    assert window_start >= 10_000
+
+
 def test_rate_limit_table_evicts_the_oldest_key():
     from apps.finance.backend import rate_limit
 
