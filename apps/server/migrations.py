@@ -54,7 +54,14 @@ def include_object(object_, name, type_, reflected, compare_to):
     return not (type_ == "table" and name in _IGNORED_TABLES)
 
 
-def connect(path: Path) -> sqlite3.Connection:
+def connect(path: Path, *, readonly: bool = False) -> sqlite3.Connection:
+    """Open SQLite. Inspection uses mode=ro so a plan cannot create -wal/-shm files."""
+    if readonly:
+        return sqlite3.connect(
+            f"{path.resolve().as_uri()}?mode=ro",
+            uri=True,
+            timeout=SQLITE_TIMEOUT_SECONDS,
+        )
     return sqlite3.connect(path, timeout=SQLITE_TIMEOUT_SECONDS)
 
 
@@ -69,8 +76,12 @@ def make_config(url: str) -> Config:
     return cfg
 
 
-def sqlite_url(path: Path) -> str:
-    return f"sqlite:///{path.resolve()}"
+def sqlite_url(path: Path, *, readonly: bool = False) -> str:
+    resolved = path.resolve()
+    if readonly:
+        # SQLAlchemy's SQLite dialect treats uri=true as a URI filename.
+        return f"sqlite:///file:{resolved.as_posix()}?mode=ro&uri=true"
+    return f"sqlite:///{resolved}"
 
 
 def database_path(url: str) -> Path:
@@ -96,7 +107,7 @@ def head_revision() -> str:
 
 def schema_signature(path: Path) -> tuple:
     """Schema objects except the site revision table, in a stable order."""
-    with connect(path) as db:
+    with connect(path, readonly=True) as db:
         rows = db.execute(
             """
             SELECT type, name, tbl_name, COALESCE(sql, '')
@@ -110,14 +121,14 @@ def schema_signature(path: Path) -> tuple:
 
 
 def table_names(path: Path) -> set[str]:
-    with connect(path) as db:
+    with connect(path, readonly=True) as db:
         return {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
 
 
 def current_revision(path: Path) -> str | None:
     if not path.is_file() or path.stat().st_size == 0:
         return None
-    with connect(path) as db:
+    with connect(path, readonly=True) as db:
         present = db.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
             (MIGRATION_VERSION_TABLE,),
@@ -143,24 +154,26 @@ def classify(path: Path) -> str:
         return "managed"
     if "site_schema" not in names:
         raise RuntimeError("Database is not a site database; refusing to migrate")
-    with connect(path) as db:
+    with connect(path, readonly=True) as db:
         version = db.execute("SELECT version FROM site_schema WHERE id=1").fetchone()
     if version != (VERSION,):
         raise RuntimeError(f"Database schema {version[0] if version else 'missing'}; refusing to adopt. Expected site schema version {VERSION}.")
     return "adopt"
 
 
-def model_diff(path: Path):
+def model_diff(path: Path, *, readonly: bool = False):
     """Operations Alembic would generate to make this file match the models.
 
     Constraint order inside CREATE TABLE is not significant; SQLite preserves
     the statement text, and that text is not stable across process hash seeds.
+    ``readonly`` opens the file with mode=ro. ``--plan`` uses that so the
+    comparison cannot create sidecar files or require a writable directory.
     """
     from apps.server.schema import metadata
 
     current = metadata()
     engine = create_engine(
-        sqlite_url(path),
+        sqlite_url(path, readonly=readonly),
         poolclass=NullPool,
         connect_args={"timeout": SQLITE_TIMEOUT_SECONDS},
     )
@@ -236,8 +249,14 @@ def _enable_wal(path: Path) -> None:
     os.chmod(path, 0o600)
 
 
+def foreign_key_violations(path: Path) -> list[tuple]:
+    """Rows from PRAGMA foreign_key_check. Empty means the file can be migrated."""
+    with connect(path, readonly=True) as db:
+        return [tuple(row) for row in db.execute("PRAGMA foreign_key_check")]
+
+
 def _finance_marker(path: Path) -> str | None:
-    with connect(path) as db:
+    with connect(path, readonly=True) as db:
         try:
             rows = db.execute("SELECT version_num FROM alembic_version ORDER BY version_num").fetchall()
         except sqlite3.OperationalError:
@@ -247,9 +266,9 @@ def _finance_marker(path: Path) -> str | None:
     return None
 
 
-def _reject_adopt(path: Path) -> str | None:
+def _reject_adopt(path: Path, *, readonly: bool = False) -> str | None:
     """Return a refusal reason, or None when the database may be stamped."""
-    diff = model_diff(path)
+    diff = model_diff(path, readonly=readonly)
     if diff:
         return (
             "Refusing to stamp this database; its schema does not match the site baseline. "
@@ -272,6 +291,14 @@ def _stamp_sql(revision: str) -> str:
         ");\n\n"
         f"INSERT INTO {table} (version_num) VALUES ('{revision}');\n"
     )
+
+
+def _fk_refusal(path: Path, verb: str) -> str | None:
+    violations = foreign_key_violations(path)
+    if not violations:
+        return None
+    preview = "; ".join(str(row) for row in violations[:20])
+    return f"foreign_key_check failed; refusing to {verb}. {preview}"
 
 
 def _offline_sql(url: str, start: str, end: str) -> str:
@@ -322,13 +349,15 @@ def plan(url: str, *, require_existing: bool = False) -> int:
         report["detail"] = "Site database is missing or empty; refusing to create one"
         code = 1
     elif state == "adopt":
-        reason = _reject_adopt(path)
+        reason = _reject_adopt(path, readonly=True) or _fk_refusal(path, "stamp")
         if reason:
             report["action"] = "refuse"
             report["detail"] = reason
             code = 1
         else:
             report["action"] = "stamp"
+            report["schema_diff"] = []
+            report["foreign_key_check"] = []
             report["detail"] = "Would record the baseline revision and not rewrite application tables"
             sql = _stamp_sql(head)
     elif state in {"missing", "empty"}:
@@ -339,9 +368,16 @@ def plan(url: str, *, require_existing: bool = False) -> int:
         report["action"] = "current"
         report["detail"] = "Already at head"
     else:
-        report["action"] = "upgrade"
-        report["detail"] = f"Would upgrade {revision} to {head}"
-        sql = _offline_sql(url, revision, head)
+        reason = _fk_refusal(path, "upgrade")
+        if reason:
+            report["action"] = "refuse"
+            report["detail"] = reason
+            code = 1
+        else:
+            report["action"] = "upgrade"
+            report["foreign_key_check"] = []
+            report["detail"] = f"Would upgrade {revision} to {head}"
+            sql = _offline_sql(url, revision, head)
     print(json.dumps(report), flush=True)
     if sql:
         print(sql, end="" if sql.endswith("\n") else "\n", flush=True)
@@ -366,7 +402,11 @@ def adopt_or_upgrade(url: str, *, require_existing: bool = False) -> str:
         reason = _reject_adopt(path)
         if reason:
             raise RuntimeError(reason)
-    if state != "empty":
+    # A no-op deploy is already at head. Backing up there rotates the
+    # premigrate set and can delete the snapshot taken before the last real
+    # migration. Stamp and a pending upgrade are the writes that need one.
+    will_write = state == "adopt" or (state == "managed" and before != head_revision())
+    if will_write:
         backup_if_configured(path)
     if state == "adopt":
         command.stamp(make_config(url), "head")

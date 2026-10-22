@@ -41,7 +41,10 @@ def assert_ready(connection):
 
     Exact head is always accepted. A newer revision is accepted only when
     ``site_revision_compatibility`` lists this image's head for that revision.
-    A database behind head is not upgraded here.
+    That row means the change is expand-only for the named head: new tables,
+    or new columns that are nullable or have a default. A drop, rename,
+    retype, or NOT NULL column without a default must not record the old
+    head. A database behind head is not upgraded here.
     """
     from sqlalchemy import text
     from apps.server.migrations import head_revision

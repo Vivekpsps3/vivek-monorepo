@@ -250,6 +250,54 @@ def test_empty_version_table_is_refused(tmp_path):
         assert db.execute("SELECT version FROM site_schema WHERE id=1").fetchone() == (VERSION,)
 
 
+def test_plan_refuses_a_foreign_key_violation_without_writing(tmp_path, capsys, monkeypatch):
+    database = tmp_path / "site.db"
+    legacy_site_database(database)
+    with sqlite3.connect(database) as db:
+        db.execute("PRAGMA foreign_keys=OFF")
+        db.execute(
+            "INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
+            "VALUES (42, 'orphan', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')"
+        )
+    before = database.read_bytes()
+    assert plan(sqlite_url(database), require_existing=True) == 1
+    assert database.read_bytes() == before
+    refused = capsys.readouterr().out
+    assert '"action": "refuse"' in refused
+    assert "foreign_key_check failed; refusing to stamp" in refused
+    assert "INSERT INTO site_alembic_version" not in refused
+
+    fresh = tmp_path / "managed.db"
+    adopt_or_upgrade(sqlite_url(fresh))
+    with sqlite3.connect(fresh) as db:
+        db.execute("PRAGMA foreign_keys=OFF")
+        db.execute(
+            "INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
+            "VALUES (42, 'orphan', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')"
+        )
+    monkeypatch.setattr("apps.server.migrations.head_revision", lambda: "site_schema_v2")
+    assert plan(sqlite_url(fresh)) == 1
+    upgrade_refused = capsys.readouterr().out
+    assert "foreign_key_check failed; refusing to upgrade" in upgrade_refused
+    assert current_revision(fresh) == "site_schema_v1"
+
+
+def test_noop_upgrade_does_not_take_or_rotate_premigrate_backups(tmp_path, monkeypatch):
+    database = tmp_path / "site.db"
+    backups = tmp_path / "backups"
+    monkeypatch.setenv("SITE_BACKUP_DIR", str(backups))
+    assert adopt_or_upgrade(sqlite_url(database)) == "upgraded"
+    assert list(backups.glob("premigrate-*.db")) == []
+    legacy = tmp_path / "legacy.db"
+    legacy_site_database(legacy)
+    assert adopt_or_upgrade(sqlite_url(legacy)) == "stamped"
+    taken = sorted(backups.glob("premigrate-*.db"))
+    assert len(taken) == 1
+    assert adopt_or_upgrade(sqlite_url(legacy)) == "current"
+    assert adopt_or_upgrade(sqlite_url(legacy)) == "current"
+    assert sorted(backups.glob("premigrate-*.db")) == taken
+
+
 def test_plan_prints_sql_without_writing(tmp_path, capsys):
     missing = tmp_path / "new.db"
     assert plan(sqlite_url(missing)) == 0
@@ -335,9 +383,9 @@ def test_batch_recreate_keeps_cascade_and_non_cascade_children(tmp_path):
         'down_revision = "site_schema_v1"\n'
         "branch_labels = None\ndepends_on = None\n"
         "def upgrade():\n"
-        "    with op.batch_alter_table('users') as batch:\n"
+        "    with op.batch_alter_table('users', recreate='always') as batch:\n"
         "        batch.add_column(sa.Column('batch_marker', sa.Integer(), nullable=True))\n"
-        "    with op.batch_alter_table('user_entries') as batch:\n"
+        "    with op.batch_alter_table('user_entries', recreate='always') as batch:\n"
         "        batch.add_column(sa.Column('batch_marker', sa.Integer(), nullable=True))\n"
         "def downgrade():\n"
         "    pass\n",

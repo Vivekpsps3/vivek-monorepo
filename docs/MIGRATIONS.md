@@ -64,8 +64,12 @@ replacing the running container:
 3. `migrate` profile job: the same image, still read-only except for the `data`
    and `backups` volumes, with `SITE_BACKUP_DIR=/backups`. It writes a
    `premigrate-<revision>-<timestamp>` snapshot, then stamps or upgrades.
-   Those files are not part of the hourly `site-*` set. At least three are
-   kept. `--require-existing` refuses a missing or zero-byte production file.
+   A database that is already at head does not get another snapshot, so a
+   code-only deploy cannot rotate the pre-migration set away. Those files
+   are not part of the hourly `site-*` set. Retention keeps the newest
+   snapshot of each of the last three revisions, ordered by the timestamp in
+   the filename. `--require-existing` refuses a missing or zero-byte
+   production file.
    If this command fails, deploy exits and the running container stays.
 4. `compose up` and the route probes. Startup only checks that this image can
    serve the revision already in the file.
@@ -81,8 +85,12 @@ new schema in place. A forward-compatible revision must create
 `site_schema_v1` when that is true. Startup accepts the database when
 `site_alembic_version` equals this image's head, or when that table names this
 image's head for the database's revision. Anything else, including a database
-behind head, fails startup. Do not insert a compatibility row for a revision
-that drops, renames, retypes, or tightens a column the old code uses. Restore
+behind head, fails startup. A compatibility row is only valid for an
+expand-only revision relative to that older head: new tables, or new columns
+that are nullable or have a database default. Do not insert one for a
+revision that drops, renames, retypes, or adds a `NOT NULL` column without a
+default. The row is a claim the revision makes about itself; nothing in CI
+boots the previous image unless you do that check before merging. Restore
 the matching `premigrate-*` snapshot instead of starting the old image.
 
 The migrate job and the old container share one SQLite file. Stamping is one
@@ -115,21 +123,35 @@ tests also upgrade an empty database and stamp a fixture built the way
 production was built (`create_all`, `site_schema` version 1, Finance revision
 `e0f6a2b3c4d5`).
 
-See what a database would do before changing it. Copy a backup off the server
-first; `--plan` reads that copy and does not write it:
+See what a database would do before changing it. The check-in rehearsal builds
+a prod-shaped file from current `main` (that tree's own `create_all` path,
+including the Finance `alembic_version` row) and fills it through the app:
 
 ```sh
-# On the server, copy the latest premigrate or hourly snapshot, not the live file.
-sudo -n docker cp personal-site-maintenance-1:/backups/<snapshot>.db /tmp/site-plan.db
-# On a machine with this repo, against that copy:
+make db-seed-dev
+bash scripts/validate-seeded-adoption.sh
+```
+
+`make db-seed-dev` creates `.local/data/site.db` with this branch's migrations,
+starts the app, and inserts synthetic Finance, Travel, and Media rows through
+the HTTP handlers. `scripts/validate-seeded-adoption.sh` is the deploy
+rehearsal: it builds the unstamped database from a `main` worktree, seeds it
+through that app, runs `--plan --require-existing` on a copy, then runs the
+backup, migrate, and site containers. `--plan` reads that copy and does not
+write it. A successful adopt reports `schema_diff` and `foreign_key_check`
+as empty lists.
+
+```sh
 SITE_DATABASE_URL=sqlite:////absolute/site-plan.db python -m apps.server.migrations --plan --require-existing
 ```
 
 The JSON line is the detected state (`empty`, `adopt`, or `managed`), the
 action (`upgrade`, `stamp`, `current`, or `refuse`), and the reason. The SQL
 that would run follows. `stamp` SQL is only the `site_alembic_version`
-bookkeeping. `refuse` exits non-zero and prints no SQL. A zero-byte file is
-`empty` and, with `--require-existing`, is refused.
+bookkeeping. `refuse` exits non-zero and prints no SQL. A foreign-key
+violation on an adopt or upgrade is `refuse`, with the first
+`PRAGMA foreign_key_check` rows in the detail. A zero-byte file is `empty`
+and, with `--require-existing`, is refused.
 
 Equivalent invocations:
 

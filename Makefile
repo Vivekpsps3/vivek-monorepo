@@ -7,12 +7,13 @@ FINANCE_WEB := $(CURDIR)/apps/finance/frontend/dist/finance-app/browser
 PORTFOLIO_WEB := $(CURDIR)/apps/site/dist/personal-website/browser
 export PYTHONPATH := $(CURDIR)
 
-.PHONY: help install init-db dev build build-frontends test test-fast test-backend test-frontend test-suite-routes docker-build docker-up docker-down db-upgrade db-revision db-check
+.PHONY: help install init-db dev build build-frontends test test-fast test-backend test-frontend test-suite-routes docker-build docker-up docker-down db-upgrade db-revision db-check db-seed-dev db-validate-seeded
 help:
 	@echo 'One site, one SQLite database. See docs/OPERATIONS.md and docs/MIGRATIONS.md.'
 	@echo 'make install; make build-frontends; make dev'
 	@echo 'make test; make docker-build; make test-suite-routes'
 	@echo 'make db-revision MESSAGE="describe the change"; make db-upgrade; make db-check'
+	@echo 'make db-seed-dev; make db-validate-seeded'
 
 install:
 	python3 -m venv .venv
@@ -34,6 +35,12 @@ db-revision:
 
 db-check:
 	$(PY) -m apps.server.migrations --check
+
+db-seed-dev:
+	$(PY) scripts/seed_dev_db.py --ensure-dev
+
+db-validate-seeded:
+	bash scripts/validate-seeded-adoption.sh
 
 dev: init-db
 	SITE_DATABASE_URL=sqlite:///$(DEV_DATA)/site.db SITE_WEB_ROOT=$(FINANCE_WEB) SITE_PORTFOLIO_ROOT=$(PORTFOLIO_WEB) SESSION_COOKIE_SECURE=0 $(PY) -m uvicorn apps.server.main:app --host 127.0.0.1 --port 8000 --reload
