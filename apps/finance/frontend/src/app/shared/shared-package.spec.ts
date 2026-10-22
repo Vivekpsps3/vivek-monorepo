@@ -58,18 +58,21 @@ describe('shared UI package helpers', () => {
     await expectAsync(current).toBeResolvedTo(true);
   });
 
-  it('clears the previous toast timer when a newer toast replaces it', fakeAsync(() => {
+  it('stacks toasts and expires each one on its own timer', fakeAsync(() => {
     const service = new ToastService();
-    const latest: ({ message: string } | null)[] = [null];
-    service.toast$.subscribe(value => (latest[0] = value));
+    const visible: string[][] = [];
+    service.toasts$.subscribe(value => visible.push(value.map(toast => toast.message)));
 
     service.show('First');
     tick(3000);
     service.show('Second');
     tick(1000);
-    expect(latest[0]?.message).toBe('Second');
+    expect(visible.at(-1)).toEqual(['First', 'Second']);
+
+    tick(1000);
+    expect(visible.at(-1)).toEqual(['Second']);
 
     tick(3000);
-    expect(latest[0]).toBeNull();
+    expect(visible.at(-1)).toEqual([]);
   }));
 });

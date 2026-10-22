@@ -269,7 +269,7 @@ test('Activity exact account filters keep full matching totals through paginatio
   await expect(page.locator('#tx-category-filter')).toHaveValue('food');
   await expect(page.locator('#tx-merchant-filter')).toHaveValue('grocery');
   await expect(page.locator('.month-total--expense')).toContainText('$110.00');
-  await expect(page.locator('.month-total--expense')).toContainText('110 matching row(s)');
+  await expect(page.locator('.month-total--expense')).toContainText('110 purchases');
   const tableRows = page.getByRole('table', { name: 'Transactions history' }).getByRole('row');
   await expect(tableRows).toHaveCount(101);
   await expect(page.getByRole('button', { name: 'Load more', exact: true })).toBeVisible();
@@ -487,7 +487,7 @@ test('import account mapping refreshes the exact account label in another mounte
   await dialog.getByLabel('Map matching legacy transactions to this account', { exact: true }).check();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('0 new · 1 duplicate');
-  await dialog.getByRole('button', { name: 'Map 1 legacy transaction(s)', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Map 1 legacy transaction', exact: true }).click();
   await expect(dialog).toBeHidden();
 
   await expect(secondRow).toContainText('Daily card');

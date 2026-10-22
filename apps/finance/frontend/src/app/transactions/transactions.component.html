@@ -30,22 +30,22 @@
       <div class="month-totals">
         @if (typeFilter !== 'income') {
           <div class="month-total month-total--expense">
-            <span class="month-total__label">Spend · {{ matchingTransactions.length }} matching row(s)</span>
-            <strong class="money">${{ monthExpenseTotal | number: '1.2-2' }}</strong>
+            <span class="month-total__label">Spend · {{ purchaseCount | plural:'purchase' }}</span>
+            <strong class="money">{{ monthExpenseTotal | money }}</strong>
           </div>
         }
         @if (typeFilter !== 'expense') {
           <div class="month-total month-total--income">
             <span class="month-total__label">
-              {{ typeFilter === 'income' ? 'Recorded income' : 'Income' }} · {{ matchingTransactions.length }} matching row(s)
+              {{ typeFilter === 'income' ? 'Recorded income' : 'Income' }} · {{ incomeCount | plural:'income':'incomes' }}
             </span>
-            <strong class="money">${{ monthIncomeTotal | number: '1.2-2' }}</strong>
+            <strong class="money">{{ monthIncomeTotal | money }}</strong>
           </div>
         }
         @if (typeFilter === 'all') {
           <div class="month-total month-total--net">
             <span class="month-total__label">Net</span>
-            <strong class="money">${{ monthIncomeTotal - monthExpenseTotal | number: '1.2-2' }}</strong>
+            <strong class="money">{{ monthIncomeTotal - monthExpenseTotal | money }}</strong>
           </div>
         }
       </div>
@@ -64,21 +64,21 @@
         <div class="work-income-totals" aria-label="Work income reconciliation">
           <div class="work-income-total">
             <span>Recorded income</span>
-            <strong class="money">${{ cashflow.observed_income | number: '1.2-2' }}</strong>
+            <strong class="money">{{ cashflow.observed_income | money }}</strong>
           </div>
           <div class="work-income-total">
             <span>Scheduled work income</span>
-            <strong class="money">${{ cashflow.scheduled_income | number: '1.2-2' }}</strong>
+            <strong class="money">{{ cashflow.scheduled_income | money }}</strong>
           </div>
           <div class="work-income-total">
             <span>Overlap adjustment</span>
             <strong class="money" [class.negative]="cashflow.income_overlap_adjustment < 0">
-              {{ cashflow.income_overlap_adjustment < 0 ? '−$' : '$' }}{{ (cashflow.income_overlap_adjustment < 0 ? -cashflow.income_overlap_adjustment : cashflow.income_overlap_adjustment) | number: '1.2-2' }}
+              {{ cashflow.income_overlap_adjustment | money }}
             </strong>
           </div>
           <div class="work-income-total work-income-total--combined">
             <span>Combined income</span>
-            <strong class="money">${{ cashflow.total_income | number: '1.2-2' }}</strong>
+            <strong class="money">{{ cashflow.total_income | money }}</strong>
           </div>
         </div>
         @if (workIncomeSources.length) {
@@ -87,10 +87,10 @@
               <div class="work-income-source">
                 <span>
                   <strong>{{ item.label }} · {{ item.name }}</strong>
-                  <small>{{ item.date || 'Date unknown' }} · {{ item.detail }}</small>
+                  <small>{{ item.date | appDate }} · {{ item.detail }}</small>
                 </span>
                 <strong class="money" [class.negative]="item.amount < 0">
-                  {{ item.amount < 0 ? '−$' : '$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}
+                  {{ item.amount | money }}
                 </strong>
               </div>
             }
@@ -193,11 +193,11 @@
             variant="secondary"
             size="sm"
             (clicked)="mergeCategory()"
-            [disabled]="!canMergeCategory">
+            [disabled]="categoryMergeSaving">
             {{ categoryMergeSaving ? 'Merging' : 'Merge categories' }}
           </ui-button>
           @if (loadedCategoryMergeCount > 0) {
-            <span class="category-merge-count">{{ loadedCategoryMergeCount }} loaded match(es)</span>
+            <span class="category-merge-count">{{ loadedCategoryMergeCount | plural:'loaded match' }}</span>
           }
         </div>
       </div>
@@ -237,11 +237,11 @@
             variant="secondary"
             size="sm"
             (clicked)="bulkRenameCategories()"
-            [disabled]="!canBulkRenameCategories">
+            [disabled]="categoryMergeSaving">
             {{ categoryMergeSaving ? 'Renaming' : 'Apply bulk rename' }}
           </ui-button>
           @if (validBulkRenameRows.length > 0) {
-            <span class="category-merge-count">{{ validBulkRenameRows.length }} valid rename(s)</span>
+            <span class="category-merge-count">{{ validBulkRenameRows.length | plural:'valid rename' }}</span>
           }
         </div>
       </div>
@@ -255,7 +255,7 @@
         <div class="category-bulk-rename__row">
           <label class="form-group"><span>Merchant</span><input type="text" [(ngModel)]="bulkMerchant" list="merchant-options" placeholder="Merchant name" /></label>
           <label class="form-group"><span>Category</span><input type="text" [(ngModel)]="bulkMerchantCategory" list="category-options" placeholder="Category" /></label>
-          <ui-button variant="secondary" size="sm" [disabled]="categoryMergeSaving || !bulkMerchant.trim() || !bulkMerchantCategory.trim()" (clicked)="bulkCategorizeMerchant()">Apply</ui-button>
+          <ui-button variant="secondary" size="sm" [disabled]="categoryMergeSaving" (clicked)="bulkCategorizeMerchant()">Apply</ui-button>
         </div>
       </div>
       <datalist id="category-options">
@@ -263,6 +263,9 @@
           <option [value]="category"></option>
         }
       </datalist>
+      @if (categoryToolError) {
+        <p class="import-error" role="alert">{{ categoryToolError }}</p>
+      }
       <datalist id="merchant-options">
         @for (merchant of merchantOptions; track merchant) {
           <option [value]="merchant"></option>
@@ -305,7 +308,7 @@
         </thead>
         <tbody>
           <tr *ngFor="let tx of filteredTransactions; trackBy: trackByTxId">
-            <td>{{ tx.date }}</td>
+            <td>{{ tx.date | appDate }}</td>
             <td>
               <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ transactionLabel(tx) }}</ui-badge>
               <span class="import-tag" *ngIf="tx.source === 'import'">import</span>
@@ -315,7 +318,7 @@
             <td>{{ tx.merchant || '—' }}</td>
             <td class="desc">{{ tx.description || '—' }}</td>
             <td class="amount-col" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
-              {{ transactionAmountPrefix(tx) }}${{ tx.amount | number: '1.2-2' }}
+              {{ transactionAmountPrefix(tx) }}{{ tx.amount | money }}
             </td>
             <td class="actions actions--row">
               <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
@@ -332,10 +335,10 @@
           <summary>
             <span class="tx-mobile-main">
               <strong>{{ tx.merchant || tx.category || 'Transaction' }}</strong>
-              <small>{{ tx.date }} · {{ tx.category }}</small>
+              <small>{{ tx.date | appDate }} · {{ tx.category }}</small>
             </span>
             <span class="tx-mobile-amount" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
-              {{ transactionAmountPrefix(tx) }}${{ tx.amount | number: '1.2-2' }}
+              {{ transactionAmountPrefix(tx) }}{{ tx.amount | money }}
             </span>
           </summary>
           <div class="tx-mobile-details">
@@ -389,16 +392,16 @@
         <article class="import-history-row">
           <div>
             <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
-            <span>{{ receipt.started_at | date: 'medium' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length || 0 }} unresolved</span>
+            <span>{{ receipt.started_at | appDate:'timestamp' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length || 0 }} unresolved</span>
             <span>Account outcome: {{ receipt.account_displays.join(', ') || 'No account confirmed' }}</span>
             @if (receiptParseIssueCount(receipt)) {
-              <span class="import-error">{{ receiptParseIssueCount(receipt) }} CSV row(s) could not be parsed. Correct the file and reattach it to this receipt.</span>
+              <span class="import-error">{{ receiptParseIssueCount(receipt) | plural:'CSV row' }} could not be parsed. Correct the file and reattach it to this receipt.</span>
             }
             @if (receiptNeedsClassificationCount(receipt)) {
-              <span>{{ receiptNeedsClassificationCount(receipt) }} credit transaction(s) need a type and are excluded from totals until classified.</span>
+              <span>{{ receiptNeedsClassificationCount(receipt) | plural:'credit transaction' }} need a type and are excluded from totals until classified.</span>
             }
             @for (range of receipt.coverage || []; track $index) {
-              <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
+              <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date | appDate }}–{{ range.end_date | appDate }}</span>
             } @empty {
               <span>Coverage not confirmed</span>
             }
@@ -494,7 +497,7 @@
                 <label>From <input type="date" [(ngModel)]="entry.coverage_start" [name]="'coverage-start-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
                 <label>Through <input type="date" [(ngModel)]="entry.coverage_end" [name]="'coverage-end-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
                 <label class="check-label">
-                  <input type="checkbox" [(ngModel)]="entry.confirm_coverage" [name]="'coverage-confirm-' + entry.id" [disabled]="importWorkflow.importParsing || !entry.coverage_start || !entry.coverage_end || entry.coverage_end < entry.coverage_start" />
+                  <input type="checkbox" [(ngModel)]="entry.confirm_coverage" [name]="'coverage-confirm-' + entry.id" [disabled]="importWorkflow.importParsing" />
                   I confirm these dates are the statement's covered period
                 </label>
               </div>
@@ -506,17 +509,17 @@
         <p class="import-error" role="alert">{{ importWorkflow.importError }}</p>
       }
       <div class="form-actions">
-        <ui-button variant="primary" (clicked)="importWorkflow.runImportPreview()" [disabled]="!importWorkflow.canPreviewImport || importWorkflow.importParsing">
+        <ui-button variant="primary" (clicked)="importWorkflow.runImportPreview()" [disabled]="importWorkflow.importParsing">
           {{ importWorkflow.importParsing ? 'Preparing previews…' : 'Preview all files' }}
         </ui-button>
         <ui-button variant="secondary" (clicked)="importWorkflow.closeImportModal()">Cancel</ui-button>
       </div>
     } @else {
       <p class="import-summary">
-        {{ importWorkflow.importFiles.length }} file(s) · {{ importWorkflow.importSummary.new }} new,
+        {{ importWorkflow.importFiles.length | plural:'file' }} · {{ importWorkflow.importSummary.new }} new,
         {{ importWorkflow.importSummary.duplicate }} duplicate ({{ importWorkflow.importSummary.total_parsed }} parsed).
-        {{ importWorkflow.importSummary.skipped }} skipped; {{ importWorkflow.importSummary.errors }} row(s) need fixing.
-        Selected {{ importWorkflow.selectedImportCount }} · ${{ importWorkflow.selectedImportExpenseTotal | number: '1.2-2' }}.
+        {{ importWorkflow.importSummary.skipped }} skipped; {{ importWorkflow.importSummary.errors | plural:'row' }} need fixing.
+        Selected {{ importWorkflow.selectedImportCount }} · {{ importWorkflow.selectedImportExpenseTotal | money }}.
         <app-info-tip label="Duplicate rows" text="Duplicates include transactions already saved and overlapping rows across these files. Files with errors stay listed. Valid rows can still be imported." />
       </p>
       @if (importReceipts.length > 0) {
@@ -526,9 +529,9 @@
             <div class="import-history-row">
               <div>
                 <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
-                <span>{{ receipt.started_at | date: 'medium' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length }} unresolved</span>
+                <span>{{ receipt.started_at | appDate:'timestamp' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length }} unresolved</span>
                 @for (range of receipt.coverage || []; track $index) {
-                  <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date }}–{{ range.end_date }}</span>
+                  <span>Confirmed coverage: {{ range.account_display }} · {{ range.start_date | appDate }}–{{ range.end_date | appDate }}</span>
                 } @empty {
                   <span>Coverage not confirmed</span>
                 }
@@ -582,7 +585,7 @@
                           <input type="checkbox" [checked]="importWorkflow.isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importWorkflow.importCommitting || row.kind === 'ambiguous_credit'" (change)="importWorkflow.toggleImportRow(row)" />
                         }
                       </td>
-                      <td>{{ row.date }}</td>
+                      <td>{{ row.date | appDate }}</td>
                       <td>{{ row.account_display }}</td>
                       <td>{{ row.category }}</td>
                       <td>
@@ -592,7 +595,7 @@
                         }
                       </td>
                       <td>{{ row.description }}</td>
-                      <td>${{ row.amount | number: '1.2-2' }}</td>
+                      <td>{{ row.amount | money }}</td>
                       <td>
                         @if (row.status === 'review') {
                           <label class="form-group import-classification">
@@ -621,7 +624,7 @@
                 @if (preview.errors.length) {
                   <details class="import-notes-block import-notes-block--error" open>
                     <summary class="import-notes-title">
-                      {{ preview.errors.length }} row(s) could not be parsed
+                      {{ preview.errors.length | plural:'row' }} could not be parsed
                     </summary>
                     <ul class="import-notes-list">
                       @for (note of preview.errors; track $index) {
@@ -633,7 +636,7 @@
                 @if (preview.skipped.length) {
                   <details class="import-notes-block">
                     <summary class="import-notes-title">
-                      Skipped {{ preview.skipped.length }} row(s)
+                      Skipped {{ preview.skipped.length | plural:'row' }}
                     </summary>
                     <ul class="import-notes-list">
                       @for (note of preview.skipped; track $index) {
@@ -651,7 +654,7 @@
       }
       <div class="form-actions">
         <ui-button variant="secondary" [disabled]="importWorkflow.importCommitting" (clicked)="importWorkflow.backToImportFiles()">Back</ui-button>
-        <ui-button variant="primary" (clicked)="importWorkflow.commitImport()" [disabled]="importWorkflow.importCommitting || !importWorkflow.canSaveImport">
+        <ui-button variant="primary" (clicked)="importWorkflow.commitImport()" [disabled]="importWorkflow.importCommitting">
           {{ importWorkflow.importCommitting ? 'Saving…' : importWorkflow.importActionLabel }}
         </ui-button>
         <ui-button variant="secondary" [disabled]="importWorkflow.importCommitting" (clicked)="importWorkflow.closeImportModal()">Cancel</ui-button>
@@ -661,11 +664,22 @@
 
 <ui-dialog scrollTarget=".main-content" [open]="transactionEditor.showModal" labelledBy="tx-modal-title" panelClass="tx-sheet" (closed)="transactionEditor.closeModal()">
     <h3 id="tx-modal-title">{{ transactionEditor.editingTxId ? 'Edit transaction' : 'Add transaction' }}</h3>
-    <form (ngSubmit)="transactionEditor.saveTransaction()" #txForm="ngForm">
+    <form id="transaction-form" novalidate (ngSubmit)="transactionEditor.saveTransaction()" #txForm="ngForm">
+      @if (transactionEditor.formSubmitted && transactionEditor.fieldErrors.length) {
+        <div class="form-error-summary" role="alert">
+          <p>Fix {{ transactionEditor.fieldErrors.length }} {{ transactionEditor.fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
+          <ul>
+            @for (error of transactionEditor.fieldErrors; track error.field) {
+              <li><button type="button" (click)="focusNamed(error.field)">{{ error.label }}</button></li>
+            }
+          </ul>
+        </div>
+      }
       <div class="form-row">
         <div class="form-group">
           <label for="tx-date">Date</label>
-          <input id="tx-date" type="date" [(ngModel)]="transactionEditor.newTx.date" name="date" required data-dialog-initial-focus />
+          <input id="tx-date" data-field="date" type="date" [(ngModel)]="transactionEditor.newTx.date" name="date" data-dialog-initial-focus [attr.aria-invalid]="transactionEditor.fieldError('date') ? true : null" [attr.data-field-invalid]="transactionEditor.fieldError('date') ? true : null" />
+          @if (transactionEditor.fieldError('date')) { <span class="ui-field__error">{{ transactionEditor.fieldError('date') }}</span> }
         </div>
         <div class="form-group">
           <label for="tx-type">Type</label>
@@ -678,11 +692,13 @@
       <div class="form-row">
         <div class="form-group">
           <label for="tx-category">Category</label>
-          <input id="tx-category" type="text" [(ngModel)]="transactionEditor.newTx.category" name="category" required />
+          <input id="tx-category" data-field="category" type="text" [(ngModel)]="transactionEditor.newTx.category" name="category" [attr.aria-invalid]="transactionEditor.fieldError('category') ? true : null" [attr.data-field-invalid]="transactionEditor.fieldError('category') ? true : null" />
+          @if (transactionEditor.fieldError('category')) { <span class="ui-field__error">{{ transactionEditor.fieldError('category') }}</span> }
         </div>
         <div class="form-group">
           <label for="tx-amount">Amount</label>
-          <input id="tx-amount" type="number" [(ngModel)]="transactionEditor.newTx.amount" name="amount" step="0.01" min="0.01" required />
+          <input id="tx-amount" data-field="amount" type="text" inputmode="decimal" [(ngModel)]="transactionEditor.newTx.amount" name="amount" [attr.aria-invalid]="transactionEditor.fieldError('amount') ? true : null" [attr.data-field-invalid]="transactionEditor.fieldError('amount') ? true : null" />
+          @if (transactionEditor.fieldError('amount')) { <span class="ui-field__error">{{ transactionEditor.fieldError('amount') }}</span> }
         </div>
       </div>
       <div class="form-group">
@@ -708,7 +724,7 @@
         </div>
       </div>
       <div class="form-actions">
-        <ui-button type="submit" variant="primary" [disabled]="!txForm.form.valid || transactionEditor.saving">Save</ui-button>
+        <ui-button type="submit" variant="primary" [disabled]="transactionEditor.saving">{{ transactionEditor.saving ? 'Saving' : 'Save' }}</ui-button>
         <ui-button variant="secondary" (clicked)="transactionEditor.closeModal()">Cancel</ui-button>
       </div>
     </form>

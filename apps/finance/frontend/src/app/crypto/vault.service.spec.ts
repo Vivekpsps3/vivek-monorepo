@@ -2,6 +2,7 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { TestBed } from '@angular/core/testing';
 import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
+import { ToastService } from '@vivek/ui';
 import { VaultService } from './vault.service';
 
 describe('VaultService KDF upgrade', () => {
@@ -44,7 +45,8 @@ describe('VaultService KDF upgrade', () => {
       kdf_iterations: 600000,
       wrapped_dek_b64: 'dmF1bHQtd3JhcA==',
     });
-    spyOn(console, 'warn');
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
 
     const pending = service.upgradeKdfIfNeeded('vault-passphrase');
     await Promise.resolve();
@@ -61,7 +63,7 @@ describe('VaultService KDF upgrade', () => {
 
     expect(service['authWrap']).toEqual(upgradedAuth);
     expect(service.kdfUpgradeFailures).toBe(1);
-    expect(console.warn).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
   });
 
   it('loads the signing wrap for a session that never cached one', async () => {

@@ -1,5 +1,19 @@
-/** Returns today's date in the browser's local timezone as YYYY-MM-DD. */
-export function todayIsoDate(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
+/**
+ * Typed entry for the shared date module. The implementation lives in
+ * runtime/date.mjs, which re-exports runtime/today.mjs (PR #8).
+ */
+export {
+  WEEK_STARTS_ON,
+  browserTimeZone,
+  daysBetweenDateOnly,
+  formatDate,
+  formatDateRange,
+  isoDateInZone,
+  isOnOrBeforeToday,
+  localTodayIso,
+  parseDateOnly,
+  todayIsoDate,
+  weekStartIndex,
+} from '../runtime/date.mjs';
+
+export type DateStyle = 'table' | 'heading' | 'timestamp' | 'time' | 'month' | 'range';

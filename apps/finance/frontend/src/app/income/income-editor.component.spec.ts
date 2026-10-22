@@ -126,7 +126,7 @@ describe('Jobs and pay editor regressions', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Next paycheck 2026-10-15');
+    expect(fixture.nativeElement.textContent).toContain('Next paycheck Oct 15');
     expect(fixture.componentInstance.paydaySummary({ ...scheduledJob, is_active: false })).toContain('Inactive job');
     button('Edit', fixture).click();
     fixture.detectChanges();
@@ -175,7 +175,7 @@ describe('Jobs and pay editor regressions', () => {
       })],
       stock_valuations: [],
     }));
-    expect(fixture.nativeElement.textContent).toContain('100 shares converted to cash on 2026-01-20');
+    expect(fixture.nativeElement.textContent).toContain('100 shares converted to cash on Jan 20');
   });
 
   it('records an ESPP market value separately from employee contributions in the rendered editor', async () => {

@@ -53,6 +53,7 @@ build-frontends:
 test-fast:
 	./scripts/check-doc-paths.sh
 	python3 scripts/check-shared-boundaries.py
+	python3 scripts/check-finance-ux-f1.py
 
 test-backend:
 	$(PY) -m pytest -q apps/finance/backend/tests
@@ -65,7 +66,7 @@ test-frontend:
 	npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadless
 
 test: test-fast test-backend test-frontend
-	node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs
+	node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs
 
 test-suite-routes:
 	docker run --rm --network none --read-only --tmpfs /tmp:rw,size=128m,mode=1777 $(SITE_IMAGE) python -m apps.server.checks

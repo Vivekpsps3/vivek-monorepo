@@ -14,8 +14,8 @@
   <section class="fixed-summary">
     <div>
       <p class="section-eyebrow">Active bills</p>
-      <div class="stat-display money">${{ activeMonthlyTotal | number: '1.2-2' }}</div>
-      <p class="summary-caption">${{ activeAnnualTotal | number: '1.2-2' }} annual equivalent</p>
+      <div class="stat-display money">{{ activeMonthlyTotal | money }}</div>
+      <p class="summary-caption">{{ activeAnnualTotal | money }} annual equivalent</p>
     </div>
     <div class="summary-pill">
       <ui-icon name="credit-card" size="sm" />
@@ -48,12 +48,12 @@
               </td>
               <td>{{ row.category }}</td>
               <td>
-                <span class="money">${{ row.amount | number: '1.2-2' }}</span>
+                <span class="money">{{ row.amount | money }}</span>
                 <span class="muted block">{{ frequencyLabel(row.frequency) }}</span>
               </td>
-              <td class="money">${{ row.monthly_amount | number: '1.2-2' }}</td>
+              <td class="money">{{ row.monthly_amount | money }}</td>
               <td>
-                {{ row.next_due_date }}
+                {{ row.next_due_date | appDate }}
                 @if (row.payment_account) {
                   <span class="muted block">{{ row.payment_account }}</span>
                 }
@@ -84,15 +84,27 @@
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="fixed-expense-modal-title" (closed)="closeModal()">
       <h3 id="fixed-expense-modal-title">{{ editingId ? 'Edit bill' : 'Add bill' }}</h3>
       @if (saveError) { <p role="alert" class="form-error">{{ saveError }}</p> }
-      <form (ngSubmit)="saveExpense()" #expenseForm="ngForm">
+      <form id="bill-form" novalidate (ngSubmit)="saveExpense()" #expenseForm="ngForm">
+        @if (formSubmitted && fieldErrors.length) {
+          <div class="form-error-summary" role="alert">
+            <p>Fix {{ fieldErrors.length }} {{ fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
+            <ul>
+              @for (error of fieldErrors; track error.field) {
+                <li><button type="button" (click)="focusNamed(error.field)">{{ error.label }}</button></li>
+              }
+            </ul>
+          </div>
+        }
         <div class="form-row">
           <label class="form-group">
             <span>Name</span>
-            <input name="name" [(ngModel)]="form.name" required data-dialog-initial-focus />
+            <input uiFieldControl data-field="name" name="name" [(ngModel)]="form.name" data-dialog-initial-focus (blur)="revalidate()" [attr.aria-invalid]="fieldError('name') ? true : null" [attr.data-field-invalid]="fieldError('name') ? true : null" />
+            @if (fieldError('name')) { <span class="ui-field__error">{{ fieldError('name') }}</span> }
           </label>
           <label class="form-group">
             <span>Category</span>
-            <input name="category" list="fixed-expense-categories" [(ngModel)]="form.category" required />
+            <input uiFieldControl data-field="category" name="category" list="fixed-expense-categories" [(ngModel)]="form.category" (blur)="revalidate()" [attr.aria-invalid]="fieldError('category') ? true : null" [attr.data-field-invalid]="fieldError('category') ? true : null" />
+            @if (fieldError('category')) { <span class="ui-field__error">{{ fieldError('category') }}</span> }
           </label>
         </div>
         <datalist id="fixed-expense-categories">
@@ -104,7 +116,8 @@
         <div class="form-row">
           <label class="form-group">
             <span>Amount</span>
-            <input name="amount" type="number" min="0" step="0.01" [(ngModel)]="form.amount" required />
+            <input uiFieldControl data-field="amount" name="amount" type="text" inputmode="decimal" [(ngModel)]="form.amount" (blur)="revalidate()" [attr.aria-invalid]="fieldError('amount') ? true : null" [attr.data-field-invalid]="fieldError('amount') ? true : null" />
+            @if (fieldError('amount')) { <span class="ui-field__error">{{ fieldError('amount') }}</span> }
           </label>
           <ui-select
             label="Frequency"
@@ -119,7 +132,8 @@
           </label>
           <label class="form-group">
             <span>Due day</span>
-            <input name="due_day" type="number" min="1" max="31" [(ngModel)]="form.due_day" />
+            <input uiFieldControl data-field="dueDay" name="due_day" type="text" inputmode="numeric" [(ngModel)]="form.due_day" (blur)="revalidate()" [attr.aria-invalid]="fieldError('dueDay') ? true : null" [attr.data-field-invalid]="fieldError('dueDay') ? true : null" />
+            @if (fieldError('dueDay')) { <span class="ui-field__error">{{ fieldError('dueDay') }}</span> }
           </label>
         </div>
 
@@ -151,7 +165,7 @@
         </label>
 
         <div class="form-actions">
-          <ui-button type="submit" variant="primary" [disabled]="!expenseForm.form.valid || saving">Save</ui-button>
+          <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving' : 'Save' }}</ui-button>
           <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
         </div>
       </form>

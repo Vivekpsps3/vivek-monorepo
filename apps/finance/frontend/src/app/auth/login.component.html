@@ -23,7 +23,7 @@
           }
           @if (passwordHint) { <p class="password-hint">{{ passwordHint }}</p> }
           @if (error) { <p class="login-error" role="alert">{{ error }}</p> }
-          <ui-button type="submit" [disabled]="!canSubmit">
+          <ui-button type="submit" [disabled]="loading">
             {{ loading ? (needsDisplayName ? 'Creating account' : (legacyMode ? 'Migrating' : 'Signing in')) : (setupMode ? 'Create admin account' : (legacyMode ? 'Migrate and sign in' : 'Sign in')) }}
           </ui-button>
         </form>

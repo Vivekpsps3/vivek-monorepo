@@ -59,7 +59,7 @@ describe('PortfolioComponent', () => {
     expect(component.getGain(unknown)).toBeNull();
     expect(component.getTotalGain()).toBeNull();
     expect(component.priceFreshness(unknown)).toBe('Imported');
-    expect(component.dateLabel(null)).toBe('Date unknown');
+    expect(component.dateLabel(null)).toBe('No date');
   });
 
   it('shows the stale quote age while keeping the warning badge state', () => {
@@ -83,7 +83,7 @@ describe('PortfolioComponent', () => {
     } as any;
     component.resumeFidelityStage(stage);
     expect(finance.resumeFidelityImportStage).toHaveBeenCalledWith(77);
-    expect(toast.success).toHaveBeenCalledWith('Activated 1 Fidelity position(s)');
+    expect(toast.success).toHaveBeenCalledWith('Activated 1 Fidelity position');
   });
 
 });

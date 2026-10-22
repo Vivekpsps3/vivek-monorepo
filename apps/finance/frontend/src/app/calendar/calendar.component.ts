@@ -24,7 +24,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
-import { todayIsoDate } from '@vivek/browser';
+import { WEEK_STARTS_ON, todayIsoDate, weekStartIndex } from '@vivek/browser';
 import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
@@ -40,6 +40,8 @@ import {
   UiIconComponent,
 } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 interface CalendarDay {
   date: string;
@@ -55,6 +57,8 @@ type ChartConstructor = new (item: ChartItem, config: unknown) => ChartInstance;
   selector: 'app-calendar',
   standalone: true,
   imports: [
+    AppDatePipe,
+    MoneyPipe,
     CommonModule,
     RouterLink,
     UiPageHeaderComponent,
@@ -85,7 +89,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedPlans: CashflowOccurrence[] = [];
   selectedIncomeOccurrences: IncomeCashflowOccurrence[] = [];
   daysInMonth: CalendarDay[] = [];
-  weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].slice(WEEK_STARTS_ON).concat(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].slice(0, WEEK_STARTS_ON));
   monthSummary: MonthSpendSummary = summarizeMonthSpend([], monthKeyFromDate(new Date()));
 
   private destroy$ = new Subject<void>();
@@ -160,7 +164,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   generateCalendar() {
     const year = this.currentDate.getFullYear();
     const month = this.currentDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
+    const firstDay = weekStartIndex(new Date(year, month, 1));
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const today = todayIsoDate();
     const monthKey = this.monthKey;

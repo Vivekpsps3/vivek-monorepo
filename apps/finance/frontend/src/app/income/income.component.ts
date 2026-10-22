@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom, from, Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '@vivek/ui';
-import { ToastService } from '@vivek/ui';
+import { ToastService, failureCopy, successCopy } from '@vivek/ui';
 import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation, PaydayFrequency } from '../models/transaction.model';
 import {
   annualBasePayAt,
@@ -28,8 +28,13 @@ import {
   stockPurchaseSnapshot,
   stockSnapshotAt,
 } from '../utils/job-compensation.util';
-import { todayIsoDate } from '@vivek/browser';
+import { formatDate, todayIsoDate, toDollars, validateJob, validateMoney, type FieldIssue } from '@vivek/browser';
+import { formatEstimate } from '../shared/stored-money';
+import { focusFirstInvalid } from '../shared/form-validation';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { AppDateRangePipe } from '../shared/pipes/app-date.pipe';
 
 interface StockPriceDraft {
   date: string;
@@ -58,6 +63,9 @@ import { InfoTipComponent } from '../shared/info-tip.component';
   selector: 'app-income',
   standalone: true,
   imports: [
+    AppDateRangePipe,
+    AppDatePipe,
+    MoneyPipe,
     CommonModule,
     FormsModule,
     UiPageHeaderComponent,
@@ -85,10 +93,13 @@ export class IncomeComponent implements OnInit, OnDestroy {
   today = todayIsoDate;
   incomes: JobIncome[] = [];
   stockPriceDrafts: Record<number, StockPriceDraft> = {};
+  stockPriceErrors: Record<number, string> = {};
   stockQuoteStatuses: Record<string, StockQuoteStatus> = {};
   private savingStockPriceIds = new Set<number>();
   showModal = false;
   saving = false;
+  fieldErrors: FieldIssue[] = [];
+  formSubmitted = false;
   editingId: number | null = null;
   form: JobIncomeCreate = this.emptyForm();
   taxEstimator = {
@@ -370,7 +381,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
     const horizon = new Date(Date.parse(`${from}T00:00:00Z`) + 370 * 86_400_000).toISOString().slice(0, 10);
     const next = paydayDatesBetween(row, from, horizon)[0];
     return next
-      ? `Next paycheck ${next} · about $${estimatedPaycheckNet(row, next).toFixed(2)} net`
+      ? `Next paycheck ${formatDate(next)} · ${formatEstimate(estimatedPaycheckNet(row, next))} net`
       : 'No upcoming paycheck date before this job ends';
   }
 
@@ -418,13 +429,16 @@ export class IncomeComponent implements OnInit, OnDestroy {
     const price = Number(rawPrice);
     const latest = this.incomes.find(item => item.id === row.id) || row;
     if (!isValidIsoDate(draft.date) || draft.date < latest.effective_date) {
-      this.toastService.error('Share price date must be valid and on or after the job start date.');
+      this.stockPriceErrors[row.id] = 'Share price date must be valid and on or after the job start date.';
+      this.cdr.markForCheck();
       return;
     }
     if (!rawPrice || !Number.isFinite(price) || price < 0) {
-      this.toastService.error('Enter a non-negative share price.');
+      this.stockPriceErrors[row.id] = 'Enter a non-negative share price.';
+      this.cdr.markForCheck();
       return;
     }
+    delete this.stockPriceErrors[row.id];
     const valuation: JobStockValuation = { date: draft.date, price_per_share: price, source: 'manual', price_as_of: null };
     this.savingStockPriceIds.add(row.id);
     this.cdr.markForCheck();
@@ -587,25 +601,45 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.form = this.emptyForm();
   }
 
+  fieldError(field: string): string | null {
+    return this.formSubmitted ? this.fieldErrors.find(error => error.field === field)?.message ?? null : null;
+  }
+
+  focusNamed(field: string): void {
+    document.getElementById('job-form')?.querySelector<HTMLElement>(`[data-field="${field}"]`)?.focus();
+  }
+
   saveIncome(): void {
     if (!this.form.employer.trim()) {
-      this.toastService.error('Employer is required.');
+      this.fieldErrors = [{ field: 'employer', label: 'Employer', message: 'Enter the employer.' }];
+      this.formSubmitted = true;
       return;
     }
-    if (this.form.base_pay < 0) {
-      this.toastService.error('Base pay must be non-negative.');
-      return;
-    }
-    if (this.form.pay_frequency === 'hourly' && !this.form.hours_per_week) {
-      this.toastService.error('Hours per week is required for hourly income.');
-      return;
-    }
-
+    const jobIssues = validateJob({
+      employer: this.form.employer,
+      basePay: this.form.base_pay,
+      payFrequency: this.form.pay_frequency,
+      hoursPerWeek: this.form.hours_per_week,
+      paydayFrequency: this.form.payday_frequency,
+      nextPayday: this.form.first_pay_date,
+      taxes: this.form.taxes_per_period,
+      deductions: this.form.deductions_per_period,
+    });
     const historyError = jobHistoryError(this.form);
-    if (historyError) {
-      this.toastService.error(historyError);
+    if (historyError) jobIssues.push({ field: 'endDate', label: 'End date', message: historyError });
+    this.fieldErrors = jobIssues;
+    this.formSubmitted = true;
+    if (jobIssues.length) {
+      this.cdr.markForCheck();
+      setTimeout(() => focusFirstInvalid(document.getElementById('job-form')));
       return;
     }
+    const pay = validateMoney(this.form.base_pay, {
+      allowZero: false,
+      negativeMessage: 'Enter yearly pay above $0.',
+      emptyMessage: 'Enter yearly pay above $0.',
+    });
+    if ('cents' in pay) this.form.base_pay = toDollars(pay.cents);
     const wasEditing = this.editingId !== null;
     this.saving = true;
     const payload: JobIncomeCreate = {
@@ -679,7 +713,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
           return;
         }
         this.closeModal();
-        this.toastService.success(wasEditing ? 'Income updated' : 'Income added');
+        this.toastService.success(successCopy('Job', wasEditing ? 'saved' : 'added'));
         if (saved?.stock_symbol) this.refreshStockTicker(saved.stock_symbol);
         this.cdr.markForCheck();
       },

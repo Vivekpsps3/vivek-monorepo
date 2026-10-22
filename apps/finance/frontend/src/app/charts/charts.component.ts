@@ -26,6 +26,7 @@ import {
   chartDangerColor,
   chartAccentColor,
 } from '@vivek/ui';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
 type ChartConstructor = new (
   item: ChartItem,
   config: unknown
@@ -34,7 +35,8 @@ type ChartConstructor = new (
 @Component({
   selector: 'app-charts',
   standalone: true,
-  imports: [CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, InfoTipComponent],
+  imports: [
+    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, InfoTipComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

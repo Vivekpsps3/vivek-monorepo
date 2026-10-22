@@ -7,53 +7,55 @@
     <nav class="home-overview" aria-label="Home overview">
       <a routerLink="/have" class="home-tile home-tile--balance">
         <span class="home-tile__topline">What you have <span class="home-tile__arrow" aria-hidden="true">→</span></span>
-        <span class="home-tile__value money">${{ have | number: '1.2-2' }}</span>
+        <span class="home-tile__value money">{{ have | money }}</span>
         <span class="home-tile__metric-name">Current net worth</span>
 
         <dl class="balance-breakdown">
           <div>
             <dt>{{ portfolioValueIncomplete ? 'Known holdings' : 'Holdings' }}</dt>
-            <dd class="money">${{ netWorth.portfolio | number: '1.0-0' }}</dd>
+            <dd class="money">{{ netWorth.portfolio | money }}</dd>
           </div>
           <div>
             <dt>Other assets</dt>
-            <dd class="money">${{ netWorth.other_assets | number: '1.0-0' }}</dd>
+            <dd class="money">{{ netWorth.other_assets | money }}</dd>
           </div>
           <div>
             <dt>Debts</dt>
-            <dd class="money negative">${{ netWorth.liabilities | number: '1.0-0' }}</dd>
+            <dd class="money">{{ (-netWorth.liabilities) | money }}</dd>
           </div>
         </dl>
 
+        @if (balanceSourceDates || positionSourceDates || quoteSourceDates) {
         <div class="source-dates">
           <p class="source-dates__heading">Source dates</p>
           <dl>
-            <div><dt>Balances</dt><dd>{{ balanceSourceDates }}</dd></div>
-            <div><dt>Positions</dt><dd>{{ positionSourceDates }}</dd></div>
-            <div><dt>Quotes</dt><dd>{{ quoteSourceDates }}</dd></div>
+            @if (balanceSourceDates) { <div><dt>Balances</dt><dd>{{ balanceSourceDates }}</dd></div> }
+            @if (positionSourceDates) { <div><dt>Positions</dt><dd>{{ positionSourceDates }}</dd></div> }
+            @if (quoteSourceDates) { <div><dt>Quotes</dt><dd>{{ quoteSourceDates }}</dd></div> }
           </dl>
         </div>
+        }
 
         @if (portfolioValueIncomplete) {
-          <span class="home-status">Portfolio value incomplete · {{ unvaluedPositionCount }} unvalued position(s)</span>
+          <span class="home-status">Portfolio value incomplete · {{ unvaluedPositionCount | plural:'unvalued position' }}</span>
         }
         @if (provisionalPositionCount) {
-          <span class="home-status">{{ provisionalPositionCount }} position(s) use provisional values</span>
+          <span class="home-status">{{ provisionalPositionCount | plural:'position' }} {{ provisionalPositionCount === 1 ? 'uses' : 'use' }} provisional values</span>
         }
       </a>
 
       <a routerLink="/spending" class="home-tile home-tile--activity">
         <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
-        <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet < 0 ? '−' : '' }}${{ (monthNet < 0 ? -monthNet : monthNet) | number: '1.2-2' }}</span>
+        <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
         <span class="home-tile__metric-name">Income and spending, counted once</span>
         <span class="home-split">
           <span>
             <small>Income</small>
-            <strong class="money">${{ monthPay | number: '1.2-2' }}</strong>
+            <strong class="money">{{ monthPay | money }}</strong>
           </span>
           <span>
             <small>Spending</small>
-            <strong class="money negative">${{ monthSpend | number: '1.2-2' }}</strong>
+            <strong class="money negative">{{ monthSpend | money }}</strong>
           </span>
         </span>
       </a>
@@ -68,10 +70,10 @@
               <div class="income-breakdown__row">
                 <div class="income-breakdown__source">
                   <strong>{{ item.label }} · {{ item.name }}</strong>
-                  <span>{{ item.date || 'Date unknown' }} · {{ item.detail }}</span>
+                  <span>{{ item.date | appDate }} · {{ item.detail }}</span>
                 </div>
                 <strong class="money" [class.negative]="item.amount < 0">
-                  {{ item.amount < 0 ? '−$' : '$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}
+                  {{ item.amount | money }}
                 </strong>
               </div>
             }

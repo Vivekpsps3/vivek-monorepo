@@ -2,9 +2,10 @@ import { ChangeDetectorRef, Injectable, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
-import { ToastService } from '@vivek/ui';
+import { ToastService, failureCopy, successCopy } from '@vivek/ui';
 import { Transaction, TransactionCreate } from '../models/transaction.model';
-import { todayIsoDate } from '@vivek/browser';
+import { todayIsoDate, toDollars, validateMoney, validateTransaction, type FieldIssue } from '@vivek/browser';
+import { fieldMessage, focusFirstInvalid } from '../shared/form-validation';
 
 @Injectable()
 export class TransactionsEditorWorkflow implements OnDestroy {
@@ -14,6 +15,8 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   editingImported = false;
   saving = false;
   transactionSaveError = '';
+  fieldErrors: FieldIssue[] = [];
+  formSubmitted = false;
   private readonly destroy$ = new Subject<void>();
 
   constructor(
@@ -35,19 +38,37 @@ export class TransactionsEditorWorkflow implements OnDestroy {
     this.showModal = true;
   }
 
+  fieldError(field: string): string | null {
+    return this.formSubmitted ? fieldMessage(this.fieldErrors, field) : null;
+  }
+
   saveTransaction(): void {
     if (this.saving) return;
-    if (!this.newTx.category?.trim() || this.newTx.amount <= 0) {
-      this.toastService.error('Category and a positive amount are required.');
+    const errors = validateTransaction({
+      amount: this.newTx.amount,
+      date: this.newTx.date,
+      category: this.newTx.category,
+    });
+    this.fieldErrors = errors;
+    this.formSubmitted = true;
+    if (errors.length) {
+      this.cdr.markForCheck();
+      setTimeout(() => focusFirstInvalid(document.getElementById('transaction-form')));
       return;
     }
+    const parsed = validateMoney(this.newTx.amount, {
+      allowZero: false,
+      negativeMessage: 'Enter an amount above $0. Choose Refund or Income for money coming in.',
+      emptyMessage: 'Enter an amount above $0. Choose Refund or Income for money coming in.',
+    });
+    if (!('cents' in parsed)) return;
 
     this.saving = true;
     this.transactionSaveError = '';
     const payload: TransactionCreate = {
       ...this.newTx,
       category: this.newTx.category.trim(),
-      amount: Math.round(this.newTx.amount * 100) / 100,
+      amount: toDollars(parsed.cents),
     };
     const request = this.editingTxId !== null
       ? this.financeService.updateTransaction(this.editingTxId, payload)
@@ -58,13 +79,16 @@ export class TransactionsEditorWorkflow implements OnDestroy {
         this.saving = false;
         const wasEditing = this.editingTxId !== null;
         this.closeModal();
-        this.toastService.success(wasEditing ? 'Transaction updated' : 'Transaction added');
+        this.toastService.success(successCopy('Transaction', wasEditing ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
         this.transactionSaveError = 'Could not save this transaction. Your changes are still here; try again.';
-        this.toastService.error('Could not save transaction. Your changes are still here; try again.');
+        this.toastService.error(failureCopy('save', 'this transaction', 'Try again.'), {
+          label: 'Try again',
+          run: () => this.saveTransaction(),
+        });
         this.cdr.markForCheck();
       },
     });

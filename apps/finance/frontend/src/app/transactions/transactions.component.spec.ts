@@ -134,9 +134,13 @@ describe('Transactions multi-file import UI', () => {
   it('selects multiple files, assigns independent banks, previews and commits the combined selection', async () => {
     chooseFiles([chaseFile(), amexFile()]);
     expect(component.importFiles.length).toBe(2);
-    expect(button('Preview all files').disabled).toBeTrue();
+    expect(button('Preview all files').disabled).toBeFalse();
+    button('Preview all files').click();
+    fixture.detectChanges();
+    expect(component.importError).toContain('Choose CSV files and select a bank for every file.');
+    expect(previewPromise).toBeUndefined();
     assignBank(0, 'chase');
-    expect(button('Preview all files').disabled).toBeTrue();
+    expect(button('Preview all files').disabled).toBeFalse();
     assignBank(1, 'amex');
     assignAccountName(0, 'Chase Checking');
     assignAccountName(1, 'Amex Gold');
@@ -148,7 +152,7 @@ describe('Transactions multi-file import UI', () => {
     expect(sections.length).toBe(2);
     expect(sections[0].textContent).toContain('chase.csv · Chase');
     expect(sections[1].textContent).toContain('amex.csv · American Express');
-    button('Import 2 transaction(s)').click();
+    button('Import 2 transactions').click();
     fixture.detectChanges();
     expect(finance.commitBankImports.calls.mostRecent().args[0].map(row => row.account_display)).toEqual(['Chase Checking', 'Amex Gold']);
     expect(component.showImportModal).toBeFalse();
@@ -191,7 +195,7 @@ describe('Transactions multi-file import UI', () => {
     }));
     expect(component.legacyMappingCount).toBe(1);
     expect(component.canSaveImport).toBeTrue();
-    expect(component.importActionLabel).toBe('Map 1 legacy transaction(s)');
+    expect(component.importActionLabel).toBe('Map 1 legacy transaction');
     component.commitImport();
     expect(finance.commitBankImports.calls.mostRecent().args[0][0].legacy_dedupe_key).toBe(legacyKey);
   });

@@ -17,9 +17,8 @@ import {
   LiabilityCreate,
   NetWorth,
 } from '../models/transaction.model';
-import { ToastService } from '@vivek/ui';
-import { ConfirmService } from '@vivek/ui';
-import { todayIsoDate } from '@vivek/browser';
+import { ConfirmService, ToastService, UiBadgeComponent, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
+import { amountProblem, excludedAmountNote, todayIsoDate, toDollars, validateAsset, validateDebt, validateMoney, type FieldIssue } from '@vivek/browser';
 import {
   UiButtonComponent,
   UiCardComponent,
@@ -32,6 +31,9 @@ import {
   UiIconComponent,
 } from '@vivek/ui';
 import { FormatCategoryPipe } from '../shared/pipes/format-category.pipe';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { errorSummary, fieldMessage, focusField, focusFirstInvalid } from '../shared/form-validation';
 import { InfoTipComponent } from '../shared/info-tip.component';
 import { portfolioDateSummary } from '../utils/portfolio.util';
 
@@ -49,7 +51,12 @@ import { portfolioDateSummary } from '../utils/portfolio.util';
     UiDataTableComponent,
     UiDialogComponent,
     UiIconComponent,
+    UiBadgeComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
     FormatCategoryPipe,
+    MoneyPipe,
+    AppDatePipe,
     InfoTipComponent,
   ],
   templateUrl: './assets-liabilities.component.html',
@@ -64,6 +71,12 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
   showAssetModal = false;
   showLiabilityModal = false;
   saving = false;
+  assetErrors: FieldIssue[] = [];
+  liabilityErrors: FieldIssue[] = [];
+  assetSubmitted = false;
+  liabilitySubmitted = false;
+  readonly amountProblem = amountProblem;
+  readonly errorSummary = errorSummary;
   editingAssetId: number | null = null;
   editingLiabilityId: number | null = null;
   assetForm: AssetCreate = this.emptyAsset();
@@ -186,16 +199,25 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
 
   saveAsset() {
     if (this.saving) return;
-    const value = this.assetForm.current_value;
-    if (!this.assetForm.name.trim() || value == null || !Number.isFinite(Number(value)) || Number(value) < 0) {
-      this.toastService.error('Name and a non-negative value are required.');
+    const errors = validateAsset({ name: this.assetForm.name, value: this.assetForm.current_value });
+    this.assetErrors = errors;
+    this.assetSubmitted = true;
+    if (errors.length) {
+      this.cdr.markForCheck();
+      setTimeout(() => focusFirstInvalid(document.getElementById('asset-form')));
       return;
     }
+    const parsed = validateMoney(this.assetForm.current_value, {
+      allowZero: true,
+      negativeMessage: 'Enter a value of $0 or more.',
+      emptyMessage: 'Enter a value of $0 or more.',
+    });
+    if (!('cents' in parsed)) return;
     this.saving = true;
     const payload = {
       ...this.assetForm,
       name: this.assetForm.name.trim(),
-      current_value: Math.round(Number(value) * 100) / 100,
+      current_value: toDollars(parsed.cents),
     };
     const req =
       this.editingAssetId !== null
@@ -205,12 +227,15 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       next: () => {
         this.saving = false;
         this.closeModals();
-        this.toastService.success(this.editingAssetId ? 'Asset updated' : 'Asset added');
+        this.toastService.success(successCopy('Asset', this.editingAssetId ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
-        this.toastService.error('Could not save this asset. Please try again.');
+        this.toastService.error(failureCopy('save', 'this asset', 'Try again.'), {
+          label: 'Try again',
+          run: () => this.saveAsset(),
+        });
         this.cdr.markForCheck();
       },
     });
@@ -218,16 +243,25 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
 
   saveLiability() {
     if (this.saving) return;
-    const balance = this.liabilityForm.balance_owed;
-    if (!this.liabilityForm.name.trim() || balance == null || !Number.isFinite(Number(balance)) || Number(balance) < 0) {
-      this.toastService.error('Name and a non-negative balance are required.');
+    const errors = validateDebt({ name: this.liabilityForm.name, amount: this.liabilityForm.balance_owed });
+    this.liabilityErrors = errors;
+    this.liabilitySubmitted = true;
+    if (errors.length) {
+      this.cdr.markForCheck();
+      setTimeout(() => focusFirstInvalid(document.getElementById('liability-form')));
       return;
     }
+    const parsed = validateMoney(this.liabilityForm.balance_owed, {
+      allowZero: true,
+      negativeMessage: 'Enter what you owe as a positive amount.',
+      emptyMessage: 'Enter what you owe as a positive amount.',
+    });
+    if (!('cents' in parsed)) return;
     this.saving = true;
     const payload = {
       ...this.liabilityForm,
       name: this.liabilityForm.name.trim(),
-      balance_owed: Math.round(Number(balance) * 100) / 100,
+      balance_owed: toDollars(parsed.cents),
     };
     const req =
       this.editingLiabilityId !== null
@@ -237,14 +271,15 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       next: () => {
         this.saving = false;
         this.closeModals();
-        this.toastService.success(
-          this.editingLiabilityId ? 'Liability updated' : 'Liability added'
-        );
+        this.toastService.success(successCopy('Debt', this.editingLiabilityId ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
-        this.toastService.error('Could not save this liability. Please try again.');
+        this.toastService.error(failureCopy('save', 'this debt', 'Try again.'), {
+          label: 'Try again',
+          run: () => this.saveLiability(),
+        });
         this.cdr.markForCheck();
       },
     });
@@ -274,6 +309,34 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
     this.financeService.deleteLiability(row.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toastService.success('Liability deleted'),
     });
+  }
+
+  assetFieldError(field: string): string | null {
+    return this.assetSubmitted ? fieldMessage(this.assetErrors, field) : null;
+  }
+
+  liabilityFieldError(field: string): string | null {
+    return this.liabilitySubmitted ? fieldMessage(this.liabilityErrors, field) : null;
+  }
+
+  focusNamed(rootId: string, field: string): void {
+    focusField(document.getElementById(rootId), field);
+  }
+
+  revalidateAsset(): void {
+    if (!this.assetSubmitted) return;
+    this.assetErrors = validateAsset({ name: this.assetForm.name, value: this.assetForm.current_value });
+    this.cdr.markForCheck();
+  }
+
+  revalidateLiability(): void {
+    if (!this.liabilitySubmitted) return;
+    this.liabilityErrors = validateDebt({ name: this.liabilityForm.name, amount: this.liabilityForm.balance_owed });
+    this.cdr.markForCheck();
+  }
+
+  excludedNote(): string | null {
+    return excludedAmountNote(this.netWorth?.excluded_invalid_amounts ?? 0);
   }
 
   assetDatesSummary(): string {

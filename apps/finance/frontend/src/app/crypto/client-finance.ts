@@ -18,45 +18,79 @@ import {
   jobCompensationBetween,
   paydayDatesBetween,
 } from '../utils/job-compensation.util';
-import { todayIsoDate } from '@vivek/browser';
+import { countableCents, dollarsFromCountedCents, fromDollars, roundHalfAwayFromZero, todayIsoDate, type Cents } from '@vivek/browser';
+
+function dollarsFromCents(cents: Cents): number {
+  const dollars = dollarsFromCountedCents(cents);
+  return Number.isFinite(dollars) ? dollars : 0;
+}
+
+/** Count a stored dollar amount, or flag it when it cannot be summed safely. */
+function takeCents(value: unknown, mode: 'nonNegative' | 'positive'): { cents: Cents; excluded: boolean } {
+  if (value == null || value === '') return { cents: 0, excluded: false };
+  const cents = countableCents(value, mode);
+  if (cents == null) return { cents: 0, excluded: true };
+  return { cents, excluded: false };
+}
+
+function holdingDollars(holding: Holding): number | null {
+  const shares = Number(holding.shares) || 0;
+  const exactValue = holding.market_value == null ? null : Number(holding.market_value);
+  const enrichedValue = holding.value == null ? null : Number(holding.value);
+  const price = holding.current_price ?? holding.purchase_price;
+  if (exactValue != null && Number.isFinite(exactValue)) return exactValue;
+  if (enrichedValue != null && Number.isFinite(enrichedValue)) return enrichedValue;
+  if (price == null || !Number.isFinite(Number(price))) return null;
+  return Number(price) * shares;
+}
 
 export function computeNetWorth(
   assets: Asset[],
   liabilities: Liability[],
   holdings: Holding[]
 ): NetWorth {
-  const other_assets = assets.reduce((sum, a) => sum + (Number(a.current_value) || 0), 0);
+  let excluded = 0;
+  let otherCents = 0;
+  for (const asset of assets) {
+    const taken = takeCents(asset.current_value, 'nonNegative');
+    otherCents += taken.cents;
+    if (taken.excluded) excluded += 1;
+  }
   const portfolio_sources: Record<string, string> = {};
   const portfolio_breakdown: Record<string, number> = {};
-  let portfolio = 0;
+  let portfolioCents = 0;
   const activeHoldings = holdings.filter(h => h.lifecycle_status !== 'inactive' && h.lifecycle_status !== 'staged');
-  for (const h of activeHoldings) {
-    const shares = Number(h.shares) || 0;
-    const exactValue = h.market_value == null ? null : Number(h.market_value);
-    const enrichedValue = h.value == null ? null : Number(h.value);
-    const price = h.current_price ?? h.purchase_price;
-    const value = exactValue != null && Number.isFinite(exactValue)
-      ? exactValue
-      : enrichedValue != null && Number.isFinite(enrichedValue)
-        ? enrichedValue
-        : price == null || !Number.isFinite(Number(price))
-          ? 0
-          : Number(price) * shares;
-    portfolio += value;
-    const symbol = (h.symbol || '').trim().toUpperCase() || `holding-${h.id}`;
-    portfolio_sources[symbol] = h.price_source || 'manual';
-    portfolio_breakdown[symbol] = (portfolio_breakdown[symbol] || 0) + value;
+  for (const holding of activeHoldings) {
+    const dollars = holdingDollars(holding);
+    const taken = dollars == null ? { cents: 0, excluded: false } : takeCents(dollars, 'nonNegative');
+    portfolioCents += taken.cents;
+    if (taken.excluded) excluded += 1;
+    const symbol = (holding.symbol || '').trim().toUpperCase() || `holding-${holding.id}`;
+    portfolio_sources[symbol] = holding.price_source || 'manual';
+    const previous = fromDollars(portfolio_breakdown[symbol] ?? 0) ?? 0;
+    portfolio_breakdown[symbol] = dollarsFromCents(previous + taken.cents);
   }
-  const liab = liabilities.reduce((sum, l) => sum + (Number(l.balance_owed) || 0), 0);
+  let liabilityCents = 0;
+  for (const liability of liabilities) {
+    const taken = takeCents(liability.balance_owed, 'nonNegative');
+    liabilityCents += taken.cents;
+    if (taken.excluded) excluded += 1;
+  }
+  const other_assets = dollarsFromCents(otherCents);
+  const portfolio = dollarsFromCents(portfolioCents);
+  const liab = dollarsFromCents(liabilityCents);
+  const totalAssetsCents = otherCents + portfolioCents;
+  const totalCents = totalAssetsCents - liabilityCents;
   return {
     other_assets,
     portfolio,
     liabilities: liab,
-    total_assets: other_assets + portfolio,
-    total: other_assets + portfolio - liab,
+    total_assets: dollarsFromCents(totalAssetsCents),
+    total: dollarsFromCents(totalCents),
     as_of: new Date().toISOString(),
     portfolio_sources: activeHoldings.length ? portfolio_sources : undefined,
     portfolio_breakdown: activeHoldings.length ? portfolio_breakdown : undefined,
+    excluded_invalid_amounts: excluded,
   };
 }
 
@@ -67,7 +101,9 @@ export interface TransactionEffects {
 
 /** Shared recorded-ledger semantics. Legacy rows without `kind` keep their income/expense behavior. */
 export function transactionEffects(tx: Transaction): TransactionEffects {
-  const amount = Math.abs(Number(tx.amount) || 0);
+  const raw = Number(tx.amount);
+  const cents = Number.isFinite(raw) && raw >= 0 ? countableCents(raw, 'nonNegative') : null;
+  const amount = cents == null ? 0 : dollarsFromCents(cents);
   switch (tx.kind) {
     case 'purchase': return { income: 0, spending: amount };
     case 'refund': return { income: 0, spending: -amount };
@@ -89,22 +125,26 @@ export function transactionSpending(tx: Transaction): number {
 }
 
 function monthlyAmount(amount: number, frequency: string): number {
+  const cents = fromDollars(Number(amount));
+  if (cents == null) return 0;
+  const scaled = (numerator: number, denominator: number) =>
+    dollarsFromCents(roundHalfAwayFromZero((cents * numerator) / denominator));
   switch (frequency) {
     case 'annual':
-      return amount / 12;
+      return scaled(1, 12);
     case 'quarterly':
-      return amount / 3;
+      return scaled(1, 3);
     case 'biweekly':
-      return (amount * 26) / 12;
+      return scaled(26, 12);
     case 'weekly':
-      return (amount * 52) / 12;
+      return scaled(52, 12);
     case 'semimonthly':
-      return amount * 2;
+      return dollarsFromCents(cents * 2);
     case 'hourly':
-      return amount * 40 * 52 / 12;
+      return scaled(40 * 52, 12);
     case 'monthly':
     default:
-      return amount;
+      return dollarsFromCents(cents);
   }
 }
 

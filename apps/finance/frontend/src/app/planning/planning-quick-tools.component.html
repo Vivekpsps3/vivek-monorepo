@@ -85,7 +85,7 @@
         <select [value]="selectedDebtLiabilityId ?? ''" (change)="selectDebtLiability($any($event.target).value)">
           <option value="">Manual debt estimate</option>
           @for (liability of inputs?.liability_sources || []; track liability.id) {
-            <option [value]="liability.id">{{ liability.name }} · {{ formatMoney(liability.balance_owed) }} · as of {{ liability.as_of_date || 'undated' }}</option>
+            <option [value]="liability.id">{{ liability.name }} · {{ formatActual(liability.balance_owed) }} · as of {{ liability.as_of_date | appDate }}</option>
           }
         </select>
         <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open saved liabilities</a>

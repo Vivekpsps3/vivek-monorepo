@@ -36,7 +36,8 @@ import {
 } from '../models/transaction.model';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
-import { downloadCsv } from '@vivek/browser';
+import { downloadCsv, plural } from '@vivek/browser';
+import { focusField } from '../shared/form-validation';
 import {
   normalizeSpendingLabel,
   spendingGroupKey,
@@ -57,11 +58,17 @@ import {
   UiDialogComponent,
 } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { PluralPipe } from '../shared/pipes/plural.pipe';
 
 @Component({
   selector: 'app-transactions',
   standalone: true,
   imports: [
+    PluralPipe,
+    AppDatePipe,
+    MoneyPipe,
     CommonModule,
     FormsModule,
     UiPageHeaderComponent,
@@ -152,9 +159,12 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   monthExpenseTotal = 0;
   monthIncomeTotal = 0;
+  purchaseCount = 0;
+  incomeCount = 0;
   categoryMergeFrom = '';
   categoryMergeTo = '';
   categoryMergeSaving = false;
+  categoryToolError = '';
   categoryBulkRows: { fromCategory: string; toCategory: string }[] = [this.emptyBulkRenameRow()];
   bulkMerchant = '';
   bulkMerchantCategory = '';
@@ -641,6 +651,10 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   resumeImport(receipt: ImportReceipt): void { this.importWorkflow.resumeImport(receipt); }
   undoImport(receipt: ImportReceipt): Promise<void> { return this.importWorkflow.undoImport(receipt); }
 
+  focusNamed(field: string): void {
+    focusField(document.getElementById('transaction-form'), field);
+  }
+
   openAddModal(): void {
     this.transactionEditor.openAddModal(this.selectedCalendarDate);
   }
@@ -654,6 +668,8 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.filteredTransactions = page.rows;
     this.monthExpenseTotal = totals.monthExpenseTotal;
     this.monthIncomeTotal = totals.monthIncomeTotal;
+    this.purchaseCount = totals.purchaseCount;
+    this.incomeCount = totals.incomeCount;
     this.cdr.markForCheck();
   }
 
@@ -751,13 +767,16 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     const from = this.categoryMergeFrom.trim();
     const to = this.categoryMergeTo.trim();
     if (!from || !to) {
-      this.toastService.error('Choose a source and target category.');
+      this.categoryToolError = 'Choose a source and target category.';
+      this.cdr.markForCheck();
       return;
     }
     if (from === to) {
-      this.toastService.error('Choose two different categories.');
+      this.categoryToolError = 'Choose two different categories.';
+      this.cdr.markForCheck();
       return;
     }
+    this.categoryToolError = '';
 
     const ok = await this.confirmService.ask(
       'Merge category?',
@@ -777,7 +796,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
           this.categoryMergeFrom = '';
           this.categoryMergeTo = '';
           this.applyFilterAndSort();
-          this.toastService.success(`Updated ${result.updated} transaction(s)`);
+          this.toastService.success(`Updated ${plural(result.updated, 'transaction')}`);
           this.cdr.markForCheck();
         },
         error: () => {
@@ -803,13 +822,15 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   async bulkRenameCategories(): Promise<void> {
     const rows = this.validBulkRenameRows;
     if (!rows.length) {
-      this.toastService.error('Add at least one valid category rename.');
+      this.categoryToolError = 'Add at least one valid category rename.';
+      this.cdr.markForCheck();
       return;
     }
+    this.categoryToolError = '';
 
     const ok = await this.confirmService.ask(
       'Bulk rename categories?',
-      `Apply ${rows.length} category rename(s) across all transactions?`,
+      `Apply ${plural(rows.length, 'category rename')} across all transactions?`,
       'Rename',
       'Cancel'
     );
@@ -824,7 +845,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
           this.categoryMergeSaving = false;
           this.categoryBulkRows = [this.emptyBulkRenameRow()];
           this.applyFilterAndSort();
-          this.toastService.success(`Updated ${result.updated} transaction(s)`);
+          this.toastService.success(`Updated ${plural(result.updated, 'transaction')}`);
           this.cdr.markForCheck();
         },
         error: () => {
@@ -838,9 +859,11 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     const merchant = this.bulkMerchant.trim();
     const category = this.bulkMerchantCategory.trim();
     if (!merchant || !category) {
-      this.toastService.error('Choose a merchant and a category.');
+      this.categoryToolError = 'Choose a merchant and a category.';
+      this.cdr.markForCheck();
       return;
     }
+    this.categoryToolError = '';
     const ok = await this.confirmService.ask(
       'Categorize merchant?',
       `Set every transaction for "${merchant}" to "${category}"?`,
@@ -853,7 +876,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
         this.categoryMergeSaving = false;
         this.bulkMerchant = '';
         this.bulkMerchantCategory = '';
-        this.toastService.success(`Updated ${result.updated} transaction(s)`);
+        this.toastService.success(`Updated ${plural(result.updated, 'transaction')}`);
         this.cdr.markForCheck();
       },
       error: () => { this.categoryMergeSaving = false; this.cdr.markForCheck(); },

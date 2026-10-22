@@ -18,6 +18,7 @@ import {
   ProfilePayload,
 } from '../models/planning.model';
 import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
+import { countableCents, dollarsFromCountedCents, isOnOrBeforeToday, parseDateOnly, todayIsoDate } from '@vivek/browser';
 
 @Injectable({ providedIn: 'root' })
 export class PlanningService {
@@ -124,9 +125,9 @@ export class PlanningService {
     const activeIncomes = incomes.filter(row => isCurrentJob(row));
     const activeFixed = fixed.filter(row => row.is_active);
     const activeSubs = subs.filter(row => row.is_active);
-    const monthlyIncome = activeIncomes.reduce((s, j) => s + (Number(j.monthly_net) || 0), 0);
-    const annualFixed = activeFixed.reduce((s, f) => s + (Number(f.annual_amount) || 0), 0);
-    const annualSubs = activeSubs.reduce((s, f) => s + (Number(f.annual_amount) || 0), 0);
+    const monthlyIncome = countedDollars(activeIncomes.map(job => job.monthly_net), 'nonNegative');
+    const annualFixed = countedDollars(activeFixed.map(row => row.annual_amount), 'positive');
+    const annualSubs = countedDollars(activeSubs.map(row => row.annual_amount), 'positive');
     const monthlyExpense = (annualFixed + annualSubs) / 12;
     const implied_annual_spending = annualFixed + annualSubs;
     const implied_annual_savings = monthlyIncome * 12 - implied_annual_spending;
@@ -161,7 +162,7 @@ export class PlanningService {
     ].join('|');
     return {
       disclaimer: PLANNING_DISCLAIMER,
-      as_of: new Date().toISOString().slice(0, 10),
+      as_of: todayIsoDate(),
       snapshot_hash,
       net_worth_total: nw.total,
       net_worth_portfolio: nw.portfolio,
@@ -364,12 +365,19 @@ export class PlanningService {
   }
 }
 
+function countedDollars(values: unknown[], mode: 'nonNegative' | 'positive'): number {
+  let cents = 0;
+  for (const value of values) {
+    const part = countableCents(value, mode);
+    if (part == null || part === 0) continue;
+    cents += part;
+  }
+  const dollars = dollarsFromCountedCents(cents);
+  return Number.isFinite(dollars) ? dollars : 0;
+}
+
 function isIsoDate(value: string | null | undefined): value is string {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(parsed.getTime())
-    && parsed.toISOString().slice(0, 10) === value
-    && value <= new Date().toISOString().slice(0, 10);
+  return parseDateOnly(value) != null && isOnOrBeforeToday(value);
 }
 
 function oldestIsoDate(values: Array<string | null | undefined>): string | null {

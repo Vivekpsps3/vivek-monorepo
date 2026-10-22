@@ -100,7 +100,8 @@ describe('portfolio.util', () => {
   });
 
   it('reports unknown source dates instead of substituting the current date', () => {
-    expect(portfolioDateSummary(['2026-10-10', null])).toBe('2026-10-10 · 1 unknown');
-    expect(portfolioDateSummary([null, 'invalid'])).toBe('Date unknown');
+    expect(portfolioDateSummary(['2026-10-10', null])).toBe('Oct 10 · 1 with no date');
+    expect(portfolioDateSummary([null, 'invalid'])).toBe('No date');
+    expect(portfolioDateSummary([])).toBe('');
   });
 });

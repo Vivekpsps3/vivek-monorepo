@@ -391,6 +391,12 @@ details.account-sub[open] > summary::before {
   margin: 0;
 }
 
+.import-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0;
+}
+
 .import-warning {
   margin: 0;
   font-size: var(--text-sm);

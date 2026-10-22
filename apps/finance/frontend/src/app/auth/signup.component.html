@@ -49,7 +49,7 @@
             @if (error) {
               <p class="login-error" role="alert">{{ error }}</p>
             }
-            <ui-button type="submit" [disabled]="loading || (!!inviteToken && !username)">
+            <ui-button type="submit" [disabled]="loading">
               {{ loading ? 'Creating account' : (inviteToken ? 'Finish account' : 'Sign up') }}
             </ui-button>
           } @else if (error) {

@@ -4,9 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { ConfirmService } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
-import { ToastService } from '@vivek/ui';
+import { ToastService, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
 import { FixedExpenseFrequency, Subscription, SubscriptionCreate } from '../models/transaction.model';
-import { todayIsoDate } from '@vivek/browser';
+import { amountProblem, countableCents, dollarsFromCountedCents, needsFixing, todayIsoDate, toDollars, validateMoney, validateSubscription, type FieldIssue } from '@vivek/browser';
 import {
   UiBadgeComponent,
   UiButtonComponent,
@@ -19,11 +19,16 @@ import {
   UiDialogComponent,
 } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
+import { fieldMessage, focusField, focusFirstInvalid } from '../shared/form-validation';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 @Component({
   selector: 'app-subscriptions',
   standalone: true,
   imports: [
+    AppDatePipe,
+    MoneyPipe,
     CommonModule,
     FormsModule,
     UiPageHeaderComponent,
@@ -34,6 +39,8 @@ import { InfoTipComponent } from '../shared/info-tip.component';
     UiSelectComponent,
     UiBadgeComponent,
     UiDialogComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
     InfoTipComponent,
   ],
   templateUrl: './subscriptions.component.html',
@@ -47,6 +54,10 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   showModal = false;
   saving = false;
   saveError = '';
+  fieldErrors: FieldIssue[] = [];
+  formSubmitted = false;
+  readonly amountProblem = amountProblem;
+  readonly needsFixing = needsFixing;
   editingId: number | null = null;
   form: SubscriptionCreate = this.emptyForm();
 
@@ -81,11 +92,25 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   }
 
   get activeMonthlyTotal(): number {
-    return this.subscriptions.filter(row => row.is_active).reduce((sum, row) => sum + row.monthly_amount, 0);
+    return countedTotal(this.subscriptions.filter(row => row.is_active).map(row => row.monthly_amount));
   }
 
   get activeAnnualTotal(): number {
-    return this.subscriptions.filter(row => row.is_active).reduce((sum, row) => sum + row.annual_amount, 0);
+    return countedTotal(this.subscriptions.filter(row => row.is_active).map(row => row.annual_amount));
+  }
+
+  fieldError(field: string): string | null {
+    return this.formSubmitted ? fieldMessage(this.fieldErrors, field) : null;
+  }
+
+  focusNamed(field: string): void {
+    focusField(document.getElementById('subscription-form'), field);
+  }
+
+  revalidate(): void {
+    if (!this.formSubmitted) return;
+    this.fieldErrors = validateSubscription({ name: this.form.name, amount: this.form.amount });
+    this.cdr.markForCheck();
   }
 
   openAddModal(): void {
@@ -123,15 +148,26 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   }
 
   saveSubscription(): void {
-    if (!this.form.name.trim()) {
-      this.toast.error('Subscription name is required.');
+    if (this.saving) return;
+    const errors = validateSubscription({ name: this.form.name, amount: this.form.amount });
+    this.fieldErrors = errors;
+    this.formSubmitted = true;
+    if (errors.length) {
+      this.cdr.markForCheck();
+      setTimeout(() => focusFirstInvalid(document.getElementById('subscription-form')));
       return;
     }
+    const parsed = validateMoney(this.form.amount, {
+      allowZero: false,
+      negativeMessage: 'Enter an amount above $0.',
+      emptyMessage: 'Enter an amount above $0.',
+    });
+    if (!('cents' in parsed)) return;
     const payload: SubscriptionCreate = {
       ...this.form,
       name: this.form.name.trim(),
       category: this.form.category.trim() || 'Subscriptions',
-      amount: Math.round((this.form.amount || 0) * 100) / 100,
+      amount: toDollars(parsed.cents),
       payment_account: this.form.payment_account?.trim() || null,
       notes: this.form.notes?.trim() || '',
     };
@@ -146,12 +182,15 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       next: () => {
         this.saving = false;
         this.closeModal();
-        this.toast.success(wasEditing ? 'Subscription updated' : 'Subscription added');
+        this.toast.success(successCopy('Subscription', wasEditing ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
-        this.saveError = 'This subscription could not be saved. Your details are still here; check your vault and try again.';
+        this.toast.error(failureCopy('save', 'this subscription', 'Try again.'), {
+          label: 'Try again',
+          run: () => this.saveSubscription(),
+        });
         this.cdr.markForCheck();
       },
     });
@@ -162,7 +201,10 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     if (!ok) return;
     this.finance.deleteSubscription(row.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => this.toast.success('Subscription deleted'),
-      error: () => this.toast.error('This subscription could not be deleted. Try again.'),
+      error: () => this.toast.error(failureCopy('delete', 'this subscription', 'Try again.'), {
+        label: 'Try again',
+        run: () => this.deleteSubscription(row),
+      }),
     });
   }
 
@@ -183,4 +225,16 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       notes: '',
     };
   }
+}
+
+function countedTotal(values: unknown[]): number {
+  let cents = 0;
+  for (const value of values) {
+    if (needsFixing(value, 'positive')) continue;
+    const part = countableCents(value, 'positive');
+    if (part == null) continue;
+    cents += part;
+  }
+  const dollars = dollarsFromCountedCents(cents);
+  return Number.isFinite(dollars) ? dollars : 0;
 }

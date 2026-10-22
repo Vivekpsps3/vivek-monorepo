@@ -48,7 +48,7 @@ describe('IncomeComponent compensation editing', () => {
     expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.objectContaining({
       end_date: '2026-12-31', promotions: row.promotions, compensation_payments: [jasmine.objectContaining(row.compensation_payments![0])],
     }));
-    expect(toast.success).toHaveBeenCalledWith('Income updated');
+    expect(toast.success).toHaveBeenCalledWith('Job saved');
   });
 
   it('blocks invalid history before writing', () => {
@@ -56,7 +56,8 @@ describe('IncomeComponent compensation editing', () => {
     component.form.end_date = '2025-12-31';
     component.saveIncome();
     expect(finance.updateJobIncome).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith('End date must be on or after the start date.');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(component.fieldErrors.some(error => error.message === 'End date must be on or after the start date.')).toBeTrue();
   });
 
   it('opens legacy jobs with empty histories and allows clearing an end date', async () => {

@@ -1,3 +1,4 @@
+import { formatDate, parseDateOnly } from '@vivek/browser';
 import { Asset, Holding, Liability } from '../models/transaction.model';
 
 export type ReviewState = 'current' | 'due' | 'unknown';
@@ -55,7 +56,7 @@ export function quoteFreshness(holding: Holding, asOf = todayDate()): QuoteState
   const source = String(holding.price_source || '');
   // Imported and provisional values describe their provenance independently of
   // whether the source file supplied a date. Keep that label visible while the
-  // adjacent date column says "Date unknown".
+  // adjacent date column says "No date".
   if (source === 'import_market_price' || source === 'import_market_value') return 'Imported';
   if (source === 'provisional_cost_basis' || source === 'fallback_purchase') return 'Provisional';
   if (source === 'error' || source === 'unavailable') return 'Unavailable';
@@ -117,12 +118,16 @@ export function calendarAgeDays(date: string | null | undefined, today = todayDa
 }
 
 export function portfolioDateSummary(values: Array<string | null | undefined>): string {
+  if (!values.length) return '';
   const dates = values.filter(isIsoDate).sort();
   const unknownCount = values.length - dates.length;
-  if (!dates.length) return 'Date unknown';
+  if (!dates.length) return 'No date';
   const uniqueDates = Array.from(new Set(dates));
-  const range = uniqueDates.length === 1 ? uniqueDates[0] : uniqueDates[0] + ' to ' + uniqueDates[uniqueDates.length - 1];
-  return unknownCount ? range + ' · ' + unknownCount + ' unknown' : range;
+  const formatted = uniqueDates.map(date => formatDate(date, 'table'));
+  const range = formatted.length === 1 ? formatted[0] : `${formatted[0]} to ${formatted[formatted.length - 1]}`;
+  if (!unknownCount) return range;
+  const note = unknownCount === 1 ? '1 with no date' : `${unknownCount} with no date`;
+  return `${range} · ${note}`;
 }
 
 function reviewIntervalOverride(value: number | null | undefined): number | null {
@@ -131,9 +136,7 @@ function reviewIntervalOverride(value: number | null | undefined): number | null
 }
 
 function isIsoDate(value: string | null | undefined): value is string {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(value + 'T00:00:00Z');
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  return parseDateOnly(value) != null;
 }
 
 function todayDate(): string {

@@ -9,11 +9,13 @@ import { compensationByEmployer, EmployerCompensation, isValidIsoDate } from '..
 import { todayIsoDate } from '@vivek/browser';
 import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
 
 @Component({
   selector: 'app-compensation-report',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, InfoTipComponent],
+  imports: [
+    MoneyPipe, CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, InfoTipComponent],
   template: `
     <ui-card [title]="'Total compensation by employer'">
       <app-info-tip uiCardActions align="end" label="Compensation estimate" text="Read-only. Edit jobs in Jobs and pay. Gross pay is prorated by employment dates. Dated payments count once. ESPP excludes your purchase contributions. Equity counts grant value and that year's gain; later years count only the gain or loss. Sold shares use locked proceeds. Unsold shares use the latest price on or before the selected date. Stock values do not change recurring pay or net worth." />
@@ -40,7 +42,7 @@ import { InfoTipComponent } from '../shared/info-tip.component';
       @if (rangeError) {
         <p role="alert">{{ rangeError }}</p>
       } @else if (rows.length) {
-        <p class="stat-display money">{{ total | currency:'USD':'symbol':'1.2-2' }}</p>
+        <p class="stat-display money">{{ total | money }}</p>
         <p class="muted">{{ start || 'All recorded history' }} → {{ end }}{{ isProjection ? ' · Includes projected pay' : '' }}</p>
         <ui-data-table ariaLabel="Total compensation by employer">
           <thead><tr><th>Employer</th><th>Base pay</th><th>Cash bonuses</th><th>Equity</th><th>Stock comp this range</th><th>Other</th><th>Employee ESPP contributions</th><th>Sale cash through date</th><th>Unsold stock value at date</th><th>Total compensation</th></tr></thead>
@@ -48,15 +50,15 @@ import { InfoTipComponent } from '../shared/info-tip.component';
             @for (row of rows; track row.employer) {
               <tr>
                 <td><strong>{{ row.employer }}</strong><span class="muted job-count">{{ row.jobs }} {{ row.jobs === 1 ? 'job' : 'jobs' }}</span></td>
-                <td class="money">{{ row.base | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money">{{ row.bonus | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money">{{ row.equity | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money">{{ row.stock_compensation | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money">{{ row.other | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money">{{ row.stockEmployeeContributions | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money">{{ row.stockCashProceeds | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money">{{ row.stockRemainingValue | currency:'USD':'symbol':'1.2-2' }}</td>
-                <td class="money"><strong>{{ row.gross | currency:'USD':'symbol':'1.2-2' }}</strong></td>
+                <td class="money">{{ row.base | money }}</td>
+                <td class="money">{{ row.bonus | money }}</td>
+                <td class="money">{{ row.equity | money }}</td>
+                <td class="money">{{ row.stock_compensation | money }}</td>
+                <td class="money">{{ row.other | money }}</td>
+                <td class="money">{{ row.stockEmployeeContributions | money }}</td>
+                <td class="money">{{ row.stockCashProceeds | money }}</td>
+                <td class="money">{{ row.stockRemainingValue | money }}</td>
+                <td class="money"><strong>{{ row.gross | money }}</strong></td>
               </tr>
             }
           </tbody>

@@ -16,12 +16,15 @@ import {
   evidenceKindLabel,
   stockLabEvidenceCards,
 } from '../utils/evidence-labels.util';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 
 
 @Component({
   selector: 'app-stock-lab',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent, InfoTipComponent],
+  imports: [
+    AppDatePipe, CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent, InfoTipComponent],
   templateUrl: './stock-lab.component.html',
   styleUrl: './stock-lab.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -278,8 +281,11 @@ export class StockLabComponent implements OnInit, OnDestroy {
   }
 
   formatMoney(value: number | null | undefined): string {
-    if (value == null || Number.isNaN(value)) return '-';
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
+    return formatStoredMoney(value);
+  }
+
+  formatEstimate(value: number | null | undefined): string {
+    return formatEstimateMoney(value);
   }
 
   formatPct(value: number | null | undefined): string {

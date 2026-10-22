@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
 import { apiUrl } from '../core/api-url';
@@ -16,6 +16,7 @@ import {
 } from './vault-crypto';
 import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
+import { ToastService, failureCopy } from '@vivek/ui';
 
 export interface VaultStatus {
   exists: boolean;
@@ -47,6 +48,7 @@ export class VaultService {
   private boot: Promise<void>;
   /** Failed KDF upgrades since this page loaded. The session stays unlocked either way. */
   kdfUpgradeFailures = 0;
+  private readonly toast = inject(ToastService);
 
   readonly status$ = this.statusSubject.asObservable();
   readonly unlocked$ = this.unlockedSubject.asObservable();
@@ -156,9 +158,9 @@ export class VaultService {
     try {
       await this.ensureAuthWrap();
       await this.applyKdfUpgrade(passphrase);
-    } catch (err) {
+    } catch {
       this.kdfUpgradeFailures += 1;
-      console.warn('Vault KDF upgrade failed; will retry on the next unlock', err);
+      this.toast.error(failureCopy('upgrade', 'vault protection', 'Lock and unlock again.'));
     }
   }
 

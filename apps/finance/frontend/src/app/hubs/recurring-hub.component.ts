@@ -12,6 +12,10 @@ import { FinanceService } from '../services/finance.service';
 import { UiButtonComponent } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
 import { FixedExpense, Subscription } from '../models/transaction.model';
+import { countableCents, dollarsFromCountedCents, needsFixing } from '@vivek/browser';
+import { UiBadgeComponent } from '@vivek/ui';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 export interface CommitmentRow {
   id: number;
@@ -25,6 +29,7 @@ export interface CommitmentRow {
   amount: number;
   monthlyAmount: number;
   active: boolean;
+  needsFixing?: boolean;
   bill?: FixedExpense;
   subscription?: Subscription;
 }
@@ -32,7 +37,9 @@ export interface CommitmentRow {
 @Component({
   selector: 'app-recurring-hub',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, UiButtonComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent, InfoTipComponent],
+  imports: [
+    AppDatePipe,
+    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent, InfoTipComponent],
   template: `
     <div class="page recurring-page">
       <h1>Recurring</h1>
@@ -52,8 +59,8 @@ export interface CommitmentRow {
             </div>
           </header>
           <div class="commitment-totals" aria-label="Bills and subscriptions totals">
-            <div><span>Active monthly equivalent</span><strong class="money">{{ activeMonthlyTotal | currency:'USD':'symbol':'1.2-2' }}</strong></div>
-            <div><span>Active annual equivalent</span><strong class="money">{{ activeAnnualTotal | currency:'USD':'symbol':'1.2-2' }}</strong></div>
+            <div><span>Active monthly equivalent</span><strong class="money">{{ activeMonthlyTotal | money }}</strong></div>
+            <div><span>Active annual equivalent</span><strong class="money">{{ activeAnnualTotal | money }}</strong></div>
             <div><span>Repeating</span><strong>{{ rows.length }}</strong></div>
           </div>
           <div class="commitment-filters" aria-label="Filter commitments">
@@ -74,12 +81,15 @@ export interface CommitmentRow {
                 <tbody>
                   @for (item of filteredRows; track item.kind + ':' + item.id) {
                     <tr>
-                      <td>{{ item.date ? (item.date | date:'mediumDate':'UTC') : 'No date' }}</td>
+                      <td>{{ item.date | appDate }}</td>
                       <td><strong>{{ item.name }}</strong><small>{{ item.kind === 'bill' ? item.category : 'Subscription' }} · {{ item.kind === 'bill' ? 'Bill' : 'Subscription' }}</small></td>
                       <td>{{ item.account || 'Not recorded' }}</td>
                       <td>{{ item.autopay == null ? 'Not recorded' : item.autopay ? 'Autopay' : 'Manual' }}</td>
                       <td>{{ frequencyLabel(item.frequency) }}</td>
-                      <td class="money">{{ item.amount | currency:'USD':'symbol':'1.2-2' }}<small>{{ item.monthlyAmount | currency:'USD':'symbol':'1.2-2' }} / month</small></td>
+                      <td class="money">
+                        @if (item.needsFixing) { <ui-badge variant="warning">Needs fixing</ui-badge> }
+                        {{ item.amount | money }}<small>{{ item.monthlyAmount | money }} / month</small>
+                      </td>
                       <td><span class="status-chip" [class.status-chip--inactive]="!item.active">{{ item.active ? 'Active' : 'Inactive' }}</span></td>
                       <td class="commitment-row-actions"><ui-button variant="ghost" size="sm" (clicked)="edit(item)">Edit</ui-button><ui-button variant="danger" size="sm" (clicked)="remove(item)">Delete</ui-button></td>
                     </tr>
@@ -90,8 +100,8 @@ export interface CommitmentRow {
             <div class="commitment-cards">
               @for (item of filteredRows; track item.kind + ':' + item.id) {
                 <article class="commitment-card">
-                  <div class="commitment-card__heading"><div><strong>{{ item.name }}</strong><span>{{ item.kind === 'bill' ? item.category : 'Subscription' }} · {{ item.active ? 'Active' : 'Inactive' }}</span></div><strong class="money">{{ item.amount | currency:'USD':'symbol':'1.2-2' }}</strong></div>
-                  <dl><div><dt>Next due</dt><dd>{{ item.date ? (item.date | date:'mediumDate':'UTC') : 'No date' }}</dd></div><div><dt>Account</dt><dd>{{ item.account || 'Not recorded' }}</dd></div><div><dt>Autopay</dt><dd>{{ item.autopay == null ? 'Not recorded' : item.autopay ? 'Autopay' : 'Manual' }}</dd></div><div><dt>Frequency</dt><dd>{{ frequencyLabel(item.frequency) }}</dd></div></dl>
+                  <div class="commitment-card__heading"><div><strong>{{ item.name }}</strong><span>{{ item.kind === 'bill' ? item.category : 'Subscription' }} · {{ item.active ? 'Active' : 'Inactive' }}</span></div><strong class="money">{{ item.amount | money }}</strong></div>
+                  <dl><div><dt>Next due</dt><dd>{{ item.date | appDate }}</dd></div><div><dt>Account</dt><dd>{{ item.account || 'Not recorded' }}</dd></div><div><dt>Autopay</dt><dd>{{ item.autopay == null ? 'Not recorded' : item.autopay ? 'Autopay' : 'Manual' }}</dd></div><div><dt>Frequency</dt><dd>{{ frequencyLabel(item.frequency) }}</dd></div></dl>
                   <div class="commitment-card__actions"><ui-button variant="secondary" (clicked)="edit(item)">Edit</ui-button><ui-button variant="danger" (clicked)="remove(item)">Delete</ui-button></div>
                 </article>
               }
@@ -194,13 +204,13 @@ export class RecurringHubComponent implements OnInit {
         id: bill.id, kind: 'bill' as const, name: bill.name, category: bill.category,
         date: bill.next_due_date, account: bill.payment_account || null, autopay: bill.autopay,
         frequency: bill.frequency, amount: bill.amount, monthlyAmount: bill.monthly_amount,
-        active: bill.is_active, bill,
+        active: bill.is_active, needsFixing: needsFixing(bill.amount, 'positive'), bill,
       })),
       ...this.subscriptions.map(subscription => ({
         id: subscription.id, kind: 'subscription' as const, name: subscription.name, category: subscription.category,
         date: subscription.next_due_date, account: subscription.payment_account || null, autopay: null,
         frequency: subscription.frequency, amount: subscription.amount, monthlyAmount: subscription.monthly_amount,
-        active: subscription.is_active, subscription,
+        active: subscription.is_active, needsFixing: needsFixing(subscription.amount, 'positive'), subscription,
       })),
     ].sort((a, b) => {
       if (!a.date && b.date) return 1;
@@ -218,7 +228,15 @@ export class RecurringHubComponent implements OnInit {
   }
 
   get activeMonthlyTotal(): number {
-    return this.rows.filter(row => row.active).reduce((sum, row) => sum + row.monthlyAmount, 0);
+    let cents = 0;
+    for (const row of this.rows) {
+      if (!row.active || row.needsFixing) continue;
+      const part = countableCents(row.monthlyAmount, 'positive');
+      if (part == null) continue;
+      cents += part;
+    }
+    const dollars = dollarsFromCountedCents(cents);
+    return Number.isFinite(dollars) ? dollars : 0;
   }
 
   get activeAnnualTotal(): number { return this.activeMonthlyTotal * 12; }

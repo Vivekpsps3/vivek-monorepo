@@ -24,7 +24,22 @@ export {
 } from './chart-theme';
 export { UiConfirmDialogComponent } from './ui-confirm-dialog/ui-confirm-dialog.component';
 export { ConfirmService, type ConfirmState } from './confirm.service';
-export { ToastService, type ToastKind, type ToastPayload } from './toast.service';
+export { ToastService, type ToastAction, type ToastKind, type ToastPayload } from './toast.service';
+export {
+  HTTP_ERROR_FALLBACK,
+  TOAST_ACTION_DURATION_MS,
+  TOAST_DURATION_MS,
+  TOAST_INSET_PX,
+  TOAST_LIMIT,
+  TOAST_MAX_WIDTH_PX,
+  failureCopy,
+  httpErrorMessage,
+  successCopy,
+  toastDuration,
+  toastLive,
+  toastRole,
+} from './toast-contract';
+export { UiFieldComponent, UiFieldControlDirective } from './ui-field/ui-field.component';
 export {
   applyThemePreference,
   bindSystemTheme,

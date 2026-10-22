@@ -14,6 +14,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subject, auditTime, finalize, takeUntil } from 'rxjs';
+import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 import { FinanceDataChange, FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
 import { ConfirmService } from '@vivek/ui';
@@ -64,11 +65,13 @@ import {
   normalizePlanningAssumptions,
   restorePlanningProfilePayload,
 } from './planning-assumptions.util';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 @Component({
   selector: 'app-planning',
   standalone: true,
   imports: [
+    AppDatePipe,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -144,6 +147,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   profiles: PlanningProfile[] = [];
   selectedProfileId: number | null = null;
   savedInputName = '';
+  savedInputError = '';
   savingProfile = false;
 
   private destroy$ = new Subject<void>();
@@ -503,7 +507,12 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
 
   saveSavedInputs(): void {
     const name = this.savedInputName.trim();
-    if (!name) return;
+    if (!name) {
+      this.savedInputError = 'Enter a name for these inputs.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.savedInputError = '';
     this.savingProfile = true;
     const body = { name, payload: this.normalizedAssumptions() };
     const req = this.workflow.saveProfile(this.selectedProfileId, body);
@@ -835,18 +844,15 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   formatMoney(n: number | undefined | null): string {
-    if (n == null || Number.isNaN(n)) return '-';
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(n);
+    return formatStoredMoney(n);
+  }
+
+  formatEstimate(n: number | undefined | null): string {
+    return formatEstimateMoney(n);
   }
 
   formatSignedMoney(n: number | undefined | null): string {
-    if (n == null || Number.isNaN(n)) return '-';
-    const sign = n > 0 ? '+' : '';
-    return `${sign}${this.formatMoney(n)}`;
+    return formatEstimateMoney(n, 'always');
   }
 
   formatPct(n: number | undefined | null, source: 'decimal' | 'percent' = 'decimal'): string {

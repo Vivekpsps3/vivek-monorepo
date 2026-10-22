@@ -14,19 +14,19 @@
   <section class="income-summary">
     <div>
       <p class="section-eyebrow">Yearly pay</p>
-      <div class="stat-display money">${{ activeAnnualNet | number: '1.2-2' }}</div>
+      <div class="stat-display money">{{ activeAnnualNet | money }}</div>
       <p class="summary-caption">
-        ${{ activeMonthlyTotal | number: '1.2-2' }} each month
+        {{ activeMonthlyTotal | money }} each month
       </p>
     </div>
     <div class="income-summary-metrics">
       <div class="summary-pill">
         <span>Gross</span>
-        <strong class="money">${{ activeAnnualTotal | number: '1.2-2' }}</strong>
+        <strong class="money">{{ activeAnnualTotal | money }}</strong>
       </div>
       <div class="summary-pill">
         <span>Taxes/deductions</span>
-        <strong class="money">−${{ activeAnnualAdjustments | number: '1.2-2' }}</strong>
+        <strong class="money">−{{ activeAnnualAdjustments | money }}</strong>
       </div>
       <div class="summary-pill">
         <ui-icon name="wallet" size="sm" />
@@ -60,68 +60,68 @@
                 }
               </td>
               <td>
-                <span class="money">${{ row.base_pay | number: '1.2-2' }}</span>
+                <span class="money">{{ row.base_pay | money }}</span>
                 <span class="muted block">{{ payFrequencyLabel(row.pay_frequency) }}</span>
               </td>
               <td>
-                <strong class="money">${{ row.annual_gross | number: '1.2-2' }}</strong>
-                <span class="muted block">${{ row.monthly_gross | number: '1.2-2' }} / month</span>
+                <strong class="money">{{ row.annual_gross | money }}</strong>
+                <span class="muted block">{{ row.monthly_gross | money }} / month</span>
               </td>
               <td>
-                <strong class="money">${{ row.annual_net | number: '1.2-2' }}</strong>
-                <span class="muted block">${{ row.monthly_net | number: '1.2-2' }} / month estimate</span>
+                <strong class="money">{{ row.annual_net | money }}</strong>
+                <span class="muted block">{{ row.monthly_net | money }} / month estimate</span>
               </td>
               <td>
-                <span>{{ row.effective_date }} → {{ row.end_date || 'Present' }}</span>
+                <span>{{ row.effective_date | appDateRange:row.end_date }}</span>
                 <span class="muted block">{{ paydaySummary(row) }}</span>
                 @if ((row.promotions || []).length + (row.compensation_payments || []).length + (row.stock_grants || []).length + (row.stock_purchases || []).length || row.stock_symbol) {
                   <details class="job-history">
                     <summary>Show pay and stock history</summary>
                 @for (promotion of row.promotions || []; track $index) {
-                  <span class="muted block">{{ promotion.date }}: {{ promotion.role_title || 'Promotion' }} · ${{ promotion.annual_base_pay | number: '1.2-2' }} / year</span>
+                  <span class="muted block">{{ promotion.date | appDate }}: {{ promotion.role_title || 'Promotion' }} · {{ promotion.annual_base_pay | money }} / year</span>
                 }
                 @for (payment of row.compensation_payments || []; track $index) {
-                  <span class="muted block">{{ payment.date }}: {{ payment.label || payment.kind }} · ${{ payment.amount | number: '1.2-2' }}</span>
+                  <span class="muted block">{{ payment.date | appDate }}: {{ payment.label || payment.kind }} · {{ payment.amount | money }}</span>
                 }
                 @for (grant of row.stock_grants || []; track $index) {
                   @let grantSnapshot = stockGrantSnapshot(grant, row.stock_valuations || [], today(), row.stock_symbol);
                   <span class="muted block">
-                    {{ grant.date }}: {{ grant.label || (grant.origin === 'bonus' ? 'Stock bonus' : 'Equity grant') }} · {{ grant.quantity | number: '1.0-4' }} shares at ${{ grant.price_at_grant | number: '1.2-4' }} grant price
+                    {{ grant.date | appDate }}: {{ grant.label || (grant.origin === 'bonus' ? 'Stock bonus' : 'Equity grant') }} · {{ grant.quantity | number: '1.0-4' }} shares at {{ grant.price_at_grant | money }} grant price
                     · {{ grantSnapshot.remainingShares | number: '1.0-4' }} remain as of {{ today() }}
                     @if (grantSnapshot.hasDatedValuation) {
-                      , marked at ${{ grantSnapshot.valuationPrice | number: '1.2-4' }} from {{ grantSnapshot.valuationDate }}
+                      , marked at {{ grantSnapshot.valuationPrice | money }} from {{ grantSnapshot.valuationDate }}
                     } @else {
                       , using the grant price until a dated valuation is entered
                     }
                   </span>
                   @for (sale of grant.sales || []; track $index) {
-                    <span class="muted block">{{ sale.shares | number: '1.0-4' }} shares converted to cash on {{ sale.date }} · ${{ sale.cash_proceeds | number: '1.2-2' }} proceeds</span>
+                    <span class="muted block">{{ sale.shares | number: '1.0-4' }} shares converted to cash on {{ sale.date | appDate }} · {{ sale.cash_proceeds | money }} proceeds</span>
                   }
                 }
                 @for (purchase of row.stock_purchases || []; track $index) {
                   @let purchaseSnapshot = stockPurchaseSnapshot(purchase, row.stock_valuations || [], today(), row.stock_symbol);
                   <span class="muted block">
-                    {{ purchase.date }}: {{ purchase.label || 'ESPP purchase' }} · {{ purchase.quantity | number: '1.0-4' }} shares · employee contribution ${{ (purchase.quantity * purchase.price_paid_per_share) | number: '1.2-2' }} at ${{ purchase.price_paid_per_share | number: '1.2-4' }} per share
+                    {{ purchase.date | appDate }}: {{ purchase.label || 'ESPP purchase' }} · {{ purchase.quantity | number: '1.0-4' }} shares · employee contribution {{ (purchase.quantity * purchase.price_paid_per_share) | money }} at {{ purchase.price_paid_per_share | money }} per share
                     · {{ purchaseSnapshot.remainingShares | number: '1.0-4' }} remain
                     @if (purchaseSnapshot.hasDatedValuation) {
-                      , marked at ${{ purchaseSnapshot.valuationPrice | number: '1.2-4' }} from {{ purchaseSnapshot.valuationDate }}
+                      , marked at {{ purchaseSnapshot.valuationPrice | money }} from {{ purchaseSnapshot.valuationDate }}
                     } @else if (purchaseSnapshot.hasMarketPriceAtPurchase) {
-                      , marked at ${{ purchaseSnapshot.valuationPrice | number: '1.2-4' }} purchase-date market price
+                      , marked at {{ purchaseSnapshot.valuationPrice | money }} purchase-date market price
                     } @else {
                       , using the purchase price until a dated valuation is entered
                     }
                   </span>
                   @for (sale of purchase.sales || []; track $index) {
-                    <span class="muted block">{{ sale.shares | number: '1.0-4' }} ESPP shares sold on {{ sale.date }} · ${{ sale.cash_proceeds | number: '1.2-2' }} locked proceeds</span>
+                    <span class="muted block">{{ sale.shares | number: '1.0-4' }} ESPP shares sold on {{ sale.date | appDate }} · {{ sale.cash_proceeds | money }} locked proceeds</span>
                   }
                 }
                 @if ((row.stock_grants || []).length) {
                   <span class="muted block">
-                    Stock at {{ today() }}: ${{ stockSnapshotAt(row, today()).realizedProceeds | number: '1.2-2' }} sale proceeds + ${{ stockSnapshotAt(row, today()).remainingValue | number: '1.2-2' }} remaining shares
+                    Stock at {{ today() }}: {{ stockSnapshotAt(row, today()).realizedProceeds | money }} sale proceeds + {{ stockSnapshotAt(row, today()).remainingValue | money }} remaining shares
                   </span>
                 }
                 @if ((row.stock_purchases || []).length) {
-                  <span class="muted block">Employee-funded ESPP purchases through {{ today() }}: ${{ stockSnapshotAt(row, today()).employeeContributions | number: '1.2-2' }} contributions.</span>
+                  <span class="muted block">Employee-funded ESPP purchases through {{ today() }}: {{ stockSnapshotAt(row, today()).employeeContributions | money }} contributions.</span>
                 }
                 @if (row.stock_symbol || (row.stock_grants || []).length || (row.stock_purchases || []).length) {
                   <section class="stock-quote-controls" [attr.aria-label]="(row.stock_symbol || 'Private') + ' share price controls'">
@@ -143,6 +143,9 @@
                       <ui-button variant="secondary" size="sm" [disabled]="isStockPriceSaving(row.id)" (clicked)="saveStockPrice(row)">
                         {{ isStockPriceSaving(row.id) ? 'Saving…' : 'Save current manual price' }}
                       </ui-button>
+                      @if (stockPriceErrors[row.id]) {
+                        <p class="field-error" role="alert">{{ stockPriceErrors[row.id] }}</p>
+                      }
                       @if (row.stock_symbol) {
                         <ui-button variant="ghost" size="sm" [disabled]="isStockTickerRefreshing(row.stock_symbol)" [ariaLabel]="'Refresh market price for ' + row.stock_symbol" (clicked)="refreshStockTicker(row.stock_symbol)">
                           {{ isStockTickerRefreshing(row.stock_symbol) ? 'Refreshing…' : 'Refresh market price' }}
@@ -182,11 +185,21 @@
 
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="income-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeModal()">
       <h3 id="income-modal-title">{{ editingId ? 'Edit job' : 'Add job' }}</h3>
-      <form (ngSubmit)="saveIncome()" #incomeForm="ngForm">
+      <form id="job-form" novalidate (ngSubmit)="saveIncome()" #incomeForm="ngForm">
+        @if (formSubmitted && fieldErrors.length) {
+          <div class="form-error-summary" role="alert">
+            <p>Fix {{ fieldErrors.length }} {{ fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
+            <ul>
+              @for (error of fieldErrors; track error.field) {
+                <li><button type="button" (click)="focusNamed(error.field)">{{ error.label }}</button></li>
+              }
+            </ul>
+          </div>
+        }
         <div class="form-row">
           <label class="form-group">
             <span>Employer</span>
-            <input name="employer" [(ngModel)]="form.employer" required data-dialog-initial-focus />
+            <input data-field="employer" name="employer" [(ngModel)]="form.employer" data-dialog-initial-focus [attr.aria-invalid]="fieldError('employer') ? true : null" [attr.data-field-invalid]="fieldError('employer') ? true : null" />
           </label>
           <label class="form-group">
             <span>Role</span>
@@ -201,7 +214,7 @@
             [(value)]="form.pay_frequency" />
           <label class="form-group">
             <span>Starting {{ basePayLabel.toLowerCase() }}</span>
-            <input name="base_pay" type="number" min="0" step="0.01" [(ngModel)]="form.base_pay" required />
+            <input data-field="basePay" name="base_pay" type="text" inputmode="decimal" [(ngModel)]="form.base_pay" [attr.aria-invalid]="fieldError('basePay') ? true : null" [attr.data-field-invalid]="fieldError('basePay') ? true : null" />
           </label>
         </div>
 
@@ -300,7 +313,7 @@
           </div>
           <div class="tax-helper__result">
             <span>Estimated taxes per {{ payPeriodLabel }} period</span>
-            <strong class="money">${{ estimatedTaxesPerPeriod | number: '1.2-2' }}</strong>
+            <strong class="money">{{ estimatedTaxesPerPeriod | money }}</strong>
             <small>{{ estimatedTaxRateLabel }} of gross pay before deductions</small>
           </div>
           <div class="tax-helper__actions">
@@ -329,19 +342,19 @@
         <div class="net-preview">
           <div>
             <span>Gross per {{ payPeriodLabel }} period</span>
-            <strong class="money">${{ formPeriodGross | number: '1.2-2' }}</strong>
+            <strong class="money">{{ formPeriodGross | money }}</strong>
           </div>
           <div>
             <span>Taxes/deductions per period</span>
-            <strong class="money">−${{ formPeriodAdjustments | number: '1.2-2' }}</strong>
+            <strong class="money">−{{ formPeriodAdjustments | money }}</strong>
           </div>
           <div>
             <span>Net per {{ payPeriodLabel }} period</span>
-            <strong class="money">${{ formPeriodNet | number: '1.2-2' }}</strong>
+            <strong class="money">{{ formPeriodNet | money }}</strong>
           </div>
           <div>
             <span>Starting net annual estimate</span>
-            <strong class="money">${{ formAnnualNet | number: '1.2-2' }}</strong>
+            <strong class="money">{{ formAnnualNet | money }}</strong>
           </div>
         </div>
 
@@ -455,15 +468,15 @@
               </div>
               @let grantPreview = stockGrantSnapshot(grant, form.stock_valuations || [], today(), form.stock_symbol);
               <p class="stock-preview">
-                Grant value: <strong>${{ (grant.quantity * grant.price_at_grant) | number: '1.2-2' }}</strong>.
+                Grant value: <strong>{{ (grant.quantity * grant.price_at_grant) | money }}</strong>.
                 As of {{ today() }}, {{ grantPreview.remainingShares | number: '1.0-4' }} shares remain.
                 @if (grantPreview.hasDatedValuation) {
-                  Latest saved price is <strong>${{ grantPreview.valuationPrice | number: '1.2-4' }}</strong> from {{ grantPreview.valuationDate }}, worth
+                  Latest saved price is <strong>{{ grantPreview.valuationPrice | money }}</strong> from {{ grantPreview.valuationDate }}, worth
                 } @else {
-                  No dated price is available, so the grant price of <strong>${{ grantPreview.valuationPrice | number: '1.2-4' }}</strong> is used, worth
+                  No dated price is available, so the grant price of <strong>{{ grantPreview.valuationPrice | money }}</strong> is used, worth
                 }
-                <strong>${{ grantPreview.remainingValue | number: '1.2-2' }}</strong>; recorded sale proceeds are
-                <strong>${{ grantPreview.realizedProceeds | number: '1.2-2' }}</strong>.
+                <strong>{{ grantPreview.remainingValue | money }}</strong>; recorded sale proceeds are
+                <strong>{{ grantPreview.realizedProceeds | money }}</strong>.
               </p>
 
               <div class="history-heading">
@@ -525,17 +538,17 @@
               </div>
               @let purchasePreview = stockPurchaseSnapshot(purchase, form.stock_valuations || [], today(), form.stock_symbol);
               <p class="stock-preview">
-                Your contribution: <strong>${{ (purchase.quantity * purchase.price_paid_per_share) | number: '1.2-2' }}</strong>.
+                Your contribution: <strong>{{ (purchase.quantity * purchase.price_paid_per_share) | money }}</strong>.
                 As of {{ today() }}, {{ purchasePreview.remainingShares | number: '1.0-4' }} shares remain.
                 @if (purchasePreview.hasDatedValuation) {
-                  Latest saved price is <strong>${{ purchasePreview.valuationPrice | number: '1.2-4' }}</strong> from {{ purchasePreview.valuationDate }}, worth
+                  Latest saved price is <strong>{{ purchasePreview.valuationPrice | money }}</strong> from {{ purchasePreview.valuationDate }}, worth
                 } @else if (purchasePreview.hasMarketPriceAtPurchase) {
-                  Purchase-date market price is <strong>${{ purchasePreview.valuationPrice | number: '1.2-4' }}</strong>, worth
+                  Purchase-date market price is <strong>{{ purchasePreview.valuationPrice | money }}</strong>, worth
                 } @else {
-                  No dated price is available, so your purchase price of <strong>${{ purchasePreview.valuationPrice | number: '1.2-4' }}</strong> is used, worth
+                  No dated price is available, so your purchase price of <strong>{{ purchasePreview.valuationPrice | money }}</strong> is used, worth
                 }
-                <strong>${{ purchasePreview.remainingValue | number: '1.2-2' }}</strong>; recorded sale proceeds are
-                <strong>${{ purchasePreview.realizedProceeds | number: '1.2-2' }}</strong>.
+                <strong>{{ purchasePreview.remainingValue | money }}</strong>; recorded sale proceeds are
+                <strong>{{ purchasePreview.realizedProceeds | money }}</strong>.
               </p>
 
               <div class="history-heading">
@@ -574,7 +587,7 @@
         </label>
 
         <div class="form-actions">
-          <ui-button type="submit" variant="primary" [disabled]="!incomeForm.form.valid || saving">Save</ui-button>
+          <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving' : 'Save' }}</ui-button>
           <ui-button variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
         </div>
       </form>
