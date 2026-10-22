@@ -98,7 +98,10 @@ export function openConfirm({ title, body, confirmLabel, onConfirm }) {
   dialog.querySelector("[data-confirm-title]").textContent = title;
   dialog.querySelector("[data-confirm-body]").textContent = body;
   const error = dialog.querySelector("[data-confirm-error]");
-  if (error) error.textContent = "";
+  if (error) {
+    error.textContent = "";
+    error.hidden = true;
+  }
   const ok = dialog.querySelector("[data-confirm-ok]");
   ok.textContent = confirmLabel;
   ok.onclick = async () => {
@@ -107,7 +110,10 @@ export function openConfirm({ title, body, confirmLabel, onConfirm }) {
       await onConfirm();
       dialog.close();
     } catch (reason) {
-      if (error) error.textContent = reason?.message || "Something went wrong.";
+      if (error) {
+        error.hidden = false;
+        error.textContent = reason?.message || "Something went wrong.";
+      }
     } finally {
       ok.disabled = false;
     }
