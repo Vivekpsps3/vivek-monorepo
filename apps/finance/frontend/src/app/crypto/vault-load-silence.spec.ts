@@ -115,6 +115,29 @@ describe('vault load silence', () => {
     await secondSave;
   });
 
+  it('sends a second update of the same asset with the revision from the first save', async () => {
+    const preload = store.getAssets();
+    const list = await whenRequest(fullLoad);
+    list.flush([assetRow(3)]);
+    await preload;
+
+    const firstSave = store.updateAsset(1, { name: 'First' });
+    const first = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(first.request.body?.records?.[0].expected_revision).toBe(3);
+    const secondSave = store.updateAsset(1, { name: 'Second' });
+    await settle();
+    expect(http.match(req => req.method === 'POST' && req.url.includes('/vault/records/upsert')).length)
+      .withContext('the second save waits for the first')
+      .toBe(0);
+    first.flush([assetRow(4)]);
+    await firstSave;
+
+    const second = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(second.request.body?.records?.[0].expected_revision).toBe(4);
+    second.flush([assetRow(5)]);
+    expect((await secondSave).name).toBe('Second');
+  });
+
   it('rewrites a legacy record once when a silent load and a normal load overlap', async () => {
     const silent = store.getStockLabScenarios({ silent: true });
     const open = store.getTransactions();

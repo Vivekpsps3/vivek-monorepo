@@ -67,8 +67,6 @@ export class EncryptedRecordPersistence {
   private legacyRewritePending = false;
   private inflightRewrite: InflightWork | null = null;
   private reservedIds = new Set<number>();
-  /** Record ids whose queued write is currently running, so a nested write does not deadlock. */
-  private activeRecordKeys = new Set<string>();
   private recordQueues = new Map<string, Promise<unknown>>();
   private reloadQueues = new Map<CollectionName, Promise<void>>();
   private collectionVersions = new Map<CollectionName, number>();
@@ -95,7 +93,6 @@ export class EncryptedRecordPersistence {
     this.legacyRewritePending = false;
     this.inflightRewrite = null;
     this.reservedIds.clear();
-    this.activeRecordKeys.clear();
     this.recordQueues.clear();
     this.reloadQueues.clear();
     this.collectionVersions.clear();
@@ -121,19 +118,10 @@ export class EncryptedRecordPersistence {
     update: () => Promise<T>
   ): Promise<T> {
     const key = `${collection}:${id}`;
-    if (this.activeRecordKeys.has(key)) {
-      this.assertSession(expectedGeneration);
-      return update();
-    }
     const previous = this.recordQueues.get(key) ?? Promise.resolve();
     const pending = previous.catch(() => undefined).then(async () => {
       this.assertSession(expectedGeneration);
-      this.activeRecordKeys.add(key);
-      try {
-        return await update();
-      } finally {
-        this.activeRecordKeys.delete(key);
-      }
+      return await update();
     });
     this.recordQueues.set(key, pending);
     return pending.finally(() => {
@@ -336,9 +324,7 @@ export class EncryptedRecordPersistence {
     const id = preview?.id ?? payload.id ?? this.allocateId();
     this.reservedIds.add(id);
     const cid = preview?.client_id ?? clientId ?? randomClientId(collection.slice(0, 3));
-    const write = () => this.persistUpsert(collection, payload, id, cid, generation, options);
-    if (options?.legacyRewrite) return write();
-    return this.runRecordUpdate(collection, id, generation, write);
+    return this.persistUpsert(collection, payload, id, cid, generation, options);
   }
 
   private findEnvelope(collection: CollectionName, id?: number, clientId?: string): StoredEnvelope<unknown> | undefined {

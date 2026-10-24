@@ -231,10 +231,12 @@ export class EncryptedStoreService {
 
   async updateAsset(id: number, body: any, options?: VaultWriteOptions): Promise<Asset> {
     const generation = this.generation;
-    const current = (await this.getAssets()).find(a => a.id === id);
-    this.assertSession(generation);
-    if (!current) throw new Error('Asset not found');
-    return this.upsert('assets', { ...current, ...body, id }, undefined, generation, options);
+    return this.runRecordUpdate('assets', id, generation, async () => {
+      const current = (await this.getAssets()).find(a => a.id === id);
+      this.assertSession(generation);
+      if (!current) throw new Error('Asset not found');
+      return this.upsert('assets', { ...current, ...body, id }, undefined, generation, options);
+    });
   }
 
   async deleteAsset(id: number, options?: VaultWriteOptions): Promise<void> {
