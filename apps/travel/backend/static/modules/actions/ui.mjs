@@ -5,7 +5,9 @@ import { parseHash } from '../route-parser.mjs';
 import { renderTrip } from '../views/trip.mjs';
 import { renderLogin } from '../views/settings.mjs';
 import { cityFields, connectionFields } from '../views/new-trip.mjs';
-import { submit, showError, refetchTrip } from './forms.mjs';
+import { submit, refetchTrip } from './forms.mjs';
+import { dismissToast, fail, openConfirm, saved } from '../feedback.mjs';
+import { deletionMode, dialogCopy, undoCopy, restoreBody, restorePath, flagBody, flagToast, findItem, deletePath, patchPath } from '../restore.mjs';
 import { applyFlight, renderFlightChoices } from './flight.mjs';
 import { safeStorageSet } from '../../../shared-browser/dom.mjs';
 
@@ -24,9 +26,24 @@ export async function onAction(button, ui) {
     return;
   }
   if (action === "cancel") {
+    const edit = state.edit;
     state.edit = null;
+    state.details = null;
     state.compose = "";
     state.error = "";
+    if (edit?.kind === "trip") state.focusKey = "edit-trip";
+    else if (edit?.kind) state.focusKey = `edit-${edit.kind}-${edit.id}`;
+    if (state.trip && parseHash().name === "trip") {
+      if (edit?.kind === "trip" && state.trip.title) document.title = `${state.trip.title} · Travel`;
+      ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
+    }
+    return;
+  }
+  if (action === "more-details") {
+    const kind = button.dataset.kind;
+    const id = button.dataset.id || "";
+    const same = state.details && state.details.kind === kind && String(state.details.id) === String(id);
+    state.details = same ? null : { kind, id };
     if (state.trip && parseHash().name === "trip") ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     return;
   }
@@ -54,47 +71,15 @@ export async function onAction(button, ui) {
   if (action === "edit") {
     state.edit = { kind: button.dataset.kind, id: Number(button.dataset.id) };
     state.compose = "";
+    state.details = null;
+    if (button.dataset.kind === "trip") document.title = "Edit trip · Travel";
     ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     return;
   }
   if (action === "delete") {
     const kind = button.dataset.kind;
     const id = button.dataset.id;
-    const prompts = {
-      trip: "Delete this trip and its plans?",
-      transport: "Delete this ride?",
-      plan: "Delete this plan?",
-      parking: "Delete this parking note?",
-      note: "Delete this note?",
-      reminder: "Delete this reminder?",
-      budget: "Delete this extra cost?",
-      pto: "Delete this PTO entry?",
-      stay: "Delete this city?",
-    };
-    if (!window.confirm(prompts[kind] || "Delete this?")) return;
-    const paths = {
-      trip: `/api/trips/${id}`,
-      transport: `/api/transports/${id}`,
-      plan: `/api/plans/${id}`,
-      parking: `/api/parking/${id}`,
-      note: `/api/notes/${id}`,
-      reminder: `/api/reminders/${id}`,
-      budget: `/api/budget-lines/${id}`,
-      pto: `/api/pto/entries/${id}`,
-      stay: `/api/stays/${id}`,
-    };
-    await api(paths[kind], { method: "DELETE" });
-    if (kind === "trip") {
-      state.trip = null;
-      location.hash = "#/";
-      if ((location.hash || "#/") === "#/") await ui.render();
-      return;
-    }
-    if (kind === "pto") {
-      await ui.render();
-      return;
-    }
-    await refetchTrip(ui);
+    await removeItem(kind, id, ui);
     return;
   }
   if (action === "lookup-flight") {
@@ -159,11 +144,127 @@ export async function onAction(button, ui) {
     ui.paint(renderTrip(state.trip), "home");
     return;
   }
-  if (action === "clear-key") {
-    await api("/api/settings/flightaware", { method: "DELETE" });
+  if (action === "retry-route") {
     await ui.render();
     return;
   }
+  if (action === "clear-key") {
+    const copy = dialogCopy("flight-key");
+    openConfirm({
+      title: copy.title,
+      body: copy.body,
+      confirmLabel: copy.confirm,
+      onConfirm: async () => {
+        await api("/api/settings/flightaware", { method: "DELETE" });
+        saved("Key removed.");
+        await ui.render();
+      },
+    });
+    return;
+  }
+  if (action === "show-on-map") {
+    const map = window._travelMap;
+    if (!map) return;
+    const lat = Number(button.dataset.lat);
+    const lng = Number(button.dataset.lng);
+    map.flyTo([lat, lng], 12);
+    const marker = (window._travelMarkers || []).find((item) => {
+      const point = item.getLatLng();
+      return Math.abs(point.lat - lat) < 0.0001 && Math.abs(point.lng - lng) < 0.0001;
+    });
+    marker?.openPopup();
+    return;
+  }
+  if (action === "calendar-layout") {
+    document.querySelector(".cal-board")?.classList.toggle("is-month");
+    return;
+  }
+  if (action === "menu") {
+    const menu = document.querySelector("#more-menu");
+    if (!menu) return;
+    const open = menu.hasAttribute("hidden");
+    if (open) menu.removeAttribute("hidden");
+    else menu.setAttribute("hidden", "");
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+}
+
+async function removeItem(kind, id, ui) {
+  const item = findItem(state.trip, kind, id, { entries: state.ptoEntries || [] });
+  const mode = deletionMode(kind);
+  if (mode === "dialog") {
+    const copy = dialogCopy(kind, state.trip);
+    openConfirm({
+      title: copy.title,
+      body: copy.body,
+      confirmLabel: copy.confirm,
+      onConfirm: async () => {
+        await api(deletePath(kind, id), { method: "DELETE" });
+      },
+      after: async () => {
+        if (kind === "trip") {
+          state.trip = null;
+          saved("Trip deleted.");
+          state.holdHash = true;
+          state.focusHeading = true;
+          location.hash = "#/";
+          try {
+            if ((location.hash || "#/") === "#/") await ui.render();
+          } finally {
+            state.holdHash = false;
+          }
+          return;
+        }
+        if (kind === "pto") await ui.render();
+        else if (state.trip) await refetchTrip(ui);
+      },
+    });
+    return;
+  }
+  const snapshot = item ? structuredClone(item) : null;
+  await api(deletePath(kind, id), { method: "DELETE" });
+  const tripId = state.trip?.id;
+  const restore = async () => {
+    await api(restorePath(kind, tripId), { method: "POST", body: JSON.stringify(restoreBody(kind, snapshot)) });
+    if (kind === "pto") await ui.render();
+    else await refetchTrip(ui);
+  };
+  saved(undoCopy(kind), {
+    label: "Undo",
+    key: `undo-${kind}-${id}`,
+    onClick: async () => {
+      try {
+        await restore();
+      } catch (error) {
+        fail(error, { retry: { key: `undo-${kind}-${id}`, run: restore } });
+      }
+    },
+  });
+  if (kind === "pto") await ui.render();
+  else await refetchTrip(ui);
+}
+
+async function saveFlagValue(kind, id, flag, next, ui) {
+  const item = findItem(state.trip, kind, id);
+  if (!item || !flag) return;
+  state.focusKey = `flag-${kind}-${id}-${flag}`;
+  try {
+    state.trip = await api(patchPath(kind, id), {
+      method: "PATCH",
+      body: JSON.stringify(flagBody(kind, item, flag, next)),
+    });
+    dismissToast(`flag-${kind}-${id}`);
+    saved(flagToast(kind, flag, next));
+    if (parseHash().name === "trip") ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
+  } catch (error) {
+    const input = [...document.querySelectorAll("[data-save-flag]")].find((node) => node.dataset.saveFlag === flag && node.dataset.kind === kind && node.dataset.id === String(id));
+    if (input) input.checked = !next;
+    fail(error, { retry: { key: `flag-${kind}-${id}`, run: () => saveFlagValue(kind, id, flag, next, ui) } });
+  }
+}
+
+async function saveFlag(input, ui) {
+  return saveFlagValue(input.dataset.kind, input.dataset.id, input.dataset.saveFlag, input.checked, ui);
 }
 function themeChoice(value) {
   return THEME_CHOICES.includes(value) ? value : "system";
@@ -205,15 +306,26 @@ export function applyTheme(value) {
   root.dataset.themeChoice = choice;
   document.querySelectorAll("[data-action=theme]").forEach((button) => {
     const selected = button.dataset.themeValue === choice;
-    button.setAttribute("aria-pressed", selected ? "true" : "false");
+    button.removeAttribute("aria-pressed");
+    button.setAttribute("aria-checked", selected ? "true" : "false");
+    button.tabIndex = selected ? 0 : -1;
   });
   bindSchemeListener();
 }
 
 export function bindEvents(ui) {
+  const disarmNativeValidation = (event) => {
+    const node = event.target instanceof Element ? event.target : null;
+    const form = node?.closest?.("form[data-form]");
+    if (form) form.noValidate = true;
+  };
+  document.addEventListener("click", disarmNativeValidation, true);
+  document.addEventListener("keydown", disarmNativeValidation, true);
+
   document.addEventListener("submit", (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || !form.dataset.form) return;
+    form.noValidate = true;
     event.preventDefault();
     const submitButton = form.querySelector("[type=submit]");
     if (submitButton) submitButton.disabled = true;
@@ -238,11 +350,66 @@ export function bindEvents(ui) {
   });
 
   document.addEventListener("change", (event) => {
-    if (event.target.name !== "mode") return;
-    const form = event.target.closest("form");
+    const target = event.target;
+    if (target?.dataset?.saveFlag) {
+      onActionSafe(() => saveFlag(target, ui), ui);
+      return;
+    }
+    if (target?.name === "notes") updateNotesCount(target);
+    if (target?.name !== "mode") return;
+    const form = target.closest("form");
     const flight = form && form.querySelector("[data-flight-only]");
-    if (flight) flight.hidden = event.target.value !== "flight";
+    if (flight) flight.hidden = target.value !== "flight";
   });
+  document.addEventListener("input", (event) => {
+    if (event.target?.name === "notes") updateNotesCount(event.target);
+  });
+  document.addEventListener("keydown", (event) => {
+    const themeRadio = event.target?.closest?.("[data-action=theme]");
+    if (themeRadio && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      const buttons = [...document.querySelectorAll("[data-action=theme]")];
+      const index = buttons.indexOf(themeRadio);
+      const delta = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      const next = buttons[(index + delta + buttons.length) % buttons.length];
+      if (!next) return;
+      applyTheme(next.dataset.themeValue);
+      next.focus();
+      return;
+    }
+    if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+    const menu = document.querySelector("#more-menu");
+    if (menu && !menu.hasAttribute("hidden")) {
+      menu.setAttribute("hidden", "");
+      const opener = document.querySelector("[data-action=menu]");
+      if (opener) {
+        opener.setAttribute("aria-expanded", "false");
+        opener.focus();
+      }
+      return;
+    }
+    if (!state.edit && !state.details) return;
+    const edit = state.edit;
+    state.edit = null;
+    state.details = null;
+    state.compose = "";
+    if (edit?.kind === "trip") state.focusKey = "edit-trip";
+    else if (edit?.kind) state.focusKey = `edit-${edit.kind}-${edit.id}`;
+    if (state.trip && parseHash().name === "trip") ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
+  });
+}
+
+function updateNotesCount(field) {
+  const note = field.form?.querySelector("[data-notes-count]") || document.querySelector("[data-notes-count]");
+  if (!note) return;
+  const length = field.value.length;
+  if (length < 7000) {
+    note.hidden = true;
+    note.textContent = "";
+    return;
+  }
+  note.hidden = false;
+  note.textContent = `${length} of 8000 characters`;
 }
 
 async function onActionSafe(work, ui) {
@@ -250,9 +417,14 @@ async function onActionSafe(work, ui) {
     await work();
   } catch (error) {
     if (error.status === 401) {
-      ui.paint(renderLogin(), parseHash().name);
+      ui.paint(renderLogin(), "");
+      const heading = document.querySelector("#app h1");
+      if (heading instanceof HTMLElement) {
+        heading.tabIndex = -1;
+        heading.focus();
+      }
       return;
     }
-    showError(error);
+    fail(error, { retry: error.status === 422 ? null : { key: "action", run: () => onActionSafe(work, ui) } });
   }
 }

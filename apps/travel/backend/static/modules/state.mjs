@@ -54,6 +54,9 @@ export const state = {
   compose: "",
   composeDate: "",
   composeRole: "outbound",
+  details: null,
   flights: [],
   fieldSeq: 0,
+  holdHash: false,
+  focusHeading: false,
 };

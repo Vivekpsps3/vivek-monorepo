@@ -47,5 +47,7 @@ test("hash routes parse travel home, calendar, trip day, PTO, and settings", () 
   });
   assert.deepEqual(parseHash("#/pto"), { name: "pto" });
   assert.deepEqual(parseHash("#/settings"), { name: "settings" });
-  assert.deepEqual(parseHash("#/unknown"), { name: "home" });
+  assert.deepEqual(parseHash("#/trips/new?start=2026-10-22"), { name: "new", start: "2026-10-22" });
+  assert.deepEqual(parseHash("#/unknown"), { name: "not-found" });
+  assert.deepEqual(parseHash("#/trips/abc"), { name: "not-found" });
 });
