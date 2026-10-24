@@ -14,13 +14,15 @@ test("keeps unrated distinct from zero and labels statuses by medium", () => {
   assert.equal(ratingText(null), "Unrated");
   assert.equal(ratingText(0), "0/10");
   assert.equal(ratingText(7.5), "7.5/10");
-  assert.equal(statusLabel("book", "in_progress"), "Currently Reading");
-  assert.equal(statusLabel("game", "in_progress"), "Currently Playing");
-  assert.equal(statusLabel("album", "want"), "Want to Listen");
+  assert.equal(statusLabel("book", "in_progress"), "Reading");
+  assert.equal(statusLabel("game", "in_progress"), "Playing");
+  assert.equal(statusLabel("tv", "in_progress"), "Watching");
+  assert.equal(statusLabel("album", "want"), "Want to listen");
   assert.equal(statusLabel("artist", "want"), "Following");
-  assert.equal(statusLabel("movie", "want"), "Want to Watch");
-  assert.equal(statusLabel("book", "want"), "Want to Read");
-  assert.equal(statusLabel("game", "want"), "Want to Play");
+  assert.equal(statusLabel("artist", "dropped"), "Unfollowed");
+  assert.equal(statusLabel("movie", "want"), "Want to watch");
+  assert.equal(statusLabel("book", "want"), "Want to read");
+  assert.equal(statusLabel("game", "want"), "Want to play");
   assert.equal(statusLabel("movie", "completed"), "Watched");
   assert.equal(statusLabel("tv", "completed"), "Watched");
   assert.equal(statusLabel("book", "completed"), "Read");
@@ -105,7 +107,7 @@ test("empty state escapes its copy and route errors are one panel", () => {
     primary: { href: "#/search", label: "Find something" },
     secondary: { href: "#/library", label: "Library" },
   });
-  assert.match(html, /class="empty"/);
+  assert.match(html, /class="empty(?:\s|")/);
   assert.match(html, /Nothing &lt;here&gt;/);
   assert.match(html, /class="btn btn-primary"/);
   assert.match(emptyState({ icon: "<star>" }), /class="empty-icon" aria-hidden="true">&lt;star&gt;/);

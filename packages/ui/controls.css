@@ -150,3 +150,28 @@ textarea {
   min-height: 96px;
   resize: vertical;
 }
+
+/* Opt-in empty state. Travel's `.empty` is the new-trip launcher, so this
+ * class is separate and does not change that control.
+ */
+.suite-empty {
+  box-sizing: border-box;
+  max-width: 360px;
+  margin-inline: auto;
+  padding: var(--space-10);
+  text-align: center;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.suite-empty h2 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 550;
+}
+
+.suite-empty p {
+  margin: 0 0 var(--space-4);
+  color: var(--text-secondary);
+}

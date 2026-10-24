@@ -84,6 +84,19 @@ const RELEASE_MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+/** Same kind words as the journal. */
+export function journalKindLabel(kind: string): string {
+  return ({
+    movie: 'Movie',
+    tv: 'Series',
+    book: 'Book',
+    track: 'Song',
+    album: 'Album',
+    artist: 'Artist',
+    game: 'Game',
+  } as Record<string, string>)[kind] || 'Media';
+}
+
 /** Phrases for Hub release rows. Month and year precision never become a calendar day. */
 export function mediaReleaseLabel(item: {
   when?: string | null;

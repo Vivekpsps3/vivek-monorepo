@@ -2,12 +2,10 @@
 
 export { browserTimeZone, isoDateInZone, localTodayIso } from "./today.mjs";
 import { browserTimeZone, isoDateInZone, localTodayIso } from "./today.mjs";
+import { WEEK_STARTS_ON } from "./week.mjs";
 
-/**
- * Week start for the suite. Decision D11: Sunday (0). Flip this one constant.
- * Media Batch 4 can read the same value.
- */
-export const WEEK_STARTS_ON = 0;
+/** Sunday by default. The one definition lives in week.mjs. */
+export { WEEK_STARTS_ON };
 
 const ZONE_LABELS = {
   "America/Los_Angeles": "PT",

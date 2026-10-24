@@ -3,7 +3,7 @@
 import json
 import math
 import time
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -63,8 +63,8 @@ def iso(value: datetime | date | None) -> str | None:
         return None
     if isinstance(value, datetime):
         if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc).isoformat()
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC).isoformat()
     return value.isoformat()
 
 
@@ -98,6 +98,8 @@ def entry_card(entry: UserEntry) -> dict:
         "rating": entry.rating,
         "favorite": entry.favorite,
         "anticipated": entry.anticipated,
+        "progress_value": entry.progress_value,
+        "progress_unit": entry.progress_unit,
         "progress_label": progress_label(entry),
         "updated_at": iso(entry.updated_at),
         "review_updated_at": iso(entry.review_updated_at),
@@ -388,15 +390,22 @@ def progress_number(value) -> float | None:
     return number
 
 
+_REVIEW_KEYS = {"review", "review_base"}
+
+
 def assert_review_base(entry: UserEntry, body: dict) -> None:
     """409 when a note save started from a review the server no longer has.
 
-    The same text is a no-op success. A client can time out after the server
-    has already stored the note, then retry with the base it started from.
+    An identical review, and nothing else, is a no-op success: a client can
+    time out after the server stored the note, then retry with the base it
+    started from. Other fields in the same body are still checked against
+    that base, so a stale note cannot ride along with a status change.
     """
     if "review" not in body or "review_base" not in body:
         return
-    if clean_text(body.get("review"), 20000, "Review") == entry.review:
+    same_review = clean_text(body.get("review"), 20000, "Review") == entry.review
+    other_fields = any(key not in _REVIEW_KEYS for key in body)
+    if same_review and not other_fields:
         return
     current = iso(entry.review_updated_at) or ""
     incoming = body.get("review_base")
@@ -404,9 +413,34 @@ def assert_review_base(entry: UserEntry, body: dict) -> None:
         raise HTTPException(status_code=409, detail="This note changed in another tab.")
 
 
+def _entry_snapshot(entry: UserEntry) -> tuple:
+    catalog = entry.catalog
+    return (
+        entry.status,
+        entry.rating,
+        entry.review,
+        bool(entry.review_spoiler),
+        entry.summary,
+        entry.tags,
+        bool(entry.favorite),
+        bool(entry.anticipated),
+        entry.progress_value,
+        entry.progress_unit,
+        catalog.title,
+        catalog.creator,
+        catalog.year,
+        catalog.overview,
+        catalog.artwork_url,
+    )
+
+
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     assert_review_base(entry, body)
+    before = _entry_snapshot(entry)
     before_review = entry.review
+    records_release = any(
+        key in body for key in ("release_on", "release_precision", "release_status", "releases")
+    )
     if "status" in body:
         entry.status = choice(body.get("status"), STATUSES, "Status")
     if "rating" in body:
@@ -456,7 +490,8 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
         fill_blanks_only=fill_only,
     )
     store_release(db, entry.catalog, body)
-    entry.updated_at = utc_now()
+    if _entry_snapshot(entry) != before or records_release:
+        entry.updated_at = utc_now()
     db.flush()
     return entry
 
@@ -784,6 +819,16 @@ def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None
                 .filter(MusicAlbum.catalog_id == catalog.id, MusicAlbum.source_id == source_id)
                 .one_or_none()
             )
+        raw_year = item.get("year")
+        if raw_year in (None, ""):
+            year = None
+        else:
+            try:
+                year = _year(raw_year)
+            except HTTPException:
+                # MusicBrainz dates like "0000" are not a reason to drop the
+                # rest of the discography. Skip this release and keep going.
+                continue
         if row is None:
             row = MusicAlbum(
                 catalog_id=catalog.id, title=title, source_id=source_id, position=index
@@ -791,7 +836,6 @@ def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None
             db.add(row)
         row.title = title
         row.position = index
-        year = _year(item.get("year"))
         if year is not None:
             row.year = year
         artwork = item.get("artwork_url")
@@ -887,9 +931,9 @@ def _year(value) -> int | None:
     try:
         year = int(value)
     except (TypeError, ValueError):
-        return None
+        fail("Year must be a number from 1000 to 3000.")
     if year < 1000 or year > 3000:
-        return None
+        fail("Year must be a number from 1000 to 3000.")
     return year
 
 
@@ -1085,11 +1129,15 @@ def detail(db: Session, entry: UserEntry) -> dict:
     }
 
 
-def saved_source_keys(db: Session, user_id: int) -> set[tuple[str, str]]:
+def saved_source_ids(db: Session, user_id: int) -> dict[tuple[str, str], int]:
     rows = (
-        db.query(CatalogItem.source, CatalogItem.source_id)
+        db.query(CatalogItem.source, CatalogItem.source_id, UserEntry.id)
         .join(UserEntry, UserEntry.catalog_id == CatalogItem.id)
         .filter(UserEntry.user_id == user_id, CatalogItem.source_id.is_not(None))
         .all()
     )
-    return {(source, source_id) for source, source_id in rows}
+    return {(source, source_id): entry_id for source, source_id, entry_id in rows}
+
+
+def saved_source_keys(db: Session, user_id: int) -> set[tuple[str, str]]:
+    return set(saved_source_ids(db, user_id))

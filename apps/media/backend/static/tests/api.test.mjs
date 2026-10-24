@@ -15,6 +15,44 @@ test("network, csrf, and unavailable errors use the journal sentences", () => {
   assert.equal(messageFrom(null, 500), "Request failed (500).");
 });
 
+test("a timeout with no caller signal uses the friendly network sentence", async () => {
+  const original = globalThis.fetch;
+  globalThis.document = { cookie: "finance_csrf=token" };
+  globalThis.window = { MEDIA_ROOT: "" };
+  globalThis.fetch = async () => {
+    const error = new Error("The operation was aborted due to timeout");
+    error.name = "TimeoutError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      () => api("/api/entries/1", { method: "PATCH", body: "{}" }),
+      error => error.message === NETWORK_MESSAGE && error.status === 0 && error.name !== "TimeoutError",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a timeout on the caller's signal stays a timeout", async () => {
+  const original = globalThis.fetch;
+  globalThis.document = { cookie: "finance_csrf=token" };
+  globalThis.window = { MEDIA_ROOT: "" };
+  globalThis.fetch = async () => {
+    const error = new Error("The operation was aborted due to timeout");
+    error.name = "TimeoutError";
+    throw error;
+  };
+  try {
+    await assert.rejects(
+      () => api("/api/entries/1", { method: "PATCH", body: "{}", signal: AbortSignal.timeout(10_000) }),
+      error => error.name === "TimeoutError",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test("a failed csrf preflight uses the friendly network sentence", async () => {
   const original = globalThis.fetch;
   globalThis.document = { cookie: "" };

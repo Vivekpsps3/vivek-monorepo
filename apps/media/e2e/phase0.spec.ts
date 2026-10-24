@@ -27,13 +27,8 @@ test('progress saves with a unit and survives reload and Again', async ({ page }
   await page.goto('/media/#/library');
   await page.getByRole('link', { name: /Dune/ }).click();
   await expect(page.getByLabel('Progress', { exact: true })).toBeVisible();
-  const gap = await page.evaluate(() => {
-    const row = document.querySelector('.progress-controls')?.getBoundingClientRect();
-    const again = document.querySelector('[data-action="log-again"]')?.getBoundingClientRect();
-    if (!row || !again) return 999;
-    return again.top - row.bottom;
-  });
-  expect(gap).toBeLessThan(32);
+  const gap = await page.evaluate(() => getComputedStyle(document.querySelector('.note-block') as HTMLElement).marginTop);
+  expect(gap).toBe('16px');
   const progress = page.getByLabel('Progress', { exact: true });
   await progress.fill('120');
   await page.getByLabel('Unit').selectOption('page');
@@ -46,7 +41,7 @@ test('progress saves with a unit and survives reload and Again', async ({ page }
   await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('120');
   await expect(page.getByLabel('Unit')).toHaveValue('page');
 
-  await page.getByRole('button', { name: 'Again' }).click();
+  await page.getByRole('radio', { name: 'Paused' }).click();
   await expect(page.getByLabel('Progress', { exact: true })).toHaveValue('120');
   await expect(page.getByLabel('Unit')).toHaveValue('page');
 });
@@ -63,7 +58,7 @@ test('title sort works and an unknown sort does not fail the page', async ({ pag
   await page.screenshot({ path: shot('after-library-sort.png'), fullPage: true });
 
   await page.goto('/media/#/library?sort=nope');
-  await expect(page.getByRole('heading', { name: 'Saved' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Library/ })).toBeVisible();
   await expect(page.locator('#toasts')).toContainText("That sort isn't available. Showing recently active.");
   await expect(page.locator('#notice')).toHaveCount(0);
   await expect(page).not.toHaveURL(/sort=nope/);
@@ -326,7 +321,7 @@ test('a slower library response cannot replace a newer screen', async ({ page })
   await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Saved');
   await page.waitForTimeout(1200);
   await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Saved');
-  await expect(page.locator('nav [aria-current="page"]')).toHaveText('Now');
+  await expect(page.locator('.nav [aria-current="page"]')).toHaveText('Now');
 });
 
 test('a slower search for the previous type cannot replace the current one', async ({ page }) => {
@@ -402,7 +397,7 @@ test('progress stays 120 after a status change re-renders the item', async ({ pa
   });
   const progress = page.getByLabel('Progress', { exact: true });
   await progress.fill('120');
-  const status = page.getByRole('button', { name: 'Paused' });
+  const status = page.getByRole('radio', { name: 'Paused' });
   const statusSent = page.waitForRequest(request => {
     if (request.method() !== 'PATCH') return false;
     try {
@@ -435,10 +430,11 @@ async function settleControl(page: import('@playwright/test').Page, name: string
     && /\/api\/entries\/\d+$/.test(response.url())
     && response.ok()
   ));
-  await page.getByRole('button', { name, exact }).click();
+  const control = page.locator('.opinion').getByRole('radio', { name, exact }).or(page.locator('.opinion').getByRole('button', { name, exact }));
+  await control.click();
   await refreshed;
   await expect(opinion).not.toHaveAttribute('data-generation', 'old');
-  const button = page.getByRole('button', { name, exact });
+  const button = control;
   await expect(button).toBeFocused();
   return button;
 }
@@ -450,7 +446,7 @@ test('status, favorite, and again keep focus on the same control', async ({ page
   await expect(paused).toHaveClass(/is-on/);
   const favorite = await settleControl(page, 'Favorite', true);
   await expect(favorite).toHaveAttribute('aria-pressed', 'true');
-  await settleControl(page, 'Again');
+  await expect(page.getByRole('button', { name: 'Log a read' })).toBeVisible();
 });
 
 test('a missing item is one error panel and a success toast survives navigation', async ({ page }) => {
@@ -468,9 +464,9 @@ test('a missing item is one error panel and a success toast survives navigation'
 
   await page.goto('/media/#/new');
   await page.getByLabel('Title').fill('Synthetic Toast Title');
-  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to library' }).click();
   await expect(page).toHaveURL(/#\/item\//);
-  await expect(page.locator('#toasts')).toContainText('Saved in your library.');
+  await expect(page.locator('#toasts')).toContainText('Added Synthetic Toast Title.');
 });
 
 test('a slow route shows a skeleton and a fast one does not flash', async ({ page }) => {
@@ -538,8 +534,8 @@ test('a slow status change does not skeleton the open item', async ({ page, requ
     await new Promise(resolve => setTimeout(resolve, 400));
     await route.continue();
   });
-  await page.getByRole('button', { name: 'Paused' }).click();
-  await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+  await page.getByRole('radio', { name: 'Paused' }).click();
+  await expect(page.getByRole('radio', { name: 'Paused' })).toHaveClass(/is-on/);
   await expect(page.locator('.skeleton')).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as { __skeletonShown: boolean }).__skeletonShown)).toBe(false);
 });
@@ -565,7 +561,7 @@ test('library keeps the current cards until the skeleton delay', async ({ page }
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });
-  await page.locator('a.status-mark', { hasText: /^Book$/ }).click();
+  await page.locator('a.status-mark', { hasText: /^Books$/ }).click();
   await expect(page.locator('[data-library-body] .skeleton').first()).toBeVisible();
   const trace = await page.evaluate(() => (window as unknown as { __library: { sawCards: boolean, sawSkeleton: boolean, blanked: boolean } }).__library);
   expect(trace.sawCards).toBe(true);
@@ -654,7 +650,7 @@ test('media routes stay quiet under the enforced content security policy', async
   });
   page.on('pageerror', error => problems.push(String(error)));
   await page.goto('/media/#/library');
-  await expect(page.getByRole('heading', { name: 'Saved' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Library/ })).toBeVisible();
   await page.goto('/media/#/search');
   await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
   await page.goto('/media/#/');
@@ -709,14 +705,15 @@ test('a finished progress save does not dismiss another item draft', async ({ pa
 
 test('the theme toggle names the theme it applies', async ({ page }) => {
   await page.goto('/media/');
-  await page.getByRole('button', { name: 'Dark', exact: true }).click();
+  await page.locator('.topbar [data-action="account-menu"]').click();
+  await page.getByRole('menuitemradio', { name: 'Dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.locator('[data-theme-value="dark"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.topbar [data-theme-value="dark"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.topbar [data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'false');
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(20, 19, 17)');
-  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: 'Light', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('[data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.topbar [data-theme-value="light"]')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(246, 243, 238)');
 });
 
@@ -794,17 +791,18 @@ test('a status click waits for the note save before drawing the new field', asyn
   await page.goto(`/media/#/item/${dune.id}`);
   const note = page.getByLabel('Note');
   await note.fill('typed before pause');
-  const paused = page.getByRole('button', { name: 'Paused' });
+  const paused = page.getByRole('radio', { name: 'Paused' });
   const clicked = paused.click();
   await expect.poll(() => reviews.length).toBe(1);
-  const noteSaved = page.waitForResponse(response => {
+  expect(reviews[0]).toBe('typed before pause');
+  const saved = page.waitForResponse(response => {
     if (response.request().method() !== 'PATCH' || !response.ok()) return false;
     try { return response.request().postDataJSON()?.review === 'typed before pause'; } catch { return false; }
   });
   releaseNote();
-  await noteSaved;
   await clicked;
-  await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+  await saved;
+  await expect(page.getByRole('radio', { name: 'Paused' })).toHaveClass(/is-on/);
   await expect(page.getByLabel('Note')).toHaveValue('typed before pause');
   const entry = await (await request.get(`/media/api/entries/${dune.id}`)).json();
   expect(entry.review).toBe('typed before pause');
@@ -1005,7 +1003,7 @@ test('a same-item render waits for the in-flight note save', async ({ page, requ
     response.request().method() === 'PATCH'
     && (response.request().postData() || '').includes('"status"')
   ));
-  const clicked = page.getByRole('button', { name: 'Paused' }).click();
+  const clicked = page.getByRole('radio', { name: 'Paused' }).click();
   await statusDone;
   await page.evaluate(() => true);
   expect(earlyGets).toBe(0);
@@ -1013,7 +1011,7 @@ test('a same-item render waits for the in-flight note save', async ({ page, requ
   await clicked;
   await started;
   await expect(page.getByLabel('Note')).toHaveValue('held note');
-  await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+  await expect(page.getByRole('radio', { name: 'Paused' })).toHaveClass(/is-on/);
 });
 
 test('a stalled note save times out and lets the item render', async ({ page, request }) => {
@@ -1057,7 +1055,7 @@ test('a stalled note save times out and lets the item render', async ({ page, re
       if (response.request().method() !== 'PATCH') return false;
       try { return response.request().postDataJSON()?.favorite === true; } catch { return false; }
     });
-    await page.getByRole('button', { name: 'Paused' }).click();
+    await page.getByRole('radio', { name: 'Paused' }).click();
     await page.getByRole('button', { name: 'Favorite', exact: true }).click();
     await favoriteSaved;
     await expect(page.getByRole('button', { name: 'Favorite', exact: true })).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
@@ -1097,7 +1095,7 @@ test('a stalled csrf preflight still lets Favorite land', async ({ page, request
     const preflight = page.waitForRequest(req => req.url().includes('/api/summary'));
     await note.blur();
     await preflight;
-    await page.getByRole('button', { name: 'Paused' }).click();
+    await page.getByRole('radio', { name: 'Paused' }).click();
     await page.getByRole('button', { name: 'Favorite', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Favorite', exact: true })).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
   } finally {
@@ -1227,7 +1225,7 @@ test('the toast cap evicts the oldest toast when every toast is persistent', asy
     const progress = page.getByLabel('Progress', { exact: true });
     await progress.fill('7');
     await progress.press('Enter');
-    await page.getByRole('button', { name: 'Paused' }).click();
+    await page.getByRole('radio', { name: 'Paused' }).click();
     await page.getByRole('button', { name: 'Favorite', exact: true }).click();
     await expect(page.locator('[data-toast-key^="favorite:"]')).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.toast')).toHaveCount(3);
@@ -1268,8 +1266,8 @@ test('opening a different item retires the previous item toasts', async ({ page,
   await progress.fill('40');
   await progress.press('Enter');
   await expect(page.locator('#toast-alerts')).toContainText("Couldn't save your progress. Try again.");
-  await page.getByRole('button', { name: 'Paused' }).click();
-  await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+  await page.getByRole('radio', { name: 'Paused' }).click();
+  await expect(page.getByRole('radio', { name: 'Paused' })).toHaveClass(/is-on/);
   await expect(page.locator('.toast')).toHaveCount(2);
   await page.evaluate(id => { location.hash = `#/item/${id}`; }, String(zebra!.id));
   await expect(page.getByRole('heading', { name: 'Zebra' })).toBeVisible();
@@ -1296,13 +1294,13 @@ test('a stalled status, favorite, or rating save offers retry', async ({ page, r
   });
   try {
     await page.goto(`/media/#/item/${dune.id}`);
-    await page.getByRole('button', { name: 'Paused' }).click();
+    await page.getByRole('radio', { name: 'Paused' }).click();
     await page.getByRole('button', { name: 'Favorite', exact: true }).click();
-    await page.getByRole('button', { name: 'Score 5' }).click();
+    await page.getByRole('radio', { name: '5 out of 10' }).click();
     await expect(page.locator('[data-toast-key^="status:"]')).toContainText('Not saved. Try again', { timeout: 15_000 });
     await expect(page.locator('[data-toast-key^="favorite:"]')).toContainText('Not saved. Try again');
     await expect(page.locator('[data-toast-key^="rating:"]')).toContainText('Not saved. Try again');
-    await expect(page.getByRole('button', { name: 'Score 5' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('radio', { name: '5 out of 10' })).toHaveAttribute('aria-checked', 'true');
     stallWrites = false;
     releaseStall();
     const ratingSaved = page.waitForResponse(response => {
@@ -1312,12 +1310,12 @@ test('a stalled status, favorite, or rating save offers retry', async ({ page, r
     await page.locator('[data-toast-key^="rating:"]').getByRole('button', { name: 'Retry' }).click();
     await ratingSaved;
     await expect(page.locator('[data-toast-key^="rating:"]')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Score 5' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('radio', { name: '5 out of 10' })).toHaveAttribute('aria-checked', 'true');
     await page.locator('[data-toast-key^="favorite:"]').getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByRole('button', { name: 'Favorite', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('[data-toast-key^="favorite:"]')).toHaveCount(0);
     await page.locator('[data-toast-key^="status:"]').getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByRole('button', { name: 'Paused' })).toHaveClass(/is-on/);
+    await expect(page.getByRole('radio', { name: 'Paused' })).toHaveClass(/is-on/);
     await expect(page.locator('[data-toast-key^="status:"]')).toHaveCount(0);
     const entry = await (await request.get(`/media/api/entries/${dune.id}`)).json();
     expect(entry.rating).toBe(5);

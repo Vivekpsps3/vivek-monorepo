@@ -1,6 +1,7 @@
 <button
   [type]="type()"
   [disabled]="disabled()"
+  [attr.aria-busy]="busy() ? 'true' : null"
   [class]="hostClass()"
   [attr.aria-disabled]="ariaDisabled() ? 'true' : null"
   [attr.aria-describedby]="describedBy()"

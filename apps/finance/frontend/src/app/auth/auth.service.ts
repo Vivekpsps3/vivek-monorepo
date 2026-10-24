@@ -36,6 +36,13 @@ export class AuthService {
     if (this.checkedSession) {
       return of(this.currentUser);
     }
+    // finance_session is httponly. The readable companion is finance_csrf,
+    // which is only set for a signed-in browser. Skip the probe otherwise.
+    if (!this.csrfToken) {
+      this.checkedSession = true;
+      this.userSubject.next(null);
+      return of(null);
+    }
     return this.http.get<MeResponse>(apiUrl('/auth/me'), { withCredentials: true }).pipe(
       switchMap(res => {
         // Production builds set localDevAuth false, so they never take this path.

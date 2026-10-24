@@ -21,7 +21,6 @@ REPO_ROOT = BACKEND_DIR.parents[2] if len(BACKEND_DIR.parents) > 2 else BACKEND_
 SHARED_BROWSER_DIR = REPO_ROOT / "packages" / "browser" / "runtime"
 if not SHARED_BROWSER_DIR.is_dir():
     SHARED_BROWSER_DIR = BACKEND_DIR / "shared-browser"
-JOURNAL_SCREENS = {"library", "search", "calendar", "new"}
 
 
 def shared_stylesheet(name: str) -> Path:
@@ -152,7 +151,9 @@ def create_app(*, unified: bool = False) -> FastAPI:
 
     def screen_redirect(screen: str, request: Request):
         name = screen.strip().strip("/").lower()
-        if name not in JOURNAL_SCREENS:
+        # Unknown names still enter the hash router (D6) so the not-found view
+        # can render. Dots stay files, not screens.
+        if not name or "." in name or "/" in name:
             return JSONResponse(
                 status_code=404,
                 content={"detail": "Not found"},

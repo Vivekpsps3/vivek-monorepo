@@ -81,6 +81,14 @@ export async function syntheticVault(
     target.on('pageerror', error => console.error('Synthetic finance browser error:', error.message));
   };
   attach(page);
+  // finance_session is httponly. The app only calls /api/auth/me when the
+  // readable finance_csrf companion is present, which this synthetic session is.
+  await context.addCookies([{
+    name: 'finance_csrf',
+    value: 'synthetic',
+    domain: '127.0.0.1',
+    path: '/',
+  }]);
   const key = randomBytes(32);
   const passphrase = 'Synthetic finance test passphrase';
   const salt = randomBytes(16);

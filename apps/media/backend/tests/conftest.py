@@ -7,6 +7,15 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 
+@pytest.fixture(autouse=True)
+def _clear_provider_health():
+    from apps.media.backend.services import providers
+
+    providers._HEALTH.clear()
+    yield
+    providers._HEALTH.clear()
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("MEDIA_DATABASE_URL", f"sqlite:///{tmp_path}/media.db")

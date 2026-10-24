@@ -19,6 +19,7 @@ export class UiButtonComponent {
   describedBy = input<string | undefined>(undefined);
   /** Selected preset. Undefined leaves aria-pressed unset. */
   pressed = input<boolean | null>(null);
+  busy = input(false);
   type = input<'button' | 'submit' | 'reset'>('button');
   ariaLabel = input<string | undefined>(undefined);
   tooltip = input<string | undefined>(undefined);

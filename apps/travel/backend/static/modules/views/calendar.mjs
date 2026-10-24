@@ -2,11 +2,13 @@ import { api } from '../api.mjs';
 import { KINDS } from '../state.mjs';
 import { esc, banner, head, isoDate, prettyDate, labelOf } from '../helpers.mjs';
 import { browserTimeZone, localTodayIso } from '../../../shared-browser/today.mjs';
+import { rotateWeekLabels, weekStartsOn } from '../../../shared-browser/week.mjs';
 
 export function monthMatrix(year, month) {
   const first = new Date(year, month - 1, 1);
   const start = new Date(first);
-  start.setDate(first.getDate() - first.getDay());
+  const offset = (first.getDay() - weekStartsOn() + 7) % 7;
+  start.setDate(first.getDate() - offset);
   const weeks = [];
   for (let week = 0; week < 6; week += 1) {
     const days = [];
@@ -40,7 +42,7 @@ export function renderCalendar(data, path, weeks, selected) {
     plans[plan.on_date] = plans[plan.on_date] || [];
     plans[plan.on_date].push(plan);
   });
-  const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<div>${day}</div>`).join("");
+  const dow = rotateWeekLabels(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]).map((day) => `<div>${day}</div>`).join("");
   const weekHtml = weeks
     .map((week) => {
       const isos = week.map(isoDate);
