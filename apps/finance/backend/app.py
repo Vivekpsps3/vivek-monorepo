@@ -16,16 +16,16 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from apps.finance.backend.api_auth import ApiKeyMiddleware
 from apps.finance.backend.logging_config import (
     get_logger,
     redact_database_url,
     setup_logging,
     uvicorn_log_config,
 )
-from apps.finance.backend.api_auth import ApiKeyMiddleware
 from apps.finance.backend.rate_limit import RateLimitMiddleware
 from apps.finance.backend.request_logging import RequestLoggingMiddleware
-from apps.finance.backend.routers import auth_routes, health, market, vault
+from apps.finance.backend.routers import account, auth_routes, health, market, vault
 
 setup_logging()
 logger = get_logger()
@@ -103,6 +103,7 @@ def create_app() -> FastAPI:
     api_prefix = "/api"
     application.include_router(health.router, prefix=api_prefix)
     application.include_router(auth_routes.router, prefix=api_prefix)
+    application.include_router(account.router, prefix=api_prefix)
     application.include_router(vault.router, prefix=api_prefix)
     application.include_router(market.router, prefix=api_prefix)
 

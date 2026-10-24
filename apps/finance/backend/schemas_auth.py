@@ -1,10 +1,15 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.schemas_vault import VaultCreateRequest
+from apps.finance.backend.services.username_policy import (
+    USERNAME_MAX,
+    USERNAME_MIN,
+    USERNAME_PATTERN,
+)
 
 UserRoleValue = Literal["admin", "user"]
 
@@ -25,14 +30,14 @@ class UserPublic(EmailMixin):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    username: Optional[str] = None
+    username: str | None = None
     display_name: str
     role: UserRoleValue
     is_active: bool
     must_change_password: bool
     created_at: datetime
     updated_at: datetime
-    last_login_at: Optional[datetime] = None
+    last_login_at: datetime | None = None
 
 
 class LoginRequest(EmailMixin):
@@ -55,7 +60,9 @@ class AuthPrivateKeyWrap(BaseModel):
 
 
 class PasswordlessEnrollRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+    username: str = Field(
+        ..., min_length=USERNAME_MIN, max_length=USERNAME_MAX, pattern=USERNAME_PATTERN
+    )
     public_key_b64: str = Field(..., min_length=16, max_length=4096)
     auth: AuthPrivateKeyWrap
     # Same vault payload as bootstrap/invitation so migration is one step to a usable vault.
@@ -69,7 +76,9 @@ class InvitationEnrollRequest(BaseModel):
 
 
 class PasswordlessBootstrapRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+    username: str = Field(
+        ..., min_length=USERNAME_MIN, max_length=USERNAME_MAX, pattern=USERNAME_PATTERN
+    )
     display_name: str = Field(..., min_length=1, max_length=160)
     public_key_b64: str = Field(..., min_length=16, max_length=4096)
     vault: VaultCreateRequest
@@ -79,7 +88,9 @@ class PasswordlessBootstrapRequest(BaseModel):
 class PasswordlessSignupRequest(BaseModel):
     """Self-signup. Closed unless AUTH_SIGNUP_MODE opens it."""
 
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+    username: str = Field(
+        ..., min_length=USERNAME_MIN, max_length=USERNAME_MAX, pattern=USERNAME_PATTERN
+    )
     display_name: str = Field("", max_length=160)
     public_key_b64: str = Field(..., min_length=16, max_length=4096)
     vault: VaultCreateRequest
@@ -106,15 +117,31 @@ class PasswordlessVerifyRequest(BaseModel):
     signature_b64: str = Field(..., min_length=16, max_length=256)
 
 
+class UsernameChangeRequest(BaseModel):
+    """New username plus a fresh login challenge signature.
+
+    The signature is the same proof ``/auth/passwordless/verify`` checks. The
+    username is validated in the handler so a bad name is 400, not a parse error.
+    """
+
+    username: str = Field(..., max_length=256)
+    challenge_id: str = Field(..., min_length=16, max_length=128)
+    challenge: str = Field(..., min_length=32, max_length=256)
+    message: str = Field(..., min_length=1, max_length=2048)
+    signature_b64: str = Field(..., min_length=16, max_length=256)
+
+
 class MeResponse(BaseModel):
     user: UserPublic
-    csrf_token: Optional[str] = None
+    csrf_token: str | None = None
     # True only when this response was served through the local dev auth bypass.
     local_dev: bool = False
 
 
 class AdminUserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+    username: str = Field(
+        ..., min_length=USERNAME_MIN, max_length=USERNAME_MAX, pattern=USERNAME_PATTERN
+    )
     display_name: str = Field(..., min_length=1, max_length=160)
     role: UserRoleValue = "user"
 
@@ -130,9 +157,9 @@ class InvitationPreview(BaseModel):
 
 
 class AdminUserUpdate(BaseModel):
-    display_name: Optional[str] = Field(None, min_length=1, max_length=160)
-    role: Optional[UserRoleValue] = None
-    is_active: Optional[bool] = None
+    display_name: str | None = Field(None, min_length=1, max_length=160)
+    role: UserRoleValue | None = None
+    is_active: bool | None = None
 
 
 class AdminUserContentReset(BaseModel):

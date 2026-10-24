@@ -4,7 +4,6 @@
 # update refuses a higher count unless --allow-increase is passed.
 apps/finance/backend/admin_tools.py	I001	1
 apps/finance/backend/alembic/env.py	I001	2
-apps/finance/backend/app.py	I001	1
 apps/finance/backend/auth.py	I001	1
 apps/finance/backend/auth.py	UP045	4
 apps/finance/backend/database.py	I001	2
@@ -12,13 +11,8 @@ apps/finance/backend/legacy_schema_guard.py	I001	1
 apps/finance/backend/logging_config.py	UP006	1
 apps/finance/backend/logging_config.py	UP035	1
 apps/finance/backend/logging_config.py	UP045	1
-apps/finance/backend/rate_limit.py	UP035	1
 apps/finance/backend/request_logging.py	UP035	1
-apps/finance/backend/routers/auth_routes.py	I001	1
-apps/finance/backend/routers/auth_routes.py	UP006	1
-apps/finance/backend/routers/auth_routes.py	UP035	1
 apps/finance/backend/routers/market.py	I001	1
-apps/finance/backend/schemas_auth.py	UP045	6
 apps/finance/backend/schemas_market.py	I001	1
 apps/finance/backend/schemas_market.py	UP006	13
 apps/finance/backend/schemas_market.py	UP035	2
