@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEEK_STARTS_ON, chooseReview, coverImage, dayLabel, draftKey, emptyState, escapeHtml, genericStatusOptions, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, weekDayLabels, whenLabel } from "../modules/format.mjs";
+import { WEEK_STARTS_ON, chooseReview, coverImage, dayLabel, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, weekDayLabels, whenLabel } from "../modules/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
@@ -50,6 +50,10 @@ test("review drafts win only when they still match the server base", () => {
   assert.deepEqual(chooseReview("B", serverAt, { text: "B", base: "other" }), { text: "B", restore: false });
   assert.deepEqual(chooseReview("B", serverAt, { text: "A", at: "2099-01-01T00:00:00.000Z" }), { text: "B", restore: true });
   assert.deepEqual(chooseReview("B", null, { text: "A", base: "" }), { text: "A", restore: false });
+  assert.equal(failedNoteAfterReload(null, "B"), null);
+  assert.equal(failedNoteAfterReload({ kind: "failure", text: "A" }, "A"), null);
+  assert.equal(failedNoteAfterReload({ kind: "failure", text: "A" }, "B"), "A");
+  assert.equal(failedNoteAfterReload({ kind: "failure" }, null), null);
 });
 
 test("library query drops unknown sort, kind, and status", () => {

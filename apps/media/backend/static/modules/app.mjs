@@ -16,6 +16,7 @@ import {
   TOAST_ACTION_MS,
   TOAST_MS,
   chooseReview,
+  failedNoteAfterReload,
   coverImage,
   dayLabel,
   draftKey,
@@ -771,7 +772,15 @@ async function viewItem(id, ticket, forcedSeason = null) {
   if (note instanceof HTMLTextAreaElement) {
     note.dataset.saved = entry.review ?? "";
     note.dataset.reviewBase = entry.review_updated_at ?? "";
-    if (String(noteOutcome?.id) === String(id) && note.value !== (entry.review ?? "")) {
+    const failedNote = failedNoteAfterReload(
+      String(noteOutcome?.id) === String(id) ? noteOutcome : null,
+      entry.review,
+    );
+    if (failedNote != null) {
+      if (note.value !== failedNote) {
+        note.value = failedNote;
+        writeDraft(id, failedNote, entry.review_updated_at ?? "");
+      }
       showNoteFailure(document.querySelector("#note-status"));
     } else if (String(noteOutcome?.id) === String(id)) {
       noteOutcome = null;
@@ -1644,7 +1653,7 @@ async function commitNote(id) {
     // fail() drops TimeoutError and AbortError, so a stalled save has to
     // surface here or the chain would unblock with no Retry toast.
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
-    noteOutcome = { id: String(id), kind: "failure" };
+    noteOutcome = { id: String(id), kind: "failure", text: sent };
     showNoteFailure(document.querySelector("#note-status"));
     if (timedOut) {
       toast(NETWORK_MESSAGE, "alert", retry);

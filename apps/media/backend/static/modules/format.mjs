@@ -170,6 +170,18 @@ export function progressPreview(value, unit) {
 }
 
 /**
+ * The text of a note save that failed, when the refetch must keep showing it.
+ * Null means the failure is stale: the server already has that text.
+ */
+export function failedNoteAfterReload(outcome, serverReview) {
+  if (!outcome || outcome.kind !== "failure") return null;
+  const server = serverReview ?? "";
+  const text = typeof outcome.text === "string" ? outcome.text : "";
+  if (text === server) return null;
+  return text;
+}
+
+/**
  * One draft key per entry, shared by every tab. `base` is the server
  * review_updated_at the draft started from, not the client clock.
  * The draft is shown only while that base still matches. Otherwise the server
