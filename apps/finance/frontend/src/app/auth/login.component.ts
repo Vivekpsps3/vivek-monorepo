@@ -64,11 +64,6 @@ export class LoginComponent implements OnInit {
       this.cdr.markForCheck();
       return;
     }
-    if (!this.legacyMode && !this.setupMode && this.username.includes('@')) {
-      this.error = 'Sign in with your username, not your email.';
-      this.cdr.markForCheck();
-      return;
-    }
     this.loading = true;
     this.error = '';
     this.cdr.markForCheck();
@@ -153,7 +148,7 @@ export class LoginComponent implements OnInit {
     if (this.legacyMode) {
       return 'Enter your old credentials, then choose a username and a new passphrase (12+ characters).';
     }
-    return 'Use your enrolled username. An email address will not sign in.';
+    return 'Use your enrolled username.';
   }
 
   private errorMessage(err: any): string {

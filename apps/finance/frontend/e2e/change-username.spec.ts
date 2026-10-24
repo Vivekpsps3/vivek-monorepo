@@ -51,6 +51,14 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow).toBe(false);
 }
 
+async function signIn(page: Page, username: string): Promise<void> {
+  await page.goto('/auth/login');
+  await page.getByLabel('Username', { exact: true }).fill(username);
+  await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.waitForURL(/\/hub$/, { timeout: 60_000 });
+}
+
 async function saveUsername(page: Page, nextName: string, passphrase: string): Promise<void> {
   await page.locator('.username-panel').scrollIntoViewIfNeeded();
   await page.getByLabel('New username', { exact: true }).fill(nextName);
@@ -104,6 +112,85 @@ test('renamed username shows in the hub, then signs in, and the old username doe
   await expect(page.locator('.login-error')).toBeVisible({ timeout: 60_000 });
   await expect(page).toHaveURL(/\/auth\/login/);
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+});
+
+test('a reload of /hub still renames', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await createAccount(page, 'rename.reload');
+  await page.reload();
+  await expect(page.locator('.hub-account__name')).toHaveText(['rename.reload', 'rename.reload']);
+  await saveUsername(page, 'rename.reloaded', PASSPHRASE);
+  await expect(page.locator('.toast-copy')).toHaveText('Username updated.');
+  await expect(page.locator('.hub-account__name')).toHaveText(['rename.reloaded', 'rename.reloaded']);
+  await expectPassphraseCleared(page);
+});
+
+test('a legacy email username signs in and changes through the hub', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const legacy = 'legacy.user@example.com';
+  const next = 'legacy.renamed';
+  await createAccount(page, 'legacy.seed');
+  const adopted = await page.evaluate(async (username) => {
+    const csrf = document.cookie
+      .split('; ')
+      .find(part => part.startsWith('finance_csrf='))
+      ?.slice('finance_csrf='.length);
+    const response = await fetch('/api/e2e/legacy-email-username', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json', 'x-csrf-token': csrf ?? '' },
+      body: JSON.stringify({ username }),
+    });
+    return { status: response.status, body: await response.text() };
+  }, legacy);
+  expect(adopted.status, adopted.body).toBe(200);
+
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.waitForURL(/\/auth\/login/);
+  await signIn(page, legacy);
+  await expect(page.locator('.hub-account__name')).toHaveText([legacy, legacy]);
+  await saveUsername(page, 'Legacy.Renamed', PASSPHRASE);
+  await expect(page.locator('.toast-copy')).toHaveText('Username updated.');
+  await expect(page.locator('.hub-account__name')).toHaveText([next, next]);
+  await expectPassphraseCleared(page);
+
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.waitForURL(/\/auth\/login/);
+  await signIn(page, next);
+  await expect(page.locator('.hub-account__name').first()).toHaveText(next);
+
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.waitForURL(/\/auth\/login/);
+  await page.getByLabel('Username', { exact: true }).fill(legacy);
+  await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('.login-error')).toBeVisible({ timeout: 60_000 });
+  await expect(page).toHaveURL(/\/auth\/login/);
+});
+
+test('a CSRF mismatch shows the session-expired copy', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createAccount(page, 'rename.csrf');
+  let patches = 0;
+  await page.route('**/api/account/username', async route => {
+    if (route.request().method() !== 'PATCH') {
+      await route.continue();
+      return;
+    }
+    patches += 1;
+    await route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Invalid CSRF token' }),
+    });
+  });
+  await saveUsername(page, 'rename.csrf2', PASSPHRASE);
+  const error = page.locator('#username-change-error');
+  await expect(error).toHaveText('Session expired, sign in again.');
+  await expect(error).toHaveAttribute('data-status', '403');
+  expect(patches).toBe(2);
+  await expect(page.locator('.hub-account__name')).toHaveText(['rename.csrf', 'rename.csrf']);
+  await expectPassphraseCleared(page);
 });
 
 test('a wrong passphrase shows the 401 error and clears the passphrase', async ({ page }) => {

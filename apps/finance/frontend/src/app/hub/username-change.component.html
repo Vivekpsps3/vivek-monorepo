@@ -20,7 +20,7 @@
     class="form-error"
     role="alert"
     aria-live="assertive"
-    [attr.data-status]="errorStatus === 400 || errorStatus === 401 || errorStatus === 409 || errorStatus === 429 ? errorStatus : null">
+    [attr.data-status]="errorStatus === 400 || errorStatus === 401 || errorStatus === 403 || errorStatus === 409 || errorStatus === 422 || errorStatus === 429 ? errorStatus : null">
     {{ error }}
   </p>
   <ui-button type="submit" [disabled]="saving" [busy]="saving">Save</ui-button>

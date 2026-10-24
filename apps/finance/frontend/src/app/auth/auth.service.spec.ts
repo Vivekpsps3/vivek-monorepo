@@ -227,4 +227,197 @@ describe('AuthService passwordless login', () => {
     await expectAsync(service.changeUsername('no', 'passphrase')).toBeRejectedWith(jasmine.any(UsernameChangeError));
     http.expectNone(`${api}/auth/passwordless/lookup`);
   });
+
+  it('still lowercases an email-shaped login name and does not apply the new-username rule', async () => {
+    const pending = service.loginWithVault('Legacy.User@example.com', 'correct horse battery staple');
+    const lookup = http.expectOne(`${api}/auth/passwordless/lookup`);
+    expect(lookup.request.body).toEqual({ username: 'legacy.user@example.com' });
+    lookup.flush({
+      auth: {
+        kdf_salt_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==',
+        kdf_iterations: 310000,
+        wrapped_private_key_b64: 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
+        recovery_wrapped_private_key_b64: '',
+      },
+    });
+    await Promise.resolve();
+    const challenge = http.expectOne(`${api}/auth/passwordless/challenge`);
+    expect(challenge.request.body).toEqual({ username: 'legacy.user@example.com' });
+    challenge.flush({
+      challenge_id: 'c1',
+      challenge: 'raw',
+      message: 'vault-auth-v1\nhttp://localhost\nlogin',
+    });
+    await expectAsync(pending).toBeRejected();
+  });
+
+  async function signInAs(username: string): Promise<void> {
+    signedIn();
+    const session = service.loadSession().toPromise();
+    http.expectOne(`${api}/auth/me`).flush({
+      user: {
+        id: 4,
+        email: 'legacy.seed@pending.local',
+        username,
+        display_name: 'Vivek',
+        role: 'user',
+        is_active: true,
+        must_change_password: false,
+        created_at: '2026-10-14T00:00:00',
+        updated_at: '2026-10-14T00:00:00',
+      },
+    });
+    await session;
+  }
+
+  it('submits a current username that contains @', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createSigningKey(passphrase, 1_000);
+    const current = 'Legacy.User@example.com';
+    await signInAs(current);
+    const warn = spyOn(console, 'warn');
+    const pending = service.changeUsername('Next.Name', passphrase);
+    const lookup = http.expectOne(`${api}/auth/passwordless/lookup`);
+    expect(lookup.request.body).toEqual({ username: current });
+    lookup.flush({ auth: material.wrapped });
+    await Promise.resolve();
+    const challengeReq = http.expectOne(`${api}/auth/passwordless/challenge`);
+    expect(challengeReq.request.body).toEqual({ username: current, purpose: 'username_change' });
+    const message = 'vault-auth-v1\nhttp://127.0.0.1:4173\nchallenge-id-value\nusername_change\n2099-01-01T00:00:00';
+    challengeReq.flush({
+      challenge_id: 'challenge-id-value',
+      challenge: 'raw-challenge-value-32-characters',
+      message,
+    });
+    const patch = await nextRequest(http, `${api}/account/username`);
+    expect(patch.request.body).toEqual(jasmine.objectContaining({ username: 'next.name', message }));
+    expect(JSON.stringify(patch.request.body)).not.toContain(passphrase);
+    patch.flush({
+      id: 4,
+      email: 'legacy.seed@pending.local',
+      username: 'next.name',
+      display_name: 'Vivek',
+      role: 'user',
+      is_active: true,
+      must_change_password: false,
+      created_at: '2026-10-14T00:00:00',
+      updated_at: '2026-10-14T00:00:01',
+    });
+    await expectAsync(pending).toBeResolvedTo(jasmine.objectContaining({ username: 'next.name' }));
+    expect(warn).not.toHaveBeenCalled();
+    expect(JSON.stringify(warn.calls.allArgs())).not.toContain(passphrase);
+  });
+
+  it('warns and stops when the signed-in username is missing', async () => {
+    await signInAs('');
+    const warn = spyOn(console, 'warn');
+    await expectAsync(service.changeUsername('next.name', 'correct horse battery staple')).toBeRejectedWith(
+      jasmine.objectContaining({ status: 0, message: 'The signed-in username is missing.' }),
+    );
+    expect(warn).toHaveBeenCalledWith('username change: missing username', { status: 0 });
+    http.expectNone(`${api}/auth/passwordless/lookup`);
+  });
+
+  it('warns when lookup, the challenge, or unwrapping fails', async () => {
+    const passphrase = 'correct horse battery staple';
+    await signInAs('legacy.user@example.com');
+    const warn = spyOn(console, 'warn');
+
+    const missingKey = service.changeUsername('next.name', passphrase);
+    http.expectOne(`${api}/auth/passwordless/lookup`).flush({ auth: {} });
+    await expectAsync(missingKey).toBeRejectedWith(
+      jasmine.objectContaining({ message: 'The signing key could not be loaded.' }),
+    );
+    expect(warn).toHaveBeenCalledWith('username change: lookup', { status: 0 });
+
+    const unreadable = service.changeUsername('next.name', passphrase);
+    http.expectOne(`${api}/auth/passwordless/lookup`).flush({
+      auth: {
+        kdf_salt_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==',
+        kdf_iterations: 1000,
+        wrapped_private_key_b64: 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
+        recovery_wrapped_private_key_b64: '',
+      },
+    });
+    await Promise.resolve();
+    http.expectOne(`${api}/auth/passwordless/challenge`).flush({ challenge_id: 'only-an-id' });
+    await expectAsync(unreadable).toBeRejectedWith(
+      jasmine.objectContaining({ message: 'The username change challenge could not be read.' }),
+    );
+    expect(warn).toHaveBeenCalledWith('username change: challenge', { status: 0 });
+
+    const unwrap = service.changeUsername('next.name', passphrase);
+    http.expectOne(`${api}/auth/passwordless/lookup`).flush({
+      auth: {
+        kdf_salt_b64: 'MTIzNDU2Nzg5MDEyMzQ1Ng==',
+        kdf_iterations: 1000,
+        wrapped_private_key_b64: 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=',
+        recovery_wrapped_private_key_b64: '',
+      },
+    });
+    await Promise.resolve();
+    http.expectOne(`${api}/auth/passwordless/challenge`).flush({
+      challenge_id: 'challenge-id-value',
+      challenge: 'raw-challenge-value-32-characters',
+      message: 'vault-auth-v1\norigin\nusername_change',
+    });
+    await expectAsync(unwrap).toBeRejectedWith(
+      jasmine.objectContaining({ status: 401, message: 'That passphrase is wrong.' }),
+    );
+    expect(warn).toHaveBeenCalledWith('username change: signing', { status: 401 });
+    const logged = JSON.stringify(warn.calls.allArgs());
+    expect(logged).not.toContain(passphrase);
+    expect(logged).not.toContain('wrapped_private_key_b64');
+  });
+
+  it('refreshes the session once after a 403 and does not loop', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createSigningKey(passphrase, 1_000);
+    await signInAs('legacy.user@example.com');
+    const pending = service.changeUsername('next.name', passphrase);
+
+    const answerChallenge = async (id: string) => {
+      const lookup = await nextRequest(http, `${api}/auth/passwordless/lookup`);
+      lookup.flush({ auth: material.wrapped });
+      await Promise.resolve();
+      const challenge = http.expectOne(`${api}/auth/passwordless/challenge`);
+      challenge.flush({
+        challenge_id: id,
+        challenge: 'raw-challenge-value-32-characters',
+        message: `vault-auth-v1\nhttp://127.0.0.1\n${id}\nusername_change\n2099-01-01T00:00:00`,
+      });
+    };
+
+    await answerChallenge('challenge-id-value-one');
+    const firstPatch = await nextRequest(http, `${api}/account/username`);
+    expect((firstPatch.request.body as { challenge_id: string }).challenge_id).toBe('challenge-id-value-one');
+    firstPatch.flush({ detail: 'Invalid CSRF token' }, { status: 403, statusText: 'Forbidden' });
+
+    const refresh = await nextRequest(http, `${api}/auth/me`);
+    expect(refresh.request.method).toBe('GET');
+    refresh.flush({
+      user: {
+        id: 4,
+        email: 'legacy.seed@pending.local',
+        username: 'legacy.user@example.com',
+        display_name: 'Vivek',
+        role: 'user',
+        is_active: true,
+        must_change_password: false,
+        created_at: '2026-10-14T00:00:00',
+        updated_at: '2026-10-14T00:00:00',
+      },
+    });
+
+    await answerChallenge('challenge-id-value-two');
+    const secondPatch = await nextRequest(http, `${api}/account/username`);
+    expect((secondPatch.request.body as { challenge_id: string }).challenge_id).toBe('challenge-id-value-two');
+    secondPatch.flush({ detail: 'Invalid CSRF token' }, { status: 403, statusText: 'Forbidden' });
+
+    await expectAsync(pending).toBeRejectedWith(
+      jasmine.objectContaining({ status: 403, message: 'Session expired, sign in again.' }),
+    );
+    http.expectNone(`${api}/auth/passwordless/lookup`);
+    http.expectNone(`${api}/auth/me`);
+  });
 });

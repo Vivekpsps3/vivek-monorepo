@@ -10,6 +10,7 @@ from datetime import timedelta
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.admin_tools import admin_metrics, delete_user_account, reset_user_contents
@@ -25,6 +26,7 @@ from apps.finance.backend.auth import (
     get_current_user,
     normalize_email,
     public_user,
+    repair_csrf_cookie,
     revoke_user_sessions,
     utc_now_naive,
     verify_password,
@@ -88,11 +90,23 @@ def _origin(request: Request) -> str:
 def _find_passwordless_user(db: Session, identifier: str) -> User | None:
     """Resolve passwordless login by username only.
 
-    Email is not an alias. The same wrap for ``alice`` and ``alice@example.com``
-    would confirm that both identifiers exist and belong to one account.
+    The mailbox is not an alias. ``alice@pending.local`` does not select the
+    account whose username is ``alice``. A legacy username that itself contains
+    ``@`` matches that username column, exactly and then in lowercase form.
     """
+    raw = identifier.strip()
     key = normalize_email(identifier)
-    if not key or "@" in key:
+    if not raw:
+        return None
+    if "@" in raw:
+        exact = db.query(User).filter(User.username == raw).first()
+        if exact is not None:
+            return exact
+        if not key:
+            return None
+        # Login lowercases first. A legacy username may still be mixed case.
+        return db.query(User).filter(func.lower(User.username) == key).first()
+    if not key:
         return None
     return db.query(User).filter(User.username == key).first()
 
@@ -489,7 +503,13 @@ def _me_body(request: Request, user: User) -> dict:
 
 
 @router.get("/auth/me", response_model=MeResponse)
-def me(request: Request, current_user: User = Depends(get_current_user)):
+def me(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    repair_csrf_cookie(db, request, response)
     return _me_body(request, current_user)
 
 
