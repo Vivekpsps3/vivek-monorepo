@@ -15,11 +15,18 @@ export function systemTheme(): UiTheme {
     : 'light';
 }
 
-/** The saved choice. An absent or unknown value follows the operating system. */
+export const SUITE_THEME_KEY = 'suite-theme';
+
+/** The saved choice. `suite-theme` wins; the app key is the legacy fallback. */
 export function readThemeChoice(storageKey: string): ThemeChoice {
   try {
+    const shared = localStorage.getItem(SUITE_THEME_KEY);
+    if (isChoice(shared)) return shared;
     const saved = localStorage.getItem(storageKey);
-    if (isChoice(saved)) return saved;
+    if (isChoice(saved)) {
+      try { localStorage.setItem(SUITE_THEME_KEY, saved); } catch { /* private mode */ }
+      return saved;
+    }
   } catch {
     // Storage may be unavailable in private browsing or server rendering.
   }
@@ -50,6 +57,7 @@ export function applyThemePreference(theme: UiTheme): void {
 /** Saves System, Light, or Dark and applies the resolved theme. */
 export function setThemePreference(theme: ThemeChoice, storageKey: string): void {
   try {
+    localStorage.setItem(SUITE_THEME_KEY, theme);
     localStorage.setItem(storageKey, theme);
   } catch {
     // Storage may be unavailable in private browsing or server rendering.

@@ -41,8 +41,6 @@ apps/media/backend/app.py	I001	1
 apps/media/backend/models.py	UP017	1
 apps/media/backend/services/followups.py	SIM105	1
 apps/media/backend/services/followups.py	UP017	1
-apps/media/backend/services/providers.py	UP017	3
-apps/media/backend/services/records.py	UP017	2
 apps/media/backend/tests/test_journal.py	I001	1
 apps/server/auth.py	I001	1
 apps/server/checks.py	I001	2

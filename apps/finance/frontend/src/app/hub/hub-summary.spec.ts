@@ -3,6 +3,7 @@ import {
   financeSnapshot,
   hasManualCashAndBrokerage,
   largestPositions,
+  journalKindLabel,
   mediaReleaseLabel,
   portfolioAccounts,
   priceFreshnessSummary,
@@ -65,6 +66,13 @@ describe('hub finance summary', () => {
       [{ id: 1, name: 'House', category: 'property', current_value: 20, as_of_date: today } as Asset],
       [holding({ market_value: 5 })],
     )).toBeFalse();
+  });
+
+  it('uses the journal kind labels', () => {
+    expect(journalKindLabel('tv')).toBe('Series');
+    expect(journalKindLabel('book')).toBe('Book');
+    expect(journalKindLabel('track')).toBe('Song');
+    expect(journalKindLabel('game')).toBe('Game');
   });
 
   it('keeps month and year releases from looking like a specific day', () => {

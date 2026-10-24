@@ -150,7 +150,8 @@ from a local ref that may be stale. An all-zero `before` (a new-branch
 push) falls back to `origin/main` for the database and to `HEAD^1` for the
 revision-immutability check. If that commit is not an ancestor of `HEAD`,
 the script warns and the upgrade still fails closed when the plan cannot
-move forward. A non-empty schema diff names the table and column. `--plan` must be the forward action (`current` when the revisions
+move forward. A non-empty schema diff names the table and column.
+`--plan` must be the forward action (`current` when the revisions
 match, `upgrade` when this branch is a descendant). Applying it keeps the
 row counts of the tables that already existed, and the schema diff of the
 result against this branch's models must be empty. A `current` plan does

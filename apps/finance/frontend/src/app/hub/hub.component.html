@@ -63,15 +63,16 @@
           <p class="figure-note" role="status">Checking your journal…</p>
         } @else if (mediaState === 'unavailable') {
           <p class="figure-note">Media is not available from here right now.</p>
+          <button type="button" class="open-link" (click)="retryMedia()">Retry</button>
         } @else if (media) {
-          @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length) {
+          @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length && !media.next_episodes.length) {
             <p class="quiet-title">Nothing in progress</p>
             <a class="open-link" href="/media/#/search">Add something</a>
           }
           @if (media.currently.length) {
             <ul class="rows">
               @for (item of media.currently.slice(0, 3); track item.id) {
-                <li><span>{{ item.title }} <em>{{ item.kind }}</em></span><strong>{{ item.progress_label || 'In progress' }}</strong></li>
+                <li><a [href]="'/media/#/item/' + item.id">{{ item.title }} <em>{{ kindLabel(item.kind) }}</em></a><strong>{{ item.progress_label || 'In progress' }}</strong></li>
               }
             </ul>
           }
@@ -79,7 +80,7 @@
             <h3>Next episode</h3>
             <ul class="rows">
               @for (item of media.next_episodes.slice(0, 2); track item.show_title + item.season + item.episode) {
-                <li><span>{{ item.show_title }}</span><strong>S{{ item.season }} E{{ item.episode }}</strong></li>
+                <li><a [href]="item.entry_id ? '/media/#/item/' + item.entry_id : '/media/'">{{ item.show_title }}</a><strong>S{{ item.season }} E{{ item.episode }}</strong></li>
               }
             </ul>
           }
@@ -87,7 +88,7 @@
             <h3>Coming up</h3>
             <ul class="rows">
               @for (item of media.upcoming.slice(0, 3); track item.id) {
-                <li><span>{{ item.title }}</span><strong>{{ mediaWhen(item) }}</strong></li>
+                <li><a [href]="'/media/#/item/' + item.id">{{ item.title }}</a><strong>{{ mediaWhen(item) }}</strong></li>
               }
             </ul>
           }
@@ -95,7 +96,7 @@
             <h3>Recent notes</h3>
             <ul class="rows">
               @for (item of media.recent_reviews.slice(0, 2); track item.id) {
-                <li><span>{{ item.title }}</span><strong>{{ item.rating == null ? 'Unrated' : item.rating + '/10' }}</strong></li>
+                <li><a [href]="'/media/#/item/' + item.id">{{ item.title }}</a><strong>{{ item.review_excerpt || (item.rating == null ? 'Unrated' : item.rating + '/10') }}</strong></li>
               }
             </ul>
           }

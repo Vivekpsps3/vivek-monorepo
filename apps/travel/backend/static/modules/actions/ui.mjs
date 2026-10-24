@@ -198,6 +198,7 @@ function bindSchemeListener() {
 
 export function applyTheme(value) {
   const choice = themeChoice(value);
+  safeStorageSet("suite-theme", choice);
   safeStorageSet("travel-theme", choice);
   const root = document.documentElement;
   root.dataset.theme = resolvedTheme(choice);
