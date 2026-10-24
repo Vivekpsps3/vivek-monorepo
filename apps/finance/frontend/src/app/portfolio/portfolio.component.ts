@@ -21,7 +21,9 @@ import {
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ConfirmService } from '@vivek/ui';
-import { downloadCsv, todayIsoDate } from '@vivek/browser';
+import { downloadCsv, formatDate, formatMoney, fromDollars, plural, todayIsoDate, unitPriceToNumber, validateHolding, validateUnitPrice, type FieldIssue } from '@vivek/browser';
+import { failureCopy, successCopy } from '@vivek/ui';
+import { dialogSaveAlert, focusDialogAlert, focusFirstInvalid } from '../shared/form-validation';
 import {
   holdingGain,
   holdingGainPercent,
@@ -49,11 +51,15 @@ import {
   UiDialogComponent,
 } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { PluralPipe } from '../shared/pipes/plural.pipe';
 
 @Component({
   selector: 'app-portfolio',
   standalone: true,
   imports: [
+    PluralPipe,
+    MoneyPipe,
     CommonModule,
     KeyValuePipe,
     FormsModule,
@@ -83,11 +89,13 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   holdingsLoadError: string | null = null;
   checkingPrice = false;
   priceCheck: MarketPriceQuote | null = null;
+  priceCheckError = '';
 
   // Fidelity import state (modeled on Transactions import)
   showFidelityImportModal = false;
   fidelityImportStep: 'upload' | 'preview' = 'upload';
   fidelityImportFile: File | null = null;
+  fidelityImportError = '';
   fidelityImportPreview: FidelityPreviewResult | null = null;
   fidelityImportParsing = false;
   fidelityImportCommitting = false;
@@ -162,6 +170,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   openAddModal() {
     this.editingId = null;
+    this.originalPurchasePrice = undefined;
+    this.purchasePriceDirty = false;
+    this.holdingSaveError = '';
     this.newHolding = this.emptyHolding();
     this.priceCheck = null;
     this.showModal = true;
@@ -174,7 +185,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         if (!this.destroyed) {
         this.refreshingPrices = false;
         if (result.phase === 'complete') this.toastService.success(
-          `Updated ${result.updatedHoldings} holding price(s) and ${result.updatedEmployerValuations} employer valuation(s)`
+          `Updated ${plural(result.updatedHoldings, 'holding price')} and ${plural(result.updatedEmployerValuations, 'employer valuation')}`
         );
         else this.toastService.error('Some prices could not be refreshed. Saved prices remain available; see the refresh details above.');
         this.cdr.markForCheck();
@@ -219,9 +230,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   checkSharePrice() {
     const symbol = this.newHolding.symbol.trim().toUpperCase();
     if (!symbol) {
-      this.toastService.error('Enter a symbol to check price.');
+      this.priceCheckError = 'Enter a symbol to check price.';
+      this.cdr.markForCheck();
       return;
     }
+    this.priceCheckError = '';
     this.checkingPrice = true;
     this.priceCheck = null;
     this.financeService.lookupSharePrice(symbol, true).pipe(takeUntil(this.destroy$)).subscribe({
@@ -259,37 +272,77 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     return new Date(iso).toLocaleString();
   }
 
+  holdingErrors: FieldIssue[] = [];
+  holdingSubmitted = false;
+  holdingSaveError = '';
+  private originalPurchasePrice: number | null | undefined = undefined;
+  private purchasePriceDirty = false;
+
+  holdingFieldError(field: string): string | null {
+    return this.holdingSubmitted ? this.holdingErrors.find(error => error.field === field)?.message ?? null : null;
+  }
+
+  markPurchasePriceDirty(): void {
+    this.purchasePriceDirty = true;
+  }
+
   addOrUpdateHolding() {
-    const symbol = this.newHolding.symbol.trim().toUpperCase();
-    if (!symbol || this.newHolding.shares <= 0 || (this.editingId === null && (this.newHolding.purchase_price == null || this.newHolding.purchase_price <= 0))) {
-      this.toastService.error('Symbol and shares are required; new manual holdings also need cost basis.');
+    if (this.saving) return;
+    const keepStoredPrice = this.editingId !== null && !this.purchasePriceDirty;
+    const issues = validateHolding({
+      symbol: this.newHolding.symbol,
+      shares: this.newHolding.shares,
+      costBasis: keepStoredPrice ? null : this.newHolding.purchase_price,
+      purchaseDate: this.newHolding.purchase_date,
+      requirePurchaseDate: this.editingId === null,
+    });
+    this.holdingErrors = issues;
+    this.holdingSubmitted = true;
+    if (issues.length) {
+      this.cdr.markForCheck();
+      setTimeout(() => focusFirstInvalid(document.querySelector('.holding-form')));
       return;
+    }
+    const symbol = this.newHolding.symbol.trim().toUpperCase();
+    if (!keepStoredPrice) {
+      const priceError = validateUnitPrice(this.newHolding.purchase_price);
+      if (priceError) {
+        this.holdingErrors = [...issues, { field: 'costBasis', label: 'Cost basis', message: priceError }];
+        this.cdr.markForCheck();
+        setTimeout(() => focusFirstInvalid(document.querySelector('.holding-form')));
+        return;
+      }
     }
 
     this.saving = true;
+    this.holdingSaveError = '';
     const payload: HoldingCreate = {
       ...this.newHolding,
       symbol,
+      purchase_price: keepStoredPrice
+        ? this.originalPurchasePrice ?? null
+        : unitPriceToNumber(this.newHolding.purchase_price),
     };
     if (this.editingId !== null && !payload.purchase_date) delete (payload as Partial<HoldingCreate>).purchase_date;
 
     const req =
       this.editingId !== null
-        ? this.financeService.updateHolding(this.editingId, payload)
-        : this.financeService.addHolding(payload);
+        ? this.financeService.updateHolding(this.editingId, payload, true)
+        : this.financeService.addHolding(payload, true);
 
     req.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
+        const wasEditing = this.editingId !== null;
         this.closeModal();
-        this.toastService.success(this.editingId ? 'Holding updated' : 'Holding added');
+        this.toastService.success(successCopy('Holding', wasEditing ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
-      error: (err) => {
+      error: () => {
         this.saving = false;
-        this.toastService.error('Failed to save holding. Please try again.');
-        console.error('Holding save error', err);
+        this.holdingSaveError = dialogSaveAlert();
         this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.querySelector('.holding-form')));
       },
     });
   }
@@ -297,6 +350,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   editHolding(h: Holding) {
     this.editingId = h.id;
     const purchaseDate = h.purchase_date ? String(h.purchase_date).split('T')[0] : '';
+    this.originalPurchasePrice = h.purchase_price;
+    this.purchasePriceDirty = false;
+    this.holdingSaveError = '';
     this.newHolding = {
       symbol: h.symbol,
       shares: h.shares,
@@ -310,6 +366,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   closeModal() {
     this.showModal = false;
     this.editingId = null;
+    this.holdingSaveError = '';
     this.newHolding = this.emptyHolding();
     this.priceCheck = null;
   }
@@ -330,7 +387,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   gainIsNegative(h: Holding): boolean { const value = this.getGain(h); return value != null && value < 0; }
   gainDisplay(h: Holding): string {
     const value = this.getGain(h);
-    return value == null ? 'Unavailable' : `${value >= 0 ? '+' : ''}$${value.toFixed(2)}`;
+    return value == null ? 'Unavailable' : formatMoney(fromDollars(value), { sign: 'always' });
   }
   gainPercentIsPositive(h: Holding): boolean { const value = this.getGainPercent(h); return value != null && value >= 0; }
   gainPercentIsNegative(h: Holding): boolean { const value = this.getGainPercent(h); return value != null && value < 0; }
@@ -342,7 +399,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   totalGainIsNegative(): boolean { const value = this.getTotalGain(); return value != null && value < 0; }
   totalGainDisplay(): string {
     const value = this.getTotalGain();
-    return value == null ? 'Unavailable' : `${value >= 0 ? '+' : ''}$${value.toFixed(2)}`;
+    return value == null ? 'Unavailable' : formatMoney(fromDollars(value), { sign: 'always' });
   }
 
   /** Grouped view for better account breakdown.
@@ -408,9 +465,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   dateLabel(value: string | null | undefined): string {
-    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'Date unknown';
-    const date = new Date(value + 'T00:00:00Z');
-    return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? 'Date unknown' : value;
+    return formatDate(value, 'table');
   }
 
   positionDateSummary(): string {
@@ -459,7 +514,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.financeService.resumeFidelityImportStage(stage.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: result => {
         this.fidelityImportCommitting = false;
-        this.toastService.success(`Activated ${result.inserted} Fidelity position(s)`);
+        this.toastService.success(`Activated ${plural(result.inserted, 'Fidelity position')}`);
         this.loadResumableFidelityStages();
         this.cdr.markForCheck();
       },
@@ -501,10 +556,30 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       purchase_date: h.purchase_date,
     };
 
-    this.financeService.deleteHolding(h.id).pipe(takeUntil(this.destroy$)).subscribe({
+    this.removeHolding(h, backup);
+  }
+
+  private removeHolding(h: Holding, backup: HoldingCreate): void {
+    this.financeService.deleteHolding(h.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
-        this.toastService.success('Holding deleted', () => {
-          this.financeService.addHolding(backup).subscribe();
+        this.toastService.success('Holding deleted', () => this.restoreHolding(backup));
+      },
+      error: () => {
+        this.toastService.error(failureCopy('delete', 'this holding'), {
+          label: 'Try again',
+          run: () => this.removeHolding(h, backup),
+        });
+      },
+    });
+  }
+
+  private restoreHolding(backup: HoldingCreate): void {
+    // Keep the error toast if the user leaves this page while the restore is in flight.
+    this.financeService.addHolding(backup, true).subscribe({
+      error: () => {
+        this.toastService.error(failureCopy('restore', 'this holding'), {
+          label: 'Try again',
+          run: () => this.restoreHolding(backup),
         });
       },
     });
@@ -580,6 +655,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.showFidelityImportModal = false;
     this.fidelityImportFile = null;
     this.fidelityImportPreview = null;
+    this.fidelityImportError = '';
     this.selectedFidelityAccounts.clear();
   }
 
@@ -593,9 +669,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   runFidelityPreview() {
     if (!this.fidelityImportFile) {
-      this.toastService.error('Choose a Fidelity CSV file first.');
+      this.fidelityImportError = 'Choose a Fidelity CSV file first.';
+      this.cdr.markForCheck();
       return;
     }
+    this.fidelityImportError = '';
     this.fidelityImportParsing = true;
     this.financeService
       .previewFidelityImport(this.fidelityImportFile)
@@ -628,6 +706,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.fidelityImportParsing = false;
+          this.fidelityImportError = "Couldn't read this file. Try again.";
           this.cdr.markForCheck();
         },
       });
@@ -637,16 +716,19 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     if (!this.fidelityImportPreview || !this.fidelityImportFile) return;
     const selectedMasks = Array.from(this.selectedFidelityAccounts);
     if (!selectedMasks.length) {
-      this.toastService.error('No accounts selected to replace.');
+      this.fidelityImportError = 'No accounts selected to replace.';
+      this.cdr.markForCheck();
       return;
     }
     const rowsToSend = this.fidelityImportPreview.rows.filter(r =>
       this.selectedFidelityAccounts.has(r.account_mask)
     );
     if (!rowsToSend.length) {
-      this.toastService.error('Select accounts to import.');
+      this.fidelityImportError = 'Select accounts to import.';
+      this.cdr.markForCheck();
       return;
     }
+    this.fidelityImportError = '';
 
     const accountLabels = this.fidelityImportPreview.accounts.filter(a => {
       const mask = this.extractMaskFromDisplay(a);
@@ -658,7 +740,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
     const ok = await this.confirmService.ask(
       'Replace Fidelity holdings?',
-      `The selected Fidelity accounts will switch to the verified CSV positions. Existing positions stay active until the staged replacement is verified.\n\nAccounts:\n${accountList}\n\n${rowsToSend.length} position row(s) will be imported.`,
+      `The selected Fidelity accounts will switch to the verified CSV positions. Existing positions stay active until the staged replacement is verified.\n\nAccounts:\n${accountList}\n\n${plural(rowsToSend.length, 'position row')} will be imported.`,
       'Confirm Replace',
       'Cancel'
     );
@@ -674,7 +756,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
           this.fidelityImportCommitting = false;
           this.closeFidelityImportModal();
           this.toastService.success(
-            `Replaced ${res.holdings_replaced} holdings, inserted ${res.inserted} for ${res.accounts_replaced} account(s)`
+            `Replaced ${res.holdings_replaced} holdings, inserted ${res.inserted} for ${plural(res.accounts_replaced, 'account')}`
           );
           this.loadResumableFidelityStages();
           this.cdr.markForCheck();

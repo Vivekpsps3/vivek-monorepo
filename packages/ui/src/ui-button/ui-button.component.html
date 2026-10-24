@@ -3,6 +3,9 @@
   [disabled]="disabled()"
   [attr.aria-busy]="busy() ? 'true' : null"
   [class]="hostClass()"
+  [attr.aria-disabled]="ariaDisabled() ? 'true' : null"
+  [attr.aria-describedby]="describedBy()"
+  [attr.aria-pressed]="pressed() === null ? null : (pressed() ? 'true' : 'false')"
   [attr.aria-label]="ariaLabel()"
   [attr.title]="tooltip()"
   (click)="onClick($event)">

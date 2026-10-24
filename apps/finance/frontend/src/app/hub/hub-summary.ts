@@ -110,7 +110,7 @@ export function mediaReleaseLabel(item: {
     case 'this_month': return 'This month';
     case 'recent': return 'Recently released';
     case 'postponed': return 'Postponed';
-    case 'unknown': return 'Date unknown';
+    case 'unknown': return 'No date';
     default:
       break;
   }

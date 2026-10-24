@@ -58,9 +58,9 @@ describe('Dashboard', () => {
     component.holdings = [
       { id: 1, symbol: 'ABC', shares: 1, purchase_price: 10, purchase_date: null, quote_date: null, price_as_of: '2026-10-11T08:00:00Z' } as Holding,
     ];
-    expect(component.quoteSourceDates).toBe('Date unknown');
+    expect(component.quoteSourceDates).toBe('No date');
     component.holdings = [{ ...component.holdings[0], quote_date: '2026-10-08' }];
-    expect(component.quoteSourceDates).toBe('2026-10-08');
+    expect(component.quoteSourceDates).toBe('Oct 8');
   });
 
   it('renders dated sources, unknown estimate dates, and the aggregate overlap adjustment on Home', async () => {
@@ -102,10 +102,10 @@ describe('Dashboard', () => {
 
     const breakdown = fixture.nativeElement.querySelector('[aria-label="Monthly income breakdown"]') as HTMLElement;
     expect(breakdown.textContent).toContain('Projected paycheck · Acme');
-    expect(breakdown.textContent).toContain('2026-10-15');
+    expect(breakdown.textContent).toContain('Oct 15');
     expect(breakdown.textContent).toContain('ESPP sale · Acme');
     expect(breakdown.textContent).toContain('Annual equity estimate · Acme');
-    expect(breakdown.textContent).toContain('Date unknown');
+    expect(breakdown.textContent).toContain('No date');
     expect(breakdown.textContent).toContain('Possible income overlap adjustment');
     expect(fixture.nativeElement.textContent).toContain('Income and spending, counted once');
     fixture.destroy();

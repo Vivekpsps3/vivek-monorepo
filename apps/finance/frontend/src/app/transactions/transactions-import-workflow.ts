@@ -13,6 +13,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { ToastService, ConfirmService } from '@vivek/ui';
+import { plural } from '@vivek/browser';
 
 @Injectable()
 export class TransactionsImportWorkflow implements OnDestroy {
@@ -216,7 +217,8 @@ export class TransactionsImportWorkflow implements OnDestroy {
   runImportPreview() {
     if (this.importParsing || this.importCommitting) return;
     if (!this.canPreviewImport) {
-      this.toastService.error('Choose CSV files and select a bank for every file.');
+      this.importError = 'Choose CSV files and select a bank for every file.';
+      this.cdr.markForCheck();
       return;
     }
     this.importParsing = true;
@@ -288,9 +290,9 @@ export class TransactionsImportWorkflow implements OnDestroy {
 
   get importActionLabel(): string {
     if (!this.selectedImportCount) return 'Save receipt';
-    if (this.legacyMappingCount && !this.importSelected.size) return `Map ${this.legacyMappingCount} legacy transaction(s)`;
-    if (this.legacyMappingCount) return `Import and map ${this.selectedImportCount} row(s)`;
-    return `Import ${this.selectedImportCount} transaction(s)`;
+    if (this.legacyMappingCount && !this.importSelected.size) return `Map ${plural(this.legacyMappingCount, 'legacy transaction')}`;
+    if (this.legacyMappingCount) return `Import and map ${plural(this.selectedImportCount, 'row')}`;
+    return `Import ${plural(this.selectedImportCount, 'transaction')}`;
   }
 
   get selectedImportExpenseTotal(): number {
@@ -324,7 +326,8 @@ export class TransactionsImportWorkflow implements OnDestroy {
       || (row.status === 'duplicate' && !!row.legacy_dedupe_key)
     );
     if (!rows.length && !this.canSaveImport) {
-      this.toastService.error('Select a transaction or confirm statement coverage.');
+      this.importError = 'Select a transaction or confirm statement coverage.';
+      this.cdr.markForCheck();
       return;
     }
     this.importCommitting = true;
@@ -369,7 +372,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
           this.activeImportReceiptId = null;
           this.closeImportModal();
           this.refreshImportReceipts();
-          this.toastService.success(`Imported ${res.inserted} transaction(s)${res.skipped ? `; skipped ${res.skipped} duplicate(s)` : ''}`);
+          this.toastService.success(`Imported ${plural(res.inserted, 'transaction')}${res.skipped ? `; skipped ${plural(res.skipped, 'duplicate')}` : ''}`);
           this.cdr.markForCheck();
         },
         error: (err: any) => {
@@ -389,7 +392,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
     if (receipt.status === 'undoing') {
       this.financeService.undoBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
         next: result => {
-          this.toastService.success(`Undo resumed: removed ${result.removed}; kept ${result.edited} edited transaction(s)`);
+          this.toastService.success(`Undo resumed: removed ${result.removed}; kept ${plural(result.edited, 'edited transaction')}`);
           this.refreshImportReceipts();
         },
         error: err => this.toastService.error(this.importFailureMessage(err, 'Could not resume undo.')),
@@ -398,7 +401,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
     }
     this.financeService.resumeBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: result => {
-        this.toastService.success(`Resumed import: ${result.inserted} transaction(s) added`);
+        this.toastService.success(`Resumed import: ${plural(result.inserted, 'transaction')} added`);
         this.refreshImportReceipts();
       },
       error: err => this.toastService.error(this.importFailureMessage(err, 'Could not resume this import.')),
@@ -414,7 +417,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
     if (!ok) return;
     this.financeService.undoBankImport(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: result => {
-        this.toastService.success(`Removed ${result.removed}; kept ${result.edited} edited transaction(s)`);
+        this.toastService.success(`Removed ${result.removed}; kept ${plural(result.edited, 'edited transaction')}`);
         this.refreshImportReceipts();
       },
       error: err => this.toastService.error(this.importFailureMessage(err, 'Could not undo this import.')),

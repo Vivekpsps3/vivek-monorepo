@@ -125,7 +125,7 @@ describe('Jobs and pay editor regressions', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Next paycheck 2026-10-15');
+    expect(fixture.nativeElement.textContent).toContain('Next paycheck Oct 15');
     expect(fixture.componentInstance.paydaySummary({ ...scheduledJob, is_active: false })).toContain('Inactive job');
     button('Edit', fixture).click();
     fixture.detectChanges();
@@ -173,8 +173,8 @@ describe('Jobs and pay editor regressions', () => {
         sales: [{ date: '2026-01-20', shares: 100, cash_proceeds: 15000 }],
       })],
       stock_valuations: [],
-    }));
-    expect(fixture.nativeElement.textContent).toContain('100 shares converted to cash on 2026-01-20');
+    }), true);
+    expect(fixture.nativeElement.textContent).toContain('100 shares converted to cash on Jan 20');
   });
 
   it('records an ESPP market value separately from employee contributions in the rendered editor', async () => {
@@ -204,7 +204,7 @@ describe('Jobs and pay editor regressions', () => {
         date: '2026-01-01', label: 'ESPP first offering', quantity: 10,
         price_paid_per_share: 80, market_price_at_purchase: 100, sales: [],
       })],
-    }));
+    }), true);
     const incomeText = fixture.nativeElement.textContent;
     expect(incomeText).toContain('employee contribution $800.00');
     expect(incomeText).toContain('purchase-date market price');
@@ -271,7 +271,7 @@ describe('Jobs and pay editor regressions', () => {
     expect(finance.updateJobIncome).toHaveBeenCalledWith(7, jasmine.objectContaining({
       notes: 'Updated role notes',
       stock_valuations: [jasmine.objectContaining(quote)],
-    }));
+    }), true);
   });
 
   it('allows a private employer stock lot to save a dated manual price without a ticker', async () => {
@@ -304,7 +304,7 @@ describe('Jobs and pay editor regressions', () => {
 
     expect(finance.updateJobIncome).toHaveBeenCalledWith(5, jasmine.objectContaining({
       stock_valuations: [jasmine.objectContaining({ date: '2026-10-09', price_per_share: 12.5, source: 'manual' })],
-    }));
+    }), true);
   });
 
   it('saves one manual current price, replaces earlier manual history and preserves market quote rows', async () => {
@@ -410,5 +410,48 @@ describe('Jobs and pay editor regressions', () => {
       jasmine.objectContaining({ date: '2026-10-09', price_per_share: 120, source: 'manual' }),
     ]);
     expect(saved?.stock_valuations).toContain(jasmine.objectContaining(quoteAddedWhileEditing));
+  });
+
+  it('ties each invalid job field to its own message', () => {
+    button('Add job', fixture).click();
+    fixture.detectChanges();
+    const form = (fixture.nativeElement.querySelector('#job-form') || document.querySelector('#job-form')) as HTMLFormElement;
+    expect(form).toBeTruthy();
+    fixture.componentInstance.saveIncome();
+    fixture.detectChanges();
+
+    const expectField = (field: string, message: string) => {
+      const input = form.querySelector(`[data-field="${field}"]`) as HTMLInputElement;
+      const describedBy = input.getAttribute('aria-describedby');
+      expect(describedBy).withContext(field).toBeTruthy();
+      const error = form.querySelector(`#${describedBy}`);
+      expect(error?.textContent).withContext(field).toContain(message);
+      expect(error?.textContent).withContext(field).toContain('⚠');
+      expect(input.closest('label')?.contains(error as Node)).withContext(field).toBeFalse();
+    };
+
+    expectField('employer', 'Enter the employer.');
+    expectField('basePay', 'Enter yearly pay above $0.');
+
+    const component = fixture.componentInstance;
+    component.form.employer = 'Acme';
+    component.form.base_pay = 10;
+    component.form.pay_frequency = 'hourly';
+    component.form.hours_per_week = 0;
+    component.form.payday_frequency = 'monthly';
+    component.form.first_pay_date = '';
+    component.form.taxes_per_period = -1;
+    component.form.deductions_per_period = -1;
+    component.form.effective_date = '2026-01-01';
+    component.form.end_date = '2000-01-01';
+    fixture.detectChanges();
+    component.saveIncome();
+    fixture.detectChanges();
+
+    expectField('hoursPerWeek', 'Enter hours from 1 to 168.');
+    expectField('nextPayday', 'Enter the next payday to place paychecks on the calendar.');
+    expectField('taxes', "Taxes can't be negative.");
+    expectField('deductions', "Deductions can't be negative.");
+    expectField('endDate', 'End date must be on or after the start date.');
   });
 });

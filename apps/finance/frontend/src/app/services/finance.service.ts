@@ -18,11 +18,12 @@ import {
   take,
 } from 'rxjs';
 import { apiUrl } from '../core/api-url';
+import { silentErrorToast } from '../core/http-error.interceptor';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
-import { VaultService } from '../crypto/vault.service';
+import { VaultService, type VaultWriteOptions } from '../crypto/vault.service';
 import {
   BankAccountRecord,
   Holding,
@@ -146,6 +147,11 @@ export class FinanceService {
 
   get sessionToken(): number {
     return this.encStore.sessionToken;
+  }
+
+  /** Callers that show their own error pass silent so only that write skips the fallback toast. */
+  private commit<T>(work: (options: VaultWriteOptions) => Promise<T>, silent = false): Observable<T> {
+    return from(work(silent ? { silent: true } : {}));
   }
 
   private bumpCollectionEpoch(collection: EncryptedCollection): void {
@@ -365,28 +371,31 @@ export class FinanceService {
     return this.getCashflowSummary(start, end);
   }
 
-  addTransaction(tx: TransactionCreate): Observable<Transaction> {
-    return from(this.encStore.addTransaction(tx as Omit<Transaction, 'id'>).then(async row => {
+  addTransaction(tx: TransactionCreate, silent = false): Observable<Transaction> {
+    return this.commit(async options => {
+      const row = await this.encStore.addTransaction(tx as Omit<Transaction, 'id'>, options);
       this._transactions.next(await this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  updateTransaction(id: number, tx: Partial<TransactionCreate>): Observable<Transaction> {
-    return from(this.encStore.updateTransaction(id, tx as Partial<Transaction>).then(async row => {
+  updateTransaction(id: number, tx: Partial<TransactionCreate>, silent = false): Observable<Transaction> {
+    return this.commit(async options => {
+      const row = await this.encStore.updateTransaction(id, tx as Partial<Transaction>, options);
       this._transactions.next(await this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  deleteTransaction(id: number): Observable<{ ok: boolean }> {
-    return from(this.encStore.deleteTransaction(id).then(async () => {
+  deleteTransaction(id: number, silent = false): Observable<{ ok: boolean }> {
+    return this.commit(async options => {
+      await this.encStore.deleteTransaction(id, options);
       this._transactions.next(await this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return { ok: true };
-    }));
+    }, silent);
   }
 
   getJobIncomes(): Observable<JobIncome[]> {
@@ -397,28 +406,31 @@ export class FinanceService {
     }));
   }
 
-  addJobIncome(body: JobIncomeCreate): Observable<JobIncome> {
-    return from(this.encStore.addJobIncome(body).then(async row => {
+  addJobIncome(body: JobIncomeCreate, silent = false): Observable<JobIncome> {
+    return this.commit(async options => {
+      const row = await this.encStore.addJobIncome(body, options);
       this._jobIncomes.next(await this.encStore.getJobIncomes());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  updateJobIncome(id: number, body: Partial<JobIncomeCreate>): Observable<JobIncome> {
-    return from(this.encStore.updateJobIncome(id, body).then(async row => {
+  updateJobIncome(id: number, body: Partial<JobIncomeCreate>, silent = false): Observable<JobIncome> {
+    return this.commit(async options => {
+      const row = await this.encStore.updateJobIncome(id, body, options);
       this._jobIncomes.next(await this.encStore.getJobIncomes());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  deleteJobIncome(id: number): Observable<{ ok: boolean }> {
-    return from(this.encStore.deleteJobIncome(id).then(async () => {
+  deleteJobIncome(id: number, silent = false): Observable<{ ok: boolean }> {
+    return this.commit(async options => {
+      await this.encStore.deleteJobIncome(id, options);
       this._jobIncomes.next(await this.encStore.getJobIncomes());
       this.invalidateDashboardCache();
       return { ok: true };
-    }));
+    }, silent);
   }
 
   getFixedExpenses(): Observable<FixedExpense[]> {
@@ -435,28 +447,31 @@ export class FinanceService {
     }));
   }
 
-  addSubscription(body: SubscriptionCreate): Observable<Subscription> {
-    return from(this.encStore.addSubscription(body).then(async row => {
+  addSubscription(body: SubscriptionCreate, silent = false): Observable<Subscription> {
+    return this.commit(async options => {
+      const row = await this.encStore.addSubscription(body, options);
       this._subscriptions.next(await this.encStore.getSubscriptions());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  updateSubscription(id: number, body: Partial<SubscriptionCreate>): Observable<Subscription> {
-    return from(this.encStore.updateSubscription(id, body).then(async row => {
+  updateSubscription(id: number, body: Partial<SubscriptionCreate>, silent = false): Observable<Subscription> {
+    return this.commit(async options => {
+      const row = await this.encStore.updateSubscription(id, body, options);
       this._subscriptions.next(await this.encStore.getSubscriptions());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  deleteSubscription(id: number): Observable<{ ok: boolean }> {
-    return from(this.encStore.deleteSubscription(id).then(async () => {
+  deleteSubscription(id: number, silent = false): Observable<{ ok: boolean }> {
+    return this.commit(async options => {
+      await this.encStore.deleteSubscription(id, options);
       this._subscriptions.next(await this.encStore.getSubscriptions());
       this.invalidateDashboardCache();
       return { ok: true };
-    }));
+    }, silent);
   }
 
   clearSessionState(): void {
@@ -477,33 +492,36 @@ export class FinanceService {
   }
 
   resetMyData(): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>(apiUrl('/auth/reset-data'), { confirm: 'CLEAR MY DATA' }).pipe(
+    return this.http.post<{ ok: boolean }>(apiUrl('/auth/reset-data'), { confirm: 'CLEAR MY DATA' }, { context: silentErrorToast() }).pipe(
       tap(() => this.clearSessionState())
     );
   }
 
-  addFixedExpense(body: FixedExpenseCreate): Observable<FixedExpense> {
-    return from(this.encStore.addFixedExpense(body).then(async row => {
+  addFixedExpense(body: FixedExpenseCreate, silent = false): Observable<FixedExpense> {
+    return this.commit(async options => {
+      const row = await this.encStore.addFixedExpense(body, options);
       this._fixedExpenses.next(await this.encStore.getFixedExpenses());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  updateFixedExpense(id: number, body: Partial<FixedExpenseCreate>): Observable<FixedExpense> {
-    return from(this.encStore.updateFixedExpense(id, body).then(async row => {
+  updateFixedExpense(id: number, body: Partial<FixedExpenseCreate>, silent = false): Observable<FixedExpense> {
+    return this.commit(async options => {
+      const row = await this.encStore.updateFixedExpense(id, body, options);
       this._fixedExpenses.next(await this.encStore.getFixedExpenses());
       this.invalidateDashboardCache();
       return row;
-    }));
+    }, silent);
   }
 
-  deleteFixedExpense(id: number): Observable<{ ok: boolean }> {
-    return from(this.encStore.deleteFixedExpense(id).then(async () => {
+  deleteFixedExpense(id: number, silent = false): Observable<{ ok: boolean }> {
+    return this.commit(async options => {
+      await this.encStore.deleteFixedExpense(id, options);
       this._fixedExpenses.next(await this.encStore.getFixedExpenses());
       this.invalidateDashboardCache();
       return { ok: true };
-    }));
+    }, silent);
   }
 
   renameCategory(fromCategory: string, toCategory: string): Observable<CategoryRenameResult> {
@@ -612,31 +630,34 @@ export class FinanceService {
     const upper = symbol.trim().toUpperCase();
     let params = new HttpParams();
     if (refresh) params = params.set('refresh', 'true');
-    return this.http.get<MarketPriceQuote>(apiUrl(`/market/price/${encodeURIComponent(upper)}`), { params });
+    return this.http.get<MarketPriceQuote>(apiUrl(`/market/price/${encodeURIComponent(upper)}`), { params, context: silentErrorToast() });
   }
 
-  addHolding(holding: HoldingCreate): Observable<Holding> {
-    return from(this.encStore.addHolding(holding).then(async row => {
+  addHolding(holding: HoldingCreate, silent = false): Observable<Holding> {
+    return this.commit(async options => {
+      const row = await this.encStore.addHolding(holding, options);
       this._holdings.next(await this.encStore.getHoldings());
       this.refreshDerivedMetrics();
       return row;
-    }));
+    }, silent);
   }
 
-  updateHolding(id: number, holding: Partial<HoldingCreate>): Observable<Holding> {
-    return from(this.encStore.updateHolding(id, holding as Partial<Holding>).then(async row => {
+  updateHolding(id: number, holding: Partial<HoldingCreate>, silent = false): Observable<Holding> {
+    return this.commit(async options => {
+      const row = await this.encStore.updateHolding(id, holding as Partial<Holding>, this.encStore.sessionToken, options);
       this._holdings.next(await this.encStore.getHoldings());
       this.refreshDerivedMetrics();
       return row;
-    }));
+    }, silent);
   }
 
-  deleteHolding(id: number): Observable<{ ok: boolean }> {
-    return from(this.encStore.deleteHolding(id).then(async () => {
+  deleteHolding(id: number, silent = false): Observable<{ ok: boolean }> {
+    return this.commit(async options => {
+      await this.encStore.deleteHolding(id, options);
       this._holdings.next(await this.encStore.getHoldings());
       this.refreshDerivedMetrics();
       return { ok: true };
-    }));
+    }, silent);
   }
 
   getNetWorth(): Observable<NetWorth> {
@@ -656,28 +677,31 @@ export class FinanceService {
     }));
   }
 
-  addAsset(body: AssetCreate): Observable<Asset> {
-    return from(this.encStore.addAsset(body).then(async row => {
+  addAsset(body: AssetCreate, silent = false): Observable<Asset> {
+    return this.commit(async options => {
+      const row = await this.encStore.addAsset(body, options);
       this._assets.next(await this.encStore.getAssets());
       this.refreshDerivedMetrics();
       return row;
-    }));
+    }, silent);
   }
 
-  updateAsset(id: number, body: Partial<AssetCreate>): Observable<Asset> {
-    return from(this.encStore.updateAsset(id, body).then(async row => {
+  updateAsset(id: number, body: Partial<AssetCreate>, silent = false): Observable<Asset> {
+    return this.commit(async options => {
+      const row = await this.encStore.updateAsset(id, body, options);
       this._assets.next(await this.encStore.getAssets());
       this.refreshDerivedMetrics();
       return row;
-    }));
+    }, silent);
   }
 
-  deleteAsset(id: number): Observable<{ ok: boolean }> {
-    return from(this.encStore.deleteAsset(id).then(async () => {
+  deleteAsset(id: number, silent = false): Observable<{ ok: boolean }> {
+    return this.commit(async options => {
+      await this.encStore.deleteAsset(id, options);
       this._assets.next(await this.encStore.getAssets());
       this.refreshDerivedMetrics();
       return { ok: true };
-    }));
+    }, silent);
   }
 
   getLiabilities(): Observable<Liability[]> {
@@ -688,28 +712,31 @@ export class FinanceService {
     }));
   }
 
-  addLiability(body: LiabilityCreate): Observable<Liability> {
-    return from(this.encStore.addLiability(body).then(async row => {
+  addLiability(body: LiabilityCreate, silent = false): Observable<Liability> {
+    return this.commit(async options => {
+      const row = await this.encStore.addLiability(body, options);
       this._liabilities.next(await this.encStore.getLiabilities());
       this.refreshDerivedMetrics();
       return row;
-    }));
+    }, silent);
   }
 
-  updateLiability(id: number, body: Partial<LiabilityCreate>): Observable<Liability> {
-    return from(this.encStore.updateLiability(id, body).then(async row => {
+  updateLiability(id: number, body: Partial<LiabilityCreate>, silent = false): Observable<Liability> {
+    return this.commit(async options => {
+      const row = await this.encStore.updateLiability(id, body, options);
       this._liabilities.next(await this.encStore.getLiabilities());
       this.refreshDerivedMetrics();
       return row;
-    }));
+    }, silent);
   }
 
-  deleteLiability(id: number): Observable<{ ok: boolean }> {
-    return from(this.encStore.deleteLiability(id).then(async () => {
+  deleteLiability(id: number, silent = false): Observable<{ ok: boolean }> {
+    return this.commit(async options => {
+      await this.encStore.deleteLiability(id, options);
       this._liabilities.next(await this.encStore.getLiabilities());
       this.refreshDerivedMetrics();
       return { ok: true };
-    }));
+    }, silent);
   }
 
   getImportBanks(): Observable<BankImportOption[]> {

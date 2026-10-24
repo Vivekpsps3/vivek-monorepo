@@ -1,18 +1,21 @@
 /**
- * Keyed toast layer shared by Media and Travel.
+ * Keyed toast layer shared by Media and Travel, plus the suite toast contract
+ * Finance reads (limit, durations, roles, and copy).
  *
  * Two persistent live regions, outside the app root:
  *   #toasts        role=status   polite successes
  *   #toast-alerts  role=alert    errors
  * The roles stay on the regions. A toast never carries its own live role.
  *
- * Travel adopts this module as-is. App-specific rules (date-picker yield,
+ * Travel adopts the layer as-is. App-specific rules (date-picker yield,
  * Leaflet stacking) live in the app, not here.
  */
 
 export const TOAST_LIMIT = 3;
 export const TOAST_MS = 5000;
 export const TOAST_ACTION_MS = 8000;
+export const TOAST_DURATION_MS = TOAST_MS;
+export const TOAST_ACTION_DURATION_MS = TOAST_ACTION_MS;
 
 /** Item-scoped media toasts. The id is the capture group. Travel keys do not match. */
 export const ITEM_TOAST_KEY = /^(?:progress|note|note-conflict|status|favorite|anticipated|rating):(.+)$/;
@@ -151,4 +154,44 @@ export function createToastLayer({
   }
 
   return { pushToast, toast, dismissToast, toastNodes, retireOtherItemToasts };
+}
+
+export const TOAST_INSET_PX = 24;
+export const TOAST_MAX_WIDTH_PX = 400;
+export const TOAST_MOBILE_BREAKPOINT_PX = 768;
+export const HTTP_ERROR_FALLBACK = "Something went wrong. Reload the page if this keeps happening.";
+
+export function toastRole(kind) {
+  return kind === "error" ? "alert" : "status";
+}
+
+export function toastLive(kind) {
+  return kind === "error" ? "assertive" : "polite";
+}
+
+export function toastDuration(hasAction) {
+  return hasAction ? TOAST_ACTION_DURATION_MS : TOAST_DURATION_MS;
+}
+
+export function successCopy(thing, verb = "saved") {
+  return `${thing} ${verb}`;
+}
+
+export function failureCopy(verb, thing, reason) {
+  const sentence = `Couldn't ${verb} ${thing}.`;
+  return reason ? `${sentence} ${reason}` : sentence;
+}
+
+export function isUserFacingDetail(detail) {
+  if (typeof detail !== "string") return false;
+  const text = detail.trim();
+  if (!text || text.length > 180) return false;
+  if (/[<>]/.test(text)) return false;
+  if (/^request failed\.?$/i.test(text)) return false;
+  if (/traceback|exception|stack trace|\bsql\b|errno|econn|http failure/i.test(text)) return false;
+  return true;
+}
+
+export function httpErrorMessage(detail) {
+  return isUserFacingDetail(detail) ? detail.trim() : HTTP_ERROR_FALLBACK;
 }

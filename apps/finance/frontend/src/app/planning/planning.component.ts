@@ -14,10 +14,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subject, auditTime, finalize, takeUntil } from 'rxjs';
+import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 import { FinanceDataChange, FinanceService } from '../services/finance.service';
 import { PlanningService } from '../services/planning.service';
-import { ConfirmService } from '@vivek/ui';
-import { ToastService } from '@vivek/ui';
+import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
 import {
   DEFAULT_MC_ASSUMPTIONS,
   MC_FAN_PATHS_PERSIST_MAX,
@@ -64,11 +64,13 @@ import {
   normalizePlanningAssumptions,
   restorePlanningProfilePayload,
 } from './planning-assumptions.util';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 @Component({
   selector: 'app-planning',
   standalone: true,
   imports: [
+    AppDatePipe,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -144,6 +146,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   profiles: PlanningProfile[] = [];
   selectedProfileId: number | null = null;
   savedInputName = '';
+  savedInputError = '';
   savingProfile = false;
 
   private destroy$ = new Subject<void>();
@@ -392,8 +395,8 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
         this.toast.success('Covered spending estimate accepted and saved.');
         this.cdr.markForCheck();
       },
-      error: err => {
-        this.error = err?.message ?? 'Could not save the accepted spending estimate.';
+      error: () => {
+        this.error = failureCopy('save', 'the spending estimate');
       },
     });
   }
@@ -503,7 +506,12 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
 
   saveSavedInputs(): void {
     const name = this.savedInputName.trim();
-    if (!name) return;
+    if (!name) {
+      this.savedInputError = 'Enter a name for these inputs.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.savedInputError = '';
     this.savingProfile = true;
     const body = { name, payload: this.normalizedAssumptions() };
     const req = this.workflow.saveProfile(this.selectedProfileId, body);
@@ -526,8 +534,8 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
           this.savedInputName = p.name;
           this.toast.success('Saved inputs updated.');
         },
-        error: err => {
-          this.error = err?.message ?? 'Could not save inputs.';
+        error: () => {
+          this.error = failureCopy('save', 'these inputs');
         },
       });
   }
@@ -603,6 +611,10 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
           this.savedInputName = '';
           this.cdr.markForCheck();
         },
+        error: () => {
+          this.error = failureCopy('delete', 'these saved inputs');
+          this.cdr.markForCheck();
+        },
       });
   }
 
@@ -639,6 +651,18 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.useTxIncome) {
       this.assumptions.monthly_income = value;
     }
+  }
+
+  onStartingNetWorthInput(value: number | null): void {
+    if (!this.useLedgerStartingNetWorth) this.startingNetWorth = value;
+  }
+
+  onNetCashflowInput(value: number | null): void {
+    if (this.useNetCashflowOverride) this.assumptions.net_annual_cashflow_override = value;
+  }
+
+  onAllocationInput(value: number | null): void {
+    if (!this.useInferredAllocation) this.assumptions.portfolio_allocation = this.fromPercent(value);
   }
 
   setUseTxIncome(useCurrent: boolean): void {
@@ -835,18 +859,15 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   formatMoney(n: number | undefined | null): string {
-    if (n == null || Number.isNaN(n)) return '-';
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(n);
+    return formatStoredMoney(n);
+  }
+
+  formatEstimate(n: number | undefined | null): string {
+    return formatEstimateMoney(n);
   }
 
   formatSignedMoney(n: number | undefined | null): string {
-    if (n == null || Number.isNaN(n)) return '-';
-    const sign = n > 0 ? '+' : '';
-    return `${sign}${this.formatMoney(n)}`;
+    return formatEstimateMoney(n, 'always');
   }
 
   formatPct(n: number | undefined | null, source: 'decimal' | 'percent' = 'decimal'): string {

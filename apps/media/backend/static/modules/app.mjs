@@ -54,6 +54,7 @@ import {
   SKELETON_DELAY_MS,
   SORT_TOAST,
   chooseReview,
+  failedNoteAfterReload,
   coverImage,
   dayLabel,
   draftKey,
@@ -907,7 +908,15 @@ async function viewItem(id, ticket, forcedSeason = null) {
   if (note instanceof HTMLTextAreaElement) {
     note.dataset.saved = entry.review ?? "";
     note.dataset.reviewBase = entry.review_updated_at ?? "";
-    if (String(noteOutcome?.id) === String(id) && note.value !== (entry.review ?? "")) {
+    const failedNote = failedNoteAfterReload(
+      String(noteOutcome?.id) === String(id) ? noteOutcome : null,
+      entry.review,
+    );
+    if (failedNote != null) {
+      if (note.value !== failedNote) {
+        note.value = failedNote;
+        writeDraft(id, failedNote, entry.review_updated_at ?? "");
+      }
       showNoteFailure(document.querySelector("#note-status"));
     } else if (String(noteOutcome?.id) === String(id)) {
       noteOutcome = null;
@@ -2097,7 +2106,9 @@ async function commitNote(id) {
       });
       return;
     }
-    noteOutcome = { id: String(id), kind: "failure" };
+    // Keep the unsent note and the retry toast here. reportItemSaveFailure
+    // does that for this failure; it hands only 401 and 403 to fail().
+    noteOutcome = { id: String(id), kind: "failure", text: sent };
     showNoteFailure(document.querySelector("#note-status"));
     reportItemSaveFailure({
       id,

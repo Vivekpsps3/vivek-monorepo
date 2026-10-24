@@ -772,6 +772,9 @@ test('two quick note saves use the base from the first response', async ({ page,
 test('a status click waits for the note save before drawing the new field', async ({ page, request }) => {
   const listed = await request.get('/media/api/library');
   const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
+  // An earlier test leaves this row paused, so the pressed style would not
+  // wait for this click. Start from a different status.
+  await request.patch(`/media/api/entries/${dune.id}`, { data: { status: 'in_progress' } });
   let releaseNote: () => void = () => {};
   const gate = new Promise<void>(resolve => { releaseNote = resolve; });
   const reviews: string[] = [];
@@ -793,12 +796,8 @@ test('a status click waits for the note save before drawing the new field', asyn
   await expect.poll(() => reviews.length).toBe(1);
   expect(reviews[0]).toBe('typed before pause');
   const saved = page.waitForResponse(response => {
-    if (response.request().method() !== 'PATCH') return false;
-    try {
-      return response.request().postDataJSON()?.review === 'typed before pause';
-    } catch {
-      return false;
-    }
+    if (response.request().method() !== 'PATCH' || !response.ok()) return false;
+    try { return response.request().postDataJSON()?.review === 'typed before pause'; } catch { return false; }
   });
   releaseNote();
   await clicked;
@@ -1043,6 +1042,15 @@ test('a stalled note save times out and lets the item render', async ({ page, re
     ));
     await note.blur();
     await reviewSent;
+    // The refetch drops a draft whose base no longer matches. The failure
+    // still has to come back with the typed text after the item redraws.
+    await page.evaluate(id => {
+      const key = `media-review-draft:${id}`;
+      const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+      parsed.text = "stalled draft";
+      parsed.base = "stale-base";
+      localStorage.setItem(key, JSON.stringify(parsed));
+    }, String(dune.id));
     const favoriteSaved = page.waitForResponse(response => {
       if (response.request().method() !== 'PATCH') return false;
       try { return response.request().postDataJSON()?.favorite === true; } catch { return false; }

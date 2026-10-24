@@ -375,4 +375,77 @@ describe('EncryptedStoreService', () => {
       name: 'Remote cash', current_value: 125, notes: 'my draft',
     })]);
   });
+
+  it('sends each same-record update through the record queue', async () => {
+    const { store } = createStoreHarness();
+    const transaction = await store.addTransaction({
+      date: '2026-01-02', type: 'expense', category: 'Food', amount: 4, description: 'Tea',
+    });
+    const liability = await store.addLiability({
+      name: 'Card', category: 'credit', balance_owed: 20, as_of_date: '2026-01-02',
+    });
+    const asset = await store.addAsset({ name: 'Cash', category: 'cash', current_value: 10 });
+    const holding = await store.addHolding({
+      symbol: 'MSFT', shares: 1, purchase_price: 10, purchase_date: '2024-01-02',
+    });
+    const income = await store.addJobIncome({
+      employer: 'Acme', effective_date: '2026-01-01', pay_frequency: 'annual', base_pay: 1, is_active: true,
+    });
+    const expense = await store.addFixedExpense({
+      name: 'Rent', category: 'Housing', amount: 1, frequency: 'monthly', start_date: '2026-01-01', autopay: false, is_active: true,
+    });
+    const subscription = await store.addSubscription({
+      name: 'Music', category: 'Fun', amount: 1, frequency: 'monthly', next_bill_date: '2026-02-01', is_active: true,
+    });
+    const bank = await store.upsertBankAccount({
+      bank_slug: 'chase', account_mask: '1234', account_key: 'chk', display_name: 'Checking', confirmed: true,
+    });
+    const brokerage = await store.upsertBrokerageAccount({
+      broker_slug: 'fidelity', broker_name: 'Fidelity', account_mask: '9999',
+    });
+    const profile = await store.savePlanningProfile({ name: 'Base' });
+    const scenario = await store.saveStockLabScenario({ name: 'First', primary_symbol: 'MSFT' } as never);
+    const receipt = await store.addImportReceipt({
+      bank_slugs: ['chase'], filenames: ['statement.csv'], status: 'complete', started_at: '',
+      selected_row_count: 0, inserted_count: 0, unresolved: [], coverage: [],
+    } as never);
+
+    const queued: string[] = [];
+    const persistence = (store as unknown as {
+      persistence: { runRecordUpdate: (collection: string, id: number, generation: number, update: () => Promise<unknown>) => Promise<unknown> };
+    }).persistence;
+    const original = persistence.runRecordUpdate.bind(persistence);
+    spyOn(persistence, 'runRecordUpdate').and.callFake((collection: string, id: number, generation: number, update: () => Promise<unknown>) => {
+      queued.push(`${collection}:${id}`);
+      return original(collection, id, generation, update);
+    });
+
+    await store.updateTransaction(transaction.id, { merchant: 'Cafe' });
+    await store.updateLiability(liability.id, { balance_owed: 15 });
+    await store.updateAsset(asset.id, { name: 'Cash 2' });
+    await store.updateHolding(holding.id, { shares: 2 });
+    await store.updateJobIncome(income.id, { employer: 'Acme 2' });
+    await store.updateFixedExpense(expense.id, { name: 'Rent 2' });
+    await store.updateSubscription(subscription.id, { name: 'Music 2' });
+    await store.savePlanningProfile({ name: 'Base 2' }, profile.id);
+    await store.upsertBankAccount({ ...bank, display_name: 'Main' });
+    await store.upsertBrokerageAccount({ ...brokerage, nickname: 'Taxable' });
+    await store.saveStockLabScenario({ ...scenario, name: 'Next' }, scenario.id);
+    await store.updateImportReceipt(receipt.id, { status: 'staged' });
+
+    expect(queued).toEqual([
+      `transactions:${transaction.id}`,
+      `liabilities:${liability.id}`,
+      `assets:${asset.id}`,
+      `holdings:${holding.id}`,
+      `job_incomes:${income.id}`,
+      `fixed_expenses:${expense.id}`,
+      `subscriptions:${subscription.id}`,
+      `planning_profiles:${profile.id}`,
+      `bank_accounts:${bank.id}`,
+      `brokerage_accounts:${brokerage.id}`,
+      `stock_lab_scenarios:${scenario.id}`,
+      `import_batches:${receipt.id}`,
+    ]);
+  });
 });

@@ -7,6 +7,7 @@ import {
   PlanningProjectionRow,
 } from '../models/planning.model';
 import { McChartData, MonteCarloFanChartComponent } from './monte-carlo-fan-chart.component';
+import { formatEstimate } from '../shared/stored-money';
 
 @Component({
   selector: 'app-planning-results',
@@ -42,15 +43,11 @@ export class PlanningResultsComponent {
   }
 
   formatMoney(value: number | undefined | null): string {
-    if (value == null || Number.isNaN(value)) return '-';
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency', currency: 'USD', maximumFractionDigits: 0,
-    }).format(value);
+    return formatEstimate(value);
   }
 
   formatSignedMoney(value: number | undefined | null): string {
-    if (value == null || Number.isNaN(value)) return '-';
-    return `${value > 0 ? '+' : ''}${this.formatMoney(value)}`;
+    return formatEstimate(value, 'always');
   }
 
   formatPct(value: number | undefined | null, source: 'decimal' | 'percent' = 'decimal'): string {

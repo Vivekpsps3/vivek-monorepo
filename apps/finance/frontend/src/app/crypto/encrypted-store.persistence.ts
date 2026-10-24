@@ -1,6 +1,6 @@
 import { firstValueFrom, Subject } from 'rxjs';
 import { randomClientId } from './vault-crypto';
-import { VaultService } from './vault.service';
+import { VaultService, type VaultWriteOptions } from './vault.service';
 
 export type EncryptedCollection =
   | 'transactions'
@@ -43,12 +43,29 @@ export interface StoredEnvelope<T> {
 
 const CURRENT_RECORD_SCHEMA_VERSION = 2;
 
+/** Internal load options. `legacyRewrite` is not part of the public vault API. */
+interface StoreLoadOptions extends VaultWriteOptions {
+  /** Set only on the rewrite's own upsert so it does not wait for itself. */
+  legacyRewrite?: boolean;
+  /** Writes surface a failed rewrite. Reads keep the loaded rows. */
+  reportRewriteFailure?: boolean;
+}
+
+interface InflightWork {
+  generation: number;
+  promise: Promise<void>;
+  toasted: boolean;
+}
+
 export class EncryptedRecordPersistence {
   private changesSubject = new Subject<EncryptedStoreChange>();
   readonly changes$ = this.changesSubject.asObservable();
   private loaded = false;
-  private loadingGeneration = -1;
-  private loadingPromise: Promise<void> | null = null;
+  /** One physical load per session. Callers join it; they do not start another. */
+  private inflightLoad: InflightWork | null = null;
+  /** Schema rewrite failed after the rows were already usable. Retried on the next load or commit. */
+  private legacyRewritePending = false;
+  private inflightRewrite: InflightWork | null = null;
   private reservedIds = new Set<number>();
   private recordQueues = new Map<string, Promise<unknown>>();
   private reloadQueues = new Map<CollectionName, Promise<void>>();
@@ -72,8 +89,9 @@ export class EncryptedRecordPersistence {
 
   clear(): void {
     this.loaded = false;
-    this.loadingGeneration = -1;
-    this.loadingPromise = null;
+    this.inflightLoad = null;
+    this.legacyRewritePending = false;
+    this.inflightRewrite = null;
     this.reservedIds.clear();
     this.recordQueues.clear();
     this.reloadQueues.clear();
@@ -103,7 +121,7 @@ export class EncryptedRecordPersistence {
     const previous = this.recordQueues.get(key) ?? Promise.resolve();
     const pending = previous.catch(() => undefined).then(async () => {
       this.assertSession(expectedGeneration);
-      return update();
+      return await update();
     });
     this.recordQueues.set(key, pending);
     return pending.finally(() => {
@@ -124,35 +142,93 @@ export class EncryptedRecordPersistence {
     return acquire(0);
   }
 
-  async ensureLoaded(): Promise<void> {
+  async ensureLoaded(options?: StoreLoadOptions): Promise<void> {
+    if (options?.legacyRewrite && this.loaded) return;
+    const generation = this.getSessionToken();
+    const rewrite = this.inflightRewrite?.generation === generation ? this.inflightRewrite : null;
+    if (rewrite) {
+      await this.finishRewrite(rewrite, options);
+      return;
+    }
+    if (this.loaded && this.legacyRewritePending) {
+      await this.finishRewrite(this.beginRewrite(generation), options);
+      return;
+    }
     if (this.loaded) return;
     if (!this.vault.isUnlocked) throw new Error('Vault locked');
-    const generation = this.getSessionToken();
-    if (this.loadingPromise && this.loadingGeneration === generation) return this.loadingPromise;
-    const promise = this.loadStore(generation);
-    this.loadingPromise = promise;
-    this.loadingGeneration = generation;
-    try {
-      await promise;
+    if (this.inflightLoad?.generation === generation) {
+      await this.joinInflight(this.inflightLoad, options);
+      return;
+    }
+    const promise = this.loadStore(generation).then(() => {
       if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
       if (!this.loaded) throw new Error('Vault data could not be loaded');
-    } catch (error) {
-      if (this.getSessionToken() === generation && this.loadingPromise === promise) {
-        this.loaded = false;
-        this.loadingPromise = null;
-        this.loadingGeneration = -1;
-      }
-      throw error;
+    });
+    const inflight = { generation, promise, toasted: false };
+    this.inflightLoad = inflight;
+    try {
+      await this.joinInflight(inflight, options);
     } finally {
-      if (this.loadingPromise === promise) {
-        this.loadingPromise = null;
-        this.loadingGeneration = -1;
-      }
+      if (this.inflightLoad === inflight) this.inflightLoad = null;
+    }
+  }
+
+  /** The shared GET never toasts. One failed load produces at most one toast. */
+  private async joinInflight(inflight: InflightWork, options?: StoreLoadOptions): Promise<void> {
+    try {
+      await inflight.promise;
+    } catch (error) {
+      this.surfaceLoadFailure(inflight, options, error);
+      throw error;
+    }
+  }
+
+  private surfaceLoadFailure(inflight: InflightWork, options: StoreLoadOptions | undefined, error: unknown): void {
+    if (options?.silent) return;
+    if (error instanceof Error && (error.message === 'Vault session changed' || error.message === 'Vault locked')) return;
+    const status = typeof error === 'object' && error ? Number((error as { status?: number }).status) : NaN;
+    if (status === 422) return;
+    if (inflight.toasted) return;
+    inflight.toasted = true;
+    this.vault.reportFallbackFailure();
+  }
+
+  private beginRewrite(generation: number): InflightWork {
+    const existing = this.inflightRewrite?.generation === generation ? this.inflightRewrite : null;
+    if (existing) return existing;
+    const promise = this.executeRewrite(generation);
+    const inflight = { generation, promise, toasted: false };
+    this.inflightRewrite = inflight;
+    void promise.finally(() => {
+      if (this.inflightRewrite === inflight) this.inflightRewrite = null;
+    });
+    return inflight;
+  }
+
+  /** Reads resolve with the loaded rows when the rewrite fails. Writes surface it once. */
+  private async finishRewrite(inflight: InflightWork, options?: StoreLoadOptions): Promise<void> {
+    try {
+      await inflight.promise;
+    } catch (error) {
+      if (!options?.reportRewriteFailure) return;
+      this.surfaceLoadFailure(inflight, options, error);
+      throw error;
+    }
+  }
+
+  private async executeRewrite(generation: number): Promise<void> {
+    try {
+      await this.rewriteLegacyRecords(generation);
+      if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
+      this.legacyRewritePending = false;
+    } catch (error) {
+      if (generation === this.getSessionToken()) this.legacyRewritePending = true;
+      throw error;
     }
   }
 
   private async loadStore(generation: number): Promise<void> {
-    const rows = await firstValueFrom(this.vault.listRecords());
+    const rows = await firstValueFrom(this.vault.listRecords(undefined, { silent: true }));
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     for (const key of Object.keys(this.bags)) this.bags[key] = new Map();
     const decoded: Array<{ row: any; data: any }> = [];
@@ -184,8 +260,7 @@ export class EncryptedRecordPersistence {
       this.bags[row.collection].set(row.client_id, envelope);
     }
     this.loaded = true;
-    await this.rewriteLegacyRecords(generation);
-    if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
+    await this.beginRewrite(generation).promise;
   }
 
   allocateId(): number {
@@ -238,20 +313,36 @@ export class EncryptedRecordPersistence {
     collection: CollectionName,
     payload: T,
     clientId?: string,
-    expectedGeneration?: number
+    expectedGeneration?: number,
+    options?: StoreLoadOptions,
   ): Promise<T> {
     const requestedGeneration = expectedGeneration ?? this.getSessionToken();
-    await this.ensureLoaded();
+    await this.ensureLoaded(options?.legacyRewrite ? options : { ...options, reportRewriteFailure: true });
     const generation = requestedGeneration;
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
-    const existing = clientId
-      ? this.bags[collection].get(clientId)
-      : payload.id
-        ? Array.from(this.bags[collection].values()).find(v => v.id === payload.id)
-        : undefined;
-    const id = existing?.id ?? payload.id ?? this.allocateId();
+    const preview = this.findEnvelope(collection, payload.id, clientId);
+    const id = preview?.id ?? payload.id ?? this.allocateId();
     this.reservedIds.add(id);
-    const cid = existing?.client_id ?? clientId ?? randomClientId(collection.slice(0, 3));
+    const cid = preview?.client_id ?? clientId ?? randomClientId(collection.slice(0, 3));
+    return this.persistUpsert(collection, payload, id, cid, generation, options);
+  }
+
+  private findEnvelope(collection: CollectionName, id?: number, clientId?: string): StoredEnvelope<unknown> | undefined {
+    if (clientId) return this.bags[collection].get(clientId);
+    if (!id) return undefined;
+    return Array.from(this.bags[collection].values()).find(envelope => envelope.id === id);
+  }
+
+  private async persistUpsert<T extends { id?: number }>(
+    collection: CollectionName,
+    payload: T,
+    id: number,
+    cid: string,
+    generation: number,
+    options?: StoreLoadOptions,
+  ): Promise<T> {
+    if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
+    const existing = this.findEnvelope(collection, id, cid);
     const data = { ...payload, id };
     const schemaVersion = CURRENT_RECORD_SCHEMA_VERSION;
     const keyVersion = existing?.key_version ?? 1;
@@ -277,13 +368,15 @@ export class EncryptedRecordPersistence {
           expected_revision: existing?.revision ?? null,
           indexes,
         },
-      ])
+      ], options)
     ).catch(async error => {
-      if (Number((error as any)?.status) === 409) {
+      const status = Number((error as { status?: number })?.status);
+      if (status === 422 && !options?.silent) this.vault.reportFallbackFailure();
+      if (status === 409) {
         let latestLoaded = false;
         if (this.loaded && generation === this.getSessionToken()) {
           try {
-            await this.reloadCollections([collection]);
+            await this.reloadCollections([collection], options);
             latestLoaded = true;
             this.changesSubject.next({ collection, source: 'remote' });
           } catch {
@@ -313,22 +406,24 @@ export class EncryptedRecordPersistence {
   async savePreparedRecords<T extends { id: number }>(
     collection: CollectionName,
     records: T[],
-    _replaceExisting = false
+    _replaceExisting = false,
+    options?: VaultWriteOptions,
   ): Promise<T[]> {
     const generation = this.getSessionToken();
     if (collection === 'holdings' && records.length) {
       return this.withRecordUpdates(collection, records.map(record => record.id), generation,
-        () => this.savePreparedRecordsUnlocked(collection, records, generation));
+        () => this.savePreparedRecordsUnlocked(collection, records, generation, options));
     }
-    return this.savePreparedRecordsUnlocked(collection, records, generation);
+    return this.savePreparedRecordsUnlocked(collection, records, generation, options);
   }
 
   private async savePreparedRecordsUnlocked<T extends { id: number }>(
     collection: CollectionName,
     records: T[],
-    generation: number
+    generation: number,
+    options?: VaultWriteOptions,
   ): Promise<T[]> {
-    await this.ensureLoaded();
+    await this.ensureLoaded({ ...options, reportRewriteFailure: true });
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     const output: T[] = [];
     for (let offset = 0; offset < records.length; offset += 200) {
@@ -363,7 +458,7 @@ export class EncryptedRecordPersistence {
         envelopes.push({ id: data.id, client_id, schema_version, key_version, data });
       }
       if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
-      const saved = await firstValueFrom(this.vault.upsertRecords(prepared));
+      const saved = await firstValueFrom(this.vault.upsertRecords(prepared, options));
       if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
       this.bumpCollectionVersion(collection);
       saved.forEach((row, index) => {
@@ -384,22 +479,22 @@ export class EncryptedRecordPersistence {
       for (const envelope of this.bags[collection].values()) {
         // Older ciphertext needs authenticated-record AAD; plaintext tables are retired.
         if (envelope.schema_version < CURRENT_RECORD_SCHEMA_VERSION) {
-          await this.upsert(collection, envelope.data, envelope.client_id, generation);
+          await this.upsert(collection, envelope.data, envelope.client_id, generation, { silent: true, legacyRewrite: true });
         }
       }
     }
   }
 
-  async remove(collection: CollectionName, id: number): Promise<void> {
+  async remove(collection: CollectionName, id: number, options?: VaultWriteOptions): Promise<void> {
     const generation = this.getSessionToken();
-    await this.ensureLoaded();
+    await this.ensureLoaded({ ...options, reportRewriteFailure: true });
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     const found = Array.from(this.bags[collection].values()).find(v => v.id === id);
     if (!found) return;
     await firstValueFrom(
       this.vault.deleteRecords([
         { collection, client_id: found.client_id, expected_revision: found.revision },
-      ])
+      ], options)
     );
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     this.bumpCollectionVersion(collection);
@@ -408,12 +503,13 @@ export class EncryptedRecordPersistence {
   }
 
   /** Reloads encrypted records after another same-account tab changes them. */
-  async reloadCollections(collections: EncryptedCollection[]): Promise<void> {
+  async reloadCollections(collections: EncryptedCollection[], options?: VaultWriteOptions): Promise<void> {
+    // Joins the single in-flight load, then refreshes with this caller's silence.
     const generation = this.getSessionToken();
-    await this.ensureLoaded();
+    await this.ensureLoaded(options);
     for (const collection of [...new Set(collections)]) {
       const previous = this.reloadQueues.get(collection) ?? Promise.resolve();
-      const pending = previous.catch(() => undefined).then(() => this.reloadCollectionSnapshot(collection, generation));
+      const pending = previous.catch(() => undefined).then(() => this.reloadCollectionSnapshot(collection, generation, options));
       this.reloadQueues.set(collection, pending);
       try {
         await pending;
@@ -423,11 +519,11 @@ export class EncryptedRecordPersistence {
     }
   }
 
-  private async reloadCollectionSnapshot(collection: CollectionName, generation: number): Promise<void> {
+  private async reloadCollectionSnapshot(collection: CollectionName, generation: number, options?: VaultWriteOptions): Promise<void> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       this.assertSession(generation);
       const version = this.collectionVersions.get(collection) ?? 0;
-      const records = await firstValueFrom(this.vault.listRecords(collection));
+      const records = await firstValueFrom(this.vault.listRecords(collection, options));
       this.assertSession(generation);
       const latest = new Map<string, StoredEnvelope<any>>();
       const decoded: Array<{ record: any; data: any }> = [];
@@ -464,8 +560,8 @@ export class EncryptedRecordPersistence {
   }
 
 
-  async deleteMany(collection: CollectionName, ids: number[]): Promise<void> {
-    await this.ensureLoaded();
+  async deleteMany(collection: CollectionName, ids: number[], options?: VaultWriteOptions): Promise<void> {
+    await this.ensureLoaded({ ...options, reportRewriteFailure: true });
     const generation = this.getSessionToken();
     const records = ids
       .map(id => Array.from(this.bags[collection].values()).find(row => row.id === id))
@@ -475,7 +571,7 @@ export class EncryptedRecordPersistence {
       const batch = records.slice(offset, offset + 200);
       await firstValueFrom(this.vault.deleteRecords(batch.map(row => ({
         collection, client_id: row.client_id, expected_revision: row.revision,
-      }))));
+      })), options));
       this.assertSession(generation);
       this.bumpCollectionVersion(collection);
       for (const row of batch) this.bags[collection].delete(row.client_id);

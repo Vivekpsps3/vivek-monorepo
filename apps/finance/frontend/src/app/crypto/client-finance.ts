@@ -18,56 +18,98 @@ import {
   jobCompensationBetween,
   paydayDatesBetween,
 } from '../utils/job-compensation.util';
-import { todayIsoDate } from '@vivek/browser';
+import { countableCents, dollarsFromCountedCents, fromDollars, roundHalfAwayFromZero, todayIsoDate, type Cents } from '@vivek/browser';
+
+/**
+ * Decision pending Vivek.
+ * true: a legacy transaction whose sign isn't allowed is excluded and badged.
+ * false: count the absolute value, which is what main did before F1.
+ * The default never applies abs and never drops the row without a badge.
+ */
+export const FLAG_DISALLOWED_TRANSACTION_SIGNS = true;
+
+function dollarsFromCents(cents: Cents): number {
+  const dollars = dollarsFromCountedCents(cents);
+  return Number.isFinite(dollars) ? dollars : 0;
+}
+
+/** Count a stored dollar amount, or flag it when it cannot be summed safely. */
+function takeCents(value: unknown, mode: 'nonNegative' | 'positive'): { cents: Cents; excluded: boolean } {
+  if (value == null || value === '') return { cents: 0, excluded: false };
+  const cents = countableCents(value, mode);
+  if (cents == null) return { cents: 0, excluded: true };
+  return { cents, excluded: false };
+}
+
+function holdingDollars(holding: Holding): number | null {
+  const shares = Number(holding.shares) || 0;
+  const exactValue = holding.market_value == null ? null : Number(holding.market_value);
+  const enrichedValue = holding.value == null ? null : Number(holding.value);
+  const price = holding.current_price ?? holding.purchase_price;
+  if (exactValue != null && Number.isFinite(exactValue)) return exactValue;
+  if (enrichedValue != null && Number.isFinite(enrichedValue)) return enrichedValue;
+  if (price == null || !Number.isFinite(Number(price))) return null;
+  return Number(price) * shares;
+}
 
 export function computeNetWorth(
   assets: Asset[],
   liabilities: Liability[],
   holdings: Holding[]
 ): NetWorth {
-  const other_assets = assets.reduce((sum, a) => sum + (Number(a.current_value) || 0), 0);
+  let excluded = 0;
+  let otherCents = 0;
+  for (const asset of assets) {
+    const taken = takeCents(asset.current_value, 'nonNegative');
+    otherCents += taken.cents;
+    if (taken.excluded) excluded += 1;
+  }
   const portfolio_sources: Record<string, string> = {};
   const portfolio_breakdown: Record<string, number> = {};
-  let portfolio = 0;
+  let portfolioCents = 0;
   const activeHoldings = holdings.filter(h => h.lifecycle_status !== 'inactive' && h.lifecycle_status !== 'staged');
-  for (const h of activeHoldings) {
-    const shares = Number(h.shares) || 0;
-    const exactValue = h.market_value == null ? null : Number(h.market_value);
-    const enrichedValue = h.value == null ? null : Number(h.value);
-    const price = h.current_price ?? h.purchase_price;
-    const value = exactValue != null && Number.isFinite(exactValue)
-      ? exactValue
-      : enrichedValue != null && Number.isFinite(enrichedValue)
-        ? enrichedValue
-        : price == null || !Number.isFinite(Number(price))
-          ? 0
-          : Number(price) * shares;
-    portfolio += value;
-    const symbol = (h.symbol || '').trim().toUpperCase() || `holding-${h.id}`;
-    portfolio_sources[symbol] = h.price_source || 'manual';
-    portfolio_breakdown[symbol] = (portfolio_breakdown[symbol] || 0) + value;
+  for (const holding of activeHoldings) {
+    const dollars = holdingDollars(holding);
+    const taken = dollars == null ? { cents: 0, excluded: false } : takeCents(dollars, 'nonNegative');
+    portfolioCents += taken.cents;
+    if (taken.excluded) excluded += 1;
+    const symbol = (holding.symbol || '').trim().toUpperCase() || `holding-${holding.id}`;
+    portfolio_sources[symbol] = holding.price_source || 'manual';
+    const previous = fromDollars(portfolio_breakdown[symbol] ?? 0) ?? 0;
+    portfolio_breakdown[symbol] = dollarsFromCents(previous + taken.cents);
   }
-  const liab = liabilities.reduce((sum, l) => sum + (Number(l.balance_owed) || 0), 0);
+  let liabilityCents = 0;
+  for (const liability of liabilities) {
+    const taken = takeCents(liability.balance_owed, 'nonNegative');
+    liabilityCents += taken.cents;
+    if (taken.excluded) excluded += 1;
+  }
+  const other_assets = dollarsFromCents(otherCents);
+  const portfolio = dollarsFromCents(portfolioCents);
+  const liab = dollarsFromCents(liabilityCents);
+  const totalAssetsCents = otherCents + portfolioCents;
+  const totalCents = totalAssetsCents - liabilityCents;
   return {
     other_assets,
     portfolio,
     liabilities: liab,
-    total_assets: other_assets + portfolio,
-    total: other_assets + portfolio - liab,
+    total_assets: dollarsFromCents(totalAssetsCents),
+    total: dollarsFromCents(totalCents),
     as_of: new Date().toISOString(),
     portfolio_sources: activeHoldings.length ? portfolio_sources : undefined,
     portfolio_breakdown: activeHoldings.length ? portfolio_breakdown : undefined,
+    excluded_invalid_amounts: excluded,
   };
 }
 
 export interface TransactionEffects {
   income: number;
   spending: number;
+  /** Present when the stored amount is left out of totals. */
+  excluded?: boolean;
 }
 
-/** Shared recorded-ledger semantics. Legacy rows without `kind` keep their income/expense behavior. */
-export function transactionEffects(tx: Transaction): TransactionEffects {
-  const amount = Math.abs(Number(tx.amount) || 0);
+function directedEffects(tx: Transaction, amount: number): TransactionEffects {
   switch (tx.kind) {
     case 'purchase': return { income: 0, spending: amount };
     case 'refund': return { income: 0, spending: -amount };
@@ -80,6 +122,25 @@ export function transactionEffects(tx: Transaction): TransactionEffects {
   }
 }
 
+/** Shared recorded-ledger semantics. Legacy rows without `kind` keep their income/expense behavior. */
+export function transactionEffects(
+  tx: Transaction,
+  options?: { flagDisallowed?: boolean },
+): TransactionEffects {
+  const flagDisallowed = options?.flagDisallowed ?? FLAG_DISALLOWED_TRANSACTION_SIGNS;
+  const raw = Number(tx.amount);
+  const cents = Number.isFinite(raw) ? fromDollars(raw) : null;
+  const signDisallowed = cents != null && cents < 0;
+  if (cents == null || (signDisallowed && flagDisallowed)) {
+    return { income: 0, spending: 0, excluded: true };
+  }
+  if (signDisallowed) {
+    const absolute = fromDollars(Math.abs(raw));
+    return directedEffects(tx, absolute == null ? 0 : dollarsFromCents(absolute));
+  }
+  return directedEffects(tx, dollarsFromCents(cents));
+}
+
 export function transactionIncome(tx: Transaction): number {
   return transactionEffects(tx).income;
 }
@@ -89,22 +150,26 @@ export function transactionSpending(tx: Transaction): number {
 }
 
 function monthlyAmount(amount: number, frequency: string): number {
+  const cents = fromDollars(Number(amount));
+  if (cents == null) return 0;
+  const scaled = (numerator: number, denominator: number) =>
+    dollarsFromCents(roundHalfAwayFromZero((cents * numerator) / denominator));
   switch (frequency) {
     case 'annual':
-      return amount / 12;
+      return scaled(1, 12);
     case 'quarterly':
-      return amount / 3;
+      return scaled(1, 3);
     case 'biweekly':
-      return (amount * 26) / 12;
+      return scaled(26, 12);
     case 'weekly':
-      return (amount * 52) / 12;
+      return scaled(52, 12);
     case 'semimonthly':
-      return amount * 2;
+      return dollarsFromCents(cents * 2);
     case 'hourly':
-      return amount * 40 * 52 / 12;
+      return scaled(40 * 52, 12);
     case 'monthly':
     default:
-      return amount;
+      return dollarsFromCents(cents);
   }
 }
 
@@ -364,9 +429,12 @@ export function computeCashflowSummary(
   subscriptions: Subscription[]
 ): CashflowSummary {
   const income_occurrences: IncomeCashflowOccurrence[] = [];
-  let transaction_income = 0;
-  let transaction_expenses = 0;
-  const money = (value: number) => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
+  let transactionIncomeCents = 0;
+  let transactionExpenseCents = 0;
+  const money = (value: number) => {
+    const cents = fromDollars(value);
+    return cents == null ? 0 : dollarsFromCents(cents);
+  };
   const pushIncome = (
     id: string,
     date: string | null,
@@ -382,8 +450,10 @@ export function computeCashflowSummary(
   for (const tx of transactions) {
     if (tx.date < start || tx.date > end) continue;
     const effect = transactionEffects(tx);
-    transaction_income += effect.income;
-    transaction_expenses += effect.spending;
+    if (!effect.excluded) {
+      transactionIncomeCents += fromDollars(effect.income) ?? 0;
+      transactionExpenseCents += fromDollars(effect.spending) ?? 0;
+    }
     if (effect.income > 0) {
       pushIncome(
         `posted:${tx.id}`,
@@ -473,34 +543,49 @@ export function computeCashflowSummary(
   const planned_income = money(income_occurrences
     .filter(row => row.kind !== 'posted' && row.kind !== 'overlap')
     .reduce((sum, row) => sum + row.amount, 0));
+  const occurrenceAmount = (raw: unknown): number | null => {
+    const cents = countableCents(raw, 'positive');
+    return cents == null ? null : dollarsFromCents(cents);
+  };
   const fixedOccurrences = fixedExpenses
     .filter(row => row.is_active)
-    .flatMap(row => occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date, row.due_day).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
+    .flatMap(row => {
+      const amount = occurrenceAmount(row.amount);
+      if (amount == null) return [];
+      return occurrencesBetween(row.start_date, row.frequency, start, end, row.end_date, row.due_day)
+        .map(date => ({ date, name: row.name, category: row.category, amount }));
+    });
   const subscriptionOccurrences = subscriptions
     .filter(row => row.is_active)
-    .flatMap(row => occurrencesBetween(row.next_bill_date, row.frequency, start, end, row.end_date).map(date => ({ date, name: row.name, category: row.category, amount: Number(row.amount) || 0 })));
-  const fixed_total = fixedOccurrences.reduce((sum, row) => sum + row.amount, 0);
-  const sub_total = subscriptionOccurrences.reduce((sum, row) => sum + row.amount, 0);
+    .flatMap(row => {
+      const amount = occurrenceAmount(row.amount);
+      if (amount == null) return [];
+      return occurrencesBetween(row.next_bill_date, row.frequency, start, end, row.end_date)
+        .map(date => ({ date, name: row.name, category: row.category, amount }));
+    });
+  const centsOf = (rows: Array<{ amount: number }>) => rows.reduce((sum, row) => sum + (fromDollars(row.amount) ?? 0), 0);
+  const fixed_total = centsOf(fixedOccurrences);
+  const sub_total = centsOf(subscriptionOccurrences);
   const roundedIncome = planned_income;
-  const roundedFixed = Math.round(fixed_total * 100) / 100;
-  const roundedSubscriptions = Math.round(sub_total * 100) / 100;
+  const roundedFixed = dollarsFromCents(fixed_total);
+  const roundedSubscriptions = dollarsFromCents(sub_total);
   // Use the same per-row rounding shown in Home so the visible source lines
   // reconcile exactly with the ledger side of the monthly total.
   const observed_income = money(income_occurrences
     .filter(row => row.kind === 'posted')
     .reduce((sum, row) => sum + row.amount, 0));
-  const observed_expenses = Math.round(transaction_expenses * 100) / 100;
-  const observed_net_cashflow = Math.round((observed_income - observed_expenses) * 100) / 100;
+  const observed_expenses = dollarsFromCents(transactionExpenseCents);
+  const observed_net_cashflow = dollarsFromCents((fromDollars(observed_income) ?? 0) - transactionExpenseCents);
   const scheduled_income = roundedIncome;
-  const scheduled_expenses = Math.round((roundedFixed + roundedSubscriptions) * 100) / 100;
-  const scheduled_net_cashflow = Math.round((scheduled_income - scheduled_expenses) * 100) / 100;
+  const scheduled_expenses = dollarsFromCents(fixed_total + sub_total);
+  const scheduled_net_cashflow = dollarsFromCents((fromDollars(scheduled_income) ?? 0) - fixed_total - sub_total);
   const counted_occurrences = unmatchedScheduledExpenses(
     transactions,
     [...fixedOccurrences, ...subscriptionOccurrences],
     start,
     end,
   );
-  const repeatingExpenses = Math.round(counted_occurrences.reduce((sum, row) => sum + row.amount, 0) * 100) / 100;
+  const repeatingCents = centsOf(counted_occurrences);
   // One cashflow: posted activity plus repeating pay and bills that are not already posted.
   const total_income = unifyIncome(observed_income, scheduled_income);
   const income_overlap_adjustment = money(total_income - observed_income - scheduled_income);
@@ -516,13 +601,13 @@ export function computeCashflowSummary(
     });
   }
   income_occurrences.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31') || a.label.localeCompare(b.label));
-  const total_expenses = Math.round((observed_expenses + repeatingExpenses) * 100) / 100;
-  const net_cashflow = Math.round((total_income - total_expenses) * 100) / 100;
+  const total_expenses = dollarsFromCents(transactionExpenseCents + repeatingCents);
+  const net_cashflow = dollarsFromCents((fromDollars(total_income) ?? 0) - transactionExpenseCents - repeatingCents);
   return {
     start_date: start,
     end_date: end,
-    transaction_income,
-    transaction_expenses,
+    transaction_income: dollarsFromCents(transactionIncomeCents),
+    transaction_expenses: observed_expenses,
     planned_income: roundedIncome,
     fixed_expenses: roundedFixed,
     subscriptions: roundedSubscriptions,

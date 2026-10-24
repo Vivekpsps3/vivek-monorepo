@@ -106,7 +106,7 @@
   cursor: pointer;
 }
 
-.chart-drilldown-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chart-drilldown-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .chart-fallback a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
-.chart-fallback a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chart-fallback a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .chart-company-name { display: block; color: var(--text-secondary); }

@@ -16,11 +16,11 @@
   <section class="summary-grid">
     <ui-card>
       <span class="metric-label">Active monthly</span>
-      <strong class="metric-value money">${{ activeMonthlyTotal | number:'1.2-2' }}</strong>
+      <strong class="metric-value money">{{ activeMonthlyTotal | money }}</strong>
     </ui-card>
     <ui-card>
       <span class="metric-label">Active annual</span>
-      <strong class="metric-value money">${{ activeAnnualTotal | number:'1.2-2' }}</strong>
+      <strong class="metric-value money">{{ activeAnnualTotal | money }}</strong>
     </ui-card>
     <ui-card>
       <span class="metric-label">Tracked subscriptions</span>
@@ -40,13 +40,22 @@
                   {{ row.is_active ? 'Active' : 'Paused' }}
                 </ui-badge>
               </div>
-              <p>{{ row.category }} · {{ frequencyLabel(row.frequency) }} · next {{ row.next_due_date }}</p>
+              <p>{{ row.category }} · {{ frequencyLabel(row.frequency) }} · next {{ row.next_due_date | appDate }}</p>
               @if (row.payment_account) {
                 <small>{{ row.payment_account }}</small>
               }
             </div>
             <div class="row-actions">
-              <strong class="money">${{ row.amount | number:'1.2-2' }}</strong>
+              @if (needsFixing(row.amount, 'positive')) {
+                <ui-badge variant="warning">Needs fixing</ui-badge>
+                @if (amountProblem(row.amount, 'positive') === 'over-max') {
+                  <span>Amount too large to count · <button type="button" (click)="openEditModal(row)">Fix</button></span>
+                } @else {
+                  <strong class="money">{{ row.amount | money }}</strong>
+                }
+              } @else {
+                <strong class="money">{{ row.amount | money }}</strong>
+              }
               <ui-button variant="secondary" size="sm" (clicked)="openEditModal(row)">Edit</ui-button>
               <ui-button variant="danger" size="sm" (clicked)="deleteSubscription(row)">Delete</ui-button>
             </div>
@@ -61,21 +70,28 @@
 }
 
   <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="subscription-modal-title" (closed)="closeModal()">
-      @if (saveError) { <p role="alert" class="form-error">{{ saveError }}</p> }
+      @if (saveError) { <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ saveError }}</p> }
       <h2 id="subscription-modal-title">{{ editingId ? 'Edit subscription' : 'Add subscription' }}</h2>
-      <form (ngSubmit)="saveSubscription()" class="form-grid">
-        <label>
-          <span>Name</span>
-          <input name="name" [(ngModel)]="form.name" required data-dialog-initial-focus />
-        </label>
-        <label>
-          <span>Category</span>
-          <input name="category" [(ngModel)]="form.category" />
-        </label>
-        <label>
-          <span>Amount</span>
-          <input name="amount" type="number" step="0.01" min="0" [(ngModel)]="form.amount" required />
-        </label>
+      <form id="subscription-form" novalidate (ngSubmit)="saveSubscription()" class="form-grid">
+        @if (formSubmitted && fieldErrors.length) {
+          <div class="form-error-summary" role="alert" tabindex="-1" data-error-summary>
+            <p>Fix {{ fieldErrors.length }} {{ fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
+            <ul>
+              @for (error of fieldErrors; track error.field) {
+                <li><button type="button" (click)="focusNamed(error.field)">{{ error.label }}</button></li>
+              }
+            </ul>
+          </div>
+        }
+        <ui-field label="Name" [error]="fieldError('name')">
+          <input uiFieldControl data-field="name" name="name" [(ngModel)]="form.name" data-dialog-initial-focus (blur)="revalidate()" />
+        </ui-field>
+        <ui-field label="Category" [optional]="true">
+          <input uiFieldControl name="category" [(ngModel)]="form.category" />
+        </ui-field>
+        <ui-field label="Amount" [error]="fieldError('amount')">
+          <input uiFieldControl data-field="amount" name="amount" type="text" inputmode="decimal" [(ngModel)]="form.amount" (blur)="revalidate()" />
+        </ui-field>
         <ui-select
           label="Frequency"
           [options]="frequencyOptions"
@@ -103,7 +119,7 @@
         <div class="modal-actions">
           <ui-button type="button" variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
           <ui-button type="submit" variant="primary" [disabled]="saving">
-            {{ saving ? 'Saving' : 'Save' }}
+            {{ saving ? 'Saving…' : 'Save' }}
           </ui-button>
         </div>
       </form>

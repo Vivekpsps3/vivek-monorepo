@@ -12,7 +12,7 @@ import { ReleaseFreshnessService } from './services/release-freshness.service';
   styleUrl: './app.component.css',
 })
 export class AppComponent implements OnInit {
-  toast: ToastPayload | null = null;
+  toasts: ToastPayload[] = [];
 
   constructor(
     private toastService: ToastService,
@@ -21,16 +21,33 @@ export class AppComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.toastService.toast$.subscribe(t => (this.toast = t));
+    this.toastService.toasts$.subscribe(toasts => (this.toasts = toasts));
     this.releaseFreshness.start();
   }
 
-  dismissToast() {
-    this.toastService.dismiss();
+  get politeToasts(): ToastPayload[] {
+    return this.toasts.filter(toast => toast.kind !== 'error');
   }
 
-  undoToast() {
-    this.toast?.undo?.();
-    this.toastService.dismiss();
+  get alertToasts(): ToastPayload[] {
+    return this.toasts.filter(toast => toast.kind === 'error');
+  }
+
+  pauseToasts(): void {
+    this.toastService.pause();
+  }
+
+  resumeToasts(): void {
+    this.toastService.resume();
+  }
+
+  dismissToast(id: number): void {
+    this.toastService.dismiss(id);
+  }
+
+  runToastAction(toast: ToastPayload): void {
+    const action = toast.action ?? (toast.undo ? { label: 'Undo', run: toast.undo } : undefined);
+    action?.run();
+    this.toastService.dismiss(toast.id);
   }
 }

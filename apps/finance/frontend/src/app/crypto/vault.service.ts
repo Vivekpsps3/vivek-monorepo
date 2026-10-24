@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
 import { apiUrl } from '../core/api-url';
@@ -16,6 +16,8 @@ import {
 } from './vault-crypto';
 import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
+import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
+import { silentErrorToast } from '../core/http-error.interceptor';
 
 export interface VaultStatus {
   exists: boolean;
@@ -25,6 +27,11 @@ export interface VaultStatus {
   wrapped_dek_b64?: string | null;
   recovery_wrapped_dek_b64?: string | null;
   key_version?: number | null;
+}
+
+/** Per-request flag. Only that HTTP call skips the fallback toast. */
+export interface VaultWriteOptions {
+  silent?: boolean;
 }
 
 export interface EncryptedRecordDto {
@@ -47,6 +54,7 @@ export class VaultService {
   private boot: Promise<void>;
   /** Failed KDF upgrades since this page loaded. The session stays unlocked either way. */
   kdfUpgradeFailures = 0;
+  private readonly toast = inject(ToastService);
 
   readonly status$ = this.statusSubject.asObservable();
   readonly unlocked$ = this.unlockedSubject.asObservable();
@@ -156,16 +164,16 @@ export class VaultService {
     try {
       await this.ensureAuthWrap();
       await this.applyKdfUpgrade(passphrase);
-    } catch (err) {
+    } catch {
       this.kdfUpgradeFailures += 1;
-      console.warn('Vault KDF upgrade failed; will retry on the next unlock', err);
+      this.toast.error("Couldn't finish a security upgrade. We'll retry next time you unlock.");
     }
   }
 
   private async ensureAuthWrap(): Promise<void> {
     if (this.authWrap?.wrapped_private_key_b64 && this.authWrap.kdf_iterations) return;
     const body = await firstValueFrom(
-      this.http.get<{ auth: WrappedSigningKey }>(apiUrl('/auth/passwordless/wraps'))
+      this.http.get<{ auth: WrappedSigningKey }>(apiUrl('/auth/passwordless/wraps'), { context: silentErrorToast() })
     );
     if (body?.auth?.wrapped_private_key_b64) this.authWrap = body.auth;
   }
@@ -178,13 +186,13 @@ export class VaultService {
     if (!authStale && !vaultStale) return;
     if (authStale && auth) {
       const wrapped = await this.rewrapAuthWrap(passphrase, auth);
-      await firstValueFrom(this.http.put(apiUrl('/auth/passwordless/wraps'), wrapped));
+      await firstValueFrom(this.http.put(apiUrl('/auth/passwordless/wraps'), wrapped, { context: silentErrorToast() }));
       this.authWrap = wrapped;
     }
     if (vaultStale && this.dek && status) {
       const rewrap = await this.rewrapVaultDek(passphrase);
       const updated = await firstValueFrom(
-        this.http.put<VaultStatus>(apiUrl('/vault/wraps'), rewrap)
+        this.http.put<VaultStatus>(apiUrl('/vault/wraps'), rewrap, { context: silentErrorToast() })
       );
       this.statusSubject.next(updated);
       this.unlockedWrap = updated.wrapped_dek_b64 ?? this.unlockedWrap;
@@ -258,11 +266,15 @@ export class VaultService {
     return hmacBlindIndex(this.requireDek(), value);
   }
 
-  listRecords(collection?: string): Observable<EncryptedRecordDto[]> {
+  listRecords(collection?: string, options?: VaultWriteOptions): Observable<EncryptedRecordDto[]> {
     const q = collection ? `?collection=${encodeURIComponent(collection)}` : '';
-    return this.http.get<EncryptedRecordDto[]>(apiUrl(`/vault/records${q}`));
+    return this.http.get<EncryptedRecordDto[]>(apiUrl(`/vault/records${q}`), this.requestOptions(options));
   }
 
+  /**
+   * Dialog saves and other callers that show their own error pass `{ silent: true }`
+   * on that call. A concurrent upsert or delete keeps the interceptor toast.
+   */
   upsertRecords(
     records: Array<{
       collection: string;
@@ -272,15 +284,29 @@ export class VaultService {
       key_version?: number;
       expected_revision?: number | null;
       indexes?: Array<{ index_name: string; index_value_b64: string }>;
-    }>
+    }>,
+    options?: VaultWriteOptions,
   ): Observable<EncryptedRecordDto[]> {
-    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records });
+    return this.http.post<EncryptedRecordDto[]>(apiUrl('/vault/records/upsert'), { records }, this.requestOptions(options));
   }
 
   deleteRecords(
-    records: Array<{ collection: string; client_id: string; expected_revision: number }>
+    records: Array<{ collection: string; client_id: string; expected_revision: number }>,
+    options?: VaultWriteOptions,
   ): Observable<{ deleted: number }> {
-    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records });
+    return this.http.post<{ deleted: number }>(apiUrl('/vault/records/delete'), { records }, this.requestOptions(options));
+  }
+
+  private requestOptions(options?: VaultWriteOptions): { context: ReturnType<typeof silentErrorToast> } | undefined {
+    return options?.silent ? { context: silentErrorToast() } : undefined;
+  }
+
+  /**
+   * The shared vault load suppresses the interceptor toast.
+   * A normal caller asks for the standard failure toast after that load rejects.
+   */
+  reportFallbackFailure(): void {
+    this.toast.error(HTTP_ERROR_FALLBACK);
   }
 
   getCounts(): Observable<{ counts: Record<string, number> }> {

@@ -70,6 +70,7 @@ export class SignupComponent implements OnInit {
 
   submit(): void {
     if (this.loading) return;
+    if (this.inviteToken && !this.username.trim()) return;
     if (!this.inviteToken && this.policy?.mode === 'closed') return;
     const validationError = this.validationError();
     if (validationError) {

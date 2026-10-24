@@ -4,6 +4,12 @@
   max-width: 100%;
 }
 
+.field-error {
+  margin: var(--space-1) 0 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
 .income-summary {
   display: flex;
   justify-content: space-between;

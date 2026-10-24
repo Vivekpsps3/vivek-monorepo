@@ -397,7 +397,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   await mapping.check();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('0 new · 1 duplicate');
-  const mapAction = dialog.getByRole('button', { name: 'Map 1 legacy transaction(s)', exact: true });
+  const mapAction = dialog.getByRole('button', { name: 'Map 1 legacy transaction', exact: true });
   await expect(mapAction).toBeEnabled();
   await mapAction.click();
   await expect(dialog).toBeHidden();
@@ -420,7 +420,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   await expect(dialog.getByRole('checkbox', { name: /Map matching legacy transactions to this account/ })).not.toBeChecked();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('1 new · 0 duplicate');
-  await dialog.getByRole('button', { name: 'Import 1 transaction(s)', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Import 1 transaction', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => vault.data('transactions').length).toBe(2);
 
@@ -451,7 +451,9 @@ test('bank imports require account identity, resume one receipt, and undo retain
     ),
   });
   await dialog.getByLabel('Bank for statement.csv', { exact: true }).selectOption('chase');
-  await expect(dialog.getByRole('button', { name: 'Preview all files', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Preview all files', exact: true })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Choose CSV files and select a bank for every file.');
   await dialog.getByLabel('Account name', { exact: true }).fill('Daily card');
   await dialog.getByLabel('From', { exact: true }).fill(`${today().slice(0, 8)}01`);
   await dialog.getByLabel('Through', { exact: true }).fill(today());

@@ -16,12 +16,15 @@ import {
   evidenceKindLabel,
   stockLabEvidenceCards,
 } from '../utils/evidence-labels.util';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 
 
 @Component({
   selector: 'app-stock-lab',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent, InfoTipComponent],
+  imports: [
+    AppDatePipe, CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent, InfoTipComponent],
   templateUrl: './stock-lab.component.html',
   styleUrl: './stock-lab.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -98,7 +101,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
   }
 
   get dividendCadence(): string {
-    return this.primaryResearch ? detectDividendCadence(this.primaryResearch.dividends) : 'none';
+    const cadence = this.primaryResearch ? detectDividendCadence(this.primaryResearch.dividends) : 'none';
+    return cadence === 'none' ? '—' : cadence;
   }
 
   get trailingDividend(): number {
@@ -119,7 +123,7 @@ export class StockLabComponent implements OnInit, OnDestroy {
     return stockLabEvidenceCards({
       primarySymbol: this.scenario.primary_symbol,
       hasQuote: !!primary?.quote?.current_price,
-      cacheStatus: primary?.cache_status,
+      cacheStatus: this.cachePhrase(primary?.cache_status),
     });
   }
 
@@ -153,11 +157,11 @@ export class StockLabComponent implements OnInit, OnDestroy {
       next: batch => {
         if (request !== this.marketRequest) return;
         this.research = batch.results;
-        if (batch.failed.length) this.error = batch.failed.map(row => `${row.symbol}: ${row.error}`).join('; ');
+        if (batch.failed.length) this.error = "Couldn't load market data. Try again.";
       },
-      error: err => {
+      error: () => {
         if (request !== this.marketRequest) return;
-        this.error = err?.error?.detail || err?.message || 'Market research failed.';
+        this.error = "Couldn't load market data. Try again.";
       },
     });
   }
@@ -170,10 +174,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
         this.scenario = { ...this.scenarios[0] };
         this.loadMarketData(false);
       }
-    } catch (err: unknown) {
-      const message = this.errorMessage(err, 'Could not load scenarios.');
-      this.error = message;
-      this.toast.error(message);
+    } catch {
+      this.error = "Couldn't load saved scenarios.";
     }
     this.cdr.markForCheck();
   }
@@ -186,10 +188,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
       this.scenario = { ...saved };
       await this.loadScenarios();
       this.toast.success('Scenario saved.');
-    } catch (err: unknown) {
-      const message = this.errorMessage(err, 'Could not save scenario.');
-      this.error = message;
-      this.toast.error(message);
+    } catch {
+      this.error = "Couldn't save this scenario.";
     } finally {
       this.saving = false;
       this.cdr.markForCheck();
@@ -206,10 +206,8 @@ export class StockLabComponent implements OnInit, OnDestroy {
       await this.loadScenarios();
       this.loadMarketData(false);
       this.toast.success('Scenario deleted.');
-    } catch (err: unknown) {
-      const message = this.errorMessage(err, 'Could not delete scenario.');
-      this.error = message;
-      this.toast.error(message);
+    } catch {
+      this.error = "Couldn't delete this scenario.";
     } finally {
       this.saving = false;
       this.cdr.markForCheck();
@@ -233,11 +231,6 @@ export class StockLabComponent implements OnInit, OnDestroy {
   setIncludeOwnedSymbols(include: boolean): void {
     this.scenario = { ...this.scenario, include_owned_symbols: include };
     this.loadMarketData(false);
-  }
-
-  private errorMessage(err: unknown, fallback: string): string {
-    const anyErr = err as { error?: { detail?: string }; message?: string } | null;
-    return anyErr?.error?.detail || anyErr?.message || fallback;
   }
 
   setPrimarySymbol(symbol: string): void {
@@ -278,12 +271,22 @@ export class StockLabComponent implements OnInit, OnDestroy {
   }
 
   formatMoney(value: number | null | undefined): string {
-    if (value == null || Number.isNaN(value)) return '-';
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
+    return formatStoredMoney(value);
+  }
+
+  formatEstimate(value: number | null | undefined): string {
+    return formatEstimateMoney(value);
+  }
+
+  cachePhrase(status: string | null | undefined): string {
+    if (status === 'hit') return 'cached';
+    if (status === 'refresh') return 'refreshed';
+    if (status === 'miss') return 'fetched';
+    return '—';
   }
 
   formatPct(value: number | null | undefined): string {
-    if (value == null || Number.isNaN(value)) return '-';
+    if (value == null || Number.isNaN(value)) return '—';
     return `${(value * 100).toFixed(Math.abs(value) >= 0.1 ? 1 : 2)}%`;
   }
 }

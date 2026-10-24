@@ -1,16 +1,18 @@
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+import { ConfirmService } from '@vivek/ui';
 import { Asset, Liability } from '../models/transaction.model';
 import { AssetsLiabilitiesComponent } from './assets-liabilities.component';
 
 describe('AssetsLiabilitiesComponent balance editing', () => {
   function makeComponent() {
-    const finance = jasmine.createSpyObj('FinanceService', ['addAsset', 'addLiability', 'updateAsset', 'updateLiability']);
+    const finance = jasmine.createSpyObj('FinanceService', ['addAsset', 'addLiability', 'updateAsset', 'updateLiability', 'deleteAsset', 'deleteLiability']);
     finance.addAsset.and.callFake((body: unknown) => of(body));
     finance.addLiability.and.callFake((body: unknown) => of(body));
     finance.updateAsset.and.callFake((_id: number, body: unknown) => of(body));
     finance.updateLiability.and.callFake((_id: number, body: unknown) => of(body));
     const toast = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
-    const component = new AssetsLiabilitiesComponent(finance, toast, {} as any, { markForCheck: () => {} } as any);
+    const confirm = { ask: jasmine.createSpy('ask').and.resolveTo(true) } as unknown as ConfirmService;
+    const component = new AssetsLiabilitiesComponent(finance, toast, confirm, { markForCheck: () => {} } as any);
     component.assets = [{
       id: 1, name: 'Checking', category: 'checking', current_value: 1200, as_of_date: '2026-09-30',
       review_interval_days: 0,
@@ -19,7 +21,7 @@ describe('AssetsLiabilitiesComponent balance editing', () => {
       id: 2, name: 'Card', category: 'credit_card', balance_owed: 250, as_of_date: '2026-10-01',
       review_interval_days: 60,
     } as Liability];
-    return { component, finance, toast };
+    return { component, finance, toast, confirm };
   }
 
   it('saves ordinary balance edits without changing the source date or legacy review metadata', () => {
@@ -35,7 +37,7 @@ describe('AssetsLiabilitiesComponent balance editing', () => {
       as_of_date: '2026-09-30',
       review_interval_days: 0,
       notes: '',
-    });
+    }, true);
 
     component.openEditLiability(component.liabilities[0]);
     component.liabilityForm.balance_owed = 275;
@@ -47,7 +49,35 @@ describe('AssetsLiabilitiesComponent balance editing', () => {
       as_of_date: '2026-10-01',
       review_interval_days: 60,
       notes: '',
-    });
+    }, true);
+  });
+
+  it('shows one retry toast when deleting an asset fails', async () => {
+    const { component, finance, toast, confirm } = makeComponent();
+    finance.deleteAsset.and.returnValue(throwError(() => new Error('nope')));
+    await component.deleteAsset(component.assets[0]);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't delete this asset.");
+    expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
+    expect(finance.deleteAsset).toHaveBeenCalledWith(1, true);
+    (toast.error.calls.mostRecent().args[1].run as () => void)();
+    expect(confirm.ask as jasmine.Spy).toHaveBeenCalledTimes(1);
+    expect(finance.deleteAsset).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows one retry toast when deleting a debt fails', async () => {
+    const { component, finance, toast, confirm } = makeComponent();
+    finance.deleteLiability.and.returnValue(throwError(() => new Error('nope')));
+    await component.deleteLiability(component.liabilities[0]);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't delete this debt.");
+    expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
+    expect(finance.deleteLiability).toHaveBeenCalledWith(2, true);
+    (toast.error.calls.mostRecent().args[1].run as () => void)();
+    expect(confirm.ask as jasmine.Spy).toHaveBeenCalledTimes(1);
+    expect(finance.deleteLiability).toHaveBeenCalledTimes(2);
   });
 
   it('rejects blank or non-finite manual balances before starting a write', () => {

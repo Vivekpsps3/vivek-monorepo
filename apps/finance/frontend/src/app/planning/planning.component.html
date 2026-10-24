@@ -11,15 +11,15 @@
         <span>Current net worth</span>
         <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
         <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open assets and debts</a>
-        <small>Oldest valid balance date: {{ inputs?.oldest_balance_as_of || 'No valid date recorded' }}</small>
+        <small>Oldest valid balance date: {{ inputs?.oldest_balance_as_of | appDate }}</small>
       </div>
       <div>
         <span>Portfolio value</span>
         <strong>{{ formatMoney(inputs?.net_worth_portfolio) }}</strong>
         <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
         <small>
-          Oldest quote {{ inputs?.oldest_portfolio_quote_date || 'undated' }} ·
-          position {{ inputs?.oldest_portfolio_position_date || 'undated' }}
+          Oldest quote {{ inputs?.oldest_portfolio_quote_date | appDate }} ·
+          position {{ inputs?.oldest_portfolio_position_date | appDate }}
         </small>
       </div>
       <div>
@@ -155,7 +155,7 @@
             @for (tx of recurringExclusionCandidates; track tx.id) {
               <label class="mc-check">
                 <input type="checkbox" [checked]="isSelected(excludedRecurringTransactionIds, tx.id)" (change)="toggleRecurringExclusion(tx.id, $any($event.target).checked)" />
-                <span>{{ tx.date }} · {{ tx.merchant || tx.description || tx.category }} · {{ formatMoney(tx.amount) }}</span>
+                <span>{{ tx.date | appDate }} · {{ tx.merchant || tx.description || tx.category }} · {{ formatMoney(tx.amount) }}</span>
               </label>
             }
           </fieldset>
@@ -232,18 +232,28 @@
         </label>
         <label class="mc-field mc-field--grow">
           <span>Name</span>
-          <input type="text" [(ngModel)]="savedInputName" placeholder="e.g. Retirement baseline" maxlength="120" />
+          <input type="text" [(ngModel)]="savedInputName" placeholder="e.g. Retirement baseline" maxlength="120" [attr.aria-invalid]="savedInputError ? true : null" />
+          @if (savedInputError) {
+            <span class="mc-field-error">{{ savedInputError }}</span>
+          }
         </label>
         <ui-button
           variant="secondary"
           (clicked)="saveSavedInputs()"
-          [disabled]="savingProfile || !savedInputName.trim()"
+          [disabled]="savingProfile"
         >
           {{ selectedProfileId != null ? 'Update' : 'Save' }}
         </ui-button>
-        <ui-button variant="ghost" (clicked)="deleteSelectedProfile()" [disabled]="selectedProfileId == null">
+        <ui-button
+          variant="ghost"
+          (clicked)="deleteSelectedProfile()"
+          [ariaDisabled]="selectedProfileId === null"
+          [describedBy]="selectedProfileId === null ? 'delete-saved-inputs-hint' : undefined">
           Delete
         </ui-button>
+        @if (selectedProfileId === null) {
+          <small id="delete-saved-inputs-hint" class="mc-field-hint">Choose saved inputs to delete.</small>
+        }
       </div>
     </ui-card>
 
@@ -308,9 +318,14 @@
             <input
               type="number"
               step="1000"
-              [disabled]="useLedgerStartingNetWorth"
-              [(ngModel)]="startingNetWorth"
+              [readonly]="useLedgerStartingNetWorth"
+              [attr.aria-describedby]="useLedgerStartingNetWorth ? 'starting-net-worth-hint' : null"
+              [ngModel]="useLedgerStartingNetWorth ? inputs?.net_worth_total : startingNetWorth"
+              (ngModelChange)="onStartingNetWorthInput($event)"
             />
+            @if (useLedgerStartingNetWorth) {
+              <small id="starting-net-worth-hint" class="mc-field-hint">Using ledger net worth. Turn off 'Use ledger net worth at start' to enter your own.</small>
+            }
           </label>
         </ui-card>
 
@@ -358,10 +373,14 @@
               type="number"
               min="0"
               step="500"
-              [disabled]="useTxIncome"
+              [readonly]="useTxIncome"
+              [attr.aria-describedby]="useTxIncome ? 'monthly-income-hint' : null"
               [ngModel]="useTxIncome ? txImpliedMonthlyIncome() : assumptions.monthly_income"
               (ngModelChange)="onMonthlyIncomeInput($event)"
             />
+            @if (useTxIncome) {
+              <small id="monthly-income-hint" class="mc-field-hint">Using the job-income estimate. Turn off 'Use active job-income estimate' to enter your own.</small>
+            }
           </label>
 
           <label class="mc-check">
@@ -373,9 +392,14 @@
             <input
               type="number"
               step="1000"
-              [disabled]="!useNetCashflowOverride"
-              [(ngModel)]="assumptions.net_annual_cashflow_override"
+              [readonly]="!useNetCashflowOverride"
+              [attr.aria-describedby]="!useNetCashflowOverride ? 'annual-cashflow-hint' : null"
+              [ngModel]="useNetCashflowOverride ? assumptions.net_annual_cashflow_override : effectiveNetCashflow()"
+              (ngModelChange)="onNetCashflowInput($event)"
             />
+            @if (!useNetCashflowOverride) {
+              <small id="annual-cashflow-hint" class="mc-field-hint">Using income less spending. Turn on 'Use one total annual cashflow instead' to enter your own.</small>
+            }
           </label>
           <label class="mc-field">
             <span>Additional annual contribution <app-info-tip label="Additional contribution" text="Kept for older saved inputs. Added to income less spending only when the total annual cashflow override is off." /></span>
@@ -411,10 +435,14 @@
               min="0"
               max="100"
               step="5"
-              [disabled]="useInferredAllocation"
-              [ngModel]="asPercent(assumptions.portfolio_allocation)"
-              (ngModelChange)="assumptions.portfolio_allocation = fromPercent($event)"
+              [readonly]="useInferredAllocation"
+              [attr.aria-describedby]="useInferredAllocation ? 'growth-allocation-hint' : null"
+              [ngModel]="asPercent(useInferredAllocation ? inferredAllocation() : assumptions.portfolio_allocation)"
+              (ngModelChange)="onAllocationInput($event)"
             />
+            @if (useInferredAllocation) {
+              <small id="growth-allocation-hint" class="mc-field-hint">Using the holdings share of net worth. Turn off 'Infer growth allocation' to enter your own.</small>
+            }
           </label>
 
           <div class="mc-control-grid">
