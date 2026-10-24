@@ -1,0 +1,42 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.username-form {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 28rem;
+}
+
+.form-error {
+  margin: 0;
+  min-height: 1.25rem;
+  color: var(--danger);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .username-form {
+    max-width: none;
+  }
+
+  .username-form ::ng-deep .ui-field__control,
+  .username-form ::ng-deep .ui-btn {
+    min-height: 44px;
+    max-width: 100%;
+    font-size: 1rem;
+  }
+
+  .username-form ::ng-deep .ui-btn {
+    width: 100%;
+  }
+
+  .username-form ::ng-deep .ui-field__password-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

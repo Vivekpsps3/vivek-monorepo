@@ -38,4 +38,27 @@ describe('authInterceptor', () => {
     expect(auth.clearLocalSession).toHaveBeenCalled();
     expect(goToLogin).toHaveBeenCalled();
   });
+
+  it('sends the CSRF header on username change and keeps the session after a 401', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['clearLocalSession'], { csrfToken: 'csrf-token' });
+    const goToLogin = spyOn(authNavigation, 'goToLogin');
+    TestBed.configureTestingModule({
+      providers: [{ provide: AuthService, useValue: auth }],
+    });
+
+    let seenHeader = '';
+    await expectAsync(firstValueFrom(TestBed.runInInjectionContext(() =>
+      authInterceptor(
+        new HttpRequest('PATCH', '/api/account/username', { username: 'next.name' }),
+        req => {
+          seenHeader = req.headers.get('X-CSRF-Token') ?? '';
+          return throwError(() => new HttpErrorResponse({ status: 401, statusText: 'Unauthorized', url: req.url }));
+        }
+      )
+    ))).toBeRejected();
+
+    expect(seenHeader).toBe('csrf-token');
+    expect(auth.clearLocalSession).not.toHaveBeenCalled();
+    expect(goToLogin).not.toHaveBeenCalled();
+  });
 });

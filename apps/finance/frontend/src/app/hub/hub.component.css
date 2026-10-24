@@ -109,6 +109,26 @@
   text-transform: uppercase;
 }
 
+.hub-account {
+  margin: var(--space-3) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.hub-account__name {
+  color: var(--text);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.username-panel {
+  margin-top: var(--space-4);
+}
+
+.username-panel .figure-note {
+  margin: 0 0 var(--space-4);
+}
+
 h1 {
   margin: 0;
   font-size: clamp(2.4rem, 5vw, 4.25rem);

@@ -6,9 +6,11 @@ import { apiUrl } from '../core/api-url';
 import { authNavigation } from './after-auth';
 import { AuthUser, LoginResponse, MeResponse, SignupPolicy } from './auth.models';
 import { FinanceService } from '../services/finance.service';
-import { createSigningKey, signChallenge, WrappedSigningKey } from '@vivek/auth';
+import { createSigningKey, signChallenge, usernameForStorage, WrappedSigningKey } from '@vivek/auth';
 import { createVaultMaterial } from '../crypto/vault-crypto';
 import { VaultService } from '../crypto/vault.service';
+import { silentErrorToast } from '../core/http-error.interceptor';
+import { UsernameChangeError } from './username-change';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -254,16 +256,7 @@ export class AuthService {
     // The same username is sent to challenge and verify. Email is not an alias.
     const handle = identifier;
     this.vault.loadAuthWrap(lookup.auth);
-    const challenge = await firstValueFrom(
-      this.http.post<{ challenge_id: string; challenge: string; message: string }>(
-        apiUrl('/auth/passwordless/challenge'),
-        { username: handle },
-        { withCredentials: true }
-      )
-    );
-    if (!challenge?.challenge_id || !challenge?.message) {
-      throw new Error('Unable to request vault authentication challenge');
-    }
+    const challenge = await this.requestPasswordlessChallenge(handle);
     let signature_b64: string;
     try {
       signature_b64 = await signChallenge(vaultPassphrase, lookup.auth, challenge.message);
@@ -307,6 +300,81 @@ export class AuthService {
     // Another PBKDF2 pass. It must not delay navigation, and a failed upgrade must not log the user out.
     void this.vault.upgradeKdfIfNeeded(vaultPassphrase);
     return response.user;
+  }
+
+  /**
+   * Rename the signed-in account. The passphrase unwraps the same signing key
+   * login uses, signs the server's message, and is not kept after this returns.
+   */
+  async changeUsername(requested: string, passphrase: string): Promise<AuthUser> {
+    try {
+      return await this.submitUsernameChange(requested, passphrase);
+    } catch (err) {
+      if (err instanceof UsernameChangeError) throw err;
+      const status = err instanceof HttpErrorResponse ? err.status : 0;
+      throw new UsernameChangeError(status);
+    }
+  }
+
+  private async submitUsernameChange(requested: string, passphrase: string): Promise<AuthUser> {
+    const username = usernameForStorage(requested);
+    if (!username) throw new UsernameChangeError(400);
+    if (!passphrase) throw new UsernameChangeError(0);
+    const current = this.currentUser?.username?.trim().toLowerCase() ?? '';
+    if (!usernameForStorage(current)) throw new UsernameChangeError(0);
+
+    const lookup = await firstValueFrom(
+      this.http.post<{ auth: WrappedSigningKey }>(
+        apiUrl('/auth/passwordless/lookup'),
+        { username: current },
+        { withCredentials: true, context: silentErrorToast() }
+      )
+    );
+    if (!lookup?.auth?.wrapped_private_key_b64 || !lookup.auth.kdf_salt_b64 || !lookup.auth.kdf_iterations) {
+      throw new UsernameChangeError(0);
+    }
+    const challenge = await this.requestPasswordlessChallenge(current, 'username_change');
+    let signature_b64: string;
+    try {
+      signature_b64 = await signChallenge(passphrase, lookup.auth, challenge.message);
+    } catch {
+      throw new UsernameChangeError(401);
+    }
+    const updated = await firstValueFrom(
+      this.http.patch<AuthUser>(
+        apiUrl('/account/username'),
+        {
+          username,
+          challenge_id: challenge.challenge_id,
+          challenge: challenge.challenge,
+          message: challenge.message,
+          signature_b64,
+        },
+        { withCredentials: true, context: silentErrorToast() }
+      )
+    );
+    const user: AuthUser = { ...(this.currentUser as AuthUser), ...updated };
+    this.userSubject.next(user);
+    return user;
+  }
+
+  private async requestPasswordlessChallenge(
+    username: string,
+    purpose?: 'username_change',
+  ): Promise<{ challenge_id: string; challenge: string; message: string }> {
+    const challenge = await firstValueFrom(
+      this.http.post<{ challenge_id: string; challenge: string; message: string }>(
+        apiUrl('/auth/passwordless/challenge'),
+        purpose ? { username, purpose } : { username },
+        purpose
+          ? { withCredentials: true, context: silentErrorToast() }
+          : { withCredentials: true },
+      )
+    );
+    if (!challenge?.challenge_id || !challenge?.message) {
+      throw new Error('Unable to request vault authentication challenge');
+    }
+    return challenge;
   }
 
   logout(): void {

@@ -19,6 +19,7 @@ export class UiInputComponent {
   required = input(false);
   autocomplete = input<string | undefined>(undefined);
   describedBy = input<string | undefined>(undefined);
+  invalid = input(false);
   showPasswordToggle = input(false);
   passwordVisible = signal(false);
 

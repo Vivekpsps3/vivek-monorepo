@@ -21,6 +21,7 @@ import {
 import { todayIsoDate } from '@vivek/browser';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { UsernameChangeComponent } from './username-change.component';
 
 type LoadState = 'loading' | 'ready' | 'unavailable';
 
@@ -63,7 +64,10 @@ interface MediaSummary {
   standalone: true,
   imports: [
     AppDatePipe,
-    MoneyPipe, RouterLink],
+    MoneyPipe,
+    RouterLink,
+    UsernameChangeComponent,
+  ],
   templateUrl: './hub.component.html',
   styleUrl: './hub.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -77,6 +81,7 @@ export class HubComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   name = 'Your library of days';
+  username = '';
   admin = false;
   readonly today = new Date();
   choice = this.themeService.current;
@@ -97,6 +102,7 @@ export class HubComponent implements OnInit {
   ngOnInit(): void {
     this.auth.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
       this.name = user?.display_name || user?.username || 'Your library of days';
+      this.username = user?.username || '';
       this.admin = user?.role === 'admin';
       this.cdr.markForCheck();
     });
