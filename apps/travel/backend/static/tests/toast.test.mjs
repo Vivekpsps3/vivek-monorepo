@@ -131,6 +131,45 @@ test("hover pauses the toast timer", () => {
   }
 });
 
+test("focus inside a toast pauses its timer", () => {
+  mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  try {
+    const toast = layer();
+    const node = toast.toast("Ride added.");
+    mock.timers.tick(4000);
+    node.dispatch("focusin");
+    mock.timers.tick(10_000);
+    assert.equal(toast.toastNodes().length, 1);
+    node.dispatch("focusout", { relatedTarget: null });
+    mock.timers.tick(1000);
+    assert.equal(toast.toastNodes().length, 0);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("clicking a toast action dismisses that toast", () => {
+  const toast = layer();
+  let clicked = 0;
+  const node = toast.toast("Ride deleted.", "status", {
+    label: "Undo",
+    onClick() {
+      clicked += 1;
+    },
+  });
+  node.children.find((child) => child.className === "toast-action").dispatch("click");
+  assert.equal(clicked, 1);
+  assert.equal(toast.toastNodes().length, 0);
+});
+
+test("a fourth toast evicts the oldest and the cap stays at three", () => {
+  assert.equal(TOAST_LIMIT, 3);
+  const toast = layer();
+  for (const message of ["one", "two", "three", "four"]) toast.toast(message);
+  const messages = toast.toastNodes().map((node) => node.children.find((child) => child.tagName === "P").textContent);
+  assert.deepEqual(messages, ["two", "three", "four"]);
+});
+
 test("an action toast waits eight seconds", () => {
   mock.timers.enable({ apis: ["setTimeout", "Date"] });
   try {
