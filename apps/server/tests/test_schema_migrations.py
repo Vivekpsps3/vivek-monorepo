@@ -115,6 +115,36 @@ def test_existing_v1_database_is_stamped_without_data_changes(tmp_path):
     assert adopt_or_upgrade(sqlite_url(database)) == "current"
 
 
+def test_baseline_database_is_stamped_then_upgraded(tmp_path):
+    database = tmp_path / "site.db"
+    command.upgrade(make_config(sqlite_url(database)), "site_schema_v1")
+    with sqlite3.connect(database) as db:
+        db.execute("DROP TABLE site_alembic_version")
+        db.execute(
+            "INSERT INTO users (email, display_name, role, is_active, must_change_password, created_at, updated_at) "
+            "VALUES ('keeper@example.invalid', 'Keeper', 'user', 1, 0, '2026-01-01', '2026-01-01')"
+        )
+        db.execute(
+            "INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
+            "VALUES (1, 'Keep me', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')"
+        )
+    assert "purpose" not in {
+        row[1] for row in sqlite3.connect(database).execute("PRAGMA table_info(auth_challenges)")
+    }
+    assert adopt_or_upgrade(sqlite_url(database)) == "upgraded"
+    assert current_revision(database) == head_revision()
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT title FROM trips").fetchone() == ("Keep me",)
+        columns = {row[1] for row in db.execute("PRAGMA table_info(auth_challenges)")}
+        assert "purpose" in columns
+        assert db.execute(
+            "SELECT compatible_head FROM site_revision_compatibility WHERE revision = ?",
+            (head_revision(),),
+        ).fetchone() == ("site_schema_v1",)
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert model_diff(database) == []
+
+
 def test_stamp_refuses_a_database_that_does_not_match_the_baseline(tmp_path):
     database = tmp_path / "site.db"
     legacy_site_database(database)
@@ -182,9 +212,10 @@ def test_failed_revision_rolls_back_instead_of_half_applying(tmp_path):
     before = dump_rows(database)
     extra = tmp_path / "versions"
     extra.mkdir()
+    parent = head_revision()
     (extra / "boom_break.py").write_text(
         'revision = "boom00000001"\n'
-        'down_revision = "site_schema_v1"\n'
+        f'down_revision = "{parent}"\n'
         "branch_labels = None\ndepends_on = None\n"
         "from alembic import op\n"
         "def upgrade():\n"
@@ -201,7 +232,7 @@ def test_failed_revision_rolls_back_instead_of_half_applying(tmp_path):
     with pytest.raises(Exception, match="intentional migration failure"):
         command.upgrade(cfg, "head")
     assert "half_applied" not in table_names(database)
-    assert current_revision(database) == "site_schema_v1"
+    assert current_revision(database) == parent
     assert dump_rows(database) == before
 
 
@@ -297,11 +328,12 @@ def test_plan_refuses_a_foreign_key_violation_without_writing(tmp_path, capsys, 
             "INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) "
             "VALUES (42, 'orphan', '2026-01-01', '2026-01-02', 'planning', 1, '2026-01-01', '2026-01-01')"
         )
+    fresh_revision = current_revision(fresh)
     monkeypatch.setattr("apps.server.migrations.head_revision", lambda: "site_schema_v2")
     assert plan(sqlite_url(fresh)) == 1
     upgrade_refused = capsys.readouterr().out
     assert "foreign_key_check failed; refusing to upgrade" in upgrade_refused
-    assert current_revision(fresh) == "site_schema_v1"
+    assert current_revision(fresh) == fresh_revision
 
 
 def test_noop_upgrade_does_not_take_or_rotate_premigrate_backups(tmp_path, monkeypatch):
@@ -398,12 +430,13 @@ def _seed_batch_children(database: Path) -> None:
 
 
 def _recreate_table(database: Path, table: str, rev_id: str) -> None:
+    parent = head_revision()
     _apply_extra(
         database,
         "import sqlalchemy as sa\n"
         "from alembic import op\n"
         f'revision = "{rev_id}"\n'
-        'down_revision = "site_schema_v1"\n'
+        f'down_revision = "{parent}"\n'
         "branch_labels = None\ndepends_on = None\n"
         "def upgrade():\n"
         f"    with op.batch_alter_table('{table}', recreate='always') as batch:\n"
@@ -479,6 +512,9 @@ def test_in_place_baseline_edit_is_caught_by_model_diff(tmp_path, monkeypatch):
     )
     edited = tmp_path / "versions"
     edited.mkdir()
+    for sibling in source.parent.glob("*.py"):
+        if sibling.name != source.name:
+            (edited / sibling.name).write_text(sibling.read_text())
     original = source.read_text()
     needle = 'value TEXT NOT NULL, \\n\\tPRIMARY KEY ("key")'
     assert needle in original
@@ -554,7 +590,7 @@ def test_foreign_key_violation_rolls_the_revision_back(tmp_path):
             database,
             "from alembic import op\n"
             'revision = "fkviol00001"\n'
-            'down_revision = "site_schema_v1"\n'
+            f'down_revision = "{head_revision()}"\n'
             "branch_labels = None\ndepends_on = None\n"
             "def upgrade():\n"
             '    op.execute("INSERT INTO trips (user_id, title, start_date, end_date, status, counts_as_pto, created_at, updated_at) '
@@ -563,7 +599,7 @@ def test_foreign_key_violation_rolls_the_revision_back(tmp_path):
             "    pass\n",
             "fkviol00001",
         )
-    assert current_revision(database) == "site_schema_v1"
+    assert current_revision(database) == head_revision()
     with sqlite3.connect(database) as db:
         assert db.execute("SELECT COUNT(*) FROM trips").fetchone() == (0,)
 
@@ -571,6 +607,7 @@ def test_foreign_key_violation_rolls_the_revision_back(tmp_path):
 def test_startup_accepts_only_recorded_forward_compatible_descendants(tmp_path, monkeypatch):
     database = tmp_path / "site.db"
     adopt_or_upgrade(sqlite_url(database))
+    image_head = head_revision()
     engine = create_engine(sqlite_url(database))
     with sqlite3.connect(database) as db:
         db.execute("UPDATE site_alembic_version SET version_num='site_schema_v2'")
@@ -580,7 +617,7 @@ def test_startup_accepts_only_recorded_forward_compatible_descendants(tmp_path, 
     assert current_revision(database) == "site_schema_v2"
     with sqlite3.connect(database) as db:
         db.execute(
-            "CREATE TABLE site_revision_compatibility ("
+            "CREATE TABLE IF NOT EXISTS site_revision_compatibility ("
             "revision VARCHAR(32) NOT NULL, compatible_head VARCHAR(32) NOT NULL, "
             "PRIMARY KEY (revision, compatible_head))"
         )
@@ -594,7 +631,8 @@ def test_startup_accepts_only_recorded_forward_compatible_descendants(tmp_path, 
     with sqlite3.connect(database) as db:
         db.execute(
             "INSERT INTO site_revision_compatibility (revision, compatible_head) "
-            "VALUES ('site_schema_v2', 'site_schema_v1')"
+            "VALUES ('site_schema_v2', ?)",
+            (image_head,),
         )
     with engine.connect() as connection:
         assert_ready(connection)

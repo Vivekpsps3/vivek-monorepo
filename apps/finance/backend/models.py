@@ -59,6 +59,9 @@ class AuthChallenge(Base):
     challenge_hash = Column(String, unique=True, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     consumed_at = Column(DateTime, nullable=True, index=True)
+    # login or username_change. Default keeps rows issued before the column,
+    # and inserts from an older process, valid for the login path.
+    purpose = Column(String, nullable=False, default="login", server_default="login")
     created_at = Column(DateTime, default=utc_now, nullable=False)
 
 

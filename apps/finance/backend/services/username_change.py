@@ -23,7 +23,7 @@ from apps.finance.backend.rate_limit import (
     note_failed_verify,
 )
 from apps.finance.backend.schemas_auth import UsernameChangeRequest
-from apps.finance.backend.services.challenge_auth import verify_challenge
+from apps.finance.backend.services.challenge_auth import PURPOSE_USERNAME_CHANGE, verify_challenge
 from apps.finance.backend.services.username_policy import InvalidUsername, stored_username
 
 _RATE_DETAIL = "Rate limit exceeded; retry later"
@@ -96,16 +96,24 @@ def _replacement_email(user: User, new_name: str) -> str | None:
     return _synthetic_email(new_name)
 
 
+def _request_origin(request: Request) -> str:
+    return request.headers.get("origin") or str(request.base_url).rstrip("/")
+
+
 def _taken(
     db: Session, user_id: int, *, username: str | None = None, email: str | None = None
 ) -> bool:
-    others = db.query(User).filter(User.id != user_id).all()
-    for other in others:
-        if username is not None and _as_str(other.username).strip().lower() == username:
-            return True
-        if email is not None and _as_str(other.email).strip().lower() == email:
-            return True
-    return False
+    """Stored names and mailboxes are lowercase, so equality uses the unique indexes."""
+    query = db.query(User.id).filter(User.id != user_id)
+    if username is not None and email is not None:
+        query = query.filter((User.username == username) | (User.email == email))
+    elif username is not None:
+        query = query.filter(User.username == username)
+    elif email is not None:
+        query = query.filter(User.email == email)
+    else:
+        return False
+    return query.first() is not None
 
 
 def _set(user: User, field: str, value: object) -> None:
@@ -141,6 +149,8 @@ def change_username(db: Session, user: User, body: UsernameChangeRequest, reques
         body.challenge,
         body.message,
         body.signature_b64,
+        _request_origin(request),
+        PURPOSE_USERNAME_CHANGE,
     ):
         if failed_verify_blocked(account):
             _fail(db, user_id, old_name, attempted, "rate_limit")
@@ -167,9 +177,11 @@ def change_username(db: Session, user: User, body: UsernameChangeRequest, reques
         raise HTTPException(status_code=409, detail=_CONFLICT_DETAIL)
 
     try:
-        apply_username(db, user, new_name, new_email)
+        # The savepoint rolls the rename back and leaves the challenge spend in
+        # the outer transaction. A full rollback here would make the proof reusable.
+        with db.begin_nested():
+            apply_username(db, user, new_name, new_email)
     except IntegrityError:
-        db.rollback()
         _fail(db, user_id, old_name, new_name, "collision")
         raise HTTPException(status_code=409, detail=_CONFLICT_DETAIL) from None
 

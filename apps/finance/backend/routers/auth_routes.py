@@ -64,6 +64,7 @@ from apps.finance.backend.services.auth_decoy import decoy_passwordless_material
 from apps.finance.backend.services.challenge_auth import (
     CHALLENGE_TTL,
     PROTOCOL,
+    PURPOSE_LOGIN,
     issue_challenge,
     verify_challenge,
 )
@@ -155,12 +156,15 @@ def _user_and_vault(db: Session, identifier: str) -> tuple[User | None, object |
     return user, vault
 
 
-def _decoy_challenge(request: Request) -> dict:
+def _decoy_challenge(request: Request, purpose: str) -> dict:
     expires_at = utc_now_naive() + CHALLENGE_TTL
+    challenge_id = secrets.token_urlsafe(24)
     return {
-        "challenge_id": secrets.token_urlsafe(24),
+        "challenge_id": challenge_id,
         "challenge": secrets.token_urlsafe(32),
-        "message": "\n".join([PROTOCOL, _origin(request), expires_at.isoformat()]),
+        "message": "\n".join(
+            [PROTOCOL, _origin(request), challenge_id, purpose, expires_at.isoformat()]
+        ),
         "expires_at": expires_at,
     }
 
@@ -324,8 +328,8 @@ def passwordless_challenge(
     enforce_login_pair_limit(body.username, request)
     user = _find_passwordless_user(db, body.username)
     if not user or not user.is_active or not user.auth_public_key_b64:
-        return _decoy_challenge(request)
-    challenge, raw, message = issue_challenge(db, user, _origin(request))
+        return _decoy_challenge(request, body.purpose)
+    challenge, raw, message = issue_challenge(db, user, _origin(request), body.purpose)
     db.commit()
     return {
         "challenge_id": challenge.challenge_id,
@@ -382,7 +386,14 @@ def passwordless_verify(
         user
         and user.is_active
         and verify_challenge(
-            db, user, body.challenge_id, body.challenge, body.message, body.signature_b64
+            db,
+            user,
+            body.challenge_id,
+            body.challenge,
+            body.message,
+            body.signature_b64,
+            _origin(request),
+            PURPOSE_LOGIN,
         )
     ):
         csrf = create_session(db, user, request, response)

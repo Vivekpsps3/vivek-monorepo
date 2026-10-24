@@ -131,8 +131,11 @@ def _signup(username: str, *, passphrase: str | None = None):
     return client, private_key, auth, vault, dek
 
 
-def _proof(client: TestClient, private_key, username: str) -> dict:
-    challenge = client.post("/api/auth/passwordless/challenge", json={"username": username}).json()
+def _proof(client: TestClient, private_key, username: str, purpose: str = "login") -> dict:
+    challenge = client.post(
+        "/api/auth/passwordless/challenge",
+        json={"username": username, "purpose": purpose},
+    ).json()
     return {
         "challenge_id": challenge["challenge_id"],
         "challenge": challenge["challenge"],
@@ -142,7 +145,10 @@ def _proof(client: TestClient, private_key, username: str) -> dict:
 
 
 def _rename(client: TestClient, private_key, current: str, new_name: str, **extra):
-    body = {"username": new_name, **_proof(client, private_key, current)}
+    body = {
+        "username": new_name,
+        **_proof(client, private_key, current, purpose="username_change"),
+    }
     body.update(extra)
     return client.patch("/api/account/username", json=body)
 

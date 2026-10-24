@@ -100,6 +100,8 @@ class PasswordlessSignupRequest(BaseModel):
 
 class PasswordlessChallengeRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=64)
+    # Omitted by the login client. Rename asks for username_change.
+    purpose: Literal["login", "username_change"] = "login"
 
 
 class PasswordlessChallengeResponse(BaseModel):

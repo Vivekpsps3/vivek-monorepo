@@ -21,7 +21,6 @@ apps/finance/backend/routers/auth_routes.py	assignment	31
 apps/finance/backend/routers/auth_routes.py	misc	1
 apps/finance/backend/routers/health.py	assignment	1
 apps/finance/backend/routers/vault.py	arg-type	29
-apps/finance/backend/services/challenge_auth.py	assignment	1
 apps/finance/backend/services/challenge_auth.py	call-overload	1
 apps/finance/backend/services/encrypted_storage.py	assignment	11
 apps/finance/backend/services/encrypted_storage.py	misc	1

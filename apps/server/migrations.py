@@ -47,8 +47,10 @@ from apps.server.schema import (
 
 SQLITE_TIMEOUT_SECONDS = 30
 _IGNORED_TABLES = {MIGRATION_VERSION_TABLE, COMPATIBILITY_TABLE}
+BASELINE_REVISION = "site_schema_v1"
 
 _HEAD = None
+_BASELINE_SHAPE = None
 
 
 def include_name(name, type_, parent_names):
@@ -323,20 +325,71 @@ def _finance_marker(path: Path) -> str | None:
     return None
 
 
-def _reject_adopt(path: Path, *, readonly: bool = False) -> str | None:
-    """Return a refusal reason, or None when the database may be stamped."""
-    diff = model_diff(path, readonly=readonly)
-    if diff:
-        return (
-            "Refusing to stamp this database; its schema does not match the site baseline. "
-            "No changes were applied. " + _diff_summary(diff)
-        )
+def _schema_shape(path: Path) -> tuple:
+    """Column, index, and foreign-key shape, ignoring SQL formatting."""
+    with connect(path, readonly=True) as db:
+        tables = []
+        names = [
+            row[0]
+            for row in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name NOT LIKE 'sqlite_%' AND name != ? ORDER BY name",
+                (MIGRATION_VERSION_TABLE,),
+            )
+        ]
+        for name in names:
+            columns = tuple(
+                (column[1], column[2], column[3], column[4], column[5])
+                for column in db.execute(f'PRAGMA table_info("{name}")')
+            )
+            indexes = []
+            for index in db.execute(f'PRAGMA index_list("{name}")'):
+                index_name = index[1]
+                index_columns = tuple(
+                    info[2] for info in db.execute(f'PRAGMA index_info("{index_name}")')
+                )
+                indexes.append((index_name, index[2], index_columns))
+            foreign_keys = tuple(
+                sorted(
+                    (key[3], key[4], key[6], key[7])
+                    for key in db.execute(f'PRAGMA foreign_key_list("{name}")')
+                )
+            )
+            tables.append((name, columns, tuple(sorted(indexes)), foreign_keys))
+    return tuple(tables)
+
+
+def _baseline_shape() -> tuple:
+    global _BASELINE_SHAPE
+    if _BASELINE_SHAPE is None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "baseline.db"
+            command.upgrade(make_config(sqlite_url(path)), BASELINE_REVISION)
+            _BASELINE_SHAPE = _schema_shape(path)
+    return _BASELINE_SHAPE
+
+
+def _adopt_kind(path: Path, *, readonly: bool = False) -> tuple[str | None, str | None]:
+    """Return ``head`` or ``baseline``, plus a refusal reason when neither matches.
+
+    A database created from the current models is stamped at head. A database
+    that still has the frozen v1 shape is stamped at ``site_schema_v1`` and
+    then upgraded, so later revisions can add columns without refusing adoption.
+    """
     if _finance_marker(path) != FINANCE_REVISION:
-        return (
+        return None, (
             "Refusing to stamp this database; alembic_version is not "
             f"{FINANCE_REVISION}. No changes were applied."
         )
-    return None
+    diff = model_diff(path, readonly=readonly)
+    if not diff:
+        return "head", None
+    if _schema_shape(path) == _baseline_shape():
+        return "baseline", None
+    return None, (
+        "Refusing to stamp this database; its schema does not match the site baseline. "
+        "No changes were applied. " + _diff_summary(diff)
+    )
 
 
 def _stamp_sql(revision: str) -> str:
@@ -411,19 +464,33 @@ def plan(url: str, *, require_existing: bool = False) -> int:
         report["detail"] = "Site database is missing or empty; refusing to create one"
         code = 1
     elif state == "adopt":
-        reason = _reject_adopt(path, readonly=True) or _fk_refusal(path, "stamp")
+        kind, reason = _adopt_kind(path, readonly=True)
+        reason = reason or _fk_refusal(path, "stamp")
         if reason:
             report["action"] = "refuse"
             report["detail"] = reason
             code = 1
         else:
-            report["action"] = "stamp"
             report["schema_diff"] = []
             report["foreign_key_check"] = []
-            report["detail"] = (
-                "Would record the baseline revision and not rewrite application tables"
-            )
-            sql = _stamp_sql(head)
+            if kind == "baseline" and head != BASELINE_REVISION:
+                report["action"] = "stamp_and_upgrade"
+                report["baseline"] = BASELINE_REVISION
+                report["detail"] = (
+                    f"Would stamp {BASELINE_REVISION} and upgrade to {head} "
+                    "without rewriting existing rows"
+                )
+                sql = (
+                    _stamp_sql(BASELINE_REVISION)
+                    + "\n"
+                    + _offline_sql(url, BASELINE_REVISION, head)
+                )
+            else:
+                report["action"] = "stamp"
+                report["detail"] = (
+                    "Would record the baseline revision and not rewrite application tables"
+                )
+                sql = _stamp_sql(head)
     elif state in {"missing", "empty"}:
         report["action"] = "upgrade"
         report["detail"] = "Would create the schema by running revisions from base to head"
@@ -462,8 +529,9 @@ def adopt_or_upgrade(url: str, *, require_existing: bool = False) -> str:
     if require_existing and state == "empty":
         raise RuntimeError("Site database is empty; refusing to create one")
     before = current_revision(path) if state == "managed" else None
+    match = None
     if state == "adopt":
-        reason = _reject_adopt(path)
+        match, reason = _adopt_kind(path)
         if reason:
             raise RuntimeError(reason)
     # A no-op deploy is already at head. Backing up there rotates the
@@ -473,8 +541,13 @@ def adopt_or_upgrade(url: str, *, require_existing: bool = False) -> str:
     if will_write:
         backup_if_configured(path)
     if state == "adopt":
-        command.stamp(make_config(url), "head")
-        action = "stamped"
+        if match == "baseline" and head_revision() != BASELINE_REVISION:
+            command.stamp(make_config(url), BASELINE_REVISION)
+            command.upgrade(make_config(url), "head")
+            action = "upgraded"
+        else:
+            command.stamp(make_config(url), "head")
+            action = "stamped"
     else:
         command.upgrade(make_config(url), "head")
         action = "upgraded" if current_revision(path) != before else "current"
