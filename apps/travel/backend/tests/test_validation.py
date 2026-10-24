@@ -159,6 +159,10 @@ def test_pto_values_keep_full_precision_and_display_rounds(client):
     )
     assert created.status_code == 201, created.text
     assert created.json()["pto_days"] == "1.6667"
+    board = client.get("/api/pto")
+    assert board.status_code == 200, board.text
+    synced = [row for row in board.json()["entries"] if row["trip_id"] == created.json()["id"]]
+    assert [row["days"] for row in synced] == ["1.6667"]
 
 
 def test_blank_titles_match_on_create_and_patch(client):

@@ -314,9 +314,18 @@ export function applyTheme(value) {
 }
 
 export function bindEvents(ui) {
+  const disarmNativeValidation = (event) => {
+    const node = event.target instanceof Element ? event.target : null;
+    const form = node?.closest?.("form[data-form]");
+    if (form) form.noValidate = true;
+  };
+  document.addEventListener("click", disarmNativeValidation, true);
+  document.addEventListener("keydown", disarmNativeValidation, true);
+
   document.addEventListener("submit", (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || !form.dataset.form) return;
+    form.noValidate = true;
     event.preventDefault();
     const submitButton = form.querySelector("[type=submit]");
     if (submitButton) submitButton.disabled = true;

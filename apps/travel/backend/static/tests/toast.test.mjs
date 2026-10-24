@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
-import { TOAST_LIMIT, createToastLayer } from "../../../../../packages/browser/runtime/toast.mjs";
+import { TOAST_LIMIT, createToastLayer, itemIdFromHash } from "../../../../../packages/browser/runtime/toast.mjs";
 
 class Node {
   constructor(tag, doc) {
@@ -172,20 +172,37 @@ test("a fourth toast evicts the oldest and the cap stays at three", () => {
 
 test("a late item failure keeps a key that item changes do not retire", () => {
   const toast = layer();
+  toast.pushToast({
+    message: "Save failed for Kyoto.",
+    kind: "alert",
+    key: "save-failed:note:4",
+    persist: true,
+  });
+  toast.pushToast({ message: "Still here.", kind: "alert", key: "note:9", persist: true });
+  toast.pushToast({ message: "Other item.", kind: "alert", key: "note:8", persist: true });
+  toast.retireOtherItemToasts("9");
+  const keys = toast.toastNodes().map((node) => node.dataset.toastKey);
+  assert.deepEqual(keys.sort(), ["note:9", "save-failed:note:4"]);
+});
+
+test("a late note conflict keeps its key and clears when the item reopens", () => {
+  const toast = layer();
+  const message = "This note changed in another tab. Your text is kept as a draft.";
   globalThis.location = { hash: "#/item/9" };
   try {
-    const late = toast.pushToast({
-      message: "Couldn't save the note.",
-      kind: "alert",
-      key: "note:4",
+    assert.equal(itemIdFromHash(undefined), "");
+    const late = toast.toast(message, "alert", {
+      label: "Reload",
       persist: true,
+      key: "note-conflict:4",
+      onClick() {},
     });
-    assert.equal(late.dataset.toastKey, "save-failed:note:4");
-    assert.equal(late.children.find((child) => child.tagName === "P").textContent, "Save failed for this item.");
-    toast.pushToast({ message: "Still here.", kind: "alert", key: "note:9", persist: true });
-    toast.retireOtherItemToasts("9");
-    const keys = toast.toastNodes().map((node) => node.dataset.toastKey);
-    assert.deepEqual(keys.sort(), ["note:9", "save-failed:note:4"]);
+    assert.equal(late.dataset.toastKey, "note-conflict:4");
+    assert.equal(late.children.find((child) => child.tagName === "P").textContent, message);
+    toast.retireOtherItemToasts("4");
+    assert.deepEqual(toast.toastNodes().map((node) => node.dataset.toastKey), ["note-conflict:4"]);
+    toast.dismissToast("note-conflict:4");
+    assert.equal(toast.toastNodes().length, 0);
   } finally {
     delete globalThis.location;
   }

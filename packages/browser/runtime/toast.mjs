@@ -18,17 +18,8 @@ export const TOAST_ACTION_MS = 8000;
 export const ITEM_TOAST_KEY = /^(?:progress|note|note-conflict|status|favorite|anticipated|rating):(.+)$/;
 
 export function itemIdFromHash(hash) {
-  const value = hash !== undefined ? hash : (typeof location !== "undefined" ? location.hash : "");
-  const match = /^#\/item\/(\d+)/.exec(String(value || ""));
+  const match = /^#\/item\/(\d+)/.exec(String(hash || ""));
   return match ? match[1] : "";
-}
-
-function lateFailureKey(key) {
-  const match = ITEM_TOAST_KEY.exec(key || "");
-  if (!match) return { key, away: false };
-  const here = itemIdFromHash();
-  if (here && here === match[1]) return { key, away: false };
-  return { key: `save-failed:${key}`, away: true };
 }
 
 export function createToastLayer({
@@ -82,11 +73,6 @@ export function createToastLayer({
   function pushToast({ message, kind = "status", action = null, key = "", persist = false }) {
     const host = region(kind);
     if (!host || !message) return null;
-    const scoped = lateFailureKey(key);
-    key = scoped.key;
-    if (scoped.away && !String(message).startsWith("Save failed")) {
-      message = "Save failed for this item.";
-    }
     if (key) dismissToast(key);
     const order = ++serial;
     const toast = doc.createElement("div");
