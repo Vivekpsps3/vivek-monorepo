@@ -26,6 +26,7 @@ def setup_function():
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(delete(table))
 
+
 ANYTHING = "anything"
 
 
@@ -162,9 +163,7 @@ def test_login_challenge_cannot_rename(monkeypatch):
     _open_signup(monkeypatch)
     client, private_key, _auth, _vault, _dek = _signup("owner.name")
     login = _proof(client, private_key, "owner.name", purpose="login")
-    rejected = client.patch(
-        "/api/account/username", json={"username": "renamed.owner", **login}
-    )
+    rejected = client.patch("/api/account/username", json={"username": "renamed.owner", **login})
     assert rejected.status_code == 401
     assert client.get("/api/auth/me").json()["user"]["username"] == "owner.name"
 
