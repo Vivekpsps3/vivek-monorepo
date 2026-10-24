@@ -791,8 +791,18 @@ test('a status click waits for the note save before drawing the new field', asyn
   const paused = page.getByRole('radio', { name: 'Paused' });
   const clicked = paused.click();
   await expect.poll(() => reviews.length).toBe(1);
+  expect(reviews[0]).toBe('typed before pause');
+  const saved = page.waitForResponse(response => {
+    if (response.request().method() !== 'PATCH') return false;
+    try {
+      return response.request().postDataJSON()?.review === 'typed before pause';
+    } catch {
+      return false;
+    }
+  });
   releaseNote();
   await clicked;
+  await saved;
   await expect(page.getByRole('radio', { name: 'Paused' })).toHaveClass(/is-on/);
   await expect(page.getByLabel('Note')).toHaveValue('typed before pause');
   const entry = await (await request.get(`/media/api/entries/${dune.id}`)).json();
