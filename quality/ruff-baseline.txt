@@ -61,8 +61,6 @@ apps/server/tests/test_security_headers.py	RUF012	2
 apps/travel/backend/app.py	I001	2
 apps/travel/backend/deps.py	I001	1
 apps/travel/backend/routers/trips.py	I001	1
-apps/travel/backend/services/assemble.py	I001	1
-apps/travel/backend/services/money.py	I001	1
 apps/travel/backend/tests/test_finance_session.py	I001	1
 scripts/backup-site.py	I001	1
 scripts/backup-site.py	SIM117	1
