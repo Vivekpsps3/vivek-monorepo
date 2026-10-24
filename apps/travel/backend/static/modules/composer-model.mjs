@@ -172,6 +172,12 @@ export function monthCells(anchor, weekStartsOn = DECISIONS.weekStartsOn) {
   return cells;
 }
 
+export function gridDay(cell, { focusIso, selected, label }) {
+  if (cell.outside) return `<span class="composer-day is-out" aria-hidden="true">${cell.day}</span>`;
+  const tab = cell.iso === focusIso ? "0" : "-1";
+  return `<button type="button" role="gridcell" class="composer-day" data-day="${cell.iso}" tabindex="${tab}" aria-selected="${selected ? "true" : "false"}" aria-label="${label}">${cell.day}</button>`;
+}
+
 export function cityColor(index) {
   return `var(--city-${(index % 5) + 1})`;
 }

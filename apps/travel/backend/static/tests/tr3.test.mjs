@@ -77,7 +77,7 @@ test("the composer grid and the pto cadence are in the page source", () => {
   assert.match(composer, /aria-label="Previous month"/);
   assert.match(composer, /Counts as PTO/);
   assert.match(composer, /aria-disabled/);
-  assert.match(composer, /input\.name = "city";\s*applyFieldError\(root, "city", "Name the city\."\)/);
+  assert.match(composer, /input\.name = "city";\s*model\.cityError = true;\s*applyFieldError\(root, "city", "Name the city\."\)/);
   assert.match(composer, /Split…/);
   assert.match(pto, /role="radiogroup"/);
   assert.match(pto, /Set up PTO/);

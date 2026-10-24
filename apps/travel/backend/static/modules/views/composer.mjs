@@ -1,5 +1,5 @@
 import { api } from '../api.mjs';
-import { fail, saved, applyFieldError } from '../feedback.mjs';
+import { applyFieldError, clearFieldError, dismissToast, fail, saved } from '../feedback.mjs';
 import { parseHash } from '../route-parser.mjs';
 import { DECISIONS } from '../decisions.mjs';
 import { legFields } from './new-trip.mjs';
@@ -11,6 +11,7 @@ import {
   dayName,
   defaultTripName,
   dragRange,
+  gridDay,
   monthCells,
   moveFocus,
   pickDay,
@@ -44,20 +45,34 @@ export function mountComposer() {
   let dragging = false;
   let dragOrigin = "";
   let dragMoved = false;
+  let dragX = 0;
+  let dragY = 0;
+
+  function endDrag() {
+    dragging = false;
+    dragOrigin = "";
+  }
+
+  function focusDay(iso) {
+    root.querySelector(`[data-day="${iso}"]:not(.is-out)`)?.focus();
+  }
 
   root.addEventListener("pointerdown", (event) => {
-    const day = event.target.closest("[data-day]");
+    const day = event.target.closest("[data-day]:not(.is-out)");
     if (!day || event.button !== 0) return;
     if (event.target.closest("input, select, a, button:not([data-day])")) return;
     dragging = true;
     dragMoved = false;
     dragOrigin = day.dataset.day;
+    dragX = event.clientX;
+    dragY = event.clientY;
     root.setPointerCapture?.(event.pointerId);
   });
   root.addEventListener("pointermove", (event) => {
     if (!dragging) return;
+    if (!dragMoved && Math.hypot(event.clientX - dragX, event.clientY - dragY) < 8) return;
     const hit = document.elementFromPoint(event.clientX, event.clientY);
-    const day = hit?.closest?.("[data-day]");
+    const day = hit?.closest?.("[data-day]:not(.is-out)");
     if (!day || day.dataset.day === dragOrigin) return;
     dragMoved = true;
     model = dragRange(model, dragOrigin, day.dataset.day);
@@ -72,20 +87,30 @@ export function mountComposer() {
     }
     dragOrigin = "";
     draw({ announce: true });
+    if (focusIso) focusDay(focusIso);
+  });
+  root.addEventListener("pointercancel", endDrag);
+  root.addEventListener("lostpointercapture", () => {
+    if (dragging) endDrag();
   });
   root.addEventListener("keydown", (event) => {
     const day = event.target.closest?.("[data-day]");
-    if (!day) return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      model = pickDay(model, day.dataset.day, { shift: event.shiftKey });
-      draw({ announce: true });
-      return;
-    }
+    if (!day || day.classList.contains("is-out")) return;
     if (event.key === "Escape") {
       event.preventDefault();
+      const stay = day.dataset.day;
       model = clearRange(model);
+      focusIso = stay;
       draw({ announce: true });
+      focusDay(stay);
+      return;
+    }
+    if ((event.key === "Home" || event.key === "End") && event.ctrlKey) {
+      event.preventDefault();
+      const next = event.key === "Home" ? rangeEdge("first") : rangeEdge("last");
+      focusIso = next;
+      draw({ announce: false });
+      focusDay(next);
       return;
     }
     const next = moveFocus(day.dataset.day, event.key);
@@ -96,13 +121,17 @@ export function mountComposer() {
     const date = new Date(`${next}T00:00:00`);
     model.anchor = new Date(date.getFullYear(), date.getMonth(), 1);
     draw({ announce: false });
-    root.querySelector(`[data-day="${next}"]`)?.focus();
+    focusDay(next);
   });
   root.addEventListener("input", (event) => {
     const input = event.target;
     if (!(input instanceof HTMLInputElement)) return;
     if (input.dataset.cityStart) {
       model.cities[input.dataset.cityStart] = input.value;
+      if (input.name === "city" && input.value.trim()) {
+        clearFieldError(root, "city");
+        model.cityError = false;
+      }
       if (!model.nameTouched) model.tripName = defaultTripName(model);
       const name = root.querySelector("[data-trip-name]");
       if (name && !model.nameTouched) name.value = model.tripName;
@@ -114,6 +143,14 @@ export function mountComposer() {
     refreshGate();
   });
   root.addEventListener("click", async (event) => {
+    const day = event.target.closest("[data-day]:not(.is-out)");
+    if (day && event.detail === 0) {
+      model = pickDay(model, day.dataset.day, { shift: event.shiftKey });
+      focusIso = day.dataset.day;
+      draw({ announce: true });
+      focusDay(focusIso);
+      return;
+    }
     const button = event.target.closest("button");
     if (!button) return;
     if (button.dataset.shift) {
@@ -137,6 +174,13 @@ export function mountComposer() {
 
   function narrow() {
     return window.matchMedia?.("(max-width: 767px)").matches;
+  }
+
+  function rangeEdge(which) {
+    const start = new Date(model.anchor.getFullYear(), model.anchor.getMonth(), 1);
+    const endMonth = narrow() ? start : new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    const end = new Date(endMonth.getFullYear(), endMonth.getMonth() + 1, 0);
+    return toIso(which === "first" ? start : end);
   }
 
   function shell() {
@@ -189,10 +233,9 @@ export function mountComposer() {
     const heads = weekdayHeads(narrow()).map((day) => `<abbr role="columnheader" title="${escapeAttr(day.title)}">${escapeAttr(day.label)}</abbr>`).join("");
     const body = rows.map((row) => `<div role="row">${row.map((cell) => {
       const selected = Boolean(model.start && cell.iso >= model.start && model.end && cell.iso <= model.end) || cell.iso === model.start;
-      const tab = cell.iso === focusIso ? "0" : "-1";
-      return `<button type="button" role="gridcell" class="composer-day${cell.outside ? " is-out" : ""}" data-day="${cell.iso}" tabindex="${tab}" aria-selected="${selected ? "true" : "false"}" aria-label="${escapeAttr(dayName(cell.iso, model))}">${cell.day}</button>`;
+      return gridDay(cell, { focusIso, selected, label: escapeAttr(dayName(cell.iso, model)) });
     }).join("")}</div>`).join("");
-    return `<section><h2>${escapeAttr(label)}</h2><div class="composer-grid" role="grid" aria-label="${escapeAttr(label)}" style="touch-action:none"><div role="row" class="composer-dow">${heads}</div>${body}</div></section>`;
+    return `<section><h2>${escapeAttr(label)}</h2><div class="composer-grid" role="grid" aria-multiselectable="true" aria-label="${escapeAttr(label)}" style="touch-action:none"><div role="row" class="composer-dow">${heads}</div>${body}</div></section>`;
   }
 
   function paintDays() {
@@ -207,8 +250,13 @@ export function mountComposer() {
       day.style.setProperty("--city", index >= 0 ? cityColor(index) : "");
       day.setAttribute("aria-label", dayName(value, model));
       day.setAttribute("aria-selected", index >= 0 || value === model.start ? "true" : "false");
-      day.tabIndex = value === focusIso ? 0 : -1;
+      day.tabIndex = value === focusIso && !day.classList.contains("is-out") ? 0 : -1;
     });
+    const stops = [...root.querySelectorAll("[data-day]")].filter((day) => !day.classList.contains("is-out"));
+    if (stops.length && !stops.some((day) => day.tabIndex === 0)) {
+      focusIso = stops[0].dataset.day;
+      stops[0].tabIndex = 0;
+    }
   }
 
   function paintCities() {
@@ -223,13 +271,20 @@ export function mountComposer() {
         <span class="city-swatch" aria-hidden="true"></span>
         <label for="city-${escapeAttr(part.key)}">City ${index + 1} · ${escapeAttr(shortRange(part.arrive, part.leave))}</label>
         <input id="city-${escapeAttr(part.key)}" data-city-start="${escapeAttr(part.key)}" value="${escapeAttr(model.cities[part.key] || "")}" autocomplete="off">
-        ${options ? `<select data-split-day data-split-for="${escapeAttr(part.key)}" aria-label="Split ${index + 1} after">${options}</select><button type="button" data-split="${escapeAttr(part.key)}">Split…</button>` : ""}
+        ${options ? `<select data-split-day data-split-for="${escapeAttr(part.key)}" aria-label="Split ${index + 1} after">${options}</select><button type="button" class="chip-choice" data-split="${escapeAttr(part.key)}">Split…</button>` : ""}
         ${remove}
       </div>`;
     }).join("") + (parts.length ? `<label for="trip-name">Trip name</label><input id="trip-name" data-trip-name value="${escapeAttr(model.tripName || defaultTripName(model))}" autocomplete="off">` : "");
+    if (model.cityError) {
+      const input = root.querySelector("[data-city-start]");
+      if (input) input.name = "city";
+      applyFieldError(root, "city", "Name the city.", { focus: false });
+    }
   }
 
   async function save() {
+    clearFieldError(root, "city");
+    model.cityError = false;
     model.tripName = root.querySelector("[data-trip-name]")?.value ?? model.tripName;
     root.querySelectorAll("[data-city-start]").forEach((input) => {
       model.cities[input.dataset.cityStart] = input.value;
@@ -239,10 +294,11 @@ export function mountComposer() {
     if (!gate.ok) {
       if (help) help.textContent = gate.helper;
       root.querySelector("[data-save]")?.setAttribute("aria-disabled", "true");
-      if (gate.focus === "grid") root.querySelector("[role=grid]")?.querySelector("[data-day]")?.focus();
+      if (gate.focus === "grid") root.querySelector('[data-day][tabindex="0"]')?.focus();
       if (gate.focus === "city") {
         const input = root.querySelector("[data-city-start]");
         if (input) input.name = "city";
+        model.cityError = true;
         applyFieldError(root, "city", "Name the city.");
       }
       return;
@@ -275,6 +331,7 @@ export function mountComposer() {
           notes: emptyInput(root, "notes"),
         }),
       });
+      dismissToast("composer-save");
       saved("Trip created.");
       location.hash = `#/trips/${trip.id}`;
     } catch (reason) {
@@ -288,5 +345,10 @@ export function mountComposer() {
 
   shell();
   draw({ announce: true });
-  window.addEventListener("resize", () => draw({ announce: false }));
+  let wasNarrow = narrow();
+  window.addEventListener("resize", () => {
+    if (narrow() === wasNarrow) return;
+    wasNarrow = narrow();
+    draw({ announce: false });
+  });
 }

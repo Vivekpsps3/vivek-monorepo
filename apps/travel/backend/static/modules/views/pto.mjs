@@ -1,7 +1,7 @@
 import { api } from '../api.mjs';
 import { state } from '../state.mjs';
 import { esc, banner, head, daysText, prettyRange } from '../helpers.mjs';
-import { fail, saved, applyFieldError } from '../feedback.mjs';
+import { applyFieldError, dismissToast, fail, saved } from '../feedback.mjs';
 import { formError } from '../validate.mjs';
 import { DECISIONS } from '../decisions.mjs';
 import { actionName } from '../copy.mjs';
@@ -63,21 +63,26 @@ export function mountPto() {
     range: null,
   };
 
+  let picking = false;
   root.addEventListener("pointerdown", (event) => {
     const cell = event.target.closest("[data-pto-day]");
-    if (!cell) return;
+    if (!cell || event.button !== 0) return;
+    picking = true;
+    root.setPointerCapture?.(event.pointerId);
     draft.range = { start: cell.dataset.ptoDay, end: cell.dataset.ptoDay };
     markRange();
   });
   root.addEventListener("pointermove", (event) => {
-    if (!draft.range) return;
+    if (!picking) return;
     const hit = document.elementFromPoint(event.clientX, event.clientY);
     const cell = hit?.closest?.("[data-pto-day]");
     if (!cell) return;
     draft.range.end = cell.dataset.ptoDay;
     markRange();
   });
-  window.addEventListener("pointerup", () => {
+  root.addEventListener("pointerup", () => {
+    if (!picking) return;
+    picking = false;
     if (!draft.range?.start) return;
     const [start, end] = ordered(draft.range.start, draft.range.end);
     const form = root.querySelector("[data-form=pto-entry]");
@@ -86,6 +91,9 @@ export function mountPto() {
       form.elements.end_date.value = end;
       form.elements.label.focus();
     }
+  });
+  root.addEventListener("pointercancel", () => {
+    picking = false;
   });
   root.addEventListener("click", async (event) => {
     const button = event.target.closest("button");
@@ -103,6 +111,7 @@ export function mountPto() {
     if (button.dataset.cadence) {
       draft.cadence = button.dataset.cadence;
       paint();
+      root.querySelector(`[data-cadence="${draft.cadence}"]`)?.focus();
       return;
     }
     if (button.dataset.showAll != null) {
@@ -116,7 +125,20 @@ export function mountPto() {
     if (event.target?.name === "accrual_unit") {
       draft.unit = event.target.value;
       paint();
+      root.querySelector("#pto-unit")?.focus();
     }
+  });
+  root.addEventListener("keydown", (event) => {
+    const radio = event.target.closest?.("[data-cadence]");
+    if (!radio) return;
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const index = CADENCE.findIndex(([value]) => value === radio.dataset.cadence);
+    const delta = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+    const next = CADENCE[(index + delta + CADENCE.length) % CADENCE.length][0];
+    draft.cadence = next;
+    paint();
+    root.querySelector(`[data-cadence="${next}"]`)?.focus();
   });
   root.addEventListener("submit", async (event) => {
     const form = event.target;
@@ -132,6 +154,7 @@ export function mountPto() {
     const body = { label: data.label, start_date: data.start_date, end_date: data.end_date };
     try {
       await api("/api/pto/entries", { method: "POST", body: JSON.stringify(body) });
+      dismissToast("pto-entry");
       saved("Time off added.");
       location.hash = "#/pto";
       window.dispatchEvent(new HashChangeEvent("hashchange"));
@@ -142,9 +165,20 @@ export function mountPto() {
 
   async function resubmit(body) {
     await api("/api/pto/entries", { method: "POST", body: JSON.stringify(body) });
+    dismissToast("pto-entry");
     saved("Time off added.");
     location.hash = "#/pto";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
+  }
+
+  function readDraft() {
+    const form = root.querySelector("[data-pto-form]");
+    if (!form) return;
+    if (form.elements.balance_days) draft.balance = form.elements.balance_days.value;
+    if (form.elements.balance_as_of) draft.asOf = form.elements.balance_as_of.value;
+    if (form.elements.accrual_amount) draft.amount = form.elements.accrual_amount.value;
+    if (form.elements.accrual_unit) draft.unit = form.elements.accrual_unit.value;
+    if (form.elements.hours_per_day) draft.hours = form.elements.hours_per_day.value;
   }
 
   function ordered(a, b) {
@@ -183,7 +217,10 @@ export function mountPto() {
     const unit = DECISIONS.accrualHours
       ? `<label for="pto-unit">Unit</label><select id="pto-unit" name="accrual_unit"><option value="day"${draft.unit === "day" ? " selected" : ""}>days</option><option value="hour"${draft.unit === "hour" ? " selected" : ""}>hours</option></select>`
       : `<input type="hidden" name="accrual_unit" value="day">`;
-    const radios = CADENCE.map(([value, label]) => `<button type="button" role="radio" data-cadence="${value}" aria-checked="${value === draft.cadence ? "true" : "false"}">${label}</button>`).join("");
+    const radios = CADENCE.map(([value, label]) => {
+      const selected = value === draft.cadence;
+      return `<button type="button" role="radio" data-cadence="${value}" aria-checked="${selected ? "true" : "false"}" tabindex="${selected ? "0" : "-1"}">${label}</button>`;
+    }).join("");
     return `<form class="stack" data-pto-form>
       <label for="pto-balance">Current balance</label>
       <input id="pto-balance" name="balance_days" inputmode="decimal" value="${esc(draft.balance)}" aria-describedby="pto-balance-unit">
@@ -253,7 +290,7 @@ export function mountPto() {
     const groups = [];
     days.forEach((day) => {
       const date = parse(day.key);
-      const key = iso(addDays(date, -date.getDay()));
+      const key = iso(addDays(date, -((date.getDay() - DECISIONS.weekStartsOn + 7) % 7)));
       const last = groups[groups.length - 1];
       if (!last || last.key !== key) groups.push({ key, end: day.key, balance: day.balance, used: day.used });
       else {
@@ -310,6 +347,7 @@ export function mountPto() {
       });
       draft.configured = true;
       draft.editing = false;
+      dismissToast("pto-policy");
       saved("PTO settings saved.");
       paint();
     } catch (error) {
@@ -322,6 +360,7 @@ export function mountPto() {
   }
 
   function paint() {
+    readDraft();
     const days = draft.configured || draft.balance ? series() : [];
     const form = draft.editing ? policyFields() : "";
     const balance = draft.configured && !draft.editing
