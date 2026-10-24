@@ -1,5 +1,5 @@
-/** Calendar names and the Sunday-or-Monday grid. Month links stay links (D9). */
-import { DECISIONS } from "./decisions.mjs";
+/** Calendar names and the suite week grid. Month links stay links. D9 is Sunday, the default inside weekStartsOn(). */
+import { weekStartsOn } from "../../shared-browser/week.mjs";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -12,10 +12,10 @@ export function toIso(date) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export function monthMatrix(year, month, weekStartsOn = DECISIONS.weekStartsOn) {
+export function monthMatrix(year, month, startOn = weekStartsOn()) {
   const first = new Date(year, month - 1, 1);
   const start = new Date(first);
-  start.setDate(first.getDate() - ((first.getDay() - weekStartsOn + 7) % 7));
+  start.setDate(first.getDate() - ((first.getDay() - startOn + 7) % 7));
   const weeks = [];
   for (let week = 0; week < 6; week += 1) {
     const days = [];
@@ -30,7 +30,7 @@ export function monthMatrix(year, month, weekStartsOn = DECISIONS.weekStartsOn) 
 }
 
 export function weekdayHeads() {
-  const start = DECISIONS.weekStartsOn;
+  const start = weekStartsOn();
   return Array.from({ length: 7 }, (_, index) => {
     const day = (start + index) % 7;
     return { title: WEEKDAYS[day], label: SHORT[day] };

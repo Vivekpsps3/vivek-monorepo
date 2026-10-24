@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
@@ -38,6 +39,7 @@ async function clearToasts(page) {
 }
 
 async function shot(page, stem, width, mode) {
+  if (!/focus/i.test(stem)) await page.evaluate(() => document.activeElement?.blur?.());
   await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(backgrounds[mode]);
   const expectsToast = /success|servererror|offline/.test(stem);
@@ -546,6 +548,20 @@ test("travel ux matrix", async ({ page, request }) => {
         await go(stem, null, () => tabs(page, count));
       }
       await page.unrouteAll({ behavior: "ignoreErrors" });
+
+      const differ = (focused, plain) => {
+        const left = readFileSync(path.join(dir, `${focused}-${width}-${mode}.png`));
+        const right = readFileSync(path.join(dir, `${plain}-${width}-${mode}.png`));
+        expect(left.equals(right), `${focused} matches ${plain} at ${width} ${mode}`).toBe(false);
+      };
+      differ("checkbox-focus", "checkbox-checked");
+      differ("checkbox-uncheckedfocus", "checkbox-unchecked");
+      differ("newtrip-ptofocus", "newtrip-ptochecked");
+      differ("reminder-checkedfocus", "reminder-checked");
+      differ("home-focus1", "home-empty");
+      differ("pto-focused", "pto-empty");
+      differ("city-focused", "city-blank");
+      differ("login-focus1", "login-locked");
     }
   }
 });

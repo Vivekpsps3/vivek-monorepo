@@ -224,13 +224,20 @@ async function removeItem(kind, id, ui) {
   const snapshot = item ? structuredClone(item) : null;
   await api(deletePath(kind, id), { method: "DELETE" });
   const tripId = state.trip?.id;
+  const restore = async () => {
+    await api(restorePath(kind, tripId), { method: "POST", body: JSON.stringify(restoreBody(kind, snapshot)) });
+    if (kind === "pto") await ui.render();
+    else await refetchTrip(ui);
+  };
   saved(undoCopy(kind), {
     label: "Undo",
     key: `undo-${kind}-${id}`,
     onClick: async () => {
-      await api(restorePath(kind, tripId), { method: "POST", body: JSON.stringify(restoreBody(kind, snapshot)) });
-      if (kind === "pto") await ui.render();
-      else await refetchTrip(ui);
+      try {
+        await restore();
+      } catch (error) {
+        fail(error, { retry: { key: `undo-${kind}-${id}`, run: restore } });
+      }
     },
   });
   if (kind === "pto") await ui.render();
@@ -298,8 +305,9 @@ export function applyTheme(value) {
   root.dataset.themeChoice = choice;
   document.querySelectorAll("[data-action=theme]").forEach((button) => {
     const selected = button.dataset.themeValue === choice;
-    button.setAttribute("aria-pressed", selected ? "true" : "false");
-    if (button.getAttribute("role") === "radio") button.setAttribute("aria-checked", selected ? "true" : "false");
+    button.removeAttribute("aria-pressed");
+    button.setAttribute("aria-checked", selected ? "true" : "false");
+    button.tabIndex = selected ? 0 : -1;
   });
   bindSchemeListener();
 }
@@ -347,7 +355,29 @@ export function bindEvents(ui) {
     if (event.target?.name === "notes") updateNotesCount(event.target);
   });
   document.addEventListener("keydown", (event) => {
+    const themeRadio = event.target?.closest?.("[data-action=theme]");
+    if (themeRadio && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      const buttons = [...document.querySelectorAll("[data-action=theme]")];
+      const index = buttons.indexOf(themeRadio);
+      const delta = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      const next = buttons[(index + delta + buttons.length) % buttons.length];
+      if (!next) return;
+      applyTheme(next.dataset.themeValue);
+      next.focus();
+      return;
+    }
     if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+    const menu = document.querySelector("#more-menu");
+    if (menu && !menu.hasAttribute("hidden")) {
+      menu.setAttribute("hidden", "");
+      const opener = document.querySelector("[data-action=menu]");
+      if (opener) {
+        opener.setAttribute("aria-expanded", "false");
+        opener.focus();
+      }
+      return;
+    }
     if (!state.edit && !state.details) return;
     const edit = state.edit;
     state.edit = null;

@@ -139,7 +139,12 @@ def test_pto_values_keep_full_precision_and_display_rounds(client):
     assert policy["annual_cap_days"] == "20.0050"
     entry = client.post(
         "/api/pto/entries",
-        json={"label": "Half morning", "start_date": "2026-11-02", "end_date": "2026-11-02", "days": "0.125"},
+        json={
+            "label": "Half morning",
+            "start_date": "2026-11-02",
+            "end_date": "2026-11-02",
+            "days": "0.125",
+        },
     )
     assert entry.status_code == 201, entry.text
     assert entry.json()["entries"][0]["days"] == "0.1250"

@@ -41,13 +41,41 @@ function fieldElement(form, name) {
   return form.querySelector(`[name="${CSS.escape(name)}"]`);
 }
 
+function describedIds(field) {
+  return (field.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+}
+
+function writeDescribedBy(field, ids) {
+  const unique = [...new Set(ids)];
+  if (unique.length) field.setAttribute("aria-describedby", unique.join(" "));
+  else field.removeAttribute("aria-describedby");
+}
+
+function dropDescribedToken(field, token) {
+  if (!(field instanceof HTMLElement) || !token) return;
+  writeDescribedBy(field, describedIds(field).filter((id) => id !== token));
+}
+
+export function clearFormErrors(form) {
+  if (!form?.querySelectorAll) return;
+  form.querySelectorAll("[data-error-for]").forEach((node) => {
+    const field = fieldElement(form, node.dataset.errorFor);
+    if (field instanceof HTMLElement) {
+      field.removeAttribute("aria-invalid");
+      dropDescribedToken(field, node.id);
+    }
+    node.remove();
+  });
+}
+
 export function clearFieldError(form, name) {
   const field = fieldElement(form, name);
+  const node = form?.querySelector(`[data-error-for="${CSS.escape(name)}"]`);
   if (field instanceof HTMLElement) {
     field.removeAttribute("aria-invalid");
-    field.removeAttribute("aria-describedby");
+    dropDescribedToken(field, node?.id);
   }
-  form?.querySelector(`[data-error-for="${CSS.escape(name)}"]`)?.remove();
+  node?.remove();
 }
 
 export function applyFieldError(form, name, message, options = {}) {
@@ -64,7 +92,7 @@ export function applyFieldError(form, name, message, options = {}) {
   const hostId = field.id || `${name}-field`;
   error.id = `${hostId}-error`;
   error.textContent = `⚠ ${message}`;
-  field.setAttribute("aria-describedby", error.id);
+  writeDescribedBy(field, [...describedIds(field), error.id]);
   field.insertAdjacentElement("afterend", error);
   if (options.focus !== false && typeof field.focus === "function") field.focus({ preventScroll: true });
   revealFocusedField();

@@ -48,9 +48,9 @@
           <button class="btn btn-ghost btn-sm" type="button" data-action="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More">⋯ More</button>
           <div id="more-menu" class="more-menu" hidden>
             <div class="theme-switch" role="radiogroup" aria-label="Theme">
-              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="system" aria-checked="true" aria-pressed="true">System</button>
-              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="light" aria-checked="false" aria-pressed="false">Light</button>
-              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="dark" aria-checked="false" aria-pressed="false">Dark</button>
+              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="system" aria-checked="true" tabindex="0">System</button>
+              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="light" aria-checked="false" tabindex="-1">Light</button>
+              <button class="btn btn-ghost btn-sm" type="button" role="radio" data-action="theme" data-theme-value="dark" aria-checked="false" tabindex="-1">Dark</button>
             </div>
             <a href="#/settings" data-nav="settings">Settings</a>
             <a href="/hub">Hub</a>
@@ -71,7 +71,7 @@
     <p class="field-error" data-confirm-error role="alert" hidden></p>
     <div class="row-actions">
       <button type="button" class="btn" data-confirm-cancel>Cancel</button>
-      <button type="button" class="btn btn-ghost btn-danger" data-confirm-ok>Delete</button>
+      <button type="button" class="btn btn-danger" data-confirm-ok>Delete</button>
     </div>
   </dialog>
   <script src="__TRAVEL_ROOT__/static/vendor/leaflet.js"></script>

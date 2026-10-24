@@ -12,7 +12,7 @@ export function renderSettings(settings) {
     <section class="card"><h2>FlightAware</h2>
       <p class="meta">${esc(flightStatus(flight))}</p>
       ${admin ? `<p class="lede">${esc(admin)}</p>` : ""}
-      <form class="stack" data-form="flight-key"><div class="form-grid">${field("AeroAPI key", "api_key", "", { type: "password", wide: true, required: true, autocomplete: "off", scope: "flight" })}</div><div class="row-actions"><button class="btn btn-primary" type="submit">Save key</button>${remove}</div></form>
+      <form class="stack" data-form="flight-key"><div class="form-grid">${field("AeroAPI key", "api_key", "", { type: "password", wide: true, required: true, autocomplete: "off", scope: "flight", focusKey: "flight-key" })}</div><div class="row-actions"><button class="btn btn-primary" type="submit">Save key</button>${remove}</div></form>
     </section>
     <section class="card"><h2>Account</h2>
       <p class="lede">${esc(accountLine(settings.account ? settings.account.name : ""))}</p>

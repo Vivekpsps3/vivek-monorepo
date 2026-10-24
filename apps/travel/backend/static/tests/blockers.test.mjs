@@ -87,7 +87,8 @@ test("TR3.4 a PTO drag ends once, a cadence change keeps typed values, and radio
   assert.match(pto, /paint\(\) \{\s*readDraft\(\)/);
   assert.match(pto, /tabindex="\$\{selected \? "0" : "-1"\}"/);
   assert.match(pto, /ArrowLeft/);
-  assert.match(pto, /DECISIONS\.weekStartsOn/);
+  assert.match(pto, /weekStartsOn\(\)/);
+  assert.equal(pto.includes("DECISIONS.weekStartsOn"), false);
   assert.equal(pto.includes("addDays(date, -date.getDay())"), false);
   assert.match(css, /#pto-board \[role="radio"\]/);
 });
@@ -126,6 +127,77 @@ test("TR2.8 the city error survives a narrow redraw and clears when the city is 
   assert.match(composer, /clearFieldError\(root, "city"\)/);
   assert.match(composer, /applyFieldError\(root, "city", "Name the city\.", \{ focus: false \}\)/);
   assert.match(css, /grid-template-columns:\s*8px 1fr/);
+});
+
+test("TR1.6 a saved key and a saved PTO entry restore focus", () => {
+  const forms = read("modules/actions/forms.mjs");
+  const router = read("modules/router.mjs");
+  const pto = read("modules/views/pto.mjs");
+  const settings = read("modules/views/settings.mjs");
+  assert.match(forms, /state\.focusKey = "flight-key"/);
+  assert.match(settings, /focusKey: "flight-key"/);
+  assert.match(router, /options\.focusKey \|\| state\.focusKey/);
+  assert.match(pto, /state\.focusKey = "pto-name"/);
+  assert.match(pto, /data-focus-key="pto-name"/);
+  assert.match(pto, /querySelector\("\[data-edit-policy\]"\)\?\.focus\(\)/);
+});
+
+test("TR2.1 an error token is added without dropping the other description", () => {
+  const feedback = read("modules/feedback.mjs");
+  const forms = read("modules/actions/forms.mjs");
+  const pto = read("modules/views/pto.mjs");
+  const composer = read("modules/views/composer.mjs");
+  assert.match(feedback, /function clearFormErrors/);
+  assert.match(feedback, /describedIds\(field\)\.filter\(\(id\) => id !== token\)/);
+  assert.match(forms, /clearFormErrors\(form\)/);
+  assert.match(pto, /clearFormErrors\(form\)/);
+  assert.match(composer, /clearFormErrors\(root\)/);
+});
+
+test("TR2.2 a ride has From and To labels", () => {
+  const trip = read("modules/views/trip.mjs");
+  assert.match(trip, /<legend class="add-label">Add a ride<\/legend>/);
+  assert.match(trip, /<label for="\$\{focus\}">From<\/label>/);
+  assert.match(trip, /<label for="\$\{focus\}-to">To<\/label>/);
+});
+
+test("TR4.3 row deletes stay ghost and the dialog confirm stays filled", () => {
+  const css = read("app.css");
+  const html = read("index.html");
+  const trip = read("modules/views/trip.mjs");
+  assert.match(css, /\.btn-ghost\.btn-danger \{[^}]*background:\s*transparent/);
+  assert.match(html, /class="btn btn-danger" data-confirm-ok/);
+  assert.equal(html.includes('class="btn btn-ghost btn-danger" data-confirm-ok'), false);
+  assert.match(trip, /class="row-more"/);
+  assert.match(css, /grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+});
+
+test("TR4.1 theme radios rove and Escape closes More", () => {
+  const html = read("index.html");
+  const ui = read("modules/actions/ui.mjs");
+  const css = read("app.css");
+  assert.equal(html.includes('data-action="theme"'), true);
+  assert.equal(html.includes("aria-pressed"), false);
+  assert.match(ui, /button\.removeAttribute\("aria-pressed"\)/);
+  assert.match(ui, /button\.tabIndex = selected \? 0 : -1/);
+  assert.match(ui, /#more-menu/);
+  assert.match(ui, /data-action=menu/);
+  assert.match(css, /\.theme-switch \.btn\[aria-checked="true"\]/);
+  assert.equal(css.includes('.theme-switch .btn[aria-pressed="true"]'), false);
+});
+
+test("TR2.10 a failed Undo offers Retry and the toast reports the rejection", () => {
+  const ui = read("modules/actions/ui.mjs");
+  const toast = readFileSync(new URL("../../../../../packages/browser/runtime/toast.mjs", import.meta.url), "utf8");
+  assert.match(ui, /const restore = async \(\) =>/);
+  assert.match(ui, /run: restore/);
+  assert.match(toast, /Promise\.resolve\(result\)\.catch/);
+});
+
+test("focus uses the shared ring on keyboard and programmatic focus", () => {
+  const css = read("app.css");
+  assert.match(css, /input:focus/);
+  assert.match(css, /outline:\s*3px solid var\(--focus-ring\)/);
 });
 
 test("client day rounding matches half away from zero", () => {

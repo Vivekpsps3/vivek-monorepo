@@ -3,7 +3,7 @@ import { state } from '../state.mjs';
 import { esc, val, checked, daysText } from '../helpers.mjs';
 import { parseHash } from '../route-parser.mjs';
 import { renderTrip } from '../views/trip.mjs';
-import { dismissToast, fail, saved } from '../feedback.mjs';
+import { clearFormErrors, dismissToast, fail, saved } from '../feedback.mjs';
 import { formError } from '../validate.mjs';
 
 export function readLeg(root, role) {
@@ -95,6 +95,7 @@ function committed(kind, message) {
 
 export async function submit(kind, form, ui) {
   state.error = "";
+  clearFormErrors(form);
   const problem = formError(kind, readForm(form));
   if (problem) {
     fail({ message: problem.message, status: 422 }, { form, field: problem.name });
@@ -349,6 +350,7 @@ async function submitBody(kind, form, ui) {
   }
   if (kind === "flight-key") {
     await api("/api/settings/flightaware", { method: "PUT", body: JSON.stringify({ api_key: val(form, "api_key") || "" }) });
+    state.focusKey = "flight-key";
     committed(kind, "Key saved.");
     await ui.render();
   }

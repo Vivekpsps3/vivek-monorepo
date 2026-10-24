@@ -1,5 +1,5 @@
 import { api } from '../api.mjs';
-import { applyFieldError, clearFieldError, dismissToast, fail, saved } from '../feedback.mjs';
+import { applyFieldError, clearFieldError, clearFormErrors, dismissToast, fail, saved } from '../feedback.mjs';
 import { parseHash } from '../route-parser.mjs';
 import { DECISIONS } from '../decisions.mjs';
 import { legFields } from './new-trip.mjs';
@@ -283,6 +283,7 @@ export function mountComposer() {
   }
 
   async function save() {
+    clearFormErrors(root);
     clearFieldError(root, "city");
     model.cityError = false;
     model.tripName = root.querySelector("[data-trip-name]")?.value ?? model.tripName;

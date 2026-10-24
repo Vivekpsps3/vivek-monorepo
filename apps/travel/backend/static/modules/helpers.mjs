@@ -115,6 +115,7 @@ function inputAttrs(id, name, options) {
     options.min != null && options.min !== "" ? `min="${esc(options.min)}"` : "",
     options.max != null && options.max !== "" ? `max="${esc(options.max)}"` : "",
     options.placeholder ? `placeholder="${esc(options.placeholder)}"` : "",
+    options.focusKey ? `data-focus-key="${esc(options.focusKey)}"` : "",
     options.maxlength ? `maxlength="${esc(options.maxlength)}"` : "",
   ];
   return parts.filter(Boolean).join(" ");

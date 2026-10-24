@@ -24,8 +24,7 @@ export const DECISIONS = {
   settingsInMenu: true,
   /** D8 bottom tab bar below 768px. Set false for a two-row top header. */
   bottomTabs: true,
-  /** D9 week start. 0 is Sunday, 1 is Monday. The month view stays links. */
-  weekStartsOn: 0,
+  /** D9 lives in shared weekStartsOn(): Sunday (0) is the default, Monday is the stored override. */
   /** D10 packing lists stay hidden. */
   showPackingKind: false,
   /** D11 the map is behind Show map below 768px. The places list stays visible. */

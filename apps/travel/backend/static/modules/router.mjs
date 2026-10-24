@@ -49,6 +49,14 @@ export function paint(html, nav, options = {}) {
       heading.focus();
     }
   } else if (options.route) {
+    const key = options.focusKey || state.focusKey;
+    if (key) {
+      const match = root.querySelector(`[data-focus-key="${CSS.escape(key)}"]`);
+      if (match instanceof HTMLElement) {
+        match.focus({ preventScroll: true });
+        state.focusKey = "";
+      }
+    }
     if (state.focusHeading) {
       state.focusHeading = false;
       const pageHeading = root.querySelector("h1");

@@ -42,6 +42,12 @@ function addForm({ kind, id = "", label, focusKey, controls, hidden = "", pair =
   </form>`;
 }
 
+function rowActions(parts) {
+  const items = parts.filter(Boolean);
+  if (items.length <= 2) return `<div class="row-actions">${items.join("")}</div>`;
+  return `<div class="row-actions">${items.slice(0, 2).join("")}<details class="row-more"><summary class="btn btn-ghost btn-sm" aria-label="More actions">⋯</summary>${items.slice(2).join("")}</details></div>`;
+}
+
 function textControl(name, value, { id, placeholder = "", required = false, inputmode = "" } = {}) {
   return `<input id="${esc(id)}" name="${esc(name)}" value="${esc(value ?? "")}"${placeholder ? ` placeholder="${esc(placeholder)}"` : ""} autocomplete="off"${required ? ` required aria-required="true"` : ""}${inputmode ? ` inputmode="${esc(inputmode)}"` : ""}>`;
 }
@@ -90,7 +96,11 @@ function rideRow(item) {
   if (editor) return editor;
   const meta = flightMeta(item);
   const name = transportSummary(item) || labelOf(MODES, item.mode);
-  return `<div class="ride"><div><p class="kicker">${esc(labelOf(MODES, item.mode))}</p><p>${esc(transportSummary(item))}</p>${meta ? `<p class="meta">${esc(meta)}</p>` : ""}</div><div class="row-actions">${flagBox("transport", item, "paid", "Paid")}${iconButton("Edit", "ride", name, `data-action="edit" data-kind="transport" data-id="${item.id}" data-focus-key="edit-transport-${item.id}"`)}${iconButton("Delete", "ride", name, `data-action="delete" data-kind="transport" data-id="${item.id}"`)}</div></div>`;
+  return `<div class="ride"><div><p class="kicker">${esc(labelOf(MODES, item.mode))}</p><p>${esc(transportSummary(item))}</p>${meta ? `<p class="meta">${esc(meta)}</p>` : ""}</div>${rowActions([
+    flagBox("transport", item, "paid", "Paid"),
+    iconButton("Edit", "ride", name, `data-action="edit" data-kind="transport" data-id="${item.id}" data-focus-key="edit-transport-${item.id}"`),
+    iconButton("Delete", "ride", name, `data-action="delete" data-kind="transport" data-id="${item.id}"`),
+  ])}</div>`;
 }
 
 function modeControl(role) {
@@ -103,13 +113,17 @@ function rideAdd(role) {
     return transportForm(null, role);
   }
   const focus = `add-transport-${role}`;
-  return `<form class="add-row is-pair" data-form="transport">
-    <label class="add-label" for="${focus}">Add a ride</label>
-    ${textControl("depart_place", "", { id: focus, placeholder: "From", required: true })}
-    ${textControl("arrive_place", "", { id: `${focus}-to`, placeholder: "To" })}
-    ${modeControl(role)}
-    <button class="btn btn-secondary btn-sm" type="submit">Add</button>
-    ${moreButton("transport", `add-${role}`)}
+  return `<form class="add-row" data-form="transport">
+    <fieldset class="add-row is-pair">
+      <legend class="add-label">Add a ride</legend>
+      <label for="${focus}">From</label>
+      ${textControl("depart_place", "", { id: focus, required: true })}
+      <label for="${focus}-to">To</label>
+      ${textControl("arrive_place", "", { id: `${focus}-to` })}
+      ${modeControl(role)}
+      <button class="btn btn-secondary btn-sm" type="submit">Add</button>
+      ${moreButton("transport", `add-${role}`)}
+    </fieldset>
     <input type="hidden" name="role" value="${esc(role)}"><input type="hidden" name="status" value="planned">
   </form>`;
 }
@@ -131,7 +145,11 @@ function planEditor(item) {
 function planRow(item) {
   const editor = planEditor(item);
   if (editor) return editor;
-  return `<div class="plan"><div><p>${item.start_time ? `<strong>${esc(item.start_time)}</strong> · ` : ""}<span class="chip">${esc(labelOf(KINDS, item.kind))}</span> ${esc(item.title)}</p></div><div class="row-actions">${flagBox("plan", item, "paid", "Paid")}${iconButton("Edit", "plan", item.title, `data-action="edit" data-kind="plan" data-id="${item.id}" data-focus-key="edit-plan-${item.id}"`)}${iconButton("Delete", "plan", item.title, `data-action="delete" data-kind="plan" data-id="${item.id}"`)}</div></div>`;
+  return `<div class="plan"><div><p>${item.start_time ? `<strong>${esc(item.start_time)}</strong> · ` : ""}<span class="chip">${esc(labelOf(KINDS, item.kind))}</span> ${esc(item.title)}</p></div>${rowActions([
+    flagBox("plan", item, "paid", "Paid"),
+    iconButton("Edit", "plan", item.title, `data-action="edit" data-kind="plan" data-id="${item.id}" data-focus-key="edit-plan-${item.id}"`),
+    iconButton("Delete", "plan", item.title, `data-action="delete" data-kind="plan" data-id="${item.id}"`),
+  ])}</div>`;
 }
 
 function parkingEditor(item) {
@@ -152,7 +170,12 @@ function parkingRow(item) {
   const name = item.place_name || "Parking";
   const editor = parkingEditor(item);
   if (editor) return editor;
-  return `<div class="ride"><div>${parkingChip(item)}<p>${esc(name)}</p></div><div class="row-actions">${flagBox("parking", item, "booked", "Booked")}${flagBox("parking", item, "paid", "Paid")}${iconButton("Edit", "parking", name, `data-action="edit" data-kind="parking" data-id="${item.id}" data-focus-key="edit-parking-${item.id}"`)}${iconButton("Delete", "parking", name, `data-action="delete" data-kind="parking" data-id="${item.id}"`)}</div></div>`;
+  return `<div class="ride"><div>${parkingChip(item)}<p>${esc(name)}</p></div>${rowActions([
+    flagBox("parking", item, "booked", "Booked"),
+    flagBox("parking", item, "paid", "Paid"),
+    iconButton("Edit", "parking", name, `data-action="edit" data-kind="parking" data-id="${item.id}" data-focus-key="edit-parking-${item.id}"`),
+    iconButton("Delete", "parking", name, `data-action="delete" data-kind="parking" data-id="${item.id}"`),
+  ])}</div>`;
 }
 
 export function renderTrip(trip, focusDay) {

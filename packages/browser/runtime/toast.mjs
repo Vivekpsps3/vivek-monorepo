@@ -86,8 +86,10 @@ export function createToastLayer({
       button.className = "toast-action";
       button.textContent = action.label;
       button.addEventListener("click", () => {
-        if (typeof action.onClick === "function") action.onClick();
-        else if (action.href) location.assign(action.href);
+        const result = typeof action.onClick === "function"
+          ? action.onClick()
+          : (action.href ? location.assign(action.href) : undefined);
+        Promise.resolve(result).catch((error) => console.error(error));
         dismiss();
       });
       toast.append(button);

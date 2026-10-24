@@ -1,5 +1,6 @@
 /** Date-range model for the new-trip composer. Pointer, touch, and keyboard share it. */
 import { DECISIONS } from "./decisions.mjs";
+import { weekStartsOn } from "../../shared-browser/week.mjs";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -66,10 +67,14 @@ export function dayName(iso, { start = "", end = "" } = {}) {
 }
 
 export function weekdayHeads(narrow = false) {
-  return WEEKDAYS.map((name, index) => ({
-    title: name,
-    label: narrow ? WEEKDAYS_NARROW[index] : WEEKDAYS_SHORT[index],
-  }));
+  const start = weekStartsOn();
+  return Array.from({ length: 7 }, (_, index) => {
+    const day = (start + index) % 7;
+    return {
+      title: WEEKDAYS[day],
+      label: narrow ? WEEKDAYS_NARROW[day] : WEEKDAYS_SHORT[day],
+    };
+  });
 }
 
 export function blankRange(start = "") {
@@ -140,7 +145,7 @@ export function segmentDays(part) {
   return days;
 }
 
-export function moveFocus(iso, key, weekStartsOn = DECISIONS.weekStartsOn) {
+export function moveFocus(iso, key, startOn = weekStartsOn()) {
   if (key === "ArrowLeft") return addDays(iso, -1);
   if (key === "ArrowRight") return addDays(iso, 1);
   if (key === "ArrowUp") return addDays(iso, -7);
@@ -149,7 +154,7 @@ export function moveFocus(iso, key, weekStartsOn = DECISIONS.weekStartsOn) {
   if (key === "PageDown") return shiftMonthIso(iso, 1);
   if (key === "Home" || key === "End") {
     const date = parseIso(iso);
-    const delta = (date.getDay() - weekStartsOn + 7) % 7;
+    const delta = (date.getDay() - startOn + 7) % 7;
     if (key === "Home") return addDays(iso, -delta);
     return addDays(iso, 6 - delta);
   }
@@ -157,12 +162,12 @@ export function moveFocus(iso, key, weekStartsOn = DECISIONS.weekStartsOn) {
   return iso;
 }
 
-export function monthCells(anchor, weekStartsOn = DECISIONS.weekStartsOn) {
+export function monthCells(anchor, startOn = weekStartsOn()) {
   const year = anchor.getFullYear();
   const month = anchor.getMonth();
   const first = new Date(year, month, 1);
   const start = new Date(first);
-  start.setDate(1 - ((first.getDay() - weekStartsOn + 7) % 7));
+  start.setDate(1 - ((first.getDay() - startOn + 7) % 7));
   const cells = [];
   for (let index = 0; index < 42; index += 1) {
     const date = new Date(start);

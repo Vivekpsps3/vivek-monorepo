@@ -1,7 +1,8 @@
 import { api } from '../api.mjs';
 import { state } from '../state.mjs';
 import { esc, banner, head, daysText, prettyRange } from '../helpers.mjs';
-import { applyFieldError, dismissToast, fail, saved } from '../feedback.mjs';
+import { applyFieldError, clearFormErrors, dismissToast, fail, saved } from '../feedback.mjs';
+import { weekStartsOn } from '../../../shared-browser/week.mjs';
 import { formError } from '../validate.mjs';
 import { DECISIONS } from '../decisions.mjs';
 import { actionName } from '../copy.mjs';
@@ -145,6 +146,7 @@ export function mountPto() {
     if (!(form instanceof HTMLFormElement) || form.dataset.form !== "pto-entry") return;
     event.preventDefault();
     event.stopPropagation();
+    clearFormErrors(form);
     const data = Object.fromEntries(new FormData(form).entries());
     const problem = formError("pto-entry", data);
     if (problem) {
@@ -156,6 +158,7 @@ export function mountPto() {
       await api("/api/pto/entries", { method: "POST", body: JSON.stringify(body) });
       dismissToast("pto-entry");
       saved("Time off added.");
+      state.focusKey = "pto-name";
       location.hash = "#/pto";
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     } catch (error) {
@@ -167,6 +170,7 @@ export function mountPto() {
     await api("/api/pto/entries", { method: "POST", body: JSON.stringify(body) });
     dismissToast("pto-entry");
     saved("Time off added.");
+    state.focusKey = "pto-name";
     location.hash = "#/pto";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   }
@@ -262,7 +266,7 @@ export function mountPto() {
     const [start, end] = draft.range ? ordered(draft.range.start, draft.range.end) : ["", ""];
     return `<form class="add-row is-pair" data-form="pto-entry">
       <label class="add-label" for="pto-name">Add time off</label>
-      <input id="pto-name" name="label" autocomplete="off" placeholder="Name">
+      <input id="pto-name" name="label" autocomplete="off" placeholder="Name" data-focus-key="pto-name">
       <label class="add-label" for="pto-start">First day</label>
       <input id="pto-start" name="start_date" type="date" value="${esc(start)}">
       <label class="add-label" for="pto-end">Last day</label>
@@ -290,7 +294,7 @@ export function mountPto() {
     const groups = [];
     days.forEach((day) => {
       const date = parse(day.key);
-      const key = iso(addDays(date, -((date.getDay() - DECISIONS.weekStartsOn + 7) % 7)));
+      const key = iso(addDays(date, -((date.getDay() - weekStartsOn() + 7) % 7)));
       const last = groups[groups.length - 1];
       if (!last || last.key !== key) groups.push({ key, end: day.key, balance: day.balance, used: day.used });
       else {
@@ -312,6 +316,7 @@ export function mountPto() {
 
   async function savePolicy(button) {
     const form = root.querySelector("[data-pto-form]");
+    clearFormErrors(form);
     const data = {
       balance_days: form.elements.balance_days.value,
       balance_as_of: form.elements.balance_as_of.value,
@@ -350,10 +355,13 @@ export function mountPto() {
       dismissToast("pto-policy");
       saved("PTO settings saved.");
       paint();
+      root.querySelector("[data-edit-policy]")?.focus();
     } catch (error) {
       button.textContent = "Save";
       button.disabled = false;
-      fail({ message: "Couldn't save your PTO settings.", status: error?.status || 0 }, {
+      const reported = error?.status === 422 ? error : { message: "Couldn't save your PTO settings.", status: error?.status || 0 };
+      fail(reported, {
+        form,
         retry: { key: "pto-policy", run: () => savePolicy(button) },
       });
     }
