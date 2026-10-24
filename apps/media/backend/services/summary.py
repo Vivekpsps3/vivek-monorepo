@@ -59,7 +59,26 @@ def build_summary(db: Session, user_id: int) -> dict:
         "recent": 7,
     }
     upcoming.sort(key=lambda item: (order.get(item["when"], 9), item["release_on"] or "9999"))
-    next_episodes = []
+    return {
+        "currently": currently[:6],
+        "recent_reviews": recent_reviews,
+        "upcoming": upcoming[:6],
+        "next_episodes": next_episodes(db, user_id, entries),
+        "counts": {
+            "library": len(entries),
+            "in_progress": len(currently),
+            "anticipated": sum(
+                1 for entry in entries if entry.anticipated or entry.status == "anticipating"
+            ),
+        },
+    }
+
+
+def next_episodes(db: Session, user_id: int, entries: list[UserEntry] | None = None) -> list:
+    """Next episode for each show the reader is in, wants, or is anticipating."""
+    if entries is None:
+        entries = db.query(UserEntry).filter(UserEntry.user_id == user_id).all()
+    found = []
     for entry in entries:
         if entry.catalog.kind != "tv" or entry.status not in {
             "in_progress",
@@ -74,7 +93,7 @@ def build_summary(db: Session, user_id: int) -> dict:
         if chosen is None:
             continue
         aired = bool(chosen.get("released"))
-        next_episodes.append(
+        found.append(
             {
                 "entry_id": entry.id,
                 "episode_id": chosen["id"],
@@ -87,19 +106,7 @@ def build_summary(db: Session, user_id: int) -> dict:
                 "state": "next" if aired else "upcoming",
             }
         )
-    return {
-        "currently": currently[:6],
-        "recent_reviews": recent_reviews,
-        "upcoming": upcoming[:6],
-        "next_episodes": next_episodes[:4],
-        "counts": {
-            "library": len(entries),
-            "in_progress": len(currently),
-            "anticipated": sum(
-                1 for entry in entries if entry.anticipated or entry.status == "anticipating"
-            ),
-        },
-    }
+    return found[:4]
 
 
 def card_with_progress(entry: UserEntry) -> dict:

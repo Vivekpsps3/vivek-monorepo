@@ -40,21 +40,21 @@ def provider_status() -> dict[str, str]:
 SEARCH_TIMEOUT = 3.0
 HEALTH_TTL = 60.0
 _HEALTH: dict[str, tuple[float, str]] = {}
-_HEALTH_TEST = ""
 
 
-def sticky_status(name: str, state: str) -> str:
-    """Keep the last provider status for a minute so a flap doesn't change the line."""
-    global _HEALTH_TEST
-    current = os.environ.get("PYTEST_CURRENT_TEST", "")
-    if current != _HEALTH_TEST:
-        _HEALTH.clear()
-        _HEALTH_TEST = current
-    now = time.monotonic()
-    row = _HEALTH.get(name)
-    if row is not None and now - row[0] < HEALTH_TTL:
-        return row[1]
-    _HEALTH[name] = (now, state)
+def sticky_status(name: str, state: str, now: float | None = None) -> str:
+    """Remember this provider's line, but never contradict the request in hand.
+
+    The clock is an argument so tests can move time without reading the
+    process environment. A cached error must not stay up once this call
+    returned rows, and a cached ok must not stay up once this call failed.
+    """
+    moment = time.monotonic() if now is None else now
+    previous = _HEALTH.get(name)
+    if previous is not None and moment - previous[0] < HEALTH_TTL and previous[1] == state:
+        _HEALTH[name] = (moment, state)
+        return state
+    _HEALTH[name] = (moment, state)
     return state
 
 

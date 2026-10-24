@@ -819,6 +819,16 @@ def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None
                 .filter(MusicAlbum.catalog_id == catalog.id, MusicAlbum.source_id == source_id)
                 .one_or_none()
             )
+        raw_year = item.get("year")
+        if raw_year in (None, ""):
+            year = None
+        else:
+            try:
+                year = _year(raw_year)
+            except HTTPException:
+                # MusicBrainz dates like "0000" are not a reason to drop the
+                # rest of the discography. Skip this release and keep going.
+                continue
         if row is None:
             row = MusicAlbum(
                 catalog_id=catalog.id, title=title, source_id=source_id, position=index
@@ -826,7 +836,6 @@ def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None
             db.add(row)
         row.title = title
         row.position = index
-        year = _year(item.get("year"))
         if year is not None:
             row.year = year
         artwork = item.get("artwork_url")

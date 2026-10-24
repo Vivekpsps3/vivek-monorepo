@@ -124,11 +124,6 @@ function trimToasts() {
 function pushToast({ message, kind = "status", action = null, key = "", persist = false }) {
   const region = kind === "alert" ? toastAlerts : toasts;
   if (!region || !message) return;
-  // A late failure can land after the reader has opened another item.
-  // That toast belongs to the item it names, so it does not appear here.
-  const itemKey = ITEM_TOAST_KEY.exec(key || "");
-  const openItem = itemIdFromHash(location.hash);
-  if (itemKey && openItem && itemKey[1] !== openItem) return;
   if (key) dismissToast(key);
   const order = ++toastSerial;
   const toast = document.createElement("div");
@@ -209,12 +204,40 @@ function writeTimedOut(error) {
   return error?.name === "AbortError" || error?.name === "TimeoutError";
 }
 
-function showWriteTimeout(key, retry) {
-  toast(NOT_SAVED_LABEL, "alert", {
-    label: "Retry",
-    persist: true,
+function visibleItemTitle(id) {
+  if (itemIdFromHash(location.hash) !== String(id)) return "";
+  return document.querySelector("article h1")?.textContent?.trim() || "";
+}
+
+function dismissItemSave(field, id) {
+  dismissToast(`${field}:${id}`);
+  dismissToast(`save-failed:${field}:${id}`);
+}
+
+// A failure stays tied to the item it was saving. If that item is still open,
+// the toast uses the field key (`rating:12`) so a later success clears it and
+// opening a different item retires it. If the reader has already moved on,
+// the key is `save-failed:` so item-change retirement — which only removes
+// toasts already on screen — cannot drop a failure that has not been shown.
+// #15's createToastLayer can absorb this wrapper; the layer itself stays
+// item-agnostic.
+function reportItemSaveFailure({ id, field, title, error, message, retry }) {
+  if (error?.status === 401 || error?.status === 403) {
+    fail(error);
+    return;
+  }
+  const here = itemIdFromHash(location.hash) === String(id);
+  const key = here ? `${field}:${id}` : `save-failed:${field}:${id}`;
+  dismissItemSave(field, id);
+  pushToast({
+    message: here ? message : `Save failed for ${title || "this item"}.`,
+    kind: "alert",
     key,
-    onClick: () => { void retry(); },
+    persist: true,
+    action: {
+      label: "Retry",
+      onClick: () => { void retry(); },
+    },
   });
 }
 
@@ -226,66 +249,59 @@ function patchOpinion(id, body) {
   });
 }
 
-async function saveStatus(id, status) {
-  const key = `status:${id}`;
+async function saveStatus(id, status, title = visibleItemTitle(id)) {
   try {
     await patchOpinion(id, { status, anticipated: status === "anticipating" });
-    dismissToast(key);
+    dismissItemSave("status", id);
     await render();
   } catch (error) {
-    if (writeTimedOut(error)) {
-      showWriteTimeout(key, () => saveStatus(id, status));
-      return;
-    }
-    fail(error, {
-      label: "Retry",
-      persist: true,
-      key,
-      onClick: () => { void saveStatus(id, status); },
+    reportItemSaveFailure({
+      id,
+      field: "status",
+      title,
+      error,
+      message: writeTimedOut(error) ? NOT_SAVED_LABEL : (error?.message || "Something went wrong."),
+      retry: () => saveStatus(id, status, title),
     });
   }
 }
 
-async function saveFlag(id, flag, on) {
-  const key = `${flag}:${id}`;
+async function saveFlag(id, flag, on, title = visibleItemTitle(id)) {
   try {
     await patchOpinion(id, { [flag]: on });
-    dismissToast(key);
+    dismissItemSave(flag, id);
     await render();
   } catch (error) {
-    if (writeTimedOut(error)) {
-      showWriteTimeout(key, () => saveFlag(id, flag, on));
-      return;
-    }
-    fail(error, {
-      label: "Retry",
-      persist: true,
-      key,
-      onClick: () => { void saveFlag(id, flag, on); },
+    reportItemSaveFailure({
+      id,
+      field: flag,
+      title,
+      error,
+      message: writeTimedOut(error) ? NOT_SAVED_LABEL : (error?.message || "Something went wrong."),
+      retry: () => saveFlag(id, flag, on, title),
     });
   }
 }
 
-async function saveRating(id, rating) {
-  const key = `rating:${id}`;
+async function saveRating(id, rating, title = visibleItemTitle(id)) {
   const status = document.querySelector("#score-status");
   const cancel = armSaving(status);
   try {
     await patchOpinion(id, { rating });
     cancel();
-    dismissToast(key);
+    dismissItemSave("rating", id);
+    document.querySelector(`.opinion[data-id="${id}"] .score`)?.removeAttribute("data-pending-save");
     showSaved(status);
   } catch (error) {
     cancel();
-    if (writeTimedOut(error)) {
-      showWriteTimeout(key, () => saveRating(id, rating));
-      return;
-    }
-    fail(error, {
-      label: "Retry",
-      persist: true,
-      key,
-      onClick: () => { void saveRating(id, rating); },
+    document.querySelector(`.opinion[data-id="${id}"] .score`)?.setAttribute("data-pending-save", "true");
+    reportItemSaveFailure({
+      id,
+      field: "rating",
+      title,
+      error,
+      message: writeTimedOut(error) ? NOT_SAVED_LABEL : (error?.message || "Something went wrong."),
+      retry: () => saveRating(id, rating, title),
     });
   }
 }
@@ -712,10 +728,12 @@ function libraryPage(kind, status, q, sort, body, resume, count, fav) {
     <div class="library-toolbar" id="library-toolbar">
       <label class="grow">Search your library <input id="library-q" type="search" value="${esc(q)}" placeholder="Filter by title or creator" autocomplete="off"></label>
       <label class="sort-field">Sort <select id="library-sort" data-library-sort aria-label="Sort">${options(sorts, sort)}</select></label>
-      <a class="flag${fav ? " is-on" : ""}" href="${libraryQuery(kind, status, q, sort, !fav)}" ${fav ? `aria-current="true"` : ""}>★ Favorites</a>
+      <div class="chip-row" role="group" aria-label="Favorites">
+        <button type="button" class="flag${fav ? " is-on" : ""}" data-library-fav aria-pressed="${fav ? "true" : "false"}">★ Favorites</button>
+      </div>
     </div>
-    <div class="chip-row" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, status, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
-    <div class="chip-row status-wide">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" ${item.value === status ? `aria-current="true"` : ""} href="${libraryQuery(kind, item.value, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
+    <div class="chip-row" role="group" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, status, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
+    <div class="chip-row status-wide" role="group" aria-label="Status">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" ${item.value === status ? `aria-current="true"` : ""} href="${libraryQuery(kind, item.value, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
     <label class="status-narrow">Status <select id="library-status" data-library-status>${options(statuses.map(item => ({ value: item.value, label: item.label === "All" ? "All" : item.label })), status)}</select></label>
     ${continuePoint(resume)}
     <div data-library-body>${body}</div>
@@ -955,36 +973,45 @@ async function viewItem(id, ticket, forcedSeason = null) {
   }
   const review = chooseReview(entry.review, entry.review_updated_at, readDraftRecord(id));
   const progress = entry.kind === "book" || entry.kind === "game";
+  const scoreText = entry.rating == null ? "Unrated" : ratingText(entry.rating).replace("/10", " / 10");
   commitView(`
     <article class="detail">
-      <div class="poster poster-lg">${poster(entry)}</div>
-      <div>
-        <p class="eyebrow">${esc(kindLabel(entry.kind))}${entry.catalog.source === "manual" ? " · Added manually" : ""}</p>
-        <h1>${esc(entry.title)}</h1>
-        <p class="lede">${esc([entry.creator, entry.year].filter(Boolean).join(" · "))}</p>
+      <div class="detail-head">
+        <div class="poster poster-lg">${poster(entry)}</div>
+        <div class="detail-titles">
+          <p class="eyebrow">${esc(kindLabel(entry.kind))}${entry.catalog.source === "manual" ? " · Added manually" : ""}</p>
+          <h1>${esc(entry.title)}</h1>
+          <p class="lede">${esc([entry.creator, entry.year].filter(Boolean).join(" · "))}</p>
+        </div>
+      </div>
+      <div class="detail-main">
         ${overviewHtml(entry.catalog.overview)}
         ${externalRatings(entry.catalog.external_ratings)}
         ${releaseLine(entry.releases)}
         <div class="opinion" data-id="${entry.id}" data-favorite="${entry.favorite ? "true" : "false"}" data-anticipated="${entry.anticipated ? "true" : "false"}">
-          <div class="field-label">Status <span id="status-save" class="progress-status" role="status"></span></div>
-          <div class="status-row" role="radiogroup" aria-label="Status">${statusOptions(entry.kind).map(opt => {
-            const on = opt.value === entry.status;
-            return `<button type="button" role="radio" class="status-mark${on ? " is-on" : ""}" aria-checked="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`;
-          }).join("")}</div>
-          <div class="field-label">Your score <span id="score-value">${esc(entry.rating == null ? "Unrated" : `${ratingText(entry.rating).replace("/10", " / 10")}`)}</span> <span id="score-status" class="progress-status" role="status"></span></div>
-          <div class="score-row">
-            ${scoreMarks(entry.rating, "Your score")}
-            <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}" aria-label="Favorite">${entry.favorite ? "★ Favorite" : "☆ Favorite"}</button>
-          </div>
-          ${progress ? progressField(entry) : ""}
-          <div class="note-block">
+          <section class="detail-section">
+            <div class="field-label">Status <span id="status-save" class="progress-status" role="status"></span></div>
+            <div class="status-row" role="radiogroup" aria-label="Status">${statusOptions(entry.kind).map(opt => {
+              const on = opt.value === entry.status;
+              return `<button type="button" role="radio" class="status-mark${on ? " is-on" : ""}" aria-checked="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`;
+            }).join("")}</div>
+          </section>
+          <section class="detail-section">
+            <div class="field-label">Your score <span id="score-value" class="value">${esc(scoreText)}</span> <span id="score-status" class="progress-status" role="status"></span></div>
+            <div class="score-row">
+              ${scoreMarks(entry.rating, "Your score")}
+              <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}" aria-label="Favorite">${entry.favorite ? "★ Favorite" : "☆ Favorite"}</button>
+            </div>
+          </section>
+          ${progress ? `<section class="detail-section">${progressField(entry)}</section>` : ""}
+          <section class="detail-section note-block">
             <label for="note">Your note</label>
             <textarea id="note" name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" data-spoiler-saved="${entry.review_spoiler ? "true" : "false"}" rows="4" aria-label="Note">${esc(review.text)}</textarea>
             <label class="spoiler"><input type="checkbox" data-spoiler ${entry.review_spoiler ? "checked" : ""}> Contains spoilers</label>
             <p class="meta" data-note-count>${esc(noteCountText(review.text))}</p>
             <p id="note-status" class="progress-status" role="status"></p>
             ${review.restore ? `<p id="note-draft" class="save-draft">${esc(NOTE_RESTORE_LABEL)} <button type="button" data-restore-note="${entry.id}">Restore</button> <button type="button" data-discard-note="${entry.id}">Discard</button></p>` : ""}
-          </div>
+          </section>
         </div>
         ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
@@ -1097,7 +1124,7 @@ function experienceBlock(entry) {
   const today = new Date();
   const finished = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return `
-    <section class="exps">
+    <section class="exps detail-section">
       <h2>History</h2>
       ${list}
       <button type="button" class="flag" data-action="toggle-log" data-focus-key="again" data-id="${entry.id}">Log a ${esc(logVerb(entry.kind))}</button>
@@ -1121,7 +1148,7 @@ function showEpisodes(entry, seasonNumber) {
     .sort((a, b) => a.episode_number - b.episode_number || a.id - b.id);
   const tabs = seasons.map(item => {
     const selected = item.season_number === seasonNumber;
-    return `<button type="button" role="tab" class="season-chip${selected ? " is-current" : ""}" id="season-tab-${item.season_number}" data-season-jump data-id="${entry.id}" data-season="${item.season_number}" aria-selected="${selected ? "true" : "false"}" tabindex="${selected ? "0" : "-1"}" aria-controls="season-panel">${esc(seasonLabel(item.season_number))}</button>`;
+    return `<button type="button" role="tab" class="season-chip${selected ? " is-current" : ""}" id="season-tab-${item.season_number}" data-season-jump data-id="${entry.id}" data-season="${item.season_number}" data-focus-key="season:${item.season_number}" aria-selected="${selected ? "true" : "false"}" tabindex="${selected ? "0" : "-1"}" aria-controls="season-panel">${esc(seasonLabel(item.season_number))}</button>`;
   }).join("");
   const rating = seasons.find(item => item.season_number === seasonNumber);
   const watched = rating?.watched ? "true" : "false";
@@ -1141,11 +1168,11 @@ function showEpisodes(entry, seasonNumber) {
   const next = nextLabel && upcoming
     ? `<button type="button" class="btn btn-primary" data-action="mark-next" data-id="${entry.id}" data-episode="${upcoming.id}" data-label="${esc(episodeCode(upcoming.season_number, upcoming.episode_number))}">${esc(nextLabel)}</button>`
     : "";
-  return `<section class="episodes-section">
+  return `<section class="episodes-section detail-section">
     <p class="meta">${esc(caughtUpText(show))}</p>
     ${next}
     <div class="season-strip" role="tablist" aria-label="Seasons">${tabs}</div>
-    <div role="tabpanel" id="season-panel">${seasonBox}<ol class="episode-tiles">${tiles}</ol></div>
+    <div role="tabpanel" id="season-panel" aria-labelledby="season-tab-${seasonNumber}">${seasonBox}<ol class="episode-tiles">${tiles}</ol></div>
   </section>`;
 }
 
@@ -1188,7 +1215,7 @@ function musicBlock(entry) {
       </ol>
     </li>`).join("");
   const partial = music.partial ? `<p class="quiet">Some albums are still loading. Check back in a minute.</p>` : "";
-  return `
+    return `
     <section class="discog">
       ${partial}
       <ul class="covers">${albums}</ul>
@@ -1484,6 +1511,20 @@ document.addEventListener("click", async event => {
     setTheme(theme.dataset.themeValue);
     return;
   }
+  const libraryFav = target.closest("[data-library-fav]");
+  if (libraryFav) {
+    keepButtonClick(event, target);
+    const params = route().params;
+    const pressed = libraryFav.getAttribute("aria-pressed") === "true";
+    location.hash = libraryQuery(
+      params.get("kind") || "",
+      params.get("status") || "",
+      params.get("q") || "",
+      params.get("sort") || "activity",
+      !pressed,
+    );
+    return;
+  }
   const mark = target.closest(".score [data-score]");
   if (mark) {
     keepButtonClick(event, target);
@@ -1497,7 +1538,7 @@ document.addEventListener("click", async event => {
       const fraction = rect.width ? (event.clientX - rect.left) / rect.width : 1;
       next = pointerScore(mark.dataset.score, fraction);
     }
-    if (next === current) return;
+    if (next === current && group.dataset.pendingSave !== "true") return;
     const painted = paintScore(group, next);
     const season = painted.closest("[data-season-marks]");
     const track = painted.closest("[data-track-row]");
@@ -2133,27 +2174,24 @@ async function commitNote(id) {
   const spoiler = spoilerBox instanceof HTMLInputElement ? spoilerBox.checked : false;
   if (sent === (box.dataset.saved ?? "") && String(spoiler) === (box.dataset.spoilerSaved || "false")) return;
   const base = box.dataset.reviewBase ?? "";
+  const title = visibleItemTitle(id) || "this item";
+  const body = {
+    review: sent,
+    review_base: base,
+    ...(String(spoiler) === (box.dataset.spoilerSaved || "false") ? {} : { review_spoiler: spoiler }),
+  };
   const status = document.querySelector("#note-status");
   const stopSaving = armSaving(status);
-  const retry = {
-    label: "Retry",
-    persist: true,
-    key: `note:${id}`,
-    onClick: () => { const again = noteBox(id); if (again) void saveNote(again); },
+  const retry = () => {
+    const again = noteBox(id);
+    if (again && itemIdFromHash(location.hash) === String(id)) return saveNote(again);
+    return resendNote(id, body, title);
   };
   try {
-    const updated = await api(`/api/entries/${id}`, {
-      method: "PATCH",
-      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
-      body: JSON.stringify({
-        review: sent,
-        review_base: base,
-        ...(String(spoiler) === (box.dataset.spoilerSaved || "false") ? {} : { review_spoiler: spoiler }),
-      }),
-    });
+    const updated = await patchOpinion(id, body);
     stopSaving();
     if (readDraftRecord(id)?.text === sent) clearDraft(id);
-    dismissToast(`note:${id}`);
+    dismissItemSave("note", id);
     dismissToast(`note-conflict:${id}`);
     if (String(noteOutcome?.id) === String(id)) noteOutcome = null;
     const live = noteBox(id);
@@ -2178,16 +2216,39 @@ async function commitNote(id) {
       });
       return;
     }
-    // fail() drops TimeoutError and AbortError, so a stalled save has to
-    // surface here or the chain would unblock with no Retry toast.
-    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
     noteOutcome = { id: String(id), kind: "failure" };
     showNoteFailure(document.querySelector("#note-status"));
-    if (timedOut) {
-      toast(NETWORK_MESSAGE, "alert", retry);
-      return;
+    reportItemSaveFailure({
+      id,
+      field: "note",
+      title,
+      error,
+      message: writeTimedOut(error) ? NETWORK_MESSAGE : (error?.message || "Something went wrong."),
+      retry,
+    });
+  }
+}
+
+async function resendNote(id, body, title) {
+  try {
+    await patchOpinion(id, body);
+    dismissItemSave("note", id);
+    if (String(noteOutcome?.id) === String(id)) noteOutcome = null;
+    const live = noteBox(id);
+    if (live && live.value === body.review) {
+      delete live.dataset.conflict;
+      live.dataset.saved = body.review;
+      live.dataset.reviewBase = "";
     }
-    fail(error, retry);
+  } catch (error) {
+    reportItemSaveFailure({
+      id,
+      field: "note",
+      title,
+      error,
+      message: writeTimedOut(error) ? NETWORK_MESSAGE : (error?.message || "Something went wrong."),
+      retry: () => resendNote(id, body, title),
+    });
   }
 }
 
@@ -2417,11 +2478,13 @@ function failProgress(payload, message, keepDraft = true) {
   }
   if (payload.input?.isConnected) setProgressStatus(keepDraft ? NOT_SAVED_LABEL : message, true, !keepDraft);
   if (keepDraft) {
-    toast(PROGRESS_TOAST, "alert", {
-      label: "Retry",
-      persist: true,
-      key: `progress:${payload.id}`,
-      onClick: () => { void retryProgress(payload); },
+    reportItemSaveFailure({
+      id: payload.id,
+      field: "progress",
+      title: payload.title || visibleItemTitle(payload.id),
+      error: { message },
+      message: PROGRESS_TOAST,
+      retry: () => retryProgress(payload),
     });
   }
 }
@@ -2434,7 +2497,7 @@ function saveProgress() {
   if (progressQueuedKey === pending) return progressChain;
   if (!progressQueuedKey && snap.input.dataset.saved === key) return progressChain;
   progressQueuedKey = pending;
-  const payload = { id: snap.id, value: snap.value, unit: snap.unit, key, input: snap.input };
+  const payload = { id: snap.id, value: snap.value, unit: snap.unit, key, input: snap.input, title: visibleItemTitle(snap.id) };
   return trackProgress(pending, progressChain.then(() => commitProgress(payload)));
 }
 
@@ -2459,7 +2522,7 @@ async function commitProgress(payload) {
     });
     stopSaving();
     clearProgressDraft(payload.id);
-    dismissToast(`progress:${payload.id}`);
+    dismissItemSave("progress", payload.id);
     document.querySelector(`[data-restore-progress="${payload.id}"]`)?.closest("#progress-draft")?.remove();
     if (payload.input.isConnected) {
       payload.input.dataset.saved = payload.key;
@@ -2502,6 +2565,24 @@ document.addEventListener("keydown", event => {
       event.preventDefault();
       links.forEach(link => { link.tabIndex = link === next ? 0 : -1; });
       next.focus();
+    }
+    return;
+  }
+  const tab = event.target instanceof Element ? event.target.closest("[role='tab']") : null;
+  const tabList = tab?.closest("[role='tablist']");
+  if (tab && tabList && ["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) {
+    const tabs = [...tabList.querySelectorAll("[role='tab']")];
+    const index = tabs.indexOf(tab);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    if (nextTab instanceof HTMLElement) {
+      nextTab.focus();
+      nextTab.click();
     }
     return;
   }

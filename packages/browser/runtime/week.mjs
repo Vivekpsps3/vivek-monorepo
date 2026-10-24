@@ -17,3 +17,11 @@ export function writeWeekStart(value) {
   try { localStorage.setItem(WEEK_START_KEY, next); } catch { /* private mode */ }
   return Number(next);
 }
+
+/** Rotate a Sunday-first label list so index 0 is the suite week start. */
+export function rotateWeekLabels(labels) {
+  const names = [...labels];
+  const count = names.length || 1;
+  const start = ((weekStartsOn() % count) + count) % count;
+  return [...names.slice(start), ...names.slice(0, start)];
+}

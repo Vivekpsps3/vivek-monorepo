@@ -1,5 +1,9 @@
 import { api } from '../api.mjs';
-import { weekStartsOn } from '../../../shared-browser/week.mjs';
+import { rotateWeekLabels, weekStartsOn } from '../../../shared-browser/week.mjs';
+
+export function composerDowLabels() {
+  return rotateWeekLabels(['S', 'M', 'T', 'W', 'T', 'F', 'S']);
+}
 
 const COLORS = ['var(--accent)', '#c4a574', '#7d9a78', '#8d7ea8', '#c47c6a'];
 
@@ -131,7 +135,7 @@ export function mountComposer() {
       const outside = date.getMonth() !== month ? ' is-out' : '';
       days.push(`<button type="button" class="composer-day${outside}" data-day="${iso(date)}">${date.getDate()}</button>`);
     }
-    const heads = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => `<span>${day}</span>`).join('');
+    const heads = composerDowLabels().map((day) => `<span>${day}</span>`).join('');
     return `<section><h2>${escapeAttr(monthLabel(monthDate))}</h2><div class="composer-dow">${heads}</div><div class="composer-grid">${days.join('')}</div></section>`;
   }
 

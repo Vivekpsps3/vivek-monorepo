@@ -8,7 +8,7 @@ from apps.media.backend.models import Episode, Experience
 from apps.media.backend.services import providers, records
 from apps.media.backend.services.calendar import build_calendar
 from apps.media.backend.services.providers import UA
-from apps.media.backend.services.summary import build_summary
+from apps.media.backend.services.summary import build_summary, next_episodes
 from apps.media.backend.services.validate import clean_text
 
 router = APIRouter()
@@ -51,10 +51,11 @@ def library(
         sort = "activity"
     user_id = require_actor().id
     rows = records.list_library(db, user_id, kind, status, q, sort)
-    summary = build_summary(db, user_id)
+    # The Continue rail is the only summary slice the library paints.
+    # Chip and sort changes must not rebuild upcoming, reviews, and counts.
     return {
         "items": [records.entry_card(row) for row in rows],
-        "continue": summary["next_episodes"],
+        "continue": next_episodes(db, user_id),
     }
 
 
