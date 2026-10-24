@@ -18,7 +18,7 @@
       <ui-card>
         <form class="login-form" novalidate (ngSubmit)="submit()">
           @if (inviteToken) {
-            <p class="password-hint">{{ inviteName || 'Your account' }} signs in as <strong>{{ username || '…' }}</strong></p>
+            <p id="signup-invite-identity" class="password-hint">{{ inviteName || 'Your account' }} signs in as <strong>{{ username || '…' }}</strong></p>
           } @else if (!policy) {
             <p class="password-hint">Checking whether signup is open.</p>
           } @else if (policy.mode === 'closed') {
@@ -60,7 +60,12 @@
             @if (progressNote) {
               <p class="password-hint" role="status">{{ progressNote }}</p>
             }
-            <ui-button type="submit" [disabled]="loading || (!!inviteToken && !username)" [busy]="loading">
+            <ui-button
+              type="submit"
+              [disabled]="loading"
+              [ariaDisabled]="!!inviteToken && !username"
+              [describedBy]="inviteToken && !username ? 'signup-invite-identity' : undefined"
+              [busy]="loading">
               {{ submitLabel() }}
             </ui-button>
           } @else if (error) {

@@ -52,6 +52,7 @@ export class EncryptedStoreService {
       deleteTransactions: ids => this.deleteTransactions(ids),
       sessionToken: () => this.generation,
       assertSession: generation => this.assertSession(generation),
+      runRecordUpdate: (collection, id, generation, update) => this.runRecordUpdate(collection, id, generation, update),
     });
     this.brokerageStages = new EncryptedBrokerageStageStore({
       ensureLoaded: () => this.ensureLoaded(),
@@ -67,9 +68,10 @@ export class EncryptedStoreService {
       upsertBrokerageAccount: body => this.upsertBrokerageAccount(body),
       getHoldings: () => this.getHoldings(),
       updateHolding: (id, row, generation) => this.updateHolding(id, row, generation),
-      removeHolding: id => this.remove('holdings', id),
+      removeHolding: id => this.deleteHolding(id),
       sessionToken: () => this.generation,
       assertSession: generation => this.assertSession(generation),
+      runRecordUpdate: (collection, id, generation, update) => this.runRecordUpdate(collection, id, generation, update),
     });
   }
 
@@ -111,31 +113,38 @@ export class EncryptedStoreService {
 
   async updateTransaction(id: number, tx: Partial<Transaction>, options?: VaultWriteOptions): Promise<Transaction> {
     const generation = this.generation;
-    await this.ensureLoaded();
-    this.assertSession(generation);
-    const current = this.list<Transaction>('transactions').find(t => t.id === id);
-    if (!current) throw new Error('Transaction not found');
-    const contentFields: Array<keyof Transaction> = [
-      'date', 'type', 'category', 'amount', 'description', 'merchant', 'kind', 'account_display',
-      'bank_account_key', 'source_bank', 'source_account_mask', 'reviewed', 'review_reason',
-    ];
-    const edited = current.source === 'import' && contentFields.some(
-      key => tx[key] !== undefined && tx[key] !== current[key]
-    );
-    return this.upsert('transactions', {
-      ...current,
-      ...tx,
-      ...(edited ? { import_edited: true } : {}),
-      id,
-    }, undefined, generation, options);
+    return this.runRecordUpdate('transactions', id, generation, async () => {
+      await this.ensureLoaded();
+      this.assertSession(generation);
+      const current = this.list<Transaction>('transactions').find(t => t.id === id);
+      if (!current) throw new Error('Transaction not found');
+      const contentFields: Array<keyof Transaction> = [
+        'date', 'type', 'category', 'amount', 'description', 'merchant', 'kind', 'account_display',
+        'bank_account_key', 'source_bank', 'source_account_mask', 'reviewed', 'review_reason',
+      ];
+      const edited = current.source === 'import' && contentFields.some(
+        key => tx[key] !== undefined && tx[key] !== current[key]
+      );
+      return this.upsert('transactions', {
+        ...current,
+        ...tx,
+        ...(edited ? { import_edited: true } : {}),
+        id,
+      }, undefined, generation, options);
+    });
   }
 
   async deleteTransaction(id: number, options?: VaultWriteOptions): Promise<void> {
-    return this.remove('transactions', id, options);
+    const generation = this.generation;
+    return this.runRecordUpdate('transactions', id, generation, () => this.remove('transactions', id, options));
   }
 
   async deleteTransactions(ids: number[]): Promise<void> {
-    await this.persistence.deleteMany('transactions', ids);
+    const generation = this.generation;
+    const uniqueIds = [...new Set(ids)];
+    if (!uniqueIds.length) return;
+    await this.withRecordUpdates('transactions', uniqueIds, generation,
+      () => this.persistence.deleteMany('transactions', uniqueIds));
   }
 
   async getBankAccounts(): Promise<BankAccountRecord[]> {
@@ -145,26 +154,36 @@ export class EncryptedStoreService {
 
   async upsertBankAccount(body: Omit<BankAccountRecord, 'id'> & { id?: number }): Promise<BankAccountRecord> {
     const generation = this.generation;
-    const accounts = await this.getBankAccounts();
+    const write = async () => {
+      const accounts = await this.getBankAccounts();
+      const suppliedKey = String(body.account_key || '').trim();
+      const current = body.id != null
+        ? accounts.find(row => Number(row.id) === Number(body.id))
+        : suppliedKey
+          ? accounts.find(row => row.bank_slug === body.bank_slug && row.account_key === suppliedKey)
+          : undefined;
+      if (body.id != null && !current) throw new Error('Bank account mapping not found');
+      if (current && current.bank_slug !== body.bank_slug) throw new Error('Bank account identity does not match this mapping');
+      if (current?.account_key && suppliedKey && current.account_key !== suppliedKey) {
+        throw new Error('Bank account identity does not match this mapping');
+      }
+      this.assertSession(generation);
+      const saved = await this.upsert('bank_accounts', {
+        ...current,
+        ...body,
+        account_key: current?.account_key || body.account_key || randomClientId('bank-account'),
+        id: body.id ?? current?.id,
+      }, undefined, generation);
+      return { ...saved, id: Number(saved.id) };
+    };
+    if (body.id != null) return this.runRecordUpdate('bank_accounts', Number(body.id), generation, write);
     const suppliedKey = String(body.account_key || '').trim();
-    const current = body.id != null
-      ? accounts.find(row => Number(row.id) === Number(body.id))
-      : suppliedKey
-        ? accounts.find(row => row.bank_slug === body.bank_slug && row.account_key === suppliedKey)
-        : undefined;
-    if (body.id != null && !current) throw new Error('Bank account mapping not found');
-    if (current && current.bank_slug !== body.bank_slug) throw new Error('Bank account identity does not match this mapping');
-    if (current?.account_key && suppliedKey && current.account_key !== suppliedKey) {
-      throw new Error('Bank account identity does not match this mapping');
-    }
-    if (generation !== this.generation) throw new Error('Vault session changed');
-    const saved = await this.upsert('bank_accounts', {
-      ...current,
-      ...body,
-      account_key: current?.account_key || body.account_key || randomClientId('bank-account'),
-      id: body.id ?? current?.id,
-    }, undefined, generation);
-    return { ...saved, id: Number(saved.id) };
+    const existing = suppliedKey
+      ? (await this.getBankAccounts()).find(row => row.bank_slug === body.bank_slug && row.account_key === suppliedKey)
+      : undefined;
+    this.assertSession(generation);
+    if (existing?.id != null) return this.runRecordUpdate('bank_accounts', Number(existing.id), generation, write);
+    return write();
   }
 
   getImportReceipts(): Promise<ImportReceipt[]> { return this.bankImports.getImportReceipts(); }
@@ -240,7 +259,8 @@ export class EncryptedStoreService {
   }
 
   async deleteAsset(id: number, options?: VaultWriteOptions): Promise<void> {
-    return this.remove('assets', id, options);
+    const generation = this.generation;
+    return this.runRecordUpdate('assets', id, generation, () => this.remove('assets', id, options));
   }
 
   async getLiabilities(): Promise<Liability[]> {
@@ -254,14 +274,17 @@ export class EncryptedStoreService {
 
   async updateLiability(id: number, body: any, options?: VaultWriteOptions): Promise<Liability> {
     const generation = this.generation;
-    const current = (await this.getLiabilities()).find(a => a.id === id);
-    this.assertSession(generation);
-    if (!current) throw new Error('Liability not found');
-    return this.upsert('liabilities', { ...current, ...body, id }, undefined, generation, options);
+    return this.runRecordUpdate('liabilities', id, generation, async () => {
+      const current = (await this.getLiabilities()).find(a => a.id === id);
+      this.assertSession(generation);
+      if (!current) throw new Error('Liability not found');
+      return this.upsert('liabilities', { ...current, ...body, id }, undefined, generation, options);
+    });
   }
 
   async deleteLiability(id: number, options?: VaultWriteOptions): Promise<void> {
-    return this.remove('liabilities', id, options);
+    const generation = this.generation;
+    return this.runRecordUpdate('liabilities', id, generation, () => this.remove('liabilities', id, options));
   }
 
   async getHoldings(): Promise<Holding[]> {
@@ -462,12 +485,21 @@ export class EncryptedStoreService {
     label?: string | null;
   }> {
     const generation = this.generation;
-    const existing = (await this.getBrokerageAccounts()).find(account =>
+    const write = async () => {
+      const existing = (await this.getBrokerageAccounts()).find(account =>
+        account.broker_slug === body.broker_slug && account.account_mask === body.account_mask
+      );
+      this.assertSession(generation);
+      const row = await this.upsert('brokerage_accounts', { ...existing, ...body, id: body.id ?? existing?.id }, undefined, generation);
+      return { ...row, id: Number(row.id) };
+    };
+    if (body.id != null) return this.runRecordUpdate('brokerage_accounts', Number(body.id), generation, write);
+    const existingId = (await this.getBrokerageAccounts()).find(account =>
       account.broker_slug === body.broker_slug && account.account_mask === body.account_mask
-    );
+    )?.id;
     this.assertSession(generation);
-    const row = await this.upsert('brokerage_accounts', { ...existing, ...body, id: body.id ?? existing?.id }, undefined, generation);
-    return { ...row, id: Number(row.id) };
+    if (existingId != null) return this.runRecordUpdate('brokerage_accounts', Number(existingId), generation, write);
+    return write();
   }
 
   async createHoldingImportStage(body: Omit<FidelityStageRecord, 'id' | 'selected_rows'>, rows: FidelityStageRow[]): Promise<FidelityStageRecord> {
@@ -537,7 +569,8 @@ export class EncryptedStoreService {
   }
 
   async deleteFixedExpense(id: number, options?: VaultWriteOptions): Promise<void> {
-    return this.remove('fixed_expenses', id, options);
+    const generation = this.generation;
+    return this.runRecordUpdate('fixed_expenses', id, generation, () => this.remove('fixed_expenses', id, options));
   }
 
   async getSubscriptions(): Promise<Subscription[]> {
@@ -560,7 +593,8 @@ export class EncryptedStoreService {
   }
 
   async deleteSubscription(id: number, options?: VaultWriteOptions): Promise<void> {
-    return this.remove('subscriptions', id, options);
+    const generation = this.generation;
+    return this.runRecordUpdate('subscriptions', id, generation, () => this.remove('subscriptions', id, options));
   }
 
   async getNetWorth() {
@@ -593,15 +627,18 @@ export class EncryptedStoreService {
   async savePlanningProfile(body: any, id?: number, options?: VaultWriteOptions): Promise<any> {
     const generation = this.generation;
     if (id != null) {
-      const current = (await this.listPlanningProfiles()).find(p => p.id === id) || { id };
-      this.assertSession(generation);
-      return this.upsert('planning_profiles', { ...current, ...body, id }, undefined, generation, options);
+      return this.runRecordUpdate('planning_profiles', id, generation, async () => {
+        const current = (await this.listPlanningProfiles()).find(p => p.id === id) || { id };
+        this.assertSession(generation);
+        return this.upsert('planning_profiles', { ...current, ...body, id }, undefined, generation, options);
+      });
     }
     return this.upsert('planning_profiles', body, undefined, generation, options);
   }
 
   async deletePlanningProfile(id: number, options?: VaultWriteOptions): Promise<void> {
-    return this.remove('planning_profiles', id, options);
+    const generation = this.generation;
+    return this.runRecordUpdate('planning_profiles', id, generation, () => this.remove('planning_profiles', id, options));
   }
 
   async getStockLabScenarios(options?: VaultWriteOptions): Promise<StockLabScenario[]> {
@@ -612,20 +649,28 @@ export class EncryptedStoreService {
   }
 
   async saveStockLabScenario(body: StockLabScenario, id?: number, options?: VaultWriteOptions): Promise<StockLabScenario> {
-    const current = id
-      ? (await this.getStockLabScenarios(options)).find(row => row.id === id)
-      : undefined;
-    const now = new Date().toISOString();
-    return this.upsert('stock_lab_scenarios', {
-      ...current,
-      ...body,
-      id: id ?? body.id,
-      created_at: current?.created_at ?? body.created_at ?? now,
-      updated_at: now,
-    }, undefined, undefined, options);
+    const generation = this.generation;
+    const recordId = id ?? body.id;
+    const write = async () => {
+      const current = recordId != null
+        ? (await this.getStockLabScenarios(options)).find(row => row.id === recordId)
+        : undefined;
+      this.assertSession(generation);
+      const now = new Date().toISOString();
+      return this.upsert('stock_lab_scenarios', {
+        ...current,
+        ...body,
+        id: recordId,
+        created_at: current?.created_at ?? body.created_at ?? now,
+        updated_at: now,
+      }, undefined, undefined, options);
+    };
+    if (recordId != null) return this.runRecordUpdate('stock_lab_scenarios', Number(recordId), generation, write);
+    return write();
   }
 
   async deleteStockLabScenario(id: number, options?: VaultWriteOptions): Promise<void> {
-    return this.remove('stock_lab_scenarios', id, options);
+    const generation = this.generation;
+    return this.runRecordUpdate('stock_lab_scenarios', id, generation, () => this.remove('stock_lab_scenarios', id, options));
   }
 }

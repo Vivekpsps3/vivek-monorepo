@@ -2225,8 +2225,8 @@ async function commitNote(id) {
       });
       return;
     }
-    // fail() drops TimeoutError and AbortError, so a stalled save has to
-    // surface here or the chain would unblock with no Retry toast.
+    // Keep the unsent note and the retry toast here. reportItemSaveFailure
+    // does that for this failure; it hands only 401 and 403 to fail().
     noteOutcome = { id: String(id), kind: "failure", text: sent };
     showNoteFailure(document.querySelector("#note-status"));
     reportItemSaveFailure({
