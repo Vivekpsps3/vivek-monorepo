@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { gridDay, monthCells } from "../modules/composer-model.mjs";
+import { gridDay, monthCells, monthRows } from "../modules/composer-model.mjs";
 import { balancePhrase, formatDays } from "../modules/labels.mjs";
 import { formError } from "../modules/validate.mjs";
 
@@ -70,6 +70,11 @@ test("the composer grid has one tab stop and outside days are not announced", ()
   assert.equal((both.match(/aria-label="Monday, November 30, 2026"/g) || []).length, 1);
   const composer = read("modules/views/composer.mjs");
   assert.match(composer, /gridDay\(/);
+  assert.match(composer, /monthRows\(/);
+  assert.equal(monthRows(new Date(2026, 9, 1)).every((row) => row.some((cell) => !cell.outside)), true);
+  assert.equal(monthRows(new Date(2026, 10, 1)).every((row) => row.some((cell) => !cell.outside)), true);
+  assert.equal(monthRows(new Date(2026, 9, 1)).length < 6, true);
+  assert.equal(monthRows(new Date(2026, 10, 1)).length < 6, true);
   assert.match(composer, /aria-multiselectable="true"/);
   assert.match(composer, /event\.ctrlKey/);
   assert.match(composer, /Math\.hypot\(event\.clientX - dragX, event\.clientY - dragY\) < 8/);

@@ -177,6 +177,16 @@ export function monthCells(anchor, startOn = weekStartsOn()) {
   return cells;
 }
 
+export function monthRows(anchor, startOn = weekStartsOn()) {
+  const cells = monthCells(anchor, startOn);
+  const rows = [];
+  for (let index = 0; index < cells.length; index += 7) {
+    const row = cells.slice(index, index + 7);
+    if (row.some((cell) => !cell.outside)) rows.push(row);
+  }
+  return rows;
+}
+
 export function gridDay(cell, { focusIso, selected, label }) {
   if (cell.outside) return `<span class="composer-day is-out" aria-hidden="true">${cell.day}</span>`;
   const tab = cell.iso === focusIso ? "0" : "-1";

@@ -15,7 +15,10 @@ async function reset(request) {
 
 async function theme(page, value) {
   await page.goto("/");
-  await page.evaluate((choice) => localStorage.setItem("travel-theme", choice), value);
+  await page.evaluate((choice) => {
+    localStorage.setItem("suite-theme", choice);
+    localStorage.setItem("travel-theme", choice);
+  }, value);
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", value);
 }

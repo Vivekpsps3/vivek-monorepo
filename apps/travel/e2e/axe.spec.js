@@ -3,7 +3,10 @@ import { expect, test } from "@playwright/test";
 
 async function openThemed(page, hash) {
   await page.goto("/");
-  await page.evaluate(() => localStorage.setItem("travel-theme", "light"));
+  await page.evaluate(() => {
+    localStorage.setItem("suite-theme", "light");
+    localStorage.setItem("travel-theme", "light");
+  });
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   if (hash) {
@@ -64,4 +67,21 @@ test("axe on the travel pages at 1280 light", async ({ page, request }) => {
     }
   }
   expect(failures).toEqual([]);
+});
+
+test("a dark suite-theme replaces an earlier light choice", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    localStorage.setItem("suite-theme", "light");
+    localStorage.setItem("travel-theme", "light");
+  });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.evaluate(() => {
+    localStorage.setItem("suite-theme", "dark");
+    localStorage.setItem("travel-theme", "dark");
+  });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme-choice", "dark");
 });
