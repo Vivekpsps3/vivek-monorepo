@@ -71,6 +71,8 @@ export async function rewrapSigningKey(
   };
 }
 
+export { USERNAME_PATTERN, usernameForStorage } from './username';
+
 export async function signChallenge(
   passphrase: string,
   wrapped: WrappedSigningKey,

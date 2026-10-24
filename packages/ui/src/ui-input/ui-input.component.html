@@ -13,6 +13,7 @@
       [required]="required()"
       [attr.autocomplete]="autocomplete()"
       [attr.aria-describedby]="describedBy()"
+      [attr.aria-invalid]="invalid() ? 'true' : null"
       [value]="value()"
       (input)="value.set($any($event.target).value)" />
     @if (type() === 'password' && showPasswordToggle()) {

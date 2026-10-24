@@ -25,4 +25,27 @@ test("the hub panel uses journal labels, deep links, next episodes, and retry", 
   assert.match(html, /retryMedia\(\)/);
   assert.match(html, /review_excerpt/);
   assert.match(read("app/hub/hub-summary.ts"), /tv: 'Series'/);
+  assert.match(html, /Change username/);
+  assert.match(html, /hub-account__name/);
+  assert.match(read("app/hub/username-change.component.html"), /aria-live="assertive"/);
+  assert.match(read("app/hub/username-change.component.html"), /New username/);
+  assert.match(read("app/hub/username-change.component.html"), /Current passphrase/);
+  const policy = readFileSync(new URL("../../backend/services/username_policy.py", import.meta.url), "utf8");
+  const min = Number(policy.match(/^USERNAME_MIN = (\d+)$/m)[1]);
+  const max = Number(policy.match(/^USERNAME_MAX = (\d+)$/m)[1]);
+  const pattern = policy.match(/^USERNAME_PATTERN = r"(\^\[[^\]]+\]\+\$)"$/m)[1];
+  const characterClass = pattern.slice(1, pattern.indexOf("]") + 1);
+  const stored = `^${characterClass}{${min},${max}}$`;
+  assert.equal(characterClass, "[a-zA-Z0-9_.-]");
+  assert.match(
+    policy,
+    /USERNAME_RE = re\.compile\(rf"\^\[a-zA-Z0-9_.-\]\{\{\{USERNAME_MIN\},\{USERNAME_MAX\}\}\}\$"\)/,
+  );
+  const client = readFileSync(new URL("../../../../packages/auth/src/username.ts", import.meta.url), "utf8");
+  assert.match(client, new RegExp(`export const USERNAME_PATTERN = '${stored.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}';`));
+  assert.match(client, /toLowerCase\(\)/);
+  const service = read("app/auth/auth.service.ts");
+  assert.match(service, /usernameForStorage/);
+  assert.match(service, /requestPasswordlessChallenge\(handle\)/);
+  assert.match(service, /requestPasswordlessChallenge\(current, 'username_change'\)/);
 });

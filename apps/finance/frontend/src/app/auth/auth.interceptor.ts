@@ -17,6 +17,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         req.url.includes('/auth/bootstrap') ||
         req.url.includes('/auth/signup') ||
         req.url.includes('/auth/invitations') ||
+        req.url.includes('/account/username') ||
         req.url.includes('/health');
       if (err.status === 401 && !isAuthAttempt) {
         auth.clearLocalSession();

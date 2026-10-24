@@ -29,6 +29,23 @@ function send(res, status, body, contentType) {
   res.end(body);
 }
 
+function proxyApi(request, response, targetOrigin, rawPath) {
+  const target = new URL(rawPath, targetOrigin);
+  const headers = { ...request.headers, host: target.host };
+  const proxyReq = http.request(target, { method: request.method, headers }, proxyRes => {
+    response.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+    proxyRes.pipe(response);
+  });
+  proxyReq.on('error', () => {
+    if (!response.headersSent) {
+      send(response, 502, 'Bad gateway', 'text/plain; charset=utf-8');
+      return;
+    }
+    response.end();
+  });
+  request.pipe(proxyReq);
+}
+
 function insideRoot(root, file) {
   const relative = path.relative(root, file);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -69,13 +86,20 @@ export function mapRequestPath(pathname, mount) {
 export function createSpaServer(rootDir, options = {}) {
   const root = path.resolve(rootDir);
   const mount = normalizeMount(options.mount ?? '');
+  const apiProxy = options.apiProxy || '';
   return http.createServer((request, response) => {
     let pathname;
+    let rawPath;
     try {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+      rawPath = `${url.pathname}${url.search}`;
       pathname = decodeURIComponent(url.pathname);
     } catch {
       send(response, 400, 'Bad request', 'text/plain; charset=utf-8');
+      return;
+    }
+    if (apiProxy && (pathname === '/api' || pathname.startsWith('/api/'))) {
+      proxyApi(request, response, apiProxy, rawPath);
       return;
     }
     const mapped = mapRequestPath(pathname, mount);
@@ -113,7 +137,7 @@ if (isMain) {
   const root = path.resolve(process.argv[2] ?? 'dist');
   const port = Number(process.argv[3] ?? 4173);
   const mount = process.argv[4] ?? '';
-  const server = createSpaServer(root, { mount });
+  const server = createSpaServer(root, { mount, apiProxy: process.env.API_PROXY_TARGET || '' });
   server.listen(port, '127.0.0.1', () => {
     const prefix = normalizeMount(mount);
     console.log(`Serving ${root} at http://127.0.0.1:${port}${prefix}/`);

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import http from 'node:http';
 import { createSpaServer } from './serve-spa.mjs';
 
 test('mounted bundle falls back only for extensionless routes', async () => {
@@ -48,6 +49,43 @@ test('mounted bundle falls back only for extensionless routes', async () => {
     assert.equal(await badEscape.text(), 'Bad request');
   } finally {
     await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('api paths proxy to the finance server when a target is set', async () => {
+  const upstream = http.createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      response.writeHead(201, { 'content-type': 'application/json', 'x-upstream': 'yes' });
+      response.end(JSON.stringify({ path: request.url, body: Buffer.concat(chunks).toString() }));
+    });
+  });
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  const { port: apiPort } = upstream.address();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spa-proxy-'));
+  fs.writeFileSync(path.join(root, 'index.html'), '<html>app</html>');
+  const server = createSpaServer(root, { mount: '/finance', apiProxy: `http://127.0.0.1:${apiPort}` });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  try {
+    const page = await fetch(`http://127.0.0.1:${port}/hub`);
+    assert.equal(page.status, 200);
+    const api = await fetch(`http://127.0.0.1:${port}/api/auth/passwordless/challenge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'ada' }),
+    });
+    assert.equal(api.status, 201);
+    assert.equal(api.headers.get('x-upstream'), 'yes');
+    assert.deepEqual(await api.json(), {
+      path: '/api/auth/passwordless/challenge',
+      body: JSON.stringify({ username: 'ada' }),
+    });
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    await new Promise(resolve => upstream.close(resolve));
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

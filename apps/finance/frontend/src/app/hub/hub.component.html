@@ -23,6 +23,9 @@
   <main id="hub-main">
     <p class="eyebrow">{{ headingToday | appDate:'heading' }}</p>
     <h1>{{ name }}</h1>
+    @if (username) {
+      <p class="hub-account">Signed in as <strong class="hub-account__name">{{ username }}</strong></p>
+    }
 
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading">
@@ -169,5 +172,18 @@
         }
       </section>
     </div>
+
+    <section class="side-panel username-panel" aria-labelledby="username-heading">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Account</p>
+          <h2 id="username-heading">Change username</h2>
+        </div>
+      </div>
+      @if (username) {
+        <p class="figure-note">Current username <strong class="hub-account__name">{{ username }}</strong></p>
+      }
+      <app-username-change />
+    </section>
   </main>
 </div>

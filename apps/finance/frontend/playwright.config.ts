@@ -1,4 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { defineConfig } from '@playwright/test';
+
+function findRepoRoot(start: string): string {
+  let dir = path.resolve(start);
+  for (let i = 0; i < 6; i += 1) {
+    if (fs.existsSync(path.join(dir, 'apps/finance/e2e/username_server.py'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error(`username e2e server not found from ${start}`);
+}
+
+const repoRoot = findRepoRoot(process.cwd());
+const venvPython = path.join(repoRoot, '.venv/bin/python');
+const python = process.env.PYTHON || (fs.existsSync(venvPython) ? venvPython : 'python3');
+const apiPort = process.env.USERNAME_E2E_PORT || '8098';
 
 const dist = process.env.E2E_DIST;
 const port = process.env.E2E_PORT ?? '4173';
@@ -25,13 +43,31 @@ export default defineConfig({
   webServer: process.env.E2E_SKIP_WEB_SERVER
     ? undefined
     : dist
-      ? {
-          command: `node ../../../scripts/serve-spa.mjs ${dist} ${port} /finance`,
-          url: builtUrl,
-          // A server left over from a / build would serve this bundle's scripts as HTML.
-          reuseExistingServer: false,
-          timeout: 30_000,
-        }
+      ? [
+          {
+            command: `"${python}" -m apps.finance.e2e.username_server`,
+            cwd: repoRoot,
+            url: `http://127.0.0.1:${apiPort}/api/health`,
+            reuseExistingServer: false,
+            timeout: 60_000,
+            env: {
+              ...process.env,
+              USERNAME_E2E_PORT: apiPort,
+              PYTHONPATH: repoRoot,
+            },
+          },
+          {
+            command: `node ../../../scripts/serve-spa.mjs ${dist} ${port} /finance`,
+            url: builtUrl,
+            // A server left over from a / build would serve this bundle's scripts as HTML.
+            reuseExistingServer: false,
+            timeout: 30_000,
+            env: {
+              ...process.env,
+              API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`,
+            },
+          },
+        ]
       : {
           command: 'npm run start -- --prebundle=false --hmr=false --live-reload=false',
           url: 'http://127.0.0.1:4200',
