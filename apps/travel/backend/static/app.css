@@ -48,7 +48,7 @@
   background: var(--card-bg);
   padding: var(--space-2) var(--space-3);
 }
-.skip:focus { top: var(--space-3); }
+.skip:focus { top: var(--space-3); z-index: 1000; }
 
 .topbar { backdrop-filter: blur(var(--backdrop-blur)); }
 .topbar-inner { gap: var(--space-5); }
