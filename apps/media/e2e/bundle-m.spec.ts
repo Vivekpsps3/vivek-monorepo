@@ -312,33 +312,37 @@ test('season tabs move with the arrow keys and the chip label fits', async ({ pa
   });
   expect(show.ok()).toBeTruthy();
   const showId = (await show.json()).id as number;
-  for (const season of [0, 1, 2]) {
-    for (const episode of [1, 2, 3]) {
-      expect((await request.post(`/media/api/entries/${showId}/episodes`, {
-        data: { season_number: season, episode_number: episode, title: `S${season}E${episode}` },
+  try {
+    for (const season of [0, 1, 2]) {
+      for (const episode of [1, 2, 3]) {
+        expect((await request.post(`/media/api/entries/${showId}/episodes`, {
+          data: { season_number: season, episode_number: episode, title: `S${season}E${episode}` },
+        })).ok()).toBeTruthy();
+      }
+    }
+    const detail = await (await request.get(`/media/api/entries/${showId}`)).json();
+    const watched = (detail.show.episodes as Array<{ id: number; season_number: number; episode_number: number }>)
+      .filter(episode => episode.season_number === 0 || (episode.season_number === 1 && episode.episode_number < 3));
+    for (const episode of watched) {
+      expect((await request.post(`/media/api/entries/${showId}/episodes/${episode.id}/watched`, {
+        data: { watched: true },
       })).ok()).toBeTruthy();
     }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/media/#/item/${showId}`);
+    await expect(page.getByRole('heading', { name: 'Tab Show' })).toBeVisible();
+    const seasonOne = page.getByRole('tab', { name: 'Season 1' });
+    await seasonOne.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
+    const chip = page.getByRole('tab', { name: 'Specials' });
+    const chipBox = await chip.boundingBox();
+    expect(chipBox?.width).toBeGreaterThanOrEqual(44);
+    const fits = await chip.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
+    expect(fits).toBeTruthy();
+  } finally {
+    await request.delete(`/media/api/entries/${showId}`);
   }
-  const detail = await (await request.get(`/media/api/entries/${showId}`)).json();
-  const watched = (detail.show.episodes as Array<{ id: number; season_number: number; episode_number: number }>)
-    .filter(episode => episode.season_number === 0 || (episode.season_number === 1 && episode.episode_number < 3));
-  for (const episode of watched) {
-    expect((await request.post(`/media/api/entries/${showId}/episodes/${episode.id}/watched`, {
-      data: { watched: true },
-    })).ok()).toBeTruthy();
-  }
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/media/#/item/${showId}`);
-  await expect(page.getByRole('heading', { name: 'Tab Show' })).toBeVisible();
-  const seasonOne = page.getByRole('tab', { name: 'Season 1' });
-  await seasonOne.focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
-  const chip = page.getByRole('tab', { name: 'Specials' });
-  const chipBox = await chip.boundingBox();
-  expect(chipBox?.width).toBeGreaterThanOrEqual(44);
-  const fits = await chip.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
-  expect(fits).toBeTruthy();
 });
 
 test('the month grid lays weeks across the row at 1280', async ({ page }) => {
@@ -363,25 +367,29 @@ test('item, add, and an artist stay inside a 390px viewport', async ({ page, req
     data: { kind: 'artist', title: 'Narrow Band', status: 'want' },
   });
   const artistId = (await artist.json()).id as number;
-  expect((await request.post(`/media/api/entries/${artistId}/albums`, {
-    data: { title: 'Narrow Album' },
-  })).ok()).toBeTruthy();
-  await page.setViewportSize({ width: 390, height: 800 });
-  for (const hash of ['#/item/1', '#/new', `#/item/${artistId}`]) {
-    await page.goto(`/media/${hash}`);
-    await expect(page.locator('h1').first()).toBeVisible();
-    const right = await page.evaluate(() => {
-      let max = 0;
-      for (const node of document.body.querySelectorAll('*')) {
-        const style = getComputedStyle(node);
-        if (style.display === 'none' || style.visibility === 'hidden') continue;
-        const box = node.getBoundingClientRect();
-        if (box.width === 0 || box.height === 0) continue;
-        max = Math.max(max, box.right);
-      }
-      return max;
-    });
-    expect(right, hash).toBeLessThanOrEqual(391);
+  try {
+    expect((await request.post(`/media/api/entries/${artistId}/albums`, {
+      data: { title: 'Narrow Album' },
+    })).ok()).toBeTruthy();
+    await page.setViewportSize({ width: 390, height: 800 });
+    for (const hash of ['#/item/1', '#/new', `#/item/${artistId}`]) {
+      await page.goto(`/media/${hash}`);
+      await expect(page.locator('h1').first()).toBeVisible();
+      const right = await page.evaluate(() => {
+        let max = 0;
+        for (const node of document.body.querySelectorAll('*')) {
+          const style = getComputedStyle(node);
+          if (style.display === 'none' || style.visibility === 'hidden') continue;
+          const box = node.getBoundingClientRect();
+          if (box.width === 0 || box.height === 0) continue;
+          max = Math.max(max, box.right);
+        }
+        return max;
+      });
+      expect(right, hash).toBeLessThanOrEqual(391);
+    }
+  } finally {
+    await request.delete(`/media/api/entries/${artistId}`);
   }
 });
 

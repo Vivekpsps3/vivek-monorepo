@@ -538,7 +538,7 @@ dialog form { display: grid; gap: var(--space-3); }
 .score-child .mark.is-on,
 .score-child .mark.is-half { background: var(--text-secondary); border-color: var(--text-secondary); color: var(--bg); }
 .score-child .mark.is-half { background: linear-gradient(90deg, var(--text-secondary) 50%, transparent 50%); }
-.note-block { display: grid; gap: var(--space-2); }
+.detail-section.note-block { display: grid; gap: var(--space-2); margin-top: 16px; }
 .confirm { width: min(420px, calc(100% - 32px)); border: 0; border-radius: var(--radius-lg); background: var(--surface-elevated, var(--card-bg)); color: inherit; }
 .confirm::backdrop { background: color-mix(in srgb, var(--text) 40%, transparent); }
 .log-form { display: grid; gap: var(--space-3); margin-top: var(--space-3); max-width: 24rem; }
