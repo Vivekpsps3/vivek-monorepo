@@ -1,7 +1,10 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { BehaviorSubject, from, of, Subject, throwError } from 'rxjs';
 import { TransactionsComponent } from './transactions.component';
+import { TransactionsEditorWorkflow } from './transactions-editor-workflow';
+import { TransactionsImportWorkflow } from './transactions-import-workflow';
 import { FinanceService } from '../services/finance.service';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
@@ -134,9 +137,13 @@ describe('Transactions multi-file import UI', () => {
   it('selects multiple files, assigns independent banks, previews and commits the combined selection', async () => {
     chooseFiles([chaseFile(), amexFile()]);
     expect(component.importFiles.length).toBe(2);
-    expect(button('Preview all files').disabled).toBeTrue();
+    expect(button('Preview all files').disabled).toBeFalse();
+    button('Preview all files').click();
+    fixture.detectChanges();
+    expect(component.importError).toContain('Choose CSV files and select a bank for every file.');
+    expect(previewPromise).toBeUndefined();
     assignBank(0, 'chase');
-    expect(button('Preview all files').disabled).toBeTrue();
+    expect(button('Preview all files').disabled).toBeFalse();
     assignBank(1, 'amex');
     assignAccountName(0, 'Chase Checking');
     assignAccountName(1, 'Amex Gold');
@@ -148,7 +155,7 @@ describe('Transactions multi-file import UI', () => {
     expect(sections.length).toBe(2);
     expect(sections[0].textContent).toContain('chase.csv · Chase');
     expect(sections[1].textContent).toContain('amex.csv · American Express');
-    button('Import 2 transaction(s)').click();
+    button('Import 2 transactions').click();
     fixture.detectChanges();
     expect(finance.commitBankImports.calls.mostRecent().args[0].map(row => row.account_display)).toEqual(['Chase Checking', 'Amex Gold']);
     expect(component.showImportModal).toBeFalse();
@@ -191,7 +198,7 @@ describe('Transactions multi-file import UI', () => {
     }));
     expect(component.legacyMappingCount).toBe(1);
     expect(component.canSaveImport).toBeTrue();
-    expect(component.importActionLabel).toBe('Map 1 legacy transaction(s)');
+    expect(component.importActionLabel).toBe('Map 1 legacy transaction');
     component.commitImport();
     expect(finance.commitBankImports.calls.mostRecent().args[0][0].legacy_dedupe_key).toBe(legacyKey);
   });
@@ -509,5 +516,60 @@ describe('Transactions multi-file import UI', () => {
     component.ngOnChanges({ receiptsOpen: { currentValue: true, previousValue: false, firstChange: false, isFirstChange: () => false } });
     fixture.detectChanges();
     expect((fixture.nativeElement.querySelector('details.ledger-receipts') as HTMLDetailsElement).open).toBeTrue();
+  });
+});
+
+describe('Transactions delete and undo errors', () => {
+  function makeComponent() {
+    const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'addTransaction']);
+    const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
+    const component = new TransactionsComponent(
+      finance,
+      toast,
+      confirm,
+      { markForCheck() {} } as ChangeDetectorRef,
+      {} as ActivatedRoute,
+      {} as Router,
+      {} as TransactionsImportWorkflow,
+      {} as TransactionsEditorWorkflow,
+    );
+    return { component, finance, toast };
+  }
+
+  const transaction = {
+    id: 8, date: '2026-10-03', type: 'expense' as const, category: 'Food', amount: -45.67, description: 'Legacy return',
+  };
+
+  it('shows one retry toast when deleting a transaction fails', async () => {
+    const { component, finance, toast } = makeComponent();
+    finance.deleteTransaction.and.returnValue(throwError(() => new Error('nope')));
+    await component.deleteTransaction(transaction);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't delete this transaction.");
+    expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
+    expect(finance.deleteTransaction).toHaveBeenCalledWith(8, true);
+  });
+
+  it('shows one retry toast when undoing a transaction delete fails and keeps the amount', async () => {
+    const { component, finance, toast } = makeComponent();
+    finance.deleteTransaction.and.returnValue(of({ ok: true }));
+    finance.addTransaction.and.returnValue(throwError(() => new Error('nope')));
+    await component.deleteTransaction(transaction);
+    const undo = toast.success.calls.mostRecent().args[1] as () => void;
+    undo();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't restore this transaction.");
+    expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
+    expect(finance.addTransaction).toHaveBeenCalledWith(jasmine.objectContaining({
+      date: '2026-10-03', category: 'Food', amount: -45.67, description: 'Legacy return',
+    }), true);
+    const retry = toast.error.calls.mostRecent().args[1].run as () => void;
+    finance.addTransaction.calls.reset();
+    toast.error.calls.reset();
+    retry();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(finance.addTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
   });
 });

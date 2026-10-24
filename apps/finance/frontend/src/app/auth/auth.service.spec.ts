@@ -41,8 +41,13 @@ describe('AuthService passwordless login', () => {
 
   afterEach(() => {
     environment.localDevAuth = false;
+    document.cookie = 'finance_csrf=; Max-Age=0';
     http.verify();
   });
+
+  function signedIn(): void {
+    document.cookie = 'finance_csrf=test';
+  }
 
   it('signs in from the auth wrap alone and loads the vault only after verify', async () => {
     const loginPromise = service.loginWithVault('vivek', 'correct horse battery staple');
@@ -69,7 +74,14 @@ describe('AuthService passwordless login', () => {
     await expectAsync(loginPromise).toBeRejected();
   });
 
+  it('does not call /auth/me when the browser has no session cookie', async () => {
+    document.cookie = 'finance_csrf=; Max-Age=0';
+    await expectAsync(service.loadSession().toPromise()).toBeResolvedTo(null);
+    http.expectNone(`${api}/auth/me`);
+  });
+
   it('keeps the unlocked vault when a reload still has a valid session cookie', async () => {
+    signedIn();
     const session = service.loadSession().toPromise();
     http.expectOne(`${api}/auth/me`).flush({
       user: {
@@ -89,6 +101,7 @@ describe('AuthService passwordless login', () => {
   });
 
   it('clears the saved vault only when the session cookie is rejected', async () => {
+    signedIn();
     const session = service.loadSession().toPromise();
     http.expectOne(`${api}/auth/me`).flush(
       { detail: 'Session expired' },
@@ -99,6 +112,7 @@ describe('AuthService passwordless login', () => {
   });
 
   it('keeps the local-dev session when the vault unlock fails', async () => {
+    signedIn();
     environment.localDevAuth = true;
     vault.ensureLocalDevUnlocked.and.rejectWith(new Error('Local dev vault is unavailable'));
     const session = service.loadSession().toPromise();

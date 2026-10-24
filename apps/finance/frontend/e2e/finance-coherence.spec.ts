@@ -267,7 +267,7 @@ test('Activity exact account filters keep full matching totals through paginatio
   await expect(page.locator('#tx-category-filter')).toHaveValue('food');
   await expect(page.locator('#tx-merchant-filter')).toHaveValue('grocery');
   await expect(page.locator('.month-total--expense')).toContainText('$110.00');
-  await expect(page.locator('.month-total--expense')).toContainText('110 matching row(s)');
+  await expect(page.locator('.month-total--expense')).toContainText('110 purchases');
   const tableRows = page.getByRole('table', { name: 'Transactions history' }).getByRole('row');
   await expect(tableRows).toHaveCount(101);
   await expect(page.getByRole('button', { name: 'Load more', exact: true })).toBeVisible();
@@ -332,7 +332,9 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   const startingNetWorth = page.locator('aside[aria-label="Scenario builder"]')
     .locator('label.mc-field', { hasText: 'Starting net worth' })
     .locator('input');
-  await expect(startingNetWorth).toBeDisabled();
+  await expect(startingNetWorth).toHaveJSProperty('readOnly', true);
+  await expect(startingNetWorth).toHaveValue(/1125/);
+  await expect(page.locator('#starting-net-worth-hint')).toContainText('Using ledger net worth');
 
   await page.getByLabel('Use ledger net worth at start', { exact: true }).uncheck();
   await startingNetWorth.fill('777');
@@ -486,7 +488,7 @@ test('import account mapping refreshes the exact account label in another mounte
   await dialog.getByRole('checkbox', { name: /Map matching legacy transactions to this account/ }).check();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
   await expect(dialog.locator('.import-file-preview')).toContainText('0 new · 1 duplicate');
-  await dialog.getByRole('button', { name: 'Map 1 legacy transaction(s)', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Map 1 legacy transaction', exact: true }).click();
   await expect(dialog).toBeHidden();
 
   await expect(secondRow).toContainText('Daily card');

@@ -5,6 +5,7 @@ import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { UiIconComponent, UiIconName } from '@vivek/ui';
 import { apiUrl } from '../core/api-url';
+import { silentErrorToast } from '../core/http-error.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser, UserRole } from '../auth/auth.models';
 
@@ -69,8 +70,8 @@ export class SuiteAdminComponent implements OnInit {
     this.usersLoading = true;
     this.cdr.markForCheck();
     forkJoin({
-      users: this.http.get<AuthUser[]>(apiUrl('/admin/users')),
-      metrics: this.http.get<AdminMetrics>(apiUrl('/admin/metrics')),
+      users: this.http.get<AuthUser[]>(apiUrl('/admin/users'), { context: silentErrorToast() }),
+      metrics: this.http.get<AdminMetrics>(apiUrl('/admin/metrics'), { context: silentErrorToast() }),
       finance: this.http.get<{ status?: string }>(apiUrl('/health')).pipe(catchError(() => of(null))),
       travel: this.http.get<{ status?: string }>('/travel/api/health').pipe(catchError(() => of(null))),
       media: this.http.get<{ status?: string }>('/media/api/health').pipe(catchError(() => of(null))),
@@ -256,6 +257,20 @@ export class SuiteAdminComponent implements OnInit {
     return !this.isSelf(user) && !this.wouldRemoveFinalActiveAdmin(user);
   }
 
+  roleLockReason(user: AuthUser): string | null {
+    const reasons = [
+      this.isSelf(user) ? "You can't change your own role or access." : null,
+      this.wouldRemoveFinalActiveAdmin(user) ? "This is the only active admin, so the role and access stay as they are." : null,
+    ].filter((reason): reason is string => reason != null);
+    return reasons.length ? reasons.join(' ') : null;
+  }
+
+  deleteLockReason(user: AuthUser): string | null {
+    if (this.isSelf(user)) return "You can't delete your own account.";
+    if (this.wouldRemoveFinalActiveAdmin(user)) return "This is the only active admin, so the role and access stay as they are.";
+    return null;
+  }
+
   toggleRole(user: AuthUser): void {
     if (this.isSelf(user) || this.wouldRemoveFinalActiveAdmin(user)) return;
     this.patchUser(user, { role: user.role === 'admin' ? 'user' : 'admin' });
@@ -288,7 +303,7 @@ export class SuiteAdminComponent implements OnInit {
       username,
       display_name: displayName,
       role: this.inviteRole,
-    }).subscribe({
+    }, { context: silentErrorToast() }).subscribe({
       next: user => {
         this.users = [...this.users, user].sort((a, b) => (a.username || a.email).localeCompare(b.username || b.email));
         this.inviteToken = user.enrollment_token;
@@ -325,7 +340,7 @@ export class SuiteAdminComponent implements OnInit {
   }
 
   reissue(user: AuthUser): void {
-    this.http.post<AuthUser & { enrollment_token: string }>(apiUrl(`/admin/users/${user.id}/enrollment`), {}).subscribe({
+    this.http.post<AuthUser & { enrollment_token: string }>(apiUrl(`/admin/users/${user.id}/enrollment`), {}, { context: silentErrorToast() }).subscribe({
       next: updated => {
         this.inviteToken = updated.enrollment_token;
         this.notice = `Enrollment link for ${this.handle(user)} is ready. It replaces any older link.`;
@@ -344,7 +359,7 @@ export class SuiteAdminComponent implements OnInit {
       ? 'Sign out every other device? This browser stays signed in, and the vault stays.'
       : `Sign ${this.handle(user)} out everywhere? Their vault stays.`;
     if (!window.confirm(prompt)) return;
-    this.http.post<{ ok: boolean; revoked: number }>(apiUrl(`/admin/users/${user.id}/revoke-sessions`), {}).subscribe({
+    this.http.post<{ ok: boolean; revoked: number }>(apiUrl(`/admin/users/${user.id}/revoke-sessions`), {}, { context: silentErrorToast() }).subscribe({
       next: result => {
         this.notice = result.revoked
           ? `Signed out ${result.revoked} ${result.revoked === 1 ? 'session' : 'sessions'}.`
@@ -362,7 +377,7 @@ export class SuiteAdminComponent implements OnInit {
     if (!this.canDelete(user)) return;
     const label = this.handle(user);
     if (!window.confirm(`Delete ${label}? Their encrypted finance records go with the account.`)) return;
-    this.http.delete<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}`)).subscribe({
+    this.http.delete<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}`), { context: silentErrorToast() }).subscribe({
       next: () => {
         this.users = this.users.filter(item => item.id !== user.id);
         this.notice = `${label} was deleted.`;
@@ -379,7 +394,7 @@ export class SuiteAdminComponent implements OnInit {
     const expected = `RESET ${user.username || user.email}`;
     const typed = window.prompt(`Erase finance data for ${this.handle(user)}.\n\nType ${expected}`);
     if (typed !== expected) return;
-    this.http.post<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}/reset-contents`), { confirm: expected }).subscribe({
+    this.http.post<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}/reset-contents`), { confirm: expected }, { context: silentErrorToast() }).subscribe({
       next: () => {
         this.notice = `Finance data for ${this.handle(user)} was erased, and their sessions were signed out.`;
         this.load();
@@ -392,7 +407,7 @@ export class SuiteAdminComponent implements OnInit {
   }
 
   private patchUser(user: AuthUser, patch: Partial<AuthUser>): void {
-    this.http.patch<AuthUser>(apiUrl(`/admin/users/${user.id}`), patch).subscribe({
+    this.http.patch<AuthUser>(apiUrl(`/admin/users/${user.id}`), patch, { context: silentErrorToast() }).subscribe({
       next: updated => {
         this.users = this.users.map(item => item.id === updated.id ? updated : item);
         this.notice = `${this.label(updated)} updated.`;

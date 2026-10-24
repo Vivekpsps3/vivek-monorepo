@@ -39,21 +39,37 @@
 
 <ui-confirm-dialog scrollTarget=".main-content" />
 
-<div class="toast-host" aria-live="polite" aria-atomic="true">
-  @if (toast) {
-    <div
-      class="toast"
-      [class.success]="toast.kind === 'success'"
-      [class.error]="toast.kind === 'error'"
-      [class.info]="toast.kind === 'info'"
-    >
-      <span>{{ toast.message }}</span>
-      <div class="toast-actions">
-        @if (toast.undo) {
-          <ui-button variant="ghost" size="sm" (clicked)="undoToast()">Undo</ui-button>
-        }
-        <ui-button variant="ghost" size="sm" (clicked)="dismissToast()">Dismiss</ui-button>
+<div
+  class="toast-host"
+  (mouseenter)="pauseToasts()"
+  (mouseleave)="resumeToasts()"
+  (focusin)="pauseToasts()"
+  (focusout)="resumeToasts()"
+>
+  <div class="toast-region" role="status" aria-live="polite" aria-relevant="additions">
+    @for (toast of politeToasts; track toast.id) {
+      <div class="toast" [class.success]="toast.kind === 'success'" [class.info]="toast.kind === 'info'">
+        <p class="toast-copy">{{ toast.message }}</p>
+        <div class="toast-actions">
+          @if (toast.action || toast.undo) {
+            <button type="button" class="toast-action" (click)="runToastAction(toast)">{{ toast.action?.label || 'Undo' }}</button>
+          }
+          <button type="button" class="toast-dismiss" aria-label="Dismiss" (click)="dismissToast(toast.id)">✕</button>
+        </div>
       </div>
-    </div>
-  }
+    }
+  </div>
+  <div class="toast-region" role="alert" aria-live="assertive" aria-relevant="additions">
+    @for (toast of alertToasts; track toast.id) {
+      <div class="toast error">
+        <p class="toast-copy"><span class="toast-glyph" aria-hidden="true">⚠</span> {{ toast.message }}</p>
+        <div class="toast-actions">
+          @if (toast.action) {
+            <button type="button" class="toast-action" (click)="runToastAction(toast)">{{ toast.action.label }}</button>
+          }
+          <button type="button" class="toast-dismiss" aria-label="Dismiss" (click)="dismissToast(toast.id)">✕</button>
+        </div>
+      </div>
+    }
+  </div>
 </div>

@@ -1,5 +1,5 @@
 import { ChangeDetectorRef } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { IncomeComponent } from './income.component';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '@vivek/ui';
@@ -47,8 +47,8 @@ describe('IncomeComponent compensation editing', () => {
     await flushPromises();
     expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.objectContaining({
       end_date: '2026-12-31', promotions: row.promotions, compensation_payments: [jasmine.objectContaining(row.compensation_payments![0])],
-    }));
-    expect(toast.success).toHaveBeenCalledWith('Income updated');
+    }), true);
+    expect(toast.success).toHaveBeenCalledWith('Job saved');
   });
 
   it('blocks invalid history before writing', () => {
@@ -56,7 +56,8 @@ describe('IncomeComponent compensation editing', () => {
     component.form.end_date = '2025-12-31';
     component.saveIncome();
     expect(finance.updateJobIncome).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith('End date must be on or after the start date.');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(component.fieldErrors.some(error => error.message === 'End date must be on or after the start date.')).toBeTrue();
   });
 
   it('opens legacy jobs with empty histories and allows clearing an end date', async () => {
@@ -66,7 +67,7 @@ describe('IncomeComponent compensation editing', () => {
     component.form.end_date = '';
     component.saveIncome();
     await flushPromises();
-    expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.objectContaining({ end_date: null }));
+    expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.objectContaining({ end_date: null }), true);
   });
 
   it('routes manual employer quote refresh through the shared coordinator', async () => {
@@ -78,5 +79,31 @@ describe('IncomeComponent compensation editing', () => {
     await flushPromises();
     expect(market.refreshSymbol).toHaveBeenCalledOnceWith('MSFT');
     expect(finance.updateJobIncome).not.toHaveBeenCalled();
+  });
+
+  it('reports employer and base pay together on an empty job', () => {
+    component.openAddModal();
+    component.saveIncome();
+    expect(component.fieldErrors.map(error => error.message)).toEqual([
+      'Enter the employer.',
+      'Enter yearly pay above $0.',
+    ]);
+    expect(finance.addJobIncome).not.toHaveBeenCalled();
+  });
+
+  it('shows one error when a manual share price save fails and keeps the notice', async () => {
+    const job = { ...row, stock_symbol: '', stock_valuations: [] } as JobIncome;
+    component.incomes = [job];
+    const draft = component.stockPriceDraft(job);
+    draft.date = '2026-02-01';
+    draft.price = '12.5';
+    finance.updateJobIncome.and.returnValue(throwError(() => ({ error: { detail: 'Synthetic save failed' } })));
+    component.saveStockPrice(job);
+    await flushPromises();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't save this share price. Try again.");
+    expect(component.manualPriceNotice[3]).toContain('Manual price could not be saved');
+    expect(component.manualPriceNotice[3]).not.toContain('Synthetic');
+    expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.any(Object), true);
   });
 });

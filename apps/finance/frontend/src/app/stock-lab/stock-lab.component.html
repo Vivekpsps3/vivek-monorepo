@@ -29,7 +29,16 @@
       <ui-button variant="primary" (clicked)="loadMarketData(false)" [disabled]="loading">Analyze</ui-button>
       <ui-button variant="secondary" (clicked)="loadMarketData(true)" [disabled]="loading">Refresh market data</ui-button>
       <ui-button variant="secondary" (clicked)="saveScenario()" [disabled]="saving">Save encrypted scenario</ui-button>
-      <ui-button variant="ghost" (clicked)="deleteScenario()" [disabled]="!scenario.id">Delete scenario</ui-button>
+      <ui-button
+        variant="ghost"
+        (clicked)="deleteScenario()"
+        [ariaDisabled]="!scenario.id"
+        [describedBy]="!scenario.id ? 'delete-scenario-hint' : undefined">
+        Delete scenario
+      </ui-button>
+      @if (!scenario.id) {
+        <small id="delete-scenario-hint" class="stock-lock-hint">Save this scenario first to delete it.</small>
+      }
     </div>
   </ui-card>
 
@@ -40,7 +49,7 @@
         <p class="stock-name">{{ item.profile?.name || 'Unavailable' }}</p>
         <strong class="stock-price">{{ formatMoney(item.quote?.current_price) }}</strong>
         <p>1Y price / total: {{ formatPct(calculateReturnPeriods(item).at(2)?.price_return_pct) }} / {{ formatPct(calculateReturnPeriods(item).at(2)?.total_return_pct) }}</p>
-        <small>{{ item.cache_status }} · {{ item.fetched_at | date:'short' }}</small>
+        <small>{{ cachePhrase(item.cache_status) }} · {{ item.fetched_at | appDate:'table' }}</small>
       </ui-card>
     }
   </section>

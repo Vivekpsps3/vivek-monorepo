@@ -1,0 +1,37 @@
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-field__label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ui-field__optional {
+  font-weight: 500;
+}
+
+.ui-field__hint,
+.ui-field__error {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.ui-field__hint {
+  color: var(--text-secondary);
+}
+
+.ui-field__error {
+  min-height: 1.25rem;
+  color: var(--danger);
+}
+
+.ui-field--invalid :where(input, select, textarea) {
+  border-color: var(--danger);
+}

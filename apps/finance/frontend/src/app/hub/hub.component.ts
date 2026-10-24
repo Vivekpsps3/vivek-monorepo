@@ -1,4 +1,3 @@
-import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
@@ -14,10 +13,14 @@ import {
   financeSnapshot,
   hasManualCashAndBrokerage,
   largestPositions,
+  journalKindLabel,
   mediaReleaseLabel,
   portfolioAccounts,
   priceFreshnessSummary,
 } from './hub-summary';
+import { todayIsoDate } from '@vivek/browser';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 type LoadState = 'loading' | 'ready' | 'unavailable';
 
@@ -58,7 +61,9 @@ interface MediaSummary {
 @Component({
   selector: 'app-hub',
   standalone: true,
-  imports: [RouterLink, CurrencyPipe, DatePipe],
+  imports: [
+    AppDatePipe,
+    MoneyPipe, RouterLink],
   templateUrl: './hub.component.html',
   styleUrl: './hub.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -141,8 +146,12 @@ export class HubComponent implements OnInit {
     return trip.destination || trip.title;
   }
 
+  get headingToday(): string {
+    return todayIsoDate();
+  }
+
   formatDay(iso: string | null | undefined): string {
-    if (!iso) return 'Date unknown';
+    if (!iso) return 'No date';
     const [year, month, day] = iso.split('-').map(Number);
     if (!year || !month || !day) return iso;
     return new Date(year, month - 1, day).toLocaleDateString(undefined, {
@@ -197,6 +206,16 @@ export class HubComponent implements OnInit {
       this.trip = null;
     }
     this.cdr.markForCheck();
+  }
+
+  retryMedia(): void {
+    this.mediaState = 'loading';
+    this.cdr.markForCheck();
+    void this.loadMedia();
+  }
+
+  kindLabel(kind: string): string {
+    return journalKindLabel(kind);
   }
 
   private async loadMedia(): Promise<void> {

@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { authPath, continueAfterAuth } from './after-auth';
 import { SignupPolicy } from './auth.models';
 import { AuthService } from './auth.service';
+import { mediaSignup, signupProgress } from './signup-progress';
 import { UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
 
 @Component({
@@ -18,6 +19,8 @@ export class SignupComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
+  private destroyRef = inject(DestroyRef);
+  private progressTimers: number[] = [];
 
   username = '';
   password = '';
@@ -25,10 +28,13 @@ export class SignupComponent implements OnInit {
   inviteName = '';
   loading = false;
   error = '';
+  progressNote = '';
   policy: SignupPolicy | null = null;
   readonly inviteToken = new URLSearchParams(window.location.search).get('invite') || '';
+  readonly mediaNext = mediaSignup(new URLSearchParams(window.location.search).get('next'));
 
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => this.clearProgress());
     if (!this.inviteToken) {
       this.auth.signupPolicy().then(
         policy => {
@@ -64,6 +70,7 @@ export class SignupComponent implements OnInit {
 
   submit(): void {
     if (this.loading) return;
+    if (this.inviteToken && !this.username.trim()) return;
     if (!this.inviteToken && this.policy?.mode === 'closed') return;
     const validationError = this.validationError();
     if (validationError) {
@@ -74,6 +81,7 @@ export class SignupComponent implements OnInit {
 
     this.loading = true;
     this.error = '';
+    this.armProgress();
     this.cdr.markForCheck();
     const pending = this.inviteToken
       ? this.auth.enrollInvitation(this.inviteToken, this.password)
@@ -81,15 +89,40 @@ export class SignupComponent implements OnInit {
     pending.then(
       () => {
         this.loading = false;
+        this.clearProgress();
         this.cdr.markForCheck();
         return continueAfterAuth(this.router);
       },
       err => {
         this.error = this.errorMessage(err);
         this.loading = false;
+        this.clearProgress();
         this.cdr.markForCheck();
       }
     );
+  }
+
+  submitLabel(): string {
+    if (!this.loading) return this.inviteToken ? 'Finish account' : 'Sign up';
+    return signupProgress(0).button;
+  }
+
+  private armProgress(): void {
+    this.clearProgress();
+    const started = Date.now();
+    this.progressNote = signupProgress(0).note;
+    for (const at of [5_000, 30_000]) {
+      this.progressTimers.push(window.setTimeout(() => {
+        this.progressNote = signupProgress(Date.now() - started).note;
+        this.cdr.markForCheck();
+      }, at));
+    }
+  }
+
+  private clearProgress(): void {
+    for (const timer of this.progressTimers) window.clearTimeout(timer);
+    this.progressTimers = [];
+    this.progressNote = '';
   }
 
   private validationError(): string | null {

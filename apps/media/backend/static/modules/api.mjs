@@ -47,7 +47,11 @@ export async function api(path, options = {}) {
     }
     response = await fetch(`${root}${path}`, { ...options, credentials: "include", headers });
   } catch (error) {
-    if (error?.name === "AbortError" || error?.name === "TimeoutError") throw error;
+    if (error?.name === "AbortError") throw error;
+    // A caller-owned signal times out on purpose and the caller shows Retry.
+    // With no signal, including the CSRF preflight's own budget, a timeout is
+    // "can't reach Media" rather than a silent abort.
+    if (error?.name === "TimeoutError" && options.signal) throw error;
     const offline = new Error(messageFrom(null, 0));
     offline.status = 0;
     throw offline;

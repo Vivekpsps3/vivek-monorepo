@@ -3,14 +3,22 @@
     <div class="auth-intro">
       <a class="brand-lockup" [href]="pageHref('login')">Account</a>
       <h1 id="signup-title">{{ inviteToken ? 'Finish your account' : (policy?.mode === 'closed' ? 'Signup is closed' : 'Create account') }}</h1>
-      <p class="privacy-note">This account signs in to your Hub, Finance, Travel, and Media. A lost passphrase cannot be reset or used to recover your encrypted finance data.</p>
+      @if (mediaNext) {
+        <p class="privacy-note">One account for Hub, Media, Travel and Finance.</p>
+        <details class="privacy-note">
+          <summary>About your passphrase</summary>
+          <p>A lost passphrase cannot be reset or used to recover your encrypted finance data.</p>
+        </details>
+      } @else {
+        <p class="privacy-note">This account signs in to your Hub, Finance, Travel, and Media. A lost passphrase cannot be reset or used to recover your encrypted finance data.</p>
+      }
     </div>
 
     <div class="login-panel">
       <ui-card>
         <form class="login-form" novalidate (ngSubmit)="submit()">
           @if (inviteToken) {
-            <p class="password-hint">{{ inviteName || 'Your account' }} signs in as <strong>{{ username || '…' }}</strong></p>
+            <p id="signup-invite-identity" class="password-hint">{{ inviteName || 'Your account' }} signs in as <strong>{{ username || '…' }}</strong></p>
           } @else if (!policy) {
             <p class="password-hint">Checking whether signup is open.</p>
           } @else if (policy.mode === 'closed') {
@@ -49,8 +57,16 @@
             @if (error) {
               <p class="login-error" role="alert">{{ error }}</p>
             }
-            <ui-button type="submit" [disabled]="loading || (!!inviteToken && !username)">
-              {{ loading ? 'Creating account' : (inviteToken ? 'Finish account' : 'Sign up') }}
+            @if (progressNote) {
+              <p class="password-hint" role="status">{{ progressNote }}</p>
+            }
+            <ui-button
+              type="submit"
+              [disabled]="loading"
+              [ariaDisabled]="!!inviteToken && !username"
+              [describedBy]="inviteToken && !username ? 'signup-invite-identity' : undefined"
+              [busy]="loading">
+              {{ submitLabel() }}
             </ui-button>
           } @else if (error) {
             <p class="login-error" role="alert">{{ error }}</p>

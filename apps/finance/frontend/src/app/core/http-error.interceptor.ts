@@ -1,21 +1,22 @@
-import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpContext, HttpContextToken, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
-import { ToastService } from '@vivek/ui';
+import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
+
+/** Callers that already show the failure set this so the interceptor stays quiet. */
+export const SILENT_ERROR_TOAST = new HttpContextToken<boolean>(() => false);
+
+export function silentErrorToast(): HttpContext {
+  return new HttpContext().set(SILENT_ERROR_TOAST, true);
+}
 
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const toast = inject(ToastService);
-  const silent = req.url.includes('/health');
+  const silent = req.url.includes('/health') || req.context.get(SILENT_ERROR_TOAST);
   return next(req).pipe(
     catchError((err: HttpErrorResponse) => {
-      const msg =
-        typeof err.error?.detail === 'string'
-          ? err.error.detail
-          : typeof err.error?.error === 'string'
-            ? err.error.error
-            : err.message || 'Request failed';
-      if (!silent) {
-        toast.error(msg);
+      if (!silent && err.status !== 422) {
+        toast.error(HTTP_ERROR_FALLBACK);
       }
       return throwError(() => err);
     })

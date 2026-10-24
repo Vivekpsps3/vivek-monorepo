@@ -6,21 +6,23 @@ import { VaultService } from '../crypto/vault.service';
 import { NetWorth } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
 
 @Component({
   selector: 'app-net-worth-embed',
   standalone: true,
-  imports: [CommonModule],
+  imports: [
+    MoneyPipe, CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a class="card" href="/" target="_top">
       @if (netWorth) {
         <p class="eyebrow">Net worth</p>
-        <p class="total money">\${{ netWorth.total | number: '1.0-0' }}</p>
+        <p class="total money">{{ netWorth.total | money }}</p>
         <p class="break">
-          Assets \${{ netWorth.other_assets | number: '1.0-0' }}
-          · Holdings \${{ netWorth.portfolio | number: '1.0-0' }}
-          · Debts \${{ netWorth.liabilities | number: '1.0-0' }}
+          Assets {{ netWorth.other_assets | money }}
+          · Holdings {{ netWorth.portfolio | money }}
+          · Debts {{ (-netWorth.liabilities) | money }}
         </p>
       } @else if (error) {
         <p class="break">{{ error }}</p>

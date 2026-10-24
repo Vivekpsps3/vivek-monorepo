@@ -21,7 +21,7 @@
   </header>
 
   <main id="hub-main">
-    <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
+    <p class="eyebrow">{{ headingToday | appDate:'heading' }}</p>
     <h1>{{ name }}</h1>
 
     <div class="pair">
@@ -63,15 +63,16 @@
           <p class="figure-note" role="status">Checking your journal…</p>
         } @else if (mediaState === 'unavailable') {
           <p class="figure-note">Media is not available from here right now.</p>
+          <button type="button" class="open-link" (click)="retryMedia()">Retry</button>
         } @else if (media) {
-          @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length) {
+          @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length && !media.next_episodes.length) {
             <p class="quiet-title">Nothing in progress</p>
             <a class="open-link" href="/media/#/search">Add something</a>
           }
           @if (media.currently.length) {
             <ul class="rows">
               @for (item of media.currently.slice(0, 3); track item.id) {
-                <li><span>{{ item.title }} <em>{{ item.kind }}</em></span><strong>{{ item.progress_label || 'In progress' }}</strong></li>
+                <li><a [href]="'/media/#/item/' + item.id">{{ item.title }} <em>{{ kindLabel(item.kind) }}</em></a><strong>{{ item.progress_label || 'In progress' }}</strong></li>
               }
             </ul>
           }
@@ -79,7 +80,7 @@
             <h3>Next episode</h3>
             <ul class="rows">
               @for (item of media.next_episodes.slice(0, 2); track item.show_title + item.season + item.episode) {
-                <li><span>{{ item.show_title }}</span><strong>S{{ item.season }} E{{ item.episode }}</strong></li>
+                <li><a [href]="item.entry_id ? '/media/#/item/' + item.entry_id : '/media/'">{{ item.show_title }}</a><strong>S{{ item.season }} E{{ item.episode }}</strong></li>
               }
             </ul>
           }
@@ -87,7 +88,7 @@
             <h3>Coming up</h3>
             <ul class="rows">
               @for (item of media.upcoming.slice(0, 3); track item.id) {
-                <li><span>{{ item.title }}</span><strong>{{ mediaWhen(item) }}</strong></li>
+                <li><a [href]="'/media/#/item/' + item.id">{{ item.title }}</a><strong>{{ mediaWhen(item) }}</strong></li>
               }
             </ul>
           }
@@ -95,7 +96,7 @@
             <h3>Recent notes</h3>
             <ul class="rows">
               @for (item of media.recent_reviews.slice(0, 2); track item.id) {
-                <li><span>{{ item.title }}</span><strong>{{ item.rating == null ? 'Unrated' : item.rating + '/10' }}</strong></li>
+                <li><a [href]="'/media/#/item/' + item.id">{{ item.title }}</a><strong>{{ item.review_excerpt || (item.rating == null ? 'Unrated' : item.rating + '/10') }}</strong></li>
               }
             </ul>
           }
@@ -120,7 +121,7 @@
           <p class="figure-note" role="alert">Finance could not be read.</p>
           <a class="open-link" routerLink="/">Retry in Finance</a>
         } @else if (netWorth) {
-          <p class="quiet-title">{{ netWorth.total | currency:'USD':'symbol':'1.0-0' }}</p>
+          <p class="quiet-title">{{ netWorth.total | money }}</p>
           @if (freshness) {
             <p class="figure-note">{{ freshness }}</p>
           }
@@ -129,15 +130,15 @@
         <details class="finance-more">
           <summary>Breakdown</summary>
           <dl class="split">
-            <div><dt>Assets</dt><dd>{{ netWorth.other_assets | currency:'USD':'symbol':'1.0-0' }}</dd></div>
-            <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | currency:'USD':'symbol':'1.0-0' }}</dd></div>
-            <div><dt>Debts</dt><dd>{{ netWorth.liabilities | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+            <div><dt>Assets</dt><dd>{{ netWorth.other_assets | money }}</dd></div>
+            <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | money }}</dd></div>
+            <div><dt>Debts</dt><dd>{{ (-netWorth.liabilities) | money }}</dd></div>
           </dl>
           @if (fidelityAccounts().length) {
             <h3>Fidelity</h3>
             <ul class="rows">
               @for (account of fidelityAccounts(); track account.label) {
-                <li><span>{{ account.label }}</span><strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+                <li><span>{{ account.label }}</span><strong>{{ account.value | money }}</strong></li>
               }
             </ul>
           }
@@ -147,7 +148,7 @@
               @for (account of otherAccounts(); track account.label) {
                 <li>
                   <span>{{ account.label }} <em>{{ account.positions }} {{ account.positions === 1 ? 'position' : 'positions' }}</em></span>
-                  <strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong>
+                  <strong>{{ account.value | money }}</strong>
                 </li>
               }
             </ul>
@@ -156,7 +157,7 @@
             <h3>Largest positions</h3>
             <ul class="rows">
               @for (position of positions; track position.symbol) {
-                <li><span>{{ position.symbol }} <em>{{ position.account }}</em></span><strong>{{ position.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+                <li><span>{{ position.symbol }} <em>{{ position.account }}</em></span><strong>{{ position.value | money }}</strong></li>
               }
             </ul>
             <p class="figure-note">Positions are already included in the portfolio total.</p>

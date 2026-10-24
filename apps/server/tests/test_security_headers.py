@@ -160,6 +160,8 @@ def test_finance_policy_is_stricter_than_travel_and_media():
         assert "unsafe-eval" not in parsed["script-src"]
         assert parsed["script-src-attr"] == "'none'"
         assert parsed["connect-src"] == "'self'"
+        assert "cloudflare" not in parsed["script-src"]
+        assert "cloudflare" not in parsed["connect-src"]
         assert parsed["object-src"] == "'none'"
         assert parsed["base-uri"] == "'self'"
         assert parsed["form-action"] == "'self'"

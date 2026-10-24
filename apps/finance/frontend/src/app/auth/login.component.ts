@@ -58,7 +58,12 @@ export class LoginComponent implements OnInit {
   }
 
   submit(): void {
-    if (!this.canSubmit) return;
+    if (this.loading) return;
+    if (!this.canSubmit) {
+      this.error = 'Enter the required account details.';
+      this.cdr.markForCheck();
+      return;
+    }
     if (!this.legacyMode && !this.setupMode && this.username.includes('@')) {
       this.error = 'Sign in with your username, not your email.';
       this.cdr.markForCheck();

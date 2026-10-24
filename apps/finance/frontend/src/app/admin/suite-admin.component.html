@@ -75,19 +75,24 @@
                 <li><ui-icon name="wallet" size="sm" /><span>{{ hasVault(user) ? 'Vault ready' : 'No vault' }}</span></li>
                 <li><ui-icon name="document" size="sm" /><span>{{ recordsLabel(user) }}</span></li>
               </ul>
-              @if (isSelf(user) && wouldRemoveFinalActiveAdmin(user)) {
-                <p class="lock-note">This is the only active admin, so the role and access stay as they are.</p>
+              @if (roleLockReason(user); as reason) {
+                <p class="lock-note" [id]="'role-lock-' + user.id">{{ reason }}</p>
+              }
+              @if (deleteLockReason(user); as reason) {
+                <p class="lock-note" [id]="'delete-lock-' + user.id">{{ reason }}</p>
               }
               <div class="person-actions">
                 <button
                   type="button"
-                  [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
+                  [attr.aria-disabled]="roleLockReason(user) ? 'true' : null"
+                  [attr.aria-describedby]="roleLockReason(user) ? 'role-lock-' + user.id : null"
                   (click)="toggleRole(user)">
                   {{ user.role === 'admin' ? 'Make member' : 'Make admin' }}
                 </button>
                 <button
                   type="button"
-                  [disabled]="isSelf(user) || wouldRemoveFinalActiveAdmin(user)"
+                  [attr.aria-disabled]="roleLockReason(user) ? 'true' : null"
+                  [attr.aria-describedby]="roleLockReason(user) ? 'role-lock-' + user.id : null"
                   (click)="toggleActive(user)">
                   {{ user.is_active ? 'Disable' : 'Enable' }}
                 </button>
@@ -100,7 +105,12 @@
                   <button type="button" (click)="reissue(user)">New enrollment link</button>
                 }
                 <button type="button" (click)="resetUser(user)">Reset finance data</button>
-                <button type="button" class="is-danger" [disabled]="!canDelete(user)" (click)="deleteUser(user)">Delete</button>
+                <button
+                  type="button"
+                  class="is-danger"
+                  [attr.aria-disabled]="deleteLockReason(user) ? 'true' : null"
+                  [attr.aria-describedby]="deleteLockReason(user) ? 'delete-lock-' + user.id : null"
+                  (click)="deleteUser(user)">Delete</button>
               </div>
             </li>
           }

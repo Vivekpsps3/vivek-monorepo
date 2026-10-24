@@ -38,14 +38,14 @@ export class StockLabScenarioService {
   }
 
   list(): Promise<StockLabScenario[]> {
-    return this.encStore.getStockLabScenarios();
+    return this.encStore.getStockLabScenarios({ silent: true });
   }
 
   save(scenario: StockLabScenario): Promise<StockLabScenario> {
-    return this.encStore.saveStockLabScenario(scenario, scenario.id || undefined);
+    return this.encStore.saveStockLabScenario(scenario, scenario.id || undefined, { silent: true });
   }
 
   delete(id: number): Promise<void> {
-    return this.encStore.deleteStockLabScenario(id);
+    return this.encStore.deleteStockLabScenario(id, { silent: true });
   }
 }

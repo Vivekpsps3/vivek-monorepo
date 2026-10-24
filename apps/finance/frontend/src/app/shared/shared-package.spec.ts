@@ -1,5 +1,5 @@
 import { fakeAsync, tick } from '@angular/core/testing';
-import { ConfirmService, readThemeChoice, readThemePreference, setThemePreference, ToastService } from '@vivek/ui';
+import { ConfirmService, chartSliceBorder, readThemeChoice, readThemePreference, setThemePreference, ToastService } from '@vivek/ui';
 
 describe('shared UI package helpers', () => {
   const storageKey = 'test-theme-preference';
@@ -58,18 +58,64 @@ describe('shared UI package helpers', () => {
     await expectAsync(current).toBeResolvedTo(true);
   });
 
-  it('clears the previous toast timer when a newer toast replaces it', fakeAsync(() => {
+  it('stacks toasts and expires each one on its own timer', fakeAsync(() => {
     const service = new ToastService();
-    const latest: ({ message: string } | null)[] = [null];
-    service.toast$.subscribe(value => (latest[0] = value));
+    const visible: string[][] = [];
+    service.toasts$.subscribe(value => visible.push(value.map(toast => toast.message)));
 
     service.show('First');
     tick(3000);
     service.show('Second');
     tick(1000);
-    expect(latest[0]?.message).toBe('Second');
+    expect(visible.at(-1)).toEqual(['First', 'Second']);
+
+    tick(1000);
+    expect(visible.at(-1)).toEqual(['Second']);
 
     tick(3000);
-    expect(latest[0]).toBeNull();
+    expect(visible.at(-1)).toEqual([]);
   }));
+
+  it('keeps an error toast with an action until it is dismissed', fakeAsync(() => {
+    const service = new ToastService();
+    const visible: string[][] = [];
+    service.toasts$.subscribe(value => visible.push(value.map(toast => toast.message)));
+    service.error("Couldn't delete this bill.", { label: 'Try again', run: () => undefined });
+    tick(20000);
+    expect(visible.at(-1)).toEqual(["Couldn't delete this bill."]);
+    service.dismiss();
+    expect(visible.at(-1)).toEqual([]);
+  }));
+
+  it('does not start a toast timer while the stack is paused', fakeAsync(() => {
+    const service = new ToastService();
+    const visible: string[][] = [];
+    service.toasts$.subscribe(value => visible.push(value.map(toast => toast.message)));
+    service.pause();
+    service.show('Holding saved');
+    tick(20000);
+    expect(visible.at(-1)).toEqual(['Holding saved']);
+    service.resume();
+    tick(4999);
+    expect(visible.at(-1)).toEqual(['Holding saved']);
+    tick(1);
+    expect(visible.at(-1)).toEqual([]);
+  }));
+
+  it('still auto-dismisses a success toast that offers Undo', fakeAsync(() => {
+    const service = new ToastService();
+    const visible: string[][] = [];
+    service.toasts$.subscribe(value => visible.push(value.map(toast => toast.message)));
+    service.success('Holding deleted', () => undefined);
+    tick(7999);
+    expect(visible.at(-1)).toEqual(['Holding deleted']);
+    tick(1);
+    expect(visible.at(-1)).toEqual([]);
+  }));
+
+  it('draws a 2px slice border in the card color', () => {
+    const border = chartSliceBorder();
+    expect(border.borderWidth).toBe(2);
+    expect(border.borderColor.length).toBeGreaterThan(0);
+  });
 });

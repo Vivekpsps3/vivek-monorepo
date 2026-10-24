@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { errors, expect, Locator, Page } from '@playwright/test';
+import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
 
 // Production e2e builds with --base-href /finance/. ng serve stays at /.
 const BASE_PREFIX = process.env.E2E_DIST ? '/finance' : '';
@@ -28,6 +29,7 @@ export function externalPath(internal: string): string {
 
 function routeReady(target: Page, pathname: string) {
   const bare = pathname.replace(/^\/finance(?=\/|$)/, '') || '/';
+  if (bare === '/hub/admin' || bare.startsWith('/hub/admin/')) return target.locator('app-suite-admin');
   if (bare === '/hub' || bare.startsWith('/hub/')) return target.locator('app-hub');
   if (bare === '/') return target.getByRole('heading', { level: 1, name: 'Home', exact: true });
   if (bare === '/have' || bare.startsWith('/have/')) return target.getByRole('heading', { level: 1, name: 'What you have', exact: true });
@@ -66,7 +68,11 @@ function lastCompletedTradingDate(now = new Date()): string {
 }
 
 /** Each test uses a fresh key and an in-memory ciphertext server; no real API or vault. */
-export async function syntheticVault(page: Page, seed: Record<string, Payload[]> = {}) {
+export async function syntheticVault(
+  page: Page,
+  seed: Record<string, Payload[]> = {},
+  options: { role?: 'user' | 'admin' } = {},
+) {
   const context = page.context();
   const attachedPages = new WeakSet<Page>();
   const attach = (target: Page) => {
@@ -75,11 +81,19 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
     target.on('pageerror', error => console.error('Synthetic finance browser error:', error.message));
   };
   attach(page);
+  // finance_session is httponly. The app only calls /api/auth/me when the
+  // readable finance_csrf companion is present, which this synthetic session is.
+  await context.addCookies([{
+    name: 'finance_csrf',
+    value: 'synthetic',
+    domain: '127.0.0.1',
+    path: '/',
+  }]);
   const key = randomBytes(32);
   const passphrase = 'Synthetic finance test passphrase';
   const salt = randomBytes(16);
   const wrapIv = randomBytes(12);
-  const wrapCipher = createCipheriv('aes-256-gcm', pbkdf2Sync(passphrase, salt, 1000, 32, 'sha256'), wrapIv);
+  const wrapCipher = createCipheriv('aes-256-gcm', pbkdf2Sync(passphrase, salt, DEFAULT_PBKDF2_ITERATIONS, 32, 'sha256'), wrapIv);
   const wrappedKey = Buffer.concat([wrapIv, wrapCipher.update(key), wrapCipher.final(), wrapCipher.getAuthTag()]).toString('base64');
   const records = new Map<string, RecordRow>();
   const quoteRequests: string[] = [];
@@ -125,9 +139,24 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const respond = (body: any, status = 200) => route.fulfill({ status, json: body });
-    if (path === '/api/auth/me') return respond({ user: { id: 987, username: 'synthetic', display_name: 'Synthetic user', role: 'user', is_active: true } });
+    if (path === '/api/auth/me') return respond({ user: { id: 987, username: 'synthetic', display_name: 'Synthetic user', role: options.role ?? 'user', is_active: true } });
+    if (path === '/api/admin/users') return respond([
+      { id: 987, username: 'synthetic', display_name: 'Synthetic user', role: 'admin', is_active: true, has_vault: true, last_login_at: '2026-10-22T12:00:00Z' },
+      { id: 988, username: 'member', display_name: 'Synthetic member', role: 'user', is_active: true, has_vault: false, last_login_at: null },
+    ]);
+    if (path === '/api/admin/metrics') return respond({ totals: {}, finance_rows: {}, per_user: [], tables: [], recent: [] });
     if (path === '/api/vault/status') return respond({ exists: true, key_version: 1,
-      kdf_algorithm: 'PBKDF2', kdf_salt_b64: salt.toString('base64'), kdf_iterations: 1000, wrapped_dek_b64: wrappedKey });
+      kdf_algorithm: 'PBKDF2', kdf_salt_b64: salt.toString('base64'), kdf_iterations: DEFAULT_PBKDF2_ITERATIONS, wrapped_dek_b64: wrappedKey });
+    if (path === '/api/auth/passwordless/wraps' && request.method() === 'GET') {
+      return respond({
+        auth: {
+          kdf_salt_b64: salt.toString('base64'),
+          kdf_iterations: DEFAULT_PBKDF2_ITERATIONS,
+          wrapped_private_key_b64: wrappedKey,
+          recovery_wrapped_private_key_b64: '',
+        },
+      });
+    }
     if (path === '/api/health') return respond({ status: 'ok' });
     if (path === '/api/vault/records') {
       const collection = new URL(request.url()).searchParams.get('collection');
@@ -179,6 +208,37 @@ export async function syntheticVault(page: Page, seed: Record<string, Payload[]>
         return row;
       });
       return respond(saved);
+    }
+    if (path === '/api/market/research/batch') {
+      const body = request.postDataJSON() || {};
+      const symbols = Array.isArray(body.symbols) && body.symbols.length ? body.symbols : ['VOO'];
+      return respond({
+        results: symbols.map((symbol: string) => ({
+          symbol: String(symbol).trim().toUpperCase(),
+          valid: true,
+          source: 'synthetic',
+          fetched_at: '2026-10-08T00:00:00Z',
+          cache_status: 'hit',
+          warnings: [],
+          profile: { name: `${String(symbol).trim().toUpperCase()} fund` },
+          quote: { current_price: 125 },
+          history: [],
+          dividends: [],
+          splits: [],
+          fundamentals: null,
+          etf: null,
+          analyst: null,
+        })),
+        failed: [],
+      });
+    }
+    if (path.startsWith('/api/market/research/')) {
+      const symbol = decodeURIComponent(path.split('/').pop() || 'VOO').trim().toUpperCase();
+      return respond({
+        symbol, valid: true, source: 'synthetic', fetched_at: '2026-10-08T00:00:00Z', cache_status: 'hit',
+        warnings: [], profile: { name: `${symbol} fund` }, quote: { current_price: 125 },
+        history: [], dividends: [], splits: [], fundamentals: null, etf: null, analyst: null,
+      });
     }
     if (path.startsWith('/api/market/price/')) {
       const symbol = decodeURIComponent(path.split('/').pop()!);

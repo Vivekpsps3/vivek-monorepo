@@ -11,13 +11,13 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { ConfirmService } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
-import { ToastService } from '@vivek/ui';
+import { ToastService, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
 import {
   FixedExpense,
   FixedExpenseCreate,
   FixedExpenseFrequency,
 } from '../models/transaction.model';
-import { todayIsoDate } from '@vivek/browser';
+import { countableCents, dollarsFromCountedCents, needsFixing, todayIsoDate, toDollars, validateBill, validateMoney, type FieldIssue } from '@vivek/browser';
 import {
   UiBadgeComponent,
   UiButtonComponent,
@@ -31,11 +31,16 @@ import {
   UiDialogComponent,
 } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
+import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary, focusField } from '../shared/form-validation';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 @Component({
   selector: 'app-fixed-expenses',
   standalone: true,
   imports: [
+    AppDatePipe,
+    MoneyPipe,
     CommonModule,
     FormsModule,
     UiPageHeaderComponent,
@@ -47,6 +52,8 @@ import { InfoTipComponent } from '../shared/info-tip.component';
     UiSelectComponent,
     UiBadgeComponent,
     UiDialogComponent,
+    UiFieldControlDirective,
+    UiFieldControlDirective,
     InfoTipComponent,
   ],
   templateUrl: './fixed-expenses.component.html',
@@ -60,6 +67,9 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   showModal = false;
   saving = false;
   saveError = '';
+  fieldErrors: FieldIssue[] = [];
+  formSubmitted = false;
+  readonly needsFixing = needsFixing;
   editingId: number | null = null;
   form: FixedExpenseCreate = this.emptyForm();
 
@@ -96,15 +106,34 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   }
 
   get activeMonthlyTotal(): number {
-    return this.expenses
-      .filter(row => row.is_active)
-      .reduce((sum, row) => sum + row.monthly_amount, 0);
+    return countedBillTotal(this.expenses.filter(row => row.is_active).map(row => row.monthly_amount));
   }
 
   get activeAnnualTotal(): number {
-    return this.expenses
-      .filter(row => row.is_active)
-      .reduce((sum, row) => sum + row.annual_amount, 0);
+    return countedBillTotal(this.expenses.filter(row => row.is_active).map(row => row.annual_amount));
+  }
+
+  fieldError(field: string): string | null {
+    return this.formSubmitted ? fieldMessage(this.fieldErrors, field) : null;
+  }
+
+  focusNamed(field: string): void {
+    focusField(document.getElementById('bill-form'), field);
+  }
+
+  revalidate(): void {
+    if (!this.formSubmitted) return;
+    this.fieldErrors = this.billIssues();
+    this.cdr.markForCheck();
+  }
+
+  private billIssues(): FieldIssue[] {
+    return validateBill({
+      name: this.form.name,
+      category: this.form.category,
+      amount: this.form.amount,
+      dueDay: this.form.due_day,
+    });
   }
 
   private emptyForm(): FixedExpenseCreate {
@@ -160,14 +189,21 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   }
 
   saveExpense(): void {
-    if (!this.form.name.trim() || !this.form.category.trim()) {
-      this.toastService.error('Name and category are required.');
+    if (this.saving) return;
+    const errors = this.billIssues();
+    this.fieldErrors = errors;
+    this.formSubmitted = true;
+    if (errors.length) {
+      this.cdr.markForCheck();
+      setTimeout(() => focusErrorSummary(document.getElementById('bill-form')));
       return;
     }
-    if (this.form.amount < 0) {
-      this.toastService.error('Amount must be non-negative.');
-      return;
-    }
+    const parsed = validateMoney(this.form.amount, {
+      allowZero: false,
+      negativeMessage: 'Enter an amount above $0.',
+      emptyMessage: 'Enter an amount above $0.',
+    });
+    if (!('cents' in parsed)) return;
     this.saving = true;
     this.saveError = '';
     const wasEditing = this.editingId !== null;
@@ -175,25 +211,26 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       ...this.form,
       name: this.form.name.trim(),
       category: this.form.category.trim(),
-      amount: Math.round((this.form.amount || 0) * 100) / 100,
+      amount: toDollars(parsed.cents),
       due_day: this.form.due_day || null,
       payment_account: this.form.payment_account?.trim() || null,
       notes: this.form.notes?.trim() || '',
     };
     const request =
       this.editingId !== null
-        ? this.financeService.updateFixedExpense(this.editingId, payload)
-        : this.financeService.addFixedExpense(payload);
+        ? this.financeService.updateFixedExpense(this.editingId, payload, true)
+        : this.financeService.addFixedExpense(payload, true);
     request.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.saving = false;
         this.closeModal();
-        this.toastService.success(wasEditing ? 'Bill updated' : 'Bill added');
+        this.toastService.success(successCopy('Bill', wasEditing ? 'saved' : 'added'));
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
-        this.saveError = 'This bill could not be saved. Your details are still here; check your vault and try again.';
+        this.saveError = dialogSaveAlert();
+        setTimeout(() => focusDialogAlert(document.getElementById('bill-form')));
         this.cdr.markForCheck();
       },
     });
@@ -207,13 +244,28 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
-    this.financeService.deleteFixedExpense(row.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success('Fixed expense deleted'),
-      error: () => this.toastService.error('This bill could not be deleted. Try again.'),
+    this.financeService.deleteFixedExpense(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => this.toastService.success('Bill deleted'),
+      error: () => this.toastService.error(failureCopy('delete', 'this bill'), {
+        label: 'Try again',
+        run: () => { void this.deleteExpense(row); },
+      }),
     });
   }
 
   frequencyLabel(value: string): string {
     return this.frequencyOptions.find(option => option.value === value)?.label || value;
   }
+}
+
+function countedBillTotal(values: unknown[]): number {
+  let cents = 0;
+  for (const value of values) {
+    if (needsFixing(value, 'positive')) continue;
+    const part = countableCents(value, 'positive');
+    if (part == null) continue;
+    cents += part;
+  }
+  const dollars = dollarsFromCountedCents(cents);
+  return Number.isFinite(dollars) ? dollars : 0;
 }

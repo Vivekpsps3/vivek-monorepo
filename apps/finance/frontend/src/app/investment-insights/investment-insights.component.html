@@ -18,29 +18,29 @@
       <div class="answer-copy">
         <p class="section-eyebrow">Projection answer</p>
         <h2>Projected portfolio <app-info-tip label="Projection scope" text="Growth of holdings. This does not change net worth." /></h2>
-        <strong class="answer-value money">${{ projectedValue | number: '1.0-0' }}</strong>
+        <strong class="answer-value money">{{ projectedValue | money:'whole':'auto':true }}</strong>
         <p>
           In {{ projectionYears }} years, starting from
-          <strong class="money">${{ portfolioValue | number: '1.0-0' }}</strong>, assuming
+          <strong class="money">{{ portfolioValue | money:'whole':'auto':true }}</strong>, assuming
           <strong>{{ annualGrowthRate | number: '1.1-1' }}%</strong> annual growth and
-          <strong class="money">${{ monthlyContribution | number: '1.0-0' }}</strong> monthly contributions.
+          <strong class="money">{{ monthlyContribution | money:'whole':'auto':true }}</strong> monthly contributions.
         </p>
       </div>
 
       <div class="answer-metrics" aria-label="Projection answer details">
         <div>
           <span>Today's-dollar value</span>
-          <strong class="money">${{ projectedRealValue | number: '1.0-0' }}</strong>
+          <strong class="money">{{ projectedRealValue | money:'whole':'auto':true }}</strong>
           <small>After {{ inflationRate | number: '1.1-1' }}% inflation</small>
         </div>
         <div>
           <span>Future monthly income</span>
-          <strong class="money">${{ projectedMonthlyWithdrawalIncome | number: '1.0-0' }}</strong>
+          <strong class="money">{{ projectedMonthlyWithdrawalIncome | money:'whole':'auto':true }}</strong>
           <small>{{ withdrawalRate | number: '1.1-1' }}% rule on projected value</small>
         </div>
         <div>
           <span>Spending power / month</span>
-          <strong class="money">${{ projectedRealMonthlyWithdrawalIncome | number: '1.0-0' }}</strong>
+          <strong class="money">{{ projectedRealMonthlyWithdrawalIncome | money:'whole':'auto':true }}</strong>
           <small>In today's dollars</small>
         </div>
       </div>
@@ -51,7 +51,7 @@
         <ui-card [title]="'Assumptions'">
           <div class="current-snapshot">
             <span>Current portfolio <app-info-tip label="Current portfolio" text="From current holdings and saved market prices." /></span>
-            <strong class="money">${{ portfolioValue | number: '1.2-2' }}</strong>
+            <strong class="money">{{ portfolioValue | money }}</strong>
           </div>
 
           <div class="preset-block">
@@ -65,7 +65,7 @@
                   variant="secondary"
                   size="sm"
                   [ariaLabel]="rate + '% annual growth preset'"
-                  [disabled]="annualGrowthRate === rate"
+                  [pressed]="annualGrowthRate === rate"
                   (clicked)="setGrowthPreset(rate)">
                   {{ rate }}%
                 </ui-button>
@@ -111,41 +111,41 @@
           <div class="projection-summary">
             <div>
               <span>Projected value</span>
-              <strong class="money">${{ projectedValue | number: '1.2-2' }}</strong>
+              <strong class="money">{{ projectedValue | money }}</strong>
             </div>
             <div>
               <span>Today's dollars</span>
-              <strong class="money">${{ projectedRealValue | number: '1.2-2' }}</strong>
+              <strong class="money">{{ projectedRealValue | money }}</strong>
             </div>
             <div>
               <span>Growth above contributions</span>
-              <strong class="money">${{ projectedGrowthOnly | number: '1.2-2' }}</strong>
+              <strong class="money">{{ projectedGrowthOnly | money }}</strong>
             </div>
             <div>
               <span>Years to double</span>
-              <strong>{{ yearsToDouble === null ? '-' : (yearsToDouble | number: '1.1-1') }}</strong>
+              <strong>{{ yearsToDouble === null ? '—' : (yearsToDouble | number: '1.1-1') }}</strong>
             </div>
           </div>
           <div class="projection-comparison" aria-label="Contribution baseline and scenario comparison">
             <div>
               <span>Baseline monthly contribution</span>
-              <strong class="money">${{ monthlyContribution | number: '1.0-0' }}</strong>
+              <strong class="money">{{ monthlyContribution | money:'whole':'auto':true }}</strong>
             </div>
             <div>
               <span>Scenario monthly contribution</span>
-              <strong class="money">${{ scenarioMonthlyContribution | number: '1.0-0' }}</strong>
+              <strong class="money">{{ scenarioMonthlyContribution | money:'whole':'auto':true }}</strong>
             </div>
             <div>
               <span>Baseline projected value</span>
-              <strong class="money">${{ projectedValue | number: '1.0-0' }}</strong>
+              <strong class="money">{{ projectedValue | money:'whole':'auto':true }}</strong>
             </div>
             <div>
               <span>Scenario projected value</span>
-              <strong class="money">${{ scenarioProjectedValue | number: '1.0-0' }}</strong>
+              <strong class="money">{{ scenarioProjectedValue | money:'whole':'auto':true }}</strong>
             </div>
             <div>
               <span>Difference after {{ projectionYears }} years</span>
-              <strong class="money">${{ contributionScenarioDifference | number: '1.0-0' }}</strong>
+              <strong class="money">{{ contributionScenarioDifference | money:'whole':'auto':true }}</strong>
               <small>Same starting value, return, and horizon</small>
             </div>
           </div>
@@ -154,11 +154,11 @@
         <section class="insight-grid" aria-label="Key outputs">
           <div class="insight-box">
             <span>Expected annual growth</span>
-            <strong class="money">${{ annualExpectedGrowth | number: '1.2-2' }}</strong>
+            <strong class="money">{{ annualExpectedGrowth | money }}</strong>
           </div>
           <div class="insight-box primary">
             <span>If retiring today</span>
-            <strong class="money">${{ monthlyWithdrawalIncome | number: '1.2-2' }}</strong>
+            <strong class="money">{{ monthlyWithdrawalIncome | money }}</strong>
           </div>
           <div class="insight-box">
             <span>Projected growth contribution</span>
@@ -166,7 +166,7 @@
           </div>
           <div class="insight-box">
             <span>Distance to next $1M</span>
-            <strong class="money">${{ nextMillionGap | number: '1.0-0' }}</strong>
+            <strong class="money">{{ nextMillionGap | money:'whole':'auto':true }}</strong>
           </div>
         </section>
 
@@ -178,7 +178,7 @@
                 <thead><tr><th>Period</th><th>Growth</th></tr></thead>
                 <tbody>
                   @for (row of growthRows; track row.label) {
-                    <tr><td>{{ row.label }}</td><td class="money">${{ row.amount | number: '1.2-2' }}</td></tr>
+                    <tr><td>{{ row.label }}</td><td class="money">{{ row.amount | money }}</td></tr>
                   }
                 </tbody>
               </ui-data-table>
@@ -189,7 +189,7 @@
                 <thead><tr><th>Period</th><th>{{ withdrawalRate | number: '1.1-1' }}% rule income</th></tr></thead>
                 <tbody>
                   @for (row of ruleOfFourRows; track row.label) {
-                    <tr><td>{{ row.label }}</td><td class="money">${{ row.amount | number: '1.2-2' }}</td></tr>
+                    <tr><td>{{ row.label }}</td><td class="money">{{ row.amount | money }}</td></tr>
                   }
                 </tbody>
               </ui-data-table>
@@ -205,7 +205,7 @@
                 <thead><tr><th>Year</th><th>Nominal</th><th>Today's dollars</th></tr></thead>
                 <tbody>
                   @for (point of milestoneRows; track point.year) {
-                    <tr><td>{{ point.year }}</td><td class="money">${{ point.value | number: '1.2-2' }}</td><td class="money">${{ point.realValue | number: '1.2-2' }}</td></tr>
+                    <tr><td>{{ point.year }}</td><td class="money">{{ point.value | money }}</td><td class="money">{{ point.realValue | money }}</td></tr>
                   }
                 </tbody>
               </ui-data-table>
@@ -216,7 +216,7 @@
                 <thead><tr><th>Scenario</th><th>{{ projectionYears }} year value</th><th>Monthly income</th></tr></thead>
                 <tbody>
                   @for (row of scenarioRows; track row.rate) {
-                    <tr><td>{{ row.label }}</td><td class="money">${{ row.value | number: '1.2-2' }}</td><td class="money">${{ row.monthlyIncome | number: '1.2-2' }}</td></tr>
+                    <tr><td>{{ row.label }}</td><td class="money">{{ row.value | money }}</td><td class="money">{{ row.monthlyIncome | money }}</td></tr>
                   }
                 </tbody>
               </ui-data-table>

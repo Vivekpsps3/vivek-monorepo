@@ -14,6 +14,7 @@ import { Router, RouterLink } from '@angular/router';
 import { FinanceService } from '../services/finance.service';
 import { FixedExpense, Holding, JobIncome, Subscription, Transaction } from '../models/transaction.model';
 import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '../crypto/client-finance';
+import { formatPercent } from '@vivek/browser';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { UiCardComponent, UiEmptyStateComponent } from '@vivek/ui';
@@ -25,7 +26,9 @@ import {
   chartSuccessColor,
   chartDangerColor,
   chartAccentColor,
+  chartSliceBorder,
 } from '@vivek/ui';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
 type ChartConstructor = new (
   item: ChartItem,
   config: unknown
@@ -34,12 +37,16 @@ type ChartConstructor = new (
 @Component({
   selector: 'app-charts',
   standalone: true,
-  imports: [CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, InfoTipComponent],
+  imports: [
+    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, InfoTipComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
+  formatShare(value: number | null | undefined): string {
+    return formatPercent(value, 1);
+  }
   @Input() embedded = false;
 
   @ViewChild('incomeExpenseChart') incomeExpenseCanvas!: ElementRef<HTMLCanvasElement>;
@@ -407,6 +414,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           backgroundColor: hasRefundEffects
             ? this.categoryRows.map(row => row.value < 0 ? chartDangerColor() : chartAccentColor())
             : this.chartColors(this.categoryRows.length),
+          ...chartSliceBorder(),
         }],
       },
       options: {
@@ -415,7 +423,8 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         ...(hasRefundEffects ? { indexAxis: 'y' } : {}),
         ...(hasRefundEffects ? { scales: chartCartesianScales() } : {}),
         plugins: {
-          legend: chartLegendBottom(),
+          // A bar chart's legend is the dataset name. Categories are already the axis labels.
+          legend: hasRefundEffects ? { display: false } : chartLegendBottom(),
           tooltip: { enabled: false },
         },
         onClick: (_event: unknown, active: Array<{ index: number }>) => {
@@ -448,6 +457,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           data: this.allocationRows.map(r => r.value),
           backgroundColor: this.chartColors(this.allocationRows.length),
+          ...chartSliceBorder(),
         }],
       },
       options: {

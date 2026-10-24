@@ -513,6 +513,8 @@ export interface NetWorth {
   as_of?: string;
   portfolio_sources?: Record<string, string>;
   portfolio_breakdown?: Record<string, number>;
+  /** Rows skipped because the stored amount is negative, non-finite, or over the max. */
+  excluded_invalid_amounts?: number;
 }
 
 

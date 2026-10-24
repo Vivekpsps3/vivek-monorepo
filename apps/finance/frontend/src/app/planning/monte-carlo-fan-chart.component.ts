@@ -12,6 +12,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { formatMoney as formatCents, fromDollars } from '@vivek/browser';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import {
   chartAccentColor,
@@ -359,11 +360,7 @@ export class MonteCarloFanChartComponent implements AfterViewInit, OnChanges, On
   }
 
   private formatMoney(v: number): string {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: this.currency,
-      maximumFractionDigits: 0,
-    }).format(v);
+    return formatCents(fromDollars(v), { style: 'compact', currency: this.currency });
   }
 
   private yearLabelAt(index: number, years: number[]): string {

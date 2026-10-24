@@ -9,8 +9,11 @@
     (function () {
       var choice = "system";
       try {
-        var stored = localStorage.getItem("media-theme");
-        if (stored === "light" || stored === "dark" || stored === "system") choice = stored;
+        var stored = localStorage.getItem("suite-theme") || localStorage.getItem("media-theme") || localStorage.getItem("ft-theme") || localStorage.getItem("travel-theme");
+        if (stored === "light" || stored === "dark" || stored === "system") {
+          choice = stored;
+          if (!localStorage.getItem("suite-theme")) localStorage.setItem("suite-theme", stored);
+        }
       } catch (error) {}
       var theme = choice;
       if (choice !== "light" && choice !== "dark") {
@@ -24,6 +27,7 @@
   </script>
   <script>window.MEDIA_ROOT = "__MEDIA_ROOT__";</script>
   <link rel="icon" href="__MEDIA_ROOT__/favicon.svg" type="image/svg+xml">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="__MEDIA_ROOT__/tokens.css">
   <link rel="stylesheet" href="__MEDIA_ROOT__/controls.css">
   <link rel="stylesheet" href="__MEDIA_ROOT__/static/app.css">
@@ -34,19 +38,55 @@
     <div class="topbar-inner">
       <a class="brand" href="#/">Media</a>
       <nav class="nav" aria-label="Media">
-        <a href="#/" data-nav="home">Now</a>
-        <a href="#/calendar" data-nav="calendar">Calendar</a>
-        <a href="#/library" data-nav="library">Library</a>
-        <a href="#/search" data-nav="search">Search</a>
-        <a href="#/new" data-nav="new">Add</a>
+        <a href="#/" data-nav="home"><span data-icon="now"></span>Now</a>
+        <a href="#/library" data-nav="library"><span data-icon="library"></span>Library</a>
+        <a href="#/search" data-nav="search"><span data-icon="search"></span>Search</a>
+        <a href="#/calendar" data-nav="calendar"><span data-icon="calendar"></span>Calendar</a>
       </nav>
       <div class="topbar-actions">
-        <a class="btn" href="/hub">Hub</a>
-        <div class="theme-switch" role="group" aria-label="Color mode">
-          <button class="btn" type="button" data-theme-value="system" aria-pressed="true">System</button>
-          <button class="btn" type="button" data-theme-value="light" aria-pressed="false">Light</button>
-          <button class="btn" type="button" data-theme-value="dark" aria-pressed="false">Dark</button>
+        <button class="btn btn-primary btn-sm" type="button" data-action="open-add">+ Add</button>
+        <div class="account">
+          <button class="account-button" type="button" data-action="account-menu" aria-haspopup="menu" aria-expanded="false">
+            <span class="avatar" data-account-initial aria-hidden="true">A</span>
+            <span class="account-name" data-account-name>Account</span>
+          </button>
+          <div class="account-menu" role="menu" hidden>
+            <div class="menu-label" id="theme-label">Theme</div>
+            <div role="group" aria-labelledby="theme-label">
+              <button type="button" role="menuitemradio" data-theme-value="system" aria-checked="true" aria-pressed="true">System</button>
+              <button type="button" role="menuitemradio" data-theme-value="light" aria-checked="false" aria-pressed="false">Light</button>
+              <button type="button" role="menuitemradio" data-theme-value="dark" aria-checked="false" aria-pressed="false">Dark</button>
+            </div>
+            <div class="menu-label">Week start</div>
+            <button type="button" role="menuitemradio" data-week-start="0" aria-checked="true">Sunday</button>
+            <button type="button" role="menuitemradio" data-week-start="1" aria-checked="false">Monday</button>
+            <a role="menuitem" href="/hub">Hub</a>
+            <button type="button" role="menuitem" data-action="sign-out">Sign out</button>
+            <p class="menu-note">Keyboard shortcuts: / search, n add</p>
+          </div>
         </div>
+      </div>
+    </div>
+  </header>
+  <header class="mobile-bar">
+    <p class="screen-title" data-screen-title>Now</p>
+    <div class="account">
+      <button class="account-button" type="button" data-action="account-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Account">
+        <span class="avatar" data-account-initial aria-hidden="true">A</span>
+      </button>
+      <div class="account-menu" role="menu" hidden>
+        <div class="menu-label">Theme</div>
+        <div role="group" aria-label="Theme">
+          <button type="button" role="menuitemradio" data-theme-value="system" aria-checked="true" aria-pressed="true">System</button>
+          <button type="button" role="menuitemradio" data-theme-value="light" aria-checked="false" aria-pressed="false">Light</button>
+          <button type="button" role="menuitemradio" data-theme-value="dark" aria-checked="false" aria-pressed="false">Dark</button>
+        </div>
+        <div class="menu-label">Week start</div>
+        <button type="button" role="menuitemradio" data-week-start="0" aria-checked="true">Sunday</button>
+        <button type="button" role="menuitemradio" data-week-start="1" aria-checked="false">Monday</button>
+        <a role="menuitem" href="/hub">Hub</a>
+        <button type="button" role="menuitem" data-action="sign-out">Sign out</button>
+        <p class="menu-note">Keyboard shortcuts: / search, n add</p>
       </div>
     </div>
   </header>
@@ -56,19 +96,26 @@
   </div>
   <main id="app" class="shell"></main>
   <footer class="footer"><p>Your notes stay in this journal.</p></footer>
-  <dialog id="quick-add" aria-labelledby="quick-title">
-    <form data-action="quick-add">
-      <p class="eyebrow">Add to your library</p>
-      <h2 id="quick-title"></h2>
-      <p id="quick-meta" class="meta"></p>
-      <label>Status <select name="status"></select></label>
-      <label>Your rating <input name="rating" type="number" min="0" max="10" step="0.5" placeholder="Unrated"></label>
-      <label>Thought <textarea name="review" rows="4" placeholder="Optional"></textarea></label>
+  <nav class="tabbar" aria-label="Media">
+    <a href="#/" data-nav="home"><span data-icon="now"></span><span>Now</span></a>
+    <a href="#/library" data-nav="library"><span data-icon="library"></span><span>Library</span></a>
+    <a href="#/search" data-nav="search"><span data-icon="search"></span><span>Search</span></a>
+    <a href="#/calendar" data-nav="calendar"><span data-icon="calendar"></span><span>Calendar</span></a>
+    <a href="#/new" data-nav="new"><span data-icon="add"></span><span>Add</span></a>
+  </nav>
+  <dialog id="confirm" class="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-body"></p>
+      <p id="confirm-error" class="quiet" role="alert" hidden></p>
       <div class="dialog-actions">
-        <button class="btn btn-primary" type="submit">Save</button>
-        <button class="btn" type="button" data-action="close-quick">Cancel</button>
+        <button class="btn" type="submit" value="cancel">Cancel</button>
+        <button class="btn btn-danger" type="submit" value="confirm">Remove</button>
       </div>
     </form>
+  </dialog>
+  <dialog id="quick-add" aria-label="Add to library">
+    <form class="stack add-form" data-action="quick-add" novalidate></form>
   </dialog>
   <script type="module" src="__MEDIA_ROOT__/static/modules/app.mjs"></script>
 </body>

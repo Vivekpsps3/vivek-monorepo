@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { UiCardComponent } from '@vivek/ui';
 import { InfoTipComponent } from '../shared/info-tip.component';
+import { formatEstimate, formatStoredMoney } from '../shared/stored-money';
 import { PlanningInputsPreview, PlanningToolId, SpendingComponents } from '../models/planning.model';
 import {
   addCalendarMonths,
@@ -13,11 +14,13 @@ import {
   calculateGoalProjectedValue,
   calculateMonthlyGoalContribution,
 } from './planning-tools.util';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
 @Component({
   selector: 'app-planning-quick-tools',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, UiCardComponent, InfoTipComponent],
+  imports: [
+    AppDatePipe, CommonModule, FormsModule, RouterLink, UiCardComponent, InfoTipComponent],
   templateUrl: './planning-quick-tools.component.html',
   styleUrl: './planning-quick-tools.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,10 +62,11 @@ export class PlanningQuickToolsComponent implements OnChanges {
   }
 
   formatMoney(value: number | null | undefined): string {
-    if (value == null || Number.isNaN(value)) return '-';
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency', currency: 'USD', maximumFractionDigits: 0,
-    }).format(value);
+    return formatEstimate(value);
+  }
+
+  formatActual(value: number | null | undefined): string {
+    return formatStoredMoney(value);
   }
 
   effectiveAnnualSpending(): number {
