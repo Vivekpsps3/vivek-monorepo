@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { formatCompactMoney as formatCompactCents, fromDollars } from '@vivek/browser';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { Holding, NetWorth } from '../models/transaction.model';
@@ -31,6 +32,7 @@ import {
   chartLegendBottom,
   chartSuccessColor,
 } from '@vivek/ui';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
 
 interface PeriodRow {
   label: string;
@@ -64,6 +66,7 @@ type ChartConstructor = new (
   selector: 'app-investment-insights',
   standalone: true,
   imports: [
+    MoneyPipe,
     CommonModule,
     FormsModule,
     UiPageHeaderComponent,
@@ -410,6 +413,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
         backgroundColor: chartSuccessColor(),
         pointRadius: 0,
         pointHoverRadius: 4,
+        borderDash: [8, 4],
         borderWidth: 2,
         tension: 0.28,
       },
@@ -486,11 +490,6 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   }
 
   private formatCompactMoney(value: number): string {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: 'USD',
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(value);
+    return formatCompactCents(fromDollars(value));
   }
 }

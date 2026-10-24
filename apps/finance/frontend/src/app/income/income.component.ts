@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom, from, Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '@vivek/ui';
-import { ToastService } from '@vivek/ui';
+import { ToastService, failureCopy, successCopy } from '@vivek/ui';
 import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation, PaydayFrequency } from '../models/transaction.model';
 import {
   annualBasePayAt,
@@ -28,8 +28,13 @@ import {
   stockPurchaseSnapshot,
   stockSnapshotAt,
 } from '../utils/job-compensation.util';
-import { todayIsoDate } from '@vivek/browser';
+import { formatDate, todayIsoDate, toDollars, validateJob, validateMoney, type FieldIssue } from '@vivek/browser';
+import { formatEstimate } from '../shared/stored-money';
+import { dialogSaveAlert, focusDialogAlert, focusErrorSummary } from '../shared/form-validation';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { AppDateRangePipe } from '../shared/pipes/app-date.pipe';
 
 interface StockPriceDraft {
   date: string;
@@ -58,6 +63,9 @@ import { InfoTipComponent } from '../shared/info-tip.component';
   selector: 'app-income',
   standalone: true,
   imports: [
+    AppDateRangePipe,
+    AppDatePipe,
+    MoneyPipe,
     CommonModule,
     FormsModule,
     UiPageHeaderComponent,
@@ -85,10 +93,15 @@ export class IncomeComponent implements OnInit, OnDestroy {
   today = todayIsoDate;
   incomes: JobIncome[] = [];
   stockPriceDrafts: Record<number, StockPriceDraft> = {};
+  stockPriceErrors: Record<number, string> = {};
+  manualPriceNotice: Record<number, string> = {};
   stockQuoteStatuses: Record<string, StockQuoteStatus> = {};
   private savingStockPriceIds = new Set<number>();
   showModal = false;
   saving = false;
+  jobSaveError = '';
+  fieldErrors: FieldIssue[] = [];
+  formSubmitted = false;
   editingId: number | null = null;
   form: JobIncomeCreate = this.emptyForm();
   taxEstimator = {
@@ -286,12 +299,18 @@ export class IncomeComponent implements OnInit, OnDestroy {
   openAddModal(): void {
     this.editingId = null;
     this.editingJobSnapshot = null;
+    this.jobSaveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.form = this.emptyForm();
     this.taxEstimator = { state: 'average', filingStatus: 'single', preTaxDeductionsPerPeriod: 0 };
     this.showModal = true;
   }
 
   openEditModal(row: JobIncome): void {
+    this.jobSaveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.editingId = row.id;
     this.editingJobSnapshot = {
       ...row,
@@ -370,7 +389,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
     const horizon = new Date(Date.parse(`${from}T00:00:00Z`) + 370 * 86_400_000).toISOString().slice(0, 10);
     const next = paydayDatesBetween(row, from, horizon)[0];
     return next
-      ? `Next paycheck ${next} · about $${estimatedPaycheckNet(row, next).toFixed(2)} net`
+      ? `Next paycheck ${formatDate(next)} · ${formatEstimate(estimatedPaycheckNet(row, next))} net`
       : 'No upcoming paycheck date before this job ends';
   }
 
@@ -418,20 +437,24 @@ export class IncomeComponent implements OnInit, OnDestroy {
     const price = Number(rawPrice);
     const latest = this.incomes.find(item => item.id === row.id) || row;
     if (!isValidIsoDate(draft.date) || draft.date < latest.effective_date) {
-      this.toastService.error('Share price date must be valid and on or after the job start date.');
+      this.stockPriceErrors[row.id] = 'Share price date must be valid and on or after the job start date.';
+      this.cdr.markForCheck();
       return;
     }
     if (!rawPrice || !Number.isFinite(price) || price < 0) {
-      this.toastService.error('Enter a non-negative share price.');
+      this.stockPriceErrors[row.id] = 'Enter a non-negative share price.';
+      this.cdr.markForCheck();
       return;
     }
+    delete this.stockPriceErrors[row.id];
     const valuation: JobStockValuation = { date: draft.date, price_per_share: price, source: 'manual', price_as_of: null };
     this.savingStockPriceIds.add(row.id);
     this.cdr.markForCheck();
     void this.enqueueJobIncomeUpdate(row.id, current => ({
       stock_valuations: replaceStockValuation(current.stock_valuations || [], valuation),
-    }), row).then(saved => {
+    }), row, true).then(saved => {
       if (!saved || this.destroyed) return;
+      delete this.manualPriceNotice[row.id];
       const symbol = this.normalizeStockSymbol(saved.stock_symbol || row.stock_symbol || '');
       if (symbol) this.stockQuoteStatuses[symbol] = {
           state: 'updated',
@@ -443,13 +466,12 @@ export class IncomeComponent implements OnInit, OnDestroy {
       if (!this.destroyed) {
         const symbol = this.normalizeStockSymbol(latest.stock_symbol || '');
         const saved = this.latestStockPrice(latest);
-        if (symbol) this.stockQuoteStatuses[symbol] = {
-          state: 'error',
-          message: saved
-            ? `Manual price could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
-            : 'Manual price could not be saved. Grant and ESPP purchase prices remain the valuation fallback.',
-        };
-        this.toastService.error('Could not save the current manual share price.');
+        const message = saved
+          ? `Manual price could not be saved. Showing the last saved ${this.priceSourceLabel(saved.source)} price from ${saved.date}.`
+          : 'Manual price could not be saved. Grant and ESPP purchase prices remain the valuation fallback.';
+        if (symbol) this.stockQuoteStatuses[symbol] = { state: 'error', message };
+        else this.manualPriceNotice[row.id] = message;
+        this.toastService.error(failureCopy('save', 'this share price', 'Try again.'));
       }
     }).finally(() => {
       this.savingStockPriceIds.delete(row.id);
@@ -525,7 +547,8 @@ export class IncomeComponent implements OnInit, OnDestroy {
   private async enqueueJobIncomeUpdate(
     id: number,
     buildBody: (latest: JobIncome) => Partial<JobIncomeCreate> | null,
-    fallback?: JobIncome
+    fallback?: JobIncome,
+    silent = false,
   ): Promise<JobIncome | null> {
     const previous = this.jobUpdateQueues.get(id) || Promise.resolve(null);
     const pending = previous.catch(() => null).then(async () => {
@@ -534,7 +557,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       if (!latest) return null;
       const body = buildBody(latest);
       if (!body || this.destroyed) return null;
-      return await firstValueFrom(this.financeService.updateJobIncome(id, body));
+      return await firstValueFrom(this.financeService.updateJobIncome(id, body, silent));
     });
     this.jobUpdateQueues.set(id, pending);
     try {
@@ -584,28 +607,47 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.showModal = false;
     this.editingId = null;
     this.editingJobSnapshot = null;
+    this.jobSaveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
     this.form = this.emptyForm();
   }
 
-  saveIncome(): void {
-    if (!this.form.employer.trim()) {
-      this.toastService.error('Employer is required.');
-      return;
-    }
-    if (this.form.base_pay < 0) {
-      this.toastService.error('Base pay must be non-negative.');
-      return;
-    }
-    if (this.form.pay_frequency === 'hourly' && !this.form.hours_per_week) {
-      this.toastService.error('Hours per week is required for hourly income.');
-      return;
-    }
+  fieldError(field: string): string | null {
+    return this.formSubmitted ? this.fieldErrors.find(error => error.field === field)?.message ?? null : null;
+  }
 
+  focusNamed(field: string): void {
+    document.getElementById('job-form')?.querySelector<HTMLElement>(`[data-field="${field}"]`)?.focus();
+  }
+
+  saveIncome(): void {
+    const jobIssues = validateJob({
+      employer: this.form.employer,
+      basePay: this.form.base_pay,
+      payFrequency: this.form.pay_frequency,
+      hoursPerWeek: this.form.hours_per_week,
+      paydayFrequency: this.form.payday_frequency,
+      nextPayday: this.form.first_pay_date,
+      taxes: this.form.taxes_per_period,
+      deductions: this.form.deductions_per_period,
+    });
     const historyError = jobHistoryError(this.form);
-    if (historyError) {
-      this.toastService.error(historyError);
+    if (historyError) jobIssues.push({ field: 'endDate', label: 'End date', message: historyError });
+    this.fieldErrors = jobIssues;
+    this.formSubmitted = true;
+    if (jobIssues.length) {
+      this.jobSaveError = '';
+      this.cdr.markForCheck();
+      setTimeout(() => focusErrorSummary(document.getElementById('job-form')));
       return;
     }
+    const pay = validateMoney(this.form.base_pay, {
+      allowZero: false,
+      negativeMessage: 'Enter yearly pay above $0.',
+      emptyMessage: 'Enter yearly pay above $0.',
+    });
+    if ('cents' in pay) this.form.base_pay = toDollars(pay.cents);
     const wasEditing = this.editingId !== null;
     this.saving = true;
     const payload: JobIncomeCreate = {
@@ -661,31 +703,35 @@ export class IncomeComponent implements OnInit, OnDestroy {
       annual_taxes: this.roundMoney((this.form.taxes_per_period || 0) * this.payPeriodsPerYear),
       annual_deductions: this.roundMoney((this.form.deductions_per_period || 0) * this.payPeriodsPerYear),
     };
+    this.jobSaveError = '';
     const saveId = this.editingId;
     const request =
       saveId !== null
         ? from(this.enqueueJobIncomeUpdate(saveId, latest => ({
             ...payload,
             stock_valuations: [...(latest.stock_valuations || [])],
-          }), this.editingJobSnapshot || undefined))
-        : this.financeService.addJobIncome(payload);
+          }), this.editingJobSnapshot || undefined, true))
+        : this.financeService.addJobIncome(payload, true);
 
     request.pipe(takeUntil(this.destroy$)).subscribe({
       next: saved => {
         this.saving = false;
         if (!saved) {
-          this.toastService.error('This income entry is no longer available to update.');
+          this.jobSaveError = dialogSaveAlert();
           this.cdr.markForCheck();
+          setTimeout(() => focusDialogAlert(document.getElementById('job-form')));
           return;
         }
         this.closeModal();
-        this.toastService.success(wasEditing ? 'Income updated' : 'Income added');
+        this.toastService.success(successCopy('Job', wasEditing ? 'saved' : 'added'));
         if (saved?.stock_symbol) this.refreshStockTicker(saved.stock_symbol);
         this.cdr.markForCheck();
       },
       error: () => {
         this.saving = false;
+        this.jobSaveError = dialogSaveAlert();
         this.cdr.markForCheck();
+        setTimeout(() => focusDialogAlert(document.getElementById('job-form')));
       },
     });
   }
@@ -698,8 +744,12 @@ export class IncomeComponent implements OnInit, OnDestroy {
       'Cancel'
     );
     if (!ok) return;
-    this.financeService.deleteJobIncome(row.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success('Income deleted'),
+    this.financeService.deleteJobIncome(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => this.toastService.success('Job deleted'),
+      error: () => this.toastService.error(failureCopy('delete', 'this job'), {
+        label: 'Try again',
+        run: () => { void this.deleteIncome(row); },
+      }),
     });
   }
 

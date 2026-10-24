@@ -244,9 +244,9 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
         this.router.navigate(['/']);
         this.cdr.markForCheck();
       },
-      error: err => {
+      error: () => {
         this.isResettingData = false;
-        this.toast.error(err?.error?.detail || 'The app could not clear your data.');
+        this.toast.error("Couldn't clear your data. Something went wrong.");
         this.cdr.markForCheck();
       },
     });

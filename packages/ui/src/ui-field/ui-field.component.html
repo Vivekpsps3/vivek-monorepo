@@ -1,0 +1,20 @@
+<div class="ui-field" [class.ui-field--invalid]="!!error()">
+  @if (label()) {
+    <label class="ui-field__label" [for]="resolvedId()">
+      {{ label() }}@if (optional()) { <span class="ui-field__optional"> (optional)</span> }
+    </label>
+  }
+  <ng-content />
+  @if (hint()) {
+    <p class="ui-field__hint" [id]="resolvedId() + '-hint'">{{ hint() }}</p>
+  }
+  <p
+    class="ui-field__error"
+    [id]="resolvedId() + '-error'"
+  >
+    @if (error()) {
+      <span aria-hidden="true">⚠</span>
+      {{ error() }}
+    }
+  </p>
+</div>

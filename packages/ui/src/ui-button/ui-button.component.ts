@@ -14,6 +14,11 @@ export class UiButtonComponent {
   variant = input<UiButtonVariant>('primary');
   size = input<UiButtonSize>('md');
   disabled = input(false);
+  /** Stays in the tab order. Native disabled is only for an in-flight busy state. */
+  ariaDisabled = input(false);
+  describedBy = input<string | undefined>(undefined);
+  /** Selected preset. Undefined leaves aria-pressed unset. */
+  pressed = input<boolean | null>(null);
   busy = input(false);
   type = input<'button' | 'submit' | 'reset'>('button');
   ariaLabel = input<string | undefined>(undefined);
@@ -28,7 +33,7 @@ export class UiButtonComponent {
   });
 
   onClick(event: MouseEvent): void {
-    if (this.disabled()) {
+    if (this.disabled() || this.ariaDisabled()) {
       event.preventDefault();
       event.stopPropagation();
       return;

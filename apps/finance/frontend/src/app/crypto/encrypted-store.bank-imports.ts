@@ -15,6 +15,7 @@ export interface EncryptedBankImportPort {
   deleteTransactions(ids: number[]): Promise<void>;
   sessionToken(): number;
   assertSession(generation: number): void;
+  runRecordUpdate<T>(collection: 'import_batches', id: number, generation: number, update: () => Promise<T>): Promise<T>;
 }
 
 /** Owns staged bank receipt checkpoints, resume, and safe undo reconciliation. */
@@ -131,10 +132,12 @@ export class EncryptedBankImportStore {
 
   async updateImportReceipt(id: number, body: Partial<ImportReceipt>): Promise<ImportReceipt> {
     const generation = this.port.sessionToken();
-    const current = (await this.getImportReceipts()).find(row => row.id === id);
-    this.port.assertSession(generation);
-    if (!current) throw new Error('Import receipt not found');
-    return this.port.upsertImportRecord({ ...current, ...body, record_type: 'bank_receipt', id } as any, undefined, generation);
+    return this.port.runRecordUpdate('import_batches', id, generation, async () => {
+      const current = (await this.getImportReceipts()).find(row => row.id === id);
+      this.port.assertSession(generation);
+      if (!current) throw new Error('Import receipt not found');
+      return this.port.upsertImportRecord({ ...current, ...body, record_type: 'bank_receipt', id } as any, undefined, generation);
+    });
   }
 
   async undoImportReceipt(id: number): Promise<{ removed: number; edited: number; missing: number }> {

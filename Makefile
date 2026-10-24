@@ -57,6 +57,7 @@ test-fast:
 	./scripts/check-doc-paths.sh
 	./scripts/check-blame-ignore-revs.sh
 	python3 scripts/check-shared-boundaries.py
+	python3 scripts/check-finance-ux-f1.py
 	python3 -m unittest scripts/test_quality_ratchet.py scripts/test_check_shared_boundaries.py
 	node --test scripts/serve-spa.test.mjs
 
@@ -113,7 +114,7 @@ coverage-pin:
 	./scripts/coverage-pin.sh
 
 test: test-fast test-backend test-frontend
-	node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs
+	node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs
 
 test-suite-routes:
 	docker run --rm --network none --read-only --tmpfs /tmp:rw,size=128m,mode=1777 $(SITE_IMAGE) python -m apps.server.checks

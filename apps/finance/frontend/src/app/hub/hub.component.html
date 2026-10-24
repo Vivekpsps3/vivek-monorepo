@@ -21,7 +21,7 @@
   </header>
 
   <main id="hub-main">
-    <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
+    <p class="eyebrow">{{ headingToday | appDate:'heading' }}</p>
     <h1>{{ name }}</h1>
 
     <div class="pair">
@@ -121,7 +121,7 @@
           <p class="figure-note" role="alert">Finance could not be read.</p>
           <a class="open-link" routerLink="/">Retry in Finance</a>
         } @else if (netWorth) {
-          <p class="quiet-title">{{ netWorth.total | currency:'USD':'symbol':'1.0-0' }}</p>
+          <p class="quiet-title">{{ netWorth.total | money }}</p>
           @if (freshness) {
             <p class="figure-note">{{ freshness }}</p>
           }
@@ -130,15 +130,15 @@
         <details class="finance-more">
           <summary>Breakdown</summary>
           <dl class="split">
-            <div><dt>Assets</dt><dd>{{ netWorth.other_assets | currency:'USD':'symbol':'1.0-0' }}</dd></div>
-            <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | currency:'USD':'symbol':'1.0-0' }}</dd></div>
-            <div><dt>Debts</dt><dd>{{ netWorth.liabilities | currency:'USD':'symbol':'1.0-0' }}</dd></div>
+            <div><dt>Assets</dt><dd>{{ netWorth.other_assets | money }}</dd></div>
+            <div><dt>Portfolio</dt><dd>{{ netWorth.portfolio | money }}</dd></div>
+            <div><dt>Debts</dt><dd>{{ (-netWorth.liabilities) | money }}</dd></div>
           </dl>
           @if (fidelityAccounts().length) {
             <h3>Fidelity</h3>
             <ul class="rows">
               @for (account of fidelityAccounts(); track account.label) {
-                <li><span>{{ account.label }}</span><strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+                <li><span>{{ account.label }}</span><strong>{{ account.value | money }}</strong></li>
               }
             </ul>
           }
@@ -148,7 +148,7 @@
               @for (account of otherAccounts(); track account.label) {
                 <li>
                   <span>{{ account.label }} <em>{{ account.positions }} {{ account.positions === 1 ? 'position' : 'positions' }}</em></span>
-                  <strong>{{ account.value | currency:'USD':'symbol':'1.0-0' }}</strong>
+                  <strong>{{ account.value | money }}</strong>
                 </li>
               }
             </ul>
@@ -157,7 +157,7 @@
             <h3>Largest positions</h3>
             <ul class="rows">
               @for (position of positions; track position.symbol) {
-                <li><span>{{ position.symbol }} <em>{{ position.account }}</em></span><strong>{{ position.value | currency:'USD':'symbol':'1.0-0' }}</strong></li>
+                <li><span>{{ position.symbol }} <em>{{ position.account }}</em></span><strong>{{ position.value | money }}</strong></li>
               }
             </ul>
             <p class="figure-note">Positions are already included in the portfolio total.</p>

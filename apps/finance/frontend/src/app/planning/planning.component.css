@@ -149,6 +149,13 @@ app-monte-carlo-fan-chart {
   background: color-mix(in srgb, var(--warning) 10%, var(--surface-2));
 }
 
+.mc-field-error {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
 .mc-warning {
   padding: var(--space-3) var(--space-4);
   margin: 0 0 var(--space-4);
@@ -395,6 +402,12 @@ app-monte-carlo-fan-chart {
 .mc-field select:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.mc-field input[readonly] {
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--bg));
+  color: var(--text);
+  cursor: default;
 }
 
 .mc-field-hint {

@@ -18,6 +18,7 @@ export interface EncryptedBrokerageStagePort {
   removeHolding(id: number): Promise<void>;
   sessionToken(): number;
   assertSession(generation: number): void;
+  runRecordUpdate<T>(collection: 'import_batches', id: number, generation: number, update: () => Promise<T>): Promise<T>;
 }
 
 /** Owns Fidelity replacement staging, verification, activation, and cleanup. */
@@ -67,7 +68,8 @@ export class EncryptedBrokerageStageStore {
       return (await this.getHoldingImportStages()).find(row => row.id === id)!;
     } catch (error) {
       if (error && typeof error === 'object') (error as any).stage_id = id;
-      await this.port.upsertImportRecord({ ...stage, status: 'interrupted', error: String((error as any)?.message || error) } as any, undefined, generation).catch(() => undefined);
+      await this.port.runRecordUpdate('import_batches', id, generation, () =>
+        this.port.upsertImportRecord({ ...stage, status: 'interrupted', error: String((error as any)?.message || error) } as any, undefined, generation).catch(() => undefined));
       throw error;
     }
   }
@@ -141,7 +143,8 @@ export class EncryptedBrokerageStageStore {
       throw new Error('Holding stage verification failed; active holdings were not changed');
     }
     if (generation !== this.port.sessionToken()) throw new Error('Vault session changed');
-    return this.port.upsertImportRecord({ ...stage, status: 'verified', verified_at: new Date().toISOString(), record_type: 'holding_stage' } as any) as Promise<FidelityStageRecord>;
+    return this.port.runRecordUpdate('import_batches', stageId, generation, () =>
+      this.port.upsertImportRecord({ ...stage, status: 'verified', verified_at: new Date().toISOString(), record_type: 'holding_stage' } as any) as Promise<FidelityStageRecord>);
   }
 
   async activateHoldingImportStage(stageId: number): Promise<FidelityCommitResult> {
@@ -188,13 +191,16 @@ export class EncryptedBrokerageStageStore {
       })) {
         throw new Error('Persisted replacement positions could not be verified; the previous holdings remain active');
       }
-      activeStage = await this.port.upsertImportRecord({
-        ...stage,
-        status: 'activated',
-        activated_at: await this.nextHoldingStageActivationTime(generation),
-        cleanup_complete: false,
-        record_type: 'holding_stage',
-      } as any, undefined, generation) as FidelityStageRecord;
+      activeStage = await this.port.runRecordUpdate('import_batches', stageId, generation, async () => {
+        const activatedAt = await this.nextHoldingStageActivationTime(generation);
+        return this.port.upsertImportRecord({
+          ...stage,
+          status: 'activated',
+          activated_at: activatedAt,
+          cleanup_complete: false,
+          record_type: 'holding_stage',
+        } as any, undefined, generation) as Promise<FidelityStageRecord>;
+      });
     }
     // Once activated, stage holdings may have been edited and new manual holdings may
     // have joined this stage. Resume only removes superseded rows; it never reapplies
@@ -216,7 +222,8 @@ export class EncryptedBrokerageStageStore {
       if (generation !== this.port.sessionToken()) throw new Error('Vault session changed');
       await this.port.removeHolding(row.id);
     }
-    await this.port.upsertImportRecord({ ...activeStage, status: 'activated', cleanup_complete: true, record_type: 'holding_stage' } as any, undefined, generation);
+    await this.port.runRecordUpdate('import_batches', stageId, generation, () =>
+      this.port.upsertImportRecord({ ...activeStage, status: 'activated', cleanup_complete: true, record_type: 'holding_stage' } as any, undefined, generation));
     return {
       accounts_replaced: stage.account_masks.length,
       holdings_replaced: obsolete.length,

@@ -5,7 +5,7 @@
   align-items: flex-start;
   justify-content: center;
   padding: var(--space-8) var(--space-4);
-  z-index: 1500;
+  z-index: 2550;
   overflow-y: auto;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);

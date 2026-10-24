@@ -33,6 +33,11 @@ export function chartColorAt(index: number): string {
   return palette[index % palette.length];
 }
 
+/** CHT-05: 2px slice separator in the card color. Chart.js otherwise uses white. */
+export function chartSliceBorder(): { borderColor: string; borderWidth: number } {
+  return { borderColor: cssVar('--card-bg', '#f6f3ee'), borderWidth: 2 };
+}
+
 function cssVar(name: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback;
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();

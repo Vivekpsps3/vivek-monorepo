@@ -8,6 +8,7 @@ import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import { MarketPriceQuote } from '../models/transaction.model';
 import { FinanceService } from './finance.service';
+import { ToastService, failureCopy } from '@vivek/ui';
 
 export type MarketRefreshPhase = 'idle' | 'refreshing' | 'complete' | 'partial' | 'failed';
 
@@ -65,6 +66,7 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
   private readonly finance = inject(FinanceService);
   private readonly vault = inject(VaultService);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
   private readonly stateSubject = new BehaviorSubject<MarketRefreshState>({ ...EMPTY_STATE });
   private readonly destroy$ = new Subject<void>();
   private sessionCancel$ = new Subject<void>();
@@ -377,7 +379,12 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
       try {
         await this.finance.refreshCollectionsFromAnotherTab(message.collections);
       } catch {
-        // A lock or user change while decrypting invalidated the old snapshot.
+        if (this.vault.isUnlocked) {
+          this.toast.error(failureCopy('refresh', 'this vault'), {
+            label: 'Reload',
+            run: () => window.location.reload(),
+          });
+        }
       }
       return;
     }

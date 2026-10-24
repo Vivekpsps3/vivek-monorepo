@@ -143,6 +143,12 @@ ui-data-table {
   padding: var(--space-2) var(--space-3);
 }
 
+.stock-lock-hint {
+  flex-basis: 100%;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+}
+
 .stock-actions-row,
 .stock-owned-row {
   display: flex;

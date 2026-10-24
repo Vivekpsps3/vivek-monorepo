@@ -15,15 +15,15 @@
     <div class="month-totals">
       <div class="month-total month-total--expense">
         <span class="month-total__label">Spend</span>
-        <strong class="money">${{ monthSummary.expenseTotal | number: '1.2-2' }}</strong>
+        <strong class="money">{{ monthSummary.expenseTotal | money }}</strong>
       </div>
       <div class="month-total">
         <span class="month-total__label">Income</span>
-        <strong class="money">${{ monthSummary.incomeTotal | number: '1.2-2' }}</strong>
+        <strong class="money">{{ monthSummary.incomeTotal | money }}</strong>
       </div>
       <div class="month-total">
         <span class="month-total__label">Net</span>
-        <strong class="money">${{ monthSummary.net | number: '1.2-2' }}</strong>
+        <strong class="money">{{ monthSummary.net | money }}</strong>
       </div>
       <div class="month-total">
         <span class="month-total__label">Active days</span>
@@ -33,11 +33,11 @@
     @if (undatedEstimateTotal || cashflowSummary?.income_overlap_adjustment) {
     <p class="month-income-note">
       @if (undatedEstimateTotal) {
-        Undated job estimates: {{ undatedEstimateTotal < 0 ? '−$' : '$' }}{{ (undatedEstimateTotal < 0 ? -undatedEstimateTotal : undatedEstimateTotal) | number: '1.2-2' }}.
+        Undated job estimates: {{ undatedEstimateTotal | money }}.
       }
       @if (cashflowSummary?.income_overlap_adjustment) {
         The monthly total includes an aggregate possible-overlap adjustment of
-        {{ cashflowSummary!.income_overlap_adjustment < 0 ? '−' : '+' }}${{ (cashflowSummary!.income_overlap_adjustment < 0 ? -cashflowSummary!.income_overlap_adjustment : cashflowSummary!.income_overlap_adjustment) | number: '1.2-2' }}; it is not assigned to a specific date.
+        {{ cashflowSummary!.income_overlap_adjustment < 0 ? '−' : '+' }}{{ (cashflowSummary!.income_overlap_adjustment < 0 ? -cashflowSummary!.income_overlap_adjustment : cashflowSummary!.income_overlap_adjustment) | money }}; it is not assigned to a specific date.
       }
     </p>
     }
@@ -49,9 +49,9 @@
             <div class="calendar-income-sources__row">
               <span>
                 <strong>{{ item.label }} · {{ item.name }}</strong>
-                <small>{{ item.date || 'Date unknown' }} · {{ item.detail }}</small>
+                <small>{{ item.date | appDate }} · {{ item.detail }}</small>
               </span>
-              <strong [class.negative]="item.amount < 0">{{ item.amount < 0 ? '−$' : '$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}</strong>
+              <strong [class.negative]="item.amount < 0">{{ item.amount | money }}</strong>
             </div>
           }
         </div>
@@ -75,8 +75,8 @@
                 <td>
                   <a [routerLink]="['/spending']" [queryParams]="{ t: 'activity', v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
                 </td>
-                <td>${{ row.value | number: '1.2-2' }}</td>
-                <td>{{ row.pct | number: '1.0-0' }}%</td>
+                <td>{{ row.value | money }}</td>
+                <td>{{ formatShare(row.pct) }}</td>
               </tr>
             }
           </tbody>
@@ -94,9 +94,9 @@
               <a class="top-purchase-link" [routerLink]="['/spending']" [queryParams]="transactionActivityQuery(row.id)">
                 <span class="top-row">
                   <span class="top-desc">{{ row.description }}</span>
-                  <span class="top-amt">${{ row.amount | number: '1.2-2' }}</span>
+                  <span class="top-amt">{{ row.amount | money }}</span>
                 </span>
-                <span class="top-meta">{{ row.date }} · {{ row.category }} · Open transaction</span>
+                <span class="top-meta">{{ row.date | appDate }} · {{ row.category }} · Open transaction</span>
                 <span class="top-bar" [style.width.%]="(row.amount / topPurchaseMax) * 100"></span>
               </a>
             </li>
@@ -131,10 +131,10 @@
         >
           <span class="day-number">{{ day.date.split('-')[2] }}</span>
           @if (day.income !== 0) {
-            <span class="day-amt" [class.day-amt--income]="day.income > 0" [class.day-amt--negative]="day.income < 0">{{ day.income < 0 ? '−$' : '+$' }}{{ (day.income < 0 ? -day.income : day.income) | number: '1.0-0' }}</span>
+            <span class="day-amt" [class.day-amt--income]="day.income > 0" [class.day-amt--negative]="day.income < 0">{{ day.income | money:'standard':'always' }}</span>
           }
           @if (day.expense > 0) {
-            <span class="day-amt day-amt--expense">−${{ day.expense | number: '1.0-0' }}</span>
+            <span class="day-amt day-amt--expense">−{{ day.expense | money }}</span>
           } @else if (day.hasTransactions && day.income === 0) {
             <span class="dot" aria-hidden="true"></span>
           }
@@ -153,7 +153,7 @@
         <p class="day-net">
           Source net for day, before monthly overlap adjustment:
           <span [class.positive]="dayTotal() >= 0" [class.negative]="dayTotal() < 0">
-            {{ dayTotal() >= 0 ? '+' : '' }}${{ dayTotal() | number: '1.2-2' }}
+            {{ dayTotal() >= 0 ? '+' : '' }}{{ dayTotal() | money }}
           </span>
         </p>
       }
@@ -162,7 +162,7 @@
           <div class="tx-item income-event">
             <ui-badge variant="success">{{ item.label }}</ui-badge>
             <span class="category">{{ item.name }}</span>
-            <span class="amount" [class.positive]="item.amount > 0" [class.negative]="item.amount < 0">{{ item.amount < 0 ? '−$' : '+$' }}{{ (item.amount < 0 ? -item.amount : item.amount) | number: '1.2-2' }}</span>
+            <span class="amount" [class.positive]="item.amount > 0" [class.negative]="item.amount < 0">{{ item.amount | money:'standard':'always' }}</span>
             <span class="desc">{{ item.detail }}</span>
           </div>
         }
@@ -171,7 +171,7 @@
             <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ tx.kind || tx.type }}</ui-badge>
             <span class="category">{{ tx.category }}</span>
             <span class="amount" [class.positive]="transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0">
-              {{ transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0 ? '+' : transactionEffects(tx).spending > 0 ? '−' : '' }}${{ tx.amount | number: '1.2-2' }}
+              {{ transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0 ? '+' : transactionEffects(tx).spending > 0 ? '−' : '' }}{{ tx.amount | money }}
             </span>
             <span class="desc">{{ tx.description }}</span>
             <span class="calendar-edit-hint">Edit</span>
@@ -181,7 +181,7 @@
           <a class="tx-item tx-item-link" [routerLink]="['/recurring']" [queryParams]="{ t: 'spend' }" [attr.aria-label]="'Edit repeating ' + item.name">
             <ui-badge variant="default">Repeats</ui-badge>
             <span class="category">{{ item.category }}</span>
-            <span class="amount">−${{ item.amount | number: '1.2-2' }}</span>
+            <span class="amount">−{{ item.amount | money }}</span>
             <span class="desc">{{ item.name }}</span>
             <span class="calendar-edit-hint">Edit</span>
           </a>
