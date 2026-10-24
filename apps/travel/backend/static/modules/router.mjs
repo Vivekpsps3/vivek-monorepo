@@ -49,6 +49,14 @@ export function paint(html, nav, options = {}) {
       heading.focus();
     }
   } else if (options.route) {
+    if (state.focusHeading) {
+      state.focusHeading = false;
+      const pageHeading = root.querySelector("h1");
+      if (pageHeading instanceof HTMLElement) {
+        pageHeading.tabIndex = -1;
+        pageHeading.focus();
+      }
+    }
     const dayHeading = options.focusDay ? root.querySelector("[data-day-heading]") : null;
     const focus = root.querySelector("[data-focus]");
     if (dayHeading instanceof HTMLElement) {

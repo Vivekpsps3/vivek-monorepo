@@ -58,6 +58,7 @@ export function formError(kind, data) {
     return null;
   }
   if (kind === "transport") {
+    if (!value("mode")) return { name: "mode", message: "Choose a way to travel." };
     if (!value("depart_place")) return { name: "depart_place", message: "Name where this ride leaves from." };
     return null;
   }

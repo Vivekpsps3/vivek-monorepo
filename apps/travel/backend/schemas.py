@@ -35,6 +35,20 @@ AccrualCadence = Literal["weekly", "biweekly", "semimonthly", "monthly", "yearly
 TIME_RE = r"^([01]\d|2[0-3]):[0-5]\d$"
 
 
+_INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"), None)
+
+
+def trip_title(value) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Give the trip a name.")
+    text = value.translate(_INVISIBLE).strip()
+    if not text:
+        raise ValueError("Give the trip a name.")
+    if len(text) > 200:
+        raise ValueError("Keep the name under 200 characters.")
+    return text
+
+
 def _blank(value: str | None, limit: int) -> str | None:
     if value is None:
         return None
@@ -216,15 +230,10 @@ class TripCreate(BaseModel):
     stays: list[StayIn] = Field(default_factory=list)
     transports: list[TransportIn] = Field(default_factory=list)
 
-    @field_validator("title")
+    @field_validator("title", mode="before")
     @classmethod
     def title_ok(cls, value: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ValueError("Give the trip a name.")
-        if len(text) > 200:
-            raise ValueError("Keep the name under 200 characters.")
-        return text
+        return trip_title(value)
 
     @field_validator("origin_label")
     @classmethod
@@ -258,17 +267,10 @@ class TripPatch(BaseModel):
     counts_as_pto: bool | None = None
     pto_days: Decimal | None = None
 
-    @field_validator("title")
+    @field_validator("title", mode="before")
     @classmethod
     def title_ok(cls, value: str | None) -> str | None:
-        if value is None or not str(value).strip():
-            raise ValueError("Give the trip a name.")
-        text = str(value).strip()
-        if not text:
-            raise ValueError("Give the trip a name.")
-        if len(text) > 200:
-            raise ValueError("Keep the name under 200 characters.")
-        return text
+        return trip_title(value)
 
     @field_validator("origin_label")
     @classmethod

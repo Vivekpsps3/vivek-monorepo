@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from apps.travel.backend.models import BudgetLine, Parking, PlanItem, Reminder, Stay, Transport
-from apps.travel.backend.services.money import fmt_days, parse_days, parse_money
+from apps.travel.backend.services.money import parse_days, parse_money, store_days
 
 
 def touch(trip) -> None:
@@ -129,4 +129,4 @@ def apply_budget_line(row: BudgetLine, body) -> None:
 def pto_override(value) -> str | None:
     if value is None:
         return None
-    return fmt_days(parse_days(value))
+    return store_days(parse_days(value))

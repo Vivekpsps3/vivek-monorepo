@@ -50,7 +50,7 @@ export function clearFieldError(form, name) {
   form?.querySelector(`[data-error-for="${CSS.escape(name)}"]`)?.remove();
 }
 
-export function applyFieldError(form, name, message) {
+export function applyFieldError(form, name, message, options = {}) {
   const field = fieldElement(form, name);
   if (!(field instanceof HTMLElement)) {
     toast(message, "alert");
@@ -66,7 +66,7 @@ export function applyFieldError(form, name, message) {
   error.textContent = `⚠ ${message}`;
   field.setAttribute("aria-describedby", error.id);
   field.insertAdjacentElement("afterend", error);
-  if (typeof field.focus === "function") field.focus({ preventScroll: true });
+  if (options.focus !== false && typeof field.focus === "function") field.focus({ preventScroll: true });
   revealFocusedField();
 }
 
@@ -92,14 +92,23 @@ export function fail(error, options = {}) {
     : (options.action || null));
 }
 
-export function openConfirm({ title, body, confirmLabel, onConfirm }) {
+function confirmError(error, message) {
+  error.replaceChildren();
+  const icon = document.createElement("span");
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "⚠ ";
+  error.append(icon, document.createTextNode(message));
+  error.hidden = false;
+}
+
+export function openConfirm({ title, body, confirmLabel, onConfirm, after }) {
   const dialog = document.querySelector("#confirm");
   if (!(dialog instanceof HTMLDialogElement)) return;
   dialog.querySelector("[data-confirm-title]").textContent = title;
   dialog.querySelector("[data-confirm-body]").textContent = body;
   const error = dialog.querySelector("[data-confirm-error]");
   if (error) {
-    error.textContent = "";
+    error.replaceChildren();
     error.hidden = true;
   }
   const ok = dialog.querySelector("[data-confirm-ok]");
@@ -109,11 +118,16 @@ export function openConfirm({ title, body, confirmLabel, onConfirm }) {
     try {
       await onConfirm();
       dialog.close();
-    } catch (reason) {
-      if (error) {
-        error.hidden = false;
-        error.textContent = reason?.message || "Something went wrong.";
+      if (typeof after === "function") await after();
+      const heading = document.querySelector("#app h1");
+      if (heading instanceof HTMLElement) {
+        heading.tabIndex = -1;
+        heading.focus();
       }
+    } catch (reason) {
+      const message = reason?.message || "Something went wrong.";
+      if (dialog.open && error) confirmError(error, message);
+      else fail(reason instanceof Error ? reason : { message });
     } finally {
       ok.disabled = false;
     }

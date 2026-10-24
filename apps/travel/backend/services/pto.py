@@ -16,7 +16,13 @@ from decimal import Decimal
 from fractions import Fraction
 
 from apps.travel.backend.services.dates import weekday_count
-from apps.travel.backend.services.money import DAY_STEP, fmt_days, parse_days, stored_days
+from apps.travel.backend.services.money import (
+    DAY_STEP,
+    fmt_days,
+    parse_days,
+    store_days,
+    stored_days,
+)
 
 PERIOD_DAYS = {
     "weekly": Fraction(7),
@@ -130,7 +136,7 @@ def sync_trip_pto(db, trip) -> None:
     entry.user_id = trip.user_id
     entry.start_date = trip.start_date
     entry.end_date = trip.end_date
-    entry.days = fmt_days(days)
+    entry.days = store_days(days)
     entry.label = trip.title
     entry.kind = "trip"
 

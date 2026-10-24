@@ -57,4 +57,6 @@ export const state = {
   details: null,
   flights: [],
   fieldSeq: 0,
+  holdHash: false,
+  focusHeading: false,
 };

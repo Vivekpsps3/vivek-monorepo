@@ -12,7 +12,7 @@ from apps.travel.backend.models import PtoEntry, PtoPolicy
 from apps.travel.backend.schemas import PtoEntryIn, PtoPolicyIn
 from apps.travel.backend.services.assemble import snapshot_pto
 from apps.travel.backend.services.dates import weekday_count
-from apps.travel.backend.services.money import DAY_STEP, fmt_days, parse_days
+from apps.travel.backend.services.money import DAY_STEP, parse_days, store_days
 from apps.travel.backend.services.pto import policy_from_row, preview_take, usages_from_rows
 
 router = APIRouter()
@@ -46,7 +46,7 @@ def _payload(db: Session, today: date | None = None) -> dict:
             "trip_id": entry.trip_id,
             "start_date": entry.start_date,
             "end_date": entry.end_date,
-            "days": fmt_days(Decimal(entry.days)),
+            "days": store_days(Decimal(entry.days)),
             "label": entry.label,
             "kind": entry.kind,
             "notes": entry.notes,
@@ -68,14 +68,14 @@ def save_policy(body: PtoPolicyIn, db: Session = Depends(get_db)):
         row = PtoPolicy(user_id=require_actor().id, balance_as_of=body.balance_as_of)
         db.add(row)
     row.configured = True
-    row.accrual_amount = fmt_days(_quantize(body.accrual_amount))
+    row.accrual_amount = store_days(_quantize(body.accrual_amount))
     row.accrual_unit = body.accrual_unit
     row.accrual_cadence = body.accrual_cadence
-    row.hours_per_day = fmt_days(_quantize(body.hours_per_day))
-    row.balance_days = fmt_days(_quantize(body.balance_days))
+    row.hours_per_day = store_days(_quantize(body.hours_per_day))
+    row.balance_days = store_days(_quantize(body.balance_days))
     row.balance_as_of = body.balance_as_of
     row.annual_cap_days = (
-        fmt_days(_quantize(body.annual_cap_days)) if body.annual_cap_days is not None else None
+        store_days(_quantize(body.annual_cap_days)) if body.annual_cap_days is not None else None
     )
     db.flush()
     return _payload(db)
@@ -93,7 +93,7 @@ def create_entry(body: PtoEntryIn, db: Session = Depends(get_db)):
         trip_id=None,
         start_date=body.start_date,
         end_date=body.end_date,
-        days=fmt_days(parse_days(days)),
+        days=store_days(parse_days(days)),
         label=body.label,
         kind="manual",
         notes=body.notes,

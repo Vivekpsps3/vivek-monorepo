@@ -26,16 +26,29 @@ export function spanText(days) {
   return `${count} days`;
 }
 
-/** Up to D3 decimals, trailing zeros trimmed. Mirrors the server's fmt_days. */
+/** Up to D3 decimals, trailing zeros trimmed. Half away from zero, same as fmt_days. */
 export function formatDays(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "";
+  if (value == null || value === "") return "";
+  const raw = typeof value === "number" ? value.toString() : String(value).trim();
+  if (!raw || !Number.isFinite(Number(raw))) return "";
+  const negative = raw.startsWith("-");
+  const body = negative ? raw.slice(1) : raw.replace(/^\+/, "");
+  if (!/^\d+(\.\d+)?$/.test(body)) return "";
   const places = DECISIONS.ptoDayDecimals;
-  const factor = 10 ** places;
-  const rounded = Math.round(number * factor) / factor;
-  let text = rounded.toFixed(places);
+  let [whole, frac = ""] = body.split(".");
+  whole = whole.replace(/^0+(?=\d)/, "") || "0";
+  const next = frac[places] || "0";
+  let kept = (frac + "0".repeat(places)).slice(0, places);
+  if (next >= "5") {
+    const width = whole.length + kept.length;
+    const bumped = (BigInt(whole + (kept || "0")) + 1n).toString().padStart(width, "0");
+    whole = bumped.slice(0, bumped.length - places) || "0";
+    kept = places ? bumped.slice(-places) : "";
+  }
+  let text = places && kept ? `${whole}.${kept}` : whole;
   if (text.includes(".")) text = text.replace(/0+$/, "").replace(/\.$/, "");
-  return text;
+  if (!text || text === "0") return "0";
+  return negative ? `-${text}` : text;
 }
 
 export function daysText(value) {
@@ -47,14 +60,14 @@ export function daysText(value) {
 
 /** Negative balances read as "1.46 days over" rather than a bare minus. */
 export function balancePhrase(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "";
-  if (number < 0) {
-    const clean = formatDays(Math.abs(number));
-    const unit = clean === "1" ? "day" : "days";
-    return `${clean} ${unit} over`;
+  const clean = formatDays(value);
+  if (!clean) return "";
+  if (clean.startsWith("-")) {
+    const abs = clean.slice(1);
+    const unit = abs === "1" ? "day" : "days";
+    return `${abs} ${unit} over`;
   }
-  return daysText(number);
+  return daysText(value);
 }
 
 export function parkingChipParts(item) {

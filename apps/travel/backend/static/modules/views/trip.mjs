@@ -94,9 +94,8 @@ function rideRow(item) {
 }
 
 function modeControl(role) {
-  if (DECISIONS.moreDetails) return `<input type="hidden" name="mode" value="flight">`;
   const options = MODES.map(([key, text]) => `<option value="${esc(key)}">${esc(text)}</option>`).join("");
-  return `<label class="add-label" for="mode-${esc(role)}">Mode</label><select id="mode-${esc(role)}" name="mode">${options}</select>`;
+  return `<label class="add-label" for="mode-${esc(role)}">Mode</label><select id="mode-${esc(role)}" name="mode" required><option value="">Choose…</option>${options}</select>`;
 }
 
 function rideAdd(role) {
@@ -247,7 +246,7 @@ export function renderTrip(trip, focusDay) {
     controls: textControl("body", "", { id: "add-note", placeholder: "Note", required: true }),
   });
   const reminders = trip.reminders
-    .map((item) => `<div class="ride"><label class="check reminder${item.done ? " is-done" : ""}"><input type="checkbox" data-save-flag="done" data-kind="reminder" data-id="${item.id}" data-focus-key="flag-reminder-${item.id}-done" aria-pressed="${item.done ? "true" : "false"}"${item.done ? " checked" : ""}> <span>${esc(item.title)}${item.done ? " ✓" : ""}</span></label>${iconButton("Delete", "reminder", item.title, `data-action="delete" data-kind="reminder" data-id="${item.id}"`)}</div>`)
+    .map((item) => `<div class="ride"><label class="check reminder${item.done ? " is-done" : ""}"><input type="checkbox" data-save-flag="done" data-kind="reminder" data-id="${item.id}" data-focus-key="flag-reminder-${item.id}-done" ${item.done ? " checked" : ""}> <span>${esc(item.title)}${item.done ? " ✓" : ""}</span></label>${iconButton("Delete", "reminder", item.title, `data-action="delete" data-kind="reminder" data-id="${item.id}"`)}</div>`)
     .join("");
   const reminderKind = DECISIONS.showPackingKind
     ? `<label class="add-label" for="reminder-kind">Kind</label><select id="reminder-kind" name="kind"><option value="general">General</option><option value="packing">Packing</option></select>`

@@ -6,7 +6,7 @@ import { renderTrip } from '../views/trip.mjs';
 import { renderLogin } from '../views/settings.mjs';
 import { cityFields, connectionFields } from '../views/new-trip.mjs';
 import { submit, refetchTrip } from './forms.mjs';
-import { fail, openConfirm, saved } from '../feedback.mjs';
+import { dismissToast, fail, openConfirm, saved } from '../feedback.mjs';
 import { deletionMode, dialogCopy, undoCopy, restoreBody, restorePath, flagBody, flagToast, findItem, deletePath, patchPath } from '../restore.mjs';
 import { applyFlight, renderFlightChoices } from './flight.mjs';
 import { safeStorageSet } from '../../../shared-browser/dom.mjs';
@@ -200,11 +200,23 @@ async function removeItem(kind, id, ui) {
       confirmLabel: copy.confirm,
       onConfirm: async () => {
         await api(deletePath(kind, id), { method: "DELETE" });
+      },
+      after: async () => {
         if (kind === "trip") {
           state.trip = null;
+          saved("Trip deleted.");
+          state.holdHash = true;
+          state.focusHeading = true;
           location.hash = "#/";
-          if ((location.hash || "#/") === "#/") await ui.render();
+          try {
+            if ((location.hash || "#/") === "#/") await ui.render();
+          } finally {
+            state.holdHash = false;
+          }
+          return;
         }
+        if (kind === "pto") await ui.render();
+        else if (state.trip) await refetchTrip(ui);
       },
     });
     return;
@@ -225,25 +237,27 @@ async function removeItem(kind, id, ui) {
   else await refetchTrip(ui);
 }
 
-async function saveFlag(input, ui) {
-  const kind = input.dataset.kind;
-  const id = input.dataset.id;
-  const flag = input.dataset.saveFlag;
+async function saveFlagValue(kind, id, flag, next, ui) {
   const item = findItem(state.trip, kind, id);
   if (!item || !flag) return;
-  const next = input.checked;
-  state.focusKey = input.dataset.focusKey || "";
+  state.focusKey = `flag-${kind}-${id}-${flag}`;
   try {
     state.trip = await api(patchPath(kind, id), {
       method: "PATCH",
       body: JSON.stringify(flagBody(kind, item, flag, next)),
     });
+    dismissToast(`flag-${kind}-${id}`);
     saved(flagToast(kind, flag, next));
     if (parseHash().name === "trip") ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
   } catch (error) {
-    input.checked = !next;
-    fail(error, { retry: { key: `flag-${kind}-${id}`, run: () => saveFlag(input, ui) } });
+    const input = [...document.querySelectorAll("[data-save-flag]")].find((node) => node.dataset.saveFlag === flag && node.dataset.kind === kind && node.dataset.id === String(id));
+    if (input) input.checked = !next;
+    fail(error, { retry: { key: `flag-${kind}-${id}`, run: () => saveFlagValue(kind, id, flag, next, ui) } });
   }
+}
+
+async function saveFlag(input, ui) {
+  return saveFlagValue(input.dataset.kind, input.dataset.id, input.dataset.saveFlag, input.checked, ui);
 }
 function themeChoice(value) {
   return THEME_CHOICES.includes(value) ? value : "system";

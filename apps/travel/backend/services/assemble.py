@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import selectinload
 
+from apps.travel.backend.deps import require_actor
 from apps.travel.backend.models import (
     Note,
     Parking,
@@ -23,8 +24,7 @@ from apps.travel.backend.services.budget import (
     rollup,
 )
 from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
-from apps.travel.backend.services.money import fmt_days, fmt_money, stored_days
-from apps.travel.backend.deps import require_actor
+from apps.travel.backend.services.money import fmt_days, fmt_money, store_days, stored_days
 from apps.travel.backend.services.pto import (
     effective_pto_days,
     policy_from_row,
@@ -411,7 +411,7 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
         "origin_label": trip.origin_label,
         "notes": trip.notes,
         "counts_as_pto": bool(trip.counts_as_pto),
-        "pto_days": fmt_days(stored_days(trip.pto_days)) if trip.pto_days else None,
+        "pto_days": store_days(stored_days(trip.pto_days)) if trip.pto_days else None,
         "pto_days_effective": fmt_days(effective),
         "nights": nights_away(trip.start_date, trip.end_date),
         "span_days": span_days(trip.start_date, trip.end_date),
@@ -467,15 +467,15 @@ def snapshot_pto(policy, usages, today: date) -> dict:
     return {
         "configured": True,
         "balance_as_of": policy.balance_as_of,
-        "balance_saved": fmt_days(policy.balance_days),
+        "balance_saved": store_days(policy.balance_days),
         "balance_today": fmt_days(walked.balance),
         "accrued_since": fmt_days(walked.accrued),
         "used_since": fmt_days(walked.used),
-        "accrual_amount": fmt_days(policy.accrual_amount),
+        "accrual_amount": store_days(policy.accrual_amount),
         "accrual_unit": policy.accrual_unit,
         "accrual_cadence": policy.accrual_cadence,
-        "hours_per_day": fmt_days(policy.hours_per_day),
-        "annual_cap_days": fmt_days(policy.annual_cap_days)
+        "hours_per_day": store_days(policy.hours_per_day),
+        "annual_cap_days": store_days(policy.annual_cap_days)
         if policy.annual_cap_days is not None
         else None,
         "today_before_balance_date": walked.before_balance_date,

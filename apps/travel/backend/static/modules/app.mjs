@@ -17,6 +17,7 @@ export function boot() {
   const ui = { render, paint };
   bindEvents(ui);
   window.addEventListener("hashchange", () => {
+    if (state.holdHash) return;
     state.edit = null;
     state.compose = "";
     state.details = null;
