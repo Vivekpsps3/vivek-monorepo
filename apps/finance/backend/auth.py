@@ -125,11 +125,12 @@ def clear_session_cookie(response: Response) -> None:
 
 
 def repair_csrf_cookie(db: Session, request: Request, response: Response) -> None:
-    """Mint a CSRF cookie when a live session has a missing or stale one.
+    """Replace a CSRF cookie that was sent and does not match the live session.
 
     ``GET /auth/me`` does not require the CSRF header. The raw token is only
     stored in the cookie, so a mismatch cannot be repaired by echoing it.
-    A cookie that already matches the session is left in place.
+    A missing cookie is left alone: rewriting the hash would reject a later
+    write that still sends the original header. A matching cookie stays.
     """
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
@@ -147,8 +148,10 @@ def repair_csrf_cookie(db: Session, request: Request, response: Response) -> Non
     if session is None:
         return
     csrf = request.cookies.get(CSRF_COOKIE_NAME) or ""
+    if not csrf:
+        return
     stored = getattr(session, "csrf_token_hash", None)
-    if isinstance(stored, str) and csrf and secrets.compare_digest(_hash_secret(csrf), stored):
+    if isinstance(stored, str) and secrets.compare_digest(_hash_secret(csrf), stored):
         return
     fresh = secrets.token_urlsafe(32)
     db.query(UserSession).filter(UserSession.id == session.id).update(

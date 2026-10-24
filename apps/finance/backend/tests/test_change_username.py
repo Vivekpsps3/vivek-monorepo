@@ -608,6 +608,36 @@ def test_auth_me_repairs_a_stale_csrf_cookie(monkeypatch):
     assert renamed.status_code == 200, renamed.text
 
 
+def test_auth_me_leaves_csrf_alone_when_the_cookie_is_absent(monkeypatch):
+    _open_signup(monkeypatch)
+    client, _private_key, _auth, _vault, _dek = _signup("owner.name")
+    original = client.cookies.get("finance_csrf")
+    assert original
+    kept = [cookie for cookie in client.cookies.jar if cookie.name != "finance_csrf"]
+    client.cookies.jar.clear()
+    for cookie in kept:
+        client.cookies.jar.set_cookie(cookie)
+    repaired_me = client.get("/api/auth/me")
+    assert repaired_me.status_code == 200
+    assert not [
+        header
+        for header in repaired_me.headers.get_list("set-cookie")
+        if header.startswith("finance_csrf=")
+    ]
+    client.headers["X-CSRF-Token"] = original
+    rejected = client.patch(
+        "/api/account/username",
+        json={
+            "username": "renamed.owner",
+            "challenge_id": "c" * 16,
+            "challenge": "d" * 32,
+            "message": "vault-auth-v1",
+            "signature_b64": "e" * 16,
+        },
+    )
+    assert rejected.status_code == 401
+
+
 def test_unique_constraint_race_reports_a_collision(monkeypatch):
     _open_signup(monkeypatch)
     client, private_key, _auth, _vault, _dek = _signup("owner.name")
