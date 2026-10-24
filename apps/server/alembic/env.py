@@ -30,6 +30,11 @@ def target_metadata():
 
 
 def _configure(**kwargs):
+    # Offline SQL has to follow Config.stdout. MigrationContext otherwise
+    # writes the script to sys.stdout before the plan JSON, and --plan's
+    # first line is no longer the report.
+    if context.is_offline_mode():
+        kwargs.setdefault("output_buffer", context.config.stdout)
     context.configure(
         target_metadata=target_metadata(),
         version_table=MIGRATION_VERSION_TABLE,

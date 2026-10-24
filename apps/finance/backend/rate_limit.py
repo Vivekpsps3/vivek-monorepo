@@ -1,8 +1,9 @@
 """Per-IP and per-account limits for passwordless login and signup.
 
-``RATE_LIMIT_PER_MIN`` remains an optional shared cap (auth POSTs and market
-research). Auth endpoints also have an always-on per-IP limit. Challenge and
-verify are limited per (account, IP), and failed verifies have a separate
+``RATE_LIMIT_PER_MIN`` remains an optional shared cap (auth POSTs, the
+username change, and market research). Auth endpoints also have an always-on
+per-IP limit. Challenge, verify, and ``PATCH /api/account/username`` are
+limited per (account, IP), and failed verifies have a separate
 higher per-account cap. That cap rejects only further failures. A valid
 signature is never counted or blocked. Lookup is per-IP only: its body is deterministic, so a
 repeat teaches an attacker nothing, and a per-account cap there lets one IP
@@ -25,7 +26,7 @@ import os
 import threading
 import time
 from collections import OrderedDict
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -114,9 +115,18 @@ def _path(request: Request) -> str:
     return request.url.path.rstrip("/")
 
 
+_USERNAME_CHANGE = "/api/account/username"
+
+
+def _is_username_change(request: Request) -> bool:
+    return request.method == "PATCH" and _path(request) == _USERNAME_CHANGE
+
+
 def _is_shared_limited(request: Request) -> bool:
     path = _path(request)
     if path.startswith("/api/market/research"):
+        return True
+    if _is_username_change(request):
         return True
     if request.method != "POST":
         return False
@@ -124,6 +134,8 @@ def _is_shared_limited(request: Request) -> bool:
 
 
 def _is_auth_ip_limited(request: Request) -> bool:
+    if _is_username_change(request):
+        return True
     path = _path(request)
     if request.method == "POST" and (
         path in _AUTH_POSTS or path.startswith("/api/auth/invitations/")

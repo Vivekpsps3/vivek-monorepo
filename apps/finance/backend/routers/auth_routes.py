@@ -9,8 +9,6 @@ from datetime import timedelta
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
@@ -27,8 +25,8 @@ from apps.finance.backend.auth import (
     get_current_user,
     normalize_email,
     public_user,
-    utc_now_naive,
     revoke_user_sessions,
+    utc_now_naive,
     verify_password,
 )
 from apps.finance.backend.database import get_db
@@ -39,10 +37,34 @@ from apps.finance.backend.rate_limit import (
     failed_verify_blocked,
     note_failed_verify,
 )
+from apps.finance.backend.schemas_auth import (
+    AdminInvitationResponse,
+    AdminUserContentReset,
+    AdminUserCreate,
+    AdminUserUpdate,
+    AuthPrivateKeyWrap,
+    BootstrapStatusResponse,
+    InvitationEnrollRequest,
+    InvitationPreview,
+    LoginRequest,
+    LoginResponse,
+    MeResponse,
+    PasswordlessBootstrapRequest,
+    PasswordlessChallengeRequest,
+    PasswordlessChallengeResponse,
+    PasswordlessEnrollRequest,
+    PasswordlessSignupRequest,
+    PasswordlessVerifyRequest,
+    SelfDataResetRequest,
+    SignupPolicyResponse,
+    UserPublic,
+)
+from apps.finance.backend.services import encrypted_storage as vault_store
 from apps.finance.backend.services.auth_decoy import decoy_passwordless_material
 from apps.finance.backend.services.challenge_auth import (
     CHALLENGE_TTL,
     PROTOCOL,
+    PURPOSE_LOGIN,
     issue_challenge,
     verify_challenge,
 )
@@ -53,29 +75,7 @@ from apps.finance.backend.services.signup_gate import (
     signup_policy,
     username_allowlisted,
 )
-from apps.finance.backend.services import encrypted_storage as vault_store
-from apps.finance.backend.schemas_auth import (
-    AdminUserContentReset,
-    BootstrapStatusResponse,
-    AdminUserCreate,
-    AdminInvitationResponse,
-    InvitationPreview,
-    AdminUserUpdate,
-    LoginRequest,
-    LoginResponse,
-    MeResponse,
-    SelfDataResetRequest,
-    PasswordlessChallengeRequest,
-    PasswordlessChallengeResponse,
-    PasswordlessEnrollRequest,
-    InvitationEnrollRequest,
-    PasswordlessBootstrapRequest,
-    PasswordlessSignupRequest,
-    AuthPrivateKeyWrap,
-    PasswordlessVerifyRequest,
-    SignupPolicyResponse,
-    UserPublic,
-)
+from apps.finance.backend.services.username_policy import stored_username
 
 router = APIRouter(tags=["auth"])
 logger = logging.getLogger("finance.auth")
@@ -156,12 +156,15 @@ def _user_and_vault(db: Session, identifier: str) -> tuple[User | None, object |
     return user, vault
 
 
-def _decoy_challenge(request: Request) -> dict:
+def _decoy_challenge(request: Request, purpose: str) -> dict:
     expires_at = utc_now_naive() + CHALLENGE_TTL
+    challenge_id = secrets.token_urlsafe(24)
     return {
-        "challenge_id": secrets.token_urlsafe(24),
+        "challenge_id": challenge_id,
         "challenge": secrets.token_urlsafe(32),
-        "message": "\n".join([PROTOCOL, _origin(request), expires_at.isoformat()]),
+        "message": "\n".join(
+            [PROTOCOL, _origin(request), challenge_id, purpose, expires_at.isoformat()]
+        ),
         "expires_at": expires_at,
     }
 
@@ -186,7 +189,7 @@ def passwordless_bootstrap_first_admin(
     enforce_account_rate_limit(body.username)
     if db.query(User).count() != 0:
         raise HTTPException(status_code=409, detail="Setup is already complete")
-    username = normalize_email(body.username)
+    username = stored_username(body.username)
     _require_p256_public_key(body.public_key_b64)
     user = create_user(
         db,
@@ -221,7 +224,7 @@ def passwordless_signup(
     """Create an account when signup policy allows it. Closed by default."""
     enforce_account_rate_limit(body.username)
     mode = signup_mode()
-    username = normalize_email(body.username)
+    username = stored_username(body.username)
     if mode == "closed":
         raise HTTPException(status_code=403, detail=SIGNUP_UNAVAILABLE)
     if mode == "invite" and not invite_code_matches(body.invite_code):
@@ -283,7 +286,7 @@ def enroll_passwordless(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_migration_user),
 ):
-    username = normalize_email(body.username)
+    username = stored_username(body.username)
     if db.query(User).filter(User.username == username, User.id != current_user.id).first():
         raise HTTPException(status_code=409, detail="Username already exists")
     if vault_store.get_vault(db, current_user.id):
@@ -325,8 +328,8 @@ def passwordless_challenge(
     enforce_login_pair_limit(body.username, request)
     user = _find_passwordless_user(db, body.username)
     if not user or not user.is_active or not user.auth_public_key_b64:
-        return _decoy_challenge(request)
-    challenge, raw, message = issue_challenge(db, user, _origin(request))
+        return _decoy_challenge(request, body.purpose)
+    challenge, raw, message = issue_challenge(db, user, _origin(request), body.purpose)
     db.commit()
     return {
         "challenge_id": challenge.challenge_id,
@@ -383,7 +386,14 @@ def passwordless_verify(
         user
         and user.is_active
         and verify_challenge(
-            db, user, body.challenge_id, body.challenge, body.message, body.signature_b64
+            db,
+            user,
+            body.challenge_id,
+            body.challenge,
+            body.message,
+            body.signature_b64,
+            _origin(request),
+            PURPOSE_LOGIN,
         )
     ):
         csrf = create_session(db, user, request, response)
@@ -518,7 +528,7 @@ def reset_my_data(
     return {"ok": True}
 
 
-@router.get("/admin/users", response_model=List[UserPublic])
+@router.get("/admin/users", response_model=list[UserPublic])
 def list_users(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin),
@@ -533,15 +543,16 @@ def admin_create_user(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
+    username = stored_username(body.username)
     user = create_user(
         db,
-        email=f"{normalize_email(body.username)}@pending.local",
+        email=f"{username}@pending.local",
         display_name=body.display_name,
         role=UserRole(body.role),
         must_change_password=False,
         actor_user_id=admin.id,
     )
-    user.username = normalize_email(body.username)
+    user.username = username
     token = _issue_enrollment(db, user, admin)
     db.commit()
     db.refresh(user)

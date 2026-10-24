@@ -306,11 +306,18 @@ premigrate = json.load(open(premigrate_path))
 if integrity != "ok" or fk:
     raise SystemExit(json.dumps({"integrity": integrity, "fk": fk, "revision": revision}))
 if mode == "adopt":
-    compared = {key: value for key, value in counts.items() if key != "site_alembic_version"}
-    if compared != before["counts"]:
-        raise SystemExit("row counts changed\n" + json.dumps({"before": before["counts"], "after": compared}, indent=2))
-    if revision != "site_schema_v1" or counts.get("site_alembic_version") != 1:
-        raise SystemExit(json.dumps({"revision": revision, "counts": counts}))
+    action = before["plan"]["action"]
+    expected = before["plan"]["head"]
+    if action == "stamp":
+        compared = {key: value for key, value in counts.items() if key != "site_alembic_version"}
+        if compared != before["counts"]:
+            raise SystemExit("row counts changed\n" + json.dumps({"before": before["counts"], "after": compared}, indent=2))
+    else:
+        for name, value in before["counts"].items():
+            if counts.get(name) != value:
+                raise SystemExit(f"{name} changed from {value} to {counts.get(name)}")
+    if revision != expected or counts.get("site_alembic_version") != 1:
+        raise SystemExit(json.dumps({"revision": revision, "expected": expected, "counts": counts}))
     if not premigrate:
         raise SystemExit("migrate did not write a premigrate backup")
 else:
@@ -344,7 +351,7 @@ report.update({
 json.dump(report, open(report_path, "w"), indent=2)
 print(f"{mode}: row counts held and revision is {revision}")
 PY
-  if [[ "$mode" == "upgrade" ]]; then
+  if [[ "$mode" == "upgrade" || "$mode" == "adopt" ]]; then
     echo "Checking the migrated database matches this branch's models"
     PYTHONPATH="$root" "$py" - "$out_dir/migrated.db" <<'PY'
 import sys
@@ -449,19 +456,29 @@ if report["integrity_check"] != "ok" or report["foreign_key_check"] or report["a
     raise SystemExit(json.dumps(report))
 if report["site_schema"] != 1 or "site_alembic_version" in counts:
     raise SystemExit("database is not an unstamped v1 file")
+from apps.server.migrations import head_revision
 text = open(plan_path, encoding="utf-8").read()
 plan = json.loads(text.splitlines()[0])
-if plan.get("state") != "adopt" or plan.get("action") != "stamp" or plan.get("head") != "site_schema_v1":
+head = head_revision()
+action = plan.get("action")
+if plan.get("state") != "adopt" or plan.get("head") != head:
     raise SystemExit(text)
 if plan.get("schema_diff") != [] or plan.get("foreign_key_check") != []:
+    raise SystemExit(text)
+if head == "site_schema_v1":
+    if action != "stamp":
+        raise SystemExit(text)
+elif action != "stamp_and_upgrade" or plan.get("baseline") != "site_schema_v1":
     raise SystemExit(text)
 sql = "\n".join(text.splitlines()[1:])
 if "site_alembic_version" not in sql or "CREATE TABLE users" in sql:
     raise SystemExit(sql)
+if action == "stamp_and_upgrade" and "auth_challenges" not in sql:
+    raise SystemExit(sql)
 report["plan"] = plan
 report["plan_sql"] = sql.strip() + "\n"
 json.dump(report, open(out, "w"), indent=2)
-print(json.dumps({"event": "seeded_adoption", "action": "stamp", "head": "site_schema_v1", "sha256_identical": True, "total_rows": report["total_rows"]}, indent=2))
+print(json.dumps({"event": "seeded_adoption", "action": action, "head": head, "sha256_identical": True, "total_rows": report["total_rows"]}, indent=2))
 PY
   deploy_and_smoke adopt "$dir/plan.db" "$dir/before.json" "$dir/session.json" "$dir/report.json"
   if [[ "${BATCH_PROOF:-}" == "1" ]]; then
@@ -478,12 +495,15 @@ backups = root / "rev2-backups"
 backups.mkdir()
 versions = root / "versions"
 versions.mkdir()
+parent = sqlite3.connect(f"file:{database}?mode=ro", uri=True).execute(
+    "SELECT version_num FROM site_alembic_version"
+).fetchone()[0]
 revision = versions / "site_schema_v2_batch.py"
-revision.write_text(textwrap.dedent('''
+revision.write_text(textwrap.dedent(f'''
     import sqlalchemy as sa
     from alembic import op
     revision = "site_schema_v2"
-    down_revision = "site_schema_v1"
+    down_revision = "{parent}"
     branch_labels = None
     depends_on = None
 
@@ -536,8 +556,8 @@ for name, value in before.items():
 if after["site_alembic_version"] != 1:
     raise SystemExit(after)
 premigrate = list(backups.glob("premigrate-*.db"))
-if len(premigrate) != 1 or "site_schema_v1" not in premigrate[0].name:
-    raise SystemExit(f"expected one premigrate-site_schema_v1 backup, found {premigrate}")
+if len(premigrate) != 1 or parent not in premigrate[0].name:
+    raise SystemExit(f"expected one premigrate-{parent} backup, found {premigrate}")
 
 def snapshot(src, dest):
     if dest.exists():
@@ -577,12 +597,18 @@ compatible = root / "rev2-compatible.db"
 snapshot(database, compatible)
 with sqlite3.connect(compatible) as db:
     db.execute(
-        "CREATE TABLE site_revision_compatibility ("
+        "CREATE TABLE IF NOT EXISTS site_revision_compatibility ("
         "revision VARCHAR(32) NOT NULL, compatible_head VARCHAR(32) NOT NULL, "
         "PRIMARY KEY (revision, compatible_head))"
     )
     db.execute(
-        "INSERT INTO site_revision_compatibility (revision, compatible_head) VALUES ('site_schema_v2', 'site_schema_v1')"
+        "INSERT INTO site_revision_compatibility (revision, compatible_head) "
+        "VALUES ('site_schema_v2', ?)",
+        (parent,),
+    )
+    db.execute(
+        "INSERT INTO site_revision_compatibility (revision, compatible_head) "
+        "VALUES ('site_schema_v2', 'site_schema_v1')"
     )
 accepted_code, accepted_out, accepted_err = image_ready(compatible)
 if accepted_code != 0 or "ready" not in accepted_out:
