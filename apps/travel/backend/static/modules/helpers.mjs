@@ -1,6 +1,8 @@
 import { escapeHtml as esc } from '../../shared-browser/dom.mjs';
 import { state } from './state.mjs';
+import { daysText as daysLabel, parkingChipParts } from './labels.mjs';
 export { esc };
+export { nightsText, nightsAwayText, spanText, balancePhrase, formatDays } from './labels.mjs';
 
 export function dateParts(iso) {
   const [year, month, day] = String(iso).split("-").map(Number);
@@ -49,12 +51,7 @@ export function money(amount, currency = "USD") {
   }
 }
 export function daysText(value) {
-  if (value == null || value === "") return "";
-  const rounded = Math.round(Number(value) * 100) / 100;
-  if (!Number.isFinite(rounded)) return "";
-  const clean = rounded.toFixed(2).replace(/\.?0+$/, "");
-  const unit = clean === "1" || clean === "-1" ? "day" : "days";
-  return `${clean} ${unit}`;
+  return daysLabel(value);
 }
 export function budgetText(budget) {
   if (!budget || !budget.currencies.length) return "No costs yet";
@@ -79,30 +76,85 @@ export function val(form, name) {
 export function checked(form, name) {
   return Boolean(form.elements[name] && form.elements[name].checked);
 }
-export function field(label, name, value, type = "text", wide = false) {
-  const id = `f-${name}-${state.fieldSeq++}`;
-  return `<div class="${wide ? "wide" : ""}"><label for="${id}">${esc(label)}</label><input id="${id}" name="${esc(name)}" type="${type}" value="${esc(value ?? "")}"></div>`;
+function fieldOptions(type, wide, extra) {
+  if (type && typeof type === "object") return { type: "text", wide: false, ...type };
+  return { type: type || "text", wide: Boolean(wide), ...(extra || {}) };
 }
-export function area(label, name, value) {
-  const id = `f-${name}-${state.fieldSeq++}`;
-  return `<div class="wide"><label for="${id}">${esc(label)}</label><textarea id="${id}" name="${esc(name)}">${esc(value ?? "")}</textarea></div>`;
+
+function fieldId(name, options) {
+  if (options.id) return options.id;
+  const scope = options.scope ? `-${options.scope}` : `-${state.fieldSeq++}`;
+  return `f-${name}${scope}`;
 }
-export function select(label, name, value, options, wide = false) {
-  const id = `f-${name}-${state.fieldSeq++}`;
+
+function described(id, options) {
+  const ids = [];
+  if (options.helper) ids.push(`${id}-help`);
+  if (options.error) ids.push(`${id}-error`);
+  if (options.describedby) ids.push(options.describedby);
+  return ids;
+}
+
+function fieldChrome(label, name, id, options, control) {
+  const ids = described(id, options);
+  const help = options.helper ? `<p class="field-help" id="${id}-help">${esc(options.helper)}</p>` : "";
+  const error = options.error ? `<p class="field-error" id="${id}-error" data-error-for="${esc(name)}">⚠ ${esc(options.error)}</p>` : "";
+  return `<div class="field${options.wide ? " wide" : ""}${options.error ? " is-invalid" : ""}"><label for="${id}">${esc(label)}</label>${control}${help}${error}</div>`;
+}
+
+function inputAttrs(id, name, options) {
+  const ids = described(id, options);
+  const parts = [
+    `id="${id}"`,
+    `name="${esc(name)}"`,
+    options.required ? `aria-required="true"` : "",
+    options.error ? `aria-invalid="true"` : "",
+    ids.length ? `aria-describedby="${ids.join(" ")}"` : "",
+    options.autocomplete ? `autocomplete="${esc(options.autocomplete)}"` : "",
+    options.inputmode ? `inputmode="${esc(options.inputmode)}"` : "",
+    options.min != null && options.min !== "" ? `min="${esc(options.min)}"` : "",
+    options.max != null && options.max !== "" ? `max="${esc(options.max)}"` : "",
+    options.placeholder ? `placeholder="${esc(options.placeholder)}"` : "",
+    options.focusKey ? `data-focus-key="${esc(options.focusKey)}"` : "",
+    options.maxlength ? `maxlength="${esc(options.maxlength)}"` : "",
+  ];
+  return parts.filter(Boolean).join(" ");
+}
+
+export function field(label, name, value, type = "text", wide = false, extra) {
+  const options = fieldOptions(type, wide, extra);
+  const id = fieldId(name, options);
+  const control = `<input ${inputAttrs(id, name, options)} type="${esc(options.type || "text")}" value="${esc(value ?? "")}">`;
+  return fieldChrome(label, name, id, options, control);
+}
+export function area(label, name, value, extra) {
+  const options = fieldOptions("text", true, extra);
+  options.wide = extra?.wide !== false;
+  const id = fieldId(name, options);
+  const control = `<textarea ${inputAttrs(id, name, options)}>${esc(value ?? "")}</textarea>`;
+  return fieldChrome(label, name, id, options, control);
+}
+export function select(label, name, value, options, wide = false, extra) {
+  const settings = typeof wide === "object" ? { wide: false, ...wide } : { wide: Boolean(wide), ...(extra || {}) };
+  const id = fieldId(name, settings);
   const choices = options
     .map(([key, text]) => `<option value="${esc(key)}"${key === value ? " selected" : ""}>${esc(text)}</option>`)
     .join("");
-  return `<div class="${wide ? "wide" : ""}"><label for="${id}">${esc(label)}</label><select id="${id}" name="${esc(name)}">${choices}</select></div>`;
+  const control = `<select ${inputAttrs(id, name, settings)}>${choices}</select>`;
+  return fieldChrome(label, name, id, settings, control);
 }
-export function check(label, name, on) {
-  const id = `f-${name}-${state.fieldSeq++}`;
-  return `<div class="wide"><label class="check" for="${id}"><input id="${id}" name="${esc(name)}" type="checkbox"${on ? " checked" : ""}> ${esc(label)}</label></div>`;
+export function check(label, name, on, extra) {
+  const options = extra && typeof extra === "object" ? extra : {};
+  const id = fieldId(name, options);
+  const flag = options.saveFlag ? ` data-save-flag="${esc(options.saveFlag)}" data-kind="${esc(options.kind || "")}" data-id="${esc(options.itemId || "")}"` : "";
+  const focus = options.focusKey ? ` data-focus-key="${esc(options.focusKey)}"` : "";
+  return `<div class="${options.wide === false ? "" : "wide"}"><label class="check" for="${id}"><input id="${id}" name="${esc(name)}" type="checkbox"${on ? " checked" : ""}${flag}${focus}> <span>${esc(label)}</span></label></div>`;
 }
 export function actions(submitLabel) {
   return `<div class="row-actions"><button class="btn btn-primary" type="submit">${esc(submitLabel)}</button><button class="btn btn-ghost" type="button" data-action="cancel">Cancel</button></div>`;
 }
 export function banner() {
-  return state.error ? `<p class="banner" role="alert">${esc(state.error)}</p>` : "";
+  return "";
 }
 export function head(title, lede, extra = "") {
   return `<header class="page-head"><div class="page-head-row"><div><h1>${esc(title)}</h1>${lede ? `<p class="lede">${lede}</p>` : ""}</div>${extra}</div></header>`;
@@ -138,10 +190,8 @@ export function flightMeta(item) {
   return bits.join(" · ");
 }
 export function parkingChip(item) {
-  if (item.necessary === "no" || item.arrangement === "none") return `<span class="chip">Parking not needed</span>`;
-  if (item.booked) return `<span class="chip chip--ok">Parking booked${item.place_name ? ` · ${esc(item.place_name)}` : ""}</span>`;
-  if (item.necessary === "yes") return `<span class="chip chip--warn">Parking needed, not booked</span>`;
-  return `<span class="chip">${esc(labelOf(ARRANGEMENTS, item.arrangement))}</span>`;
+  const parts = parkingChipParts(item);
+  return `<span class="${parts.className}">${esc(parts.text)}</span>`;
 }
 export function plain(value) {
   if (value == null || value === "") return "";

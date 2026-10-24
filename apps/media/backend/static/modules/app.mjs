@@ -1,5 +1,6 @@
 import { NETWORK_MESSAGE, api, loginHref } from "./api.mjs";
 import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
+import { createToastLayer, itemIdFromHash } from "../../shared-browser/toast.mjs";
 import { writeWeekStart, weekStartsOn } from "../../shared-browser/week.mjs";
 import { icon } from "./icons.mjs";
 import { keyboardScore, pointerScore, scoreControl, scoreValue } from "./score.mjs";
@@ -52,8 +53,6 @@ import {
   SAVING_LABEL,
   SKELETON_DELAY_MS,
   SORT_TOAST,
-  TOAST_ACTION_MS,
-  TOAST_MS,
   chooseReview,
   failedNoteAfterReload,
   coverImage,
@@ -84,8 +83,6 @@ import {
 } from "./format.mjs";
 
 const app = document.querySelector("#app");
-const toasts = document.querySelector("#toasts");
-const toastAlerts = document.querySelector("#toast-alerts");
 const routeLoads = createSequence();
 const searchLoads = createKeyedFetch();
 let searchResults = [];
@@ -94,110 +91,8 @@ let progressChain = Promise.resolve();
 let progressQueuedKey = "";
 let noteChain = Promise.resolve();
 let noteOutcome = null;
-let toastSerial = 0;
 let skeletonTimer = 0;
-
-function toastNodes() {
-  return [
-    ...(toasts?.querySelectorAll(".toast") || []),
-    ...(toastAlerts?.querySelectorAll(".toast") || []),
-  ];
-}
-
-function dismissToast(key) {
-  if (!key) return;
-  for (const node of toastNodes()) {
-    if (node.dataset.toastKey === key) node.remove();
-  }
-}
-
-function trimToasts() {
-  const live = toastNodes().sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order));
-  while (live.length > 3) {
-    let index = live.findIndex(node => node.dataset.persist !== "true");
-    // The cap still holds when every toast is persistent: drop the oldest.
-    if (index < 0) index = 0;
-    live[index].remove();
-    live.splice(index, 1);
-  }
-}
-
-function pushToast({ message, kind = "status", action = null, key = "", persist = false }) {
-  const region = kind === "alert" ? toastAlerts : toasts;
-  if (!region || !message) return;
-  if (key) dismissToast(key);
-  const order = ++toastSerial;
-  const toast = document.createElement("div");
-  toast.className = kind === "alert" ? "toast is-alert" : "toast";
-  toast.dataset.order = String(order);
-  toast.style.order = String(order);
-  if (key) toast.dataset.toastKey = key;
-  if (persist) toast.dataset.persist = "true";
-  if (kind === "alert") {
-    const icon = document.createElement("span");
-    icon.className = "toast-icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = "⚠";
-    toast.append(icon);
-  }
-  const text = document.createElement("p");
-  text.textContent = message;
-  toast.append(text);
-  const dismiss = () => {
-    window.clearTimeout(timer);
-    toast.remove();
-  };
-  if (action) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "toast-action";
-    button.textContent = action.label;
-    button.addEventListener("click", () => {
-      if (typeof action.onClick === "function") action.onClick();
-      else if (action.href) location.assign(action.href);
-      dismiss();
-    });
-    toast.append(button);
-  }
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "toast-dismiss";
-  close.setAttribute("aria-label", "Dismiss");
-  close.textContent = "✕";
-  close.addEventListener("click", dismiss);
-  toast.append(close);
-  region.append(toast);
-  trimToasts();
-  let timer = 0;
-  if (persist) return;
-  let remaining = action ? TOAST_ACTION_MS : TOAST_MS;
-  let started = Date.now();
-  timer = window.setTimeout(dismiss, remaining);
-  const pause = () => {
-    window.clearTimeout(timer);
-    remaining -= Date.now() - started;
-  };
-  const resume = () => {
-    started = Date.now();
-    timer = window.setTimeout(dismiss, Math.max(0, remaining));
-  };
-  toast.addEventListener("mouseenter", pause);
-  toast.addEventListener("mouseleave", resume);
-  toast.addEventListener("focusin", pause);
-  toast.addEventListener("focusout", event => {
-    if (!toast.contains(event.relatedTarget)) resume();
-  });
-}
-
-function toast(message, kind = "status", action = null) {
-  pushToast({
-    message,
-    kind,
-    action,
-    key: action?.key || "",
-    persist: action?.persist === true,
-  });
-}
+const { toast, pushToast, dismissToast, toastNodes, retireOtherItemToasts } = createToastLayer();
 
 const WRITE_TIMEOUT_MS = 10_000;
 
@@ -394,20 +289,6 @@ function restoreFocus(key) {
   if (!key) return;
   const match = [...app.querySelectorAll("[data-focus-key]")].find(element => element.dataset.focusKey === key);
   if (match instanceof HTMLElement) match.focus();
-}
-
-function itemIdFromHash(hash) {
-  const match = /^#\/item\/(\d+)/.exec(String(hash || ""));
-  return match ? match[1] : "";
-}
-
-const ITEM_TOAST_KEY = /^(?:progress|note|note-conflict|status|favorite|anticipated|rating):(.+)$/;
-
-function retireOtherItemToasts(itemId) {
-  for (const node of toastNodes()) {
-    const match = ITEM_TOAST_KEY.exec(node.dataset.toastKey || "");
-    if (match && match[1] !== String(itemId)) node.remove();
-  }
 }
 
 function armSaving(status) {

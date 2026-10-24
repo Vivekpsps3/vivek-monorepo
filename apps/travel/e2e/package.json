@@ -1,0 +1,12 @@
+{
+  "name": "travel-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "shots": "playwright test screenshots.spec.js"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "1.56.1"
+  }
+}

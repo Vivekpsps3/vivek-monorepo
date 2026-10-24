@@ -1,63 +1,78 @@
-import { state, ROLES, KINDS, STATUSES } from '../state.mjs';
-import { esc, banner, head, leavePhrase, daysText, budgetText, prettyRange, prettyDate, labelOf, transportSummary, parkingChip } from '../helpers.mjs';
+import { ROLES, KINDS, STATUSES } from '../state.mjs';
+import { esc, banner, head, leavePhrase, daysText, budgetText, prettyRange, prettyDate, labelOf, transportSummary, parkingChip, nightsText, balancePhrase } from '../helpers.mjs';
+import { homeState, visiblePlans } from '../screens.mjs';
+
+function metricLink(href, strong, span, warn = false) {
+  const value = href ? `<a href="${esc(href)}">${esc(strong)}</a>` : esc(strong);
+  return `<article class="metric${warn ? " metric--warn" : ""}"><b>${value}</b><span>${esc(span)}</span></article>`;
+}
 
 export function renderHome(home) {
+  const view = homeState(home);
   const next = home.metrics.next_trip;
-  const metrics = [
-    [next ? next.title : "No trip", leavePhrase(next)],
-    [home.pto.configured ? daysText(home.pto.balance_today) : "Not set", home.next_pto ? `${daysText(home.next_pto.leftover_after)} after ${home.next_pto.title}` : "PTO balance"],
-    [String(home.metrics.unbooked_parking), "Parking still to book"],
-    [String(home.metrics.open_reminders), "Open reminders"],
-  ];
-  const metricHtml = metrics
-    .map(([strong, span]) => `<article class="metric"><b>${esc(strong)}</b><span>${esc(span)}</span></article>`)
-    .join("");
-  const attention = home.attention.length
-    ? `<section class="card"><h2>Needs a look</h2><div class="stack">${home.attention
+  const parking = (home.attention || []).find((item) => item.kind === "parking");
+  const reminder = (home.attention || []).find((item) => item.kind === "reminder");
+  const balance = home.pto.configured ? balancePhrase(home.pto.balance_today) : "Not set";
+  const balanceWarn = home.pto.configured && Number(home.pto.balance_today) < 0;
+  const metrics = view.metrics
+    ? `<section class="metrics">
+      ${metricLink(next ? `#/trips/${next.id}` : "", next ? next.title : "No trip", next ? leavePhrase(next) : "Nothing upcoming")}
+      ${metricLink("#/pto", balance, home.next_pto ? `${balancePhrase(home.next_pto.leftover_after)} after ${home.next_pto.title}` : "PTO balance", balanceWarn || Number(home.next_pto?.leftover_after) < 0)}
+      ${metricLink(parking ? `#/trips/${parking.trip_id}` : (next ? `#/trips/${next.id}` : "#/"), String(home.metrics.unbooked_parking), "Parking to book")}
+      ${metricLink(reminder ? `#/trips/${reminder.trip_id}` : (next ? `#/trips/${next.id}` : "#/"), String(home.metrics.open_reminders), "Open reminders")}
+    </section>`
+    : "";
+  const extra = balanceWarn ? `<p><a href="#/pto">PTO balance is ${esc(balance)}</a></p>` : "";
+  const attention = home.attention.length || extra
+    ? `<section class="card"><h2>Needs a look</h2><div class="stack">${extra}${home.attention
         .map((item) => `<p><a href="#/trips/${item.trip_id}">${esc(item.trip_title)}</a> · ${esc(item.text)}</p>`)
         .join("")}</div></section>`
     : "";
+  const ptoLink = home.pto.configured ? "" : `<p><a href="#/pto">Set up PTO</a></p>`;
+  const empty = view.heading
+    ? `<section class="card empty"><p class="empty-mark" aria-hidden="true">✈</p><h2>${esc(view.heading)}</h2><p>${esc(view.body)}</p><p class="row-actions"><a class="btn btn-primary" href="#/trips/new">Plan a trip</a></p>${ptoLink}</section>`
+    : "";
   const blocks = [
-    ["In progress", home.in_progress],
-    ["Upcoming", home.upcoming],
+    ["In progress", home.in_progress, true],
+    ["Upcoming", home.upcoming, false],
   ]
     .filter(([, trips]) => trips.length)
-    .map(([title, trips]) => `<section><h2 class="kicker">${esc(title)}</h2>${trips.map(renderTripCard).join("")}</section>`)
+    .map(([title, trips, current]) => `<section class="trip-group"><h2>${esc(title)}</h2>${trips.map((trip) => renderTripCard(trip, current)).join("")}</section>`)
     .join("");
-  const past = home.past.length
+  const past = view.showPast && home.past.length
     ? `<section class="card"><h2>Earlier</h2>${home.past
         .map((trip) => `<a class="past-row" href="#/trips/${trip.id}"><strong>${esc(trip.title)}</strong><span>${esc(prettyRange(trip.start_date, trip.end_date))}</span></a>`)
         .join("")}</section>`
     : "";
-  const empty = !home.in_progress.length && !home.upcoming.length
-    ? `<section class="empty"><a class="composer-open" href="#/trips/new" aria-label="New trip"></a></section>`
-    : "";
-  return `${banner()}${head("Upcoming")}<section class="metrics">${metricHtml}</section>${attention}${empty}${blocks}${past}`;
+  return `${banner()}${head("Upcoming")}${metrics}${attention}${empty}${blocks}${past}`;
 }
-export function renderTripCard(trip) {
-  const planned = trip.days.filter((day) => day.items.length || day.transports.length);
-  const rides = trip.transports.map((item) => `<p><span class="kicker">${esc(labelOf(ROLES, item.role))}</span><br>${esc(transportSummary(item))}</p>`).join("");
-  const days = planned
+
+export function renderTripCard(trip, inProgress = false) {
+  const { shown, more } = visiblePlans(trip.days);
+  const days = shown
     .map((day) => {
       const lines = [
         ...day.transports.map((item) => `<p>${esc(item.movement === "arrives" ? "Arrives" : "Departs")} · ${esc(transportSummary(item))}</p>`),
-        ...day.items.map((item) => `<p>${item.start_time ? `${esc(item.start_time)} · ` : ""}${esc(labelOf(KINDS, item.kind))} · ${esc(item.title)}${item.place_name ? ` · ${esc(item.place_name)}` : ""}</p>`),
+        ...day.items.map((item) => `<p>${item.start_time ? `${esc(item.start_time)} · ` : ""}${esc(labelOf(KINDS, item.kind))} · ${esc(item.title)}</p>`),
       ];
       return `<div class="day"><div class="day-date">${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}</div><div>${lines.join("")}</div></div>`;
     })
     .join("");
+  const moreLink = more ? `<p><a href="#/trips/${trip.id}">+${more} more days</a></p>` : "";
   const cities = trip.cities.map((city) => `<span class="chip">${esc(city)}</span>`).join("");
   const parking = trip.parking.map(parkingChip).join("");
-  const pto = trip.counts_as_pto
-    ? trip.pto.leftover_after
-      ? `PTO ${daysText(trip.pto.days)} · ${daysText(trip.pto.leftover_after)} left after`
-      : `PTO ${daysText(trip.pto.days)}`
-    : "";
+  const ptoDays = trip.counts_as_pto ? daysText(trip.pto.days) : "";
+  const leftover = trip.counts_as_pto && trip.pto.leftover_after != null ? balancePhrase(trip.pto.leftover_after) : "";
+  const pto = [ptoDays ? `PTO ${ptoDays}` : "", leftover ? `${leftover} left after` : ""].filter(Boolean).join(" · ");
+  const open = inProgress ? `<p><a href="#/trips/${trip.id}">Open trip</a></p>` : "";
+  const rides = inProgress ? "" : trip.transports.slice(0, 2).map((item) => `<p><span class="kicker">${esc(labelOf(ROLES, item.role))}</span> ${esc(transportSummary(item))}</p>`).join("");
   return `<article class="trip-card trip-card--${esc(trip.phase)}">
-    <div class="card-head"><div><p class="kicker">${esc(labelOf(STATUSES, trip.status))} · ${esc(prettyRange(trip.start_date, trip.end_date))} · ${trip.nights} nights</p><h2><a href="#/trips/${trip.id}">${esc(trip.title)}</a></h2></div><a class="btn btn-secondary btn-sm" href="#/trips/${trip.id}">Open</a></div>
+    <a class="card-link" href="#/trips/${trip.id}"><p class="kicker">${esc(labelOf(STATUSES, trip.status))} · ${esc(prettyRange(trip.start_date, trip.end_date))} · ${esc(nightsText(trip.nights))}</p><h2>${esc(trip.title)}</h2></a>
     <div class="chips">${cities}${parking}</div>
     ${rides ? `<div class="stack">${rides}</div>` : ""}
     ${days}
+    ${moreLink}
+    ${open}
     <p class="meta section">${esc(budgetText(trip.budget))}${pto ? ` · ${esc(pto)}` : ""}</p>
   </article>`;
 }
