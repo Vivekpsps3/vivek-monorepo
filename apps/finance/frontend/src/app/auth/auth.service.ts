@@ -10,7 +10,12 @@ import { createSigningKey, signChallenge, usernameForStorage, WrappedSigningKey 
 import { createVaultMaterial } from '../crypto/vault-crypto';
 import { VaultService } from '../crypto/vault.service';
 import { silentErrorToast } from '../core/http-error.interceptor';
-import { UsernameChangeError } from './username-change';
+import {
+  USERNAME_CHANGE_CHALLENGE,
+  USERNAME_CHANGE_LOOKUP,
+  USERNAME_CHANGE_MISSING,
+  UsernameChangeError,
+} from './username-change';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -305,39 +310,99 @@ export class AuthService {
   /**
    * Rename the signed-in account. The passphrase unwraps the same signing key
    * login uses, signs the server's message, and is not kept after this returns.
+   * A 403 refreshes the session once and runs this whole flow once more.
    */
   async changeUsername(requested: string, passphrase: string): Promise<AuthUser> {
     try {
       return await this.submitUsernameChange(requested, passphrase);
     } catch (err) {
-      if (err instanceof UsernameChangeError) throw err;
-      const status = err instanceof HttpErrorResponse ? err.status : 0;
-      throw new UsernameChangeError(status);
+      const mapped = this.asUsernameError(err);
+      if (mapped.status !== 403) throw mapped;
+      const refreshed = await this.refreshCsrf();
+      if (!refreshed) throw mapped;
+      try {
+        return await this.submitUsernameChange(requested, passphrase);
+      } catch (retryErr) {
+        throw this.asUsernameError(retryErr);
+      }
     }
+  }
+
+  private asUsernameError(err: unknown): UsernameChangeError {
+    if (err instanceof UsernameChangeError) return err;
+    if (err instanceof HttpErrorResponse) {
+      const detail = err.error && typeof err.error === 'object' ? err.error.detail : undefined;
+      return new UsernameChangeError(err.status, detail);
+    }
+    return new UsernameChangeError(0);
+  }
+
+  /** Re-read the session so a stale CSRF cookie can be replaced, then the caller retries once. */
+  private async refreshCsrf(): Promise<boolean> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MeResponse>(apiUrl('/auth/me'), { withCredentials: true, context: silentErrorToast() })
+      );
+      if (res?.user) {
+        this.checkedSession = true;
+        this.userSubject.next(res.user);
+      }
+      return !!res?.user && !!this.csrfToken;
+    } catch {
+      return false;
+    }
+  }
+
+  private warnUsernameStep(step: 'missing username' | 'lookup' | 'challenge' | 'signing', status: number): void {
+    console.warn(`username change: ${step}`, { status });
   }
 
   private async submitUsernameChange(requested: string, passphrase: string): Promise<AuthUser> {
     const username = usernameForStorage(requested);
     if (!username) throw new UsernameChangeError(400);
     if (!passphrase) throw new UsernameChangeError(0);
-    const current = this.currentUser?.username?.trim().toLowerCase() ?? '';
-    if (!usernameForStorage(current)) throw new UsernameChangeError(0);
-
-    const lookup = await firstValueFrom(
-      this.http.post<{ auth: WrappedSigningKey }>(
-        apiUrl('/auth/passwordless/lookup'),
-        { username: current },
-        { withCredentials: true, context: silentErrorToast() }
-      )
-    );
-    if (!lookup?.auth?.wrapped_private_key_b64 || !lookup.auth.kdf_salt_b64 || !lookup.auth.kdf_iterations) {
-      throw new UsernameChangeError(0);
+    // The signed-in name is whatever the account already uses, including a legacy email.
+    // The new-name rule applies only to `requested`.
+    const current = this.currentUser?.username ?? '';
+    if (!current.trim()) {
+      this.warnUsernameStep('missing username', 0);
+      throw new UsernameChangeError(0, undefined, USERNAME_CHANGE_MISSING);
     }
-    const challenge = await this.requestPasswordlessChallenge(current, 'username_change');
+
+    let lookup: { auth: WrappedSigningKey };
+    try {
+      lookup = await firstValueFrom(
+        this.http.post<{ auth: WrappedSigningKey }>(
+          apiUrl('/auth/passwordless/lookup'),
+          { username: current },
+          { withCredentials: true, context: silentErrorToast() }
+        )
+      );
+    } catch (err) {
+      const status = err instanceof HttpErrorResponse ? err.status : 0;
+      this.warnUsernameStep('lookup', status);
+      throw err;
+    }
+    if (!lookup?.auth?.wrapped_private_key_b64 || !lookup.auth.kdf_salt_b64 || !lookup.auth.kdf_iterations) {
+      this.warnUsernameStep('lookup', 0);
+      throw new UsernameChangeError(0, undefined, USERNAME_CHANGE_LOOKUP);
+    }
+    let challenge: { challenge_id: string; challenge: string; message: string };
+    try {
+      challenge = await this.requestPasswordlessChallenge(current, 'username_change');
+    } catch (err) {
+      if (err instanceof HttpErrorResponse) {
+        this.warnUsernameStep('challenge', err.status);
+        throw err;
+      }
+      this.warnUsernameStep('challenge', 0);
+      throw new UsernameChangeError(0, undefined, USERNAME_CHANGE_CHALLENGE);
+    }
     let signature_b64: string;
     try {
       signature_b64 = await signChallenge(passphrase, lookup.auth, challenge.message);
     } catch {
+      this.warnUsernameStep('signing', 401);
       throw new UsernameChangeError(401);
     }
     const updated = await firstValueFrom(

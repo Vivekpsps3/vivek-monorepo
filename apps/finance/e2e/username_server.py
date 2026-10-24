@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from fastapi import HTTPException, Request
+
 
 def main() -> None:
     port = int(os.environ.get("USERNAME_E2E_PORT", "8098"))
@@ -29,8 +31,28 @@ def main() -> None:
     os.environ.pop("SITE_DATABASE_URL", None)
 
     import uvicorn
+    from fastapi import Depends
 
     from apps.finance.backend.app import app
+    from apps.finance.backend.auth import get_current_user
+    from apps.finance.backend.database import get_db
+    from apps.finance.backend.models import User
+
+    @app.post("/api/e2e/legacy-email-username")
+    async def adopt_legacy_email_username(
+        request: Request,
+        db=Depends(get_db),
+        user=Depends(get_current_user),
+    ) -> dict[str, str]:
+        """Test-only rewrite. This process uses a temp database and is not production."""
+        payload = await request.json()
+        username = payload.get("username") if isinstance(payload, dict) else None
+        if username != "legacy.user@example.com":
+            raise HTTPException(status_code=400, detail="unsupported legacy username")
+        db.query(User).filter(User.id == user.id).update(
+            {"username": username}, synchronize_session=False
+        )
+        return {"username": username}
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 

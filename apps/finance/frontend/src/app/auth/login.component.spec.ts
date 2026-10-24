@@ -36,10 +36,11 @@ describe('LoginComponent', () => {
     expect(cdr.markForCheck).toHaveBeenCalled();
   });
 
-  it('tells the user to sign in with a username and rejects an email', async () => {
+  it('submits an email-shaped username to vault sign-in', async () => {
     const auth = jasmine.createSpyObj('AuthService', ['bootstrapStatus', 'signupPolicy', 'loginWithVault']);
     auth.bootstrapStatus.and.returnValue(of({ needs_setup: false }));
     auth.signupPolicy.and.resolveTo({ mode: 'closed', signup_open: false, invite_code_required: false });
+    auth.loginWithVault.and.returnValue(new Promise(() => undefined));
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       imports: [LoginComponent],
@@ -55,10 +56,13 @@ describe('LoginComponent', () => {
 
     expect(fixture.nativeElement.textContent).toContain('Use your enrolled username');
     expect(fixture.nativeElement.textContent).not.toContain('email linked');
-    fixture.componentInstance.username = 'vivek@pending.local';
+    fixture.componentInstance.username = 'legacy.user@example.com';
     fixture.componentInstance.password = 'correct horse battery staple';
     fixture.componentInstance.submit();
-    expect(fixture.componentInstance.error).toBe('Sign in with your username, not your email.');
-    expect(auth.loginWithVault).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.error).toBe('');
+    expect(auth.loginWithVault).toHaveBeenCalledWith(
+      'legacy.user@example.com',
+      'correct horse battery staple',
+    );
   });
 });

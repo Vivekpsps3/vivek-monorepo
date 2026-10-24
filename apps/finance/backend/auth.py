@@ -124,6 +124,42 @@ def clear_session_cookie(response: Response) -> None:
     )
 
 
+def repair_csrf_cookie(db: Session, request: Request, response: Response) -> None:
+    """Replace a CSRF cookie that was sent and does not match the live session.
+
+    ``GET /auth/me`` does not require the CSRF header. The raw token is only
+    stored in the cookie, so a mismatch cannot be repaired by echoing it.
+    A missing cookie is left alone: rewriting the hash would reject a later
+    write that still sends the original header. A matching cookie stays.
+    """
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        return
+    now = utc_now_naive()
+    session = (
+        db.query(UserSession)
+        .filter(
+            UserSession.token_hash == _hash_secret(token),
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
+        )
+        .first()
+    )
+    if session is None:
+        return
+    csrf = request.cookies.get(CSRF_COOKIE_NAME) or ""
+    if not csrf:
+        return
+    stored = getattr(session, "csrf_token_hash", None)
+    if isinstance(stored, str) and secrets.compare_digest(_hash_secret(csrf), stored):
+        return
+    fresh = secrets.token_urlsafe(32)
+    db.query(UserSession).filter(UserSession.id == session.id).update(
+        {"csrf_token_hash": _hash_secret(fresh)}, synchronize_session=False
+    )
+    set_csrf_cookie(response, fresh)
+
+
 def refresh_session_cookies(request: Request, response: Response, session: UserSession) -> None:
     """Keep a browser that is still in use signed in for another SESSION_DAYS."""
     token = request.cookies.get(SESSION_COOKIE_NAME)
