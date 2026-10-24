@@ -170,6 +170,27 @@ test("a fourth toast evicts the oldest and the cap stays at three", () => {
   assert.deepEqual(messages, ["two", "three", "four"]);
 });
 
+test("a late item failure keeps a key that item changes do not retire", () => {
+  const toast = layer();
+  globalThis.location = { hash: "#/item/9" };
+  try {
+    const late = toast.pushToast({
+      message: "Couldn't save the note.",
+      kind: "alert",
+      key: "note:4",
+      persist: true,
+    });
+    assert.equal(late.dataset.toastKey, "save-failed:note:4");
+    assert.equal(late.children.find((child) => child.tagName === "P").textContent, "Save failed for this item.");
+    toast.pushToast({ message: "Still here.", kind: "alert", key: "note:9", persist: true });
+    toast.retireOtherItemToasts("9");
+    const keys = toast.toastNodes().map((node) => node.dataset.toastKey);
+    assert.deepEqual(keys.sort(), ["note:9", "save-failed:note:4"]);
+  } finally {
+    delete globalThis.location;
+  }
+});
+
 test("an action toast waits eight seconds", () => {
   mock.timers.enable({ apis: ["setTimeout", "Date"] });
   try {

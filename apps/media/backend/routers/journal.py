@@ -8,10 +8,16 @@ from apps.media.backend.models import Episode, Experience
 from apps.media.backend.services import providers, records
 from apps.media.backend.services.calendar import build_calendar
 from apps.media.backend.services.providers import UA
-from apps.media.backend.services.summary import build_summary
+from apps.media.backend.services.summary import build_summary, next_episodes
 from apps.media.backend.services.validate import clean_text
 
 router = APIRouter()
+
+
+@router.get("/me")
+def me():
+    current = require_actor()
+    return {"username": current.username or "", "display_name": current.display_name}
 
 
 @router.get("/summary")
@@ -43,8 +49,14 @@ def library(
     sort = sort.strip().lower()
     if sort not in {"added", "rating", "activity", "release", "title"}:
         sort = "activity"
-    rows = records.list_library(db, require_actor().id, kind, status, q, sort)
-    return {"items": [records.entry_card(row) for row in rows]}
+    user_id = require_actor().id
+    rows = records.list_library(db, user_id, kind, status, q, sort)
+    # The Continue rail is the only summary slice the library paints.
+    # Chip and sort changes must not rebuild upcoming, reviews, and counts.
+    return {
+        "items": [records.entry_card(row) for row in rows],
+        "continue": next_episodes(db, user_id),
+    }
 
 
 @router.post("/library")
@@ -310,7 +322,10 @@ def search(q: str = Query(""), kind: str | None = None, db: Session = Depends(ge
         raise HTTPException(status_code=422, detail="Type at least two letters.")
     user_id = require_actor().id
     payload = providers.search(db, query, kind)
-    saved = records.saved_source_keys(db, user_id)
+    saved = records.saved_source_ids(db, user_id)
     for result in payload["results"]:
-        result["already_saved"] = (result.get("source"), result.get("source_id")) in saved
+        key = (result.get("source"), result.get("source_id"))
+        result["already_saved"] = key in saved
+        if key in saved:
+            result["saved_id"] = saved[key]
     return payload

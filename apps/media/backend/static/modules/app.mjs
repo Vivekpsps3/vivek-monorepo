@@ -1,6 +1,45 @@
 import { NETWORK_MESSAGE, api, loginHref } from "./api.mjs";
 import { browserTimeZone, localTodayIso } from "../../shared-browser/today.mjs";
-import { createToastLayer } from "../../shared-browser/toast.mjs";
+import { createToastLayer, itemIdFromHash } from "../../shared-browser/toast.mjs";
+import { writeWeekStart, weekStartsOn } from "../../shared-browser/week.mjs";
+import { icon } from "./icons.mjs";
+import { keyboardScore, pointerScore, scoreControl, scoreValue } from "./score.mjs";
+import { affectedSentence, orderGroups } from "./search-groups.mjs";
+import {
+  LIBRARY_PAGE_SIZE,
+  addFormInner,
+  caughtUpText,
+  connectionsFailureHtml,
+  creatorLabel,
+  emptyMonthHtml,
+  episodeCode,
+  eventWord,
+  graphCenter,
+  historyLine,
+  historyRemoveName,
+  legendHtml,
+  libraryEmptyHtml,
+  loggedToast,
+  markNextLabel,
+  monthEventCount,
+  noteCardHtml,
+  noteCountText,
+  overviewHtml,
+  relatedHtml,
+  releaseInformative,
+  searchIdleHtml,
+  searchResultHeading,
+  validateAdd,
+} from "./views.mjs";
+import {
+  documentTitle,
+  msUntilLocalMidnight,
+  navKey,
+  notFoundHtml,
+  parseRoute,
+  screenTitle,
+  tabBarHidden,
+} from "./shell.mjs";
 import { createKeyedFetch, createSequence } from "./guard.mjs";
 import {
   NOTE_CONFLICT_STATUS,
@@ -18,11 +57,13 @@ import {
   coverImage,
   dayLabel,
   draftKey,
+  emptyState,
   escapeHtml as esc,
   experienceLabel,
   experienceOptions,
   genericStatusOptions,
   kindLabel,
+  kindPlural,
   monthCells,
   monthLabel,
   normalizeLibraryQuery,
@@ -50,7 +91,7 @@ let progressQueuedKey = "";
 let noteChain = Promise.resolve();
 let noteOutcome = null;
 let skeletonTimer = 0;
-const { toast, dismissToast, toastNodes } = createToastLayer();
+const { toast, pushToast, dismissToast, toastNodes, retireOtherItemToasts } = createToastLayer();
 
 const WRITE_TIMEOUT_MS = 10_000;
 
@@ -58,12 +99,40 @@ function writeTimedOut(error) {
   return error?.name === "AbortError" || error?.name === "TimeoutError";
 }
 
-function showWriteTimeout(key, retry) {
-  toast(NOT_SAVED_LABEL, "alert", {
-    label: "Retry",
-    persist: true,
+function visibleItemTitle(id) {
+  if (itemIdFromHash(location.hash) !== String(id)) return "";
+  return document.querySelector("article h1")?.textContent?.trim() || "";
+}
+
+function dismissItemSave(field, id) {
+  dismissToast(`${field}:${id}`);
+  dismissToast(`save-failed:${field}:${id}`);
+}
+
+// A failure stays tied to the item it was saving. If that item is still open,
+// the toast uses the field key (`rating:12`) so a later success clears it and
+// opening a different item retires it. If the reader has already moved on,
+// the key is `save-failed:` so item-change retirement — which only removes
+// toasts already on screen — cannot drop a failure that has not been shown.
+// #15's createToastLayer can absorb this wrapper; the layer itself stays
+// item-agnostic.
+function reportItemSaveFailure({ id, field, title, error, message, retry }) {
+  if (error?.status === 401 || error?.status === 403) {
+    fail(error);
+    return;
+  }
+  const here = itemIdFromHash(location.hash) === String(id);
+  const key = here ? `${field}:${id}` : `save-failed:${field}:${id}`;
+  dismissItemSave(field, id);
+  pushToast({
+    message: here ? message : `Save failed for ${title || "this item"}.`,
+    kind: "alert",
     key,
-    onClick: () => { void retry(); },
+    persist: true,
+    action: {
+      label: "Retry",
+      onClick: () => { void retry(); },
+    },
   });
 }
 
@@ -75,48 +144,60 @@ function patchOpinion(id, body) {
   });
 }
 
-async function saveStatus(id, status) {
-  const key = `status:${id}`;
+async function saveStatus(id, status, title = visibleItemTitle(id)) {
   try {
-    await patchOpinion(id, { status });
-    dismissToast(key);
+    await patchOpinion(id, { status, anticipated: status === "anticipating" });
+    dismissItemSave("status", id);
     await render();
   } catch (error) {
-    if (writeTimedOut(error)) {
-      showWriteTimeout(key, () => saveStatus(id, status));
-      return;
-    }
-    fail(error);
+    reportItemSaveFailure({
+      id,
+      field: "status",
+      title,
+      error,
+      message: writeTimedOut(error) ? NOT_SAVED_LABEL : (error?.message || "Something went wrong."),
+      retry: () => saveStatus(id, status, title),
+    });
   }
 }
 
-async function saveFlag(id, flag, on) {
-  const key = `${flag}:${id}`;
+async function saveFlag(id, flag, on, title = visibleItemTitle(id)) {
   try {
     await patchOpinion(id, { [flag]: on });
-    dismissToast(key);
+    dismissItemSave(flag, id);
     await render();
   } catch (error) {
-    if (writeTimedOut(error)) {
-      showWriteTimeout(key, () => saveFlag(id, flag, on));
-      return;
-    }
-    fail(error);
+    reportItemSaveFailure({
+      id,
+      field: flag,
+      title,
+      error,
+      message: writeTimedOut(error) ? NOT_SAVED_LABEL : (error?.message || "Something went wrong."),
+      retry: () => saveFlag(id, flag, on, title),
+    });
   }
 }
 
-async function saveRating(id, rating) {
-  const key = `rating:${id}`;
+async function saveRating(id, rating, title = visibleItemTitle(id)) {
+  const status = document.querySelector("#score-status");
+  const cancel = armSaving(status);
   try {
     await patchOpinion(id, { rating });
-    dismissToast(key);
+    cancel();
+    dismissItemSave("rating", id);
+    document.querySelector(`.opinion[data-id="${id}"] .score`)?.removeAttribute("data-pending-save");
+    showSaved(status);
   } catch (error) {
-    if (writeTimedOut(error)) {
-      showWriteTimeout(key, () => saveRating(id, rating));
-      return;
-    }
-    fail(error);
-    await render();
+    cancel();
+    document.querySelector(`.opinion[data-id="${id}"] .score`)?.setAttribute("data-pending-save", "true");
+    reportItemSaveFailure({
+      id,
+      field: "rating",
+      title,
+      error,
+      message: writeTimedOut(error) ? NOT_SAVED_LABEL : (error?.message || "Something went wrong."),
+      retry: () => saveRating(id, rating, title),
+    });
   }
 }
 
@@ -188,7 +269,7 @@ function focusPageHeading() {
 }
 
 function focusSearchResult(box) {
-  const heading = box.querySelector("h2");
+  const heading = box.querySelector(searchResultHeading());
   if (heading instanceof HTMLElement) {
     heading.tabIndex = -1;
     heading.focus({ preventScroll: true });
@@ -207,20 +288,6 @@ function restoreFocus(key) {
   if (!key) return;
   const match = [...app.querySelectorAll("[data-focus-key]")].find(element => element.dataset.focusKey === key);
   if (match instanceof HTMLElement) match.focus();
-}
-
-function itemIdFromHash(hash) {
-  const match = /^#\/item\/(\d+)/.exec(String(hash || ""));
-  return match ? match[1] : "";
-}
-
-const ITEM_TOAST_KEY = /^(?:progress|note|note-conflict|status|favorite|anticipated|rating):(.+)$/;
-
-function retireOtherItemToasts(itemId) {
-  for (const node of toastNodes()) {
-    const match = ITEM_TOAST_KEY.exec(node.dataset.toastKey || "");
-    if (match && match[1] !== String(itemId)) node.remove();
-  }
 }
 
 function armSaving(status) {
@@ -246,20 +313,42 @@ function showSaved(status) {
 }
 
 function route() {
-  const raw = location.hash.replace(/^#/, "") || "/";
-  const [path, query = ""] = raw.split("?");
-  const params = new URLSearchParams(query);
-  const episode = path.match(/^\/item\/(\d+)\/episode\/(\d+)$/);
-  if (episode) return { name: "episode", id: Number(episode[1]), episodeId: Number(episode[2]), params };
-  const season = path.match(/^\/item\/(\d+)\/season\/(\d+)$/);
-  if (season) return { name: "season", id: Number(season[1]), seasonNumber: Number(season[2]), params };
-  const item = path.match(/^\/item\/(\d+)$/);
-  if (item) return { name: "item", id: Number(item[1]), params };
-  if (path === "/library") return { name: "library", params };
-  if (path === "/calendar") return { name: "calendar", params };
-  if (path === "/search") return { name: "search", params };
-  if (path === "/new") return { name: "new", params };
-  return { name: "home", params };
+  return parseRoute(location.hash);
+}
+
+function paintIcons() {
+  document.querySelectorAll("[data-icon]").forEach(node => {
+    if (node.dataset.iconReady === "true") return;
+    node.innerHTML = icon(node.dataset.icon);
+    node.dataset.iconReady = "true";
+  });
+}
+
+function applyChrome(current, extra = {}) {
+  document.title = documentTitle(current, extra);
+  const label = screenTitle(current, extra);
+  document.querySelectorAll("[data-screen-title]").forEach(node => {
+    node.textContent = label;
+  });
+  const currentNav = navKey(current.name);
+  document.querySelectorAll("[data-nav]").forEach(link => {
+    if (currentNav && link.dataset.nav === currentNav) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  const links = [...document.querySelectorAll(".nav [data-nav]")];
+  const active = links.find(link => link.getAttribute("aria-current") === "page") || links[0];
+  links.forEach(link => {
+    link.tabIndex = link === active ? 0 : -1;
+  });
+}
+
+function closeAccountMenus() {
+  document.querySelectorAll(".account-menu").forEach(menu => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll("[data-action='account-menu']").forEach(button => {
+    button.setAttribute("aria-expanded", "false");
+  });
 }
 
 function options(rows, selected) {
@@ -268,18 +357,29 @@ function options(rows, selected) {
 
 function poster(item) {
   const art = safeUrl(item.artwork_url);
-  if (art) return `<img alt="" src="${esc(art)}" width="342" height="513">`;
-  return `<span class="poster-fallback">${esc(kindLabel(item.kind))}</span>`;
+  if (art) return `<img alt="" src="${esc(art)}" width="342" height="513" loading="lazy" decoding="async">`;
+  return `<span class="poster-fallback" aria-hidden="true">${esc(kindLabel(item.kind).slice(0, 1))}</span>`;
 }
 
 function card(item) {
   const progress = item.progress_label ? ` · ${item.progress_label}` : "";
+  const star = item.favorite ? `<span class="fav-badge" aria-label="Favorite">★</span>` : "";
+  const percent = item.progress_unit === "percent" && item.progress_value != null
+    ? `<span class="progress-bar" style="width:${Math.max(0, Math.min(100, Number(item.progress_value)))}%"></span>`
+    : "";
   return `<a class="card" href="#/item/${item.id}">
-    <span class="poster">${poster(item)}</span>
+    <span class="poster">${poster(item)}${star}${percent}</span>
     <span class="card-title">${esc(item.title)}</span>
     <span class="meta">${esc([kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · "))}</span>
     <span class="meta">${esc(`${statusLabel(item.kind, item.status)} · ${ratingText(item.rating)}${progress}`)}</span>
   </a>`;
+}
+
+function syncWeek() {
+  const start = String(weekStartsOn());
+  document.querySelectorAll("[data-week-start]").forEach(button => {
+    button.setAttribute("aria-checked", String(button.dataset.weekStart === start));
+  });
 }
 
 function syncTheme() {
@@ -287,6 +387,7 @@ function syncTheme() {
   document.querySelectorAll("[data-theme-value]").forEach(button => {
     const on = button.dataset.themeValue === choice;
     button.setAttribute("aria-pressed", String(on));
+    button.setAttribute("aria-checked", String(on));
   });
 }
 
@@ -296,28 +397,56 @@ function setTheme(choice) {
     : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.setAttribute("data-theme-choice", choice);
-  try { localStorage.setItem("media-theme", choice); } catch { /* private mode */ }
+  try {
+    localStorage.setItem("suite-theme", choice);
+    localStorage.setItem("media-theme", choice);
+  } catch { /* private mode */ }
   syncTheme();
 }
 
 async function viewHome(ticket) {
   const summary = await api("/api/summary", { signal: ticket.signal });
   if (!ticket.isCurrent()) return;
+  const counts = summary.counts || {};
+  const current = summary.currently || [];
+  const upcoming = summary.upcoming || [];
+  const notes = summary.recent_reviews || [];
+  const next = summary.next_episodes || [];
+  const allEmpty = !current.length && !upcoming.length && !next.length && !notes.length;
+  const stats = `<p class="stats"><a href="#/library?status=in_progress">${counts.in_progress || 0} in progress</a> · <a href="#/library">${counts.library || 0} in library</a> · <a href="#/library?status=anticipating">${counts.anticipated || 0} coming up</a></p>`;
+  const hero = `<section class="hero"><div><p class="eyebrow">Journal</p><h1>Now</h1>${stats}</div><div class="hero-actions"><a class="btn btn-primary" href="#/search">Find something to add</a></div></section>`;
+  if (allEmpty) {
+    commitView(`${hero}${emptyState({
+      title: "Nothing in progress yet",
+      body: "Find a book, show, film, album or game and it will show up here while you're on it.",
+      primary: { href: "#/search", label: "Find something to add" },
+      secondary: { href: "#/new", label: "Add by title" },
+    })}`);
+    return;
+  }
+  const nextRows = next.map(item => {
+    const code = episodeCode(item.season, item.episode);
+    const airs = item.state === "upcoming" && item.air_date ? `<span class="meta">Airs ${esc(dayLabel(String(item.air_date).slice(0, 10)).split(",")[0])}</span>` : "";
+    const button = item.episode_id
+      ? `<button type="button" class="btn btn-secondary btn-sm" data-action="mark-watched" data-id="${item.entry_id}" data-episode="${item.episode_id}" data-label="${esc(code)}">Mark watched</button>`
+      : "";
+    return `<li class="next-row"><a href="#/item/${item.entry_id}?season=${encodeURIComponent(item.season)}"><span class="poster poster-next">${poster(item)}</span><span><strong>${esc(item.show_title)}</strong><span>${esc(code)}${item.title ? ` · ${esc(item.title)}` : ""}</span>${airs}</span></a>${button}</li>`;
+  }).join("");
+  const inProgress = current.length
+    ? `<div class="grid">${current.map(card).join("")}</div>`
+    : `<p class="quiet">Nothing in progress. <a href="#/library?status=want">Open library</a></p>`;
+  const coming = upcoming.length
+    ? `<ul class="plain">${upcoming.map(item => `<li><a href="#/item/${item.id}">${esc(item.title)}</a><span>${esc(whenLabel(item))}</span></li>`).join("")}</ul>`
+    : `<p class="quiet">Nothing coming up. Mark something Anticipating to track its release.</p>`;
+  const noteCards = notes.length
+    ? `<section><h2>Recent notes</h2><div class="note-cards">${notes.map(item => noteCardHtml(item)).join("")}</div></section>`
+    : "";
   commitView(`
-    <section class="hero">
-      <div>
-        <p class="eyebrow">Journal</p>
-        <h1>${summary.counts.in_progress ? `${summary.counts.in_progress} in progress` : "Now"}</h1>
-      </div>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="#/search">Search</a>
-        <a class="btn" href="#/new">Add manually</a>
-      </div>
-    </section>
-    ${section("In progress", summary.currently, `<a href="#/search">Search</a>`)}
-    ${releaseSection(summary.upcoming)}
-    ${reviewSection(summary.recent_reviews)}
-    <p class="footnote"><a href="#/calendar">Episode calendar</a> · <a href="#/library">Open the full library</a></p>
+    ${hero}
+    <section><h2>Next up</h2>${next.length ? `<ul class="next-list">${nextRows}</ul>` : `<p class="quiet">Nothing waiting.</p>`}</section>
+    <section><h2>In progress</h2>${inProgress}</section>
+    <section><h2>Coming up</h2>${coming}</section>
+    ${noteCards}
   `);
 }
 
@@ -336,51 +465,63 @@ async function viewCalendar(params, ticket) {
   const heads = weekDayLabels()
     .map(name => `<div class="cal-head">${name}</div>`)
     .join("");
-  const grid = cells.map(day => {
-    if (!day) return `<div class="cal-day is-outside"></div>`;
-    const events = byDay.get(day) || [];
-    const todayClass = day === today ? " is-today" : "";
-    const current = day === today ? ` aria-current="date"` : "";
-    const chips = events.map(event => eventChip(event, true)).join("");
-    return `<div class="cal-day${todayClass}"${current}><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${chips}</div>`;
-  }).join("");
   const agendaDays = (data.days || []).filter(day => (day.events || []).length);
   const agenda = agendaDays.length
     ? `<ul class="calendar-agenda">${agendaDays.map(day => `<li><time datetime="${esc(day.date)}">${esc(dayLabel(day.date))}</time><div class="cal-events">${(day.events || []).map(event => eventChip(event, false)).join("")}</div></li>`).join("")}</ul>`
-    : `<ul class="calendar-agenda"><li><p class="quiet">Nothing on a specific day this month.</p></li></ul>`;
+    : "";
+  const rows = [];
+  for (let index = 0; index < cells.length; index += 7) rows.push(cells.slice(index, index + 7));
+  const body = rows.map(week => `<div role="row">${week.map(day => {
+    if (!day) return `<div role="gridcell" class="cal-day is-outside"></div>`;
+    const events = byDay.get(day) || [];
+    const todayClass = day === today ? " is-today" : "";
+    const current = day === today ? ` aria-current="date"` : "";
+    const shown = events.slice(0, 3).map(event => eventChip(event, true)).join("");
+    const extra = events.length > 3 ? `<button type="button" class="cal-more" data-action="cal-more">+${events.length - 3} more</button><div class="cal-popover" hidden>${events.map(event => eventChip(event, false)).join("")}</div>` : "";
+    const tab = day === today ? ` tabindex="0"` : ` tabindex="-1"`;
+    return `<div role="gridcell" class="cal-day${todayClass}" data-date="${esc(day)}"${current}${tab}><time class="cal-num" datetime="${esc(day)}">${Number(day.slice(8))}</time>${shown}${extra}</div>`;
+  }).join("")}</div>`).join("");
+  const empty = monthEventCount(data) ? "" : emptyMonthHtml(label, `#/calendar?month=${shiftMonth(data.month, 1)}`);
+  const partial = data.partial
+    ? `<p class="quiet cal-partial">Some episode dates and follow-ups could not be loaded yet. What you already saved is still here. <button type="button" class="btn btn-sm" data-action="reload-calendar">Load the rest</button></p>`
+    : "";
   commitView(`
     <section class="hero">
       <div>
-        <p class="eyebrow">Calendar</p>
         <h1>${esc(label)}</h1>
       </div>
-      <div class="hero-actions">
-        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, -1))}">Previous</a>
-        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, 1))}">Next</a>
+      <div class="hero-actions cal-toolbar">
+        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, -1))}" aria-label="Previous month">‹</a>
+        <a class="btn" href="#/calendar">Today</a>
+        <a class="btn" href="#/calendar?month=${esc(shiftMonth(data.month, 1))}" aria-label="Next month">›</a>
       </div>
     </section>
-    <p class="calendar-legend">
-      <span><span class="swatch cal-episode"></span> Episode</span>
-      <span><span class="swatch cal-anticipated"></span> Anticipated</span>
-      <span><span class="swatch cal-sequel"></span> Sequel</span>
-      <span><span class="swatch cal-spinoff"></span> Spin-off</span>
-    </p>
-    ${data.partial ? `<p class="quiet">Some episode dates and follow-ups could not be loaded yet. What you already saved is still here.</p>` : ""}
-    <div class="calendar-grid" aria-label="${esc(label)}">${heads}${grid}</div>
+    ${legendHtml(data)}
+    ${partial}
+    ${empty}
+    <div class="calendar-grid" role="grid" aria-label="${esc(label)}"><div role="row">${heads.replaceAll("<div ", `<div role="columnheader" `)}</div>${body}</div>
     ${agenda}
     ${band(`Sometime in ${label}`, data.month_band)}
     ${band(`Sometime in ${year || "this year"}`, data.year_band)}
     ${band("Date not set", data.unknown)}
   `);
+  if (requested && data.month && requested !== data.month) {
+    toast("That month couldn't be read. Showing this month.");
+    history.replaceState(null, "", `${location.pathname}${location.search}#/calendar?month=${data.month}`);
+  }
+  applyChrome(route(), { monthLabel: label });
 }
 
 function eventChip(event, compact) {
   const type = ["episode", "anticipated", "sequel", "spinoff"].includes(event.type) ? event.type : "anticipated";
   const className = `cal-event cal-${type}${event.watched ? " is-watched" : ""}`;
   const text = chipText(event, compact);
+  const prefix = `<span class="visually-hidden">${esc(eventWord(type))}: </span>`;
+  const mark = event.watched ? " ✓" : "";
   const id = Number(event.entry_id);
-  if (Number.isInteger(id) && id > 0) return `<a class="${className}" href="#/item/${id}">${esc(text)}</a>`;
-  return `<span class="${className}">${esc(text)}</span>`;
+  const body = `${prefix}${esc(text)}${mark}`;
+  if (Number.isInteger(id) && id > 0) return `<a class="${className}" href="#/item/${id}">${body}</a>`;
+  return `<span class="${className}">${body}</span>`;
 }
 
 function chipText(event, compact) {
@@ -438,12 +579,23 @@ function reviewSection(items) {
   return `<section><h2>Recent notes</h2><ul class="plain">${rows}</ul></section>`;
 }
 
-function libraryPage(kind, status, q, sort, body, resume) {
-  const kinds = ["", "movie", "tv", "book", "artist", "album", "track", "game"].map(value => ({
+function libraryQuery(kind, status, q, sort, fav) {
+  const params = new URLSearchParams();
+  if (kind) params.set("kind", kind);
+  if (status) params.set("status", status);
+  if (q) params.set("q", q);
+  if (sort && sort !== "activity") params.set("sort", sort);
+  if (fav) params.set("fav", "1");
+  const text = params.toString();
+  return text ? `#/library?${text}` : "#/library";
+}
+
+function libraryPage(kind, status, q, sort, body, resume, count, fav) {
+  const kinds = ["", "movie", "tv", "book", "game", "album", "track", "artist"].map(value => ({
     value,
-    label: value ? kindLabel(value) : "All types",
+    label: value ? kindPlural(value) : "All",
   }));
-  const statuses = [{ value: "", label: "Any status" }, ...(kind ? statusOptions(kind) : genericStatusOptions())];
+  const statuses = [{ value: "", label: "All" }, ...(kind ? statusOptions(kind) : genericStatusOptions())];
   const sorts = [
     { value: "activity", label: "Recently active" },
     { value: "added", label: "Recently added" },
@@ -451,14 +603,53 @@ function libraryPage(kind, status, q, sort, body, resume) {
     { value: "rating", label: "Your score" },
     { value: "release", label: "Release year" },
   ];
+  const heading = count == null ? "Library" : `Library · ${count}`;
   return `
-    <section class="hero"><div><p class="eyebrow">Library</p><h1>Saved</h1></div></section>
-    <label class="sort-field">Sort <select id="library-sort" data-library-sort>${options(sorts, sort)}</select></label>
+    <section class="hero"><div><h1>${esc(heading)}</h1></div></section>
+    <div class="library-toolbar" id="library-toolbar">
+      <label class="grow">Search your library <input id="library-q" type="search" value="${esc(q)}" placeholder="Filter by title or creator" autocomplete="off"></label>
+      <label class="sort-field">Sort <select id="library-sort" data-library-sort aria-label="Sort">${options(sorts, sort)}</select></label>
+      <div class="chip-row" role="group" aria-label="Favorites">
+        <button type="button" class="flag${fav ? " is-on" : ""}" data-library-fav aria-pressed="${fav ? "true" : "false"}">★ Favorites</button>
+      </div>
+    </div>
+    <div class="chip-row" role="group" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, status, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
+    <div class="chip-row status-wide" role="group" aria-label="Status">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" ${item.value === status ? `aria-current="true"` : ""} href="${libraryQuery(kind, item.value, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
+    <label class="status-narrow">Status <select id="library-status" data-library-status>${options(statuses.map(item => ({ value: item.value, label: item.label === "All" ? "All" : item.label })), status)}</select></label>
     ${continuePoint(resume)}
-    <div class="status-row">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind: item.value, status, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
-    <div class="status-row">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" href="#/library?${new URLSearchParams({ kind, status: item.value, sort, q })}">${esc(item.label)}</a>`).join("")}</div>
     <div data-library-body>${body}</div>
   `;
+}
+
+let libraryItems = [];
+let libraryResume = null;
+let libraryShown = LIBRARY_PAGE_SIZE;
+
+function filteredLibrary(items, q, fav) {
+  const needle = String(q || "").trim().toLowerCase();
+  return (items || []).filter(item => {
+    if (fav && !item.favorite) return false;
+    if (!needle) return true;
+    return `${item.title || ""} ${item.creator || ""}`.toLowerCase().includes(needle);
+  });
+}
+
+function libraryCards(items) {
+  const shown = items.slice(0, libraryShown);
+  const more = items.length - shown.length;
+  const button = more > 0 ? `<button type="button" class="btn" data-action="show-more">Show more</button>` : "";
+  return `<div class="grid">${shown.map(card).join("")}</div>${button}`;
+}
+
+function paintLibrary(params, resume) {
+  const kind = params.get("kind") || "";
+  const status = params.get("status") || "";
+  const q = params.get("q") || "";
+  const sort = params.get("sort") || "activity";
+  const fav = params.get("fav") === "1";
+  const visible = filteredLibrary(libraryItems, q, fav);
+  const body = visible.length ? libraryCards(visible) : libraryEmptyHtml({ kind, status, q });
+  commitView(libraryPage(kind, status, q, sort, body, resume, visible.length, fav));
 }
 
 async function viewLibrary(params, ticket) {
@@ -466,14 +657,14 @@ async function viewLibrary(params, ticket) {
   const status = params.get("status") || "";
   const q = params.get("q") || "";
   const sort = params.get("sort") || "activity";
+  const fav = params.get("fav") === "1";
   const query = new URLSearchParams();
   if (kind) query.set("kind", kind);
   if (status) query.set("status", status);
-  if (q) query.set("q", q);
   query.set("sort", sort);
   const fromLibrary = String(app.dataset.view || "").startsWith("#/library");
   const previousCards = fromLibrary ? (app.querySelector("[data-library-body]")?.innerHTML || "") : "";
-  commitView(libraryPage(kind, status, q, sort, previousCards, null), true);
+  commitView(libraryPage(kind, status, q, sort, previousCards, null, null, fav), true);
   const cardsTimer = window.setTimeout(() => {
     if (!ticket.isCurrent()) return;
     const slot = app.querySelector("[data-library-body]");
@@ -481,17 +672,13 @@ async function viewLibrary(params, ticket) {
     slot.innerHTML = `<div class="grid" aria-hidden="true">${skeletonBlocks(12, "skeleton-card")}</div>`;
   }, SKELETON_DELAY_MS);
   try {
-    const [payload, summary] = await Promise.all([
-      api(`/api/library?${query}`, { signal: ticket.signal }),
-      api("/api/summary", { signal: ticket.signal }),
-    ]);
+    const payload = await api(`/api/library?${query}`, { signal: ticket.signal });
     window.clearTimeout(cardsTimer);
     if (!ticket.isCurrent()) return;
-    const resume = (!kind || kind === "tv") ? continueItem(summary.next_episodes) : null;
-    const body = payload.items.length
-      ? `<div class="grid">${payload.items.map(card).join("")}</div>`
-      : `<p class="quiet"><a href="#/search">Search</a></p>`;
-    commitView(libraryPage(kind, status, q, sort, body, resume));
+    libraryItems = payload.items || [];
+    libraryShown = LIBRARY_PAGE_SIZE;
+    libraryResume = (!kind || kind === "tv") ? continueItem(payload.continue) : null;
+    paintLibrary(params, libraryResume);
   } catch (error) {
     window.clearTimeout(cardsTimer);
     throw error;
@@ -504,7 +691,8 @@ function viewSearch(params) {
   commitView(`
     <section class="hero"><div><h1>Search</h1></div></section>
     <form class="filters" data-action="search-now" id="search-form">
-      <label class="grow">Search <input id="search-q" name="q" value="${esc(q)}" type="search" autocomplete="off" placeholder="Title, artist, or author"></label>
+      <label class="grow">Search <input id="search-q" name="q" value="${esc(q)}" type="search" autocomplete="off" placeholder="Title, artist, author or game"></label>
+      <button class="btn search-clear" type="button" data-action="clear-search" aria-label="Clear">Clear</button>
       <label>Type <select id="search-kind" name="kind">${options([
         { value: "", label: "All" },
         { value: "movie", label: "Movies" },
@@ -516,33 +704,54 @@ function viewSearch(params) {
         { value: "game", label: "Games" },
       ], kind)}</select></label>
     </form>
-    <div id="search-results"></div>
+    <div id="search-results">${searchIdleHtml(q)}</div>
   `);
-  if (q.length >= 2) runSearch();
+  if (q.trim().length >= 2) runSearch();
+  if (focusSearchOnPaint) {
+    focusSearchOnPaint = false;
+    document.querySelector("#search-q")?.focus();
+  }
 }
 
-function providerLine(providers) {
-  const names = { tmdb: "TMDB", musicbrainz: "MusicBrainz", openlibrary: "Open Library", rawg: "RAWG", tvmaze: "TVMaze", itunes: "iTunes" };
-  const states = { ok: "available", unconfigured: "not configured", error: "unavailable" };
-  const bits = Object.entries(providers).map(([name, state]) => `${names[name] || name} ${states[state] || state}`);
-  return `<p class="quiet">${esc(bits.join(" · "))}. Your notes are not sent to these services.</p>`;
+function resultRow(item, index) {
+  const openHref = item.saved_id ? `#/item/${item.saved_id}` : "#/library";
+  const action = item.already_saved
+    ? `<span class="in-library">In library</span> <a href="${openHref}">Open</a>`
+    : `<button class="btn btn-secondary btn-sm" type="button" tabindex="-1" data-action="${item.kind === "artist" ? "follow" : "open-quick"}" data-index="${index}">${item.kind === "artist" ? "Follow" : "Add"}</button>`;
+  return `<article class="result" tabindex="-1" data-result="${index}">
+    <span class="poster poster-sm">${poster(item)}</span>
+    <div>
+      <h2>${esc(item.title)} <span class="type-badge">${esc(kindLabel(item.kind).toUpperCase())}</span></h2>
+      <p class="meta">${esc([item.year, item.creator].filter(Boolean).join(" · "))}</p>
+      ${item.overview ? `<p class="clamp">${esc(item.overview)}</p>` : ""}
+    </div>
+    <div class="result-action">${action}</div>
+  </article>`;
 }
 
 function renderResults(payload) {
+  const sentence = affectedSentence(payload.providers);
+  const line = sentence
+    ? `<p class="quiet">${esc(sentence)} <a href="#/new?title=${encodeURIComponent(payload.query || "")}">Add one by title</a></p>`
+    : "";
   if (!payload.results.length) {
-    return `${providerLine(payload.providers)}<p class="quiet">No public match. <a href="#/new?title=${encodeURIComponent(payload.query || "")}">Add “${esc(payload.query)}” manually</a>.</p>`;
+    return `${line}<p class="quiet">Your notes are never sent to these services.</p><div class="empty suite-empty"><h2>No public match for “${esc(payload.query)}”</h2><p>Check the spelling, or add it yourself.</p><a class="btn btn-primary" href="#/new?title=${encodeURIComponent(payload.query || "")}">Add “${esc(payload.query)}” by title</a></div>`;
   }
-  const rows = payload.results.map((item, index) => `
-    <article class="result">
-      <span class="poster poster-sm">${poster(item)}</span>
-      <div>
-        <h2>${esc(item.title)}</h2>
-        <p class="meta">${esc([kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · "))}</p>
-        ${item.overview ? `<p class="clamp">${esc(item.overview)}</p>` : ""}
-        ${item.already_saved ? `<span class="followed" aria-label="In your library"></span>` : `<button class="follow" type="button" data-action="${item.kind === "artist" ? "follow" : "open-quick"}" data-index="${index}" aria-label="${item.kind === "artist" ? "Follow" : "Add"}"></button>`}
-      </div>
-    </article>`).join("");
-  return `${providerLine(payload.providers)}<div class="results">${rows}</div>`;
+  const selected = document.querySelector("#search-kind")?.value || "";
+  const count = `<p class="quiet" role="status">${payload.results.length} results for “${esc(payload.query)}”</p>`;
+  if (selected) {
+    return `${line}<div class="results">${payload.results.map((item, index) => resultRow(item, index)).join("")}</div>${count}`;
+  }
+  const groups = orderGroups(payload.results, payload.query).map(group => {
+    const visible = group.expanded ? group.rows : group.rows.slice(0, 3);
+    const hidden = group.rows.length - visible.length;
+    const more = hidden > 0
+      ? `<button type="button" data-action="show-group" data-kind="${group.kind}">Show all ${group.rows.length} ${esc(kindPlural(group.kind).toLowerCase())}</button>`
+      : "";
+    const rows = visible.map(item => resultRow(item, payload.results.indexOf(item))).join("");
+    return `<section data-group="${group.kind}"><h2>${esc(kindPlural(group.kind))} · ${group.rows.length}</h2><div class="results">${rows}</div>${more}</section>`;
+  }).join("");
+  return `${line}${groups}${count}`;
 }
 
 async function runSearch({ focusError = false, focusResult = false } = {}) {
@@ -553,7 +762,7 @@ async function runSearch({ focusError = false, focusResult = false } = {}) {
   const q = input.value.trim();
   if (q.length < 2) {
     searchLoads.start("");
-    box.innerHTML = "";
+    box.innerHTML = searchIdleHtml(q);
     box.setAttribute("aria-busy", "false");
     return;
   }
@@ -573,6 +782,8 @@ async function runSearch({ focusError = false, focusResult = false } = {}) {
     if (`${liveQ}\u0000${liveKind}` !== `${q}\u0000${kind}`) return;
     searchResults = payload.results;
     box.innerHTML = renderResults(payload);
+    const rows = box.querySelectorAll(".result");
+    if (rows[0]) rows[0].tabIndex = 0;
     box.setAttribute("aria-busy", "false");
     if (focusResult) focusSearchResult(box);
   } catch (error) {
@@ -587,26 +798,37 @@ async function runSearch({ focusError = false, focusResult = false } = {}) {
 }
 
 function viewNew(params) {
-  const kinds = [
-    ["movie", "Movie"], ["tv", "Series"], ["book", "Book"], ["artist", "Artist"],
-    ["album", "Album"], ["track", "Song"], ["game", "Game"],
-  ];
+  const kind = params.get("kind") || "movie";
   commitView(`
-    <form class="stack" data-action="create-manual">
-      <input name="title" required value="${esc(params.get("title") || "")}" aria-label="Title" placeholder="Title">
-      <div class="status-row">${kinds.map(([value, label], index) => `<label class="status-mark"><input type="radio" name="kind" value="${value}"${index === 0 ? " checked" : ""}>${label}</label>`).join("")}</div>
-      <button class="btn btn-primary" type="submit">Add</button>
+    <h1>Add</h1>
+    <form class="stack add-form" data-action="create-manual" novalidate>
+      ${addFormInner({ title: params.get("title") || "", kind })}
     </form>`);
+  document.querySelector("[name=title]")?.focus();
 }
 
-function scoreMarks(value, label) {
-  const current = value === "" || value == null || Number.isNaN(Number(value)) ? null : Number(value);
-  const buttons = [];
-  for (let step = 1; step <= 10; step += 1) {
-    const on = current != null && step <= Math.round(current);
-    buttons.push(`<button type="button" class="mark${on ? " is-on" : ""}" data-score="${step}" aria-pressed="${on ? "true" : "false"}" aria-label="${esc(label)} ${step}"></button>`);
-  }
-  return `<div class="marks" role="group" aria-label="${esc(label)}">${buttons.join("")}</div>`;
+function scoreMarks(value, label, child = false) {
+  return scoreControl({ value, label, child });
+}
+
+let ratingTimer = 0;
+function scheduleRating(id, rating) {
+  window.clearTimeout(ratingTimer);
+  ratingTimer = window.setTimeout(() => {
+    void saveRating(id, rating);
+  }, 400);
+}
+
+function paintScore(group, value) {
+  const child = group.classList.contains("score-child");
+  const label = group.getAttribute("aria-label") || "Your score";
+  const holder = document.createElement("div");
+  holder.innerHTML = scoreControl({ value, label, child });
+  const next = holder.firstElementChild;
+  if (!next) return group;
+  group.replaceWith(next);
+  next.querySelector('[aria-checked="true"]')?.focus();
+  return next;
 }
 
 function chooseSeason(entry, forcedSeason) {
@@ -632,33 +854,52 @@ async function viewItem(id, ticket, forcedSeason = null) {
   }
   const review = chooseReview(entry.review, entry.review_updated_at, readDraftRecord(id));
   const progress = entry.kind === "book" || entry.kind === "game";
+  const scoreText = entry.rating == null ? "Unrated" : ratingText(entry.rating).replace("/10", " / 10");
   commitView(`
     <article class="detail">
-      <div class="poster poster-lg">${poster(entry)}</div>
-      <div>
-        <p class="eyebrow">${esc(kindLabel(entry.kind))}${entry.catalog.source === "manual" ? " · Added manually" : ""}</p>
-        <h1>${esc(entry.title)}</h1>
-        <p class="lede">${esc([entry.creator, entry.year].filter(Boolean).join(" · "))}</p>
-        ${entry.catalog.overview ? `<p class="overview">${esc(entry.catalog.overview)}</p>` : ""}
+      <div class="detail-head">
+        <div class="poster poster-lg">${poster(entry)}</div>
+        <div class="detail-titles">
+          <p class="eyebrow">${esc(kindLabel(entry.kind))}${entry.catalog.source === "manual" ? " · Added manually" : ""}</p>
+          <h1>${esc(entry.title)}</h1>
+          <p class="lede">${esc([entry.creator, entry.year].filter(Boolean).join(" · "))}</p>
+        </div>
+      </div>
+      <div class="detail-main">
+        ${overviewHtml(entry.catalog.overview)}
         ${externalRatings(entry.catalog.external_ratings)}
         ${releaseLine(entry.releases)}
-        ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
-        ${entry.kind === "movie" || entry.kind === "tv" ? `<div class="web" data-web="${entry.id}" hidden></div>` : ""}
         <div class="opinion" data-id="${entry.id}" data-favorite="${entry.favorite ? "true" : "false"}" data-anticipated="${entry.anticipated ? "true" : "false"}">
-          <div class="status-row">${statusOptions(entry.kind).map(opt => `<button type="button" class="status-mark${opt.value === entry.status ? " is-on" : ""}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`).join("")}</div>
-          ${scoreMarks(entry.rating, "Score")}
-          <div class="flag-row">
-            <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}">Favorite</button>
-            <button type="button" class="flag${entry.anticipated ? " is-on" : ""}" data-flag="anticipated" data-focus-key="flag-anticipated" aria-pressed="${entry.anticipated ? "true" : "false"}">Soon</button>
-          </div>
-          <textarea name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="3" aria-label="Note">${esc(review.text)}</textarea>
-          <p id="note-status" class="progress-status" role="status"></p>
-          ${review.restore ? `<p id="note-draft" class="save-draft">${esc(NOTE_RESTORE_LABEL)} <button type="button" data-restore-note="${entry.id}">Restore</button> <button type="button" data-discard-note="${entry.id}">Discard</button></p>` : ""}
-          ${progress ? progressField(entry) : ""}
+          <section class="detail-section">
+            <div class="field-label">Status <span id="status-save" class="progress-status" role="status"></span></div>
+            <div class="status-row" role="radiogroup" aria-label="Status">${statusOptions(entry.kind).map(opt => {
+              const on = opt.value === entry.status;
+              return `<button type="button" role="radio" class="status-mark${on ? " is-on" : ""}" aria-checked="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`;
+            }).join("")}</div>
+          </section>
+          <section class="detail-section">
+            <div class="field-label">Your score <span id="score-value" class="value">${esc(scoreText)}</span> <span id="score-status" class="progress-status" role="status"></span></div>
+            <div class="score-row">
+              ${scoreMarks(entry.rating, "Your score")}
+              <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}" aria-label="Favorite">${entry.favorite ? "★ Favorite" : "☆ Favorite"}</button>
+            </div>
+          </section>
+          ${progress ? `<section class="detail-section">${progressField(entry)}</section>` : ""}
+          <section class="detail-section note-block">
+            <label for="note">Your note</label>
+            <textarea id="note" name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" data-spoiler-saved="${entry.review_spoiler ? "true" : "false"}" rows="4" aria-label="Note">${esc(review.text)}</textarea>
+            <label class="spoiler"><input type="checkbox" data-spoiler ${entry.review_spoiler ? "checked" : ""}> Contains spoilers</label>
+            <p class="meta" data-note-count>${esc(noteCountText(review.text))}</p>
+            <p id="note-status" class="progress-status" role="status"></p>
+            ${review.restore ? `<p id="note-draft" class="save-draft">${esc(NOTE_RESTORE_LABEL)} <button type="button" data-restore-note="${entry.id}">Restore</button> <button type="button" data-discard-note="${entry.id}">Discard</button></p>` : ""}
+          </section>
         </div>
+        ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
         ${experienceBlock(entry)}
-        <form data-action="delete-entry" data-id="${entry.id}"><button class="btn btn-danger" type="submit">Remove</button></form>
+        <div class="web" data-web="${entry.id}" hidden></div>
+        ${detailsBlock(entry)}
+        <form class="danger-zone" data-action="delete-entry" data-id="${entry.id}"><button class="btn btn-danger" type="submit">Remove from library</button></form>
       </div>
     </article>
   `);
@@ -673,6 +914,7 @@ async function viewItem(id, ticket, forcedSeason = null) {
     }
   }
   dismissToast(`note-conflict:${id}`);
+  applyChrome(route(), { title: entry.title });
   loadWeb(entry, ticket);
 }
 
@@ -725,23 +967,57 @@ function externalRatings(rows) {
 }
 
 function releaseLine(releases) {
-  if (!releases?.length) return "";
-  return `<ul class="plain">${releases.map(row => `<li><span>${esc([row.platform, row.region].filter(Boolean).join(" · ") || "Release")}</span><span>${esc(releaseLabel(row))}</span></li>`).join("")}</ul>`;
+  const rows = (releases || []).filter(releaseInformative);
+  if (!rows.length) return "";
+  return `<ul class="plain">${rows.map(row => `<li><span>${esc([row.platform, row.region].filter(Boolean).join(" · ") || "Release")}</span><span>${esc(releaseLabel(row))}</span></li>`).join("")}</ul>`;
+}
+
+function detailsBlock(entry) {
+  const genres = Array.isArray(entry.catalog?.genres) ? entry.catalog.genres.filter(Boolean) : [];
+  const tags = Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : [];
+  const genreLine = genres.length ? `<p>Genres: ${esc(genres.join(", "))}</p>` : "";
+  const tagLine = tags.length ? `<p>Tags: ${esc(tags.join(", "))}</p>` : "";
+  return `<details class="item-details"><summary>Details</summary>${genreLine}${tagLine}${releaseForm(entry)}</details>`;
+}
+
+function logVerb(kind) {
+  return { book: "read", movie: "watch", tv: "watch", game: "play", album: "listen", track: "listen", artist: "listen" }[kind] || "watch";
 }
 
 function experienceBlock(entry) {
   const kind = experienceOptions(entry.kind)[0]?.value || "watch";
-  const rows = (entry.experiences || []).map(row => `
+  const rows = (entry.experiences || []).map(row => {
+    const name = historyRemoveName(row);
+    return `
     <li class="exp">
-      <span>${esc(experienceLabel(row.kind))}</span>
-      <span>${esc(row.finished_on || row.started_on || "")}</span>
-      <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" aria-label="Remove">✕</button>
-    </li>`).join("");
+      <span>${esc(historyLine(row))}</span>
+      <button type="button" data-action="edit-experience" data-id="${entry.id}" data-experience="${row.id}">Edit</button>
+      <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" data-kind="${esc(row.kind || "")}" data-finished="${esc(row.finished_on || "")}" data-started="${esc(row.started_on || "")}" data-notes="${esc(row.notes || "")}" data-rating="${row.rating ?? ""}" aria-label="${esc(name)}">Remove</button>
+      <form class="log-form" data-action="save-experience" data-id="${entry.id}" data-experience="${row.id}" hidden>
+        <label>Entry <textarea name="notes" rows="2" aria-label="Entry">${esc(row.notes || "")}</textarea></label>
+        <label>Score <input name="rating" inputmode="decimal" value="${row.rating ?? ""}"></label>
+        <label class="spoiler"><input type="checkbox" name="spoiler" ${row.spoiler ? "checked" : ""}> Contains spoilers</label>
+        <button class="btn btn-primary" type="submit">Save</button>
+      </form>
+    </li>`;
+  }).join("");
   const list = rows ? `<ul class="exp-list">${rows}</ul>` : "";
+  const today = new Date();
+  const finished = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return `
-    <section class="exps">
+    <section class="exps detail-section">
+      <h2>History</h2>
       ${list}
-      <button type="button" class="flag" data-action="log-again" data-focus-key="again" data-id="${entry.id}" data-kind="${kind}">Again</button>
+      <button type="button" class="flag" data-action="toggle-log" data-focus-key="again" data-id="${entry.id}">Log a ${esc(logVerb(entry.kind))}</button>
+      <form class="log-form" data-log-form data-action="add-experience" data-id="${entry.id}" hidden>
+        <label>Kind <select name="kind">${options(experienceOptions(entry.kind), kind)}</select></label>
+        <label>Started <input name="started_on" type="date"></label>
+        <label>Finished <input name="finished_on" type="date" value="${esc(finished)}"></label>
+        <label>Score <input name="rating" inputmode="decimal"></label>
+        <label>Entry <textarea name="notes" rows="2" aria-label="Entry"></textarea></label>
+        <label class="spoiler"><input type="checkbox" name="spoiler"> Contains spoilers</label>
+        <button class="btn btn-primary" type="submit">Save</button>
+      </form>
     </section>`;
 }
 
@@ -751,22 +1027,33 @@ function showEpisodes(entry, seasonNumber) {
   const episodes = (show.episodes || [])
     .filter(episode => seasonNumber == null || episode.season_number === seasonNumber)
     .sort((a, b) => a.episode_number - b.episode_number || a.id - b.id);
-  const chips = seasons.map(item => {
-    const current = item.season_number === seasonNumber ? " is-current" : "";
-    const done = item.watched ? " is-done" : "";
-    return `<button type="button" class="season-chip${current}${done}" data-season-jump data-id="${entry.id}" data-season="${item.season_number}" data-current="${seasonNumber ?? ""}" aria-pressed="${item.watched ? "true" : "false"}" aria-label="Season ${item.season_number}">${item.season_number}</button>`;
+  const tabs = seasons.map(item => {
+    const selected = item.season_number === seasonNumber;
+    return `<button type="button" role="tab" class="season-chip${selected ? " is-current" : ""}" id="season-tab-${item.season_number}" data-season-jump data-id="${entry.id}" data-season="${item.season_number}" data-focus-key="season:${item.season_number}" aria-selected="${selected ? "true" : "false"}" tabindex="${selected ? "0" : "-1"}" aria-controls="season-panel">${esc(seasonLabel(item.season_number))}</button>`;
   }).join("");
   const rating = seasons.find(item => item.season_number === seasonNumber);
+  const watched = rating?.watched ? "true" : "false";
   const score = rating
-    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${rating.watched ? "true" : "false"}">${scoreMarks(rating.rating, "Season")}</div>`
+    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${watched}">${scoreMarks(rating.rating, "Season score", true)}</div>`
+    : "";
+  const seasonBox = rating
+    ? `<label class="spoiler"><input type="checkbox" data-season-watched data-id="${entry.id}" data-season="${rating.season_number}" ${rating.watched ? "checked" : ""}> Season watched</label>${score}`
     : "";
   const tiles = episodes.map(episode => {
     const label = episodePlace(episode);
-    return `<li><button type="button" class="episode-tile${episode.watched ? " is-watched" : ""}" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}" aria-label="${esc(label)}"><span>${esc(episode.episode_number)}</span><strong>${esc(episode.title || label)}</strong></button><a class="episode-open" href="#/item/${entry.id}/episode/${episode.id}" aria-label="Open ${esc(label)}"></a></li>`;
+    const code = episodeCode(episode.season_number, episode.episode_number);
+    return `<li class="episode-tile${episode.watched ? " is-watched" : ""}"><a href="#/item/${entry.id}/episode/${episode.id}">${esc(episode.episode_number)} ${esc(episode.title || label)}</a><button type="button" class="episode-watch" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}" aria-label="${episode.watched ? `Watched ${code}` : `Mark ${code} watched`}"></button></li>`;
   }).join("");
-  return `<section class="episodes-section">
-    <div class="season-strip">${chips}${score}</div>
-    <ol class="episode-tiles">${tiles}</ol>
+  const nextLabel = markNextLabel(show);
+  const upcoming = show.next_episode;
+  const next = nextLabel && upcoming
+    ? `<button type="button" class="btn btn-primary" data-action="mark-next" data-id="${entry.id}" data-episode="${upcoming.id}" data-label="${esc(episodeCode(upcoming.season_number, upcoming.episode_number))}">${esc(nextLabel)}</button>`
+    : "";
+  return `<section class="episodes-section detail-section">
+    <p class="meta">${esc(caughtUpText(show))}</p>
+    ${next}
+    <div class="season-strip" role="tablist" aria-label="Seasons">${tabs}</div>
+    <div role="tabpanel" id="season-panel" aria-labelledby="season-tab-${seasonNumber}">${seasonBox}<ol class="episode-tiles">${tiles}</ol></div>
   </section>`;
 }
 
@@ -782,30 +1069,36 @@ async function viewEpisode(entryId, episodeId, ticket) {
   commitView(`
     <article class="episode-page${episode.watched ? " is-watched" : ""}">
       <p class="eyebrow"><a href="#/item/${entry.id}?season=${episode.season_number}">${esc(entry.title)}</a></p>
-      <button type="button" class="episode-toggle" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">
-        <h1>${esc(episode.title || label)}</h1>
-        <p class="lede">${esc(label)}${episode.air_date ? ` · ${esc(episode.air_date)}` : ""}</p>
-      </button>
+      <h1>${esc(episode.title || label)}</h1>
+      <p class="lede">${esc(label)}${episode.air_date ? ` · ${esc(releaseLabel({ precision: "day", released_on: episode.air_date, status: "released" }))}` : ""}</p>
+      <button type="button" class="episode-toggle" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Watched" : "Mark watched"}</button>
       ${episode.overview ? `<p class="overview">${esc(episode.overview)}</p>` : ""}
     </article>`);
+  applyChrome(route(), {
+    show: entry.title,
+    season: episode.season_number,
+    episode: episode.episode_number,
+    episodeTitle: episode.title || "",
+  });
 }
 
 function musicBlock(entry) {
   const music = entry.music || { albums: [], partial: false };
   const albums = music.albums.map(album => `
     <li class="cover" data-album-row data-id="${entry.id}" data-album="${album.id}">
-      <button type="button" class="cover-face" data-album-open aria-label="${esc(album.title)}">
+      <button type="button" class="cover-face" data-album-open aria-expanded="false" aria-label="${esc(album.title)}">
         ${coverImage(album.artwork_url)}
         <span>${esc(album.title)}</span>
       </button>
-      ${scoreMarks(album.rating, album.title)}
+      ${scoreMarks(album.rating, album.title, true)}
       <ol class="cover-tracks" hidden>
-        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><button type="button" class="song-name" data-song-center="${esc(track.title)}">${esc(track.title)}</button>${scoreMarks(track.rating, track.title)}</li>`).join("")}
+        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><span class="song-name">${esc(track.title)}</span>${scoreMarks(track.rating, track.title, true)}</li>`).join("")}
       </ol>
     </li>`).join("");
-  return `
+  const partial = music.partial ? `<p class="quiet">Some albums are still loading. Check back in a minute.</p>` : "";
+    return `
     <section class="discog">
-      <div class="web" data-web="${entry.id}" hidden></div>
+      ${partial}
       <ul class="covers">${albums}</ul>
       <form class="cover cover-add" data-action="add-album" data-id="${entry.id}">
         <input name="title" aria-label="Album" placeholder="Album" required>
@@ -816,36 +1109,38 @@ function musicBlock(entry) {
 }
 
 let webNodes = [];
+let webCenter = "";
 
 function paintWeb(center, nodes = webNodes) {
   webNodes = nodes || [];
+  webCenter = graphCenter(center);
   const box = document.querySelector("[data-web]");
-  if (!box || !webNodes.length) return;
-  const count = Math.min(webNodes.length, 12);
-  const cx = 160;
-  const cy = 118;
-  const radius = 92;
-  const marks = webNodes.slice(0, count).map((node, index) => {
-    const angle = (-Math.PI / 2) + (index / count) * Math.PI * 2;
-    const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius;
-    const label = String(node.name || node.title || "").slice(0, 18);
-    const query = encodeURIComponent(node.name || node.title || "");
-    return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"></line><a href="#/search?q=${query}"><text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${esc(label)}</text></a>`;
-  }).join("");
+  if (!box) return;
+  const html = relatedHtml(webNodes);
+  if (!html) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
   box.hidden = false;
-  box.innerHTML = `<svg viewBox="0 0 320 240" role="img" aria-label="Connections"><g>${marks}</g><circle cx="${cx}" cy="${cy}" r="26"></circle><text x="${cx}" y="${cy + 4}" text-anchor="middle">${esc(String(center).slice(0, 16))}</text></svg>`;
+  box.innerHTML = html;
 }
 
 async function loadWeb(entry, ticket) {
   if (entry.kind !== "artist" && entry.kind !== "movie" && entry.kind !== "tv") return;
+  const box = document.querySelector("[data-web]");
   try {
     const web = await api(`/api/entries/${entry.id}/web`, { signal: ticket?.signal });
     if (ticket && !ticket.isCurrent()) return;
     const current = route();
     if (current.name !== "item" || current.id !== entry.id) return;
     paintWeb(entry.title, web.nodes || []);
-  } catch { /* the title still stands on its own */ }
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    if (!box) return;
+    box.hidden = false;
+    box.innerHTML = connectionsFailureHtml();
+  }
 }
 
 function releaseForm(entry) {
@@ -938,19 +1233,50 @@ function formBody(form) {
   return data;
 }
 
-function openQuick(index) {
-  const item = searchResults[index];
+let addInvoker = null;
+
+function openAdd(options, invoker) {
   const dialog = document.querySelector("#quick-add");
-  if (!item || !dialog) return;
-  quickIndex = index;
-  dialog.querySelector("#quick-title").textContent = item.title;
-  dialog.querySelector("#quick-meta").textContent = [kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · ");
-  const status = dialog.querySelector("select[name=status]");
-  status.innerHTML = options(statusOptions(item.kind), "completed");
-  dialog.querySelector("input[name=rating]").value = "";
-  dialog.querySelector("textarea[name=review]").value = "";
-  dialog.showModal();
-  dialog.querySelector("input[name=rating]").focus();
+  const form = dialog?.querySelector("form");
+  if (!(dialog instanceof HTMLDialogElement) || !(form instanceof HTMLFormElement)) {
+    location.hash = "#/new";
+    return;
+  }
+  form.dataset.action = options.prefilled ? "quick-add" : "create-manual";
+  form.innerHTML = addFormInner(options);
+  addInvoker = invoker instanceof HTMLElement ? invoker : null;
+  if (!dialog.open) dialog.showModal();
+  const focus = options.prefilled
+    ? form.querySelector("[name=status]")
+    : form.querySelector("[name=title]");
+  if (focus instanceof HTMLElement) focus.focus();
+}
+
+function showAddErrors(form, errors) {
+  let first = null;
+  for (const name of ["title", "year"]) {
+    const field = form.querySelector(`[name="${name}"]`);
+    const message = form.querySelector(`#${name}-error`);
+    const invalid = Boolean(errors[name]);
+    if (field instanceof HTMLElement) {
+      field.setAttribute("aria-invalid", invalid ? "true" : "false");
+      if (invalid && !first) first = field;
+    }
+    if (message) {
+      message.hidden = !invalid;
+      message.textContent = errors[name] || "";
+    }
+  }
+  const banner = form.querySelector("[data-form-error]");
+  if (banner) banner.hidden = true;
+  if (first instanceof HTMLElement) first.focus();
+  return Object.keys(errors).length === 0;
+}
+
+function addScore(form) {
+  const raw = form.querySelector(".score")?.getAttribute("data-score-value");
+  if (raw == null || raw === "") return null;
+  return raw;
 }
 
 function clickTarget(event) {
@@ -997,16 +1323,16 @@ async function render() {
   if (staying) await Promise.all([progressChain, noteChain]);
   if (!ticket.isCurrent()) return;
   const libraryNotice = settleLibraryHash();
-  document.querySelectorAll("[data-nav]").forEach(link => {
-    link.setAttribute("aria-current", link.dataset.nav === route().name ? "page" : "false");
-  });
+  const chromeRoute = route();
+  applyChrome(chromeRoute, { query: chromeRoute.params.get("q") || "" });
   syncTheme();
+  syncWeek();
   if (libraryNotice.droppedSort) toast(SORT_TOAST);
   const current = route();
   const scrolling = document.scrollingElement;
   const scrollY = scrolling ? scrolling.scrollTop : 0;
   const same = app.dataset.view === location.hash;
-  const waits = current.name !== "search" && current.name !== "new";
+  const waits = current.name !== "search" && current.name !== "new" && current.name !== "missing";
   if (waits) {
     app.setAttribute("aria-busy", "true");
     clearSkeletonTimer();
@@ -1024,9 +1350,16 @@ async function render() {
     else if (current.name === "search") viewSearch(current.params);
     else if (current.name === "new") viewNew(current.params);
     else if (current.name === "episode") await viewEpisode(current.id, current.episodeId, ticket);
-    else await viewItem(current.id, ticket, current.name === "season" ? current.seasonNumber : null);
+    else if (current.name === "item" || current.name === "season") await viewItem(current.id, ticket, current.name === "season" ? current.seasonNumber : null);
+    else {
+      commitView(notFoundHtml(location.hash || "#/"));
+      applyChrome(current);
+    }
     if (!ticket.isCurrent()) return;
     app.dataset.view = location.hash;
+    if (current.name === "missing") {
+      app.querySelector("h1")?.focus();
+    }
     restoreFocus(focusKey);
     if (scrolling) scrolling.scrollTop = same ? scrollY : 0;
   } catch (error) {
@@ -1044,28 +1377,54 @@ async function render() {
 document.addEventListener("click", async event => {
   const target = clickTarget(event);
   if (!target) return;
+  if (!target.closest(".account")) closeAccountMenus();
+  const week = target.closest("[data-week-start]");
+  if (week) {
+    keepButtonClick(event, target);
+    writeWeekStart(week.dataset.weekStart);
+    syncWeek();
+    if (route().name === "calendar") await render();
+    return;
+  }
   const theme = target.closest("[data-theme-value]");
   if (theme) {
     keepButtonClick(event, target);
     setTheme(theme.dataset.themeValue);
     return;
   }
-  const mark = target.closest("[data-score]");
+  const libraryFav = target.closest("[data-library-fav]");
+  if (libraryFav) {
+    keepButtonClick(event, target);
+    const params = route().params;
+    const pressed = libraryFav.getAttribute("aria-pressed") === "true";
+    location.hash = libraryQuery(
+      params.get("kind") || "",
+      params.get("status") || "",
+      params.get("q") || "",
+      params.get("sort") || "activity",
+      !pressed,
+    );
+    return;
+  }
+  const mark = target.closest(".score [data-score]");
   if (mark) {
     keepButtonClick(event, target);
-    const group = mark.closest(".marks");
-    const chosen = Number(mark.dataset.score);
-    const current = group.querySelectorAll(".mark.is-on").length;
-    const next = chosen === current ? null : chosen;
-    group.querySelectorAll(".mark").forEach(button => {
-      const on = next != null && Number(button.dataset.score) <= next;
-      button.classList.toggle("is-on", on);
-      button.setAttribute("aria-pressed", String(on));
-    });
-    const season = mark.closest("[data-season-marks]");
-    const track = mark.closest("[data-track-row]");
-    const album = mark.closest("[data-album-row]");
-    const opinion = mark.closest(".opinion");
+    const group = mark.closest(".score");
+    const current = scoreValue(group?.dataset.scoreValue);
+    let next = null;
+    if (mark.dataset.score === "") next = null;
+    else if (mark.dataset.score === "0") next = 0;
+    else {
+      const rect = mark.getBoundingClientRect();
+      const fraction = rect.width ? (event.clientX - rect.left) / rect.width : 1;
+      next = pointerScore(mark.dataset.score, fraction);
+    }
+    if (next === current && group.dataset.pendingSave !== "true") return;
+    const painted = paintScore(group, next);
+    const season = painted.closest("[data-season-marks]");
+    const track = painted.closest("[data-track-row]");
+    const album = painted.closest("[data-album-row]");
+    const opinion = painted.closest(".opinion");
     try {
       if (season) {
         await api(`/api/entries/${season.dataset.id}/seasons`, {
@@ -1087,7 +1446,7 @@ document.addEventListener("click", async event => {
           body: JSON.stringify({ rating: next }),
         });
       } else if (opinion) {
-        await saveRating(opinion.dataset.id, next);
+        scheduleRating(opinion.dataset.id, next);
       }
     } catch (error) {
       fail(error);
@@ -1147,40 +1506,22 @@ document.addEventListener("click", async event => {
   const season = target.closest("[data-season-jump]");
   if (season) {
     keepButtonClick(event, target);
-    if (String(season.dataset.season) !== String(season.dataset.current)) {
-      location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
-      return;
-    }
-    const watched = season.getAttribute("aria-pressed") !== "true";
-    setPressed(season, watched, "is-done");
-    try {
-      const marks = document.querySelector(`[data-season-marks][data-season="${season.dataset.season}"]`);
-      const filled = marks ? marks.querySelectorAll(".mark.is-on").length : 0;
-      await api(`/api/entries/${season.dataset.id}/seasons`, {
-        method: "POST",
-        body: JSON.stringify({
-          season_number: Number(season.dataset.season),
-          watched,
-          rating: filled || null,
-        }),
-      });
-    } catch (error) {
-      setPressed(season, !watched, "is-done");
-      fail(error);
-    }
+    location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
     return;
   }
   const song = target.closest("[data-song-center]");
   if (song) {
     keepButtonClick(event, target);
-    paintWeb(song.dataset.songCenter);
+    paintWeb(graphCenter(webCenter));
     return;
   }
   const cover = target.closest("[data-album-open]");
   if (cover) {
     keepButtonClick(event, target);
     const tracks = cover.parentElement?.querySelector(".cover-tracks");
-    if (tracks) tracks.hidden = !tracks.hidden;
+    const open = tracks ? tracks.hidden : false;
+    if (tracks) tracks.hidden = !open;
+    cover.setAttribute("aria-expanded", open ? "true" : "false");
     return;
   }
   const restore = target.closest("[data-restore-note]");
@@ -1238,25 +1579,196 @@ document.addEventListener("click", async event => {
   keepButtonClick(event, target);
   const action = button.dataset.action;
   try {
+    if (action === "account-menu") {
+      const menu = button.parentElement?.querySelector(".account-menu");
+      const opening = Boolean(menu?.hidden);
+      closeAccountMenus();
+      if (opening && menu) {
+        menu.hidden = false;
+        button.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+    if (action === "open-add") {
+      closeAccountMenus();
+      openAdd({}, button);
+      return;
+    }
+    if (action === "clear-search") {
+      const input = document.querySelector("#search-q");
+      if (input instanceof HTMLInputElement) {
+        input.value = "";
+        input.focus();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      return;
+    }
+    if (action === "show-more") {
+      libraryShown += LIBRARY_PAGE_SIZE;
+      const slot = app.querySelector("[data-library-body]");
+      const current = route();
+      if (slot && current.name === "library") {
+        const visible = filteredLibrary(libraryItems, current.params.get("q") || "", current.params.get("fav") === "1");
+        slot.innerHTML = visible.length ? libraryCards(visible) : libraryEmptyHtml({
+          kind: current.params.get("kind") || "",
+          status: current.params.get("status") || "",
+          q: current.params.get("q") || "",
+        });
+      }
+      return;
+    }
+    if (action === "toggle-overview") {
+      const overview = document.querySelector("#overview");
+      const open = button.getAttribute("aria-expanded") === "true";
+      button.setAttribute("aria-expanded", open ? "false" : "true");
+      button.textContent = open ? "More" : "Less";
+      overview?.classList.toggle("is-clamped", open);
+      return;
+    }
+    if (action === "cal-more") {
+      const pop = button.parentElement?.querySelector(".cal-popover");
+      if (pop instanceof HTMLElement) pop.hidden = !pop.hidden;
+      return;
+    }
+    if (action === "reload-calendar") {
+      await render();
+      return;
+    }
+    if (action === "retry-web") {
+      const id = document.querySelector("[data-web]")?.getAttribute("data-web");
+      if (id) {
+        try {
+          const web = await api(`/api/entries/${id}/web`);
+          paintWeb(webCenter || document.querySelector("h1")?.textContent || "", web.nodes || []);
+        } catch (error) {
+          if (error?.name !== "AbortError") {
+            const box = document.querySelector("[data-web]");
+            if (box) box.innerHTML = connectionsFailureHtml();
+          }
+        }
+      }
+      return;
+    }
+    if (action === "mark-next") {
+      const label = button.dataset.label || "the episode";
+      const episode = button.dataset.episode;
+      const id = button.dataset.id;
+      await api(`/api/entries/${id}/episodes/next`, { method: "POST", body: "{}" });
+      toast(`Marked ${label} watched.`, "status", {
+        label: "Undo",
+        key: `watched:${episode}`,
+        onClick: async () => {
+          await api(`/api/entries/${id}/episodes/${episode}/watched`, {
+            method: "POST",
+            body: JSON.stringify({ watched: false }),
+          });
+          dismissToast(`watched:${episode}`);
+          await render();
+        },
+      });
+      await render();
+      return;
+    }
+    if (action === "mark-watched") {
+      const label = button.dataset.label || "the episode";
+      await api(`/api/entries/${button.dataset.id}/episodes/${button.dataset.episode}/watched`, {
+        method: "POST",
+        body: JSON.stringify({ watched: true }),
+      });
+      toast(`Marked ${label} watched.`, "status", {
+        label: "Undo",
+        key: `watched:${button.dataset.episode}`,
+        onClick: async () => {
+          await api(`/api/entries/${button.dataset.id}/episodes/${button.dataset.episode}/watched`, {
+            method: "POST",
+            body: JSON.stringify({ watched: false }),
+          });
+          dismissToast(`watched:${button.dataset.episode}`);
+          await render();
+        },
+      });
+      await render();
+      return;
+    }
+    if (action === "edit-experience") {
+      const form = button.parentElement?.querySelector("[data-action='save-experience']");
+      if (form instanceof HTMLElement) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector("textarea, input")?.focus();
+      }
+      return;
+    }
+    if (action === "sign-out") {
+      closeAccountMenus();
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+          headers: { accept: "application/json" },
+        });
+      } catch { /* leave the journal either way */ }
+      location.assign("/auth/login");
+      return;
+    }
     if (action === "retry-route") {
       await render();
       if (!app.querySelector("[data-error-title]")) focusPageHeading();
+      return;
+    }
+    if (action === "show-group") {
+      const section = button.closest("[data-group]");
+      const kind = button.dataset.kind;
+      const rows = (searchResults || []).filter(item => item.kind === kind);
+      if (section) {
+        section.querySelector(".results").innerHTML = rows.map(item => resultRow(item, searchResults.indexOf(item))).join("");
+        button.remove();
+      }
       return;
     }
     if (action === "retry-search") {
       await runSearch({ focusError: true, focusResult: true });
       return;
     }
-    if (action === "open-quick" || action === "follow") {
+    if (action === "open-quick") {
+      const item = searchResults[Number(button.dataset.index)];
+      if (!item) return;
+      quickIndex = Number(button.dataset.index);
+      openAdd({
+        title: item.title,
+        kind: item.kind,
+        creator: item.creator || "",
+        year: item.year || "",
+        status: "want",
+        prefilled: true,
+      }, button);
+      return;
+    }
+    if (action === "follow") {
       const item = searchResults[Number(button.dataset.index)];
       if (!item) return;
       const created = await api("/api/library/from-provider", {
         method: "POST",
         body: JSON.stringify({ ...item, status: "want" }),
       });
-      location.hash = `#/item/${created.id}`;
+      item.already_saved = true;
+      item.saved_id = created.id;
+      toast(created.already_saved ? `${item.title} is already in your library.` : `Following ${item.title}.`, "status", {
+        label: "Open",
+        href: `#/item/${created.id}`,
+      });
+      const box = document.querySelector("#search-results");
+      if (box) box.innerHTML = renderResults({ results: searchResults, providers: {}, query: document.querySelector("#search-q")?.value || "" });
+      return;
     }
     if (action === "close-quick") document.querySelector("#quick-add")?.close();
+    if (action === "toggle-log") {
+      const form = button.parentElement?.querySelector("[data-log-form]");
+      if (form instanceof HTMLElement) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector("select, input, textarea")?.focus();
+      }
+      return;
+    }
     if (action === "log-again") {
       const today = new Date();
       const finished = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -1267,8 +1779,24 @@ document.addEventListener("click", async event => {
       await render();
     }
     if (action === "delete-experience") {
-      await api(`/api/entries/${button.dataset.id}/experiences/${button.dataset.experience}`, { method: "DELETE" });
-      toast("Experience removed. The overall review was left as it is.");
+      const payload = {
+        kind: button.dataset.kind,
+        finished_on: button.dataset.finished || null,
+        started_on: button.dataset.started || null,
+        notes: button.dataset.notes || null,
+        rating: button.dataset.rating === "" ? null : button.dataset.rating,
+      };
+      const id = button.dataset.id;
+      await api(`/api/entries/${id}/experiences/${button.dataset.experience}`, { method: "DELETE" });
+      toast("Removed from history.", "status", {
+        label: "Undo",
+        key: `experience:${button.dataset.experience}`,
+        onClick: async () => {
+          await api(`/api/entries/${id}/experiences`, { method: "POST", body: JSON.stringify(payload) });
+          dismissToast(`experience:${button.dataset.experience}`);
+          await render();
+        },
+      });
       await render();
     }
   } catch (error) {
@@ -1292,25 +1820,23 @@ document.addEventListener("submit", async event => {
       return;
     }
     if (form.dataset.action === "create-manual") {
+      const errors = validateAdd({ title: data.title, year: data.year });
+      if (!showAddErrors(form, errors)) return;
       const body = {
         kind: data.kind || "movie",
-        title: data.title,
+        title: String(data.title || "").trim(),
         creator: data.creator || null,
         year: data.year || null,
-        artwork_url: data.artwork_url || null,
         status: data.status || "want",
-        rating: data.rating === "" || data.rating == null ? null : data.rating,
+        rating: addScore(form),
         review: data.review || null,
-        anticipated: Boolean(data.anticipated),
+        anticipated: data.status === "anticipating",
       };
-      if (data.release_on || data.release_precision === "unknown") {
-        body.release_on = data.release_on || null;
-        body.release_precision = data.release_precision;
-        body.release_status = data.anticipated ? "scheduled" : "released";
-      }
       const created = await api("/api/library", { method: "POST", body: JSON.stringify(body) });
-      toast("Saved in your library.");
-      location.hash = `#/item/${created.id}`;
+      const dialog = form.closest("dialog");
+      if (dialog instanceof HTMLDialogElement && dialog.open) dialog.close();
+      toast(`Added ${body.title}.`, "status", { label: "Open", href: `#/item/${created.id}` });
+      if (!(dialog instanceof HTMLDialogElement)) location.hash = `#/item/${created.id}`;
       return;
     }
     if (form.dataset.action === "save-entry") {
@@ -1342,7 +1868,7 @@ document.addEventListener("submit", async event => {
         rating: data.rating === "" ? null : data.rating,
         spoiler: Boolean(data.spoiler),
       }) });
-      toast("Experience added. The overall review was not changed.");
+      toast(loggedToast(data.kind));
       await render();
       return;
     }
@@ -1412,9 +1938,21 @@ document.addEventListener("submit", async event => {
       return;
     }
     if (form.dataset.action === "delete-entry") {
-      if (!confirm("Remove this from your library? The overall review, season scores, and experiences go with it.")) return;
+      const title = document.querySelector("h1")?.textContent || "this";
+      const dialog = document.querySelector("#confirm");
+      if (!(dialog instanceof HTMLDialogElement)) return;
+      const heading = dialog.querySelector("#confirm-title");
+      const body = dialog.querySelector("#confirm-body");
+      if (heading) heading.textContent = `Remove ${title}?`;
+      if (body) body.textContent = "This deletes your status, score, note, history, and any season, album and song scores for it. This can't be undone.";
+      dialog.showModal();
+      dialog.querySelector("button[value='cancel']")?.focus();
+      const choice = await new Promise(resolve => {
+        dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
+      });
+      if (choice !== "confirm") return;
       await api(`/api/entries/${id}`, { method: "DELETE" });
-      toast("Removed from your library.");
+      toast(`Removed ${title}.`);
       location.hash = "#/library";
       return;
     }
@@ -1425,21 +1963,40 @@ document.addEventListener("submit", async event => {
         method: "POST",
         body: JSON.stringify({
           ...item,
-          status: data.status,
-          rating: data.rating === "" ? null : data.rating,
+          status: data.status || "want",
+          rating: addScore(form),
           review: data.review || null,
         }),
       });
       document.querySelector("#quick-add")?.close();
-      toast(created.already_saved ? "Already in your library." : "Saved in your library.");
-      location.hash = `#/item/${created.id}`;
+      item.already_saved = true;
+      item.saved_id = created.id;
+      const title = item.title;
+      toast(created.already_saved ? `${title} is already in your library.` : `Added ${title} to your library.`, "status", {
+        label: "Open",
+        href: `#/item/${created.id}`,
+      });
+      const box = document.querySelector("#search-results");
+      if (box) {
+        box.innerHTML = renderResults({
+          results: searchResults,
+          providers: {},
+          query: document.querySelector("#search-q")?.value || "",
+        });
+      }
     }
   } catch (error) {
+    const banner = form.querySelector("[data-form-error]");
+    if (banner && (form.dataset.action === "create-manual" || form.dataset.action === "quick-add")) {
+      banner.hidden = false;
+      banner.textContent = error?.message || "Couldn't add this.";
+    }
     fail(error);
   }
 });
 
 let searchTimer = 0;
+let focusSearchOnPaint = false;
 document.addEventListener("focusout", async event => {
   const box = event.target;
   if (box instanceof HTMLInputElement && box.dataset.progress) {
@@ -1494,31 +2051,35 @@ async function commitNote(id) {
     return;
   }
   const sent = box.value;
-  if (sent === (box.dataset.saved ?? "")) return;
+  const spoilerBox = document.querySelector("[data-spoiler]");
+  const spoiler = spoilerBox instanceof HTMLInputElement ? spoilerBox.checked : false;
+  if (sent === (box.dataset.saved ?? "") && String(spoiler) === (box.dataset.spoilerSaved || "false")) return;
   const base = box.dataset.reviewBase ?? "";
+  const title = visibleItemTitle(id) || "this item";
+  const body = {
+    review: sent,
+    review_base: base,
+    ...(String(spoiler) === (box.dataset.spoilerSaved || "false") ? {} : { review_spoiler: spoiler }),
+  };
   const status = document.querySelector("#note-status");
   const stopSaving = armSaving(status);
-  const retry = {
-    label: "Retry",
-    persist: true,
-    key: `note:${id}`,
-    onClick: () => { const again = noteBox(id); if (again) void saveNote(again); },
+  const retry = () => {
+    const again = noteBox(id);
+    if (again && itemIdFromHash(location.hash) === String(id)) return saveNote(again);
+    return resendNote(id, body, title);
   };
   try {
-    const updated = await api(`/api/entries/${id}`, {
-      method: "PATCH",
-      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
-      body: JSON.stringify({ review: sent, review_base: base }),
-    });
+    const updated = await patchOpinion(id, body);
     stopSaving();
     if (readDraftRecord(id)?.text === sent) clearDraft(id);
-    dismissToast(`note:${id}`);
+    dismissItemSave("note", id);
     dismissToast(`note-conflict:${id}`);
     if (String(noteOutcome?.id) === String(id)) noteOutcome = null;
     const live = noteBox(id);
     if (!live) return;
     delete live.dataset.conflict;
     live.dataset.saved = sent;
+    live.dataset.spoilerSaved = String(spoiler);
     live.dataset.reviewBase = updated?.review_updated_at || "";
     if (live.value === sent) showSaved(document.querySelector("#note-status"));
   } catch (error) {
@@ -1536,16 +2097,39 @@ async function commitNote(id) {
       });
       return;
     }
-    // fail() drops TimeoutError and AbortError, so a stalled save has to
-    // surface here or the chain would unblock with no Retry toast.
-    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
     noteOutcome = { id: String(id), kind: "failure" };
     showNoteFailure(document.querySelector("#note-status"));
-    if (timedOut) {
-      toast(NETWORK_MESSAGE, "alert", retry);
-      return;
+    reportItemSaveFailure({
+      id,
+      field: "note",
+      title,
+      error,
+      message: writeTimedOut(error) ? NETWORK_MESSAGE : (error?.message || "Something went wrong."),
+      retry,
+    });
+  }
+}
+
+async function resendNote(id, body, title) {
+  try {
+    await patchOpinion(id, body);
+    dismissItemSave("note", id);
+    if (String(noteOutcome?.id) === String(id)) noteOutcome = null;
+    const live = noteBox(id);
+    if (live && live.value === body.review) {
+      delete live.dataset.conflict;
+      live.dataset.saved = body.review;
+      live.dataset.reviewBase = "";
     }
-    fail(error, retry);
+  } catch (error) {
+    reportItemSaveFailure({
+      id,
+      field: "note",
+      title,
+      error,
+      message: writeTimedOut(error) ? NETWORK_MESSAGE : (error?.message || "Something went wrong."),
+      retry: () => resendNote(id, body, title),
+    });
   }
 }
 
@@ -1553,6 +2137,8 @@ document.addEventListener("input", event => {
   const target = event.target;
   if (target instanceof HTMLTextAreaElement && target.dataset.review) {
     writeDraft(target.dataset.review, target.value, target.dataset.reviewBase ?? "");
+    const count = document.querySelector("[data-note-count]");
+    if (count) count.textContent = noteCountText(target.value);
   }
   if (target instanceof HTMLInputElement && target.id === "progress") {
     target.dataset.dirty = "true";
@@ -1560,14 +2146,93 @@ document.addEventListener("input", event => {
     const unit = document.querySelector("#progress-unit");
     if (help) help.textContent = progressPreview(target.value, unit instanceof HTMLSelectElement ? unit.value : "");
   }
+  if (target instanceof HTMLInputElement && target.id === "library-q") {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+      const params = new URLSearchParams(route().params);
+      const q = target.value.trim();
+      if (q) params.set("q", q);
+      else params.delete("q");
+      const text = params.toString();
+      const hash = text ? `#/library?${text}` : "#/library";
+      if (location.hash !== hash) history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+      const current = route();
+      if (current.name !== "library") return;
+      const start = target.selectionStart;
+      paintLibrary(current.params, libraryResume);
+      const again = document.querySelector("#library-q");
+      if (again instanceof HTMLInputElement) {
+        again.focus();
+        if (start != null) again.setSelectionRange(start, start);
+      }
+    }, 220);
+  }
   if (target instanceof HTMLInputElement && target.id === "search-q") {
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(() => runSearch(), 220);
+    searchTimer = window.setTimeout(() => {
+      const q = target.value.trim();
+      const kind = document.querySelector("#search-kind")?.value || "";
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if (kind) params.set("kind", kind);
+      const hash = params.toString() ? `#/search?${params}` : "#/search";
+      if (location.hash !== hash) history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+      runSearch();
+    }, 220);
   }
 });
 
 document.addEventListener("change", async event => {
   const target = event.target;
+  if (target instanceof HTMLInputElement && target.name === "kind" && target.closest(".add-form, #quick-add")) {
+    const form = target.form;
+    const status = form?.querySelector("[data-add-status]");
+    const creator = form?.querySelector("[data-creator-label]");
+    if (status) {
+      const selected = form.querySelector("[name=status]:checked")?.value || "want";
+      status.innerHTML = statusOptions(target.value).map(opt => `<label class="status-mark"><input type="radio" name="status" value="${esc(opt.value)}"${opt.value === selected ? " checked" : ""}>${esc(opt.label)}</label>`).join("");
+    }
+    if (creator) {
+      const input = creator.querySelector("input");
+      creator.firstChild.textContent = `${creatorLabel(target.value)} `;
+      if (input) creator.append(input);
+    }
+    return;
+  }
+  if (target instanceof HTMLInputElement && target.dataset.spoiler != null) {
+    const box = document.querySelector("textarea[data-review]");
+    if (box instanceof HTMLTextAreaElement) await saveNote(box);
+    return;
+  }
+  if (target instanceof HTMLInputElement && target.dataset.seasonWatched != null) {
+    const marks = document.querySelector(`[data-season-marks][data-season="${target.dataset.season}"] .score`);
+    const raw = marks?.dataset.scoreValue;
+    const rating = raw === "" || raw == null ? null : Number(raw);
+    try {
+      await api(`/api/entries/${target.dataset.id}/seasons`, {
+        method: "POST",
+        body: JSON.stringify({
+          season_number: Number(target.dataset.season),
+          watched: target.checked,
+          rating,
+        }),
+      });
+      const holder = document.querySelector(`[data-season-marks][data-season="${target.dataset.season}"]`);
+      if (holder) holder.dataset.watched = target.checked ? "true" : "false";
+    } catch (error) {
+      target.checked = !target.checked;
+      fail(error);
+    }
+    return;
+  }
+  if (target instanceof HTMLSelectElement && target.dataset.libraryStatus != null) {
+    const params = new URLSearchParams(route().params);
+    if (!target.value) params.delete("status");
+    else params.set("status", target.value);
+    const query = params.toString();
+    location.hash = query ? `#/library?${query}` : "#/library";
+    return;
+  }
   if (target instanceof HTMLSelectElement && target.id === "progress-unit") {
     const help = document.querySelector("#progress-help");
     const input = document.querySelector("#progress");
@@ -1694,11 +2359,13 @@ function failProgress(payload, message, keepDraft = true) {
   }
   if (payload.input?.isConnected) setProgressStatus(keepDraft ? NOT_SAVED_LABEL : message, true, !keepDraft);
   if (keepDraft) {
-    toast(PROGRESS_TOAST, "alert", {
-      label: "Retry",
-      persist: true,
-      key: `progress:${payload.id}`,
-      onClick: () => { void retryProgress(payload); },
+    reportItemSaveFailure({
+      id: payload.id,
+      field: "progress",
+      title: payload.title || visibleItemTitle(payload.id),
+      error: { message },
+      message: PROGRESS_TOAST,
+      retry: () => retryProgress(payload),
     });
   }
 }
@@ -1711,7 +2378,7 @@ function saveProgress() {
   if (progressQueuedKey === pending) return progressChain;
   if (!progressQueuedKey && snap.input.dataset.saved === key) return progressChain;
   progressQueuedKey = pending;
-  const payload = { id: snap.id, value: snap.value, unit: snap.unit, key, input: snap.input };
+  const payload = { id: snap.id, value: snap.value, unit: snap.unit, key, input: snap.input, title: visibleItemTitle(snap.id) };
   return trackProgress(pending, progressChain.then(() => commitProgress(payload)));
 }
 
@@ -1736,7 +2403,7 @@ async function commitProgress(payload) {
     });
     stopSaving();
     clearProgressDraft(payload.id);
-    dismissToast(`progress:${payload.id}`);
+    dismissItemSave("progress", payload.id);
     document.querySelector(`[data-restore-progress="${payload.id}"]`)?.closest("#progress-draft")?.remove();
     if (payload.input.isConnected) {
       payload.input.dataset.saved = payload.key;
@@ -1754,9 +2421,177 @@ async function commitProgress(payload) {
 }
 
 document.addEventListener("keydown", event => {
+  const typing = event.target instanceof HTMLInputElement
+    || event.target instanceof HTMLTextAreaElement
+    || event.target instanceof HTMLSelectElement
+    || (event.target instanceof HTMLElement && event.target.isContentEditable);
+  if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && event.key === "/") {
+    event.preventDefault();
+    focusSearchOnPaint = true;
+    if (route().name === "search") document.querySelector("#search-q")?.focus();
+    else location.hash = "#/search";
+    return;
+  }
+  if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "n" || event.key === "N")) {
+    event.preventDefault();
+    location.hash = "#/new";
+    return;
+  }
+  const navLink = event.target instanceof Element ? event.target.closest(".nav [data-nav]") : null;
+  if (navLink && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
+    const links = [...document.querySelectorAll(".nav [data-nav]")];
+    const index = links.indexOf(navLink);
+    const next = links[event.key === "ArrowRight" ? index + 1 : index - 1];
+    if (next instanceof HTMLElement) {
+      event.preventDefault();
+      links.forEach(link => { link.tabIndex = link === next ? 0 : -1; });
+      next.focus();
+    }
+    return;
+  }
+  const tab = event.target instanceof Element ? event.target.closest("[role='tab']") : null;
+  const tabList = tab?.closest("[role='tablist']");
+  if (tab && tabList && ["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) {
+    const tabs = [...tabList.querySelectorAll("[role='tab']")];
+    const index = tabs.indexOf(tab);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    if (nextTab instanceof HTMLElement) {
+      nextTab.focus();
+      nextTab.click();
+    }
+    return;
+  }
+  const radio = event.target instanceof Element ? event.target.closest("[role='radio']") : null;
+  const radioGroup = radio?.closest("[role='radiogroup']");
+  if (radio && radioGroup && (event.key === "ArrowRight" || event.key === "ArrowLeft" || event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End")) {
+    if (radioGroup.classList.contains("score")) {
+      const next = keyboardScore(radioGroup.dataset.scoreValue, event.key, event.shiftKey);
+      if (next !== undefined && next !== scoreValue(radioGroup.dataset.scoreValue)) {
+        event.preventDefault();
+        const painted = paintScore(radioGroup, next);
+        const opinion = painted.closest(".opinion");
+        if (opinion) scheduleRating(opinion.dataset.id, next);
+      } else if (next !== undefined) {
+        event.preventDefault();
+      }
+      return;
+    }
+    const radios = [...radioGroup.querySelectorAll("[role='radio']")];
+    const index = radios.indexOf(radio);
+    let nextIndex = index;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = Math.min(radios.length - 1, index + 1);
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = Math.max(0, index - 1);
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = radios.length - 1;
+    const nextRadio = radios[nextIndex];
+    if (nextRadio instanceof HTMLElement && nextRadio !== radio) {
+      event.preventDefault();
+      nextRadio.focus();
+      nextRadio.click();
+    } else {
+      event.preventDefault();
+    }
+    return;
+  }
+  if (radio && radioGroup?.classList.contains("score") && (event.key === "Delete" || event.key === "Backspace")) {
+    const next = keyboardScore(radioGroup.dataset.scoreValue, event.key, false);
+    if (next !== undefined) {
+      event.preventDefault();
+      const painted = paintScore(radioGroup, next);
+      const opinion = painted.closest(".opinion");
+      if (opinion) scheduleRating(opinion.dataset.id, next);
+    }
+    return;
+  }
+  if (event.key === "Escape" && event.target instanceof HTMLTextAreaElement && event.target.dataset.review) {
+    event.target.value = event.target.dataset.saved ?? "";
+    event.target.blur();
+    return;
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    const form = event.target instanceof HTMLElement ? event.target.closest("form.add-form, #quick-add form") : null;
+    if (form instanceof HTMLFormElement) {
+      event.preventDefault();
+      form.requestSubmit();
+      return;
+    }
+  }
   if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.dataset.progress) {
     event.preventDefault();
     saveProgress();
+    return;
+  }
+  const result = event.target instanceof Element ? event.target.closest(".result") : null;
+  if (result && (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "ArrowRight" || event.key === "Enter" || event.key === "Escape")) {
+    const rows = [...document.querySelectorAll("#search-results .result")];
+    const index = rows.indexOf(result);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      document.querySelector("#search-q")?.focus();
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      const action = result.querySelector("button, a");
+      if (action instanceof HTMLElement) {
+        event.preventDefault();
+        action.tabIndex = 0;
+        action.focus();
+      }
+      return;
+    }
+    if (event.key === "Enter" && event.target === result) {
+      event.preventDefault();
+      result.querySelector("[data-action='open-quick'], [data-action='follow']")?.click();
+      return;
+    }
+    const next = rows[event.key === "ArrowDown" ? index + 1 : index - 1];
+    if (next instanceof HTMLElement) {
+      event.preventDefault();
+      rows.forEach(row => { row.tabIndex = row === next ? 0 : -1; });
+      next.focus();
+    }
+    return;
+  }
+  const cell = event.target instanceof Element ? event.target.closest("[role='gridcell'][data-date]") : null;
+  if (cell && route().name === "calendar") {
+    const cells = [...document.querySelectorAll("[role='gridcell'][data-date]")];
+    const index = cells.indexOf(cell);
+    const move = (next) => {
+      if (!(next instanceof HTMLElement)) return;
+      event.preventDefault();
+      cells.forEach(item => { item.tabIndex = item === next ? 0 : -1; });
+      next.focus();
+    };
+    if (event.key === "ArrowRight") move(cells[index + 1]);
+    else if (event.key === "ArrowLeft") move(cells[index - 1]);
+    else if (event.key === "ArrowDown") move(cells[index + 7]);
+    else if (event.key === "ArrowUp") move(cells[index - 7]);
+    else if (event.key === "Home") move(cells[index - (index % 7)]);
+    else if (event.key === "End") move(cells[Math.min(cells.length - 1, index + (6 - (index % 7)))]);
+    else if (event.key === "PageDown" || event.key === "PageUp") {
+      event.preventDefault();
+      const month = route().params.get("month") || "";
+      const delta = event.key === "PageDown" ? 1 : -1;
+      const next = shiftMonth(month || new Date().toISOString().slice(0, 7), delta);
+      location.hash = `#/calendar?month=${next}`;
+    } else if (event.key === "Enter") {
+      const link = cell.querySelector("a");
+      if (link instanceof HTMLElement) {
+        event.preventDefault();
+        link.click();
+      }
+    }
+    if (["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Home", "End", "PageDown", "PageUp", "Enter"].includes(event.key)) return;
+  }
+  if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && event.key === "t" && route().name === "calendar") {
+    event.preventDefault();
+    location.hash = "#/calendar";
     return;
   }
   if (event.key !== "ArrowDown" || document.activeElement?.id !== "search-q") return;
@@ -1786,6 +2621,40 @@ function paintToday() {
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") paintToday();
+});
+
+function armMidnight() {
+  window.setTimeout(() => {
+    paintToday();
+    armMidnight();
+  }, msUntilLocalMidnight(new Date()));
+}
+
+let lastScrollY = 0;
+let tabHidden = false;
+document.addEventListener("scroll", () => {
+  const nextY = document.scrollingElement ? document.scrollingElement.scrollTop : 0;
+  const short = window.matchMedia("(max-height: 500px)").matches;
+  tabHidden = tabBarHidden(lastScrollY, nextY, short, tabHidden);
+  lastScrollY = nextY;
+  document.querySelector(".tabbar")?.classList.toggle("is-hidden", tabHidden);
+}, { passive: true });
+
+async function loadAccount() {
+  try {
+    const me = await api("/api/me");
+    const name = me?.username || me?.display_name || "Account";
+    document.querySelectorAll("[data-account-name]").forEach(node => { node.textContent = name; });
+    const initial = String(name).trim().charAt(0).toUpperCase() || "A";
+    document.querySelectorAll("[data-account-initial]").forEach(node => { node.textContent = initial; });
+  } catch { /* the button still says Account */ }
+}
+
+paintIcons();
+armMidnight();
+loadAccount();
+document.querySelector("#quick-add")?.addEventListener("close", () => {
+  addInvoker?.focus();
 });
 
 window.addEventListener("hashchange", () => {

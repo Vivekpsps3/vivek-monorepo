@@ -14,6 +14,23 @@ export const TOAST_LIMIT = 3;
 export const TOAST_MS = 5000;
 export const TOAST_ACTION_MS = 8000;
 
+/** Item-scoped media toasts. The id is the capture group. Travel keys do not match. */
+export const ITEM_TOAST_KEY = /^(?:progress|note|note-conflict|status|favorite|anticipated|rating):(.+)$/;
+
+export function itemIdFromHash(hash) {
+  const value = hash !== undefined ? hash : (typeof location !== "undefined" ? location.hash : "");
+  const match = /^#\/item\/(\d+)/.exec(String(value || ""));
+  return match ? match[1] : "";
+}
+
+function lateFailureKey(key) {
+  const match = ITEM_TOAST_KEY.exec(key || "");
+  if (!match) return { key, away: false };
+  const here = itemIdFromHash();
+  if (here && here === match[1]) return { key, away: false };
+  return { key: `save-failed:${key}`, away: true };
+}
+
 export function createToastLayer({
   document: doc = globalThis.document,
   idleMs = TOAST_MS,
@@ -55,9 +72,21 @@ export function createToastLayer({
     }
   }
 
+  function retireOtherItemToasts(itemId) {
+    for (const node of toastNodes()) {
+      const match = ITEM_TOAST_KEY.exec(node.dataset.toastKey || "");
+      if (match && match[1] !== String(itemId)) node.remove();
+    }
+  }
+
   function pushToast({ message, kind = "status", action = null, key = "", persist = false }) {
     const host = region(kind);
     if (!host || !message) return null;
+    const scoped = lateFailureKey(key);
+    key = scoped.key;
+    if (scoped.away && !String(message).startsWith("Save failed")) {
+      message = "Save failed for this item.";
+    }
     if (key) dismissToast(key);
     const order = ++serial;
     const toast = doc.createElement("div");
@@ -135,5 +164,5 @@ export function createToastLayer({
     });
   }
 
-  return { pushToast, toast, dismissToast, toastNodes };
+  return { pushToast, toast, dismissToast, toastNodes, retireOtherItemToasts };
 }
