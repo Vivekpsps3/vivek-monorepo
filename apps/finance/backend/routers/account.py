@@ -26,10 +26,11 @@ def change_account_name(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserPublic:
     try:
-        current_user.display_name = normalize_display_name(body.display_name)
+        name = normalize_display_name(body.display_name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    current_user.updated_at = utc_now_naive()
+    setattr(current_user, "display_name", name)
+    setattr(current_user, "updated_at", utc_now_naive())
     db.commit()
     db.refresh(current_user)
     return UserPublic.model_validate(public_user(current_user))

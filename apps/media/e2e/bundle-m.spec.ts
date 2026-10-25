@@ -48,7 +48,7 @@ test('Now, Library, and Calendar use the spec headings and one library list', as
   const libraryLoad = page.waitForResponse(response => (
     response.url().includes('/api/library') && response.request().method() === 'GET'
   ));
-  await page.getByRole('button', { name: '★ Favorites' }).click();
+  await page.getByRole('button', { name: 'Favorites' }).click();
   const response = await libraryLoad;
   expect(response.ok()).toBeTruthy();
   await expect(page).toHaveURL(/fav=1/);

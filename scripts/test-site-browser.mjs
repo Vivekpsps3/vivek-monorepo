@@ -175,7 +175,7 @@ try {
   await assertClean(authed, 'signed-in dashboard');
   await authed.goto(base + '/finance/transactions', { waitUntil: 'networkidle' });
   await authed.locator('app-spending-hub').waitFor();
-  await authed.getByRole('heading', { name: 'Spending', exact: true }).waitFor();
+  await authed.getByRole('navigation', { name: 'Spending sections', exact: true }).waitFor();
   await assertClean(authed, 'signed-in transactions');
   await authed.goto(base + '/finance/embed', { waitUntil: 'networkidle' });
   await authed.locator('app-net-worth-embed').waitFor();

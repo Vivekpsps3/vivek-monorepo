@@ -1107,8 +1107,9 @@ button:focus-visible, a:focus-visible, [role="gridcell"]:focus-visible {
   .sort-field { width: auto; max-width: 100%; }
   .sort-field select,
   .progress-controls select { min-width: 0; max-width: 100%; }
-  .marks, .season-strip, .score-row { max-width: 100%; }
-  .marks { flex-wrap: wrap; }
+  .marks, .season-strip, .score-row, .btn, .episode-tile { max-width: 100%; }
+  .marks, .season-strip, .episode-tile { flex-wrap: wrap; }
+  .btn { white-space: normal; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
   .result .clamp { display: none; }
   .hero { margin-bottom: var(--space-3); }
