@@ -101,7 +101,8 @@ _MEDIA_IMG = (
     "https://coverartarchive.org https://covers.openlibrary.org "
     "https://archive.org https://*.archive.org "
     "https://*.mzstatic.com https://media.rawg.io "
-    "https://upload.wikimedia.org https://lastfm.freetls.fastly.net"
+    "https://upload.wikimedia.org https://lastfm.freetls.fastly.net "
+    "https://shared.akamai.steamstatic.com"
 )
 
 
@@ -337,6 +338,7 @@ def validate_response_headers(headers, path: str, body: bytes | str = b"") -> No
             assert "https://*.archive.org" in parsed["img-src"].split()
             assert "https://*.mzstatic.com" in parsed["img-src"]
             assert "https://media.rawg.io" in parsed["img-src"]
+            assert "https://shared.akamai.steamstatic.com" in parsed["img-src"]
             assert "https://upload.wikimedia.org" in parsed["img-src"]
             assert "https://lastfm.freetls.fastly.net" in parsed["img-src"]
             assert "tile.openstreetmap.org" not in parsed["img-src"]

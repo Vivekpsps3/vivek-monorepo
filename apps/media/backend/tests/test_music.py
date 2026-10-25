@@ -261,9 +261,13 @@ def test_album_search_uses_the_release_group_cover():
                 }
             )
 
+    from typing import cast
+
+    import httpx
+
     from apps.media.backend.services.providers import musicbrainz_search
 
-    rows = musicbrainz_search(Client(), "petal ariana grande", "album")
+    rows = musicbrainz_search(cast(httpx.Client, Client()), "petal ariana grande", "album")
     assert rows[0]["title"] == "petal"
     assert rows[0]["extra"]["release_group_id"] == "2b8f453f-ffd6-4860-8742-7cff1c2feae3"
     assert (

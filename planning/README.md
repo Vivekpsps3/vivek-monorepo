@@ -19,10 +19,11 @@ The repository has implemented the main product areas described there:
 
 Some boundaries remain explicit product or provider limits: Finance uses CSV
 imports today, with SimpleFIN documented as a future direction; Media provider
-coverage depends on the configured keys and `MEDIA_SCRAPE_MODE`, and it does not
-use Rotten Tomatoes, Metacritic, Spotify, or IGDB. Manual TV titles do not get a
-TVMaze episode lookup. See [architecture](../docs/ARCHITECTURE.md) and
-[Media behavior](../docs/MEDIA.md).
+coverage uses keyless catalogs for movies, series, and games, and a TMDB or
+RAWG key when one is set. `MEDIA_SCRAPE_MODE` only adds iTunes movie results.
+It does not use Rotten Tomatoes, Metacritic, Spotify, or IGDB. Manual TV titles
+do not get a TVMaze episode lookup. See [architecture](../docs/ARCHITECTURE.md)
+and [Media behavior](../docs/MEDIA.md).
 
 The brief asks for broad browser-driven end-to-end coverage across every app and
 journey. Current verification docs describe backend and frontend suites,

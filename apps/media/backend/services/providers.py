@@ -31,14 +31,19 @@ def scrape_mode() -> bool:
 
 
 def provider_status() -> dict[str, str]:
+    rawg_key = bool(os.getenv("RAWG_API_KEY", "").strip())
     status = {
-        "tmdb": "ok" if os.getenv("TMDB_API_KEY", "").strip() else "unconfigured",
+        # Movie search uses the official API when a key is set, and TMDB's
+        # public search page otherwise. Series search uses TVMaze either way.
+        "tmdb": "ok",
         "musicbrainz": "ok",
         "openlibrary": "ok",
-        "rawg": "ok" if os.getenv("RAWG_API_KEY", "").strip() else "unconfigured",
+        "rawg": "ok" if rawg_key else "unconfigured",
+        "tvmaze": "ok",
     }
+    if not rawg_key:
+        status["steam"] = "ok"
     if scrape_mode():
-        status["tvmaze"] = "ok"
         status["itunes"] = "ok"
     return status
 
@@ -87,7 +92,9 @@ def _now() -> float:
 
 def _invoke(job):
     http = httpx.Client(
-        timeout=SEARCH_TIMEOUT, headers={"User-Agent": UA, "Accept": "application/json"}
+        timeout=SEARCH_TIMEOUT,
+        headers={"User-Agent": UA, "Accept": "application/json"},
+        follow_redirects=True,
     )
     started = _now()
     try:
@@ -105,9 +112,14 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
     status = provider_status()
     results = []
     jobs = []
+    tmdb_key = bool(os.getenv("TMDB_API_KEY", "").strip())
+    rawg_key = bool(os.getenv("RAWG_API_KEY", "").strip())
     if kind in (None, "", "movie", "tv"):
-        jobs.append(("tmdb", lambda http: tmdb_search(http, query, kind)))
-        if scrape_mode() and kind in (None, "", "tv"):
+        if tmdb_key:
+            jobs.append(("tmdb", lambda http: tmdb_search(http, query, kind)))
+        elif kind in (None, "", "movie"):
+            jobs.append(("tmdb", lambda http: tmdb_public_search(http, query)))
+        if kind in (None, "", "tv"):
             jobs.append(("tvmaze", lambda http: tvmaze_search(http, query)))
         if scrape_mode() and kind in (None, "", "movie"):
             jobs.append(("itunes", lambda http: itunes_search(http, query)))
@@ -123,12 +135,17 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
     if kind in (None, "", "book"):
         jobs.append(("openlibrary", lambda http: openlibrary_search(http, query)))
     if kind in (None, "", "game"):
-        jobs.append(("rawg", lambda http: rawg_search(http, query)))
+        if rawg_key:
+            jobs.append(("rawg", lambda http: rawg_search(http, query)))
+        else:
+            jobs.append(("steam", lambda http: steam_search(http, query)))
     pending = []
     for name, job in jobs:
         if status.get(name) == "unconfigured":
             continue
         key = f"{name}:{kind or 'all'}:{query.lower()}"
+        if name == "tmdb" and not tmdb_key:
+            key += ":page"
         if name == "musicbrainz":
             key += ":rg-cover"
         hit = None if client is not None else _cache_get(db, key)
@@ -257,6 +274,14 @@ def tmdb_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
 
 POSTER_FILE = re.compile(r"/([A-Za-z0-9_-]+)\.(jpe?g|png|webp)", re.I)
 YEAR_TEXT = re.compile(r"(?:19|20)\d{2}")
+SEARCH_CARD = re.compile(
+    r'data-media-adult="(true|false)"[^>]*'
+    r'href="/(movie|tv)/(\d+)[^"]*"'
+    r"([\s\S]{0,1800}?)"
+    r"<h2[^>]*>\s*(?:<span[^>]*>)?\s*([^<]+?)\s*(?:</span>)?\s*</h2>"
+    r"[\s\S]{0,400}?"
+    r'class="release_date[^"]*"[^>]*>\s*([^<]*)'
+)
 
 
 def tmdb_poster_url(src: str) -> str | None:
@@ -294,7 +319,7 @@ def parse_tmdb_movie_page(page: str) -> list[dict]:
             continue
         seen.add(movie_id)
         images = list(re.finditer(r'src="(https://[^"]+)"', before))
-        released = re.search(r'release_date[^>]*>\s*([^<]+)', after)
+        released = re.search(r"release_date[^>]*>\s*([^<]+)", after)
         year_match = YEAR_TEXT.search(released.group(1) if released else "")
         found.append(
             {
@@ -316,6 +341,65 @@ def parse_tmdb_movie_page(page: str) -> list[dict]:
         if len(found) >= 20:
             break
     return found
+
+
+def parse_tmdb_search_page(page: str, media: str = "movie") -> list[dict]:
+    """Titles and posters from TMDB's public movie or series search page."""
+    if media not in {"movie", "tv"} or not isinstance(page, str) or not page:
+        return []
+    start = page.find(f'id="{media}_results"')
+    if start < 0:
+        return []
+    chunk = page[start:]
+    for other in ("movie_results", "tv_results", "person_results"):
+        if other == f"{media}_results":
+            continue
+        later = chunk.find(f'id="{other}"', 20)
+        if later > 0:
+            chunk = chunk[:later]
+    found: list[dict] = []
+    seen: set[str] = set()
+    for match in SEARCH_CARD.finditer(chunk):
+        adult, kind, media_id, body, title, released = match.groups()
+        title = html.unescape(title).strip()
+        if kind != media or adult == "true" or not title or media_id in seen:
+            continue
+        seen.add(media_id)
+        images = list(re.finditer(r'src="(https://[^"]+)"', body))
+        year, releases = release_from_display(released)
+        after = chunk[match.end() : match.end() + 900]
+        paragraph = re.search(r"<p[^>]*>([\s\S]*?)</p>", after)
+        overview = plain_text(paragraph.group(1)) if paragraph else None
+        found.append(
+            {
+                "source": "tmdb",
+                "source_id": f"{media}:{media_id}",
+                "kind": media,
+                "title": title,
+                "creator": None,
+                "year": year,
+                "overview": overview,
+                "artwork_url": tmdb_poster_url(images[-1].group(1) if images else ""),
+                "genres": [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": releases,
+                "episodes": [],
+            }
+        )
+        if len(found) >= 8:
+            break
+    return found
+
+
+def tmdb_public_search(http: httpx.Client, query: str) -> list[dict]:
+    response = http.get(
+        "https://www.themoviedb.org/search/movie",
+        params={"query": query},
+        headers={"Accept": "text/html", "User-Agent": UA},
+    )
+    response.raise_for_status()
+    return parse_tmdb_search_page(response.text, "movie")
 
 
 def tmdb_popular(http: httpx.Client) -> list[dict]:
@@ -369,6 +453,30 @@ def release_from_day(text: str) -> list[dict]:
     if len(text) >= 10:
         return [{"released_on": text[:10], "precision": "day", "status": "scheduled"}]
     return []
+
+
+def release_from_display(text: str) -> tuple[int | None, list[dict]]:
+    """A public-page date such as 'July 16, 2010'."""
+    label = SPACE.sub(" ", html.unescape(text or "")).strip()
+    if not label:
+        return None, []
+    for fmt in ("%B %d, %Y", "%b %d, %Y"):
+        try:
+            parsed = datetime.strptime(label, fmt)
+        except ValueError:
+            continue
+        return parsed.year, [
+            {
+                "released_on": parsed.date().isoformat(),
+                "precision": "day",
+                "status": "released",
+            }
+        ]
+    year_match = YEAR_TEXT.search(label)
+    if not year_match:
+        return None, []
+    year = int(year_match.group(0))
+    return year, [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}]
 
 
 SKIPPED_ALBUM_TYPES = {
@@ -939,8 +1047,10 @@ def musicbrainz_release_detail(http: httpx.Client, release_id: str) -> dict:
     body = response.json()
     if not isinstance(body, dict):
         return {"release_group_id": None, "artwork_url": None, "tracks": []}
-    group = body.get("release-group") if isinstance(body.get("release-group"), dict) else {}
-    group_id = group.get("id") if isinstance(group.get("id"), str) else None
+    raw_group = body.get("release-group")
+    group = raw_group if isinstance(raw_group, dict) else {}
+    raw_id = group.get("id")
+    group_id = raw_id if isinstance(raw_id, str) else None
     return {
         "release_group_id": mbid(group_id),
         "artwork_url": cover_art_url(release_id, group_id),
@@ -1199,6 +1309,56 @@ def rawg_search(http: httpx.Client, query: str) -> list[dict]:
                 "external_ratings": ratings,
                 "extra": {"platforms": [name for name in platforms if name]},
                 "releases": release_from_day(released) if len(released) >= 10 else [],
+                "episodes": [],
+            }
+        )
+    return found
+
+
+def steam_search(http: httpx.Client, query: str) -> list[dict]:
+    """Steam's public store search. No key. Metadata and capsule art only."""
+    response = http.get(
+        "https://store.steampowered.com/api/storesearch/",
+        params={"term": query, "l": "english", "cc": "US"},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        return []
+    found: list[dict] = []
+    for item in items[:8]:
+        if not isinstance(item, dict) or item.get("type") not in {None, "app", "game"}:
+            continue
+        app_id = item.get("id")
+        title = item.get("name")
+        if not app_id or not isinstance(title, str) or not title.strip():
+            continue
+        image = item.get("tiny_image")
+        artwork = None
+        if isinstance(image, str) and image.startswith("https://"):
+            artwork = image.split("?", 1)[0]
+        raw_platforms = item.get("platforms")
+        platforms = raw_platforms if isinstance(raw_platforms, dict) else {}
+        names = [
+            label
+            for key, label in (("windows", "Windows"), ("mac", "Mac"), ("linux", "Linux"))
+            if platforms.get(key) is True
+        ]
+        found.append(
+            {
+                "source": "steam",
+                "source_id": str(app_id),
+                "kind": "game",
+                "title": title.strip(),
+                "creator": None,
+                "year": None,
+                "overview": None,
+                "artwork_url": artwork,
+                "genres": [],
+                "external_ratings": [],
+                "extra": {"platforms": names} if names else {},
+                "releases": [],
                 "episodes": [],
             }
         )

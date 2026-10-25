@@ -177,7 +177,7 @@ policy without `'unsafe-inline'` refuses.
 | Finance (`/finance`, `/hub`, `/auth`) | `img-src 'self' data:`, `connect-src 'self'`, Trusted Types with an empty policy allowlist (`require-trusted-types-for 'script'`). `frame-ancestors 'none'`. |
 | Portfolio (`/`, `/home`, `/work`, `/about`, `/secrets`, other documents) | Same script rules as finance, without Trusted Types. `frame-ancestors 'none'`. No map or artwork hosts. |
 | Travel | `img-src` adds only `https://tile.openstreetmap.org`. No Trusted Types, because trip pages assign HTML strings. `frame-ancestors 'none'`. |
-| Media | `img-src` adds the artwork hosts the providers emit, plus the hosts their redirects land on: `image.tmdb.org`, `static.tvmaze.com`, `coverartarchive.org`, `covers.openlibrary.org`, `archive.org`, `*.archive.org`, `*.mzstatic.com`, `media.rawg.io`. No blanket `https:`. No Trusted Types. |
+| Media | `img-src` adds the artwork hosts the providers emit, plus the hosts their redirects land on: `image.tmdb.org`, `static.tvmaze.com`, `coverartarchive.org`, `covers.openlibrary.org`, `archive.org`, `*.archive.org`, `*.mzstatic.com`, `media.rawg.io`, `shared.akamai.steamstatic.com`. No blanket `https:`. No Trusted Types. |
 | API and health (`/api`, `/travel/api`, `/media/api`, `/health`, `/metrics`) | `default-src 'none'` and the same lock on scripts, images, connect, base, forms, and framing. |
 
 Every document policy also sets `script-src` to a per-response nonce plus

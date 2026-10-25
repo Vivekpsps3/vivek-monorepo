@@ -9,7 +9,7 @@ STATUSES = {"want", "anticipating", "in_progress", "completed", "paused", "dropp
 PROGRESS_UNITS = {"page", "percent", "episode", "hour"}
 PRECISIONS = {"day", "month", "year", "unknown"}
 RELEASE_STATUSES = {"scheduled", "released", "postponed", "unknown"}
-SOURCES = {"manual", "tmdb", "musicbrainz", "openlibrary", "rawg", "tvmaze", "itunes"}
+SOURCES = {"manual", "tmdb", "musicbrainz", "openlibrary", "rawg", "tvmaze", "itunes", "steam"}
 
 
 def fail(detail: str) -> NoReturn:
