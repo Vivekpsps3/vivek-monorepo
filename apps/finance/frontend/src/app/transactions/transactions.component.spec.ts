@@ -407,7 +407,7 @@ describe('Transactions multi-file import UI', () => {
     expect(fixture.nativeElement.textContent).toContain('Scheduled work income');
     expect(fixture.nativeElement.textContent).toContain('Combined income');
     expect(fixture.nativeElement.textContent).toContain('Overlap adjustment');
-    expect(fixture.nativeElement.textContent).toContain('not assigned to a paycheck');
+    expect(fixture.nativeElement.textContent).toContain('not matched to a specific deposit');
   });
 
   it('shows undated base-pay estimates when there is no posted deposit or configured payday schedule', () => {
