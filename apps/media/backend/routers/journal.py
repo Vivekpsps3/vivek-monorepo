@@ -3,31 +3,35 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from apps.media.backend.database import get_db
-from apps.media.backend.deps import require_actor
 from apps.media.backend.models import Episode, Experience
 from apps.media.backend.services import providers, records
 from apps.media.backend.services.calendar import build_calendar
 from apps.media.backend.services.providers import UA
 from apps.media.backend.services.summary import build_summary, next_episodes
 from apps.media.backend.services.validate import clean_text
+from apps.server.auth import Principal, require_principal
 
 router = APIRouter()
 
 
 @router.get("/me")
-def me():
-    current = require_actor()
-    return {"username": current.username or "", "display_name": current.display_name}
+def me(principal: Principal = Depends(require_principal)):
+    return {"username": principal.username or "", "display_name": principal.display_name}
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db)):
-    return build_summary(db, require_actor().id)
+def summary(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+    return build_summary(db, principal.id)
 
 
 @router.get("/calendar")
-def calendar(month: str | None = None, tz: str | None = None, db: Session = Depends(get_db)):
-    user_id = require_actor().id
+def calendar(
+    month: str | None = None,
+    tz: str | None = None,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    user_id = principal.id
     http = httpx.Client(
         timeout=8.0,
         headers={"User-Agent": UA, "Accept": "application/sparql-results+json, application/json"},
@@ -45,11 +49,12 @@ def library(
     q: str | None = None,
     sort: str = "activity",
     db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
 ):
     sort = sort.strip().lower()
     if sort not in {"added", "rating", "activity", "release", "title"}:
         sort = "activity"
-    user_id = require_actor().id
+    user_id = principal.id
     rows = records.list_library(db, user_id, kind, status, q, sort)
     records.apply_artist_portraits(db, rows)
     # The Continue rail is the only summary slice the library paints.
@@ -61,8 +66,7 @@ def library(
 
 
 @router.get("/movies")
-def movies(db: Session = Depends(get_db)):
-    require_actor()
+def movies(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
     http = httpx.Client(
         timeout=12.0,
         headers={"User-Agent": UA, "Accept": "text/html,application/json"},
@@ -78,14 +82,18 @@ def movies(db: Session = Depends(get_db)):
 
 
 @router.post("/library")
-def create_manual(body: dict, db: Session = Depends(get_db)):
-    entry = records.create_manual(db, require_actor().id, body)
+def create_manual(
+    body: dict, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+):
+    entry = records.create_manual(db, principal.id, body)
     return records.detail(db, entry)
 
 
 @router.post("/library/from-provider")
-def create_from_provider(body: dict, db: Session = Depends(get_db)):
-    entry, already = records.create_from_provider(db, require_actor().id, body)
+def create_from_provider(
+    body: dict, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+):
+    entry, already = records.create_from_provider(db, principal.id, body)
     _load_artist_catalog(db, entry)
     _load_album_tracks(db, entry)
     payload = records.detail(db, entry)
@@ -94,8 +102,10 @@ def create_from_provider(body: dict, db: Session = Depends(get_db)):
 
 
 @router.get("/entries/{entry_id}")
-def read_entry(entry_id: int, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def read_entry(
+    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     _load_artist_catalog(db, entry)
     _load_album_tracks(db, entry)
     records.apply_artist_portraits(db, [entry], deep=True)
@@ -103,15 +113,22 @@ def read_entry(entry_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/entries/{entry_id}")
-def patch_entry(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def patch_entry(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     records.patch_entry(db, entry, body)
     return records.detail(db, entry)
 
 
 @router.delete("/entries/{entry_id}")
-def delete_entry(entry_id: int, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def delete_entry(
+    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     db.query(Experience).filter(
         Experience.entry_id == entry.id, Experience.user_id == entry.user_id
     ).delete()
@@ -142,8 +159,13 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/albums")
-def add_album(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def add_album(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review)
     records.add_album(db, entry, body)
     db.refresh(entry)
@@ -153,8 +175,14 @@ def add_album(entry_id: int, body: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/albums/{album_id}/tracks")
-def add_track(entry_id: int, album_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def add_track(
+    entry_id: int,
+    album_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review)
     records.add_track(db, entry, album_id, body)
     db.refresh(entry)
@@ -164,8 +192,14 @@ def add_track(entry_id: int, album_id: int, body: dict, db: Session = Depends(ge
 
 
 @router.post("/entries/{entry_id}/albums/{album_id}/rating")
-def rate_album(entry_id: int, album_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def rate_album(
+    entry_id: int,
+    album_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review, entry.summary)
     records.save_album_rating(db, entry, album_id, body)
     db.refresh(entry)
@@ -175,8 +209,14 @@ def rate_album(entry_id: int, album_id: int, body: dict, db: Session = Depends(g
 
 
 @router.post("/entries/{entry_id}/tracks/{track_id}/rating")
-def rate_track(entry_id: int, track_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def rate_track(
+    entry_id: int,
+    track_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review, entry.summary)
     records.save_track_rating(db, entry, track_id, body)
     db.refresh(entry)
@@ -236,8 +276,13 @@ def _load_artist_catalog(db: Session, entry) -> None:
 
 
 @router.post("/entries/{entry_id}/seasons")
-def save_season(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def save_season(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review)
     records.save_season(db, entry, body)
     db.refresh(entry)
@@ -247,8 +292,13 @@ def save_season(entry_id: int, body: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/episodes")
-def add_episode(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def add_episode(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     if entry.catalog.kind != "tv":
         raise HTTPException(status_code=422, detail="Episodes belong on a show.")
     records.upsert_episode(db, entry.catalog, body)
@@ -256,33 +306,41 @@ def add_episode(entry_id: int, body: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/episodes/{episode_id}/watched")
-def watched(entry_id: int, episode_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def watched(
+    entry_id: int,
+    episode_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     episode = db.get(Episode, episode_id)
     if episode is None or episode.catalog_id != entry.catalog_id:
         raise HTTPException(status_code=404, detail="That episode is not on this show.")
     watched_on = (
         records.parse_date(body.get("watched_on"), "Watched on") if body.get("watched_on") else None
     )
-    records.mark_watched(
-        db, require_actor().id, episode, bool(body.get("watched", True)), watched_on
-    )
+    records.mark_watched(db, principal.id, episode, bool(body.get("watched", True)), watched_on)
     return records.detail(db, entry)
 
 
 @router.post("/entries/{entry_id}/episodes/next")
-def next_episode(entry_id: int, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
-    state = records.mark_next(db, require_actor().id, entry)
+def next_episode(
+    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    state = records.mark_next(db, principal.id, entry)
     payload = records.detail(db, entry)
     payload["show"] = state
     return payload
 
 
 @router.get("/entries/{entry_id}/web")
-def entry_web(entry_id: int, db: Session = Depends(get_db)):
+def entry_web(
+    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+):
     """Collaborators for an artist, or sequels and spin-offs for a movie."""
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+    entry = records.owned_entry(db, principal.id, entry_id)
     catalog = entry.catalog
     if catalog.kind == "artist":
         nodes = records.cached_collaborators(catalog)
@@ -319,11 +377,16 @@ def entry_web(entry_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/search")
-def search(q: str = Query(""), kind: str | None = None, db: Session = Depends(get_db)):
+def search(
+    q: str = Query(""),
+    kind: str | None = None,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
     query = clean_text(q, 120, "Search", required=True)
     if len(query) < 2:
         raise HTTPException(status_code=422, detail="Type at least two letters.")
-    user_id = require_actor().id
+    user_id = principal.id
     payload = providers.search(db, query, kind)
     providers.attach_artist_portraits(db, payload["results"])
     saved = records.saved_source_ids(db, user_id)

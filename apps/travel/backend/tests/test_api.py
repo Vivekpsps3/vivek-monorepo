@@ -265,7 +265,7 @@ def test_flight_lookup_and_place_cache(client, monkeypatch):
 
 
 def test_trips_stay_with_the_finance_user(client):
-    from apps.travel.backend.deps import AuthResult, Principal
+    from apps.server.auth import Principal, require_principal
 
     created = client.post(
         "/api/trips",
@@ -279,9 +279,7 @@ def test_trips_stay_with_the_finance_user(client):
     )
     assert created.status_code == 201, created.text
     trip_id = created.json()["id"]
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(2, "other", "Other"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
     assert client.get(f"/api/trips/{trip_id}").status_code == 404
     assert client.get("/api/home").json()["upcoming"] == []
     assert client.get("/api/settings").json()["account"]["name"] == "Other"
@@ -320,15 +318,10 @@ def test_cities_are_placed_on_the_map_when_the_trip_is_saved(client):
     assert again.json()["stays"][0]["lat"] == 38.72
 
 
-def test_finance_session_is_required(client, monkeypatch):
-    from fastapi import HTTPException
+def test_finance_session_is_required(client):
+    from apps.server.auth import require_principal
 
-    client.app.state.principal_checker = None
-
-    def deny(_request):
-        raise HTTPException(status_code=401, detail="Sign in through Finance.")
-
-    monkeypatch.setattr("apps.travel.backend.deps.fetch_principal", deny)
+    client.app.dependency_overrides.pop(require_principal, None)
     assert client.get("/api/health").status_code == 200
     assert client.get("/api/home").status_code == 401
-    assert client.get("/api/home").json()["detail"] == "Sign in through Finance."
+    assert client.get("/api/home").json()["detail"] == "Login required"

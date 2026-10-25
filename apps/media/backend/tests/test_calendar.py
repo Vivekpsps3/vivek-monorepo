@@ -56,7 +56,7 @@ def by_title(payload, title):
 
 
 def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monkeypatch):
-    from apps.media.backend.deps import AuthResult, Principal
+    from apps.server.auth import Principal, require_principal
 
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-16")
     seen = []
@@ -291,9 +291,7 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
     assert by_title(later, "Next Year")[0]["band"] == "year_band"
     assert by_title(later, "Next Year")[0]["on"] is None
 
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(2, "other", "Other"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
     assert "Serial" not in json.dumps(
         client.get("/api/calendar", params={"month": "2026-10"}).json()
     )

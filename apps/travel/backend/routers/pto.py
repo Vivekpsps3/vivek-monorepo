@@ -6,8 +6,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from apps.server.auth import Principal, require_principal
 from apps.travel.backend.database import get_db
-from apps.travel.backend.deps import require_actor
 from apps.travel.backend.models import PtoEntry, PtoPolicy
 from apps.travel.backend.schemas import PtoEntryIn, PtoPolicyIn
 from apps.travel.backend.services.assemble import snapshot_pto
@@ -22,24 +22,24 @@ def _quantize(value: Decimal) -> Decimal:
     return Decimal(str(value)).quantize(DAY_STEP, rounding=ROUND_HALF_UP)
 
 
-def _entries(db: Session):
+def _entries(db: Session, user_id: int):
     return (
         db.query(PtoEntry)
-        .filter(PtoEntry.user_id == require_actor().id)
+        .filter(PtoEntry.user_id == user_id)
         .order_by(PtoEntry.start_date, PtoEntry.id)
         .all()
     )
 
 
-def _policy_row(db: Session) -> PtoPolicy | None:
-    return db.query(PtoPolicy).filter(PtoPolicy.user_id == require_actor().id).one_or_none()
+def _policy_row(db: Session, user_id: int) -> PtoPolicy | None:
+    return db.query(PtoPolicy).filter(PtoPolicy.user_id == user_id).one_or_none()
 
 
-def _payload(db: Session, today: date | None = None) -> dict:
+def _payload(db: Session, user_id: int, today: date | None = None) -> dict:
     today = today or date.today()
-    row = _policy_row(db)
+    row = _policy_row(db, user_id)
     policy = policy_from_row(row)
-    usages = usages_from_rows(_entries(db))
+    usages = usages_from_rows(_entries(db, user_id))
     entries = [
         {
             "id": entry.id,
@@ -51,21 +51,25 @@ def _payload(db: Session, today: date | None = None) -> dict:
             "kind": entry.kind,
             "notes": entry.notes,
         }
-        for entry in _entries(db)
+        for entry in _entries(db, user_id)
     ]
     return {"policy": snapshot_pto(policy, usages, today), "entries": entries}
 
 
 @router.get("/pto")
-def read_pto(db: Session = Depends(get_db)):
-    return _payload(db)
+def read_pto(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+    return _payload(db, principal.id)
 
 
 @router.put("/pto/policy")
-def save_policy(body: PtoPolicyIn, db: Session = Depends(get_db)):
-    row = _policy_row(db)
+def save_policy(
+    body: PtoPolicyIn,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    row = _policy_row(db, principal.id)
     if row is None:
-        row = PtoPolicy(user_id=require_actor().id, balance_as_of=body.balance_as_of)
+        row = PtoPolicy(user_id=principal.id, balance_as_of=body.balance_as_of)
         db.add(row)
     row.configured = True
     row.accrual_amount = store_days(_quantize(body.accrual_amount))
@@ -78,18 +82,22 @@ def save_policy(body: PtoPolicyIn, db: Session = Depends(get_db)):
         store_days(_quantize(body.annual_cap_days)) if body.annual_cap_days is not None else None
     )
     db.flush()
-    return _payload(db)
+    return _payload(db, principal.id)
 
 
 @router.post("/pto/entries", status_code=201)
-def create_entry(body: PtoEntryIn, db: Session = Depends(get_db)):
+def create_entry(
+    body: PtoEntryIn,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
     days = (
         body.days
         if body.days is not None
         else Decimal(weekday_count(body.start_date, body.end_date))
     )
     row = PtoEntry(
-        user_id=require_actor().id,
+        user_id=principal.id,
         trip_id=None,
         start_date=body.start_date,
         end_date=body.end_date,
@@ -100,13 +108,15 @@ def create_entry(body: PtoEntryIn, db: Session = Depends(get_db)):
     )
     db.add(row)
     db.flush()
-    return _payload(db)
+    return _payload(db, principal.id)
 
 
 @router.delete("/pto/entries/{entry_id}", status_code=204)
-def delete_entry(entry_id: int, db: Session = Depends(get_db)):
+def delete_entry(
+    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+):
     row = db.get(PtoEntry, entry_id)
-    if row is None or row.user_id != require_actor().id:
+    if row is None or row.user_id != principal.id:
         raise HTTPException(status_code=404, detail="That PTO entry is not here.")
     if row.trip_id is not None:
         raise HTTPException(
@@ -121,9 +131,10 @@ def preview(
     end: date,
     days: Decimal | None = None,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
 ):
-    policy = policy_from_row(_policy_row(db))
-    usages = usages_from_rows(_entries(db))
+    policy = policy_from_row(_policy_row(db, principal.id))
+    usages = usages_from_rows(_entries(db, principal.id))
     try:
         parsed = parse_days(days) if days is not None else None
         return preview_take(policy, usages, start, end, parsed)

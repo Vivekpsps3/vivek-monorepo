@@ -19,16 +19,14 @@ def setup_logging(level: Optional[str] = None) -> None:
     lvl = getattr(logging, (level or LOG_LEVEL).upper(), logging.INFO)
 
     root = logging.getLogger()
-    if root.handlers:
-        root.setLevel(lvl)
-        return
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(DEFAULT_FORMAT, datefmt=DATE_FORMAT))
-    root.addHandler(handler)
+    if not root.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter(DEFAULT_FORMAT, datefmt=DATE_FORMAT))
+        root.addHandler(handler)
     root.setLevel(lvl)
 
-    # Quieter libraries unless DEBUG
+    # Quieter libraries unless DEBUG. Apply this even when the process already
+    # has a handler, or httpx request lines bury the site logs.
     for name, default in (
         ("uvicorn.access", logging.WARNING),
         ("uvicorn.error", logging.INFO),

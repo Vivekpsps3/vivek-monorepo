@@ -1,17 +1,33 @@
-"""In-process authentication adapter; same session and CSRF rules for all domains."""
+"""One principal for every domain route.
 
-from fastapi import Request, Response
-from apps.finance.backend.auth import get_current_user
-from apps.finance.backend.database import SessionLocal
+Finance still owns the user row, the challenge, and the session cookie.
+Domains ask this dependency for the signed-in person instead of keeping a
+second principal type or calling Finance over HTTP.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from fastapi import Depends, Request, Response
+from sqlalchemy.orm import Session
+
+from apps.server.database import get_db
 
 
-def principal_checker(result_type, principal_type):
-    def check(request: Request):
-        response = Response()
-        with SessionLocal() as db:
-            user = get_current_user(request, response, db)
-            principal = principal_type(user.id, user.username, user.display_name)
-            db.commit()
-        return result_type(principal, response.headers.getlist("set-cookie"))
+@dataclass(frozen=True)
+class Principal:
+    id: int
+    username: str | None
+    display_name: str
 
-    return check
+
+def require_principal(
+    request: Request, response: Response, db: Session = Depends(get_db)
+) -> Principal:
+    from apps.finance.backend.auth import get_current_user
+
+    user = get_current_user(request, response, db)
+    username = user.username if isinstance(user.username, str) else None
+    display_name = user.display_name if isinstance(user.display_name, str) else None
+    return Principal(int(user.id), username, display_name or username or "You")

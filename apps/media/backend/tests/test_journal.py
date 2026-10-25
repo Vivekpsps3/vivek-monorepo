@@ -1,57 +1,19 @@
 """Private journal rules. These tests do not call live metadata providers."""
 
 import httpx
-import pytest
-from fastapi import HTTPException
-from starlette.requests import Request
+
+from apps.server.auth import require_principal
 
 
-def _request(method: str, headers: list[tuple[bytes, bytes]] | None = None) -> Request:
-    return Request(
-        {
-            "type": "http",
-            "method": method,
-            "path": "/api/library",
-            "headers": headers or [],
-            "query_string": b"",
-            "scheme": "http",
-            "server": ("test", 80),
-            "client": ("127.0.0.1", 9),
-        }
-    )
-
-
-def test_reads_and_writes_follow_the_finance_session(monkeypatch):
-    from apps.media.backend.deps import fetch_principal
-
-    with pytest.raises(HTTPException) as missing:
-        fetch_principal(_request("POST", [(b"cookie", b"finance_session=abc")]))
-    assert missing.value.status_code == 403
-
-    def fake_request(method, url, headers, timeout):
-        assert method == "GET"
-        assert url.endswith("/api/auth/me")
-        assert headers["cookie"] == "finance_session=abc"
-        return httpx.Response(401, json={"detail": "Login required"})
-
-    monkeypatch.setattr(httpx, "request", fake_request)
-    with pytest.raises(HTTPException) as denied:
-        fetch_principal(_request("GET", [(b"cookie", b"finance_session=abc")]))
-    assert denied.value.status_code == 401
-
-
-def test_private_routes_reject_a_signed_out_browser(client, monkeypatch):
-    client.app.state.principal_checker = None
-
-    def reject(method, url, headers, timeout):
-        return httpx.Response(401, json={"detail": "Login required"})
-
-    monkeypatch.setattr(httpx, "request", reject)
+def test_private_routes_reject_a_signed_out_browser(client):
+    client.app.dependency_overrides.pop(require_principal, None)
     assert client.get("/api/health").status_code == 200
-    assert client.get("/api/library").status_code == 401
+    denied = client.get("/api/library")
+    assert denied.status_code == 401
+    assert denied.json()["detail"] == "Login required"
     assert client.get("/api/summary").status_code == 401
     assert client.get("/api/calendar").status_code == 401
-    assert client.post("/api/library", json={"kind": "movie", "title": "Nope"}).status_code == 403
+    assert client.post("/api/library", json={"kind": "movie", "title": "Nope"}).status_code == 401
 
 
 def test_manual_entry_rating_and_review_round_trip(client):
@@ -285,7 +247,7 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
 
 
 def test_library_filters_and_owner_isolation(client):
-    from apps.media.backend.deps import AuthResult, Principal
+    from apps.server.auth import Principal, require_principal
 
     movie = client.post(
         "/api/library",
@@ -297,15 +259,11 @@ def test_library_filters_and_owner_isolation(client):
             "rating": 10,
         },
     ).json()
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(2, "other", "Other"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
     assert client.get(f"/api/entries/{movie['id']}").status_code == 404
     assert client.get("/api/library").json()["items"] == []
     assert client.get("/api/summary").json()["counts"]["library"] == 0
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(1, "tester", "Tester"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(1, "tester", "Tester")
     listed = client.get("/api/library", params={"kind": "album", "sort": "rating"}).json()["items"]
     assert [item["title"] for item in listed] == ["Secret"]
     page = client.get("/")
@@ -518,7 +476,6 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
 
 
 def test_tvmaze_summary_is_plain_text():
-    import httpx
     from apps.media.backend.services.providers import tvmaze_search
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -621,8 +578,6 @@ def test_series_and_games_search_without_keys(client, monkeypatch):
 
 
 def test_steam_search_keeps_title_and_capsule():
-    import httpx
-
     from apps.media.backend.services.providers import steam_search
 
     def handler(request: httpx.Request) -> httpx.Response:

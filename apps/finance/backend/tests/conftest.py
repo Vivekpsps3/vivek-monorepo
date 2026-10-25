@@ -22,9 +22,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from fastapi.testclient import TestClient
 
+import apps.finance.backend.main as finance_main
+from apps.finance.backend import database as finance_db
 from apps.finance.backend.auth import create_user
-from apps.finance.backend.database import SQLALCHEMY_DATABASE_URL, SessionLocal
 from apps.finance.backend.models import UserRole, UserSession
+from apps.server.database import install, open_database
+from apps.server.main import Dependencies, Settings, create_app
+
+_database = open_database("sqlite:///:memory:")
+install(_database)
+finance_db.publish(_database)
+finance_db.init_database()
+
+_disabled = os.getenv("DISABLE_OPENAPI", "").lower() in ("1", "true", "yes")
+_app = create_app(
+    Settings(
+        database_url=_database.url,
+        release="test",
+        web_root=Path("/app/web/finance"),
+        portfolio_root=Path("/app/web/portfolio"),
+        openapi=not _disabled,
+    ),
+    Dependencies(database=_database, check_schema=False, check_frontend=False),
+)
+finance_main.app = _app
+finance_main.engine = _database.engine
+SQLALCHEMY_DATABASE_URL = finance_db.SQLALCHEMY_DATABASE_URL
+SessionLocal = finance_db.SessionLocal
 
 if ":memory:" not in SQLALCHEMY_DATABASE_URL:
     raise RuntimeError(f"Tests must not run against a file database: {SQLALCHEMY_DATABASE_URL}")

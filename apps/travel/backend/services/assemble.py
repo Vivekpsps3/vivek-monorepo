@@ -4,7 +4,6 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import selectinload
 
-from apps.travel.backend.deps import require_actor
 from apps.travel.backend.models import (
     Note,
     Parking,
@@ -434,8 +433,8 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
     }
 
 
-def pto_context(db, user_id: int | None = None):
-    owner = require_actor().id if user_id is None else user_id
+def pto_context(db, user_id: int):
+    owner = user_id
     row = db.query(PtoPolicy).filter(PtoPolicy.user_id == owner).one_or_none()
     policy = policy_from_row(row)
     usages = usages_from_rows(
@@ -530,9 +529,9 @@ def attention_for(detail: dict) -> list[dict]:
     return items
 
 
-def build_home(db, today: date | None = None) -> dict:
+def build_home(db, today: date | None = None, *, user_id: int) -> dict:
     today = today or date.today()
-    owner = require_actor().id
+    owner = user_id
     _row, policy, usages = pto_context(db, owner)
     trips = (
         db.query(Trip)
@@ -601,10 +600,10 @@ def build_home(db, today: date | None = None) -> dict:
     }
 
 
-def build_summary(db, today: date | None = None) -> dict:
+def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
     """Small next-trip card for the Hub. No budgets, notes, or PTO."""
     today = today or date.today()
-    home = build_home(db, today)
+    home = build_home(db, today, user_id=user_id)
     card = home["metrics"]["next_trip"]
     if card is None:
         return {"today": today, "next_trip": None}
@@ -629,13 +628,13 @@ def build_summary(db, today: date | None = None) -> dict:
     }
 
 
-def build_calendar(db, start: date, end: date, today: date | None = None) -> dict:
+def build_calendar(db, start: date, end: date, today: date | None = None, *, user_id: int) -> dict:
     today = today or date.today()
     if end < start:
         raise ValueError("The calendar end date has to be on or after the start.")
     if (end - start).days > 70:
         raise ValueError("Ask for at most 70 calendar days at a time.")
-    owner = require_actor().id
+    owner = user_id
     trips = (
         db.query(Trip)
         .options(selectinload(Trip.stays))

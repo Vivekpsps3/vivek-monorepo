@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Keep shared package and application imports within their intended boundaries."""
 
-from pathlib import Path
 import re
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SUFFIXES = {".ts", ".tsx", ".js", ".mjs", ".cjs", ".py"}
@@ -53,6 +52,19 @@ def import_target(path: Path, module: str) -> Path | None:
     return None
 
 
+# Domain code may use the site database, the principal, and — from tests only —
+# the app factory. It may not import another domain or the rest of the server.
+_PLATFORM = ("apps.server.database", "apps.server.auth")
+
+
+def _platform_import(source: Path, module: str) -> bool:
+    if any(module == name or module.startswith(name + ".") for name in _PLATFORM):
+        return True
+    if module == "apps.server.main" or module.startswith("apps.server.main."):
+        return "tests" in source.parts
+    return False
+
+
 def app_name(path: Path) -> str | None:
     try:
         relative = path.resolve().relative_to(ROOT)
@@ -90,6 +102,7 @@ def main() -> int:
                     and source_app
                     and target_app != source_app
                     and source_app != "server"
+                    and not _platform_import(source, module)
                 ):
                     errors.append(
                         f"cross-app source import: {source.relative_to(ROOT)} -> {module} (apps/{target_app})"
