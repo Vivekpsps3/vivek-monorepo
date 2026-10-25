@@ -5,7 +5,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | ID | Status | Evidence |
 | --- | --- | --- |
 | QA-00 | done | test -s planning/suite-experience-remediation/evidence/QA-00.md exited 0. Inspected QA-00.md against make test-fast (exit 0, only duration_ms differed), git status (clean; quote matches pre-commit parent f36fb602), and byte-identical Travel/Media static entries index.html, app.js, and modules/app.mjs. No app source changed. |
-| ARC-01 | open | pending |
+| ARC-01 | done | make test-fast exited 0. Inspected apps/site/src/main.ts, app.config.ts, app.routes.ts, app.component.html, and home.component.ts: one bootstrap, one provideRouter, HomeComponent on path home, one router-outlet; app.routes.server.ts and apps/web are absent. Travel index.html loads only modules/app.mjs, which calls boot once through router.mjs; static/app.js is gone. |
 | ARC-02 | open | pending |
 | API-01 | open | pending |
 | DB-01 | open | pending |

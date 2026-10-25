@@ -13,7 +13,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 | Done | Task | Owner lane | Dependencies | Concrete deliverable / acceptance |
 | --- | --- | --- | --- | --- |
 | [x] | QA-00 | Integration/QA | None | Repro fixtures, baseline test-discovery map, route/state captures and metrics; no production-data writes. |
-| [ ] | ARC-01 | Architecture + reviewer | QA-00 | Root Angular/real-map/CSP/SEO/vault spike in [architecture](14-top-down-refactor.md); decision recorded from evidence. |
+| [x] | ARC-01 | Architecture + reviewer | QA-00 | Root Angular/real-map/CSP/SEO/vault spike in [architecture](14-top-down-refactor.md); decision recorded from evidence. |
 | [ ] | ARC-02 | Backend platform | QA-00 | Explicit root app factory, shared identity/session/DB dependencies; migrated harnesses and removed reflection/fallbacks. |
 | [ ] | ARC-03 | Toolchain/composition | ARC-01 | One workspace/lock/build/router bootstrap and tested feature import boundary. |
 | [ ] | API-01 | Backend platform + domains | ARC-02 | Session/error/provider contracts, request deadlines, provider IO outside DB writes, upstream auth separated. |
