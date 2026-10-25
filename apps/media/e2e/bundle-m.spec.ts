@@ -373,7 +373,8 @@ test('item, add, and an artist stay inside a 390px viewport', async ({ page, req
     await page.setViewportSize({ width: 390, height: 800 });
     for (const hash of ['#/item/1', '#/new', `#/item/${artistId}`]) {
       await page.goto(`/media/${hash}`);
-      await expect(page.locator('h1').first()).toBeVisible();
+      if (hash === '#/new') await expect(page.getByRole('textbox', { name: 'Title' })).toBeVisible();
+      else await expect(page.locator('h1').first()).toBeVisible();
       const right = await page.evaluate(() => {
         let max = 0;
         for (const node of document.body.querySelectorAll('*')) {
