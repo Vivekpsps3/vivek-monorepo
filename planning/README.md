@@ -1,5 +1,11 @@
 # Personal operating system brief
 
+The current owner-requested execution plan is the
+[suite experience and top-down refactor plan](suite-experience-remediation/README.md).
+It combines the full UI/backend issue inventory with one coherent product
+architecture, an explicit deletion ledger, and a dependency-ordered swarm
+checklist for one refactor PR. It is a plan, not a record of completed repairs.
+
 [`personal-operating-system.md`](./personal-operating-system.md) is the original
 product brief, retained for context. It describes a broad ecosystem and media
 journal vision; it is not a current implementation checklist. Current behavior
