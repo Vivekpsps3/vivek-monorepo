@@ -59,7 +59,7 @@ test-fast:
 	python3 scripts/check-shared-boundaries.py
 	python3 scripts/check-finance-ux-f1.py
 	python3 -m unittest scripts/test_quality_ratchet.py scripts/test_check_shared_boundaries.py
-	node --test scripts/serve-spa.test.mjs
+	node --test scripts/serve-spa.test.mjs scripts/composition-path.test.mjs
 
 test-backend:
 	./scripts/coverage-gate.sh finance
