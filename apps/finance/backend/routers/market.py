@@ -15,6 +15,7 @@ from apps.finance.backend.schemas_market import (
     MarketResearchResponse,
 )
 from apps.finance.backend.services.market_data import market_data
+from apps.server.errors import APIError
 
 router = APIRouter(tags=["market"])
 
@@ -58,7 +59,7 @@ def get_market_research(
     try:
         return market_data.get_research(upper, period=clean_period, force_refresh=refresh, db=db)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)[:200]) from exc
+        raise APIError(502, "provider_unavailable", "Market data is unavailable.") from exc
 
 
 @router.post("/market/research/batch", response_model=MarketResearchBatchResponse)

@@ -10,6 +10,7 @@ from apps.media.backend.services.providers import UA
 from apps.media.backend.services.summary import build_summary, next_episodes
 from apps.media.backend.services.validate import clean_text
 from apps.server.auth import Principal, require_principal
+from apps.server.database import release_for_provider_io
 
 router = APIRouter()
 
@@ -230,6 +231,7 @@ def _load_album_tracks(db: Session, entry) -> None:
         return
     http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
     try:
+        release_for_provider_io(db)
         payload = providers.musicbrainz_release_detail(http, entry.catalog.source_id)
     except Exception:
         return
@@ -256,6 +258,7 @@ def _load_artist_catalog(db: Session, entry) -> None:
                 return providers.musicbrainz_artist_catalog(http, source_id)
 
             if group_offset or release_offset:
+                release_for_provider_io(db)
                 payload = fetch_page()
             else:
                 payload = providers.cached_call(
@@ -349,6 +352,7 @@ def entry_web(
                 timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"}
             )
             try:
+                release_for_provider_io(db)
                 nodes = records.store_collaborators(
                     catalog, providers.musicbrainz_collaborators(http, catalog.source_id)
                 )

@@ -13,10 +13,19 @@ AEROAPI_URL = "https://aeroapi.flightaware.com/aeroapi/flights/{ident}"
 
 
 class FlightAwareError(Exception):
-    def __init__(self, status_code: int, message: str):
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        *,
+        code: str,
+        retry_after: int | None = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.message = message
+        self.code = code
+        self.retry_after = retry_after
 
 
 def normalize_ident(raw: str) -> str:
@@ -115,20 +124,45 @@ def lookup_flights(
     try:
         response = client.get(url, params=params, headers=headers)
     except httpx.HTTPError as exc:
-        raise FlightAwareError(502, "FlightAware could not be reached.") from exc
+        raise FlightAwareError(
+            502, "FlightAware could not be reached.", code="provider_unavailable"
+        ) from exc
     finally:
         if owns_client:
             client.close()
     if response.status_code == 401:
-        raise FlightAwareError(401, "FlightAware rejected the API key.")
+        # Upstream credentials are not a suite session failure.
+        raise FlightAwareError(502, "FlightAware rejected the API key.", code="provider_auth")
     if response.status_code == 404:
         return []
     if response.status_code == 429:
-        raise FlightAwareError(429, "FlightAware rate limit reached. Try again shortly.")
+        raise FlightAwareError(
+            429,
+            "FlightAware rate limit reached. Try again shortly.",
+            code="provider_throttled",
+            retry_after=_retry_after(response),
+        )
     if response.status_code >= 400:
-        raise FlightAwareError(502, "FlightAware could not look up that flight.")
+        raise FlightAwareError(
+            502, "FlightAware could not look up that flight.", code="provider_unavailable"
+        )
     try:
         payload = response.json()
     except ValueError as exc:
-        raise FlightAwareError(502, "FlightAware returned an unreadable response.") from exc
+        raise FlightAwareError(
+            502, "FlightAware returned an unreadable response.", code="provider_unavailable"
+        ) from exc
     return parse_flights(payload)
+
+
+def _retry_after(response: httpx.Response) -> int | None:
+    raw = response.headers.get("retry-after")
+    if raw is None:
+        return None
+    try:
+        seconds = int(raw)
+    except ValueError:
+        return None
+    if seconds < 0 or seconds > 86400:
+        return None
+    return seconds

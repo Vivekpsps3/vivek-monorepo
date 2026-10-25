@@ -89,6 +89,12 @@ def current() -> Database:
     return _current
 
 
+def release_for_provider_io(db: Session) -> None:
+    """Commit the open unit of work so provider IO does not hold a write."""
+    if db.in_transaction():
+        db.commit()
+
+
 def get_db():
     """One unit of work: commit on success, roll back on failure, then close."""
     db = current().sessionmaker()

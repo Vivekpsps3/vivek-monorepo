@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 import httpx
 
+from apps.server.database import release_for_provider_io
 from apps.travel.backend.models import PlaceCache
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -56,6 +57,7 @@ def cached_search(db, query: str, fetch) -> list[dict]:
             cached = None
         if isinstance(cached, list):
             return cached
+    release_for_provider_io(db)
     try:
         hits = fetch(normalize_query(query)) or []
     except Exception:

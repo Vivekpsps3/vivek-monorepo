@@ -27,6 +27,7 @@ from apps.finance.backend.api_auth import ApiKeyMiddleware
 from apps.finance.backend.rate_limit import RateLimitMiddleware
 from apps.server.auth import Principal, require_principal
 from apps.server.database import Database, database_url, install, open_database
+from apps.server.errors import APIError
 from apps.server.redirects import register_hub_media_redirects
 from apps.server.schema import assert_ready
 from apps.server.security_headers import SHELL_HEADER, SecurityHeadersMiddleware, csp_report
@@ -153,6 +154,32 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
         )
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
+    @application.exception_handler(APIError)
+    async def api_error_handler(request: Request, exc: APIError):
+        finance_logger.log(
+            logging.ERROR if exc.status_code >= 500 else logging.WARNING,
+            "api_error method=%s path=%s status=%s code=%s",
+            request.method,
+            request.url.path,
+            exc.status_code,
+            exc.code,
+        )
+        headers = {}
+        if exc.retry_after is not None:
+            headers["Retry-After"] = str(exc.retry_after)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "detail": exc.message,
+                "field_errors": exc.field_errors,
+                "retry_after": exc.retry_after,
+                "request_id": getattr(request.state, "request_id", None),
+            },
+            headers=headers,
+        )
+
     @application.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
         finance_logger.exception(
@@ -180,6 +207,7 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     async def observe(request: Request, call_next):
         supplied_id = request.headers.get("x-request-id", "")
         request_id = supplied_id if re.fullmatch(r"[0-9a-f]{32}", supplied_id) else uuid.uuid4().hex
+        request.state.request_id = request_id
         method = (
             request.method
             if request.method in {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}

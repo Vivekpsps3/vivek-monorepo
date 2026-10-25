@@ -84,4 +84,5 @@ def test_lookup_reports_a_rejected_key():
     client = httpx.Client(transport=httpx.MockTransport(lambda _request: httpx.Response(401)))
     with pytest.raises(FlightAwareError) as caught:
         lookup_flights("UA1", date(2026, 11, 2), "nope", client=client)
-    assert caught.value.status_code == 401
+    assert caught.value.status_code == 502
+    assert caught.value.code == "provider_auth"

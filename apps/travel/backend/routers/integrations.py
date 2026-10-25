@@ -1,9 +1,11 @@
 """FlightAware lookup, map search, and local settings."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
+from apps.server.database import release_for_provider_io
+from apps.server.errors import APIError
 from apps.travel.backend.database import get_db
 from apps.travel.backend.deps import (
     flightaware_key,
@@ -85,17 +87,24 @@ def lookup_flight(
 ):
     key, _source = flightaware_key(db, principal.id)
     if not key:
-        raise HTTPException(
-            status_code=503,
-            detail="Add a FlightAware AeroAPI key in Settings. You can still type the flight yourself.",
+        raise APIError(
+            503,
+            "provider_unconfigured",
+            "Add a FlightAware AeroAPI key in Settings. You can still type the flight yourself.",
         )
+    release_for_provider_io(db)
     try:
         ident = normalize_ident(body.ident)
         flights = lookup(ident, body.depart_on, key)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise APIError(422, "invalid", str(exc), field_errors={"ident": str(exc)}) from exc
     except FlightAwareError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+        raise APIError(
+            exc.status_code,
+            exc.code,
+            exc.message,
+            retry_after=exc.retry_after,
+        ) from exc
     return {"ident": body.ident, "depart_on": body.depart_on, "flights": flights}
 
 
@@ -109,5 +118,5 @@ def search_places(
     try:
         results = cached_search(db, q, fetch)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise APIError(422, "invalid", str(exc), field_errors={"q": str(exc)}) from exc
     return {"results": results}

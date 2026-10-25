@@ -15,6 +15,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from apps.media.backend.models import ProviderCache, utc_now
+from apps.server.database import release_for_provider_io
 
 UA = "VivekMedia/1.0 (personal media journal)"
 TTL = timedelta(hours=24)
@@ -156,6 +157,7 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
         pending.append((name, key, job))
     if client is not None:
         for name, key, job in pending:
+            release_for_provider_io(db)
             try:
                 payload = job(client)
                 _cache_put(db, key, payload)
@@ -164,8 +166,10 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
             except Exception:
                 status[name] = sticky_status(name, "error")
     elif pending:
+        release_for_provider_io(db)
         pool = ThreadPoolExecutor(max_workers=len(pending))
         payloads: dict[str, list] = {}
+        ready: list[tuple[str, str, list]] = []
         try:
             futures = {pool.submit(_invoke, job): (name, key) for name, key, job in pending}
             try:
@@ -173,8 +177,7 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
                     name, key = futures.pop(future)
                     try:
                         payload = future.result()
-                        _cache_put(db, key, payload)
-                        payloads[name] = payload
+                        ready.append((name, key, payload))
                         status[name] = sticky_status(name, "ok")
                     except Exception:
                         status[name] = sticky_status(name, "error")
@@ -183,6 +186,9 @@ def search(db: Session, query: str, kind: str | None, client: httpx.Client | Non
                     status[name] = sticky_status(name, "error")
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
+        for name, key, payload in ready:
+            _cache_put(db, key, payload)
+            payloads[name] = payload
         for name, _key, _job in pending:
             results.extend(payloads.get(name, []))
     return {"query": query, "results": prefer_unique(results)[:40], "providers": status}
@@ -221,7 +227,9 @@ def cached_call(db: Session, key: str, job):
     row = db.get(ProviderCache, key)
     if row is not None and as_utc(row.fetched_at) >= datetime.now(UTC) - TTL:
         return json.loads(row.payload)
+    release_for_provider_io(db)
     payload = job()
+    row = db.get(ProviderCache, key)
     if row is None:
         row = ProviderCache(cache_key=key, payload=json.dumps(payload), fetched_at=utc_now())
         db.add(row)
@@ -428,6 +436,7 @@ def popular_movies(db: Session, http: httpx.Client) -> list[dict]:
     cached = _cache_get(db, key)
     if isinstance(cached, list) and cached:
         return cached
+    release_for_provider_io(db)
     rows = tmdb_popular(http)
     if rows:
         _cache_put(db, key, rows)
@@ -976,6 +985,7 @@ def cached_artist_portraits(
             continue
         need_wiki.append(artist_id)
     if need_wiki:
+        release_for_provider_io(db)
         try:
             found = wikidata_artist_images(http, need_wiki)
         except Exception:
@@ -1000,6 +1010,7 @@ def cached_artist_portraits(
                         {"artwork_url": None, "checked": "wiki"},
                     )
     for artist_id in need_deep:
+        release_for_provider_io(db)
         try:
             url = musicbrainz_artist_image(http, artist_id)
         except Exception:

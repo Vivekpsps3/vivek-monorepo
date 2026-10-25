@@ -41,6 +41,7 @@ from apps.media.backend.services.validate import (
     watched_flag,
 )
 from apps.media.backend.services.when import is_released
+from apps.server.database import release_for_provider_io
 
 
 def dumps(value) -> str | None:
@@ -876,6 +877,7 @@ def backfill_missing_tracks(db: Session, catalog: CatalogItem, http, limit: int 
     pending = [album for album in missing if album.source_id not in failed]
     retry = [album for album in missing if album.source_id in failed]
     for album in (pending or retry)[:limit]:
+        release_for_provider_io(db)
         time.sleep(1.05)
         try:
             tracks = release_group_tracks(http, album.source_id)
