@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from apps.finance.backend.auth import get_current_user, public_user, utc_now_naive
 from apps.finance.backend.database import get_db
 from apps.finance.backend.models import User
-from apps.finance.backend.schemas_auth import DisplayNameUpdate, UsernameChangeRequest, UserPublic, normalize_display_name
+from apps.finance.backend.schemas_auth import (
+    DisplayNameUpdate,
+    UsernameChangeRequest,
+    UserPublic,
+    normalize_display_name,
+)
 from apps.finance.backend.services.username_change import change_username
 
 router = APIRouter(tags=["account"])

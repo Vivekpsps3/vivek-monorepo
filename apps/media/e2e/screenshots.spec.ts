@@ -219,7 +219,7 @@ test.describe('phase 0 screenshot matrix', () => {
     const ready = async (name: string) => {
       await expect(page.locator('.toast')).toHaveCount(0);
       if (name === 'now') {
-        await expect(page.getByRole('heading', { name: 'Now' })).toBeVisible();
+        await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
         await expect(page.locator('.grid .card, .next-list, .empty, .quiet').first()).toBeVisible();
       }
       if (name === 'library') await expect(page.locator('.grid .card').first()).toBeVisible();

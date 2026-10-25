@@ -258,7 +258,7 @@ function focusErrorTitle() {
 }
 
 function focusPageHeading() {
-  const heading = app.querySelector("h1");
+  const heading = app.querySelector("h1, h2");
   if (!(heading instanceof HTMLElement)) return;
   if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
   heading.focus();

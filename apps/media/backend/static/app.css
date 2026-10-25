@@ -1104,7 +1104,11 @@ button:focus-visible, a:focus-visible, [role="gridcell"]:focus-visible {
   .score-row { flex-wrap: wrap; align-items: center; }
   .score.marks:not(.score-child) { width: 100%; min-width: 0; }
   .score.marks:not(.score-child) .mark { flex: 1 1 0; min-width: 0; width: auto; height: 36px; }
-  .sort-field { width: 44px; }
+  .sort-field { width: auto; max-width: 100%; }
+  .sort-field select,
+  .progress-controls select { min-width: 0; max-width: 100%; }
+  .marks, .season-strip, .score-row { max-width: 100%; }
+  .marks { flex-wrap: wrap; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
   .result .clamp { display: none; }
   .hero { margin-bottom: var(--space-3); }

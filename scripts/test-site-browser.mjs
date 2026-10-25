@@ -170,7 +170,7 @@ try {
   await authed.getByRole('heading', { name: 'CSP Check', exact: true }).waitFor();
   await assertClean(authed, 'signed-in hub');
   await authed.goto(base + '/finance/', { waitUntil: 'networkidle' });
-  await authed.getByRole('heading', { name: 'Home', exact: true }).waitFor();
+  await authed.getByRole('navigation', { name: 'Home overview', exact: true }).waitFor();
   await authed.locator('app-charts').waitFor();
   await assertClean(authed, 'signed-in dashboard');
   await authed.goto(base + '/finance/transactions', { waitUntil: 'networkidle' });

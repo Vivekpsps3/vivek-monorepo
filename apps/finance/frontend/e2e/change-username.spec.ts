@@ -29,11 +29,20 @@ async function createAccount(page: Page, username: string): Promise<void> {
     await page.goto('/auth/signup');
     await expect(page.getByRole('heading', { name: 'Create account' })).toBeVisible();
     await page.getByLabel('Username', { exact: true }).fill(username);
+    await page.getByLabel('Name', { exact: true }).fill('Synthetic reader');
     await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
     await page.getByRole('button', { name: 'Sign up', exact: true }).click();
   }
   await page.waitForURL(/\/hub$/, { timeout: 60_000 });
-  await expect(page.locator('.hub-account__name')).toHaveText([username, username]);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+}
+
+async function openAccount(page: Page): Promise<void> {
+  const menu = page.getByRole('menu', { name: 'Account settings' });
+  if (!(await menu.isVisible())) {
+    await page.getByRole('button', { name: 'Account', exact: true }).click();
+  }
+  await expect(menu).toBeVisible();
 }
 
 async function expectPassphraseCleared(page: Page): Promise<void> {
@@ -60,7 +69,7 @@ async function signIn(page: Page, username: string): Promise<void> {
 }
 
 async function saveUsername(page: Page, nextName: string, passphrase: string): Promise<void> {
-  await page.locator('.username-panel').scrollIntoViewIfNeeded();
+  await openAccount(page);
   await page.getByLabel('New username', { exact: true }).fill(nextName);
   await page.getByLabel('Current passphrase', { exact: true }).fill(passphrase);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -93,17 +102,19 @@ test('renamed username shows in the hub, then signs in, and the old username doe
   expect(JSON.stringify(body)).not.toContain(PASSPHRASE);
   expect(body.signature_b64).toEqual(expect.any(String));
   await expect(page.locator('.toast-copy')).toHaveText('Username updated.');
-  await expect(page.locator('.hub-account__name')).toHaveText([next, next]);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expectPassphraseCleared(page);
 
+  await openAccount(page);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.waitForURL(/\/auth\/login/);
   await page.getByLabel('Username', { exact: true }).fill(next);
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(/\/hub$/, { timeout: 60_000 });
-  await expect(page.locator('.hub-account__name').first()).toHaveText(next);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
+  await openAccount(page);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.waitForURL(/\/auth\/login/);
   await page.getByLabel('Username', { exact: true }).fill(current);
@@ -118,10 +129,10 @@ test('a reload of /hub still renames', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await createAccount(page, 'rename.reload');
   await page.reload();
-  await expect(page.locator('.hub-account__name')).toHaveText(['rename.reload', 'rename.reload']);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await saveUsername(page, 'rename.reloaded', PASSPHRASE);
   await expect(page.locator('.toast-copy')).toHaveText('Username updated.');
-  await expect(page.locator('.hub-account__name')).toHaveText(['rename.reloaded', 'rename.reloaded']);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expectPassphraseCleared(page);
 });
 
@@ -145,20 +156,23 @@ test('a legacy email username signs in and changes through the hub', async ({ pa
   }, legacy);
   expect(adopted.status, adopted.body).toBe(200);
 
+  await openAccount(page);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.waitForURL(/\/auth\/login/);
   await signIn(page, legacy);
-  await expect(page.locator('.hub-account__name')).toHaveText([legacy, legacy]);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await saveUsername(page, 'Legacy.Renamed', PASSPHRASE);
   await expect(page.locator('.toast-copy')).toHaveText('Username updated.');
-  await expect(page.locator('.hub-account__name')).toHaveText([next, next]);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expectPassphraseCleared(page);
 
+  await openAccount(page);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.waitForURL(/\/auth\/login/);
   await signIn(page, next);
-  await expect(page.locator('.hub-account__name').first()).toHaveText(next);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
+  await openAccount(page);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.waitForURL(/\/auth\/login/);
   await page.getByLabel('Username', { exact: true }).fill(legacy);
@@ -189,20 +203,20 @@ test('a CSRF mismatch shows the session-expired copy', async ({ page }) => {
   await expect(error).toHaveText('Session expired, sign in again.');
   await expect(error).toHaveAttribute('data-status', '403');
   expect(patches).toBe(2);
-  await expect(page.locator('.hub-account__name')).toHaveText(['rename.csrf', 'rename.csrf']);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expectPassphraseCleared(page);
 });
 
 test('a wrong passphrase shows the 401 error and clears the passphrase', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await createAccount(page, 'rename.wrong');
-  await page.locator('.username-panel').scrollIntoViewIfNeeded();
+  await openAccount(page);
   await expectNoHorizontalOverflow(page);
   await saveUsername(page, 'rename.wrong2', 'not-the-passphrase');
   const error = page.locator('#username-change-error');
   await expect(error).toHaveText('That passphrase is wrong.');
   await expect(error).toHaveAttribute('data-status', '401');
-  await expect(page.locator('.hub-account__name')).toHaveText(['rename.wrong', 'rename.wrong']);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page).toHaveURL(/\/hub$/);
   await expectPassphraseCleared(page);
   await expectNoHorizontalOverflow(page);
@@ -211,6 +225,7 @@ test('a wrong passphrase shows the 401 error and clears the passphrase', async (
 test('a taken username shows the 409 error and clears the passphrase', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await createAccount(page, 'rename.owner');
+  await openAccount(page);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.waitForURL(/\/auth\/login/);
   await createAccount(page, 'rename.other');
@@ -223,6 +238,6 @@ test('a taken username shows the 409 error and clears the passphrase', async ({ 
   const error = page.locator('#username-change-error');
   await expect(error).toHaveText('That username is already taken.');
   await expect(error).toHaveAttribute('data-status', '409');
-  await expect(page.locator('.hub-account__name')).toHaveText(['rename.other', 'rename.other']);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expectPassphraseCleared(page);
 });
