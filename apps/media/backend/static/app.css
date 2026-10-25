@@ -1076,6 +1076,8 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 .swatch.cal-spinoff { background: var(--event-spinoff); }
 .cal-event.is-watched { color: var(--text-watched, var(--text-secondary)); }
 .calendar-grid [role="gridcell"] { min-height: 96px; }
+#quick-add:not([open]),
+#confirm:not([open]) { display: none; }
 #quick-add {
   display: flex;
   flex-direction: column;

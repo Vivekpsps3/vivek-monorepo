@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.auth import get_current_user, public_user, utc_now_naive
@@ -29,8 +30,11 @@ def change_account_name(
         name = normalize_display_name(body.display_name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    setattr(current_user, "display_name", name)
-    setattr(current_user, "updated_at", utc_now_naive())
+    db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(display_name=name, updated_at=utc_now_naive())
+    )
     db.commit()
     db.refresh(current_user)
     return UserPublic.model_validate(public_user(current_user))
