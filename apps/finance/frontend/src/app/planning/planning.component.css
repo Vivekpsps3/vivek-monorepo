@@ -10,11 +10,14 @@
 }
 
 ui-card,
-ui-button,
 ui-data-table,
 app-monte-carlo-fan-chart {
   display: block;
   min-width: 0;
+  max-width: 100%;
+}
+
+ui-button {
   max-width: 100%;
 }
 
@@ -319,8 +322,24 @@ app-monte-carlo-fan-chart {
   overscroll-behavior: contain;
 }
 
-.mc-panel ui-button {
-  width: 100%;
+.mc-inline-actions,
+.mc-run-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mc-run-row {
+  justify-content: flex-end;
+}
+
+.mc-inline-actions ui-button,
+.mc-run-row ui-button,
+.mc-inline-actions ::ng-deep .ui-btn,
+.mc-run-row ::ng-deep .ui-btn {
+  width: auto;
+  max-width: 100%;
 }
 
 .mc-control-grid,
@@ -449,15 +468,17 @@ app-monte-carlo-fan-chart {
 }
 
 .mc-secondary-action-wrap {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
-  width: 100%;
   min-width: 0;
   margin-top: var(--space-3);
 }
 
 .mc-secondary-action-wrap ::ng-deep .ui-btn {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
 }
 
 .mc-results {
@@ -688,13 +709,12 @@ app-monte-carlo-fan-chart {
 
   .mc-profiles-row ui-button,
   .mc-profiles-row ::ng-deep .ui-btn,
-  .mc-row-action,
   .mc-row-action ::ng-deep .ui-btn,
   .mc-seed-row ui-button,
   .mc-seed-row ::ng-deep .ui-btn,
   .mc-panel ::ng-deep .ui-btn,
   .spending-suggestion-details ::ng-deep .ui-btn {
-    width: 100%;
+    width: auto;
     max-width: 100%;
     min-height: 44px;
     white-space: normal;

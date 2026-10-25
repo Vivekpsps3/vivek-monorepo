@@ -10,6 +10,7 @@ import {
   emptyMonthHtml,
   graphCenter,
   legendHtml,
+  buildLibraryTree,
   libraryEmptyCopy,
   markNextLabel,
   noteCardHtml,
@@ -56,14 +57,16 @@ test("the overview toggle and the note count follow the spec", () => {
   assert.equal(noteCountText("x".repeat(18001)), "18,001 / 20,000");
 });
 
-test("a song click keeps the artist at the center of related", () => {
-  assert.equal(graphCenter("Radiohead"), "Radiohead");
-  assert.match(appSource, /paintWeb\(graphCenter\(webCenter\)\)/);
-  assert.doesNotMatch(appSource, /paintWeb\(song\.dataset\.songCenter\)/);
+test("artist pages omit related and details", () => {
+  assert.match(appSource, /entry\.kind === "artist" \? musicBlock\(entry\) : ""/);
+  assert.match(appSource, /entry\.kind === "artist" \? "" : `<div class="web"/);
+  assert.match(appSource, /entry\.kind !== "movie" && entry\.kind !== "tv"/);
+  assert.doesNotMatch(appSource, /data-song-center/);
+  assert.doesNotMatch(appSource, /kind !== "artist" && entry\.kind !== "movie"/);
   const list = relatedHtml([{ title: "Kid A" }]);
-  assert.match(list, /<svg aria-hidden="true"/);
-  assert.match(list, /href="#\/search\?q=Kid%20A"/);
+  assert.match(list, /<h2>Related<\/h2>/);
   assert.match(connectionsFailureHtml(), /Connections couldn't load\./);
+  assert.equal(graphCenter("Radiohead"), "Radiohead");
 });
 
 test("library filters name what is showing and offer a reset", () => {
@@ -74,8 +77,45 @@ test("library filters name what is showing and offer a reset", () => {
   assert.match(appCss, /align-items:\s*flex-end/);
 });
 
+test("the default library nests albums and loose songs under artists", () => {
+  const tree = buildLibraryTree([
+    { id: 9, kind: "artist", title: "Nobody", music: { albums: [] } },
+    { id: 1, kind: "movie", title: "Dune" },
+    {
+      id: 2,
+      kind: "artist",
+      title: "Snail Mail",
+      music: {
+        albums: [
+          { title: "Valentine", year: 2021, tracks: [{ title: "Valentine", position: 1 }] },
+          { title: "Lush", year: 2018, tracks: [{ title: "Pristine", position: 1 }, { title: "Heat Wave", position: 2 }] },
+        ],
+      },
+    },
+    { id: 3, kind: "album", title: "Lush", creator: "Snail Mail", year: 2018 },
+    { id: 4, kind: "track", title: "Heat Wave", creator: "Snail Mail" },
+    { id: 5, kind: "track", title: "Mint", creator: "Snail Mail" },
+    { id: 6, kind: "track", title: "Let Down", creator: "Radiohead", album: "OK Computer" },
+    { id: 7, kind: "album", title: "OK Computer", creator: "Radiohead", year: 1997 },
+    { id: 8, kind: "track", title: "Orphan", creator: "" },
+  ]);
+  assert.equal(tree.rest.length, 1);
+  assert.equal(tree.rest[0].title, "Dune");
+  assert.deepEqual(tree.artists.map(artist => artist.name), ["Nobody", "Snail Mail", "Radiohead", "Unknown artist"]);
+  assert.equal(tree.artists[0].albums.length, 0);
+  assert.deepEqual(tree.artists[1].albums.map(album => album.title), ["Lush", "Valentine"]);
+  assert.equal(tree.artists[1].albums[0].item.id, 3);
+  assert.deepEqual(tree.artists[1].albums[0].songs.map(song => song.title), ["Pristine", "Heat Wave"]);
+  assert.equal(tree.artists[1].albums[0].songs[1].item.id, 4);
+  assert.deepEqual(tree.artists[1].songs.map(song => song.title), ["Mint"]);
+  assert.equal(tree.artists[2].albums[0].songs[0].item.id, 6);
+  assert.equal(tree.artists[3].songs[0].title, "Orphan");
+  assert.match(appSource, /if \(kind\) return libraryCards/);
+});
+
 test("library empty copy names the filter, and search stays quiet until two letters", () => {
   assert.equal(libraryEmptyCopy({}).title, "Your library is empty");
+  assert.equal(libraryEmptyCopy({}).primary, null);
   assert.equal(libraryEmptyCopy({ kind: "book", status: "dropped" }).title, "No books marked Dropped");
   assert.equal(libraryEmptyCopy({ q: "dune" }).title, "No matches for “dune”");
   assert.match(libraryEmptyCopy({ q: "dune" }).primary.label, /Search all of Media/);
@@ -104,6 +144,13 @@ test("episodes that have not aired cannot be marked watched in the UI", () => {
   assert.match(appSource, /has not aired yet/);
   assert.match(appSource, /Has not aired yet/);
   assert.match(appSource, /episode\.released === false && !episode\.watched/);
+});
+
+test("a watched episode button toggles off", () => {
+  assert.match(appSource, /function paintEpisodeWatch/);
+  assert.match(appSource, /watched \? "Unwatch" : "Mark watched"/);
+  assert.match(appSource, /aria-pressed"\) !== "true"/);
+  assert.match(appSource, /JSON\.stringify\(\{ watched \}\)/);
 });
 
 test("type scale and motion live in app.css", () => {

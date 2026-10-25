@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { UiCardComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { formatEstimate, formatStoredMoney } from '../shared/stored-money';
 import { PlanningInputsPreview, PlanningToolId, SpendingComponents } from '../models/planning.model';
 import {
@@ -20,7 +19,7 @@ import { AppDatePipe } from '../shared/pipes/app-date.pipe';
   selector: 'app-planning-quick-tools',
   standalone: true,
   imports: [
-    AppDatePipe, CommonModule, FormsModule, RouterLink, UiCardComponent, InfoTipComponent],
+    AppDatePipe, CommonModule, FormsModule, RouterLink, UiCardComponent],
   templateUrl: './planning-quick-tools.component.html',
   styleUrl: './planning-quick-tools.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

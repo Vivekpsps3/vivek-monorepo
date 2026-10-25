@@ -133,6 +133,45 @@ def test_episode_progress_survives_reload(client, monkeypatch):
     assert reloaded["episodes"][1]["watched"] is False
 
 
+def test_watched_episode_can_be_marked_unwatched(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
+    show = client.post(
+        "/api/library", json={"kind": "tv", "title": "Serial", "status": "in_progress"}
+    ).json()
+    added = client.post(
+        f"/api/entries/{show['id']}/episodes",
+        json={
+            "season_number": 1,
+            "episode_number": 1,
+            "title": "Pilot",
+            "air_date": "2026-10-01",
+        },
+    )
+    assert added.status_code == 200
+    episode = added.json()["show"]["episodes"][0]
+    marked = client.post(
+        f"/api/entries/{show['id']}/episodes/{episode['id']}/watched",
+        json={"watched": True, "watched_on": "2026-10-02"},
+    )
+    assert marked.status_code == 200
+    assert marked.json()["show"]["episodes"][0]["watched"] is True
+    assert marked.json()["show"]["watched_count"] == 1
+    cleared = client.post(
+        f"/api/entries/{show['id']}/episodes/{episode['id']}/watched",
+        json={"watched": False},
+    )
+    assert cleared.status_code == 200
+    row = cleared.json()["show"]["episodes"][0]
+    assert row["watched"] is False
+    assert row["watched_on"] is None
+    assert cleared.json()["show"]["watched_count"] == 0
+    assert cleared.json()["show"]["next_episode"]["id"] == episode["id"]
+    again = client.get(f"/api/entries/{show['id']}").json()["show"]
+    assert again["episodes"][0]["watched"] is False
+    assert again["episodes"][0]["watched_on"] is None
+    assert again["watched_count"] == 0
+
+
 def test_future_episode_cannot_be_marked_watched(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
     show = client.post(
@@ -364,19 +403,46 @@ def test_search_uses_a_cache_and_marks_saved_items(client, monkeypatch):
     assert marked["results"][0]["already_saved"] is True
 
 
-def test_scrape_mode_stays_off_until_asked(client, monkeypatch):
+def test_movie_search_reads_the_public_page_without_a_key(client, monkeypatch):
     def forbidden(*_args, **_kwargs):
-        raise AssertionError("public catalog was called")
+        raise AssertionError("keyed catalog was called")
 
+    def public(_http, query):
+        assert query == "inception"
+        return [
+            {
+                "source": "tmdb",
+                "source_id": "movie:27205",
+                "kind": "movie",
+                "title": "Inception",
+                "creator": None,
+                "year": 2010,
+                "overview": "A dream.",
+                "artwork_url": "https://image.tmdb.org/t/p/w342/poster.jpg",
+                "genres": [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [],
+                "episodes": [],
+            }
+        ]
+
+    monkeypatch.setattr("apps.media.backend.services.providers.tmdb_search", forbidden)
     monkeypatch.setattr("apps.media.backend.services.providers.itunes_search", forbidden)
     monkeypatch.setattr("apps.media.backend.services.providers.tvmaze_search", forbidden)
+    monkeypatch.setattr("apps.media.backend.services.providers.tmdb_public_search", public)
     found = client.get("/api/search", params={"q": "inception", "kind": "movie"})
     assert found.status_code == 200
     body = found.json()
-    assert body["results"] == []
-    assert body["providers"]["tmdb"] == "unconfigured"
+    assert body["results"][0]["title"] == "Inception"
+    assert body["results"][0]["artwork_url"].endswith("/poster.jpg")
+    assert body["providers"]["tmdb"] == "ok"
     assert "itunes" not in body["providers"]
-    assert "tvmaze" not in body["providers"]
+    saved = client.post(
+        "/api/library/from-provider", json={**body["results"][0], "status": "want"}
+    ).json()
+    assert saved["catalog"]["source"] == "tmdb"
+    assert saved["catalog"]["title"] == "Inception"
 
 
 def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client, monkeypatch):
@@ -484,6 +550,113 @@ def test_tvmaze_summary_is_plain_text():
     assert rows[0]["external_ratings"][0]["scale"] == "0–10"
     assert rows[0]["creator"] == "AMC"
     assert rows[0]["artwork_url"].startswith("https://")
+
+
+def test_series_and_games_search_without_keys(client, monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("keyed catalog was called")
+
+    def shows(_http, query):
+        assert query == "breaking bad"
+        return [
+            {
+                "source": "tvmaze",
+                "source_id": "169",
+                "kind": "tv",
+                "title": "Breaking Bad",
+                "creator": "AMC",
+                "year": 2008,
+                "overview": "A teacher.",
+                "artwork_url": "https://static.tvmaze.com/uploads/images/medium_portrait/0/2400.jpg",
+                "genres": ["Drama"],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [],
+                "episodes": [],
+            }
+        ]
+
+    def games(_http, query):
+        assert query == "hades"
+        return [
+            {
+                "source": "steam",
+                "source_id": "1145360",
+                "kind": "game",
+                "title": "Hades",
+                "creator": None,
+                "year": None,
+                "overview": None,
+                "artwork_url": (
+                    "https://shared.akamai.steamstatic.com/store_item_assets/"
+                    "steam/apps/1145360/capsule_231x87.jpg"
+                ),
+                "genres": [],
+                "external_ratings": [],
+                "extra": {"platforms": ["Windows"]},
+                "releases": [],
+                "episodes": [],
+            }
+        ]
+
+    monkeypatch.setattr("apps.media.backend.services.providers.tmdb_search", forbidden)
+    monkeypatch.setattr("apps.media.backend.services.providers.rawg_search", forbidden)
+    monkeypatch.setattr("apps.media.backend.services.providers.tvmaze_search", shows)
+    monkeypatch.setattr("apps.media.backend.services.providers.steam_search", games)
+    series = client.get("/api/search", params={"q": "breaking bad", "kind": "tv"}).json()
+    assert series["results"][0]["title"] == "Breaking Bad"
+    assert series["results"][0]["artwork_url"].startswith("https://static.tvmaze.com/")
+    assert series["providers"]["tvmaze"] == "ok"
+    assert series["providers"]["tmdb"] == "ok"
+    game = client.get("/api/search", params={"q": "hades", "kind": "game"}).json()
+    assert game["results"][0]["source"] == "steam"
+    assert game["results"][0]["artwork_url"].startswith("https://shared.akamai.steamstatic.com/")
+    assert game["providers"]["steam"] == "ok"
+    assert game["providers"]["rawg"] == "unconfigured"
+    saved = client.post(
+        "/api/library/from-provider", json={**game["results"][0], "status": "want"}
+    ).json()
+    assert saved["catalog"]["source"] == "steam"
+    assert saved["catalog"]["title"] == "Hades"
+
+
+def test_steam_search_keeps_title_and_capsule():
+    import httpx
+
+    from apps.media.backend.services.providers import steam_search
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "store.steampowered.com"
+        assert request.url.params["term"] == "hades"
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "type": "app",
+                        "name": "Hades",
+                        "id": 1145360,
+                        "tiny_image": (
+                            "https://shared.akamai.steamstatic.com/store_item_assets/"
+                            "steam/apps/1145360/capsule_231x87.jpg?t=1"
+                        ),
+                        "metascore": "93",
+                        "platforms": {"windows": True, "mac": True, "linux": False},
+                    },
+                    {"type": "bundle", "name": "Skip", "id": 1},
+                ]
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        rows = steam_search(http, "hades")
+    assert rows[0]["title"] == "Hades"
+    assert rows[0]["source_id"] == "1145360"
+    assert rows[0]["artwork_url"].endswith("capsule_231x87.jpg")
+    assert "?" not in rows[0]["artwork_url"]
+    assert rows[0]["external_ratings"] == []
+    assert rows[0]["extra"]["platforms"] == ["Windows", "Mac"]
+    assert len(rows) == 1
 
 
 def test_home_page_and_tokens_render_without_private_rows(client):

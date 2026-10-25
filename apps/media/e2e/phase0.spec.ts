@@ -19,7 +19,7 @@ test('hub and screen URLs redirect into the journal', async ({ page, request }) 
 
   await page.goto('/hub/media');
   await expect(page).toHaveURL(/\/media\/$/);
-  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
   await page.screenshot({ path: shot('after-hub-media.png'), fullPage: true });
 });
 
@@ -318,10 +318,10 @@ test('a slower library response cannot replace a newer screen', async ({ page })
   });
   await page.getByRole('navigation', { name: 'Media' }).getByRole('link', { name: 'Library', exact: true }).click();
   await page.getByRole('navigation', { name: 'Media' }).getByRole('link', { name: 'Now', exact: true }).click();
-  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
   await expect(page.locator('#library-q')).toHaveCount(0);
   await page.waitForTimeout(1200);
-  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
   await expect(page.locator('#library-q')).toHaveCount(0);
   await expect(page.locator('.nav [aria-current="page"]')).toHaveText('Now');
 });
@@ -481,7 +481,7 @@ test('a slow route shows a skeleton and a fast one does not flash', async ({ pag
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });
   await page.goto('/media/#/');
-  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __skeletonShown: boolean }).__skeletonShown)).toBe(false);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
 
@@ -495,7 +495,7 @@ test('a slow route shows a skeleton and a fast one does not flash', async ({ pag
   await expect(page.locator('.skeleton').first()).toBeVisible();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'true');
   await expect(page.locator('.skeleton-home')).toHaveAttribute('aria-hidden', 'true');
-  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
   await expect(page.locator('.skeleton')).toHaveCount(0);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
 });
@@ -655,7 +655,7 @@ test('media routes stay quiet under the enforced content security policy', async
   await page.goto('/media/#/search');
   await expect(page.getByRole('searchbox', { name: 'Search' })).toBeVisible();
   await page.goto('/media/#/');
-  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
   await page.goto('/media/#/library');
   await page.getByRole('link', { name: /Dune/ }).click();
   await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();

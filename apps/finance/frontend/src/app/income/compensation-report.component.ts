@@ -8,17 +8,16 @@ import { JobIncome } from '../models/transaction.model';
 import { compensationByEmployer, EmployerCompensation, isValidIsoDate } from '../utils/job-compensation.util';
 import { todayIsoDate } from '@vivek/browser';
 import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 
 @Component({
   selector: 'app-compensation-report',
   standalone: true,
   imports: [
-    MoneyPipe, CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, InfoTipComponent],
+    MoneyPipe, CommonModule, FormsModule, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent],
   template: `
     <ui-card [title]="'Total compensation by employer'">
-      <app-info-tip uiCardActions align="end" label="Compensation estimate" text="Read-only. Edit jobs in Jobs and pay. Gross pay is prorated by employment dates. Dated payments count once. ESPP excludes your purchase contributions. Equity counts grant value and that year's gain; later years count only the gain or loss. Sold shares use locked proceeds. Unsold shares use the latest price on or before the selected date. Stock values do not change recurring pay or net worth." />
+
       <div class="form-row">
         <label class="form-group">
           <span>Calendar year</span>
@@ -33,7 +32,7 @@ import { MoneyPipe } from '../shared/pipes/money.pipe';
         <div class="form-group">
           <span>
             <label for="compensation-start">From</label>
-            <app-info-tip label="From date" text="Leave blank for all history." />
+
           </span>
           <input id="compensation-start" name="compensation_start" type="date" [(ngModel)]="start" (ngModelChange)="customRangeChanged()" />
         </div>

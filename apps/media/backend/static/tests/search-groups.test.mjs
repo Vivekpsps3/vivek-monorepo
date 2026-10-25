@@ -22,3 +22,21 @@ test("a missing movie key says movies, series and games, and hides a healthy cat
   assert.equal(affectedSentence({ openlibrary: "ok", musicbrainz: "ok" }), "");
   assert.equal(affectedSentence({ openlibrary: "error" }), "Books can't be searched right now.");
 });
+
+test("a healthy keyless catalog covers the type a missing key used to block", () => {
+  assert.equal(
+    affectedSentence({
+      tmdb: "unconfigured",
+      tvmaze: "ok",
+      rawg: "unconfigured",
+      steam: "ok",
+      openlibrary: "ok",
+      musicbrainz: "ok",
+    }),
+    "Movies can't be searched right now.",
+  );
+  assert.equal(
+    affectedSentence({ tmdb: "ok", tvmaze: "ok", rawg: "unconfigured", steam: "ok" }),
+    "",
+  );
+});

@@ -5,7 +5,7 @@
   />
 
   <ui-card [title]="'Your current facts'">
-    <app-info-tip uiCardActions align="end" label="Planning disclaimer" [text]="disclaimer" />
+
     <div class="planning-facts-grid">
       <div>
         <span>Current net worth</span>
@@ -89,7 +89,7 @@
   @if (!loading) {
     @if (showSpendingPlan()) {
     <ui-card [title]="'Annual spending plan'">
-      <app-info-tip uiCardActions align="end" label="Spending plan" text="Fixed, variable, and irregular costs. A ledger estimate is optional and enters the plan only after you accept it." />
+
       @if (showVariableCostWarning()) {
         <p class="mc-callout mc-cost-warning" role="status">This basis may omit variable card purchases. Active recurring schedules cover fixed expenses and subscriptions; they do not include your transaction history. Add a realistic variable amount under “Fixed + variable + irregular components” or enter one manual annual total.</p>
       }
@@ -106,7 +106,7 @@
       @if (spendingMode === 'components') {
         <div class="mc-control-grid">
           <label class="mc-field">
-            <span>Fixed annual spending <app-info-tip label="Fixed annual spending" text="Recurring fixed expenses and subscriptions. Editable estimate." /></span>
+            <span>Fixed annual spending </span>
             <input aria-label="Fixed annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.fixed_annual" (ngModelChange)="setSpendingComponent('fixed_annual', $event)" />
           </label>
           <label class="mc-field">
@@ -114,7 +114,7 @@
             <input aria-label="Variable annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.variable_annual" (ngModelChange)="setSpendingComponent('variable_annual', $event)" />
           </label>
           <label class="mc-field">
-            <span>Irregular annual spending <app-info-tip label="Irregular annual spending" text="Annualized one-off costs such as repairs or travel." /></span>
+            <span>Irregular annual spending </span>
             <input aria-label="Irregular annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.irregular_annual" (ngModelChange)="setSpendingComponent('irregular_annual', $event)" />
           </label>
         </div>
@@ -127,7 +127,7 @@
       }
 
       <details class="spending-suggestion-details">
-        <summary>Suggest variable spending from the last three completed months <app-info-tip label="Coverage required" [text]="'Every selected account needs confirmed, complete receipt coverage for ' + spendingPeriod.start + ' through ' + spendingPeriod.end + '. Partial, staged, failed, and withdrawn imports do not count.'" /></summary>
+        <summary>Suggest variable spending from the last three completed months </summary>
         <fieldset class="spending-choice-group">
           <legend>Accounts</legend>
           @if (!spendingAccounts.length) {
@@ -179,9 +179,11 @@
         } @else {
           <p class="muted" role="status">Choose at least one confirmed account and category, then provide complete receipt coverage before a suggestion is available.</p>
         }
-        <ui-button variant="primary" ariaLabel="Accept spending suggestion" [disabled]="!spendingSuggestion.canSuggest || acceptingSpendingSuggestion" (clicked)="acceptSpendingSuggestion()">
-          {{ acceptingSpendingSuggestion ? 'Saving accepted estimate…' : 'Accept and save estimate' }}
-        </ui-button>
+        <div class="mc-inline-actions">
+          <ui-button variant="primary" size="sm" ariaLabel="Accept spending suggestion" [disabled]="!spendingSuggestion.canSuggest || acceptingSpendingSuggestion" (clicked)="acceptSpendingSuggestion()">
+            {{ acceptingSpendingSuggestion ? 'Saving accepted estimate…' : 'Accept and save estimate' }}
+          </ui-button>
+        </div>
       </details>
     </ui-card>
     }
@@ -204,9 +206,6 @@
             <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>
           </div>
         </ui-card>
-        <ui-card [title]="'Useful tools'">
-          <app-info-tip uiCardActions align="end" label="Spending basis" text="These tools use the selected spending basis. Saved manual totals remain in older profiles." />
-        </ui-card>
       }
       <app-planning-quick-tools
         [activeTool]="activeTool"
@@ -219,7 +218,7 @@
 
     @if (activeTool === 'simulation') {
     <ui-card [title]="'Saved inputs'">
-      <app-info-tip uiCardActions align="end" label="Saved inputs" text="Simulations are not stored. Only these input presets are saved." />
+
       <div class="mc-profiles-row">
         <label class="mc-field">
           <span>Load saved inputs</span>
@@ -237,20 +236,24 @@
             <span class="mc-field-error">{{ savedInputError }}</span>
           }
         </label>
-        <ui-button
-          variant="secondary"
-          (clicked)="saveSavedInputs()"
-          [disabled]="savingProfile"
-        >
-          {{ selectedProfileId != null ? 'Update' : 'Save' }}
-        </ui-button>
-        <ui-button
-          variant="ghost"
-          (clicked)="deleteSelectedProfile()"
-          [ariaDisabled]="selectedProfileId === null"
-          [describedBy]="selectedProfileId === null ? 'delete-saved-inputs-hint' : undefined">
-          Delete
-        </ui-button>
+        <div class="mc-inline-actions">
+          <ui-button
+            variant="secondary"
+            size="sm"
+            (clicked)="saveSavedInputs()"
+            [disabled]="savingProfile"
+          >
+            {{ selectedProfileId != null ? 'Update' : 'Save' }}
+          </ui-button>
+          <ui-button
+            variant="ghost"
+            size="sm"
+            (clicked)="deleteSelectedProfile()"
+            [ariaDisabled]="selectedProfileId === null"
+            [describedBy]="selectedProfileId === null ? 'delete-saved-inputs-hint' : undefined">
+            Delete
+          </ui-button>
+        </div>
         @if (selectedProfileId === null) {
           <small id="delete-saved-inputs-hint" class="mc-field-hint">Choose saved inputs to delete.</small>
         }
@@ -292,7 +295,7 @@
               <input type="number" min="1" max="80" [(ngModel)]="horizonYears" />
             </label>
             <label class="mc-field">
-              <span>Paths <app-info-tip label="Simulation paths" [text]="'Up to ' + mcNPathsMax + ' paths are simulated. The chart keeps ' + mcFanPathsPersistMax + ' samples.'" /></span>
+              <span>Paths </span>
               <input
                 type="number"
                 [min]="mcNPathsMin"
@@ -314,7 +317,7 @@
             <span>Use ledger net worth at start</span>
           </label>
           <label class="mc-field">
-            <span>Starting net worth <app-info-tip label="Starting net worth" text="Simulation only. Does not change your balance sheet." /></span>
+            <span>Starting net worth </span>
             <input
               type="number"
               step="1000"
@@ -330,16 +333,15 @@
         </ui-card>
 
         <ui-card [title]="'Add a what-if change'">
-          <app-info-tip uiCardActions align="end" label="What-if amounts" text="Amounts start at $0. Enter the expected cost or missed take-home pay." />
-          <div class="mc-secondary-action-wrap">
-            <ui-button variant="secondary" (clicked)="addScenarioTemplate('car-purchase')">Car purchase</ui-button>
-            <ui-button variant="secondary" (clicked)="addScenarioTemplate('time-off')">Time off</ui-button>
+          <div uiCardActions class="mc-inline-actions">
+            <ui-button variant="secondary" size="sm" (clicked)="addScenarioTemplate('car-purchase')">Car purchase</ui-button>
+            <ui-button variant="secondary" size="sm" (clicked)="addScenarioTemplate('time-off')">Time off</ui-button>
           </div>
         </ui-card>
 
         @if (assumptions.annual_cashflow_events.length) {
           <ui-card [title]="'What-if changes'">
-            <app-info-tip uiCardActions align="end" label="What-if sign" text="Costs and missed pay are negative. New changes affect the scenario. Timing and scope are under advanced assumptions." />
+
             <div class="mc-list">
               @for (event of assumptions.annual_cashflow_events; track trackByIndex($index)) {
                 <div class="mc-editor-row">
@@ -388,7 +390,7 @@
             <span>Use one total annual cashflow instead</span>
           </label>
           <label class="mc-field">
-            <span>Total annual cashflow <app-info-tip label="Total annual cashflow" text="Positive adds to savings. Negative withdraws. Replaces income less spending and any older additional contribution." /></span>
+            <span>Total annual cashflow </span>
             <input
               type="number"
               step="1000"
@@ -402,7 +404,7 @@
             }
           </label>
           <label class="mc-field">
-            <span>Additional annual contribution <app-info-tip label="Additional contribution" text="Kept for older saved inputs. Added to income less spending only when the total annual cashflow override is off." /></span>
+            <span>Additional annual contribution </span>
             <input type="number" step="1000" [(ngModel)]="assumptions.extra_contributions.annual_contribution" />
           </label>
 
@@ -509,6 +511,9 @@
         </ui-card>
 
         <ui-card [title]="'Goals'">
+          <div uiCardActions class="mc-inline-actions">
+            <ui-button variant="secondary" size="sm" (clicked)="addCheckpoint()">Add checkpoint</ui-button>
+          </div>
           <div class="mc-list">
             @for (checkpoint of assumptions.checkpoints; track trackByIndex($index)) {
               <div class="mc-editor-row">
@@ -545,13 +550,13 @@
               </div>
             }
           </div>
-          <div class="mc-secondary-action-wrap">
-            <ui-button variant="secondary" (clicked)="addCheckpoint()">Add checkpoint</ui-button>
-          </div>
         </ui-card>
 
         <ui-card [title]="'Future events'">
-          <app-info-tip uiCardActions align="end" label="Future events" text="Year 1 is the first year after today. Amount is per occurrence and sums into that year; negative is an outflow. Every N years: 1 yearly, 2 every two years, 0.5 twice a year. Templates start at $0 and apply to the scenario only." />
+          <div uiCardActions class="mc-inline-actions">
+            <ui-button variant="secondary" size="sm" (clicked)="addEvent()">Add event</ui-button>
+          </div>
+
           <div class="mc-list">
             @for (event of assumptions.annual_cashflow_events; track trackByIndex($index)) {
               <div class="mc-editor-row">
@@ -584,7 +589,7 @@
                     />
                   </label>
                   <label class="mc-field">
-                    <span>Through year <app-info-tip label="Through year" text="Leave empty to run through the end of the horizon." /></span>
+                    <span>Through year </span>
                     <input
                       type="number"
                       min="1"
@@ -594,7 +599,7 @@
                     />
                   </label>
                   <label class="mc-field">
-                    <span>Every N years <app-info-tip label="Event interval" text="1 is yearly, 2 is every two years, 0.5 is twice a year." /></span>
+                    <span>Every N years </span>
                     <input
                       type="number"
                       min="0.25"
@@ -611,15 +616,14 @@
               </div>
             }
           </div>
-          <div class="mc-secondary-action-wrap">
-            <ui-button variant="secondary" (clicked)="addEvent()">Add event</ui-button>
-          </div>
         </ui-card>
         </details>
 
-        <ui-button variant="primary" [disabled]="running" (clicked)="runSimulation()">
-          {{ running ? 'Running' : 'Run' }}
-        </ui-button>
+        <div class="mc-run-row">
+          <ui-button variant="primary" [disabled]="running" (clicked)="runSimulation()">
+            {{ running ? 'Running' : 'Run' }}
+          </ui-button>
+        </div>
       </aside>
 
       <app-planning-results

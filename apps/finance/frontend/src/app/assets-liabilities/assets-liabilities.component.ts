@@ -34,7 +34,6 @@ import { FormatCategoryPipe } from '../shared/pipes/format-category.pipe';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 import { dialogSaveAlert, errorSummary, fieldMessage, focusDialogAlert, focusField, focusFirstInvalid } from '../shared/form-validation';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { portfolioDateSummary } from '../utils/portfolio.util';
 
 @Component({
@@ -57,7 +56,6 @@ import { portfolioDateSummary } from '../utils/portfolio.util';
     FormatCategoryPipe,
     MoneyPipe,
     AppDatePipe,
-    InfoTipComponent,
   ],
   templateUrl: './assets-liabilities.component.html',
   styleUrl: './assets-liabilities.component.css',

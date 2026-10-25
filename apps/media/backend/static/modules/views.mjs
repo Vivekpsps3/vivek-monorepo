@@ -113,7 +113,6 @@ export function noteCountText(text) {
   return `${length.toLocaleString("en-US")} / 20,000`;
 }
 
-/** Clicking a song keeps the artist in the center of Related. */
 export function graphCenter(artist) {
   return artist || "";
 }
@@ -160,13 +159,134 @@ export function libraryEmptyCopy({ kind = "", status = "", q = "" } = {}) {
   return {
     title: "Your library is empty",
     body: "Save things you've watched, read, played or want to.",
-    primary: { href: "#/search", label: "Find something to add" },
+    primary: null,
     secondary: null,
   };
 }
 
 export function libraryEmptyHtml(filters) {
   return emptyState(libraryEmptyCopy(filters));
+}
+
+const LIBRARY_MUSIC = new Set(["artist", "album", "track"]);
+
+function libraryKey(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function albumTitleOf(item) {
+  const extra = item?.extra && typeof item.extra === "object" ? item.extra : {};
+  return String(item?.album || item?.album_title || extra.album || extra.album_title || "").trim();
+}
+
+function ensureArtist(artists, name, index) {
+  const label = String(name || "").trim() || "Unknown artist";
+  const key = libraryKey(label);
+  let node = artists.get(key);
+  if (!node) {
+    node = { key, name: label, item: null, order: index, albums: new Map(), songs: [] };
+    artists.set(key, node);
+  } else if (index < node.order) node.order = index;
+  return node;
+}
+
+function ensureAlbum(artist, title, year) {
+  const label = String(title || "").trim() || "Untitled";
+  const key = libraryKey(label);
+  let album = artist.albums.get(key);
+  if (!album) {
+    album = { key, title: label, year: year ?? null, item: null, songs: [] };
+    artist.albums.set(key, album);
+  } else if (album.year == null && year != null) album.year = year;
+  return album;
+}
+
+function addSong(list, song) {
+  const key = libraryKey(song.title);
+  const open = list.find(row => libraryKey(row.title) === key && !row.item);
+  if (song.item && open) {
+    open.item = song.item;
+    if (open.rating == null) open.rating = song.rating;
+    return;
+  }
+  if (!song.item && list.some(row => libraryKey(row.title) === key)) return;
+  if (song.item && list.some(row => row.item && row.item.id === song.item.id)) return;
+  list.push(song);
+}
+
+export function buildLibraryTree(items) {
+  const rest = [];
+  const artists = new Map();
+  const artistItems = [];
+  const albumItems = [];
+  const trackItems = [];
+  (items || []).forEach((item, index) => {
+    if (!item) return;
+    if (item.kind === "artist") artistItems.push([item, index]);
+    else if (item.kind === "album") albumItems.push([item, index]);
+    else if (item.kind === "track") trackItems.push([item, index]);
+    else if (!LIBRARY_MUSIC.has(item.kind)) rest.push(item);
+  });
+  artistItems.forEach(([item, index]) => {
+    const artist = ensureArtist(artists, item.title, index);
+    if (!artist.item) artist.item = item;
+    (item.music?.albums || []).forEach(album => {
+      const node = ensureAlbum(artist, album.title, album.year);
+      (album.tracks || []).forEach((track, trackIndex) => {
+        addSong(node.songs, {
+          title: track.title || "Untitled",
+          item: null,
+          rating: track.rating,
+          position: track.position ?? trackIndex,
+        });
+      });
+    });
+  });
+  albumItems.forEach(([item, index]) => {
+    const artist = ensureArtist(artists, item.creator, index);
+    const node = ensureAlbum(artist, item.title, item.year);
+    if (!node.item) node.item = item;
+  });
+  trackItems.forEach(([item, index]) => {
+    const artist = ensureArtist(artists, item.creator, index);
+    const song = {
+      title: item.title || "Untitled",
+      item,
+      rating: item.rating,
+      position: item.position ?? 9999,
+    };
+    const albumName = albumTitleOf(item);
+    if (albumName) {
+      addSong(ensureAlbum(artist, albumName, null).songs, song);
+      return;
+    }
+    const matches = [...artist.albums.values()].filter(album => (
+      album.songs.some(row => libraryKey(row.title) === libraryKey(song.title))
+    ));
+    if (matches.length === 1) addSong(matches[0].songs, song);
+    else artist.songs.push(song);
+  });
+  const ordered = [...artists.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  return {
+    artists: ordered.map(artist => ({
+      name: artist.name,
+      item: artist.item,
+      albums: [...artist.albums.values()]
+        .sort((a, b) => {
+          if ((a.year == null) !== (b.year == null)) return a.year == null ? 1 : -1;
+          if (a.year != null && b.year != null && a.year !== b.year) return a.year - b.year;
+          return a.title.localeCompare(b.title);
+        })
+        .map(album => ({
+          title: album.title,
+          year: album.year,
+          item: album.item,
+          songs: [...album.songs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.title.localeCompare(b.title)),
+        })),
+      songs: artist.songs,
+    })),
+    rest,
+  };
 }
 
 export const LIBRARY_PAGE_SIZE = 60;

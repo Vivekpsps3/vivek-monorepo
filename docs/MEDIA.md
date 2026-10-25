@@ -37,17 +37,18 @@ The movie title and year are sent to Wikidata, and to TMDB when a key is set. Ep
 
 | Provider | Needs a key | Used for |
 | --- | --- | --- |
-| TMDB | `TMDB_API_KEY` | Movies and series. Poster and vote average on TMDB’s 0–10 scale. |
-| TVMaze | No. Search only when `MEDIA_SCRAPE_MODE` is on | Series search. The calendar also refreshes episodes for a show already saved from TVMaze. |
-| iTunes Search | No, and only when `MEDIA_SCRAPE_MODE` is on | Movies. Artwork and description. No critic score. |
+| TMDB | `TMDB_API_KEY` for the official API. Movie search still works without it by reading TMDB’s public search page. | Movies and series when a key is set. Movies only, from the public page, when it is not. Poster. Vote average on TMDB’s 0–10 scale comes from the official API. |
+| TVMaze | No | Series search. The calendar also refreshes episodes for a show already saved from TVMaze. |
+| iTunes Search | No, and only when `MEDIA_SCRAPE_MODE` is on | Extra movie results. Artwork and description. No critic score. |
+| Steam store search | No | Games when `RAWG_API_KEY` is not set. Title and capsule image. No Metacritic score. |
 | MusicBrainz | No | Artists, songs, and albums. Following an artist loads that artist's studio albums and songs. No key. |
 | Cover Art Archive | No | Album artwork, addressed by MusicBrainz release id. |
 | Open Library | No | Books and covers. |
-| RAWG | `RAWG_API_KEY` | Games. Rating stays on RAWG’s 0–5 scale. |
+| RAWG | `RAWG_API_KEY` | Games when the key is set. Rating stays on RAWG’s 0–5 scale. |
 
 Keys stay on the server. The browser never receives them. Provider failures leave saved entries readable. Rotten Tomatoes, Metacritic, Spotify, and IGDB are not used.
 
-`MEDIA_SCRAPE_MODE=1` is optional and off by default. When it is on, movie and series search also calls TVMaze and the iTunes Search API. Those are public catalog APIs, not page scrapers. A TMDB result for the same title and year is kept and the public duplicate is dropped. Turning the flag off leaves manual entry and the other providers unchanged. It does not stop the calendar from refreshing a show you already saved from TVMaze.
+Series search calls TVMaze with no key. Movie search calls TMDB’s official API when `TMDB_API_KEY` is set, and otherwise reads TMDB’s public search page for the title and poster. Game search calls RAWG when `RAWG_API_KEY` is set, and otherwise calls Steam’s public store search. `MEDIA_SCRAPE_MODE=1` is optional and off by default. When it is on, movie search also calls the iTunes Search API. A TMDB result for the same title and year is kept and the iTunes duplicate is dropped. Turning the flag off leaves TVMaze, the public movie page, and Steam search in place. It does not stop the calendar from refreshing a show you already saved from TVMaze.
 
 Wikidata is used only for the calendar follow-up lookup above. It does not need a key. It is not used for search.
 

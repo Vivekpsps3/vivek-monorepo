@@ -218,23 +218,23 @@ h3 {
     gap: var(--space-2);
   }
 
-  td.actions ui-button {
-    flex: 1 1 8rem;
+  td.actions ui-button,
+  .modal-actions ui-button {
+    flex: 0 1 auto;
+    width: auto;
   }
 
   td.actions ::ng-deep .ui-btn,
   .modal-actions ::ng-deep .ui-btn,
   :host ::ng-deep .ui-empty__action .ui-btn {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     min-height: 44px;
   }
 
   .modal-actions {
-    flex-direction: column-reverse;
-    align-items: stretch;
-  }
-
-  .modal-actions ui-button {
-    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
   }
 }

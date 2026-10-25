@@ -50,7 +50,6 @@ import {
   UiDataTableComponent,
   UiDialogComponent,
 } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { PluralPipe } from '../shared/pipes/plural.pipe';
 
@@ -70,7 +69,6 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiEmptyStateComponent,
     UiDataTableComponent,
     UiDialogComponent,
-    InfoTipComponent,
   ],
   templateUrl: './portfolio.component.html',
   styleUrl: './portfolio.component.css',

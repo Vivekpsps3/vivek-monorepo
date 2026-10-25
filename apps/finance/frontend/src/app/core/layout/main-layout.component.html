@@ -57,7 +57,7 @@
           <button type="button" (click)="lockVault()">Lock vault</button>
           <button type="button" (click)="logout()">Sign out</button>
           <button type="button" class="danger" [disabled]="isResettingData" (click)="clearMyData()">Clear data</button>
-          <app-info-tip class="account-popover__note" label="Price checks" text="Price checks send ticker symbols to the market service. Shares, balances, and saved plans stay in this browser." />
+          <p class="account-popover__note">Price checks send ticker symbols to the market service. Shares, balances, and saved plans stay in this browser.</p>
         </div>
       </details>
     </div>
@@ -99,7 +99,7 @@
     <ui-card class="market-banner-card" padding="none">
       <div class="market-banner" [class.market-banner--error]="marketState.phase === 'partial' || marketState.phase === 'failed'" role="status" aria-live="polite">
         <div class="market-banner__copy">
-          <strong>{{ marketRefreshMessage }} <app-info-tip label="Price checks" [text]="marketRefreshDisclosure" /></strong>
+          <strong>{{ marketRefreshMessage }} </strong>
           @if (marketState.failures.length) {
             <ul class="market-banner__failures">
               @for (failure of marketState.failures; track $index) {

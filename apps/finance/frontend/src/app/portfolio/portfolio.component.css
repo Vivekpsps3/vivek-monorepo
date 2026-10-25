@@ -599,9 +599,15 @@ details.account-sub[open] > summary::before {
     align-items: stretch;
   }
 
+  .symbol-check {
+    flex-direction: row;
+    align-items: center;
+  }
+
   .symbol-check ui-button,
   .account-chip {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
   }
 
   .fidelity-preview-table,
@@ -632,15 +638,18 @@ details.account-sub[open] > summary::before {
   }
 
   .form-actions {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
   }
 
   td.actions ui-button,
   .form-actions ui-button,
   .symbol-check ui-button,
   .resume-stage ui-button {
-    flex: 1 1 auto;
-    width: 100%;
+    flex: 0 1 auto;
+    width: auto;
   }
 
   td.actions ::ng-deep .ui-btn,
@@ -649,7 +658,8 @@ details.account-sub[open] > summary::before {
   .resume-stage ::ng-deep .ui-btn,
   .account-label ::ng-deep .ui-btn,
   :host ::ng-deep .ui-empty__action .ui-btn {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     min-height: 44px;
   }
 

@@ -230,6 +230,114 @@ def test_manual_album_artwork_url_must_be_http(client):
     assert album["artwork_url"] == "https://example.invalid/cover.png"
 
 
+def test_album_search_uses_the_release_group_cover():
+    class Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class Client:
+        def get(self, url, params=None):
+            assert url.endswith("/release")
+            return Response(
+                {
+                    "releases": [
+                        {
+                            "id": "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe",
+                            "title": "petal",
+                            "date": "2026-07-31",
+                            "artist-credit": [{"name": "Ariana Grande"}],
+                            "release-group": {
+                                "id": "2b8f453f-ffd6-4860-8742-7cff1c2feae3",
+                                "title": "petal",
+                            },
+                        }
+                    ]
+                }
+            )
+
+    from typing import cast
+
+    import httpx
+
+    from apps.media.backend.services.providers import musicbrainz_search
+
+    rows = musicbrainz_search(cast(httpx.Client, Client()), "petal ariana grande", "album")
+    assert rows[0]["title"] == "petal"
+    assert rows[0]["extra"]["release_group_id"] == "2b8f453f-ffd6-4860-8742-7cff1c2feae3"
+    assert (
+        rows[0]["artwork_url"]
+        == "https://coverartarchive.org/release-group/2b8f453f-ffd6-4860-8742-7cff1c2feae3/front-250"
+    )
+
+
+def test_imported_album_lists_its_songs(client, monkeypatch):
+    calls = {"n": 0}
+
+    def detail(_http, release_id):
+        calls["n"] += 1
+        assert release_id == "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe"
+        return {
+            "release_group_id": "2b8f453f-ffd6-4860-8742-7cff1c2feae3",
+            "artwork_url": "https://coverartarchive.org/release-group/2b8f453f-ffd6-4860-8742-7cff1c2feae3/front-250",
+            "tracks": [
+                {
+                    "source_id": "b7dc9ce7-92cd-4da3-88b3-088904a92564",
+                    "title": "kiss me",
+                    "position": 1,
+                },
+                {
+                    "source_id": "84e20513-d08a-4682-8908-7d31e5d6be58",
+                    "title": "petal",
+                    "position": 3,
+                },
+            ],
+        }
+
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_release_detail", detail)
+    created = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe",
+            "kind": "album",
+            "title": "petal",
+            "creator": "Ariana Grande",
+            "year": 2026,
+            "artwork_url": "https://coverartarchive.org/release/0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe/front-250",
+            "extra": {"release_group_id": "2b8f453f-ffd6-4860-8742-7cff1c2feae3"},
+            "status": "want",
+        },
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert calls["n"] == 1
+    assert body["rating"] is None
+    assert (
+        body["artwork_url"]
+        == "https://coverartarchive.org/release-group/2b8f453f-ffd6-4860-8742-7cff1c2feae3/front-250"
+    )
+    tracks = body["music"]["albums"][0]["tracks"]
+    assert [track["title"] for track in tracks] == ["kiss me", "petal"]
+    rated = client.post(
+        f"/api/entries/{body['id']}/tracks/{tracks[0]['id']}/rating",
+        json={"rating": 8},
+    ).json()
+    assert rated["rating"] is None
+    assert rated["music"]["albums"][0]["tracks"][0]["rating"] == 8
+    again = client.get(f"/api/entries/{body['id']}").json()
+    assert calls["n"] == 1
+    assert [track["title"] for track in again["music"]["albums"][0]["tracks"]] == [
+        "kiss me",
+        "petal",
+    ]
+
+
 def test_disc_two_keeps_its_place_in_the_song_order():
     from apps.media.backend.services.providers import _tracks_from_release
 

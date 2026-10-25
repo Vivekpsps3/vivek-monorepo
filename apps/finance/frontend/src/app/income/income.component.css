@@ -199,9 +199,19 @@
   .tax-helper__result,
   .history-heading,
   .form-actions,
+  .tax-helper__actions,
   .stock-quote-controls__actions {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .form-actions,
+  .tax-helper__actions {
+    justify-content: flex-end;
+  }
+
+  .history-heading {
+    justify-content: space-between;
   }
 
   .tax-helper__actions ui-button,
@@ -211,7 +221,8 @@
   .stock-quote-controls__actions ::ng-deep .ui-btn,
   :host ::ng-deep .header-actions .ui-btn,
   :host ::ng-deep td.actions .ui-btn {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     min-height: 44px;
   }
 

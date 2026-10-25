@@ -23,7 +23,6 @@ import {
   UiIconComponent,
   UiPageHeaderComponent,
 } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { totalPortfolioValue } from '../utils/portfolio.util';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import {
@@ -75,7 +74,6 @@ type ChartConstructor = new (
     UiDataTableComponent,
     UiEmptyStateComponent,
     UiIconComponent,
-    InfoTipComponent,
   ],
   templateUrl: './investment-insights.component.html',
   styleUrl: './investment-insights.component.css',

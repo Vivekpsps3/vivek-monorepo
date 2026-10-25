@@ -2,9 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'">
-    <app-info-tip
-      label="Activity and net worth"
-      [text]="typeFilter === 'income' ? 'Recorded deposits and scheduled work income for the selected period. This view does not change net worth.' : 'Card and bank activity. This list does not change net worth.'" />
+
     <div uiPageActions class="header-actions">
       <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
       <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
@@ -57,7 +55,7 @@
 
   @if (typeFilter === 'income') {
     <ui-card [title]="'Work income'">
-      <app-info-tip uiCardActions align="end" label="Work income" text="Read-only for the selected dates. Search, account, merchant, and category filters do not apply. Combined income is recorded income plus scheduled work income plus the overlap adjustment. That adjustment applies when recorded and projected income are within 20%, and it is not assigned to a paycheck." />
+
       @let cashflow = workIncomeSummary;
       @if (workIncomeLoading) {
         <p class="work-income-note" role="status">Loading job income and recorded activity for this period…</p>
@@ -473,7 +471,7 @@
               [disabled]="importWorkflow.importParsing"
               (valueChange)="importWorkflow.onImportBankSelectionChange(entry, $event)" />
             @if (importWorkflow.importBank(entry.bank_slug); as bank) {
-              <app-info-tip [label]="'About ' + bank.name" [text]="bank.hint" />
+
               <label class="form-group import-account-picker">
                 <span>Account identity for this file</span>
                 <select [value]="entry.bank_account_id || ''" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onImportAccountChange(entry, $any($event.target).value)">
@@ -494,12 +492,12 @@
                   <label class="check-label">
                     <input type="checkbox" [checked]="entry.map_legacy_account === true" [name]="'map-legacy-account-' + entry.id" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onLegacyAccountMappingChange(entry, $any($event.target).checked)" />
                     Map matching legacy transactions to this account
-                    <app-info-tip label="Legacy account mapping" text="Matches only unassigned transactions from this bank with the same date, amount, and description. Other account identities stay separate." />
+
                   </label>
                 </div>
               }
               <div class="import-coverage">
-                <strong>Statement coverage <app-info-tip label="Statement coverage" text="Coverage counts after you confirm the statement dates." /></strong>
+                <strong>Statement coverage </strong>
                 <label>From <input type="date" [(ngModel)]="entry.coverage_start" [name]="'coverage-start-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
                 <label>Through <input type="date" [(ngModel)]="entry.coverage_end" [name]="'coverage-end-' + entry.id" [disabled]="importWorkflow.importParsing" /></label>
                 <label class="check-label">
@@ -526,7 +524,7 @@
         {{ importWorkflow.importSummary.duplicate }} duplicate ({{ importWorkflow.importSummary.total_parsed }} parsed).
         {{ importWorkflow.importSummary.skipped }} skipped; {{ importWorkflow.importSummary.errors | plural:'row' }} need fixing.
         Selected {{ importWorkflow.selectedImportCount }} · {{ importWorkflow.selectedImportExpenseTotal | money }}.
-        <app-info-tip label="Duplicate rows" text="Duplicates include transactions already saved and overlapping rows across these files. Files with errors stay listed. Valid rows can still be imported." />
+
       </p>
       @if (importReceipts.length > 0) {
         <details class="import-history">
@@ -651,7 +649,7 @@
                     </ul>
                   </details>
                 }
-                <app-info-tip label="Flagged rows" text="Valid rows can still be imported. Fix flagged rows in the CSV and use Back to re-preview." />
+
               </div>
             }
 

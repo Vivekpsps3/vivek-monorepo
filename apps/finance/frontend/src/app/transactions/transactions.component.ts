@@ -56,7 +56,6 @@ import {
   UiDataTableComponent,
   UiDialogComponent,
 } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 import { PluralPipe } from '../shared/pipes/plural.pipe';
@@ -80,7 +79,6 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiDataTableComponent,
     UiDialogComponent,
     RouterLink,
-    InfoTipComponent,
   ],
   templateUrl: './transactions.component.html',
   styleUrl: './transactions.component.css',
@@ -580,7 +578,6 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   get canBulkRenameCategories(): boolean {
     return this.validBulkRenameRows.length > 0 && !this.categoryMergeSaving;
   }
-
 
   openImportModal() {
     if (this.importWorkflow.importCommitting) return;

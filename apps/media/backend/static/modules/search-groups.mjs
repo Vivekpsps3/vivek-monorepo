@@ -5,6 +5,7 @@ const PROVIDER_TYPES = {
   tvmaze: ["series"],
   itunes: ["movies"],
   rawg: ["games"],
+  steam: ["games"],
   openlibrary: ["books"],
   musicbrainz: ["albums", "artists", "songs"],
 };
@@ -28,11 +29,19 @@ export function orderGroups(results, query) {
 
 /** Hidden when every provider is ok. Names the affected types, never the provider. */
 export function affectedSentence(providers) {
+  const healthy = new Set();
+  for (const [name, state] of Object.entries(providers || {})) {
+    if (!state || state === "ok") {
+      for (const word of PROVIDER_TYPES[name] || []) healthy.add(word.toLowerCase());
+    }
+  }
   const words = [];
   for (const [name, state] of Object.entries(providers || {})) {
     if (!state || state === "ok") continue;
     for (const word of PROVIDER_TYPES[name] || []) {
-      if (!words.includes(word)) words.push(word);
+      if (healthy.has(word.toLowerCase())) continue;
+      if (words.some(existing => existing.toLowerCase() === word.toLowerCase())) continue;
+      words.push(word);
     }
   }
   if (!words.length) return "";

@@ -4,6 +4,7 @@ import json
 import math
 import time
 from datetime import UTC, date, datetime
+from urllib.parse import urlparse
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -103,6 +104,23 @@ def entry_card(entry: UserEntry) -> dict:
         "updated_at": iso(entry.updated_at),
         "review_updated_at": iso(entry.review_updated_at),
     }
+
+
+def library_card(db: Session, entry: UserEntry) -> dict:
+    card = entry_card(entry)
+    kind = entry.catalog.kind
+    if kind == "artist":
+        card["music"] = music_state(db, entry)
+    elif kind == "track":
+        extra = loads(entry.catalog.extra, {})
+        album = ""
+        if isinstance(extra, dict):
+            raw = extra.get("album") or extra.get("album_title")
+            if isinstance(raw, str):
+                album = raw.strip()
+        if album:
+            card["album"] = album
+    return card
 
 
 def progress_label(entry: UserEntry) -> str | None:
@@ -348,7 +366,6 @@ def new_entry(db: Session, user_id: int, catalog: CatalogItem, body: dict) -> Us
         ),
         rating=rating_value(body.get("rating")) if "rating" in body else None,
         review=clean_text(body.get("review"), 20000, "Review"),
-        review_spoiler=bool(body.get("review_spoiler")),
         summary=clean_text(body.get("summary"), 400, "Summary"),
         favorite=bool(body.get("favorite")),
         anticipated=bool(body.get("anticipated")) or body.get("status") == "anticipating",
@@ -418,7 +435,6 @@ def _entry_snapshot(entry: UserEntry) -> tuple:
         entry.status,
         entry.rating,
         entry.review,
-        bool(entry.review_spoiler),
         entry.summary,
         entry.tags,
         bool(entry.favorite),
@@ -446,8 +462,6 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
         entry.rating = rating_value(body.get("rating"))
     if "review" in body:
         entry.review = clean_text(body.get("review"), 20000, "Review")
-    if "review_spoiler" in body:
-        entry.review_spoiler = bool(body.get("review_spoiler"))
     if "summary" in body:
         entry.summary = clean_text(body.get("summary"), 400, "Summary")
     if "tags" in body:
@@ -717,11 +731,50 @@ def cached_collaborators(catalog: CatalogItem):
     return rows if isinstance(rows, list) else None
 
 
+def album_needs_lookup(catalog: CatalogItem) -> bool:
+    if catalog.kind != "album" or catalog.source != "musicbrainz" or not catalog.source_id:
+        return False
+    return not _extra(catalog).get("album_loaded")
+
+
 def artist_needs_catalog(catalog: CatalogItem) -> bool:
     if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
         return False
     extra = _extra(catalog)
     return not extra.get("catalog_loaded") or bool(extra.get("catalog_partial"))
+
+
+def apply_artist_portraits(db: Session, entries, *, deep: bool = False) -> None:
+    """Fill a blank artist image with a URL the browser can load."""
+    import httpx
+
+    from apps.media.backend.services import providers
+
+    catalogs = []
+    for entry in entries:
+        catalog = getattr(entry, "catalog", None)
+        if catalog is None or catalog.kind != "artist" or catalog.artwork_url:
+            continue
+        if catalog.source != "musicbrainz" or not providers.mbid(catalog.source_id or ""):
+            continue
+        catalogs.append(catalog)
+    if not catalogs:
+        return
+    http = httpx.Client(
+        timeout=8.0, headers={"User-Agent": providers.UA, "Accept": "application/json"}
+    )
+    try:
+        images = providers.cached_artist_portraits(
+            db, http, [catalog.source_id for catalog in catalogs], deep=deep
+        )
+    except Exception:
+        return
+    finally:
+        http.close()
+    for catalog in catalogs:
+        url = images.get((catalog.source_id or "").lower())
+        if isinstance(url, str) and url.startswith("https://"):
+            catalog.artwork_url = url[:1000]
 
 
 def catalog_list_complete(catalog: CatalogItem) -> bool:
@@ -862,6 +915,56 @@ def _rerank_albums(db: Session, catalog: CatalogItem) -> None:
     db.flush()
 
 
+def store_album_release(db: Session, catalog: CatalogItem, payload: dict) -> None:
+    """Songs for an album the user added. Cover bytes stay on the cover host."""
+    if catalog.kind != "album" or not isinstance(payload, dict):
+        return
+    artwork = payload.get("artwork_url")
+    current = catalog.artwork_url or ""
+    if (
+        isinstance(artwork, str)
+        and artwork.startswith("https://")
+        and (not current or _release_cover(current))
+    ):
+        catalog.artwork_url = artwork[:1000]
+    group_id = payload.get("release_group_id")
+    source_id = group_id if isinstance(group_id, str) and group_id else catalog.source_id
+    row = (
+        db.query(MusicAlbum)
+        .filter(MusicAlbum.catalog_id == catalog.id, MusicAlbum.source_id == source_id)
+        .one_or_none()
+    )
+    if row is None:
+        row = MusicAlbum(
+            catalog_id=catalog.id,
+            title=catalog.title,
+            source_id=source_id,
+            year=catalog.year,
+            position=0,
+            artwork_url=catalog.artwork_url,
+        )
+        db.add(row)
+    row.title = catalog.title
+    row.year = catalog.year
+    row.artwork_url = catalog.artwork_url
+    db.flush()
+    _store_tracks(db, row, payload.get("tracks"))
+    extra = _extra(catalog)
+    extra["album_loaded"] = True
+    if isinstance(group_id, str) and group_id:
+        extra["release_group_id"] = group_id
+    _save_extra(catalog, extra)
+
+
+def _release_cover(url: str) -> bool:
+    parsed = urlparse(url)
+    return (
+        parsed.scheme in {"http", "https"}
+        and parsed.netloc == "coverartarchive.org"
+        and parsed.path.startswith("/release/")
+    )
+
+
 def _store_tracks(db: Session, album: MusicAlbum, tracks) -> None:
     if not isinstance(tracks, list):
         return
@@ -958,8 +1061,8 @@ def save_album_rating(db: Session, entry: UserEntry, album_id: int, body: dict) 
 
 
 def save_track_rating(db: Session, entry: UserEntry, track_id: int, body: dict) -> None:
-    if entry.catalog.kind != "artist":
-        fail("Songs belong on an artist.")
+    if entry.catalog.kind not in {"artist", "album"}:
+        fail("Songs belong on an artist or an album.")
     track = db.get(MusicTrack, track_id)
     album = db.get(MusicAlbum, track.album_id) if track is not None else None
     if track is None or album is None or album.catalog_id != entry.catalog_id:
@@ -1050,7 +1153,6 @@ def detail(db: Session, entry: UserEntry) -> dict:
         **entry_card(entry),
         "catalog": catalog_dict(entry.catalog),
         "review": entry.review,
-        "review_spoiler": entry.review_spoiler,
         "summary": entry.summary,
         "tags": loads(entry.tags, []),
         "progress_value": entry.progress_value,
@@ -1069,7 +1171,7 @@ def detail(db: Session, entry: UserEntry) -> dict:
             for row in releases
         ],
         "show": show,
-        "music": music_state(db, entry) if entry.catalog.kind == "artist" else None,
+        "music": music_state(db, entry) if entry.catalog.kind in {"artist", "album"} else None,
     }
 
 

@@ -40,7 +40,6 @@ import {
   UiPageHeaderComponent,
   UiIconComponent,
 } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 
@@ -68,7 +67,6 @@ type ChartConstructor = new (item: ChartItem, config: unknown) => ChartInstance;
     UiBadgeComponent,
     UiEmptyStateComponent,
     UiIconComponent,
-    InfoTipComponent,
   ],
   templateUrl: './calendar.component.html',
   styleUrl: './calendar.component.css',

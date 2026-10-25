@@ -2,9 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Assets and debts'">
-    <app-info-tip
-      label="Balances and net worth"
-      text="Income transactions do not change these totals. Update balances here when they change." />
+
     <div uiPageActions class="header-actions">
       <ui-button variant="secondary" (clicked)="openAddLiability()">Add liability</ui-button>
       <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>

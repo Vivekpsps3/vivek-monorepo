@@ -125,6 +125,7 @@ def test_search_fans_out_and_a_slow_provider_does_not_hold_the_request(client, m
 
     monkeypatch.setattr(providers, "tmdb_search", slow_movie)
     monkeypatch.setattr(providers, "rawg_search", slow_game)
+    monkeypatch.setattr(providers, "tvmaze_search", lambda *_a, **_k: [])
     monkeypatch.setattr(providers, "openlibrary_search", lambda *_a, **_k: [])
     monkeypatch.setattr(providers, "musicbrainz_search", lambda *_a, **_k: [])
     found = client.get("/api/search", params={"q": "slow"})
@@ -204,6 +205,7 @@ def test_search_uses_real_threads_and_a_timeout(client, monkeypatch):
 
     monkeypatch.setattr(providers, "tmdb_search", slow_movie)
     monkeypatch.setattr(providers, "rawg_search", slow_game)
+    monkeypatch.setattr(providers, "tvmaze_search", lambda *_a, **_k: [])
     monkeypatch.setattr(providers, "openlibrary_search", lambda *_a, **_k: [])
     monkeypatch.setattr(providers, "musicbrainz_search", lambda *_a, **_k: [])
     started = time.monotonic()
@@ -270,3 +272,108 @@ def test_a_bad_musicbrainz_year_skips_one_album(client, monkeypatch):
     assert followed.status_code == 200
     titles = [album["title"] for album in followed.json()["music"]["albums"]]
     assert titles == ["Kept"]
+
+
+def test_public_tmdb_page_pairs_each_title_with_its_poster():
+    from apps.media.backend.services.providers import parse_tmdb_movie_page
+
+    page = """
+    <div class="media-list-results">
+      <a href="/movie/11-earlier"><img src="https://media.themoviedb.org/t/p/w220_and_h330_face/earlier.jpg"></a>
+      <a href="/movie/11-earlier" data-media-adult="false"><h2>Earlier</h2></a>
+      <span class="release_date">May 25, 1977</span>
+      <a href="/movie/22-later"><img src="https://media.themoviedb.org/t/p/w220_and_h330_face/laterPoster.jpg"></a>
+      <a href="/movie/22-later" data-media-adult="false"><h2>Later</h2></a>
+      <span class="release_date">July 31, 2026</span>
+    </div>
+    """
+    rows = parse_tmdb_movie_page(page)
+    assert [(row["title"], row["source_id"], row["year"]) for row in rows] == [
+        ("Earlier", "movie:11", 1977),
+        ("Later", "movie:22", 2026),
+    ]
+    assert rows[1]["artwork_url"] == "https://image.tmdb.org/t/p/w342/laterPoster.jpg"
+
+
+def test_public_tmdb_search_page_reads_cards_and_skips_adult_titles():
+    from apps.media.backend.services.providers import parse_tmdb_search_page
+
+    page = """
+    <div id="movie_results">
+      <a data-media-adult="true" href="/movie/9-adult">
+        <img src="https://media.themoviedb.org/t/p/w94_and_h141_face/adult.jpg">
+        <h2><span>Adult Film</span></h2>
+      </a>
+      <span class="release_date">January 2, 2001</span>
+      <a data-media-adult="false" href="/movie/27205-inception">
+        <img src="https://media.themoviedb.org/t/p/w94_and_h141_face/poster.jpg">
+      </a>
+      <a data-media-adult="false" href="/movie/27205-inception">
+        <h2 class="font-semibold"><span>Inception</span></h2>
+      </a>
+      <span class="release_date">July 16, 2010</span>
+      <p>A dream.</p>
+      <a data-media-adult="false" href="/movie/77-cobol">
+        <img src="https://media.themoviedb.org/t/p/w94_and_h141_face/cobol.jpg">
+        <h2><span>Inception: The Cobol Job</span></h2>
+      </a>
+      <span class="release_date">December  7, 2010</span>
+    </div>
+    <div id="tv_results">
+      <a data-media-adult="false" href="/tv/1396-breaking-bad">
+        <h2><span>Breaking Bad</span></h2>
+      </a>
+      <span class="release_date">January 20, 2008</span>
+    </div>
+    """
+    rows = parse_tmdb_search_page(page, "movie")
+    assert [(row["title"], row["source_id"], row["year"]) for row in rows] == [
+        ("Inception", "movie:27205", 2010),
+        ("Inception: The Cobol Job", "movie:77", 2010),
+    ]
+    assert rows[0]["artwork_url"] == "https://image.tmdb.org/t/p/w342/poster.jpg"
+    assert rows[0]["overview"] == "A dream."
+    assert rows[0]["releases"][0]["released_on"] == "2010-07-16"
+    assert rows[1]["releases"][0]["released_on"] == "2010-12-07"
+    assert parse_tmdb_search_page(page, "tv")[0]["title"] == "Breaking Bad"
+
+
+def test_tmdb_public_search_requests_the_movie_page():
+    import httpx
+
+    from apps.media.backend.services.providers import tmdb_public_search
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "www.themoviedb.org"
+        assert request.url.params["query"] == "Inception"
+        assert request.headers["accept"] == "text/html"
+        return httpx.Response(200, text="<html></html>")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        assert tmdb_public_search(http, "Inception") == []
+
+
+def test_movies_route_returns_tmdb_titles(client, monkeypatch):
+    monkeypatch.setattr(
+        "apps.media.backend.services.providers.popular_movies",
+        lambda *_args, **_kwargs: [
+            {
+                "source": "tmdb",
+                "source_id": "movie:11",
+                "kind": "movie",
+                "title": "Star Wars",
+                "creator": None,
+                "year": 1977,
+                "overview": None,
+                "artwork_url": "https://image.tmdb.org/t/p/w342/star.jpg",
+                "genres": [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [],
+                "episodes": [],
+            }
+        ],
+    )
+    found = client.get("/api/movies")
+    assert found.status_code == 200
+    assert found.json()["results"][0]["title"] == "Star Wars"

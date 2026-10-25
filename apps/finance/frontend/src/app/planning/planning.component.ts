@@ -56,7 +56,6 @@ import {
 } from '../utils/planning-spending.util';
 import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
 import { PlanningQuickToolsComponent } from './planning-quick-tools.component';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { PlanningWorkflow } from './planning-workflow';
 import {
   cleanPlanningCheckpoints,
@@ -80,7 +79,6 @@ import { AppDatePipe } from '../shared/pipes/app-date.pipe';
     UiSkeletonComponent,
     PlanningQuickToolsComponent,
     PlanningResultsComponent,
-    InfoTipComponent,
   ],
   templateUrl: './planning.component.html',
   styleUrl: './planning.component.css',

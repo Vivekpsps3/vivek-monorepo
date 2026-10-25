@@ -18,7 +18,6 @@ import {
   UiSelectOption,
   UiDialogComponent,
 } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary, focusField } from '../shared/form-validation';
 import { MoneyPipe } from '../shared/pipes/money.pipe';
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
@@ -41,7 +40,6 @@ import { AppDatePipe } from '../shared/pipes/app-date.pipe';
     UiDialogComponent,
     UiFieldComponent,
     UiFieldControlDirective,
-    InfoTipComponent,
   ],
   templateUrl: './subscriptions.component.html',
   styleUrl: './subscriptions.component.css',

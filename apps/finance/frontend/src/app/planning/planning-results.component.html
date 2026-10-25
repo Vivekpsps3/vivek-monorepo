@@ -10,7 +10,7 @@
     </div>
   } @else {
     <ui-card [title]="'Baseline vs scenario'">
-      <app-info-tip uiCardActions align="end" label="Baseline and scenario" text="Both runs use the same starting balances, assumptions, horizon, and random seed. Only annual events assigned to each case differ." />
+
       <section class="tool-results-grid" aria-label="Baseline scenario comparison">
         <div>
           <span>Baseline median ending net worth</span>
@@ -51,7 +51,7 @@
 
     <ui-card [title]="'Net worth fan chart'">
       @if (fanPathCaption(); as caption) {
-        <app-info-tip uiCardActions align="end" label="Fan chart sample" [text]="caption" />
+
       }
       <app-monte-carlo-fan-chart [data]="chartData" [checkpoints]="checkpointRows()" />
     </ui-card>
