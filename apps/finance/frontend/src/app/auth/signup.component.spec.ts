@@ -44,14 +44,21 @@ describe('SignupComponent', () => {
   it('keeps submit available and explains invalid username and passphrase requirements', () => {
     expect(submitButton().disabled).toBeFalse();
 
-    enter(fields()[0], 'ab');
+    enter(fields()[1], 'ab');
+    submitButton().click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Enter a name.');
+    expect(auth.signupPasswordless).not.toHaveBeenCalled();
+
+    enter(fields()[0], 'Vivek');
+    enter(fields()[1], 'ab');
     submitButton().click();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Username must be');
     expect(auth.signupPasswordless).not.toHaveBeenCalled();
 
-    enter(fields()[0], 'valid.user');
-    enter(fields()[1], 'short');
+    enter(fields()[1], 'valid.user');
+    enter(fields()[2], 'short');
     submitButton().click();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('at least 12 characters');
@@ -64,12 +71,13 @@ describe('SignupComponent', () => {
       Promise.reject(new Error('Username is already registered')),
       Promise.resolve({} as AuthUser)
     );
-    enter(fields()[0], 'Vivek.User');
-    enter(fields()[1], 'long secure passphrase');
+    enter(fields()[0], 'Vivek User');
+    enter(fields()[1], 'Vivek.User');
+    enter(fields()[2], 'long secure passphrase');
 
     submitButton().click();
     fixture.detectChanges();
-    expect(auth.signupPasswordless).toHaveBeenCalledOnceWith('Vivek.User', 'long secure passphrase', '', '');
+    expect(auth.signupPasswordless).toHaveBeenCalledOnceWith('Vivek.User', 'long secure passphrase', 'Vivek User', '');
     expect(submitButton().disabled).toBeTrue();
 
     await fixture.whenStable();

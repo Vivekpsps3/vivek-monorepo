@@ -14,7 +14,6 @@ from apps.media.backend.models import (
     CatalogItem,
     Episode,
     EpisodeProgress,
-    Experience,
     MusicAlbum,
     MusicTrack,
     Release,
@@ -25,7 +24,6 @@ from apps.media.backend.models import (
 )
 from apps.media.backend.services.clock import today
 from apps.media.backend.services.validate import (
-    EXPERIENCE_KINDS,
     KINDS,
     PRECISIONS,
     PROGRESS_UNITS,
@@ -41,6 +39,7 @@ from apps.media.backend.services.validate import (
     season_number,
     watched_flag,
 )
+from apps.media.backend.services.when import is_released
 
 
 def dumps(value) -> str | None:
@@ -496,44 +495,6 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     return entry
 
 
-def add_experience(db: Session, entry: UserEntry, body: dict) -> Experience:
-    started = parse_date(body.get("started_on"), "Start date")
-    finished = parse_date(body.get("finished_on"), "End date")
-    if started and finished and finished < started:
-        fail("The end date is before the start date.")
-    row = Experience(
-        user_id=entry.user_id,
-        entry_id=entry.id,
-        kind=choice(body.get("kind"), EXPERIENCE_KINDS, "Experience"),
-        started_on=started,
-        finished_on=finished,
-        rating=rating_value(body.get("rating")) if "rating" in body else None,
-        notes=clean_text(body.get("notes"), 20000, "Notes"),
-        spoiler=bool(body.get("spoiler")),
-    )
-    db.add(row)
-    entry.updated_at = utc_now()
-    db.flush()
-    return row
-
-
-def patch_experience(row: Experience, body: dict) -> None:
-    if "kind" in body:
-        row.kind = choice(body.get("kind"), EXPERIENCE_KINDS, "Experience")
-    if "started_on" in body:
-        row.started_on = parse_date(body.get("started_on"), "Start date")
-    if "finished_on" in body:
-        row.finished_on = parse_date(body.get("finished_on"), "End date")
-    if row.started_on and row.finished_on and row.finished_on < row.started_on:
-        fail("The end date is before the start date.")
-    if "rating" in body:
-        row.rating = rating_value(body.get("rating"))
-    if "notes" in body:
-        row.notes = clean_text(body.get("notes"), 20000, "Notes")
-    if "spoiler" in body:
-        row.spoiler = bool(body.get("spoiler"))
-
-
 def list_library(
     db: Session, user_id: int, kind: str | None, status: str | None, query: str | None, sort: str
 ) -> list[UserEntry]:
@@ -694,6 +655,8 @@ def save_season(db: Session, entry: UserEntry, body: dict) -> None:
 def mark_watched(
     db: Session, user_id: int, episode: Episode, watched: bool, watched_on: date | None
 ) -> None:
+    if watched and not is_released(episode.air_date, today()):
+        fail("This episode has not aired yet.")
     row = (
         db.query(EpisodeProgress)
         .filter(EpisodeProgress.user_id == user_id, EpisodeProgress.episode_id == episode.id)
@@ -1081,12 +1044,6 @@ def music_state(db: Session, entry: UserEntry) -> dict:
 
 
 def detail(db: Session, entry: UserEntry) -> dict:
-    experiences = (
-        db.query(Experience)
-        .filter(Experience.entry_id == entry.id, Experience.user_id == entry.user_id)
-        .all()
-    )
-    experiences.sort(key=lambda row: (row.finished_on or row.started_on or date.min, row.id))
     releases = db.query(Release).filter(Release.catalog_id == entry.catalog_id).all()
     show = episode_state(db, entry.user_id, entry.catalog) if entry.catalog.kind == "tv" else None
     return {
@@ -1099,19 +1056,6 @@ def detail(db: Session, entry: UserEntry) -> dict:
         "progress_value": entry.progress_value,
         "progress_unit": entry.progress_unit,
         "created_at": iso(entry.created_at),
-        "experiences": [
-            {
-                "id": row.id,
-                "kind": row.kind,
-                "started_on": iso(row.started_on),
-                "finished_on": iso(row.finished_on),
-                "rating": row.rating,
-                "notes": row.notes,
-                "spoiler": row.spoiler,
-                "created_at": iso(row.created_at),
-            }
-            for row in experiences
-        ],
         "releases": [
             {
                 "id": row.id,

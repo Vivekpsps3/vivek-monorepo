@@ -31,11 +31,11 @@ function routeReady(target: Page, pathname: string) {
   const bare = pathname.replace(/^\/finance(?=\/|$)/, '') || '/';
   if (bare === '/hub/admin' || bare.startsWith('/hub/admin/')) return target.locator('app-suite-admin');
   if (bare === '/hub' || bare.startsWith('/hub/')) return target.locator('app-hub');
-  if (bare === '/') return target.getByRole('heading', { level: 1, name: 'Home', exact: true });
-  if (bare === '/have' || bare.startsWith('/have/')) return target.getByRole('heading', { level: 1, name: 'What you have', exact: true });
-  if (bare === '/spending' || bare.startsWith('/spending/')) return target.getByRole('heading', { level: 1, name: 'Spending', exact: true });
-  if (bare === '/recurring' || bare.startsWith('/recurring/')) return target.getByRole('heading', { level: 1, name: 'Recurring', exact: true });
-  if (bare === '/planning' || bare.startsWith('/planning/')) return target.getByRole('heading', { level: 1, name: 'Planning', exact: true });
+  if (bare === '/') return target.locator('app-dashboard');
+  if (bare === '/have' || bare.startsWith('/have/')) return target.locator('app-have-hub');
+  if (bare === '/spending' || bare.startsWith('/spending/')) return target.locator('app-spending-hub');
+  if (bare === '/recurring' || bare.startsWith('/recurring/')) return target.locator('app-recurring-hub');
+  if (bare === '/planning' || bare.startsWith('/planning/')) return target.locator('app-planning-hub');
   if (bare === '/login' || bare.startsWith('/auth/')) return target.getByRole('heading', { level: 1, name: /Sign in|Create/ });
   return target.locator('app-root');
 }

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { combineLatest, take } from 'rxjs';
@@ -65,6 +66,7 @@ interface MediaSummary {
   imports: [
     AppDatePipe,
     MoneyPipe,
+    FormsModule,
     RouterLink,
     UsernameChangeComponent,
   ],
@@ -82,6 +84,10 @@ export class HubComponent implements OnInit {
 
   name = 'Your library of days';
   username = '';
+  draftName = '';
+  settingsOpen = false;
+  savingName = false;
+  nameError = '';
   admin = false;
   readonly today = new Date();
   choice = this.themeService.current;
@@ -103,6 +109,7 @@ export class HubComponent implements OnInit {
     this.auth.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
       this.name = user?.display_name || user?.username || 'Your library of days';
       this.username = user?.username || '';
+      if (!this.savingName) this.draftName = user?.display_name || '';
       this.admin = user?.role === 'admin';
       this.cdr.markForCheck();
     });
@@ -131,6 +138,38 @@ export class HubComponent implements OnInit {
 
   signOut(): void {
     this.auth.logout();
+  }
+
+  toggleSettings(): void {
+    this.settingsOpen = !this.settingsOpen;
+    this.nameError = '';
+    this.cdr.markForCheck();
+  }
+
+  async saveName(): Promise<void> {
+    if (this.savingName) return;
+    const name = this.draftName.trim().replace(/\s+/g, ' ');
+    if (!name) {
+      this.nameError = 'Enter a name.';
+      this.cdr.markForCheck();
+      return;
+    }
+    if (name.length > 160) {
+      this.nameError = 'Name must be 160 characters or fewer.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.savingName = true;
+    this.nameError = '';
+    this.cdr.markForCheck();
+    try {
+      await this.auth.updateDisplayName(name);
+    } catch (err) {
+      this.nameError = err instanceof Error ? err.message : 'The name could not be saved.';
+    } finally {
+      this.savingName = false;
+      this.cdr.markForCheck();
+    }
   }
 
   fidelityAccounts(): PortfolioAccount[] {

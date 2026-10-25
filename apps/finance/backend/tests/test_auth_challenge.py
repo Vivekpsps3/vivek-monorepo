@@ -392,7 +392,19 @@ def test_open_passwordless_signup_creates_user_without_invitation(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["user"]["username"] == "open.user"
+    assert response.json()["user"]["display_name"] == "Open User"
     assert response.json()["user"]["role"] == "user"
+    blank = TestClient(app).post(
+        "/api/auth/signup/passwordless",
+        json={"username": "nameless.user", "display_name": "   ", **passwordless_material()},
+    )
+    assert blank.status_code == 422
+    assert blank.json()["detail"] == "Enter a name."
+    client.headers["X-CSRF-Token"] = response.json()["csrf_token"]
+    renamed = client.patch("/api/account/name", json={"display_name": "  Open   Person  "})
+    assert renamed.status_code == 200
+    assert renamed.json()["display_name"] == "Open Person"
+    assert client.patch("/api/account/name", json={"display_name": "   "}).status_code == 422
     assert client.get("/api/vault/status").json()["exists"] is True
     assert client.get("/api/auth/me").status_code == 200
 
@@ -699,6 +711,7 @@ def test_signup_invite_code_and_allowlist(monkeypatch):
         "/api/auth/signup/passwordless",
         json={
             "username": "someone.else",
+            "display_name": "Someone Else",
             "invite_code": "household-code",
             **passwordless_material(),
         },

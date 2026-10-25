@@ -9,11 +9,8 @@ import {
   creatorLabel,
   emptyMonthHtml,
   graphCenter,
-  historyRemoveName,
-  historyLine,
   legendHtml,
   libraryEmptyCopy,
-  loggedToast,
   markNextLabel,
   noteCardHtml,
   noteCountText,
@@ -59,13 +56,6 @@ test("the overview toggle and the note count follow the spec", () => {
   assert.equal(noteCountText("x".repeat(18001)), "18,001 / 20,000");
 });
 
-test("history names the kind and a formatted date", () => {
-  const row = { kind: "read", finished_on: "2026-10-21", rating: 8, notes: "slow" };
-  assert.equal(historyRemoveName(row), "Remove Read on Wednesday, October 21");
-  assert.match(historyLine(row), /Read · Wednesday, October 21 · 8\/10 · slow/);
-  assert.equal(loggedToast("reread"), "Logged a reread. Your overall score didn't change.");
-});
-
 test("a song click keeps the artist at the center of related", () => {
   assert.equal(graphCenter("Radiohead"), "Radiohead");
   assert.match(appSource, /paintWeb\(graphCenter\(webCenter\)\)/);
@@ -74,6 +64,14 @@ test("a song click keeps the artist at the center of related", () => {
   assert.match(list, /<svg aria-hidden="true"/);
   assert.match(list, /href="#\/search\?q=Kid%20A"/);
   assert.match(connectionsFailureHtml(), /Connections couldn't load\./);
+});
+
+test("library filters name what is showing and offer a reset", () => {
+  assert.match(appSource, /libraryFilterSummary/);
+  assert.match(appSource, /Showing <strong>/);
+  assert.match(appSource, /href="#\/library">Reset/);
+  assert.match(appCss, /#search-form\.filters/);
+  assert.match(appCss, /align-items:\s*flex-end/);
 });
 
 test("library empty copy names the filter, and search stays quiet until two letters", () => {
@@ -99,6 +97,13 @@ test("the calendar legend is absent for an empty month and today copy is specifi
 test("a show offers Mark S2 E3 watched until it is caught up", () => {
   assert.equal(markNextLabel({ next_episode: { season_number: 2, episode_number: 3 }, caught_up: false }), "Mark S2 E3 watched");
   assert.equal(markNextLabel({ next_episode: null, caught_up: true }), "");
+});
+
+test("episodes that have not aired cannot be marked watched in the UI", () => {
+  assert.match(appSource, /item\.state !== "upcoming"/);
+  assert.match(appSource, /has not aired yet/);
+  assert.match(appSource, /Has not aired yet/);
+  assert.match(appSource, /episode\.released === false && !episode\.watched/);
 });
 
 test("type scale and motion live in app.css", () => {

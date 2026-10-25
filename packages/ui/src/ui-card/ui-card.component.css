@@ -21,6 +21,9 @@
 }
 
 .ui-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
   margin: 0;
   font-size: var(--text-lg);
   font-weight: 650;

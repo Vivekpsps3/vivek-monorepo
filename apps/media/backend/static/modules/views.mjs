@@ -2,7 +2,6 @@ import {
   dayLabel,
   emptyState,
   escapeHtml as esc,
-  experienceLabel,
   genericStatusOptions,
   kindLabel,
   kindPlural,
@@ -112,25 +111,6 @@ export function noteCountText(text) {
   const length = String(text || "").length;
   if (length <= 18000) return "";
   return `${length.toLocaleString("en-US")} / 20,000`;
-}
-
-export function historyWhen(row) {
-  const iso = row?.finished_on || row?.started_on || "";
-  return dayLabel(String(iso).slice(0, 10)) || "an undated day";
-}
-
-export function historyRemoveName(row) {
-  return `Remove ${experienceLabel(row?.kind)} on ${historyWhen(row)}`;
-}
-
-export function historyLine(row) {
-  const score = row?.rating == null || row?.rating === "" ? "" : ` · ${ratingText(row.rating)}`;
-  const note = row?.notes ? ` · ${row.notes}` : "";
-  return `${experienceLabel(row?.kind)} · ${historyWhen(row)}${score}${note}`;
-}
-
-export function loggedToast(kind) {
-  return `Logged a ${experienceLabel(kind).toLowerCase()}. Your overall score didn't change.`;
 }
 
 /** Clicking a song keeps the artist in the center of Related. */

@@ -28,7 +28,7 @@ test('unlocking the synthetic vault does not raise an error toast', async ({ pag
     assets: [{ id: 1, name: 'Checking', category: 'cash', current_value: 1500, as_of_date: '2026-10-01' }],
   });
   await vault.open('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
+  await expect(page.locator('app-dashboard')).toBeVisible();
   await expect(page.locator('.toast')).toHaveCount(0);
 });
 

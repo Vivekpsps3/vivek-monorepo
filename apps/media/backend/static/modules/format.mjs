@@ -47,16 +47,6 @@ import { WEEK_STARTS_ON, weekStartsOn } from "../../shared-browser/week.mjs";
 
 export { WEEK_STARTS_ON, weekStartsOn };
 
-const EXPERIENCE = {
-  movie: [["watch", "Watched"], ["rewatch", "Rewatched"]],
-  tv: [["watch", "Watched"], ["rewatch", "Rewatched"]],
-  book: [["read", "Read"], ["reread", "Reread"]],
-  track: [["listen", "Listened"]],
-  album: [["listen", "Listened"]],
-  artist: [["listen", "Listened"]],
-  game: [["play", "Played"], ["replay", "Replayed"]],
-};
-
 export function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -95,18 +85,6 @@ export function statusOptions(kind) {
 
 export function genericStatusOptions() {
   return Object.entries(STATUS_GENERIC).map(([value, label]) => ({ value, label }));
-}
-
-export function experienceOptions(kind) {
-  return (EXPERIENCE[kind] || EXPERIENCE.movie).map(([value, label]) => ({ value, label }));
-}
-
-export function experienceLabel(kind) {
-  for (const rows of Object.values(EXPERIENCE)) {
-    const match = rows.find(([value]) => value === kind);
-    if (match) return match[1];
-  }
-  return kind;
 }
 
 export function seasonLabel(number) {

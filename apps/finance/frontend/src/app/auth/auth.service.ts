@@ -136,7 +136,7 @@ export class AuthService {
         apiUrl('/auth/signup/passwordless'),
         {
           username: normalized,
-          display_name: (displayName || normalized).trim(),
+          display_name: displayName.trim().replace(/\s+/g, ' '),
           public_key_b64: signingMaterial.publicKeyB64,
           vault: vaultMaterial.setupPayload,
           auth: signingMaterial.wrapped,
@@ -312,6 +312,18 @@ export class AuthService {
    * login uses, signs the server's message, and is not kept after this returns.
    * A 403 refreshes the session once and runs this whole flow once more.
    */
+  async updateDisplayName(displayName: string): Promise<AuthUser> {
+    const name = displayName.trim().replace(/\s+/g, ' ');
+    if (!name) throw new Error('Enter a name.');
+    if (name.length > 160) throw new Error('Name must be 160 characters or fewer.');
+    const updated = await firstValueFrom(
+      this.http.patch<AuthUser>(apiUrl('/account/name'), { display_name: name }, { withCredentials: true }),
+    );
+    const user: AuthUser = { ...(this.currentUser as AuthUser), ...updated };
+    this.userSubject.next(user);
+    return user;
+  }
+
   async changeUsername(requested: string, passphrase: string): Promise<AuthUser> {
     try {
       return await this.submitUsernameChange(requested, passphrase);

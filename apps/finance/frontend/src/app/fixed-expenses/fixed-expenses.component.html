@@ -3,10 +3,10 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Bills'">
+    <app-info-tip
+      label="Bills and net worth"
+      text="This does not change net worth." />
     <div uiPageActions class="header-actions">
-      <app-info-tip
-        label="Bills and net worth"
-        text="This does not change net worth." />
       <ui-button variant="primary" (clicked)="openAddModal()">Add bill</ui-button>
     </div>
   </ui-page-header>

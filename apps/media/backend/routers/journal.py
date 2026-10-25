@@ -120,38 +120,6 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db)):
     return {"deleted": True}
 
 
-@router.post("/entries/{entry_id}/experiences")
-def add_experience(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
-    before = (entry.rating, entry.review)
-    records.add_experience(db, entry, body)
-    db.refresh(entry)
-    if (entry.rating, entry.review) != before:
-        raise HTTPException(status_code=500, detail="An experience changed the overall review.")
-    return records.detail(db, entry)
-
-
-@router.patch("/entries/{entry_id}/experiences/{experience_id}")
-def patch_experience(entry_id: int, experience_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
-    row = db.get(Experience, experience_id)
-    if row is None or row.entry_id != entry.id or row.user_id != entry.user_id:
-        raise HTTPException(status_code=404, detail="That experience is not on this item.")
-    records.patch_experience(row, body)
-    entry.updated_at = records.utc_now()
-    return records.detail(db, entry)
-
-
-@router.delete("/entries/{entry_id}/experiences/{experience_id}")
-def delete_experience(entry_id: int, experience_id: int, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
-    row = db.get(Experience, experience_id)
-    if row is None or row.entry_id != entry.id or row.user_id != entry.user_id:
-        raise HTTPException(status_code=404, detail="That experience is not on this item.")
-    db.delete(row)
-    return records.detail(db, entry)
-
-
 @router.post("/entries/{entry_id}/albums")
 def add_album(entry_id: int, body: dict, db: Session = Depends(get_db)):
     entry = records.owned_entry(db, require_actor().id, entry_id)

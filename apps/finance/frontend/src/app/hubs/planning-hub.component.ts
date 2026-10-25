@@ -12,7 +12,6 @@ import { PlanningToolId } from '../models/planning.model';
   imports: [RouterLink, PlanningComponent, InvestmentInsightsComponent, StockLabComponent],
   template: `
     <div class="page">
-      <h1>Planning</h1>
       <nav class="hub-tabs" aria-label="Planning">
         <a [routerLink]="[]" [queryParams]="{ t: 'path' }" [class.on]="tab === 'path'">Retirement &amp; goals</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'growth' }" [class.on]="tab === 'growth'">Portfolio projection</a>

@@ -1,12 +1,13 @@
 <header class="ui-page-header" [class.ui-page-header--embed]="embedded()">
-  @if (!embedded()) {
-    <div class="ui-page-header__text">
+  <div class="ui-page-header__text">
+    @if (!embedded()) {
       <h1 class="ui-page-header__title">{{ title() }}</h1>
-      @if (subtitle()) {
-        <p class="ui-page-header__subtitle">{{ subtitle() }}</p>
-      }
-    </div>
-  }
+    }
+    <ng-content select="app-info-tip" />
+    @if (!embedded() && subtitle()) {
+      <p class="ui-page-header__subtitle">{{ subtitle() }}</p>
+    }
+  </div>
   <div class="ui-page-header__actions">
     <ng-content select="[uiPageActions]" />
   </div>

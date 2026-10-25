@@ -85,13 +85,26 @@ class PasswordlessBootstrapRequest(BaseModel):
     auth: AuthPrivateKeyWrap
 
 
+DISPLAY_NAME_MAX = 160
+
+
+def normalize_display_name(value: str) -> str:
+    """Same rule for signup and the account name editor."""
+    name = " ".join(str(value or "").split())
+    if not name:
+        raise ValueError("Enter a name.")
+    if len(name) > DISPLAY_NAME_MAX:
+        raise ValueError("Name must be 160 characters or fewer.")
+    return name
+
+
 class PasswordlessSignupRequest(BaseModel):
     """Self-signup. Closed unless AUTH_SIGNUP_MODE opens it."""
 
     username: str = Field(
         ..., min_length=USERNAME_MIN, max_length=USERNAME_MAX, pattern=USERNAME_PATTERN
     )
-    display_name: str = Field("", max_length=160)
+    display_name: str = Field("", max_length=DISPLAY_NAME_MAX)
     public_key_b64: str = Field(..., min_length=16, max_length=4096)
     vault: VaultCreateRequest
     auth: AuthPrivateKeyWrap
@@ -117,6 +130,10 @@ class PasswordlessVerifyRequest(BaseModel):
     challenge: str = Field(..., min_length=32, max_length=256)
     message: str = Field(..., min_length=1, max_length=2048)
     signature_b64: str = Field(..., min_length=16, max_length=256)
+
+
+class DisplayNameUpdate(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=DISPLAY_NAME_MAX)
 
 
 class UsernameChangeRequest(BaseModel):

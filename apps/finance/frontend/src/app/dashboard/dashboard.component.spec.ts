@@ -107,7 +107,9 @@ describe('Dashboard', () => {
     expect(breakdown.textContent).toContain('Annual equity estimate · Acme');
     expect(breakdown.textContent).toContain('No date');
     expect(breakdown.textContent).toContain('Possible income overlap adjustment');
-    expect(fixture.nativeElement.textContent).toContain('Income and spending, counted once');
+    expect(fixture.nativeElement.textContent).not.toContain('Income and spending, counted once');
+    expect(fixture.nativeElement.textContent).not.toContain('Current net worth');
+    expect(fixture.nativeElement.textContent).not.toContain('Source dates');
     fixture.destroy();
   });
 });

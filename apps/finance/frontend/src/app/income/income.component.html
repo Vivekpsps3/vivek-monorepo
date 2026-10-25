@@ -2,10 +2,10 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'">
+    <app-info-tip
+      label="Jobs and net worth"
+      text="Jobs and pay do not add a spending transaction or change net worth." />
     <div uiPageActions class="header-actions">
-      <app-info-tip
-        label="Jobs and net worth"
-        text="Jobs and pay do not add a spending transaction or change net worth." />
       <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
     </div>
   </ui-page-header>

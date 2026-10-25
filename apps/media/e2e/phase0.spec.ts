@@ -446,7 +446,6 @@ test('status, favorite, and again keep focus on the same control', async ({ page
   await expect(paused).toHaveClass(/is-on/);
   const favorite = await settleControl(page, 'Favorite', true);
   await expect(favorite).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Log a read' })).toBeVisible();
 });
 
 test('a missing item is one error panel and a success toast survives navigation', async ({ page }) => {

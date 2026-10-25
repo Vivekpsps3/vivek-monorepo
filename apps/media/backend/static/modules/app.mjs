@@ -15,11 +15,8 @@ import {
   episodeCode,
   eventWord,
   graphCenter,
-  historyLine,
-  historyRemoveName,
   legendHtml,
   libraryEmptyHtml,
-  loggedToast,
   markNextLabel,
   monthEventCount,
   noteCardHtml,
@@ -60,8 +57,6 @@ import {
   draftKey,
   emptyState,
   escapeHtml as esc,
-  experienceLabel,
-  experienceOptions,
   genericStatusOptions,
   kindLabel,
   kindPlural,
@@ -415,7 +410,7 @@ async function viewHome(ticket) {
   const next = summary.next_episodes || [];
   const allEmpty = !current.length && !upcoming.length && !next.length && !notes.length;
   const stats = `<p class="stats"><a href="#/library?status=in_progress">${counts.in_progress || 0} in progress</a> · <a href="#/library">${counts.library || 0} in library</a> · <a href="#/library?status=anticipating">${counts.anticipated || 0} coming up</a></p>`;
-  const hero = `<section class="hero"><div><p class="eyebrow">Journal</p><h1>Now</h1>${stats}</div><div class="hero-actions"><a class="btn btn-primary" href="#/search">Find something to add</a></div></section>`;
+  const hero = `<section class="hero"><div>${stats}</div><div class="hero-actions"><a class="btn btn-primary" href="#/search">Find something to add</a></div></section>`;
   if (allEmpty) {
     commitView(`${hero}${emptyState({
       title: "Nothing in progress yet",
@@ -427,11 +422,12 @@ async function viewHome(ticket) {
   }
   const nextRows = next.map(item => {
     const code = episodeCode(item.season, item.episode);
-    const airs = item.state === "upcoming" && item.air_date ? `<span class="meta">Airs ${esc(dayLabel(String(item.air_date).slice(0, 10)).split(",")[0])}</span>` : "";
-    const button = item.episode_id
+    const airs = item.state === "upcoming" && item.air_date ? `<span class="next-when">Airs ${esc(dayLabel(String(item.air_date).slice(0, 10)).split(",")[0])}</span>` : "";
+    const button = item.episode_id && item.state !== "upcoming"
       ? `<button type="button" class="btn btn-secondary btn-sm" data-action="mark-watched" data-id="${item.entry_id}" data-episode="${item.episode_id}" data-label="${esc(code)}">Mark watched</button>`
       : "";
-    return `<li class="next-row"><a href="#/item/${item.entry_id}?season=${encodeURIComponent(item.season)}"><span class="poster poster-next">${poster(item)}</span><span><strong>${esc(item.show_title)}</strong><span>${esc(code)}${item.title ? ` · ${esc(item.title)}` : ""}</span>${airs}</span></a>${button}</li>`;
+    const name = `${esc(code)}${item.title ? ` · ${esc(item.title)}` : ""}`;
+    return `<li class="next-row"><a href="#/item/${item.entry_id}?season=${encodeURIComponent(item.season)}"><span class="poster poster-next">${poster(item)}</span><span class="next-copy"><strong>${esc(item.show_title)}</strong><span class="next-name">${name}</span>${airs}</span></a>${button}</li>`;
   }).join("");
   const inProgress = current.length
     ? `<div class="grid">${current.map(card).join("")}</div>`
@@ -580,6 +576,22 @@ function reviewSection(items) {
   return `<section><h2>Recent notes</h2><ul class="plain">${rows}</ul></section>`;
 }
 
+function libraryFilterSummary(kind, status, q, sort, fav) {
+  const parts = [];
+  if (kind) parts.push(kindPlural(kind));
+  if (status) {
+    const generic = genericStatusOptions().find(row => row.value === status)?.label;
+    parts.push(kind ? statusLabel(kind, status) : (generic || status));
+  }
+  if (fav) parts.push("Favorites");
+  if (q) parts.push(`“${q}”`);
+  if (sort === "added") parts.push("Recently added");
+  else if (sort === "title") parts.push("Title A–Z");
+  else if (sort === "rating") parts.push("Your score");
+  else if (sort === "release") parts.push("Release year");
+  return parts.length ? parts.join(" · ") : "Everything";
+}
+
 function libraryQuery(kind, status, q, sort, fav) {
   const params = new URLSearchParams();
   if (kind) params.set("kind", kind);
@@ -591,7 +603,7 @@ function libraryQuery(kind, status, q, sort, fav) {
   return text ? `#/library?${text}` : "#/library";
 }
 
-function libraryPage(kind, status, q, sort, body, resume, count, fav) {
+function libraryPage(kind, status, q, sort, body, resume, fav) {
   const kinds = ["", "movie", "tv", "book", "game", "album", "track", "artist"].map(value => ({
     value,
     label: value ? kindPlural(value) : "All",
@@ -604,14 +616,21 @@ function libraryPage(kind, status, q, sort, body, resume, count, fav) {
     { value: "rating", label: "Your score" },
     { value: "release", label: "Release year" },
   ];
-  const heading = count == null ? "Library" : `Library · ${count}`;
+  const summary = libraryFilterSummary(kind, status, q, sort, fav);
+  const filtered = Boolean(kind || status || q || fav || (sort && sort !== "activity"));
+  const reset = filtered ? `<a class="btn btn-secondary btn-sm" href="#/library">Reset</a>` : "";
   return `
-    <section class="hero"><div><h1>${esc(heading)}</h1></div></section>
-    <div class="library-toolbar" id="library-toolbar">
-      <label class="grow">Search your library <input id="library-q" type="search" value="${esc(q)}" placeholder="Filter by title or creator" autocomplete="off"></label>
-      <label class="sort-field">Sort <select id="library-sort" data-library-sort aria-label="Sort">${options(sorts, sort)}</select></label>
-      <div class="chip-row" role="group" aria-label="Favorites">
-        <button type="button" class="flag${fav ? " is-on" : ""}" data-library-fav aria-pressed="${fav ? "true" : "false"}">★ Favorites</button>
+    <div class="library-filters" id="library-toolbar">
+      <div class="library-filters__bar">
+        <p class="library-active">Showing <strong>${esc(summary)}</strong></p>
+        ${reset}
+      </div>
+      <div class="library-toolbar">
+        <label class="grow">Search your library <input id="library-q" type="search" value="${esc(q)}" placeholder="Filter by title or creator" autocomplete="off"></label>
+        <label class="sort-field">Sort <select id="library-sort" data-library-sort aria-label="Sort">${options(sorts, sort)}</select></label>
+        <div class="chip-row" role="group" aria-label="Favorites">
+          <button type="button" class="flag${fav ? " is-on" : ""}" data-library-fav aria-pressed="${fav ? "true" : "false"}">${fav ? "★ Favorites" : "☆ Favorites"}</button>
+        </div>
       </div>
     </div>
     <div class="chip-row" role="group" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, status, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
@@ -650,7 +669,7 @@ function paintLibrary(params, resume) {
   const fav = params.get("fav") === "1";
   const visible = filteredLibrary(libraryItems, q, fav);
   const body = visible.length ? libraryCards(visible) : libraryEmptyHtml({ kind, status, q });
-  commitView(libraryPage(kind, status, q, sort, body, resume, visible.length, fav));
+  commitView(libraryPage(kind, status, q, sort, body, resume, fav));
 }
 
 async function viewLibrary(params, ticket) {
@@ -665,7 +684,7 @@ async function viewLibrary(params, ticket) {
   query.set("sort", sort);
   const fromLibrary = String(app.dataset.view || "").startsWith("#/library");
   const previousCards = fromLibrary ? (app.querySelector("[data-library-body]")?.innerHTML || "") : "";
-  commitView(libraryPage(kind, status, q, sort, previousCards, null, null, fav), true);
+  commitView(libraryPage(kind, status, q, sort, previousCards, null, fav), true);
   const cardsTimer = window.setTimeout(() => {
     if (!ticket.isCurrent()) return;
     const slot = app.querySelector("[data-library-body]");
@@ -690,7 +709,6 @@ function viewSearch(params) {
   const q = params.get("q") || "";
   const kind = params.get("kind") || "";
   commitView(`
-    <section class="hero"><div><h1>Search</h1></div></section>
     <form class="filters" data-action="search-now" id="search-form">
       <label class="grow">Search <input id="search-q" name="q" value="${esc(q)}" type="search" autocomplete="off" placeholder="Title, artist, author or game"></label>
       <button class="btn search-clear" type="button" data-action="clear-search" aria-label="Clear">Clear</button>
@@ -801,7 +819,6 @@ async function runSearch({ focusError = false, focusResult = false } = {}) {
 function viewNew(params) {
   const kind = params.get("kind") || "movie";
   commitView(`
-    <h1>Add</h1>
     <form class="stack add-form" data-action="create-manual" novalidate>
       ${addFormInner({ title: params.get("title") || "", kind })}
     </form>`);
@@ -878,10 +895,11 @@ async function viewItem(id, ticket, forcedSeason = null) {
               return `<button type="button" role="radio" class="status-mark${on ? " is-on" : ""}" aria-checked="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`;
             }).join("")}</div>
           </section>
-          <section class="detail-section">
-            <div class="field-label">Your score <span id="score-value" class="value">${esc(scoreText)}</span> <span id="score-status" class="progress-status" role="status"></span></div>
+          <section class="detail-section score-group">
+            <h2 class="score-heading">${entry.kind === "tv" ? "Show score" : "Your score"}</h2>
+            <div class="field-label"><span id="score-value" class="value">${esc(scoreText)}</span> <span id="score-status" class="progress-status" role="status"></span></div>
             <div class="score-row">
-              ${scoreMarks(entry.rating, "Your score")}
+              ${scoreMarks(entry.rating, entry.kind === "tv" ? "Show score" : "Your score")}
               <button type="button" class="flag${entry.favorite ? " is-on" : ""}" data-flag="favorite" data-focus-key="flag-favorite" aria-pressed="${entry.favorite ? "true" : "false"}" aria-label="Favorite">${entry.favorite ? "★ Favorite" : "☆ Favorite"}</button>
             </div>
           </section>
@@ -897,7 +915,6 @@ async function viewItem(id, ticket, forcedSeason = null) {
         </div>
         ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
-        ${experienceBlock(entry)}
         <div class="web" data-web="${entry.id}" hidden></div>
         ${detailsBlock(entry)}
         <form class="danger-zone" data-action="delete-entry" data-id="${entry.id}"><button class="btn btn-danger" type="submit">Remove from library</button></form>
@@ -989,47 +1006,6 @@ function detailsBlock(entry) {
   return `<details class="item-details"><summary>Details</summary>${genreLine}${tagLine}${releaseForm(entry)}</details>`;
 }
 
-function logVerb(kind) {
-  return { book: "read", movie: "watch", tv: "watch", game: "play", album: "listen", track: "listen", artist: "listen" }[kind] || "watch";
-}
-
-function experienceBlock(entry) {
-  const kind = experienceOptions(entry.kind)[0]?.value || "watch";
-  const rows = (entry.experiences || []).map(row => {
-    const name = historyRemoveName(row);
-    return `
-    <li class="exp">
-      <span>${esc(historyLine(row))}</span>
-      <button type="button" data-action="edit-experience" data-id="${entry.id}" data-experience="${row.id}">Edit</button>
-      <button type="button" data-action="delete-experience" data-id="${entry.id}" data-experience="${row.id}" data-kind="${esc(row.kind || "")}" data-finished="${esc(row.finished_on || "")}" data-started="${esc(row.started_on || "")}" data-notes="${esc(row.notes || "")}" data-rating="${row.rating ?? ""}" aria-label="${esc(name)}">Remove</button>
-      <form class="log-form" data-action="save-experience" data-id="${entry.id}" data-experience="${row.id}" hidden>
-        <label>Entry <textarea name="notes" rows="2" aria-label="Entry">${esc(row.notes || "")}</textarea></label>
-        <label>Score <input name="rating" inputmode="decimal" value="${row.rating ?? ""}"></label>
-        <label class="spoiler"><input type="checkbox" name="spoiler" ${row.spoiler ? "checked" : ""}> Contains spoilers</label>
-        <button class="btn btn-primary" type="submit">Save</button>
-      </form>
-    </li>`;
-  }).join("");
-  const list = rows ? `<ul class="exp-list">${rows}</ul>` : "";
-  const today = new Date();
-  const finished = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return `
-    <section class="exps detail-section">
-      <h2>History</h2>
-      ${list}
-      <button type="button" class="flag" data-action="toggle-log" data-focus-key="again" data-id="${entry.id}">Log a ${esc(logVerb(entry.kind))}</button>
-      <form class="log-form" data-log-form data-action="add-experience" data-id="${entry.id}" hidden>
-        <label>Kind <select name="kind">${options(experienceOptions(entry.kind), kind)}</select></label>
-        <label>Started <input name="started_on" type="date"></label>
-        <label>Finished <input name="finished_on" type="date" value="${esc(finished)}"></label>
-        <label>Score <input name="rating" inputmode="decimal"></label>
-        <label>Entry <textarea name="notes" rows="2" aria-label="Entry"></textarea></label>
-        <label class="spoiler"><input type="checkbox" name="spoiler"> Contains spoilers</label>
-        <button class="btn btn-primary" type="submit">Save</button>
-      </form>
-    </section>`;
-}
-
 function showEpisodes(entry, seasonNumber) {
   const show = entry.show || { episodes: [], seasons: [] };
   const seasons = show.seasons || [];
@@ -1043,15 +1019,22 @@ function showEpisodes(entry, seasonNumber) {
   const rating = seasons.find(item => item.season_number === seasonNumber);
   const watched = rating?.watched ? "true" : "false";
   const score = rating
-    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${watched}">${scoreMarks(rating.rating, "Season score", true)}</div>`
+    ? `<div data-season-marks data-id="${entry.id}" data-season="${rating.season_number}" data-watched="${watched}">${scoreMarks(rating.rating, "Season score")}</div>`
+    : "";
+  const seasonWatched = rating
+    ? `<button type="button" class="btn ${rating.watched ? "btn-primary" : "btn-secondary"}" data-action="season-watched" data-id="${entry.id}" data-season="${rating.season_number}" aria-pressed="${rating.watched ? "true" : "false"}">${rating.watched ? "Season watched" : "Mark season watched"}</button>`
     : "";
   const seasonBox = rating
-    ? `<label class="spoiler"><input type="checkbox" data-season-watched data-id="${entry.id}" data-season="${rating.season_number}" ${rating.watched ? "checked" : ""}> Season watched</label>${score}`
+    ? `<section class="score-group season-score-group" aria-label="Season score"><h2 class="score-heading">Season score</h2>${score}${seasonWatched}</section>`
     : "";
   const tiles = episodes.map(episode => {
     const label = episodePlace(episode);
     const code = episodeCode(episode.season_number, episode.episode_number);
-    return `<li class="episode-tile${episode.watched ? " is-watched" : ""}"><a href="#/item/${entry.id}/episode/${episode.id}">${esc(episode.episode_number)} ${esc(episode.title || label)}</a><button type="button" class="episode-watch" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}" aria-label="${episode.watched ? `Watched ${code}` : `Mark ${code} watched`}"></button></li>`;
+    const unaired = episode.released === false && !episode.watched;
+    const watch = unaired
+      ? `<button type="button" class="btn btn-secondary btn-sm" disabled aria-disabled="true" aria-label="${esc(code)} has not aired yet">Has not aired yet</button>`
+      : `<button type="button" class="btn ${episode.watched ? "btn-primary" : "btn-secondary"} btn-sm" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Watched" : "Mark watched"}</button>`;
+    return `<li class="episode-tile${episode.watched ? " is-watched" : ""}"><a href="#/item/${entry.id}/episode/${episode.id}">${esc(episode.episode_number)} ${esc(episode.title || label)}</a>${watch}</li>`;
   }).join("");
   const nextLabel = markNextLabel(show);
   const upcoming = show.next_episode;
@@ -1080,7 +1063,9 @@ async function viewEpisode(entryId, episodeId, ticket) {
       <p class="eyebrow"><a href="#/item/${entry.id}?season=${episode.season_number}">${esc(entry.title)}</a></p>
       <h1>${esc(episode.title || label)}</h1>
       <p class="lede">${esc(label)}${episode.air_date ? ` · ${esc(releaseLabel({ precision: "day", released_on: episode.air_date, status: "released" }))}` : ""}</p>
-      <button type="button" class="episode-toggle" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Watched" : "Mark watched"}</button>
+      ${episode.released === false && !episode.watched
+        ? `<button type="button" class="btn btn-secondary" disabled aria-disabled="true">Has not aired yet</button>`
+        : `<button type="button" class="btn ${episode.watched ? "btn-primary" : "btn-secondary"}" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Watched" : "Mark watched"}</button>`}
       ${episode.overview ? `<p class="overview">${esc(episode.overview)}</p>` : ""}
     </article>`);
   applyChrome(route(), {
@@ -1699,12 +1684,25 @@ document.addEventListener("click", async event => {
       await render();
       return;
     }
-    if (action === "edit-experience") {
-      const form = button.parentElement?.querySelector("[data-action='save-experience']");
-      if (form instanceof HTMLElement) {
-        form.hidden = !form.hidden;
-        if (!form.hidden) form.querySelector("textarea, input")?.focus();
-      }
+    if (action === "season-watched") {
+      const next = button.getAttribute("aria-pressed") !== "true";
+      const marks = document.querySelector(`[data-season-marks][data-season="${button.dataset.season}"] .score`);
+      const raw = marks?.dataset.scoreValue;
+      const rating = raw === "" || raw == null ? null : Number(raw);
+      await api(`/api/entries/${button.dataset.id}/seasons`, {
+        method: "POST",
+        body: JSON.stringify({
+          season_number: Number(button.dataset.season),
+          watched: next,
+          rating,
+        }),
+      });
+      button.setAttribute("aria-pressed", String(next));
+      button.textContent = next ? "Season watched" : "Mark season watched";
+      button.classList.toggle("btn-primary", next);
+      button.classList.toggle("btn-secondary", !next);
+      const holder = document.querySelector(`[data-season-marks][data-season="${button.dataset.season}"]`);
+      if (holder) holder.dataset.watched = next ? "true" : "false";
       return;
     }
     if (action === "sign-out") {
@@ -1770,44 +1768,6 @@ document.addEventListener("click", async event => {
       return;
     }
     if (action === "close-quick") document.querySelector("#quick-add")?.close();
-    if (action === "toggle-log") {
-      const form = button.parentElement?.querySelector("[data-log-form]");
-      if (form instanceof HTMLElement) {
-        form.hidden = !form.hidden;
-        if (!form.hidden) form.querySelector("select, input, textarea")?.focus();
-      }
-      return;
-    }
-    if (action === "log-again") {
-      const today = new Date();
-      const finished = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-      await api(`/api/entries/${button.dataset.id}/experiences`, {
-        method: "POST",
-        body: JSON.stringify({ kind: button.dataset.kind, finished_on: finished }),
-      });
-      await render();
-    }
-    if (action === "delete-experience") {
-      const payload = {
-        kind: button.dataset.kind,
-        finished_on: button.dataset.finished || null,
-        started_on: button.dataset.started || null,
-        notes: button.dataset.notes || null,
-        rating: button.dataset.rating === "" ? null : button.dataset.rating,
-      };
-      const id = button.dataset.id;
-      await api(`/api/entries/${id}/experiences/${button.dataset.experience}`, { method: "DELETE" });
-      toast("Removed from history.", "status", {
-        label: "Undo",
-        key: `experience:${button.dataset.experience}`,
-        onClick: async () => {
-          await api(`/api/entries/${id}/experiences`, { method: "POST", body: JSON.stringify(payload) });
-          dismissToast(`experience:${button.dataset.experience}`);
-          await render();
-        },
-      });
-      await render();
-    }
   } catch (error) {
     fail(error);
   }
@@ -1865,29 +1825,6 @@ document.addEventListener("submit", async event => {
       await api(`/api/entries/${id}`, { method: "PATCH", body: JSON.stringify(body) });
       clearDraft(id);
       toast("Overall opinion saved.");
-      await render();
-      return;
-    }
-    if (form.dataset.action === "add-experience") {
-      await api(`/api/entries/${id}/experiences`, { method: "POST", body: JSON.stringify({
-        kind: data.kind,
-        started_on: data.started_on || null,
-        finished_on: data.finished_on || null,
-        notes: data.notes || null,
-        rating: data.rating === "" ? null : data.rating,
-        spoiler: Boolean(data.spoiler),
-      }) });
-      toast(loggedToast(data.kind));
-      await render();
-      return;
-    }
-    if (form.dataset.action === "save-experience") {
-      await api(`/api/entries/${id}/experiences/${form.dataset.experience}`, { method: "PATCH", body: JSON.stringify({
-        notes: data.notes,
-        rating: data.rating === "" ? null : data.rating,
-        spoiler: Boolean(data.spoiler),
-      }) });
-      toast("Experience updated.");
       await render();
       return;
     }
@@ -1953,7 +1890,7 @@ document.addEventListener("submit", async event => {
       const heading = dialog.querySelector("#confirm-title");
       const body = dialog.querySelector("#confirm-body");
       if (heading) heading.textContent = `Remove ${title}?`;
-      if (body) body.textContent = "This deletes your status, score, note, history, and any season, album and song scores for it. This can't be undone.";
+      if (body) body.textContent = "This deletes your status, score, note, and any season, album and song scores for it. This can't be undone.";
       dialog.showModal();
       dialog.querySelector("button[value='cancel']")?.focus();
       const choice = await new Promise(resolve => {
@@ -2213,27 +2150,6 @@ document.addEventListener("change", async event => {
   if (target instanceof HTMLInputElement && target.dataset.spoiler != null) {
     const box = document.querySelector("textarea[data-review]");
     if (box instanceof HTMLTextAreaElement) await saveNote(box);
-    return;
-  }
-  if (target instanceof HTMLInputElement && target.dataset.seasonWatched != null) {
-    const marks = document.querySelector(`[data-season-marks][data-season="${target.dataset.season}"] .score`);
-    const raw = marks?.dataset.scoreValue;
-    const rating = raw === "" || raw == null ? null : Number(raw);
-    try {
-      await api(`/api/entries/${target.dataset.id}/seasons`, {
-        method: "POST",
-        body: JSON.stringify({
-          season_number: Number(target.dataset.season),
-          watched: target.checked,
-          rating,
-        }),
-      });
-      const holder = document.querySelector(`[data-season-marks][data-season="${target.dataset.season}"]`);
-      if (holder) holder.dataset.watched = target.checked ? "true" : "false";
-    } catch (error) {
-      target.checked = !target.checked;
-      fail(error);
-    }
     return;
   }
   if (target instanceof HTMLSelectElement && target.dataset.libraryStatus != null) {

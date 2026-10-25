@@ -32,6 +32,11 @@
                 [(value)]="inviteCode" />
             }
             <ui-input
+              label="Name"
+              autocomplete="name"
+              [required]="true"
+              [(value)]="displayName" />
+            <ui-input
               label="Username"
               autocomplete="username"
               [required]="true"
@@ -49,9 +54,9 @@
               @if (inviteToken) {
                 Passphrase: at least 12 characters. It stays in this browser.
               } @else if (policy?.invite_code_required) {
-                Use the invite code you were given. Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+                Use the invite code you were given.                 Name is required. Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
               } @else {
-                Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
+                Name is required. Username: 3–64 letters, numbers, dots, underscores, or hyphens. Passphrase: at least 12 characters.
               }
             </p>
             @if (error) {

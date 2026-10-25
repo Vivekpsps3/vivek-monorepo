@@ -47,22 +47,16 @@ CITIES = (
     ("Red Mesa", "Central", "Fictoria", 35.08, -106.65),
 )
 MEDIA = (
-    ("movie", "watch", "Lantern Tide"),
-    ("movie", "watch", "Paper Orbit"),
-    ("tv", "watch", "Station Eleven Minus Ten"),
-    ("book", "read", "The Quiet Ledger"),
-    ("book", "read", "Maps of Unused Rooms"),
-    ("track", "listen", "Blue Platform"),
-    ("album", "listen", "Second Pressing"),
-    ("artist", "listen", "The Copper Quartet"),
-    ("game", "play", "Ferry Run"),
+    ("movie", "Lantern Tide"),
+    ("movie", "Paper Orbit"),
+    ("tv", "Station Eleven Minus Ten"),
+    ("book", "The Quiet Ledger"),
+    ("book", "Maps of Unused Rooms"),
+    ("track", "Blue Platform"),
+    ("album", "Second Pressing"),
+    ("artist", "The Copper Quartet"),
+    ("game", "Ferry Run"),
 )
-EXPERIENCE_AGAIN = {
-    "watch": "rewatch",
-    "read": "reread",
-    "listen": "listen",
-    "play": "replay",
-}
 
 
 def b64(n: int) -> str:
@@ -271,7 +265,7 @@ def seed_trips(client: httpx.Client, user_index: int, count: int) -> None:
 
 def seed_media(client: httpx.Client, user_index: int, count: int) -> None:
     for number in range(count):
-        kind, experience, title = MEDIA[number % len(MEDIA)]
+        kind, title = MEDIA[number % len(MEDIA)]
         body = {
             "kind": kind,
             "title": f"{title} {user_index}-{number}",
@@ -284,30 +278,6 @@ def seed_media(client: httpx.Client, user_index: int, count: int) -> None:
         created = require(client.post("/media/api/library", json=body), "create media")
         entry_id = created["id"]
         finished = date(2024, 6, 1) + timedelta(days=number)
-        require(
-            client.post(
-                f"/media/api/entries/{entry_id}/experiences",
-                json={
-                    "kind": experience,
-                    "started_on": (finished - timedelta(days=2)).isoformat(),
-                    "finished_on": finished.isoformat(),
-                    "rating": 8,
-                    "notes": "Synthetic experience.",
-                },
-            ),
-            "create experience",
-        )
-        require(
-            client.post(
-                f"/media/api/entries/{entry_id}/experiences",
-                json={
-                    "kind": EXPERIENCE_AGAIN[experience],
-                    "finished_on": (finished + timedelta(days=10)).isoformat(),
-                    "rating": 6,
-                },
-            ),
-            "create second experience",
-        )
         if kind == "tv":
             for episode in range(1, 4):
                 detail = require(

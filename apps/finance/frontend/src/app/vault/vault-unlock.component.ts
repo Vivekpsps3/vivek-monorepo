@@ -16,14 +16,12 @@ import { InfoTipComponent } from '../shared/info-tip.component';
     <div class="page vault-page">
       <ui-page-header [title]="'Unlock vault'">
         <app-info-tip
-          uiPageActions
-          align="end"
           label="Where decryption happens"
           text="Decrypt your finance data in this browser session. Nothing sensitive is sent to the server." />
       </ui-page-header>
       <ui-card [title]="'Vault passphrase'">
         <p class="muted">
-          Signed in as <strong>{{ username || '…' }}</strong>. Remember this username for other browsers.
+          Remember this username for other browsers.
           A lost passphrase cannot be reset, and encrypted data cannot be recovered.
         </p>
         <label>

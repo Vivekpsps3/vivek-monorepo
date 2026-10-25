@@ -115,7 +115,8 @@ test.describe('finance F1 screenshot matrix', () => {
       for (const theme of ['light', 'dark'] as const) {
         await vault.open('/');
         await chooseTheme(page, vault, theme);
-        await expect(page.locator('.source-dates')).toContainText('Balances');
+        await expect(page.locator('.home-tile--balance')).toContainText('Holdings');
+        await expect(page.locator('.home-tile--balance .source-dates')).toHaveCount(0);
         await shot('home-source-dates', width, theme);
         await page.locator('canvas[aria-label*="category"]').scrollIntoViewIfNeeded();
         await expectChartsDrawn(page);

@@ -23,6 +23,7 @@ export class SignupComponent implements OnInit {
   private progressTimers: number[] = [];
 
   username = '';
+  displayName = '';
   password = '';
   inviteCode = '';
   inviteName = '';
@@ -85,7 +86,7 @@ export class SignupComponent implements OnInit {
     this.cdr.markForCheck();
     const pending = this.inviteToken
       ? this.auth.enrollInvitation(this.inviteToken, this.password)
-      : this.auth.signupPasswordless(this.username, this.password, '', this.inviteCode);
+      : this.auth.signupPasswordless(this.username, this.password, this.displayName, this.inviteCode);
     pending.then(
       () => {
         this.loading = false;
@@ -127,6 +128,11 @@ export class SignupComponent implements OnInit {
 
   private validationError(): string | null {
     if (this.inviteToken && this.error && !this.username) return this.error;
+    if (!this.inviteToken) {
+      const name = this.displayName.trim().replace(/\s+/g, ' ');
+      if (!name) return 'Enter a name.';
+      if (name.length > 160) return 'Name must be 160 characters or fewer.';
+    }
     const username = this.username.trim();
     if (!username) return this.inviteToken ? 'This enrollment link is invalid or expired. Ask an admin for a new one.' : 'Enter a username.';
     if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username)) {

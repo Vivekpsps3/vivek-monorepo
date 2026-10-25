@@ -15,7 +15,23 @@
         @if (admin) {
           <a class="text-button" routerLink="/hub/admin">Admin</a>
         }
-        <button type="button" class="text-button" (click)="signOut()">Sign out</button>
+        <div class="account-settings">
+          <button type="button" class="text-button" (click)="toggleSettings()" [attr.aria-expanded]="settingsOpen" aria-haspopup="menu">Account</button>
+          @if (settingsOpen) {
+            <div class="account-settings__menu" role="menu" aria-label="Account settings">
+              <form class="account-settings__name" (ngSubmit)="saveName()">
+                <label>Name <input name="display-name" autocomplete="name" [value]="draftName" (input)="draftName = $any($event.target).value" required></label>
+                @if (nameError) {
+                  <p class="form-error" role="alert">{{ nameError }}</p>
+                }
+                <button type="submit" [disabled]="savingName">Save name</button>
+              </form>
+              <h2 id="username-heading">Change username</h2>
+              <app-username-change />
+              <button type="button" (click)="signOut()">Sign out</button>
+            </div>
+          }
+        </div>
       </div>
     </div>
   </header>
@@ -23,9 +39,6 @@
   <main id="hub-main">
     <p class="eyebrow">{{ headingToday | appDate:'heading' }}</p>
     <h1>{{ name }}</h1>
-    @if (username) {
-      <p class="hub-account">Signed in as <strong class="hub-account__name">{{ username }}</strong></p>
-    }
 
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading">
@@ -173,17 +186,5 @@
       </section>
     </div>
 
-    <section class="side-panel username-panel" aria-labelledby="username-heading">
-      <div class="panel-head">
-        <div>
-          <p class="eyebrow">Account</p>
-          <h2 id="username-heading">Change username</h2>
-        </div>
-      </div>
-      @if (username) {
-        <p class="figure-note">Current username <strong class="hub-account__name">{{ username }}</strong></p>
-      }
-      <app-username-change />
-    </section>
   </main>
 </div>

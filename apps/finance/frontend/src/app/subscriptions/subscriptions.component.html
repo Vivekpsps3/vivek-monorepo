@@ -3,10 +3,10 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Subscriptions'">
+    <app-info-tip
+      label="Subscriptions and net worth"
+      text="This does not change net worth." />
     <div uiPageActions class="header-actions">
-      <app-info-tip
-        label="Subscriptions and net worth"
-        text="This does not change net worth." />
       <ui-button variant="primary" (clicked)="openAddModal()">
         <ui-icon name="plus" size="sm" /> Add subscription
       </ui-button>

@@ -213,17 +213,7 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
     add_movie(client, "Watched", status="completed", year=2021)
     add_movie(client, "Watched 2", status="want", year=2026)
     add_movie(client, "Seen Sequel", status="completed", year=2019)
-    logging = add_movie(client, "Logging", status="in_progress", year=2018)
-    assert (
-        client.post(
-            f"/api/entries/{logging['id']}/experiences",
-            json={
-                "kind": "watch",
-                "finished_on": "2026-09-01",
-            },
-        ).status_code
-        == 200
-    )
+    add_movie(client, "Logging", status="completed", year=2018)
 
     before = {item["title"] for item in client.get("/api/library").json()["items"]}
     payload = client.get("/api/calendar").json()

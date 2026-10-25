@@ -26,7 +26,10 @@ test("the hub panel uses journal labels, deep links, next episodes, and retry", 
   assert.match(html, /review_excerpt/);
   assert.match(read("app/hub/hub-summary.ts"), /tv: 'Series'/);
   assert.match(html, /Change username/);
-  assert.match(html, /hub-account__name/);
+  assert.match(html, /aria-label="Account settings"/);
+  assert.match(html, /Save name/);
+  assert.doesNotMatch(html, /Signed in as/);
+  assert.doesNotMatch(html, /hub-account__name/);
   assert.match(read("app/hub/username-change.component.html"), /aria-live="assertive"/);
   assert.match(read("app/hub/username-change.component.html"), /New username/);
   assert.match(read("app/hub/username-change.component.html"), /Current passphrase/);

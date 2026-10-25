@@ -2,10 +2,10 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Holdings'">
+    <app-info-tip
+      label="Holdings and net worth"
+      text="Market value counts toward net worth. Transactions do not." />
     <div uiPageActions class="header-actions">
-      <app-info-tip
-        label="Holdings and net worth"
-        text="Market value counts toward net worth. Transactions do not." />
       <ui-button
         variant="secondary"
         [disabled]="refreshingPrices || holdings.length === 0"

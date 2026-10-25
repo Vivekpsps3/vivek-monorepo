@@ -646,7 +646,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     await expect(plan).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/planning(?:\?|$)/);
-    await expect(page.getByRole('heading', { name: 'Planning', exact: true })).toBeVisible();
+    await expect(page.locator('app-planning-hub')).toBeVisible();
   }
 });
 

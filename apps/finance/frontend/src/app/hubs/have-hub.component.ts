@@ -9,7 +9,6 @@ import { PortfolioComponent } from '../portfolio/portfolio.component';
   imports: [RouterLink, AssetsLiabilitiesComponent, PortfolioComponent],
   template: `
     <div class="page">
-      <h1>What you have</h1>
       <nav class="hub-tabs" aria-label="What you have">
         <a [routerLink]="[]" [queryParams]="{ t: 'assets' }" [class.on]="tab === 'assets'">Assets and debts</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'holdings' }" [class.on]="tab === 'holdings'">Holdings</a>

@@ -1,14 +1,9 @@
 <div class="page dashboard">
   @if (!isLoading && !error && netWorth) {
-    <header class="home-header">
-      <h1>Home</h1>
-    </header>
-
     <nav class="home-overview" aria-label="Home overview">
       <a routerLink="/have" class="home-tile home-tile--balance">
         <span class="home-tile__topline">What you have <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money">{{ have | money }}</span>
-        <span class="home-tile__metric-name">Current net worth</span>
 
         <dl class="balance-breakdown">
           <div>
@@ -25,17 +20,6 @@
           </div>
         </dl>
 
-        @if (balanceSourceDates || positionSourceDates || quoteSourceDates) {
-        <div class="source-dates">
-          <p class="source-dates__heading">Source dates</p>
-          <dl>
-            @if (balanceSourceDates) { <div><dt>Balances</dt><dd>{{ balanceSourceDates }}</dd></div> }
-            @if (positionSourceDates) { <div><dt>Positions</dt><dd>{{ positionSourceDates }}</dd></div> }
-            @if (quoteSourceDates) { <div><dt>Quotes</dt><dd>{{ quoteSourceDates }}</dd></div> }
-          </dl>
-        </div>
-        }
-
         @if (portfolioValueIncomplete) {
           <span class="home-status">Portfolio value incomplete · {{ unvaluedPositionCount | plural:'unvalued position' }}</span>
         }
@@ -47,7 +31,6 @@
       <a routerLink="/spending" class="home-tile home-tile--activity">
         <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
-        <span class="home-tile__metric-name">Income and spending, counted once</span>
         <span class="home-split">
           <span>
             <small>Income</small>

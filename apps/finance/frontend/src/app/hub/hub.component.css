@@ -109,25 +109,29 @@
   text-transform: uppercase;
 }
 
-.hub-account {
-  margin: var(--space-3) 0 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+.account-settings { position: relative; }
+.account-settings__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: var(--space-3);
+  width: min(22rem, calc(100vw - 2rem));
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-lg);
 }
-
-.hub-account__name {
-  color: var(--text);
-  font-weight: 650;
-  overflow-wrap: anywhere;
+.account-settings__name { display: grid; gap: var(--space-2); }
+.account-settings__name input,
+.account-settings__menu button {
+  min-height: 44px;
+  font: inherit;
 }
-
-.username-panel {
-  margin-top: var(--space-4);
-}
-
-.username-panel .figure-note {
-  margin: 0 0 var(--space-4);
-}
+.account-settings__menu h2 { margin: 0; font-size: var(--text-sm); }
+.account-settings .form-error { margin: 0; color: var(--danger); font-size: var(--text-sm); }
 
 h1 {
   margin: 0;

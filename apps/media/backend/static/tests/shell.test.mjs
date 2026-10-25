@@ -63,6 +63,7 @@ test("the shell has five mobile tabs and a currentColor favicon", () => {
   assert.equal((tabNav.match(/data-nav="/g) || []).length, 5);
   assert.match(html, /class="mobile-bar"/);
   assert.match(html, /data-action="open-add"/);
+  assert.doesNotMatch(html, /Your notes stay in this journal/);
   assert.doesNotMatch(html, /aria-current="false"/);
   assert.match(icon("now"), /aria-hidden="true"/);
   assert.match(icon("search"), /<svg/);

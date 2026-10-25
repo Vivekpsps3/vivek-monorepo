@@ -254,7 +254,12 @@ def passwordless_signup(
             raise HTTPException(status_code=403, detail=SIGNUP_UNAVAILABLE)
         raise HTTPException(status_code=409, detail="Username already exists")
     _require_p256_public_key(body.public_key_b64)
-    display = (body.display_name or "").strip() or username
+    try:
+        from apps.finance.backend.schemas_auth import normalize_display_name
+
+        display = normalize_display_name(body.display_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     is_first = db.query(User).count() == 0
     user = create_user(
         db,

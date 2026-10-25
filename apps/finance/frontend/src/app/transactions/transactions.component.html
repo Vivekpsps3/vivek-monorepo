@@ -2,10 +2,10 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'">
+    <app-info-tip
+      label="Activity and net worth"
+      [text]="typeFilter === 'income' ? 'Recorded deposits and scheduled work income for the selected period. This view does not change net worth.' : 'Card and bank activity. This list does not change net worth.'" />
     <div uiPageActions class="header-actions">
-      <app-info-tip
-        label="Activity and net worth"
-        [text]="typeFilter === 'income' ? 'Recorded deposits and scheduled work income for the selected period. This view does not change net worth.' : 'Card and bank activity. This list does not change net worth.'" />
       <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
       <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
     </div>

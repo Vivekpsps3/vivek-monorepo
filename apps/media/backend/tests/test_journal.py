@@ -91,68 +91,6 @@ def test_manual_entry_rating_and_review_round_trip(client):
     assert again.json()["review"] == "Revised."
 
 
-def test_experiences_do_not_replace_the_overall_review(client):
-    created = client.post(
-        "/api/library",
-        json={
-            "kind": "movie",
-            "title": "Rewatch",
-            "status": "completed",
-            "rating": 9,
-            "review": "Still the one.",
-        },
-    ).json()
-    first = client.post(
-        f"/api/entries/{created['id']}/experiences",
-        json={
-            "kind": "watch",
-            "finished_on": "2025-01-03",
-            "rating": 8,
-            "notes": "First time.",
-        },
-    )
-    assert first.status_code == 200
-    assert first.json()["rating"] == 9
-    assert first.json()["review"] == "Still the one."
-    second = client.post(
-        f"/api/entries/{created['id']}/experiences",
-        json={
-            "kind": "rewatch",
-            "finished_on": "2026-10-02",
-            "rating": 9.5,
-            "notes": "Better the second time.",
-            "spoiler": True,
-        },
-    )
-    assert second.status_code == 200
-    notes = [row["notes"] for row in second.json()["experiences"]]
-    assert notes == ["First time.", "Better the second time."]
-    assert [row["rating"] for row in second.json()["experiences"]] == [8, 9.5]
-    assert second.json()["rating"] == 9
-    assert second.json()["review"] == "Still the one."
-
-    edited = client.patch(
-        f"/api/entries/{created['id']}/experiences/{second.json()['experiences'][0]['id']}",
-        json={"notes": "First time, revised."},
-    )
-    assert edited.json()["review"] == "Still the one."
-    removed = client.delete(
-        f"/api/entries/{created['id']}/experiences/{second.json()['experiences'][1]['id']}"
-    )
-    assert [row["notes"] for row in removed.json()["experiences"]] == ["First time, revised."]
-    assert (
-        client.post(
-            f"/api/entries/{created['id']}/experiences",
-            json={
-                "kind": "watch",
-                "started_on": "2026-10-10",
-                "finished_on": "2026-10-01",
-            },
-        ).status_code
-        == 422
-    )
-
-
 def test_episode_progress_survives_reload(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
     show = client.post(
@@ -193,6 +131,51 @@ def test_episode_progress_survives_reload(client, monkeypatch):
     reloaded = client.get(f"/api/entries/{show['id']}").json()["show"]
     assert reloaded["episodes"][0]["watched"] is True
     assert reloaded["episodes"][1]["watched"] is False
+
+
+def test_future_episode_cannot_be_marked_watched(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
+    show = client.post(
+        "/api/library", json={"kind": "tv", "title": "Serial", "status": "in_progress"}
+    ).json()
+
+    def add(number, title, air_date):
+        body = {"season_number": 1, "episode_number": number, "title": title}
+        if air_date is not None:
+            body["air_date"] = air_date
+        added = client.post(f"/api/entries/{show['id']}/episodes", json=body)
+        assert added.status_code == 200
+        return next(
+            row for row in added.json()["show"]["episodes"] if row["episode_number"] == number
+        )
+
+    future = add(1, "Later", "2026-10-16")
+    today = add(2, "Today", "2026-10-15")
+    aired = add(3, "Aired", "2026-10-14")
+    undated = add(4, "Undated", None)
+    blocked = client.post(
+        f"/api/entries/{show['id']}/episodes/{future['id']}/watched",
+        json={"watched": True},
+    )
+    assert blocked.status_code == 422
+    assert "not aired" in blocked.json()["detail"].lower()
+    kept = client.get(f"/api/entries/{show['id']}").json()["show"]["episodes"]
+    assert next(row for row in kept if row["id"] == future["id"])["watched"] is False
+    for episode in (today, aired, undated):
+        marked = client.post(
+            f"/api/entries/{show['id']}/episodes/{episode['id']}/watched",
+            json={"watched": True},
+        )
+        assert marked.status_code == 200
+        row = next(
+            item for item in marked.json()["show"]["episodes"] if item["id"] == episode["id"]
+        )
+        assert row["watched"] is True
+    cleared = client.post(
+        f"/api/entries/{show['id']}/episodes/{future['id']}/watched",
+        json={"watched": False},
+    )
+    assert cleared.status_code == 200
 
 
 def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkeypatch):
