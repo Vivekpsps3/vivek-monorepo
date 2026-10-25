@@ -1,11 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEEK_STARTS_ON, chooseReview, coverImage, dayLabel, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, weekDayLabels, whenLabel } from "../modules/format.mjs";
+import { WEEK_STARTS_ON, artworkUrl, chooseReview, coverImage, dayLabel, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, weekDayLabels, whenLabel } from "../modules/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
   assert.equal(safeUrl("javascript:alert(1)"), "");
   assert.equal(safeUrl("https://covers.example/a.jpg"), "https://covers.example/a.jpg");
+  const group = "2b8f453f-ffd6-4860-8742-7cff1c2feae3";
+  const releaseCover = "https://coverartarchive.org/release/0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe/front-250";
+  assert.equal(
+    artworkUrl({ artwork_url: releaseCover, extra: { release_group_id: group } }),
+    `https://coverartarchive.org/release-group/${group}/front-250`,
+  );
+  assert.equal(
+    artworkUrl({ artwork_url: "https://example.invalid/cover.png", extra: { release_group_id: group } }),
+    "https://example.invalid/cover.png",
+  );
+  assert.equal(
+    artworkUrl({
+      kind: "artist",
+      artwork_url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/A.jpg/500px-A.jpg",
+      extra: { release_group_id: group },
+    }),
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/A.jpg/500px-A.jpg",
+  );
+  assert.equal(artworkUrl({ kind: "artist", artwork_url: null, extra: { release_group_id: group } }), "");
 });
 
 test("keeps unrated distinct from zero and labels statuses by medium", () => {

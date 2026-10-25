@@ -4,20 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { VaultService } from '../crypto/vault.service';
 import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 
 @Component({
   selector: 'app-vault-setup',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, InfoTipComponent],
+  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent],
   template: `
     <div class="page vault-page">
       <ui-page-header [title]="'Create your vault'">
-        <app-info-tip
-          uiPageActions
-          align="end"
-          label="Encryption"
-          text="Your finance data is encrypted in the browser. The server only stores ciphertext." />
+
       </ui-page-header>
       <ui-card [title]="'Vault passphrase'">
         <p class="muted">

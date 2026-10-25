@@ -270,3 +270,50 @@ def test_a_bad_musicbrainz_year_skips_one_album(client, monkeypatch):
     assert followed.status_code == 200
     titles = [album["title"] for album in followed.json()["music"]["albums"]]
     assert titles == ["Kept"]
+
+
+def test_public_tmdb_page_pairs_each_title_with_its_poster():
+    from apps.media.backend.services.providers import parse_tmdb_movie_page
+
+    page = """
+    <div class="media-list-results">
+      <a href="/movie/11-earlier"><img src="https://media.themoviedb.org/t/p/w220_and_h330_face/earlier.jpg"></a>
+      <a href="/movie/11-earlier" data-media-adult="false"><h2>Earlier</h2></a>
+      <span class="release_date">May 25, 1977</span>
+      <a href="/movie/22-later"><img src="https://media.themoviedb.org/t/p/w220_and_h330_face/laterPoster.jpg"></a>
+      <a href="/movie/22-later" data-media-adult="false"><h2>Later</h2></a>
+      <span class="release_date">July 31, 2026</span>
+    </div>
+    """
+    rows = parse_tmdb_movie_page(page)
+    assert [(row["title"], row["source_id"], row["year"]) for row in rows] == [
+        ("Earlier", "movie:11", 1977),
+        ("Later", "movie:22", 2026),
+    ]
+    assert rows[1]["artwork_url"] == "https://image.tmdb.org/t/p/w342/laterPoster.jpg"
+
+
+def test_movies_route_returns_tmdb_titles(client, monkeypatch):
+    monkeypatch.setattr(
+        "apps.media.backend.services.providers.popular_movies",
+        lambda *_args, **_kwargs: [
+            {
+                "source": "tmdb",
+                "source_id": "movie:11",
+                "kind": "movie",
+                "title": "Star Wars",
+                "creator": None,
+                "year": 1977,
+                "overview": None,
+                "artwork_url": "https://image.tmdb.org/t/p/w342/star.jpg",
+                "genres": [],
+                "external_ratings": [],
+                "extra": {},
+                "releases": [],
+                "episodes": [],
+            }
+        ],
+    )
+    found = client.get("/api/movies")
+    assert found.status_code == 200
+    assert found.json()["results"][0]["title"] == "Star Wars"

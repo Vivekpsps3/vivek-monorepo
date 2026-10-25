@@ -16,7 +16,6 @@ import {
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
 import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import {
   actualQuoteDate,
   hasUnvaluedPositions,
@@ -41,7 +40,6 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiCardComponent,
     UiIconComponent,
     UiSkeletonComponent,
-    InfoTipComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.css',

@@ -43,6 +43,7 @@
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .ui-page-header__actions:empty {
@@ -59,6 +60,7 @@
   }
 
   .ui-page-header__actions {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
   }
 }

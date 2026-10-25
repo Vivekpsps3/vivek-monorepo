@@ -67,6 +67,38 @@ export function safeUrl(value) {
   return "";
 }
 
+const MBID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function releaseGroupId(item) {
+  const extras = [item?.extra, item?.catalog?.extra];
+  for (const extra of extras) {
+    if (extra && typeof extra.release_group_id === "string" && MBID.test(extra.release_group_id)) {
+      return extra.release_group_id;
+    }
+  }
+  return "";
+}
+
+function releaseScopedCover(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === "coverartarchive.org" && parsed.pathname.startsWith("/release/");
+  } catch {
+    return false;
+  }
+}
+
+export function artworkUrl(item) {
+  const current = safeUrl(item?.artwork_url);
+  if (item?.kind === "artist") return current;
+  const group = releaseGroupId(item);
+  if (group && (!current || releaseScopedCover(current))) {
+    return `https://coverartarchive.org/release-group/${group}/front-250`;
+  }
+  return current;
+}
+
 export function kindLabel(kind) {
   return { movie: "Movie", tv: "Series", book: "Book", track: "Song", album: "Album", artist: "Artist", game: "Game" }[kind] || "Media";
 }

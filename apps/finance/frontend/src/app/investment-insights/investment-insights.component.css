@@ -5,10 +5,13 @@
 }
 
 ui-card,
-ui-button,
 ui-data-table {
   display: block;
   min-width: 0;
+  max-width: 100%;
+}
+
+ui-button {
   max-width: 100%;
 }
 

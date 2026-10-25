@@ -133,6 +133,45 @@ def test_episode_progress_survives_reload(client, monkeypatch):
     assert reloaded["episodes"][1]["watched"] is False
 
 
+def test_watched_episode_can_be_marked_unwatched(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
+    show = client.post(
+        "/api/library", json={"kind": "tv", "title": "Serial", "status": "in_progress"}
+    ).json()
+    added = client.post(
+        f"/api/entries/{show['id']}/episodes",
+        json={
+            "season_number": 1,
+            "episode_number": 1,
+            "title": "Pilot",
+            "air_date": "2026-10-01",
+        },
+    )
+    assert added.status_code == 200
+    episode = added.json()["show"]["episodes"][0]
+    marked = client.post(
+        f"/api/entries/{show['id']}/episodes/{episode['id']}/watched",
+        json={"watched": True, "watched_on": "2026-10-02"},
+    )
+    assert marked.status_code == 200
+    assert marked.json()["show"]["episodes"][0]["watched"] is True
+    assert marked.json()["show"]["watched_count"] == 1
+    cleared = client.post(
+        f"/api/entries/{show['id']}/episodes/{episode['id']}/watched",
+        json={"watched": False},
+    )
+    assert cleared.status_code == 200
+    row = cleared.json()["show"]["episodes"][0]
+    assert row["watched"] is False
+    assert row["watched_on"] is None
+    assert cleared.json()["show"]["watched_count"] == 0
+    assert cleared.json()["show"]["next_episode"]["id"] == episode["id"]
+    again = client.get(f"/api/entries/{show['id']}").json()["show"]
+    assert again["episodes"][0]["watched"] is False
+    assert again["episodes"][0]["watched_on"] is None
+    assert again["watched_count"] == 0
+
+
 def test_future_episode_cannot_be_marked_watched(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-15")
     show = client.post(

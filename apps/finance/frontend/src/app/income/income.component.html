@@ -2,9 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'">
-    <app-info-tip
-      label="Jobs and net worth"
-      text="Jobs and pay do not add a spending transaction or change net worth." />
+
     <div uiPageActions class="header-actions">
       <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
     </div>
@@ -294,7 +292,7 @@
         </div>
 
         <details class="pay-disclosure">
-          <summary>Annual pay estimates, taxes, and take-home estimate <app-info-tip label="Annual estimates" text="Bonus, equity, and other pay are estimates added to base pay and prorated over employment dates. Dated payments are added separately. Clear an annual estimate if it is the same payout." /></summary>
+          <summary>Annual pay estimates, taxes, and take-home estimate </summary>
         <div class="form-row">
           <label class="form-group">
             <span>Annual bonus</span>
@@ -315,9 +313,7 @@
             <div>
               <h4 id="tax-helper-title">
                 U.S. tax withholding helper
-                <app-info-tip
-                  label="Tax estimate"
-                  text="Starting estimate for federal income tax, FICA, and a state-tax bucket. Replace it with paystub numbers. Not tax advice." />
+
               </h4>
             </div>
             <ui-badge variant="warning">Estimate</ui-badge>
@@ -334,7 +330,7 @@
             <label class="form-group">
               <span>
                 Pre-tax deductions per period
-                <app-info-tip label="Pre-tax deductions" text="401(k), insurance, HSA/FSA, or commuter benefits." />
+
               </span>
               <input name="pre_tax_deductions" type="number" min="0" step="0.01" [(ngModel)]="taxEstimator.preTaxDeductionsPerPeriod" />
             </label>
@@ -355,7 +351,7 @@
             <label>
               <span>
                 {{ payPeriodLabel | titlecase }} taxes
-                <app-info-tip label="Taxes per period" text="Use paystub withholding when you have it." />
+
               </span>
               <input id="job-taxes" data-field="taxes" name="taxes_per_period" type="number" min="0" step="0.01" [(ngModel)]="form.taxes_per_period" [attr.aria-invalid]="fieldError('taxes') ? true : null" [attr.aria-describedby]="fieldError('taxes') ? 'job-taxes-error' : null" [attr.data-field-invalid]="fieldError('taxes') ? true : null" />
             </label>
@@ -367,7 +363,7 @@
             <label>
               <span>
                 {{ payPeriodLabel | titlecase }} deductions
-                <app-info-tip label="Deductions per period" text="Recurring deductions such as insurance, retirement, or transit." />
+
               </span>
               <input id="job-deductions" data-field="deductions" name="deductions_per_period" type="number" min="0" step="0.01" [(ngModel)]="form.deductions_per_period" [attr.aria-invalid]="fieldError('deductions') ? true : null" [attr.aria-describedby]="fieldError('deductions') ? 'job-deductions-error' : null" [attr.data-field-invalid]="fieldError('deductions') ? true : null" />
             </label>
@@ -396,15 +392,13 @@
           </div>
         </div>
 
-
-
         </details>
 
         <details class="pay-disclosure pay-disclosure--history">
           <summary>Promotions, dated payments, stock, and ESPP history</summary>
         <section class="compensation-history" aria-labelledby="promotions-title">
           <div class="history-heading">
-            <h4 id="promotions-title">Promotions and pay changes <app-info-tip label="Promotions" text="Starting pay stays above. Each promotion replaces annual base pay from its date." /></h4>
+            <h4 id="promotions-title">Promotions and pay changes </h4>
             <ui-button variant="secondary" size="sm" (clicked)="addPromotion()">Add promotion</ui-button>
           </div>
           @for (promotion of form.promotions || []; track $index; let i = $index) {
@@ -430,7 +424,7 @@
 
         <section class="compensation-history" aria-labelledby="payments-title">
           <div class="history-heading">
-            <h4 id="payments-title">Dated cash bonuses and payments <app-info-tip label="Dated payments" text="Gross amounts on the payment or vesting date, counted once, including after a job ends. Annual withholding estimates still apply to recurring pay." /></h4>
+            <h4 id="payments-title">Dated cash bonuses and payments </h4>
             <ui-button variant="secondary" size="sm" (clicked)="addCompensationPayment()">Add payment</ui-button>
           </div>
           @for (payment of form.compensation_payments || []; track $index; let i = $index) {
@@ -464,13 +458,13 @@
 
         <section class="compensation-history" aria-labelledby="stock-title">
           <div class="history-heading">
-            <h4 id="stock-title">Stock bonuses and equity grants <app-info-tip label="Stock compensation" text="Grant value counts in the grant year; later years count only gains or losses. ESPP compensation is value minus your purchase contributions. Sale proceeds stay fixed. These amounts stay out of recurring pay and net worth." /></h4>
+            <h4 id="stock-title">Stock bonuses and equity grants </h4>
             <ui-button variant="secondary" size="sm" (clicked)="addStockGrant()">Add stock grant</ui-button>
           </div>
 
           <div class="form-row">
             <label class="form-group">
-              <span>Employer stock ticker (optional) <app-info-tip label="Ticker and price" text="A ticker refreshes a market quote on open and after save. Only the ticker is sent. Leave it blank for private stock. Each manual price replaces the previous one; dated market quotes are kept." /></span>
+              <span>Employer stock ticker (optional) </span>
               <input name="stock_symbol" maxlength="10" autocapitalize="characters" autocomplete="off" [(ngModel)]="form.stock_symbol" placeholder="MSFT or BRK.B" />
             </label>
           </div>
@@ -518,7 +512,7 @@
               </p>
 
               <div class="history-heading">
-                <h4>Partial sales <app-info-tip label="Sale proceeds" text="Enter total cash received. It stays fixed if later share prices change." /></h4>
+                <h4>Partial sales </h4>
                 <ui-button variant="secondary" size="sm" (clicked)="addStockSale(grant)">Add sale</ui-button>
               </div>
               @for (sale of grant.sales || []; track $index; let si = $index) {
@@ -545,7 +539,7 @@
           }
 
           <div class="history-heading stock-valuations-heading">
-            <h4>Employee share plan (ESPP) purchases <app-info-tip label="ESPP purchases" text="Record shares and what you paid per share. Only value above that contribution counts as compensation. Sale proceeds stay fixed when later prices change." /></h4>
+            <h4>Employee share plan (ESPP) purchases </h4>
             <ui-button variant="secondary" size="sm" (clicked)="addStockPurchase()">Add ESPP purchase</ui-button>
           </div>
           @for (purchase of form.stock_purchases || []; track $index; let i = $index) {

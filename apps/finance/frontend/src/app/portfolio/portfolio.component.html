@@ -2,9 +2,7 @@
   <ui-page-header
     [embedded]="embedded"
     [title]="'Holdings'">
-    <app-info-tip
-      label="Holdings and net worth"
-      text="Market value counts toward net worth. Transactions do not." />
+
     <div uiPageActions class="header-actions">
       <ui-button
         variant="secondary"
@@ -23,11 +21,11 @@
   </ui-page-header>
   @for (stage of resumableFidelityStages; track stage.id) {
     <ui-card class="resume-stage" [title]="'Fidelity replacement needs attention'">
-      <p>{{ stage.filename }} · {{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>
-      <ui-button variant="primary" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
+      <ui-button uiCardActions variant="primary" size="sm" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
         @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
         Resume Fidelity import
       </ui-button>
+      <p>{{ stage.filename }} · {{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>
     </ui-card>
   }
 

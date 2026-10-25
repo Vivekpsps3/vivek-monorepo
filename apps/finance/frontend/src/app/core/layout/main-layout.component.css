@@ -325,15 +325,6 @@
   white-space: nowrap;
 }
 
-.account-popover__note {
-  margin: var(--space-1) 0 0;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  line-height: 1.45;
-}
-
 .account-popover a,
 .account-popover button {
   width: 100%;
@@ -716,7 +707,7 @@
   }
 
   .tutorial-header {
-    flex-direction: column;
+    align-items: flex-start;
   }
 
   .tutorial-map {

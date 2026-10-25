@@ -18,7 +18,6 @@ import { formatPercent } from '@vivek/browser';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { UiCardComponent, UiEmptyStateComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import {
   chartColorAt,
   chartCartesianScales,
@@ -38,7 +37,7 @@ type ChartConstructor = new (
   selector: 'app-charts',
   standalone: true,
   imports: [
-    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, InfoTipComponent],
+    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

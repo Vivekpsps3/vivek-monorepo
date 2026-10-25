@@ -38,7 +38,7 @@ test('search tells the truth when movie and game catalogs are missing', async ({
 
 test('Now, Library, and Calendar use the spec headings and one library list', async ({ page }) => {
   await page.goto('/media/#/');
-  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
   await expect(page.locator('.grid .card').first()).toBeVisible();
 
   await page.goto('/media/#/library');
@@ -164,7 +164,7 @@ test('axe reports no serious or critical issues on the main screens', async ({ p
   ];
   for (const [hash, name] of screens) {
     await page.evaluate(value => { location.hash = value; }, hash);
-    if (name === 'now') await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+    if (name === 'now') await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
     if (name === 'library') await expect(page.locator('.grid .card').first()).toBeVisible();
     if (name === 'search') await expect(page.getByText('Results come from public catalogs.')).toBeVisible();
     if (name === 'calendar') await expect(page.getByRole('link', { name: 'Today' })).toBeVisible();

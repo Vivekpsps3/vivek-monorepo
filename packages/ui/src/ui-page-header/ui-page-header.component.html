@@ -3,7 +3,6 @@
     @if (!embedded()) {
       <h1 class="ui-page-header__title">{{ title() }}</h1>
     }
-    <ng-content select="app-info-tip" />
     @if (!embedded() && subtitle()) {
       <p class="ui-page-header__subtitle">{{ subtitle() }}</p>
     }

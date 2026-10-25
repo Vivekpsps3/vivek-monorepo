@@ -6,18 +6,15 @@ import { continueAfterAuth } from '../auth/after-auth';
 import { AuthService } from '../auth/auth.service';
 import { VaultService } from '../crypto/vault.service';
 import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 
 @Component({
   selector: 'app-vault-unlock',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, InfoTipComponent],
+  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent],
   template: `
     <div class="page vault-page">
       <ui-page-header [title]="'Unlock vault'">
-        <app-info-tip
-          label="Where decryption happens"
-          text="Decrypt your finance data in this browser session. Nothing sensitive is sent to the server." />
+
       </ui-page-header>
       <ui-card [title]="'Vault passphrase'">
         <p class="muted">

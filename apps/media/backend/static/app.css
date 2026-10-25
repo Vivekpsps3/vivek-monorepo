@@ -542,6 +542,7 @@ dialog form { display: grid; gap: var(--space-3); }
   text-align: left;
   cursor: pointer;
 }
+.episode-page.is-watched > h1,
 .episode-page.is-watched .episode-toggle h1 { color: var(--text-tertiary); }
 .episode-page .eyebrow a { color: inherit; text-decoration: none; }
 .marks { display: flex; gap: 4px; align-items: center; min-height: 44px; }
@@ -757,6 +758,9 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 .cover-face span { position: relative; z-index: 1; color: #fff; font-size: 0.85rem; }
 .cover input[name="rating"], .cover-tracks input { width: 3rem; border: 0; background: transparent; color: inherit; }
 .cover-tracks { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
+.song-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.song-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 44px; padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-md); }
+.song-list .song-name { cursor: default; }
 .cover-add { display: grid; gap: var(--space-2); }
 .cover-add input, .cover-add button {
   border: 1px solid var(--border-control);
@@ -948,6 +952,28 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 .library-toolbar .grow { flex: 1; min-width: 0; }
 .library-toolbar .chip-row { margin: 0; overflow: visible; }
 #library-q { width: min(280px, 100%); }
+.library-tree { display: grid; gap: var(--space-8); }
+.library-tree + .grid { margin-top: var(--space-8); }
+.library-artist > h2 { margin-bottom: var(--space-3); }
+.library-artist-head { display: flex; align-items: center; gap: var(--space-3); }
+.library-artist-head .poster-sm { width: 48px; flex: none; }
+.library-artist > h2 a,
+.library-album-name a { color: inherit; text-decoration: none; }
+.library-artist > h2 a:hover,
+.library-album-name a:hover { color: var(--accent); }
+.library-albums { display: grid; gap: var(--space-4); margin-left: var(--space-4); }
+.library-album-name {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+.library-album .library-songs,
+.library-artist > .library-songs { margin-left: var(--space-4); }
 .status-narrow { display: none; }
 .continue {
   box-shadow: var(--shadow-sm);
@@ -1092,7 +1118,7 @@ a.status-mark, a.flag { text-decoration: none; display: inline-flex; align-items
 }
 #quick-add form { overflow: auto; min-height: 0; overscroll-behavior: contain; }
 #quick-add::backdrop { background: color-mix(in srgb, var(--text) 40%, transparent); }
-.stats a { color: inherit; }
+section > h2 a { color: inherit; text-decoration: none; }
 button:focus-visible, a:focus-visible, [role="gridcell"]:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;

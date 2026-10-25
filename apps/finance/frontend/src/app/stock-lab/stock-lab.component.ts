@@ -9,7 +9,6 @@ import { MarketResearchService } from '../services/market-research.service';
 import { StockLabScenarioService } from '../services/stock-lab-scenario.service';
 import { ToastService } from '@vivek/ui';
 import { UiButtonComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { buildScorecard, calculatePurchasePlan, calculateReturnPeriods, detectDividendCadence, trailingTwelveMonthDividend } from '../utils/stock-lab.util';
 import {
   EvidenceCard,
@@ -19,12 +18,11 @@ import {
 import { AppDatePipe } from '../shared/pipes/app-date.pipe';
 import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 
-
 @Component({
   selector: 'app-stock-lab',
   standalone: true,
   imports: [
-    AppDatePipe, CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent, InfoTipComponent],
+    AppDatePipe, CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiDataTableComponent, UiEmptyStateComponent, UiSkeletonComponent],
   templateUrl: './stock-lab.component.html',
   styleUrl: './stock-lab.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

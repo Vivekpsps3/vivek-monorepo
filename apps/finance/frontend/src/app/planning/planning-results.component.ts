@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import { UiCardComponent, UiDataTableComponent, UiIconComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import {
   PlanningCheckpointResult,
   PlanningRun,
@@ -12,7 +11,7 @@ import { formatEstimate } from '../shared/stored-money';
 @Component({
   selector: 'app-planning-results',
   standalone: true,
-  imports: [UiCardComponent, UiDataTableComponent, UiIconComponent, MonteCarloFanChartComponent, InfoTipComponent],
+  imports: [UiCardComponent, UiDataTableComponent, UiIconComponent, MonteCarloFanChartComponent],
   templateUrl: './planning-results.component.html',
   styleUrl: './planning-results.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

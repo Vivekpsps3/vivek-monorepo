@@ -10,7 +10,6 @@ import { FixedExpensesComponent } from '../fixed-expenses/fixed-expenses.compone
 import { SubscriptionsComponent } from '../subscriptions/subscriptions.component';
 import { FinanceService } from '../services/finance.service';
 import { UiButtonComponent } from '@vivek/ui';
-import { InfoTipComponent } from '../shared/info-tip.component';
 import { FixedExpense, Subscription } from '../models/transaction.model';
 import { countableCents, dollarsFromCountedCents, needsFixing } from '@vivek/browser';
 import { UiBadgeComponent } from '@vivek/ui';
@@ -39,7 +38,7 @@ export interface CommitmentRow {
   standalone: true,
   imports: [
     AppDatePipe,
-    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent, InfoTipComponent],
+    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
   template: `
     <div class="page recurring-page">
       <nav class="hub-tabs" aria-label="Recurring">
@@ -50,7 +49,7 @@ export interface CommitmentRow {
         <section class="commitments" aria-labelledby="commitments-title">
           <header class="commitments__header">
             <div>
-              <h2 id="commitments-title">Bills &amp; subscriptions <app-info-tip label="Bills and balances" text="Editing bills and subscriptions does not add a transaction or change your balances." /></h2>
+              <h2 id="commitments-title">Bills &amp; subscriptions </h2>
             </div>
             <div class="commitments__actions">
               <ui-button variant="secondary" (clicked)="addBill()">Add bill</ui-button>
@@ -116,7 +115,7 @@ export interface CommitmentRow {
       } @else {
         <app-income [embedded]="true" />
         <details class="compensation-history" [open]="historyOpen" (toggle)="historyToggled($event)">
-          <summary>View compensation history <app-info-tip label="Compensation history" text="Estimated gross compensation by employer, from the same job records. This report is read-only." /></summary>
+          <summary>View compensation history </summary>
           <app-compensation-report />
         </details>
       }
@@ -154,11 +153,11 @@ export interface CommitmentRow {
     .compensation-history summary { cursor:pointer; font-weight:650; min-height:44px; display:flex; align-items:center; }
     .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (max-width:768px) {
-      .commitments__header, .commitment-error { display:grid; }
-      .commitments__actions { display:grid; grid-template-columns:1fr; }
+      .commitments__header, .commitment-error { align-items:center; }
+      .commitments__actions, .commitment-card__actions { display:flex; flex-wrap:wrap; justify-content:flex-end; }
       .commitments__actions ::ng-deep .ui-btn,
       .commitment-card__actions ::ng-deep .ui-btn,
-      .commitment-error ::ng-deep .ui-btn { width:100%; min-height:44px; }
+      .commitment-error ::ng-deep .ui-btn { width:auto; max-width:100%; min-height:44px; }
       .commitment-totals, .commitment-filters { grid-template-columns:1fr; }
       .commitment-filters { display:grid; }
       .commitment-filters label { min-width:0; }

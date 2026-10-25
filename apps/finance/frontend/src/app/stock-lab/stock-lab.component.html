@@ -5,7 +5,7 @@
   @if (error) { <p class="stock-error" role="alert">{{ error }}</p> }
 
   <ui-card [title]="'Facts and guesses'">
-    <app-info-tip uiCardActions align="end" label="Market data" [text]="disclosure + ' This does not add a holding.'" />
+
     <ul class="evidence-list">
       @for (card of evidenceCards; track card.label) {
         <li>

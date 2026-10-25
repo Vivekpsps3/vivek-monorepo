@@ -643,21 +643,24 @@ h2:focus-visible,
   }
 
   .table-actions--toolbar,
-  .header-actions {
-    width: 100%;
-    justify-content: stretch;
+  .header-actions,
+  .form-actions {
+    width: auto;
+    max-width: 100%;
+    justify-content: flex-end;
   }
 
   .header-actions ui-button,
   .form-actions ui-button,
   .table-actions--toolbar ui-button {
-    flex: 1 1 10rem;
+    flex: 0 1 auto;
   }
 
   .header-actions .ui-btn,
   .form-actions .ui-btn,
   .table-actions--toolbar .ui-btn {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
   }
 
   .toast-host {

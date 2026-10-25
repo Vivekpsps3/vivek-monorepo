@@ -16,6 +16,7 @@ import {
   eventWord,
   graphCenter,
   legendHtml,
+  buildLibraryTree,
   libraryEmptyHtml,
   markNextLabel,
   monthEventCount,
@@ -52,6 +53,7 @@ import {
   SORT_TOAST,
   chooseReview,
   failedNoteAfterReload,
+  artworkUrl,
   coverImage,
   dayLabel,
   draftKey,
@@ -69,7 +71,6 @@ import {
   releaseLabel,
   routeErrorCopy,
   seasonLabel,
-  safeUrl,
   shiftMonth,
   statusLabel,
   statusOptions,
@@ -352,7 +353,7 @@ function options(rows, selected) {
 }
 
 function poster(item) {
-  const art = safeUrl(item.artwork_url);
+  const art = artworkUrl(item);
   if (art) return `<img alt="" src="${esc(art)}" width="342" height="513" loading="lazy" decoding="async">`;
   return `<span class="poster-fallback" aria-hidden="true">${esc(kindLabel(item.kind).slice(0, 1))}</span>`;
 }
@@ -400,6 +401,10 @@ function setTheme(choice) {
   syncTheme();
 }
 
+function homeHeading(label, count, href) {
+  return `<h2><a href="${href}">${esc(label)} · ${count}</a></h2>`;
+}
+
 async function viewHome(ticket) {
   const summary = await api("/api/summary", { signal: ticket.signal });
   if (!ticket.isCurrent()) return;
@@ -409,15 +414,21 @@ async function viewHome(ticket) {
   const notes = summary.recent_reviews || [];
   const next = summary.next_episodes || [];
   const allEmpty = !current.length && !upcoming.length && !next.length && !notes.length;
-  const stats = `<p class="stats"><a href="#/library?status=in_progress">${counts.in_progress || 0} in progress</a> · <a href="#/library">${counts.library || 0} in library</a> · <a href="#/library?status=anticipating">${counts.anticipated || 0} coming up</a></p>`;
-  const hero = `<section class="hero"><div>${stats}</div><div class="hero-actions"><a class="btn btn-primary" href="#/search">Find something to add</a></div></section>`;
+  const progressHeading = homeHeading("In progress", counts.in_progress || 0, "#/library?status=in_progress");
+  const libraryHeading = homeHeading("In library", counts.library || 0, "#/library");
+  const comingHeading = homeHeading("Coming up", counts.anticipated || 0, "#/library?status=anticipating");
   if (allEmpty) {
-    commitView(`${hero}${emptyState({
-      title: "Nothing in progress yet",
-      body: "Find a book, show, film, album or game and it will show up here while you're on it.",
-      primary: { href: "#/search", label: "Find something to add" },
-      secondary: { href: "#/new", label: "Add by title" },
-    })}`);
+    commitView(`
+      <section>${progressHeading}</section>
+      <section>${libraryHeading}</section>
+      <section>${comingHeading}</section>
+      ${emptyState({
+        title: "Nothing in progress yet",
+        body: "Find a book, show, film, album or game and it will show up here while you're on it.",
+        primary: null,
+        secondary: { href: "#/new", label: "Add by title" },
+      })}
+    `);
     return;
   }
   const nextRows = next.map(item => {
@@ -439,10 +450,10 @@ async function viewHome(ticket) {
     ? `<section><h2>Recent notes</h2><div class="note-cards">${notes.map(item => noteCardHtml(item)).join("")}</div></section>`
     : "";
   commitView(`
-    ${hero}
     <section><h2>Next up</h2>${next.length ? `<ul class="next-list">${nextRows}</ul>` : `<p class="quiet">Nothing waiting.</p>`}</section>
-    <section><h2>In progress</h2>${inProgress}</section>
-    <section><h2>Coming up</h2>${coming}</section>
+    <section>${progressHeading}${inProgress}</section>
+    <section>${libraryHeading}</section>
+    <section>${comingHeading}${coming}</section>
     ${noteCards}
   `);
 }
@@ -661,6 +672,56 @@ function libraryCards(items) {
   return `<div class="grid">${shown.map(card).join("")}</div>${button}`;
 }
 
+function movieBrowseCards(items) {
+  return `<div class="grid">${items.map(item => `<article class="card">
+    <span class="poster">${poster(item)}</span>
+    <span class="card-title">${esc(item.title)}</span>
+    <span class="meta">${esc([kindLabel("movie"), item.year].filter(Boolean).join(" · "))}</span>
+  </article>`).join("")}</div>`;
+}
+
+function songRow(song) {
+  const label = esc(song.title);
+  const name = song.item ? `<a href="#/item/${song.item.id}">${label}</a>` : `<span>${label}</span>`;
+  const score = song.rating == null || song.rating === "" ? "" : `<span class="meta">${esc(ratingText(song.rating))}</span>`;
+  return `<li data-library-song>${name}${score}</li>`;
+}
+
+function songList(songs) {
+  if (!songs.length) return "";
+  return `<ul class="plain library-songs">${songs.map(songRow).join("")}</ul>`;
+}
+
+function albumBlock(album) {
+  const title = esc(album.title);
+  const name = album.item ? `<a href="#/item/${album.item.id}">${title}</a>` : `<span>${title}</span>`;
+  const year = album.year ? `<span class="meta">${esc(album.year)}</span>` : "";
+  return `<div class="library-album" data-library-album><h3 class="library-album-name">${name}${year}</h3>${songList(album.songs)}</div>`;
+}
+
+function artistSection(artist) {
+  const name = esc(artist.name);
+  const heading = artist.item ? `<a href="#/item/${artist.item.id}">${name}</a>` : name;
+  const art = artist.item ? `<span class="poster poster-sm">${poster(artist.item)}</span>` : "";
+  const albums = artist.albums.length ? `<div class="library-albums">${artist.albums.map(albumBlock).join("")}</div>` : "";
+  return `<section class="library-artist" data-library-artist><h2 class="library-artist-head">${art}${heading}</h2>${albums}${songList(artist.songs)}</section>`;
+}
+
+function libraryStandard(items) {
+  const { artists, rest } = buildLibraryTree(items);
+  const tree = artists.length ? `<div class="library-tree">${artists.map(artistSection).join("")}</div>` : "";
+  const shown = rest.slice(0, libraryShown);
+  const more = rest.length - shown.length;
+  const grid = shown.length ? `<div class="grid">${shown.map(card).join("")}</div>` : "";
+  const button = more > 0 ? `<button type="button" class="btn" data-action="show-more">Show more</button>` : "";
+  return `${tree}${grid}${button}`;
+}
+
+function libraryMarkup(items, kind) {
+  if (kind) return libraryCards(items);
+  return libraryStandard(items);
+}
+
 function paintLibrary(params, resume) {
   const kind = params.get("kind") || "";
   const status = params.get("status") || "";
@@ -668,7 +729,7 @@ function paintLibrary(params, resume) {
   const sort = params.get("sort") || "activity";
   const fav = params.get("fav") === "1";
   const visible = filteredLibrary(libraryItems, q, fav);
-  const body = visible.length ? libraryCards(visible) : libraryEmptyHtml({ kind, status, q });
+  const body = visible.length ? libraryMarkup(visible, kind) : libraryEmptyHtml({ kind, status, q });
   commitView(libraryPage(kind, status, q, sort, body, resume, fav));
 }
 
@@ -698,6 +759,20 @@ async function viewLibrary(params, ticket) {
     libraryItems = payload.items || [];
     libraryShown = LIBRARY_PAGE_SIZE;
     libraryResume = (!kind || kind === "tv") ? continueItem(payload.continue) : null;
+    const savedMovies = filteredLibrary(libraryItems, q, fav);
+    if (kind === "movie" && !savedMovies.length && !status && !q && !fav) {
+      try {
+        const catalog = await api("/api/movies", { signal: ticket.signal });
+        if (!ticket.isCurrent()) return;
+        const movies = (catalog.results || []).filter(item => item && item.title);
+        if (movies.length) {
+          commitView(libraryPage(kind, status, q, sort, movieBrowseCards(movies), libraryResume, fav));
+          return;
+        }
+      } catch (error) {
+        if (error?.name === "AbortError" || !ticket.isCurrent()) return;
+      }
+    }
     paintLibrary(params, libraryResume);
   } catch (error) {
     window.clearTimeout(cardsTimer);
@@ -906,8 +981,7 @@ async function viewItem(id, ticket, forcedSeason = null) {
           ${progress ? `<section class="detail-section">${progressField(entry)}</section>` : ""}
           <section class="detail-section note-block">
             <label for="note">Your note</label>
-            <textarea id="note" name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" data-spoiler-saved="${entry.review_spoiler ? "true" : "false"}" rows="4" aria-label="Note">${esc(review.text)}</textarea>
-            <label class="spoiler"><input type="checkbox" data-spoiler ${entry.review_spoiler ? "checked" : ""}> Contains spoilers</label>
+            <textarea id="note" name="review" data-draft="${esc(draftKey(entry.id))}" data-review="${entry.id}" rows="4" aria-label="Note">${esc(review.text)}</textarea>
             <p class="meta" data-note-count>${esc(noteCountText(review.text))}</p>
             <p id="note-status" class="progress-status" role="status"></p>
             ${review.restore ? `<p id="note-draft" class="save-draft">${esc(NOTE_RESTORE_LABEL)} <button type="button" data-restore-note="${entry.id}">Restore</button> <button type="button" data-discard-note="${entry.id}">Discard</button></p>` : ""}
@@ -915,8 +989,8 @@ async function viewItem(id, ticket, forcedSeason = null) {
         </div>
         ${entry.kind === "tv" ? showEpisodes(entry, seasonNumber) : ""}
         ${entry.kind === "artist" ? musicBlock(entry) : ""}
-        <div class="web" data-web="${entry.id}" hidden></div>
-        ${detailsBlock(entry)}
+        ${entry.kind === "album" ? albumSongs(entry) : ""}
+        ${entry.kind === "artist" ? "" : `<div class="web" data-web="${entry.id}" hidden></div>${detailsBlock(entry)}`}
         <form class="danger-zone" data-action="delete-entry" data-id="${entry.id}"><button class="btn btn-danger" type="submit">Remove from library</button></form>
       </div>
     </article>
@@ -1033,7 +1107,7 @@ function showEpisodes(entry, seasonNumber) {
     const unaired = episode.released === false && !episode.watched;
     const watch = unaired
       ? `<button type="button" class="btn btn-secondary btn-sm" disabled aria-disabled="true" aria-label="${esc(code)} has not aired yet">Has not aired yet</button>`
-      : `<button type="button" class="btn ${episode.watched ? "btn-primary" : "btn-secondary"} btn-sm" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Watched" : "Mark watched"}</button>`;
+      : `<button type="button" class="btn ${episode.watched ? "btn-primary" : "btn-secondary"} btn-sm" data-episode-tile data-id="${entry.id}" data-episode="${episode.id}" data-focus-key="watch:${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Unwatch" : "Mark watched"}</button>`;
     return `<li class="episode-tile${episode.watched ? " is-watched" : ""}"><a href="#/item/${entry.id}/episode/${episode.id}">${esc(episode.episode_number)} ${esc(episode.title || label)}</a>${watch}</li>`;
   }).join("");
   const nextLabel = markNextLabel(show);
@@ -1065,7 +1139,7 @@ async function viewEpisode(entryId, episodeId, ticket) {
       <p class="lede">${esc(label)}${episode.air_date ? ` · ${esc(releaseLabel({ precision: "day", released_on: episode.air_date, status: "released" }))}` : ""}</p>
       ${episode.released === false && !episode.watched
         ? `<button type="button" class="btn btn-secondary" disabled aria-disabled="true">Has not aired yet</button>`
-        : `<button type="button" class="btn ${episode.watched ? "btn-primary" : "btn-secondary"}" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Watched" : "Mark watched"}</button>`}
+        : `<button type="button" class="btn ${episode.watched ? "btn-primary" : "btn-secondary"}" data-episode-page data-id="${entry.id}" data-episode="${episode.id}" data-focus-key="watch:${episode.id}" aria-pressed="${episode.watched ? "true" : "false"}">${episode.watched ? "Unwatch" : "Mark watched"}</button>`}
       ${episode.overview ? `<p class="overview">${esc(episode.overview)}</p>` : ""}
     </article>`);
   applyChrome(route(), {
@@ -1074,6 +1148,17 @@ async function viewEpisode(entryId, episodeId, ticket) {
     episode: episode.episode_number,
     episodeTitle: episode.title || "",
   });
+}
+
+function albumSongs(entry) {
+  const tracks = (entry.music?.albums || []).flatMap(album => album.tracks || []);
+  if (!tracks.length) return "";
+  const rows = tracks.map(track => `
+    <li data-track-row data-id="${entry.id}" data-track="${track.id}">
+      <span class="song-name">${esc(track.title)}</span>
+      ${scoreMarks(track.rating, track.title, true)}
+    </li>`).join("");
+  return `<section class="detail-section" aria-label="Songs"><h2 class="score-heading">Songs</h2><ol class="song-list">${rows}</ol></section>`;
 }
 
 function musicBlock(entry) {
@@ -1121,7 +1206,7 @@ function paintWeb(center, nodes = webNodes) {
 }
 
 async function loadWeb(entry, ticket) {
-  if (entry.kind !== "artist" && entry.kind !== "movie" && entry.kind !== "tv") return;
+  if (entry.kind !== "movie" && entry.kind !== "tv") return;
   const box = document.querySelector("[data-web]");
   try {
     const web = await api(`/api/entries/${entry.id}/web`, { signal: ticket?.signal });
@@ -1282,6 +1367,40 @@ function clickTarget(event) {
 function setPressed(element, pressed, className) {
   element.setAttribute("aria-pressed", String(pressed));
   element.classList.toggle(className, pressed);
+}
+
+function paintEpisodeWatch(button, watched) {
+  button.setAttribute("aria-pressed", watched ? "true" : "false");
+  button.textContent = watched ? "Unwatch" : "Mark watched";
+  button.classList.toggle("btn-primary", watched);
+  button.classList.toggle("btn-secondary", !watched);
+  button.closest(".episode-tile")?.classList.toggle("is-watched", watched);
+  button.closest(".episode-page")?.classList.toggle("is-watched", watched);
+}
+
+function refreshEpisodes(entry, focusEpisodeId) {
+  const section = document.querySelector(".episodes-section");
+  if (!section || !entry?.show) return;
+  section.outerHTML = showEpisodes(entry, chooseSeason(entry, null));
+  const next = document.querySelector(`[data-focus-key="watch:${focusEpisodeId}"]`);
+  if (next instanceof HTMLElement) next.focus();
+}
+
+async function toggleEpisodeWatch(button) {
+  const watched = button.getAttribute("aria-pressed") !== "true";
+  paintEpisodeWatch(button, watched);
+  try {
+    const detail = await api(`/api/entries/${button.dataset.id}/episodes/${button.dataset.episode}/watched`, {
+      method: "POST",
+      body: JSON.stringify({ watched }),
+    });
+    const episode = (detail?.show?.episodes || []).find(item => String(item.id) === String(button.dataset.episode));
+    if (episode && episode.watched !== watched) paintEpisodeWatch(button, Boolean(episode.watched));
+    refreshEpisodes(detail, button.dataset.episode);
+  } catch (error) {
+    if (button.isConnected) paintEpisodeWatch(button, !watched);
+    fail(error);
+  }
 }
 
 function keepButtonClick(event, target) {
@@ -1466,47 +1585,19 @@ document.addEventListener("click", async event => {
   const episodePage = target.closest("[data-episode-page]");
   if (episodePage) {
     keepButtonClick(event, target);
-    const watched = episodePage.getAttribute("aria-pressed") !== "true";
-    episodePage.setAttribute("aria-pressed", String(watched));
-    episodePage.closest(".episode-page")?.classList.toggle("is-watched", watched);
-    try {
-      await api(`/api/entries/${episodePage.dataset.id}/episodes/${episodePage.dataset.episode}/watched`, {
-        method: "POST",
-        body: JSON.stringify({ watched }),
-      });
-    } catch (error) {
-      episodePage.setAttribute("aria-pressed", String(!watched));
-      episodePage.closest(".episode-page")?.classList.toggle("is-watched", !watched);
-      fail(error);
-    }
+    await toggleEpisodeWatch(episodePage);
     return;
   }
   const tile = target.closest("[data-episode-tile]");
   if (tile) {
     keepButtonClick(event, target);
-    const watched = tile.getAttribute("aria-pressed") !== "true";
-    setPressed(tile, watched, "is-watched");
-    try {
-      await api(`/api/entries/${tile.dataset.id}/episodes/${tile.dataset.episode}/watched`, {
-        method: "POST",
-        body: JSON.stringify({ watched }),
-      });
-    } catch (error) {
-      setPressed(tile, !watched, "is-watched");
-      fail(error);
-    }
+    await toggleEpisodeWatch(tile);
     return;
   }
   const season = target.closest("[data-season-jump]");
   if (season) {
     keepButtonClick(event, target);
     location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
-    return;
-  }
-  const song = target.closest("[data-song-center]");
-  if (song) {
-    keepButtonClick(event, target);
-    paintWeb(graphCenter(webCenter));
     return;
   }
   const cover = target.closest("[data-album-open]");
@@ -1603,7 +1694,7 @@ document.addEventListener("click", async event => {
       const current = route();
       if (slot && current.name === "library") {
         const visible = filteredLibrary(libraryItems, current.params.get("q") || "", current.params.get("fav") === "1");
-        slot.innerHTML = visible.length ? libraryCards(visible) : libraryEmptyHtml({
+        slot.innerHTML = visible.length ? libraryMarkup(visible, current.params.get("kind") || "") : libraryEmptyHtml({
           kind: current.params.get("kind") || "",
           status: current.params.get("status") || "",
           q: current.params.get("q") || "",
@@ -1814,7 +1905,6 @@ document.addEventListener("submit", async event => {
         rating: data.rating === "" ? null : data.rating,
         review: data.review,
         summary: data.summary,
-        review_spoiler: Boolean(data.review_spoiler),
         favorite: Boolean(data.favorite),
         anticipated: Boolean(data.anticipated),
       };
@@ -1997,15 +2087,12 @@ async function commitNote(id) {
     return;
   }
   const sent = box.value;
-  const spoilerBox = document.querySelector("[data-spoiler]");
-  const spoiler = spoilerBox instanceof HTMLInputElement ? spoilerBox.checked : false;
-  if (sent === (box.dataset.saved ?? "") && String(spoiler) === (box.dataset.spoilerSaved || "false")) return;
+  if (sent === (box.dataset.saved ?? "")) return;
   const base = box.dataset.reviewBase ?? "";
   const title = visibleItemTitle(id) || "this item";
   const body = {
     review: sent,
     review_base: base,
-    ...(String(spoiler) === (box.dataset.spoilerSaved || "false") ? {} : { review_spoiler: spoiler }),
   };
   const status = document.querySelector("#note-status");
   const stopSaving = armSaving(status);
@@ -2025,7 +2112,6 @@ async function commitNote(id) {
     if (!live) return;
     delete live.dataset.conflict;
     live.dataset.saved = sent;
-    live.dataset.spoilerSaved = String(spoiler);
     live.dataset.reviewBase = updated?.review_updated_at || "";
     if (live.value === sent) showSaved(document.querySelector("#note-status"));
   } catch (error) {
@@ -2145,11 +2231,6 @@ document.addEventListener("change", async event => {
       creator.firstChild.textContent = `${creatorLabel(target.value)} `;
       if (input) creator.append(input);
     }
-    return;
-  }
-  if (target instanceof HTMLInputElement && target.dataset.spoiler != null) {
-    const box = document.querySelector("textarea[data-review]");
-    if (box instanceof HTMLTextAreaElement) await saveNote(box);
     return;
   }
   if (target instanceof HTMLSelectElement && target.dataset.libraryStatus != null) {

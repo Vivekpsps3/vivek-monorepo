@@ -5,10 +5,13 @@
 }
 
 ui-card,
-ui-button,
 ui-data-table {
   display: block;
   min-width: 0;
+  max-width: 100%;
+}
+
+ui-button {
   max-width: 100%;
 }
 
@@ -292,14 +295,16 @@ ui-data-table {
 
   .stock-actions-row,
   .stock-owned-row {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .stock-actions-row ::ng-deep .ui-btn,
   .stock-owned-row ::ng-deep .ui-btn,
   .stock-chip {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     min-height: 44px;
     white-space: normal;
   }

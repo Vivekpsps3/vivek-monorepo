@@ -51,12 +51,30 @@ def library(
         sort = "activity"
     user_id = require_actor().id
     rows = records.list_library(db, user_id, kind, status, q, sort)
+    records.apply_artist_portraits(db, rows)
     # The Continue rail is the only summary slice the library paints.
     # Chip and sort changes must not rebuild upcoming, reviews, and counts.
     return {
-        "items": [records.entry_card(row) for row in rows],
+        "items": [records.library_card(db, row) for row in rows],
         "continue": next_episodes(db, user_id),
     }
+
+
+@router.get("/movies")
+def movies(db: Session = Depends(get_db)):
+    require_actor()
+    http = httpx.Client(
+        timeout=12.0,
+        headers={"User-Agent": UA, "Accept": "text/html,application/json"},
+        follow_redirects=True,
+    )
+    try:
+        results = providers.popular_movies(db, http)
+    except Exception:
+        results = []
+    finally:
+        http.close()
+    return {"results": results}
 
 
 @router.post("/library")
@@ -69,6 +87,7 @@ def create_manual(body: dict, db: Session = Depends(get_db)):
 def create_from_provider(body: dict, db: Session = Depends(get_db)):
     entry, already = records.create_from_provider(db, require_actor().id, body)
     _load_artist_catalog(db, entry)
+    _load_album_tracks(db, entry)
     payload = records.detail(db, entry)
     payload["already_saved"] = already
     return payload
@@ -78,6 +97,8 @@ def create_from_provider(body: dict, db: Session = Depends(get_db)):
 def read_entry(entry_id: int, db: Session = Depends(get_db)):
     entry = records.owned_entry(db, require_actor().id, entry_id)
     _load_artist_catalog(db, entry)
+    _load_album_tracks(db, entry)
+    records.apply_artist_portraits(db, [entry], deep=True)
     return records.detail(db, entry)
 
 
@@ -162,6 +183,20 @@ def rate_track(entry_id: int, track_id: int, body: dict, db: Session = Depends(g
     if (entry.rating, entry.review, entry.summary) != before:
         raise HTTPException(status_code=500, detail="A song score changed the artist rating.")
     return records.detail(db, entry)
+
+
+def _load_album_tracks(db: Session, entry) -> None:
+    if not records.album_needs_lookup(entry.catalog):
+        return
+    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
+    try:
+        payload = providers.musicbrainz_release_detail(http, entry.catalog.source_id)
+    except Exception:
+        return
+    finally:
+        http.close()
+    if isinstance(payload, dict):
+        records.store_album_release(db, entry.catalog, payload)
 
 
 def _load_artist_catalog(db: Session, entry) -> None:
@@ -290,6 +325,7 @@ def search(q: str = Query(""), kind: str | None = None, db: Session = Depends(ge
         raise HTTPException(status_code=422, detail="Type at least two letters.")
     user_id = require_actor().id
     payload = providers.search(db, query, kind)
+    providers.attach_artist_portraits(db, payload["results"])
     saved = records.saved_source_ids(db, user_id)
     for result in payload["results"]:
         key = (result.get("source"), result.get("source_id"))
