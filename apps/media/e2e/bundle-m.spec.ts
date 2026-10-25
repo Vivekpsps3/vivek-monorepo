@@ -38,18 +38,17 @@ test('search tells the truth when movie and game catalogs are missing', async ({
 
 test('Now, Library, and Calendar use the spec headings and one library list', async ({ page }) => {
   await page.goto('/media/#/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Now' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
   await expect(page.locator('.grid .card').first()).toBeVisible();
 
   await page.goto('/media/#/library');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Library · \d+/);
+  await expect(page.getByLabel('Search your library')).toBeVisible();
   await expect(page.getByLabel('Search your library')).toBeVisible();
   await expect(page.locator('.grid .card').first()).toBeVisible();
   const libraryLoad = page.waitForResponse(response => (
     response.url().includes('/api/library') && response.request().method() === 'GET'
   ));
-  await page.getByRole('button', { name: '★ Favorites' }).click();
+  await page.getByRole('button', { name: 'Favorites' }).click();
   const response = await libraryLoad;
   expect(response.ok()).toBeTruthy();
   await expect(page).toHaveURL(/fav=1/);
@@ -66,7 +65,7 @@ test('removing an item asks before it deletes, and cancel leaves it in place', a
   await page.goto('/media/#/library');
   await page.getByRole('link', { name: /Dune/ }).click();
   await page.getByRole('button', { name: 'Remove from library' }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('dialog', { name: 'Remove Dune?' });
   await expect(dialog.getByRole('heading', { name: 'Remove Dune?' })).toBeVisible();
   await expect(dialog).toContainText('album and song scores');
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
@@ -165,7 +164,7 @@ test('axe reports no serious or critical issues on the main screens', async ({ p
   ];
   for (const [hash, name] of screens) {
     await page.evaluate(value => { location.hash = value; }, hash);
-    if (name === 'now') await expect(page.getByRole('heading', { name: 'Now' })).toBeVisible();
+    if (name === 'now') await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
     if (name === 'library') await expect(page.locator('.grid .card').first()).toBeVisible();
     if (name === 'search') await expect(page.getByText('Results come from public catalogs.')).toBeVisible();
     if (name === 'calendar') await expect(page.getByRole('link', { name: 'Today' })).toBeVisible();

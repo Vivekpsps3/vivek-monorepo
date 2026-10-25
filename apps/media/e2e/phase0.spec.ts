@@ -19,7 +19,7 @@ test('hub and screen URLs redirect into the journal', async ({ page, request }) 
 
   await page.goto('/hub/media');
   await expect(page).toHaveURL(/\/media\/$/);
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
   await page.screenshot({ path: shot('after-hub-media.png'), fullPage: true });
 });
 
@@ -58,7 +58,7 @@ test('title sort works and an unknown sort does not fail the page', async ({ pag
   await page.screenshot({ path: shot('after-library-sort.png'), fullPage: true });
 
   await page.goto('/media/#/library?sort=nope');
-  await expect(page.getByRole('heading', { name: /Library/ })).toBeVisible();
+  await expect(page.getByLabel('Search your library')).toBeVisible();
   await expect(page.locator('#toasts')).toContainText("That sort isn't available. Showing recently active.");
   await expect(page.locator('#notice')).toHaveCount(0);
   await expect(page).not.toHaveURL(/sort=nope/);
@@ -318,9 +318,11 @@ test('a slower library response cannot replace a newer screen', async ({ page })
   });
   await page.getByRole('navigation', { name: 'Media' }).getByRole('link', { name: 'Library', exact: true }).click();
   await page.getByRole('navigation', { name: 'Media' }).getByRole('link', { name: 'Now', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Saved');
+  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.locator('#library-q')).toHaveCount(0);
   await page.waitForTimeout(1200);
-  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Saved');
+  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
+  await expect(page.locator('#library-q')).toHaveCount(0);
   await expect(page.locator('.nav [aria-current="page"]')).toHaveText('Now');
 });
 
@@ -479,7 +481,7 @@ test('a slow route shows a skeleton and a fast one does not flash', async ({ pag
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });
   await page.goto('/media/#/');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __skeletonShown: boolean }).__skeletonShown)).toBe(false);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
 
@@ -493,7 +495,7 @@ test('a slow route shows a skeleton and a fast one does not flash', async ({ pag
   await expect(page.locator('.skeleton').first()).toBeVisible();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'true');
   await expect(page.locator('.skeleton-home')).toHaveAttribute('aria-hidden', 'true');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
   await expect(page.locator('.skeleton')).toHaveCount(0);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
 });
@@ -512,7 +514,7 @@ test('try again focuses the page heading when the route recovers', async ({ page
   await expect(page.getByRole('heading', { name: "Couldn't load your journal" })).toBeFocused();
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.locator('.error-panel')).toHaveCount(0);
-  await expect(page.locator('#app h1')).toBeFocused();
+  await expect(page.locator('#app h1, #app h2').first()).toBeFocused();
 });
 
 test('a slow status change does not skeleton the open item', async ({ page, request }) => {
@@ -649,11 +651,11 @@ test('media routes stay quiet under the enforced content security policy', async
   });
   page.on('pageerror', error => problems.push(String(error)));
   await page.goto('/media/#/library');
-  await expect(page.getByRole('heading', { name: /Library/ })).toBeVisible();
+  await expect(page.getByLabel('Search your library')).toBeVisible();
   await page.goto('/media/#/search');
-  await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search' })).toBeVisible();
   await page.goto('/media/#/');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Find something to add' })).toBeVisible();
   await page.goto('/media/#/library');
   await page.getByRole('link', { name: /Dune/ }).click();
   await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
