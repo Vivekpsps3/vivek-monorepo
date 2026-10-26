@@ -157,10 +157,19 @@ def update_trip(
         trip.notes = data["notes"] or None
     if "counts_as_pto" in data:
         trip.counts_as_pto = data["counts_as_pto"]
-    if "pto_days" in data:
-        trip.pto_days = pto_override(data["pto_days"])
+    choices = None
+    chosen = data.get("pto_dates")
+    if chosen:
+        choices = {item["on_date"]: item["amount"] for item in chosen}
+    if not choices:
+        override = data.get("pto_days", False)
+        if override is not False:
+            trip.pto_days = pto_override(override)
     touch(trip)
-    sync_trip_pto(db, trip)
+    try:
+        sync_trip_pto(db, trip, choices)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.flush()
     return _detail(db, trip.id, principal.id)
 

@@ -202,8 +202,13 @@ export function mountPto() {
       : amount / (PERIOD[draft.cadence] || 365);
     const usage = new Map();
     for (const entry of entries) {
-      if (!entry.start_date) continue;
-      usage.set(entry.start_date, (usage.get(entry.start_date) || 0) + Number(entry.days || 0));
+      const charges = Array.isArray(entry.charges) && entry.charges.length
+        ? entry.charges
+        : [{ on_date: entry.start_date, amount: entry.days }];
+      for (const charge of charges) {
+        if (!charge?.on_date) continue;
+        usage.set(charge.on_date, (usage.get(charge.on_date) || 0) + Number(charge.amount || 0));
+      }
     }
     for (let cursor = new Date(begin); cursor <= addDays(today, 120); cursor = addDays(cursor, 1)) {
       const key = iso(cursor);
@@ -377,8 +382,10 @@ export function mountPto() {
     const setup = !draft.configured
       ? `<section class="card empty"><h2>Set up PTO</h2><p>Tell Travel your balance and how fast you earn time off, and it will project what's left after each trip.</p>${form}</section>`
       : `${balance}${draft.editing ? `<section class="card">${form}</section>` : ""}`;
+    const conflicts = (policy.conflicts || []).map((item) => `${pretty(item.on_date)} adds up to ${daysText(item.amount)} across ${(item.labels || []).join(" and ")}.`).join(" ");
+    const conflictLine = conflicts ? `<p class="meta">${esc(conflicts)}</p>` : "";
     const board = draft.configured
-      ? `${chart(days)}${strip(days)}${entries.length ? entryList() : `<p class="meta">No time off planned.</p>`}${addForm()}`
+      ? `${chart(days)}${strip(days)}${conflictLine}${entries.length ? entryList() : `<p class="meta">No time off planned.</p>`}${addForm()}`
       : "";
     root.innerHTML = `${setup}${board}`;
     root.querySelectorAll("form").forEach((item) => { item.noValidate = true; });

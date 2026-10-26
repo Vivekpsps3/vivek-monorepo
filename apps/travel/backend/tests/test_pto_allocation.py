@@ -1,7 +1,7 @@
-"""Per-date PTO storage and the lossless allocation backfill."""
+"""Per-date PTO storage. A legacy total stays unallocated until someone chooses days."""
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import StringIO
 
@@ -22,24 +22,27 @@ from apps.server.migrations import (
 )
 from apps.travel.backend.models import Base, PtoEntry, Trip, TripPtoDay
 from apps.travel.backend.services.dates import iter_dates, weekday_count
-from apps.travel.backend.services.money import store_days
+from apps.travel.backend.services.money import fmt_days, store_days
 from apps.travel.backend.services.pto import (
     MIGRATION_SOURCE_AUTOMATIC,
     PTO_MODE_DATES,
     PTO_MODE_LEGACY,
     PTO_PROVENANCE_DEFAULT,
+    PTO_PROVENANCE_OVERRIDE,
     Policy,
     Usage,
     backfill_trip_pto_days,
     default_pto_amount,
     sync_allocated_pto_days,
     sync_trip_pto,
+    usages_from_rows,
     validate_pto_day,
     walk,
 )
 
 PARENT = "site_auth_challenge_purpose_v2"
 REVISION = "site_trip_pto_days_v1"
+HEAD = "site_media_membership_v1"
 TRIP_COLUMNS = (
     "id, user_id, title, start_date, end_date, status, origin_label, notes, "
     "counts_as_pto, pto_days, created_at, updated_at"
@@ -58,13 +61,11 @@ def test_pto_day_amount_and_date_are_bounded():
         validate_pto_day(date(2026, 10, 26), friday, friday, "1")
 
 
-def test_per_date_charging_would_change_capped_and_mid_balance_forecasts():
-    """Day rows do not change today's start-date charge.
+def test_forecast_deducts_each_selected_date():
+    """A lump on the start date is not the forecast once days are allocated.
 
-    Subtracting each selected date instead of the whole total on the start
-    date changes a capped accrual and a balance date that falls during the
-    trip. The backfill keeps the stored entry, so projections stay on the
-    old numbers until that correction is applied.
+    Charging each selected date changes a capped accrual and a balance date
+    that falls during the trip. The stored rows are what the walk uses.
     """
     start = date(2026, 1, 5)
     end = date(2026, 1, 9)
@@ -79,13 +80,18 @@ def test_per_date_charging_would_change_capped_and_mid_balance_forecasts():
         annual_cap_days=Decimal(10),
     )
     lump = [Usage(1, start, end, Decimal(5), "Trip", 1)]
-    per_day = [
-        Usage(index, day, day, Decimal(1), "Trip", 1)
-        for index, day in enumerate(iter_dates(start, end), start=1)
-        if day.weekday() < 5
-    ]
+    db = _memory_session()
+    trip = _trip(db, title="Week", start_date=start, end_date=end)
+    sync_trip_pto(db, trip)
+    db.flush()
+    entry = db.query(PtoEntry).one()
+    rows = db.query(TripPtoDay).filter(TripPtoDay.trip_id == trip.id).all()
+    charged = usages_from_rows([entry], rows)
     assert walk(capped, lump, end).balance == Decimal("10.0000")
-    assert walk(capped, per_day, end).balance == Decimal("9.0000")
+    assert walk(capped, charged, end).balance == Decimal("9.0000")
+    assert [on for on, _amount in charged[0].charges] == [
+        day for day in iter_dates(start, end) if day.weekday() < 5
+    ]
 
     mid = Policy(
         configured=True,
@@ -97,10 +103,9 @@ def test_per_date_charging_would_change_capped_and_mid_balance_forecasts():
         balance_as_of=date(2026, 1, 7),
         annual_cap_days=None,
     )
-    after_balance = [usage for usage in per_day if usage.start_date > mid.balance_as_of]
     assert walk(mid, lump, end).balance == Decimal("10.0000")
-    assert walk(mid, after_balance, end).balance == Decimal("8.0000")
-    assert [usage.start_date for usage in after_balance] == [date(2026, 1, 8), date(2026, 1, 9)]
+    assert walk(mid, charged, end).balance == Decimal("8.0000")
+    db.close()
 
 
 def _memory_session():
@@ -156,6 +161,23 @@ def test_sync_stores_weekday_defaults_and_keeps_an_explicit_total_unallocated():
     entry = db.query(PtoEntry).one()
     assert entry.days == "2.0000"
     assert entry.start_date == trip.start_date
+
+    friday = db.query(TripPtoDay).filter(TripPtoDay.on_date == date(2026, 10, 23)).one()
+    friday.amount = "0.0000"
+    friday.provenance = PTO_PROVENANCE_OVERRIDE
+    sync_trip_pto(db, trip)
+    db.flush()
+    assert db.query(PtoEntry).one().days == "1.0000"
+    assert _day_rows(db, trip.id)[0] == (
+        date(2026, 10, 23),
+        "0.0000",
+        PTO_PROVENANCE_OVERRIDE,
+        None,
+    )
+    friday.amount = "1.0000"
+    friday.provenance = PTO_PROVENANCE_DEFAULT
+    sync_allocated_pto_days(db, trip)
+    db.flush()
 
     for row in db.query(TripPtoDay).all():
         row.migration_source = MIGRATION_SOURCE_AUTOMATIC
@@ -323,11 +345,12 @@ def test_backfill_preserves_totals_without_inventing_legacy_dates():
         )
 
 
-def test_revision_is_the_only_head_and_backfill_downgrades_cleanly(tmp_path):
+def test_revision_backfill_downgrades_cleanly(tmp_path):
     script = ScriptDirectory.from_config(make_config("sqlite://"))
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == [HEAD]
     assert script.get_revision(REVISION).down_revision == PARENT
-    assert head_revision() == REVISION
+    assert script.get_revision(HEAD).down_revision == REVISION
+    assert head_revision() == HEAD
 
     database = tmp_path / "site.db"
     url = sqlite_url(database)
@@ -369,7 +392,7 @@ def test_revision_is_the_only_head_and_backfill_downgrades_cleanly(tmp_path):
         db.commit()
 
     command.upgrade(cfg, "head")
-    assert current_revision(database) == REVISION
+    assert current_revision(database) == HEAD
     assert model_diff(database) == []
     with sqlite3.connect(database) as db:
         assert (
@@ -532,3 +555,411 @@ def test_trip_api_persists_per_date_defaults_and_legacy_zero(client):
         assert db.query(TripPtoDay).filter(TripPtoDay.trip_id == trip_id).count() == 0
     finally:
         db.close()
+
+
+def _next_friday(today: date | None = None) -> date:
+    today = today or date.today()
+    ahead = (4 - today.weekday()) % 7
+    if ahead == 0:
+        ahead = 7
+    return today + timedelta(days=ahead)
+
+
+def _create_trip(client, title, start, end, **extra):
+    body = {
+        "title": title,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "counts_as_pto": True,
+    }
+    body.update(extra)
+    made = client.post("/api/trips", json=body)
+    assert made.status_code == 201, made.text
+    return made.json()
+
+
+def _put_policy(client, balance, as_of):
+    saved = client.put(
+        "/api/pto/policy",
+        json={
+            "accrual_amount": "0",
+            "accrual_unit": "day",
+            "accrual_cadence": "yearly",
+            "hours_per_day": "8",
+            "balance_days": balance,
+            "balance_as_of": as_of.isoformat(),
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    return saved.json()
+
+
+def _home_trips(home):
+    return [*home["in_progress"], *home["upcoming"], *home["past"]]
+
+
+def _one(rows, trip_id):
+    return next(row for row in rows if row["id"] == trip_id)
+
+
+def _dates(start, end, amount):
+    return [{"on_date": day.isoformat(), "amount": amount(day)} for day in iter_dates(start, end)]
+
+
+def _same_forecast(client, trip_id, days):
+    """Trip, home, PTO board, and calendar all read the selected dates."""
+    detail = client.get(f"/api/trips/{trip_id}")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["pto"]["days"] == days
+    home = client.get("/api/home").json()
+    card = _one(_home_trips(home), trip_id)
+    assert card["pto"]["days"] == days
+    assert card["pto_dates"] == body["pto_dates"]
+    assert card["pto"]["leftover_after"] == body["pto"]["leftover_after"]
+    assert card["pto"]["balance_when_you_leave"] == body["pto"]["balance_when_you_leave"]
+    assert card["pto"]["conflicts"] == body["pto"]["conflicts"]
+    board = client.get("/api/pto").json()
+    entry = next(row for row in board["entries"] if row["trip_id"] == trip_id)
+    assert entry["days"] == store_days(Decimal(days))
+    charged = sum((Decimal(item["amount"]) for item in entry["charges"]), Decimal(0))
+    assert charged == Decimal(days)
+    counted = [row["on_date"] for row in body["pto_dates"] if Decimal(row["amount"]) > 0]
+    assert [item["on_date"] for item in entry["charges"]] == counted
+    calendar = client.get(
+        "/api/calendar",
+        params={"start": body["start_date"], "end": body["end_date"]},
+    )
+    assert calendar.status_code == 200, calendar.text
+    assert _one(calendar.json()["trips"], trip_id)["pto_dates"] == counted
+    used = sum(
+        (
+            Decimal(item["amount"])
+            for item in entry["charges"]
+            if home["pto"]["balance_as_of"]
+            and date.fromisoformat(home["pto"]["balance_as_of"])
+            < date.fromisoformat(item["on_date"])
+            <= date.fromisoformat(home["today"])
+        ),
+        Decimal(0),
+    )
+    if home["pto"]["configured"] and home["pto"]["accrual_amount"] == "0.0000":
+        balance = Decimal(home["pto"]["balance_saved"])
+        if date.fromisoformat(home["today"]) < date.fromisoformat(home["pto"]["balance_as_of"]):
+            used = Decimal(0)
+        assert home["pto"]["balance_today"] == fmt_days(balance - used)
+        assert home["pto"]["used_since"] == fmt_days(used)
+    return body, entry, home
+
+
+def test_each_date_choice_drives_every_forecast(client):
+    friday = _next_friday()
+    monday = friday + timedelta(days=3)
+    tuesday = monday + timedelta(days=1)
+    created = _create_trip(client, "Fri-Mon", friday, monday)
+    trip_id = created["id"]
+    assert created["pto_days"] is None
+    assert created["pto_mode"] == PTO_MODE_DATES
+    assert created["pto"]["days"] == "2"
+    assert [(row["on_date"], row["amount"], row["provenance"]) for row in created["pto_dates"]] == [
+        (friday.isoformat(), "1", PTO_PROVENANCE_DEFAULT),
+        ((friday + timedelta(days=1)).isoformat(), "0", PTO_PROVENANCE_DEFAULT),
+        ((friday + timedelta(days=2)).isoformat(), "0", PTO_PROVENANCE_DEFAULT),
+        (monday.isoformat(), "1", PTO_PROVENANCE_DEFAULT),
+    ]
+
+    _put_policy(client, "0", friday - timedelta(days=1))
+    body, _entry, home = _same_forecast(client, trip_id, "2")
+    assert body["pto"]["balance_when_you_leave"] == "0"
+    assert body["pto"]["leftover_after"] == "-2"
+    assert home["next_pto"]["days"] == "2"
+    assert home["next_pto"]["leftover_after"] == "-2"
+
+    _put_policy(client, "10", friday - timedelta(days=1))
+    body, _entry, _home = _same_forecast(client, trip_id, "2")
+    assert body["pto"]["balance_when_you_leave"] == "10"
+    assert body["pto"]["leftover_after"] == "8"
+
+    off_friday = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"pto_dates": [{"on_date": friday.isoformat(), "amount": "0"}]},
+    )
+    assert off_friday.status_code == 200, off_friday.text
+    body, entry, _home = _same_forecast(client, trip_id, "1")
+    assert body["pto"]["leftover_after"] == "9"
+    friday_row = body["pto_dates"][0]
+    assert friday_row["amount"] == "0"
+    assert friday_row["provenance"] == PTO_PROVENANCE_OVERRIDE
+    assert entry["charges"] == [{"on_date": monday.isoformat(), "amount": "1"}]
+    again = client.get(f"/api/trips/{trip_id}").json()
+    assert again["pto"]["days"] == "1"
+    assert again["pto_dates"] == body["pto_dates"]
+
+    half = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"pto_dates": [{"on_date": friday.isoformat(), "amount": "0.5"}]},
+    )
+    assert half.status_code == 200, half.text
+    body, entry, _home = _same_forecast(client, trip_id, "1.5")
+    assert body["pto"]["leftover_after"] == "8.5"
+    assert entry["charges"][0] == {"on_date": friday.isoformat(), "amount": "0.5"}
+    assert body["pto_dates"][0]["provenance"] == PTO_PROVENANCE_OVERRIDE
+
+    weekdays = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"pto_dates": _dates(friday, monday, lambda day: "0" if day.weekday() >= 5 else "1")},
+    )
+    assert weekdays.status_code == 200, weekdays.text
+    body, _entry, _home = _same_forecast(client, trip_id, "2")
+    assert body["pto_dates"][0]["provenance"] == PTO_PROVENANCE_DEFAULT
+    assert body["pto"]["leftover_after"] == "8"
+
+    extended = client.patch(f"/api/trips/{trip_id}", json={"end_date": tuesday.isoformat()})
+    assert extended.status_code == 200, extended.text
+    body, _entry, _home = _same_forecast(client, trip_id, "3")
+    assert body["pto_dates"][-1] == {
+        "on_date": tuesday.isoformat(),
+        "amount": "1",
+        "provenance": PTO_PROVENANCE_DEFAULT,
+    }
+    assert body["pto_dates"][0]["amount"] == "1"
+
+    client.patch(
+        f"/api/trips/{trip_id}",
+        json={"pto_dates": [{"on_date": friday.isoformat(), "amount": "0"}]},
+    )
+    shortened = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"start_date": (friday + timedelta(days=1)).isoformat()},
+    )
+    assert shortened.status_code == 200, shortened.text
+    body, _entry, _home = _same_forecast(client, trip_id, "2")
+    assert friday.isoformat() not in {row["on_date"] for row in body["pto_dates"]}
+
+    restored = client.patch(f"/api/trips/{trip_id}", json={"start_date": friday.isoformat()})
+    assert restored.status_code == 200, restored.text
+    body, _entry, _home = _same_forecast(client, trip_id, "3")
+    assert body["pto_dates"][0] == {
+        "on_date": friday.isoformat(),
+        "amount": "1",
+        "provenance": PTO_PROVENANCE_DEFAULT,
+    }
+
+    paused = client.patch(f"/api/trips/{trip_id}", json={"counts_as_pto": False})
+    assert paused.status_code == 200, paused.text
+    assert paused.json()["pto"]["days"] == "0"
+    assert len(paused.json()["pto_dates"]) == 5
+    assert all(row["trip_id"] != trip_id for row in client.get("/api/pto").json()["entries"])
+    resumed = client.patch(f"/api/trips/{trip_id}", json={"counts_as_pto": True})
+    assert resumed.status_code == 200, resumed.text
+    _same_forecast(client, trip_id, "3")
+
+    cleared = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"pto_dates": _dates(friday, tuesday, lambda _day: "0")},
+    )
+    assert cleared.status_code == 200, cleared.text
+    body, _entry, _home = _same_forecast(client, trip_id, "0")
+    assert [row["amount"] for row in body["pto_dates"]] == ["0", "0", "0", "0", "0"]
+    assert body["pto_dates"][0]["provenance"] == PTO_PROVENANCE_OVERRIDE
+    assert body["pto_dates"][1]["provenance"] == PTO_PROVENANCE_DEFAULT
+
+    rejected = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"pto_dates": [{"on_date": (tuesday + timedelta(days=3)).isoformat(), "amount": "1"}]},
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"] == "PTO dates have to sit inside the trip."
+    over = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"pto_dates": [{"on_date": friday.isoformat(), "amount": "1.5"}]},
+    )
+    assert over.status_code == 422
+    assert "A PTO day cannot be more than 1." in over.json()["detail"]
+    duplicate = client.patch(
+        f"/api/trips/{trip_id}",
+        json={
+            "pto_dates": [
+                {"on_date": friday.isoformat(), "amount": "1"},
+                {"on_date": friday.isoformat(), "amount": "0"},
+            ]
+        },
+    )
+    assert duplicate.status_code == 422
+    assert "Each PTO date can only be chosen once." in duplicate.json()["detail"]
+    assert client.get(f"/api/trips/{trip_id}").json()["pto"]["days"] == "0"
+
+
+def test_mid_trip_balance_deducts_only_later_selected_days(client):
+    start = date(2026, 1, 5)
+    end = date(2026, 1, 9)
+    balance_on = date(2026, 1, 7)
+    legacy = _create_trip(client, "Old total", start, end, pto_days="5")
+    assert legacy["pto_mode"] == PTO_MODE_LEGACY
+    assert legacy["pto_dates"] == []
+    assert legacy["pto_days"] == "5.0000"
+    _put_policy(client, "10", balance_on)
+    legacy = client.get(f"/api/trips/{legacy['id']}").json()
+    assert legacy["pto"]["days"] == "5"
+    assert legacy["pto"]["balance_when_you_leave"] is None
+    assert legacy["pto"]["leftover_after"] is None
+    assert "on or before your PTO balance date" in legacy["pto"]["note"]
+    legacy_entry = next(
+        row for row in client.get("/api/pto").json()["entries"] if row["trip_id"] == legacy["id"]
+    )
+    assert legacy_entry["days"] == "5.0000"
+    assert legacy_entry["charges"] == [{"on_date": start.isoformat(), "amount": "5"}]
+
+    trip = _create_trip(client, "Allocated week", start, end)
+    body, entry, home = _same_forecast(client, trip["id"], "5")
+    assert body["pto"]["balance_when_you_leave"] is None
+    assert body["pto"]["leftover_after"] == "8"
+    assert "Later selected days are deducted." in body["pto"]["note"]
+    assert [item["on_date"] for item in entry["charges"]] == [
+        day.isoformat() for day in iter_dates(start, end)
+    ]
+    card = _one(_home_trips(home), trip["id"])
+    assert card["pto"]["leftover_after"] == "8"
+
+    marked = client.patch(
+        f"/api/trips/{trip['id']}",
+        json={"pto_dates": [{"on_date": "2026-01-09", "amount": "0"}]},
+    )
+    assert marked.status_code == 200, marked.text
+    body, entry, _home = _same_forecast(client, trip["id"], "4")
+    assert body["pto"]["leftover_after"] == "9"
+    assert "2026-01-09" not in {item["on_date"] for item in entry["charges"]}
+    assert client.get(f"/api/trips/{legacy['id']}").json()["pto"]["days"] == "5"
+
+
+def test_preview_uses_the_same_weekday_choices(client):
+    _put_policy(client, "10", date(2026, 10, 24))
+    preview = client.get("/api/pto/preview", params={"start": "2026-10-23", "end": "2026-10-26"})
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["days"] == "2"
+    assert body["auto"] is True
+    assert body["charges"] == [
+        {"on_date": "2026-10-23", "amount": "1"},
+        {"on_date": "2026-10-26", "amount": "1"},
+    ]
+    assert body["balance_when_you_leave"] is None
+    assert body["leftover_after"] == "9"
+    assert "Later selected days are deducted." in body["note"]
+
+    _put_policy(client, "0", date(2026, 10, 22))
+    before = client.get("/api/pto/preview", params={"start": "2026-10-23", "end": "2026-10-26"})
+    assert before.status_code == 200, before.text
+    assert before.json()["balance_when_you_leave"] == "0"
+    assert before.json()["leftover_after"] == "-2"
+    assert before.json()["charges"] == [
+        {"on_date": "2026-10-23", "amount": "1"},
+        {"on_date": "2026-10-26", "amount": "1"},
+    ]
+
+
+def test_overlap_is_explicit_and_legacy_totals_stay_whole(client):
+    friday = _next_friday()
+    monday = friday + timedelta(days=3)
+    _put_policy(client, "10", friday - timedelta(days=1))
+    first = _create_trip(client, "First", friday, monday)
+    second = _create_trip(client, "Second", friday, monday)
+    assert first["pto"]["days"] == "2"
+    assert second["pto"]["days"] == "2"
+    assert {item["on_date"] for item in second["pto"]["conflicts"]} == {
+        friday.isoformat(),
+        monday.isoformat(),
+    }
+    home = client.get("/api/home").json()
+    assert {item["on_date"] for item in home["pto"]["conflicts"]} == {
+        friday.isoformat(),
+        monday.isoformat(),
+    }
+    friday_conflict = next(
+        item for item in home["pto"]["conflicts"] if item["on_date"] == friday.isoformat()
+    )
+    assert friday_conflict["amount"] == "2"
+    assert friday_conflict["labels"] == ["First", "Second"]
+    assert first["pto"]["days"] == "2"
+
+    wednesday = friday + timedelta(days=5)
+    manual = client.post(
+        "/api/pto/entries",
+        json={
+            "label": "Long appointment",
+            "start_date": wednesday.isoformat(),
+            "end_date": wednesday.isoformat(),
+            "days": "2",
+        },
+    )
+    assert manual.status_code == 201, manual.text
+    board = client.get("/api/pto").json()
+    assert {item["on_date"] for item in board["policy"]["conflicts"]} == {
+        friday.isoformat(),
+        monday.isoformat(),
+    }
+    appointment = next(row for row in board["entries"] if row["label"] == "Long appointment")
+    assert appointment["days"] == "2.0000"
+
+    added = client.post(
+        "/api/pto/entries",
+        json={
+            "label": "Friday appointment",
+            "start_date": friday.isoformat(),
+            "end_date": friday.isoformat(),
+            "days": "1",
+        },
+    )
+    assert added.status_code == 201, added.text
+    board = added.json()
+    friday_conflict = next(
+        item for item in board["policy"]["conflicts"] if item["on_date"] == friday.isoformat()
+    )
+    assert friday_conflict["amount"] == "3"
+    assert friday_conflict["labels"] == ["First", "Second", "Friday appointment"]
+    monday_conflict = next(
+        item for item in board["policy"]["conflicts"] if item["on_date"] == monday.isoformat()
+    )
+    assert monday_conflict["amount"] == "2"
+    assert client.get(f"/api/trips/{first['id']}").json()["pto"]["days"] == "2"
+    assert next(row for row in board["entries"] if row["label"] == "Long appointment")["days"] == (
+        "2.0000"
+    )
+
+    later = friday + timedelta(days=14)
+    legacy = _create_trip(client, "Custom", later, later + timedelta(days=3), pto_days="1.6667")
+    assert legacy["pto_mode"] == PTO_MODE_LEGACY
+    assert legacy["pto_dates"] == []
+    assert legacy["pto"]["conflicts"] == []
+    legacy_entry = next(
+        row for row in client.get("/api/pto").json()["entries"] if row["trip_id"] == legacy["id"]
+    )
+    assert legacy_entry["days"] == "1.6667"
+    assert legacy_entry["charges"] == [{"on_date": later.isoformat(), "amount": "1.67"}]
+
+    same_day = _create_trip(client, "That Friday", later, later)
+    assert same_day["pto"]["days"] == "1"
+    conflict = same_day["pto"]["conflicts"]
+    assert len(conflict) == 1
+    assert conflict[0]["on_date"] == later.isoformat()
+    assert conflict[0]["amount"] == "2.67"
+    assert conflict[0]["labels"] == ["Custom", "That Friday"]
+    kept = client.get(f"/api/trips/{legacy['id']}").json()
+    assert kept["pto_days"] == "1.6667"
+    assert kept["pto_dates"] == []
+    assert kept["pto"]["days"] == "1.67"
+
+    allocated = client.patch(
+        f"/api/trips/{legacy['id']}",
+        json={
+            "pto_dates": _dates(
+                later, later + timedelta(days=3), lambda day: "0" if day.weekday() >= 5 else "1"
+            )
+        },
+    )
+    assert allocated.status_code == 200, allocated.text
+    assert allocated.json()["pto_days"] is None
+    assert allocated.json()["pto_mode"] == PTO_MODE_DATES
+    assert allocated.json()["pto"]["days"] == "2"
+    assert [row["amount"] for row in allocated.json()["pto_dates"]] == ["1", "0", "0", "1"]
+    assert client.get(f"/api/trips/{same_day['id']}").json()["pto"]["days"] == "1"

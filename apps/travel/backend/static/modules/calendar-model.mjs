@@ -37,10 +37,11 @@ export function weekdayHeads() {
   });
 }
 
-export function dayLinkName({ iso, todayIso, day, planCount = 0, tripTitles = [] }) {
+export function dayLinkName({ iso, todayIso, day, planCount = 0, tripTitles = [], pto = false }) {
   const date = day || new Date(`${iso}T00:00:00`);
   const bits = [`${SHORT[date.getDay()]}, ${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`];
   if (iso === todayIso) bits.push("today");
+  if (pto) bits.push("PTO");
   if (planCount === 1) bits.push("1 plan");
   else if (planCount > 1) bits.push(`${planCount} plans`);
   if (tripTitles.length) bits.push(`in ${tripTitles.join(", ")}`);

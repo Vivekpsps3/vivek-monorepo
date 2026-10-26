@@ -257,6 +257,72 @@ function parkingForm(item) {
     </form>`;
 }
 
+export function defaultPtoAmount(iso) {
+  const day = new Date(`${iso}T00:00:00`).getDay();
+  return day === 0 || day === 6 ? "0" : "1";
+}
+
+export function spanDates(start, end) {
+  if (!start || !end || end < start) return [];
+  const days = [];
+  const cursor = new Date(`${start}T00:00:00`);
+  const last = new Date(`${end}T00:00:00`);
+  while (cursor <= last) {
+    const month = String(cursor.getMonth() + 1).padStart(2, "0");
+    const day = String(cursor.getDate()).padStart(2, "0");
+    days.push(`${cursor.getFullYear()}-${month}-${day}`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+export function datesOutside(start, end, dates) {
+  if (!start || !end || end < start) return [...(dates || [])];
+  return (dates || []).filter((day) => day < start || day > end);
+}
+
+function ptoChoiceLabel(day) {
+  const amount = Number(day.amount);
+  if (!amount) return "Not PTO";
+  if (amount === 1) return "PTO";
+  return `PTO ${day.amount}`;
+}
+
+function conflictCopy(trip) {
+  const items = trip.pto?.conflicts || [];
+  if (!items.length) return "";
+  const text = items.map((item) => {
+    const labels = [...(item.labels || [])];
+    const index = labels.indexOf(trip.title);
+    if (index >= 0) labels.splice(index, 1);
+    const who = labels.join(", ") || "other time off";
+    return `${prettyDate(item.on_date)} is also counted on ${who}.`;
+  }).join(" ");
+  return `<p class="meta">${esc(text)}</p>`;
+}
+
+function ptoActions() {
+  return `<div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" data-action="pto-weekdays" data-focus-key="pto-weekdays">Select weekdays</button><button class="btn btn-ghost btn-sm" type="button" data-action="pto-clear" data-focus-key="pto-clear">Clear</button></div>`;
+}
+
+function ptoEditor(trip) {
+  if (!trip.pto_mode && !trip.pto_dates) return "";
+  const conflicts = conflictCopy(trip);
+  if (trip.pto_mode === "legacy") {
+    const total = daysText(trip.pto_days || trip.pto?.days || "");
+    return `<section class="card" id="pto-days"><h2>PTO</h2><p>Custom total of ${esc(total)}, not assigned to dates.</p><p class="meta">Saturday and Sunday start as not PTO. Choosing days replaces this total.</p>${ptoActions()}${conflicts}</section>`;
+  }
+  const counted = daysText(trip.pto?.days || 0);
+  const kept = !trip.counts_as_pto
+    ? `<p class="meta">This trip is not counted as PTO. Day choices are kept${trip.pto_days_effective ? ` (${esc(daysText(trip.pto_days_effective))} saved)` : ""}.</p>`
+    : `<p class="meta">Saturday and Sunday start as not PTO.</p>`;
+  const rows = (trip.pto_dates || []).map((day) => {
+    const on = Number(day.amount) > 0;
+    return `<div class="ride"><div><p>${esc(prettyDate(day.on_date))}</p></div><button class="btn btn-ghost btn-sm" type="button" data-action="pto-day" data-date="${esc(day.on_date)}" data-on="${on ? "1" : "0"}" data-focus-key="pto-${esc(day.on_date)}" aria-pressed="${on ? "true" : "false"}">${esc(ptoChoiceLabel(day))}</button></div>`;
+  }).join("");
+  return `<section class="card" id="pto-days"><h2>PTO</h2>${kept}<p data-pto-total>Total ${esc(counted)}</p>${ptoActions()}${rows}${conflicts}</section>`;
+}
+
 function parkingEditor(item) {
   if (!item || !editing("parking", item.id)) return "";
   return parkingForm(item);
@@ -276,14 +342,16 @@ function parkingRow(item) {
 
 export function renderTrip(trip, focusDay) {
   const editingTrip = editing("trip", trip.id);
-  const tripForm = `<header class="page-head"><h1>Edit trip</h1></header><form class="stack" data-form="trip" data-id="${trip.id}"><div class="form-grid">
+  const savedPtoDates = (trip.pto_dates || []).map((day) => day.on_date);
+  const tripForm = `<header class="page-head"><h1>Edit trip</h1></header><form class="stack" data-form="trip" data-id="${trip.id}" data-pto-dates="${esc(JSON.stringify(savedPtoDates))}"><div class="form-grid">
       ${field("Trip name", "title", trip.title, { required: true, wide: true, scope: `trip-${trip.id}`, focusKey: "edit-trip" })}
       ${field("Day you leave", "start_date", trip.start_date, { type: "date", scope: `trip-${trip.id}` })}
       ${field("Day you come back", "end_date", trip.end_date, { type: "date", min: trip.start_date, scope: `trip-${trip.id}` })}
       ${field("Leaving from", "origin_label", trip.origin_label || "", { scope: `trip-${trip.id}` })}
       ${select("Status", "status", trip.status, STATUSES, { scope: `trip-${trip.id}` })}
       ${check("Count as PTO", "counts_as_pto", trip.counts_as_pto, { scope: `trip-${trip.id}` })}
-      ${field("PTO days", "pto_days", trip.pto_days || "", { wide: true, scope: `trip-${trip.id}`, inputmode: "decimal", helper: "Leave blank to count weekdays automatically." })}
+      <p class="field-help wide">Saturday and Sunday start as not PTO. Each day is chosen on the trip.</p>
+      <p class="field-help wide" data-pto-removed hidden></p>
       ${area("Overview", "notes", trip.notes || "", { scope: `trip-${trip.id}`, maxlength: 8000 })}
     </div><p class="field-help" data-notes-count hidden></p>${actions("Save trip")}</form>`;
   const header = editingTrip
@@ -393,7 +461,8 @@ export function renderTrip(trip, focusDay) {
   }).join("");
   const mapCard = points.length ? `<aside class="card map-card"><details class="map-fold"><summary>Show map</summary><div id="map" class="map" role="region" aria-label="Trip map"></div><p class="meta" data-tile-error hidden>Map tiles couldn't load.</p></details><ol class="places">${places}</ol></aside>` : "";
   const addMenu = menu ? `<div class="add-menu">${menu}</div>` : "";
-  return `${banner()}${header}${metrics}<div class="split"><div>
+  const ptoCard = editingTrip ? "" : ptoEditor(trip);
+  return `${banner()}${header}${metrics}${ptoCard}<div class="split"><div>
       ${cityBlock}
       <section class="card"><h2>Getting there</h2>${groups}${transportEditor}</section>
       <section class="card"><div class="card-head"><h2>Days</h2><button class="btn btn-ghost btn-sm" type="button" data-action="compose" data-compose="plan" data-date="${esc(activityDate)}">Add activity</button></div><div class="date-strip">${strip}</div>${quietLine}${days}${outside}</section>

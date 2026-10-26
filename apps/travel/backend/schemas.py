@@ -218,6 +218,22 @@ class TransportIn(BaseModel):
         return value
 
 
+class PtoDateIn(BaseModel):
+    on_date: date
+    amount: Decimal
+
+    @field_validator("amount")
+    @classmethod
+    def amount_ok(cls, value: Decimal) -> Decimal:
+        if not value.is_finite():
+            raise ValueError("Enter a finite number of days.")
+        if value < 0:
+            raise ValueError("Days cannot be negative.")
+        if value > 1:
+            raise ValueError("A PTO day cannot be more than 1.")
+        return value
+
+
 class TripCreate(BaseModel):
     title: str
     start_date: date
@@ -266,6 +282,7 @@ class TripPatch(BaseModel):
     notes: str | None = None
     counts_as_pto: bool | None = None
     pto_days: Decimal | None = None
+    pto_dates: list[PtoDateIn] | None = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -292,6 +309,14 @@ class TripPatch(BaseModel):
         if value < 0 or value > 366:
             raise ValueError("PTO days have to be between 0 and 366.")
         return value
+
+    @model_validator(mode="after")
+    def one_choice_per_date(self):
+        if self.pto_dates:
+            dates = [item.on_date for item in self.pto_dates]
+            if len(dates) != len(set(dates)):
+                raise ValueError("Each PTO date can only be chosen once.")
+        return self
 
 
 class PlanIn(BaseModel):

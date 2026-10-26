@@ -151,18 +151,19 @@ async function submitBody(kind, form, ui) {
     return;
   }
   if (kind === "trip") {
+    const body = {
+      title: val(form, "title"),
+      start_date: val(form, "start_date"),
+      end_date: val(form, "end_date"),
+      origin_label: val(form, "origin_label"),
+      status: form.elements.status.value,
+      notes: val(form, "notes"),
+    };
+    if (form.elements.counts_as_pto) body.counts_as_pto = checked(form, "counts_as_pto");
+    if (form.elements.pto_days) body.pto_days = val(form, "pto_days");
     state.trip = await api(`/api/trips/${form.dataset.id}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        title: val(form, "title"),
-        start_date: val(form, "start_date"),
-        end_date: val(form, "end_date"),
-        origin_label: val(form, "origin_label"),
-        status: form.elements.status.value,
-        counts_as_pto: checked(form, "counts_as_pto"),
-        pto_days: val(form, "pto_days"),
-        notes: val(form, "notes"),
-      }),
+      body: JSON.stringify(body),
     });
     state.edit = null;
     state.focusKey = "edit-trip";

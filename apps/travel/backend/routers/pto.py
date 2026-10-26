@@ -13,22 +13,18 @@ from apps.travel.backend.schemas import PtoEntryIn, PtoPolicyIn
 from apps.travel.backend.services.assemble import snapshot_pto
 from apps.travel.backend.services.dates import weekday_count
 from apps.travel.backend.services.money import DAY_STEP, parse_days, store_days
-from apps.travel.backend.services.pto import policy_from_row, preview_take, usages_from_rows
+from apps.travel.backend.services.pto import (
+    load_usages,
+    policy_from_row,
+    preview_take,
+    usage_charges_payload,
+)
 
 router = APIRouter()
 
 
 def _quantize(value: Decimal) -> Decimal:
     return Decimal(str(value)).quantize(DAY_STEP, rounding=ROUND_HALF_UP)
-
-
-def _entries(db: Session, user_id: int):
-    return (
-        db.query(PtoEntry)
-        .filter(PtoEntry.user_id == user_id)
-        .order_by(PtoEntry.start_date, PtoEntry.id)
-        .all()
-    )
 
 
 def _policy_row(db: Session, user_id: int) -> PtoPolicy | None:
@@ -39,19 +35,20 @@ def _payload(db: Session, user_id: int, today: date | None = None) -> dict:
     today = today or date.today()
     row = _policy_row(db, user_id)
     policy = policy_from_row(row)
-    usages = usages_from_rows(_entries(db, user_id))
+    stored, usages = load_usages(db, user_id)
     entries = [
         {
             "id": entry.id,
             "trip_id": entry.trip_id,
             "start_date": entry.start_date,
             "end_date": entry.end_date,
-            "days": store_days(Decimal(entry.days)),
+            "days": store_days(usage.days),
             "label": entry.label,
             "kind": entry.kind,
             "notes": entry.notes,
+            "charges": usage_charges_payload(usage),
         }
-        for entry in _entries(db, user_id)
+        for entry, usage in zip(stored, usages, strict=True)
     ]
     return {"policy": snapshot_pto(policy, usages, today), "entries": entries}
 
@@ -134,7 +131,7 @@ def preview(
     principal: Principal = Depends(require_principal),
 ):
     policy = policy_from_row(_policy_row(db, principal.id))
-    usages = usages_from_rows(_entries(db, principal.id))
+    _stored, usages = load_usages(db, principal.id)
     try:
         parsed = parse_days(days) if days is not None else None
         return preview_take(policy, usages, start, end, parsed)

@@ -1,8 +1,8 @@
 import { api } from '../api.mjs';
 import { state } from '../state.mjs';
-import { esc, val } from '../helpers.mjs';
+import { esc, prettyDate, val } from '../helpers.mjs';
 import { parseHash } from '../route-parser.mjs';
-import { renderTrip } from '../views/trip.mjs';
+import { renderTrip, datesOutside, defaultPtoAmount, spanDates } from '../views/trip.mjs';
 import { renderLogin } from '../views/settings.mjs';
 import { cityFields, connectionFields } from '../views/new-trip.mjs';
 import { submit, refetchTrip } from './forms.mjs';
@@ -144,6 +144,10 @@ export async function onAction(button, ui) {
       }),
     });
     ui.paint(renderTrip(state.trip), "home");
+    return;
+  }
+  if (action === "pto-day" || action === "pto-weekdays" || action === "pto-clear") {
+    await savePtoChoice(button, ui);
     return;
   }
   if (action === "retry-route") {
@@ -369,6 +373,10 @@ export function bindEvents(ui) {
   });
   document.addEventListener("input", (event) => {
     if (event.target?.name === "notes") updateNotesCount(event.target);
+    const form = event.target?.form;
+    if (form?.dataset?.form === "trip" && (event.target.name === "start_date" || event.target.name === "end_date")) {
+      noteRemovedPto(form);
+    }
   });
   document.addEventListener("keydown", (event) => {
     const themeRadio = event.target?.closest?.("[data-action=theme]");
@@ -450,4 +458,44 @@ async function onActionSafe(work, ui) {
     }
     fail(error, { retry: error.status === 422 ? null : { key: "action", run: () => onActionSafe(work, ui) } });
   }
+}
+
+function noteRemovedPto(form) {
+  const note = form.querySelector("[data-pto-removed]");
+  if (!note) return;
+  let saved = [];
+  try {
+    saved = JSON.parse(form.dataset.ptoDates || "[]");
+  } catch {
+    saved = [];
+  }
+  const gone = datesOutside(form.elements.start_date.value, form.elements.end_date.value, saved);
+  if (!gone.length) {
+    note.hidden = true;
+    note.textContent = "";
+    return;
+  }
+  note.hidden = false;
+  note.textContent = `These PTO choices will be removed: ${gone.map((day) => prettyDate(day)).join(", ")}. New days use weekdays as PTO and weekends as not PTO.`;
+}
+
+async function savePtoChoice(button, ui) {
+  const trip = state.trip;
+  if (!trip) return;
+  const dates = spanDates(trip.start_date, trip.end_date);
+  let ptoDates;
+  if (button.dataset.action === "pto-weekdays") {
+    ptoDates = dates.map((onDate) => ({ on_date: onDate, amount: defaultPtoAmount(onDate) }));
+  } else if (button.dataset.action === "pto-clear") {
+    ptoDates = dates.map((onDate) => ({ on_date: onDate, amount: "0" }));
+  } else {
+    ptoDates = [{ on_date: button.dataset.date, amount: button.dataset.on === "1" ? "0" : "1" }];
+  }
+  state.trip = await api(`/api/trips/${trip.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ pto_dates: ptoDates }),
+  });
+  state.focusKey = button.dataset.focusKey || "";
+  saved("PTO updated.");
+  ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
 }
