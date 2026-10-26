@@ -23,7 +23,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | MED-04 | done | ./scripts/coverage-gate.sh media exit 0. Inspected 06-media-library.md, domain.py, records.py, summary.py, membership.py, calendar.py, format.mjs, app.mjs, views.mjs, hub.component.html, test_artist_follow.py. Artists are following or unfollowed; legacy in_progress is not a listen and no song or experience is created. |
 | WEB-01 | done | npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI exit 0 with CHROME_BIN (8 SUCCESS). Inspected 04-hub-finance.md, app.routes.ts static titles, ecdh.service.ts local ECDH, secrets.component.html escaped text, app.component.html one Workspace /hub link, package.json and lock without socket.io-client, and apps/site/flask absent. |
 | TRV-03 | done | node --test apps/travel/backend/static/tests/*.test.mjs exit 0. Inspected 05-travel.md TRV-03, flight.mjs, ui.mjs, new-trip.mjs, trip.mjs, composer.mjs, flights.py, integrations.py, and flight.test.mjs. A number and date debounce to /api/flights/lookup and preview one local-day candidate; edit-flight-manually keeps the typed depart_at. lookup-flight, applyFlight, and flight-results are absent. |
-| SRC-01 | open | pending |
+| SRC-01 | done | ./scripts/coverage-gate.sh media exited 0 (91 passed). Inspected 07-search-providers.md, providers.py, records.py, domain.py, and test_provider_contracts.py. Movie, tv, book, game, artist, album, and track each have one search route and one lookup_detail path with provenance and MB_PACE or the 3s timeout. The replaced MusicBrainz sleep and immediate retry are gone. |
 | FIN-01 | open | pending |
 | TRV-04 | open | pending |
 | SRC-02 | open | pending |
