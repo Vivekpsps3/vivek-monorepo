@@ -309,7 +309,8 @@ def test_provider_metadata_cannot_overwrite_a_review_and_outages_keep_saved_rows
     ).json()
     assert patched["catalog"]["title"] == "Original"
     assert patched["catalog"]["overview"] == "Filled blank"
-    assert patched["catalog"]["external_ratings"][0]["scale"] == "0–5"
+    assert patched["catalog"]["external_ratings"] == []
+    assert patched["catalog"]["extra"]["metadata_pending"] is True
 
     def boom(*_args, **_kwargs):
         raise RuntimeError("provider down")
@@ -356,7 +357,9 @@ def test_search_uses_a_cache_and_marks_saved_items(client, monkeypatch):
         "/api/library/from-provider",
         json={**first["results"][0], "status": "completed", "rating": 10},
     ).json()
-    assert added["releases"][0]["precision"] == "year"
+    assert added["releases"] == []
+    assert added["catalog"]["extra"]["metadata_pending"] is True
+    assert added["catalog"]["title"] == "Song"
     marked = client.get("/api/search", params={"q": "song", "kind": "track"}).json()
     assert marked["results"][0]["already_saved"] is True
 
@@ -395,6 +398,7 @@ def test_movie_search_reads_the_public_page_without_a_key(client, monkeypatch):
     assert body["results"][0]["title"] == "Inception"
     assert body["results"][0]["artwork_url"].endswith("/poster.jpg")
     assert body["providers"]["tmdb"] == "ok"
+    assert body["results"][0]["provenance"]["coverage"] == "extraction"
     assert "itunes" not in body["providers"]
     saved = client.post(
         "/api/library/from-provider", json={**body["results"][0], "status": "want"}
@@ -466,6 +470,8 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
     monkeypatch.setattr("apps.media.backend.services.providers.itunes_search", itunes)
     found = client.get("/api/search", params={"q": "inception", "kind": "movie"}).json()
     assert [item["source"] for item in found["results"]] == ["tmdb", "itunes"]
+    assert found["results"][0]["provenance"]["coverage"] == "official"
+    assert found["results"][1]["provenance"]["provider"] == "itunes"
     assert found["results"][1]["title"] == "Inception: The App"
     assert found["providers"]["itunes"] == "ok"
     saved = client.post(
@@ -564,7 +570,8 @@ def test_series_and_games_search_without_keys(client, monkeypatch):
     assert series["results"][0]["title"] == "Breaking Bad"
     assert series["results"][0]["artwork_url"].startswith("https://static.tvmaze.com/")
     assert series["providers"]["tvmaze"] == "ok"
-    assert series["providers"]["tmdb"] == "ok"
+    assert "tmdb" not in series["providers"]
+    assert series["results"][0]["provenance"]["provider"] == "tvmaze"
     game = client.get("/api/search", params={"q": "hades", "kind": "game"}).json()
     assert game["results"][0]["source"] == "steam"
     assert game["results"][0]["artwork_url"].startswith("https://shared.akamai.steamstatic.com/")

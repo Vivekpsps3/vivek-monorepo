@@ -348,12 +348,21 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
             "kind": "tv",
             "title": "Maze Show",
             "status": "completed",
-            "episodes": [
-                {"season_number": 1, "episode_number": 1, "title": "Old", "air_date": "2026-10-02"}
-            ],
         },
     )
     assert maze.status_code == 200
+    assert (
+        client.post(
+            f"/api/entries/{maze.json()['id']}/episodes",
+            json={
+                "season_number": 1,
+                "episode_number": 1,
+                "title": "Old",
+                "air_date": "2026-10-02",
+            },
+        ).status_code
+        == 200
+    )
     manual = add_movie(client, "Typed Show", kind="tv", status="in_progress")
     assert (
         client.post(
@@ -375,17 +384,21 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
             "kind": "tv",
             "title": "Keyed Show",
             "status": "in_progress",
-            "episodes": [
-                {
-                    "season_number": 1,
-                    "episode_number": 1,
-                    "title": "Stored Ep",
-                    "air_date": "2026-10-06",
-                }
-            ],
         },
     )
     assert tmdb.status_code == 200
+    assert (
+        client.post(
+            f"/api/entries/{tmdb.json()['id']}/episodes",
+            json={
+                "season_number": 1,
+                "episode_number": 1,
+                "title": "Stored Ep",
+                "air_date": "2026-10-06",
+            },
+        ).status_code
+        == 200
+    )
 
     failed = client.get("/api/calendar", params={"month": "2026-10"}).json()
     assert by_title(failed, "Old")[0]["date"] == "2026-10-02"

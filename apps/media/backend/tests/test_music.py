@@ -253,10 +253,8 @@ def test_saving_an_album_does_not_insert_its_songs(client, monkeypatch, tmp_path
     assert created.status_code == 200, created.text
     body = created.json()
     assert body["rating"] is None
-    assert (
-        body["artwork_url"]
-        == "https://coverartarchive.org/release/0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe/front-250"
-    )
+    assert body["artwork_url"] is None
+    assert body["catalog"]["extra"]["metadata_pending"] is True
     assert body["music"]["albums"][0]["tracks"] == []
     added = client.post(
         f"/api/entries/{body['id']}/albums/{body['id']}/tracks",

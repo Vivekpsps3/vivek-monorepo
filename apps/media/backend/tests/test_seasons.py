@@ -231,14 +231,16 @@ def test_seasons_belong_to_the_owner_even_on_a_shared_catalog(client, tmp_path):
         "status": "in_progress",
         "rating": 6,
         "review": "Mine.",
-        "episodes": [
-            {"season_number": 1, "episode_number": 1, "title": "Pilot"},
-            {"season_number": 2, "episode_number": 1, "title": "Return"},
-        ],
     }
     first = client.post("/api/library/from-provider", json=payload)
     assert first.status_code == 200
     first_id = first.json()["id"]
+    for episode in (
+        {"season_number": 1, "episode_number": 1, "title": "Pilot"},
+        {"season_number": 2, "episode_number": 1, "title": "Return"},
+    ):
+        added = client.post(f"/api/entries/{first_id}/episodes", json=episode)
+        assert added.status_code == 200
     assert (
         client.post(
             f"/api/entries/{first_id}/seasons",
