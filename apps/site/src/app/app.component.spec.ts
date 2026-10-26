@@ -15,4 +15,14 @@ describe('AppComponent', () => {
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
   });
+
+  it('offers one workspace path', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const links = [...fixture.nativeElement.querySelectorAll('a')].filter(
+      (link: HTMLAnchorElement) => link.getAttribute('href') === '/hub',
+    );
+    expect(links.length).toBe(1);
+    expect(links[0].textContent.trim()).toBe('Workspace');
+  });
 });

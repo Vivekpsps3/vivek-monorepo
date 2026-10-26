@@ -1,12 +1,11 @@
 import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { EcdhService } from '../../services/ecdh.service';
-import { MarkdownModule } from 'ngx-markdown';
 
 @Component({
   selector: 'app-secrets',
   standalone: true,
-  imports: [FormsModule, MarkdownModule],
+  imports: [FormsModule],
   templateUrl: './secrets.component.html',
 })
 export class SecretsComponent implements OnInit {
