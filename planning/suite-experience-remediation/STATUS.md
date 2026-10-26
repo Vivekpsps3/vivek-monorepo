@@ -17,7 +17,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | MED-01 | done | ./scripts/coverage-gate.sh media exit 0 (70 passed). Inspected 06-media-library.md, records.py, journal.py, membership.py, providers.py, and views.mjs. UserEntry saves are explicit; discography and legacy music_albums do not insert album or song membership. _load_artist_catalog and backfill_missing_tracks are gone. |
 | NAV-02 | done | CHROME_BIN set, npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI exit 0 (425 SUCCESS). Inspected 04-hub-finance.md, main-layout.component.html/ts/css, suite-hub-link.component.ts, app.routes.ts, auth.guard.ts, vault.guard.ts: one header Hub control, old nav-tab and mobile-tab /hub links absent, five section tabs, guards and deep-link redirects unchanged. |
 | TRV-05 | done | node --test apps/travel/backend/static/tests/*.test.mjs exited 0 (61 passed). Inspected 05-travel.md, trip.mjs, new-trip.mjs, ui.mjs, and blockers.test.mjs: empty trips show one btn-sm Add transport and quiet days; always-open ride, day, parking, note, and reminder builders are gone. |
-| MED-02 | open | pending |
+| MED-02 | done | node --test apps/media/backend/static/tests/*.test.mjs exited 0. Inspected 06-media-library.md, views.mjs libraryCard/savedExpansion/discographyHtml, app.mjs viewLibrary/libraryCards/viewDiscography, app.css .card/.is-artist, and index.html. artistSection, buildLibraryTree, and movieBrowseCards are absent from live JS. |
 | HUB-01 | open | pending |
 | TRV-02 | open | pending |
 | MED-04 | open | pending |

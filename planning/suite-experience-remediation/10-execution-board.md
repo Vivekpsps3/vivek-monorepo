@@ -30,7 +30,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 | [ ] | TRV-04 | Travel map/UI | ARC-01, API-01, TRV-01 | Production-policy-compatible map, explicit location choice, visible errors/retry and compliant geocoder pacing. |
 | [x] | TRV-05 | Travel UI | TRV-01 | Quiet trip itinerary/add flow and obvious forms; redundant builders/empty sections removed. |
 | [x] | MED-01 | Media domain | DB-02, API-01 | Explicit personal child membership and ID relationships; ordinary reads DB-only; eager hydration deleted. |
-| [ ] | MED-02 | Media UI | MED-01, NAV-01 | Uniform saved-only library with collapsed saved-child expansion and separate discography. |
+| [x] | MED-02 | Media UI | MED-01, NAV-01 | Uniform saved-only library with collapsed saved-child expansion and separate discography. |
 | [ ] | MED-03 | Media art/UI | DB-02, SRC-01, MED-02 | Search/select/reset personal artist portrait, attribution and effective-artwork fallback. |
 | [ ] | MED-04 | Media domain/UI | MED-01, DB-02 | Following-only artists across API/UI/filters/Now/Hub; no invented listens. |
 | [ ] | SRC-01 | Media providers | API-01 | Concrete source authority/detail/pacing contracts for every supported media kind. |
