@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from apps.travel.backend.services.flights import (
     FlightAwareError,
+    lookup_bounds,
     lookup_flights,
     normalize_ident,
     parse_flights,
@@ -21,6 +22,8 @@ SAMPLE = {
         {
             "ident": "UAL837",
             "ident_iata": "UA837",
+            "operator": "UAL",
+            "operator_iata": "UA",
             "status": "Scheduled",
             "aircraft_type": "B789",
             "origin": {
@@ -62,7 +65,9 @@ def test_normalize_ident_strips_spaces():
 def test_parse_flights_keeps_airports_gates_and_delay():
     flights = parse_flights(SAMPLE)
     assert flights[0]["ident_iata"] == "UA837"
+    assert flights[0]["operator_iata"] == "UA"
     assert flights[0]["origin_iata"] == "SFO"
+    assert flights[0]["origin_icao"] == "KSFO"
     assert flights[0]["destination_timezone"] == "Asia/Tokyo"
     assert flights[0]["gate_origin"] == "G4"
     assert flights[0]["departure_delay_seconds"] == 600
@@ -73,16 +78,64 @@ def test_lookup_uses_the_key_header_and_maps_the_body():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["x-apikey"] == "secret"
         assert request.url.path.endswith("/UA837")
+        assert request.url.params["ident_type"] == "designator"
+        assert request.url.params["start"] == "2026-11-02T00:00:00Z"
+        assert request.url.params["end"] == "2026-11-04T00:00:00Z"
         return httpx.Response(200, json=SAMPLE)
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    flights = lookup_flights("UA 837", date(2026, 11, 2), "secret", client=client)
+    flights = lookup_flights(
+        "UA 837", date(2026, 11, 2), "secret", client=client, today=date(2026, 11, 2)
+    )
     assert flights[0]["origin_city"] == "San Francisco"
 
 
 def test_lookup_reports_a_rejected_key():
     client = httpx.Client(transport=httpx.MockTransport(lambda _request: httpx.Response(401)))
     with pytest.raises(FlightAwareError) as caught:
-        lookup_flights("UA1", date(2026, 11, 2), "nope", client=client)
+        lookup_flights("UA1", date(2026, 11, 2), "nope", client=client, today=date(2026, 11, 2))
     assert caught.value.status_code == 502
     assert caught.value.code == "provider_auth"
+
+
+def test_lookup_clamps_the_window_and_skips_dates_aeroapi_will_reject():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["start"] == "2026-11-03T00:00:00Z"
+        assert request.url.params["end"] == "2026-11-04T00:00:00Z"
+        return httpx.Response(200, json={"flights": []})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    assert (
+        lookup_flights("UA837", date(2026, 11, 3), "secret", client=client, today=date(2026, 11, 2))
+        == []
+    )
+    start, end = lookup_bounds(date(2026, 10, 26), date(2026, 11, 2))
+    assert (start, end) == (date(2026, 10, 26), date(2026, 10, 28))
+
+    def forbidden(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("provider should not be called")
+
+    blocked = httpx.Client(transport=httpx.MockTransport(forbidden))
+    with pytest.raises(FlightAwareError):
+        lookup_bounds(date(2026, 10, 22), date(2026, 11, 2))
+    with pytest.raises(FlightAwareError) as caught:
+        lookup_flights(
+            "UA837", date(2026, 11, 2), "secret", client=blocked, today=date(2026, 10, 26)
+        )
+    assert caught.value.code == "schedule_unavailable"
+    with pytest.raises(FlightAwareError) as last_day:
+        lookup_flights(
+            "UA837", date(2026, 11, 4), "secret", client=blocked, today=date(2026, 11, 2)
+        )
+    assert last_day.value.code == "schedule_unavailable"
+
+
+def test_lookup_reports_a_timeout():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(FlightAwareError) as caught:
+        lookup_flights("UA837", date(2026, 11, 2), "secret", client=client, today=date(2026, 11, 2))
+    assert caught.value.status_code == 504
+    assert caught.value.code == "provider_timeout"

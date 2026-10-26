@@ -44,6 +44,8 @@ export async function api(path, options = {}) {
   if (!response.ok) {
     const error = new Error(messageFrom(payload, response.status));
     error.status = response.status;
+    error.code = payload && typeof payload.code === "string" ? payload.code : "";
+    error.retryAfter = payload?.retry_after ?? null;
     throw error;
   }
   return payload;
