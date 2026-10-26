@@ -121,3 +121,15 @@ describe('VaultService per-request silence', () => {
     requests.forEach(request => request.flush({ deleted: 1 }));
   });
 });
+
+describe('VaultService whenReady', () => {
+  afterEach(() => localStorage.removeItem('finance-dek'));
+
+  it('resolves before a missing browser key is treated as unlocked', async () => {
+    localStorage.removeItem('finance-dek');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    expect(service.isUnlocked).toBeFalse();
+  });
+});

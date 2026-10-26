@@ -8,6 +8,7 @@ import {
   toArrayBuffer,
   DEFAULT_PBKDF2_ITERATIONS,
 } from '@vivek/browser';
+import { DEK_STORE } from './dek-store';
 
 export { DEFAULT_PBKDF2_ITERATIONS, randomBytes };
 
@@ -126,8 +127,6 @@ export async function decryptJson<T>(
   const plain = await decryptPackedAesGcm(ciphertextB64, dek, additionalData);
   return JSON.parse(textDecoder.decode(plain)) as T;
 }
-
-const DEK_STORE = 'finance-dek';
 
 export async function persistDekLocal(dek: CryptoKey): Promise<void> {
   try { localStorage.setItem(DEK_STORE, bufToB64(await exportRawKey(dek))); } catch { /* private */ }

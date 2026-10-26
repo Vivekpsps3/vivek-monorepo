@@ -38,11 +38,11 @@ async function createAccount(page: Page, username: string): Promise<void> {
 }
 
 async function openAccount(page: Page): Promise<void> {
-  const menu = page.getByRole('menu', { name: 'Account settings' });
-  if (!(await menu.isVisible())) {
+  const dialog = page.getByRole('dialog', { name: 'Account settings' });
+  if (!(await dialog.isVisible())) {
     await page.getByRole('button', { name: 'Account', exact: true }).click();
   }
-  await expect(menu).toBeVisible();
+  await expect(dialog).toBeVisible();
 }
 
 async function expectPassphraseCleared(page: Page): Promise<void> {

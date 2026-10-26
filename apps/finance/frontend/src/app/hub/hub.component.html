@@ -15,33 +15,33 @@
         @if (admin) {
           <a class="text-button" routerLink="/hub/admin">Admin</a>
         }
-        <div class="account-settings">
-          <button type="button" class="text-button" (click)="toggleSettings()" [attr.aria-expanded]="settingsOpen" aria-haspopup="menu">Account</button>
-          @if (settingsOpen) {
-            <div class="account-settings__menu" role="menu" aria-label="Account settings">
-              <form class="account-settings__name" (ngSubmit)="saveName()">
-                <label>Name <input name="display-name" autocomplete="name" [value]="draftName" (input)="draftName = $any($event.target).value" required></label>
-                @if (nameError) {
-                  <p class="form-error" role="alert">{{ nameError }}</p>
-                }
-                <button type="submit" [disabled]="savingName">Save name</button>
-              </form>
-              <h2 id="username-heading">Change username</h2>
-              <app-username-change />
-              <button type="button" (click)="signOut()">Sign out</button>
-            </div>
-          }
-        </div>
+        <button type="button" class="text-button" (click)="toggleSettings()" [attr.aria-expanded]="settingsOpen" aria-haspopup="dialog">Account</button>
       </div>
     </div>
   </header>
+
+  <ui-dialog [open]="settingsOpen" labelledBy="account-settings-title" (closed)="closeSettings()">
+    <div class="account-settings__panel" aria-label="Account settings">
+      <h2 id="account-settings-title">Account settings</h2>
+      <form class="account-settings__name" (ngSubmit)="saveName()">
+        <label>Name <input name="display-name" autocomplete="name" [value]="draftName" (input)="draftName = $any($event.target).value" required></label>
+        @if (nameError) {
+          <p class="form-error" role="alert">{{ nameError }}</p>
+        }
+        <button type="submit" [disabled]="savingName">Save name</button>
+      </form>
+      <h2 id="username-heading">Change username</h2>
+      <app-username-change />
+      <button type="button" (click)="signOut()">Sign out</button>
+    </div>
+  </ui-dialog>
 
   <main id="hub-main">
     <p class="eyebrow">{{ headingToday | appDate:'heading' }}</p>
     <h1>{{ name }}</h1>
 
     <div class="pair">
-      <section class="side-panel" aria-labelledby="travel-heading">
+      <section class="side-panel" aria-labelledby="travel-heading" [attr.aria-busy]="travelState === 'loading' || travelPending">
         <div class="panel-head">
           <div>
             <p class="eyebrow">Travel</p>
@@ -51,6 +51,9 @@
         </div>
         @if (travelState === 'loading') {
           <p class="figure-note" role="status">Checking trips…</p>
+        } @else if (travelState === 'expired') {
+          <p class="figure-note" role="status">Session expired for Travel. Retry or sign in again.</p>
+          <a class="open-link" href="/auth/login?next=%2Fhub">Sign in</a>
         } @else if (travelState === 'unavailable') {
           <p class="figure-note">Travel is not available from here right now.</p>
         } @else if (!trip) {
@@ -64,10 +67,16 @@
           }
           <p class="figure-note">{{ formatDay(trip.start_date) }} – {{ formatDay(trip.end_date) }}</p>
           <a class="open-link" [href]="trip.href || '/travel/'">{{ trip.next_action }}</a>
+          @if (travelState === 'stale') {
+            <p class="figure-note">Showing the last trip snapshot.</p>
+          }
+        }
+        @if (travelState === 'unavailable' || travelState === 'expired' || travelState === 'stale' || travelPending) {
+          <button type="button" class="open-link" (click)="retryTravel()" [disabled]="travelPending">{{ travelPending ? 'Retrying…' : 'Retry' }}</button>
         }
       </section>
 
-      <section class="side-panel" aria-labelledby="media-heading">
+      <section class="side-panel" aria-labelledby="media-heading" [attr.aria-busy]="mediaState === 'loading' || mediaPending">
         <div class="panel-head">
           <div>
             <p class="eyebrow">Media</p>
@@ -77,14 +86,15 @@
         </div>
         @if (mediaState === 'loading') {
           <p class="figure-note" role="status">Checking your journal…</p>
+        } @else if (mediaState === 'expired') {
+          <p class="figure-note" role="status">Session expired for Media. Retry or sign in again.</p>
+          <a class="open-link" href="/auth/login?next=%2Fhub">Sign in</a>
         } @else if (mediaState === 'unavailable') {
           <p class="figure-note">Media is not available from here right now.</p>
-          <button type="button" class="open-link" (click)="retryMedia()">Retry</button>
-        } @else if (media) {
-          @if (!media.currently.length && !media.upcoming.length && !media.recent_reviews.length && !media.next_episodes.length) {
-            <p class="quiet-title">Nothing in progress</p>
-            <a class="open-link" href="/media/#/search">Add something</a>
-          }
+        } @else if (!media || mediaState === 'empty') {
+          <p class="quiet-title">Nothing in progress</p>
+          <a class="open-link" href="/media/#/search">Add something</a>
+        } @else {
           @if (media.currently.length) {
             <ul class="rows">
               @for (item of media.currently.slice(0, 3); track item.id) {
@@ -116,10 +126,16 @@
               }
             </ul>
           }
+          @if (mediaState === 'stale') {
+            <p class="figure-note">Showing the last media snapshot.</p>
+          }
+        }
+        @if (mediaState === 'unavailable' || mediaState === 'expired' || mediaState === 'stale' || mediaPending) {
+          <button type="button" class="open-link" (click)="retryMedia()" [disabled]="mediaPending">{{ mediaPending ? 'Retrying…' : 'Retry' }}</button>
         }
       </section>
 
-      <section class="side-panel finance-bar" aria-labelledby="finance-heading">
+      <section class="side-panel finance-bar" aria-labelledby="finance-heading" [attr.aria-busy]="financeState === 'loading' || financePending">
         <div class="panel-head">
           <div>
             <p class="eyebrow">Finance</p>
@@ -132,17 +148,25 @@
           <p class="figure-note">Balances stay encrypted in this browser.</p>
           <a class="open-link" routerLink="/vault/unlock" [queryParams]="{ next: '/hub' }">Unlock</a>
         } @else if (financeState === 'loading') {
-          <p class="figure-note" role="status">Reading this browser’s vault…</p>
-        } @else if (financeState === 'error') {
-          <p class="figure-note" role="alert">Finance could not be read.</p>
-          <a class="open-link" routerLink="/">Retry in Finance</a>
+          <p class="figure-note" role="status">{{ financePending ? 'Retrying…' : 'Reading this browser’s vault…' }}</p>
+        } @else if (financeState === 'expired') {
+          <p class="figure-note" role="status">Session expired for Finance. Retry or sign in again.</p>
+          <a class="open-link" href="/auth/login?next=%2Fhub">Sign in</a>
+        } @else if (financeState === 'unavailable') {
+          <p class="figure-note">Finance could not be read.</p>
         } @else if (netWorth) {
           <p class="quiet-title">{{ netWorth.total | money }}</p>
+          @if (financeState === 'stale') {
+            <p class="figure-note">Showing the last snapshot on this browser.</p>
+          }
           @if (freshness) {
             <p class="figure-note">{{ freshness }}</p>
           }
         }
-        @if (financeState === 'ready' && netWorth) {
+        @if (financeState === 'unavailable' || financeState === 'expired' || financeState === 'stale' || financePending) {
+          <button type="button" class="open-link" (click)="retryFinance()" [disabled]="financePending">{{ financePending ? 'Retrying…' : 'Retry' }}</button>
+        }
+        @if ((financeState === 'ready' || financeState === 'stale') && netWorth) {
         <details class="finance-more">
           <summary>Breakdown</summary>
           <dl class="split">
