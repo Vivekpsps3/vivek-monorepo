@@ -53,15 +53,18 @@ export function summaryText(start, end) {
   if (!start) return "Pick the day you leave.";
   if (!end) return "Now pick the day you come back.";
   const nights = nightsBetween(start, end);
+  if (nights === 0) return `${shortRange(start, end)} · same day`;
   const nightLabel = nights === 1 ? "1 night" : `${nights} nights`;
   return `${shortRange(start, end)} · ${nightLabel}`;
 }
 
-export function dayName(iso, { start = "", end = "" } = {}) {
+export function dayName(iso, { start = "", end = "", splits = [] } = {}) {
   const date = parseIso(iso);
   const text = `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   if (start && iso === start) return `${text}, start`;
+  if (end && iso === end && splits.includes(iso)) return `${text}, change city, end`;
   if (end && iso === end) return `${text}, end`;
+  if (splits.includes(iso)) return `${text}, change city`;
   if (start && end && iso > start && iso < end) return `${text}, in trip`;
   return text;
 }
@@ -88,45 +91,198 @@ export function blankRange(start = "") {
     tripName: "",
     nameTouched: false,
     pto: true,
+    pendingSpan: null,
   };
 }
 
-export function pickDay(model, iso, { shift = false } = {}) {
-  const next = { ...model, splits: [...(model.splits || [])] };
-  if (shift && model.start) {
-    if (iso < model.start) {
-      next.start = iso;
-      next.end = model.end || model.start;
-    } else {
-      next.start = model.start;
-      next.end = iso;
+function clone(model) {
+  return {
+    ...model,
+    splits: [...(model.splits || [])],
+    cities: { ...(model.cities || {}) },
+  };
+}
+
+function namedStops(model) {
+  return segments(model)
+    .map((part) => ({
+      key: part.key,
+      city: String(model.cities?.[part.key] || "").trim(),
+      arrive: part.arrive,
+      leave: part.leave,
+    }))
+    .filter((part) => part.city);
+}
+
+function applySpan(model, start, end) {
+  const before = segments(model);
+  const from = start <= end ? start : end;
+  const to = start <= end ? end : start;
+  const splits = (model.splits || []).filter((iso) => iso > from && iso <= to).sort();
+  const draft = { ...clone(model), start: from, end: to, awaitingEnd: false, splits, pendingSpan: null };
+  const after = segments(draft);
+  const cities = {};
+  const used = new Set();
+  for (const part of after) {
+    const exact = before.find((old) => old.key === part.key && !used.has(old.key));
+    if (exact) {
+      used.add(exact.key);
+      cities[part.key] = model.cities?.[exact.key] || "";
+      continue;
     }
-    next.awaitingEnd = false;
+    const overlap = before.find((old) => !used.has(old.key) && old.leave >= part.arrive && old.arrive <= part.leave);
+    if (overlap) {
+      used.add(overlap.key);
+      cities[part.key] = model.cities?.[overlap.key] || "";
+      continue;
+    }
+    const keyed = Object.keys(model.cities || {}).filter((key) => key >= part.arrive && key <= part.leave).sort();
+    cities[part.key] = keyed.map((key) => String(model.cities[key] || "").trim()).find(Boolean) || "";
+  }
+  draft.cities = cities;
+  return draft;
+}
+
+export function guardSpan(model, start, end) {
+  if (!start || !end) {
+    const named = namedStops(model);
+    if (named.length && (!start || !end)) {
+      return {
+        ...model,
+        pendingSpan: {
+          start: start || "",
+          end: end || "",
+          dropped: named,
+          clearEnd: Boolean(start && !end),
+          clearStart: Boolean(end && !start),
+        },
+      };
+    }
+    return {
+      ...clone(model),
+      start: start || "",
+      end: end || "",
+      awaitingEnd: Boolean(start && !end),
+      splits: start && !end ? [] : [...(model.splits || [])],
+      pendingSpan: null,
+    };
+  }
+  const from = start <= end ? start : end;
+  const to = start <= end ? end : start;
+  const dropped = namedStops(model).filter((part) => part.leave < from || part.arrive > to);
+  if (dropped.length) return { ...model, pendingSpan: { start: from, end: to, dropped } };
+  return applySpan(model, from, to);
+}
+
+export function confirmSpan(model) {
+  const pending = model.pendingSpan;
+  if (!pending) return model;
+  if (pending.reset) {
+    const next = blankRange(pending.start);
+    next.anchor = model.anchor;
+    next.pto = model.pto;
+    next.tripName = model.nameTouched ? model.tripName : "";
+    next.nameTouched = Boolean(model.nameTouched);
     return next;
   }
-  if (!model.start || !model.awaitingEnd) {
-    return { ...next, start: iso, end: "", awaitingEnd: true, splits: [] };
+  if (!pending.end || !pending.start) {
+    const dropped = new Set((pending.dropped || []).map((part) => part.key));
+    const cities = {};
+    for (const [key, value] of Object.entries(model.cities || {})) {
+      if (!dropped.has(key)) cities[key] = value;
+    }
+    return {
+      ...clone(model),
+      start: pending.start || "",
+      end: pending.end || "",
+      awaitingEnd: Boolean(pending.start && !pending.end),
+      splits: [],
+      cities,
+      pendingSpan: null,
+    };
   }
-  if (iso < model.start) return { ...next, start: iso, end: model.start, awaitingEnd: false };
-  return { ...next, end: iso, awaitingEnd: false };
+  return applySpan(model, pending.start, pending.end);
+}
+
+export function pickDay(model, iso, { shift = false } = {}) {
+  if (shift && model.start) {
+    const start = iso < model.start ? iso : model.start;
+    const end = iso < model.start ? (model.end || model.start) : iso;
+    return guardSpan(model, start, end);
+  }
+  if (!model.start || !model.awaitingEnd) {
+    const named = namedStops(model);
+    if (named.length) return { ...model, pendingSpan: { start: iso, end: "", reset: true, dropped: named } };
+    return { ...clone(model), start: iso, end: "", awaitingEnd: true, splits: [], pendingSpan: null };
+  }
+  if (iso < model.start) return guardSpan(model, iso, model.start);
+  return guardSpan(model, model.start, iso);
 }
 
 export function dragRange(model, origin, iso) {
+  if (!origin || !iso || origin === iso) return model;
   const start = origin < iso ? origin : iso;
   const end = origin < iso ? iso : origin;
-  return { ...model, start, end, awaitingEnd: false, splits: [] };
+  const next = guardSpan(model, start, end);
+  if (next.pendingSpan) return model;
+  return next;
 }
 
 export function clearRange(model) {
-  return { ...model, start: "", end: "", awaitingEnd: false, splits: [] };
+  return { ...model, start: "", end: "", awaitingEnd: false, splits: [], cities: {}, pendingSpan: null };
 }
 
-export function toggleSplit(model, iso) {
+function citiesAfterAdd(before, after, cities, added) {
+  const next = {};
+  for (const part of after) next[part.key] = part.key === added ? "" : (cities[part.key] || "");
+  if (before.length && after.length && !before.some((part) => part.key === after[0].key)) {
+    next[after[0].key] = cities[before[0].key] || "";
+  }
+  return next;
+}
+
+/** `iso` is the first day at the next destination, not the last day of this one. */
+export function changeCity(model, iso) {
   if (!model.start || !model.end || !iso) return model;
   if (iso <= model.start || iso > model.end) return model;
-  const has = model.splits.includes(iso);
-  const splits = has ? model.splits.filter((split) => split !== iso) : [...model.splits, iso].sort();
-  return { ...model, splits };
+  if ((model.splits || []).includes(iso)) return model;
+  const before = segments(model);
+  const splits = [...(model.splits || []), iso].sort();
+  const draft = { ...clone(model), splits, pendingSpan: null };
+  draft.cities = citiesAfterAdd(before, segments(draft), model.cities || {}, iso);
+  return draft;
+}
+
+export function moveChange(model, fromIso, toIso) {
+  if (!(model.splits || []).includes(fromIso)) return model;
+  if (!toIso || fromIso === toIso) return model;
+  if (toIso <= model.start || toIso > model.end || model.splits.includes(toIso)) return model;
+  const crossed = model.splits.some((iso) => iso !== fromIso && ((fromIso < iso && iso < toIso) || (toIso < iso && iso < fromIso)));
+  if (crossed) return model;
+  const before = segments(model);
+  const splits = model.splits.map((iso) => (iso === fromIso ? toIso : iso)).sort();
+  const draft = { ...clone(model), splits, pendingSpan: null };
+  const cities = {};
+  segments(draft).forEach((part, index) => {
+    const old = before[index];
+    cities[part.key] = old ? (model.cities?.[old.key] || "") : "";
+  });
+  draft.cities = cities;
+  return draft;
+}
+
+export function removeChange(model, iso) {
+  if (!(model.splits || []).includes(iso)) return model;
+  const before = segments(model);
+  const draft = { ...clone(model), splits: model.splits.filter((item) => item !== iso), pendingSpan: null };
+  const cities = {};
+  for (const part of segments(draft)) {
+    const covered = before.filter((old) => old.arrive >= part.arrive && old.leave <= part.leave);
+    const names = covered.map((old) => String(model.cities?.[old.key] || "").trim()).filter(Boolean);
+    cities[part.key] = names[0] || "";
+  }
+  draft.cities = cities;
+  return draft;
 }
 
 export function segments(model) {
@@ -197,22 +353,38 @@ export function cityColor(index) {
   return `var(--city-${(index % 5) + 1})`;
 }
 
+function destinationTitle(names) {
+  if (names.length <= 1) return names[0] || "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
 export function saveState(model) {
-  const parts = segments(model);
-  const first = parts[0];
-  const city = first ? String(model.cities[first.key] || "").trim() : "";
+  const parts = segments(model).map((part) => ({
+    ...part,
+    city: String(model.cities?.[part.key] || "").trim(),
+  }));
+  const missing = parts.find((part) => !part.city);
   if (!model.start || !model.end) {
     return { ok: false, helper: "Pick the day you leave and the day you come back.", focus: "grid", field: "" };
   }
-  if (DECISIONS.cityRequired && !city) {
-    return { ok: false, helper: "Pick dates and name at least one city.", focus: "city", field: "city" };
+  if (DECISIONS.cityRequired && missing) {
+    return {
+      ok: false,
+      helper: "Name every destination.",
+      focus: "city",
+      field: "city",
+      cityKey: missing.key,
+      parts,
+    };
   }
-  const title = String(model.tripName || "").trim() || city || "Trip";
-  return { ok: true, helper: "", focus: "", field: "", title, city, parts };
+  const names = parts.map((part) => part.city).filter(Boolean);
+  const title = String(model.tripName || "").trim() || destinationTitle(names) || "Trip";
+  return { ok: true, helper: "", focus: "", field: "", title, city: names[0] || "", cityKey: "", parts };
 }
 
 export function defaultTripName(model) {
   if (model.nameTouched) return model.tripName;
-  const first = segments(model)[0];
-  return first ? String(model.cities[first.key] || "") : "";
+  const names = segments(model).map((part) => String(model.cities?.[part.key] || "").trim()).filter(Boolean);
+  return destinationTitle(names);
 }

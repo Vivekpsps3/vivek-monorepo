@@ -27,7 +27,7 @@ export function legFields(role) {
   </div></fieldset>`;
 }
 export function renderNewTrip() {
-  return `${banner()}<header class="page-head"><h1>New trip</h1><p id="composer-summary" class="lede" aria-live="polite">Pick the day you leave.</p></header><section id="trip-composer" aria-label="Trip dates"></section>`;
+  return `${banner()}<header class="page-head"><h1>New trip</h1><p id="composer-summary" class="lede" aria-live="polite">Pick the day you leave.</p></header><section id="trip-composer" aria-label="Trip dates and destinations"></section>`;
 }
 export function connectionFields() {
   return `<div class="form-grid connection-row" data-connection>
