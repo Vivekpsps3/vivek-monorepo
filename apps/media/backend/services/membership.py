@@ -18,7 +18,8 @@ scores are reported and neither side is overwritten.
 
 Artist ``status`` is not rewritten. ``followed`` is 0 for legacy ``dropped``
 and 1 for every other artist entry. ``follow_provenance`` keeps the original
-status. No listening song or experience is created.
+status. Reads use ``followed`` for Following or Unfollowed. A preserved
+status such as ``in_progress`` is not a listen. No song or experience is created.
 
 Series lifecycle is a show-level row, unknown until a provider supplies it.
 Personal watch status is not copied into it. Episode and season rows are not

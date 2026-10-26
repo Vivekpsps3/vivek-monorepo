@@ -59,9 +59,11 @@ import {
   artworkUrl,
   dayLabel,
   draftKey,
+  defaultStatus,
   emptyState,
   escapeHtml as esc,
   genericStatusOptions,
+  libraryStatusForKind,
   kindLabel,
   kindPlural,
   monthCells,
@@ -146,7 +148,11 @@ function patchOpinion(id, body) {
 
 async function saveStatus(id, status, title = visibleItemTitle(id)) {
   try {
-    await patchOpinion(id, { status, anticipated: status === "anticipating" });
+    const body = { status };
+    if (status !== "following" && status !== "unfollowed") {
+      body.anticipated = status === "anticipating";
+    }
+    await patchOpinion(id, body);
     dismissItemSave("status", id);
     await render();
   } catch (error) {
@@ -633,7 +639,7 @@ function libraryPage(kind, status, q, sort, body, resume, fav) {
         </div>
       </div>
     </div>
-    <div class="chip-row" role="group" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, status, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
+    <div class="chip-row" role="group" aria-label="Type">${kinds.map(item => `<a class="status-mark${item.value === kind ? " is-on" : ""}" ${item.value === kind ? `aria-current="true"` : ""} href="${libraryQuery(item.value, libraryStatusForKind(item.value, status), q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
     <div class="chip-row status-wide" role="group" aria-label="Status">${statuses.map(item => `<a class="flag${item.value === status ? " is-on" : ""}" ${item.value === status ? `aria-current="true"` : ""} href="${libraryQuery(kind, item.value, q, sort, fav)}">${esc(item.label)}</a>`).join("")}</div>
     <label class="status-narrow">Status <select id="library-status" data-library-status>${options(statuses.map(item => ({ value: item.value, label: item.label === "All" ? "All" : item.label })), status)}</select></label>
     ${continuePoint(resume)}
@@ -925,8 +931,8 @@ async function viewItem(id, ticket, forcedSeason = null) {
         ${releaseLine(entry.releases)}
         <div class="opinion" data-id="${entry.id}" data-favorite="${entry.favorite ? "true" : "false"}" data-anticipated="${entry.anticipated ? "true" : "false"}">
           <section class="detail-section">
-            <div class="field-label">Status <span id="status-save" class="progress-status" role="status"></span></div>
-            <div class="status-row" role="radiogroup" aria-label="Status">${statusOptions(entry.kind).map(opt => {
+            <div class="field-label">${entry.kind === "artist" ? "Following" : "Status"} <span id="status-save" class="progress-status" role="status"></span></div>
+            <div class="status-row" role="radiogroup" aria-label="${entry.kind === "artist" ? "Following" : "Status"}">${statusOptions(entry.kind).map(opt => {
               const on = opt.value === entry.status;
               return `<button type="button" role="radio" class="status-mark${on ? " is-on" : ""}" aria-checked="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}" data-set-status="${opt.value}" data-focus-key="status:${esc(opt.value)}">${esc(opt.label)}</button>`;
             }).join("")}</div>
@@ -1980,7 +1986,7 @@ document.addEventListener("click", async event => {
         kind: item.kind,
         creator: item.creator || "",
         year: item.year || "",
-        status: "want",
+        status: defaultStatus(item.kind),
         prefilled: true,
       }, button);
       return;
@@ -1990,7 +1996,7 @@ document.addEventListener("click", async event => {
       if (!item) return;
       const created = await api("/api/library/from-provider", {
         method: "POST",
-        body: JSON.stringify({ ...item, status: "want" }),
+        body: JSON.stringify({ ...item, status: "following" }),
       });
       item.already_saved = true;
       item.saved_id = created.id;
@@ -2026,15 +2032,17 @@ document.addEventListener("submit", async event => {
     if (form.dataset.action === "create-manual") {
       const errors = validateAdd({ title: data.title, year: data.year });
       if (!showAddErrors(form, errors)) return;
+      const kind = data.kind || "movie";
+      const status = data.status || defaultStatus(kind);
       const body = {
-        kind: data.kind || "movie",
+        kind,
         title: String(data.title || "").trim(),
         creator: data.creator || null,
         year: data.year || null,
-        status: data.status || "want",
+        status,
         rating: addScore(form),
         review: data.review || null,
-        anticipated: data.status === "anticipating",
+        anticipated: kind === "artist" ? false : status === "anticipating",
       };
       const created = await api("/api/library", { method: "POST", body: JSON.stringify(body) });
       const dialog = form.closest("dialog");
@@ -2144,9 +2152,10 @@ document.addEventListener("submit", async event => {
         method: "POST",
         body: JSON.stringify({
           ...item,
-          status: data.status || "want",
+          status: data.status || defaultStatus(item.kind),
           rating: addScore(form),
           review: data.review || null,
+          anticipated: item.kind === "artist" ? false : data.status === "anticipating",
         }),
       });
       document.querySelector("#quick-add")?.close();
@@ -2368,9 +2377,13 @@ document.addEventListener("change", async event => {
     const status = form?.querySelector("[data-add-status]");
     const creator = form?.querySelector("[data-creator-label]");
     if (status) {
-      const selected = form.querySelector("[name=status]:checked")?.value || "want";
-      status.innerHTML = statusOptions(target.value).map(opt => `<label class="status-mark"><input type="radio" name="status" value="${esc(opt.value)}"${opt.value === selected ? " checked" : ""}>${esc(opt.label)}</label>`).join("");
+      const options = statusOptions(target.value);
+      const selected = form.querySelector("[name=status]:checked")?.value;
+      const value = options.some(opt => opt.value === selected) ? selected : defaultStatus(target.value);
+      status.innerHTML = options.map(opt => `<label class="status-mark"><input type="radio" name="status" value="${esc(opt.value)}"${opt.value === value ? " checked" : ""}>${esc(opt.label)}</label>`).join("");
     }
+    const statusLabelNode = form?.querySelector("[data-status-label]");
+    if (statusLabelNode) statusLabelNode.textContent = target.value === "artist" ? "Following" : "Status";
     if (creator) {
       const input = creator.querySelector("input");
       const text = [...creator.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());

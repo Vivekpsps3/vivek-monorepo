@@ -14,7 +14,7 @@ const STATUS = {
   book: { want: "Want to read", anticipating: "Anticipating", in_progress: "Reading", completed: "Read", paused: "Paused", dropped: "Dropped" },
   track: { want: "Want to listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Dropped" },
   album: { want: "Want to listen", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Dropped" },
-  artist: { want: "Following", anticipating: "Anticipating", in_progress: "Listening", completed: "Listened", paused: "Paused", dropped: "Unfollowed" },
+  artist: { following: "Following", unfollowed: "Unfollowed" },
   game: { want: "Want to play", anticipating: "Anticipating", in_progress: "Playing", completed: "Played", paused: "Paused", dropped: "Dropped" },
 };
 
@@ -115,6 +115,10 @@ export function statusOptions(kind) {
   return Object.entries(STATUS[kind] || STATUS.movie).map(([value, label]) => ({ value, label }));
 }
 
+export function defaultStatus(kind) {
+  return kind === "artist" ? "following" : "want";
+}
+
 export function genericStatusOptions() {
   return Object.entries(STATUS_GENERIC).map(([value, label]) => ({ value, label }));
 }
@@ -168,6 +172,15 @@ export function draftKey(entryId) {
 const LIBRARY_SORTS = new Set(["activity", "added", "rating", "release", "title"]);
 const LIBRARY_KINDS = new Set(["movie", "tv", "book", "artist", "album", "track", "game"]);
 const LIBRARY_STATUSES = new Set(["want", "anticipating", "in_progress", "completed", "paused", "dropped"]);
+const ARTIST_STATUSES = new Set(["following", "unfollowed"]);
+
+/** Keep a library status only when that kind can actually be in it. */
+export function libraryStatusForKind(kind, status) {
+  if (!status) return "";
+  if (kind === "artist") return ARTIST_STATUSES.has(status) ? status : "";
+  if (ARTIST_STATUSES.has(status)) return kind ? "" : status;
+  return LIBRARY_STATUSES.has(status) ? status : "";
+}
 
 export function progressUnits(kind) {
   if (kind === "book") return [{ value: "page", label: "Page" }, { value: "percent", label: "Percent" }];
@@ -234,9 +247,15 @@ export function normalizeLibraryQuery(search) {
     changed = true;
   }
   const status = params.get("status");
-  if (status != null && status !== "" && !LIBRARY_STATUSES.has(status)) {
-    params.delete("status");
-    changed = true;
+  if (status != null && status !== "") {
+    const fitted = libraryStatusForKind(params.get("kind") || "", status);
+    if (!fitted) {
+      params.delete("status");
+      changed = true;
+    } else if (fitted !== status) {
+      params.set("status", fitted);
+      changed = true;
+    }
   }
   return { params, changed, droppedSort };
 }

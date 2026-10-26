@@ -363,7 +363,7 @@ test('the month grid lays weeks across the row at 1280', async ({ page }) => {
 
 test('item, add, and an artist stay inside a 390px viewport', async ({ page, request }) => {
   const artist = await request.post('/media/api/library', {
-    data: { kind: 'artist', title: 'Narrow Band', status: 'want' },
+    data: { kind: 'artist', title: 'Narrow Band', status: 'following' },
   });
   const artistId = (await artist.json()).id as number;
   try {

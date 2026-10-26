@@ -29,6 +29,9 @@ def build_calendar(
     experience_kinds = experience_kinds_for(db, user_id, entries)
     events = []
     for entry in entries:
+        # Artists are followed, not scheduled. Songs and albums are not calendar rows.
+        if entry.catalog.kind in {"artist", "album", "track"}:
+            continue
         if entry.catalog.kind == "tv":
             refresh_show(db, entry.catalog, http, budget)
             events.extend(episode_events(db, entry, month))
