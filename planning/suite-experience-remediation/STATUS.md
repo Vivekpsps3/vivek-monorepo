@@ -18,7 +18,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | NAV-02 | done | CHROME_BIN set, npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI exit 0 (425 SUCCESS). Inspected 04-hub-finance.md, main-layout.component.html/ts/css, suite-hub-link.component.ts, app.routes.ts, auth.guard.ts, vault.guard.ts: one header Hub control, old nav-tab and mobile-tab /hub links absent, five section tabs, guards and deep-link redirects unchanged. |
 | TRV-05 | done | node --test apps/travel/backend/static/tests/*.test.mjs exited 0 (61 passed). Inspected 05-travel.md, trip.mjs, new-trip.mjs, ui.mjs, and blockers.test.mjs: empty trips show one btn-sm Add transport and quiet days; always-open ride, day, parking, note, and reminder builders are gone. |
 | MED-02 | done | node --test apps/media/backend/static/tests/*.test.mjs exited 0. Inspected 06-media-library.md, views.mjs libraryCard/savedExpansion/discographyHtml, app.mjs viewLibrary/libraryCards/viewDiscography, app.css .card/.is-artist, and index.html. artistSection, buildLibraryTree, and movieBrowseCards are absent from live JS. |
-| HUB-01 | open | pending |
+| HUB-01 | done | npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI exit 0 (446 SUCCESS, CHROME_BIN set). Inspected 04-hub-finance.md, hub.component.ts/html, hub-load.ts, finance-hub-facade.ts, dek-store.ts, hub-summary.ts: failed cards recover alone; vault facade imports only after financeVaultPresent; old Hub VaultService inject and loadDashboard path is gone. |
 | TRV-02 | open | pending |
 | MED-04 | open | pending |
 | WEB-01 | open | pending |
