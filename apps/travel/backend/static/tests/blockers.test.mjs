@@ -6,7 +6,9 @@ import { gridDay, monthCells, monthRows } from "../modules/composer-model.mjs";
 import { balancePhrase, formatDays } from "../modules/labels.mjs";
 import { state } from "../modules/state.mjs";
 import { formError } from "../modules/validate.mjs";
-import { renderTrip } from "../modules/views/trip.mjs";
+import { monthMatrix, renderCalendar } from "../modules/views/calendar.mjs";
+import { renderTripCard } from "../modules/views/home.mjs";
+import { datesOutside, defaultPtoAmount, renderTrip, spanDates } from "../modules/views/trip.mjs";
 
 const root = new URL("../", import.meta.url);
 const read = (file) => readFileSync(new URL(file, root), "utf8");
@@ -36,7 +38,9 @@ test("TR2.3 a Booked retry sends the value the person chose", () => {
   assert.match(ui, /function saveFlagValue\(kind, id, flag, next, ui\)/);
   assert.match(ui, /run: \(\) => saveFlagValue\(kind, id, flag, next, ui\)/);
   assert.equal(ui.includes("run: () => saveFlag(input, ui)"), false);
-  assert.equal(trip.includes('aria-pressed="'), false);
+  assert.match(trip, /data-action="pto-day"[^>]*aria-pressed="/);
+  assert.equal(/data-save-flag[^>]*aria-pressed/.test(trip), false);
+  assert.equal((trip.match(/aria-pressed="/g) || []).length, 1);
 });
 
 test("TR3.1 Space and a synthetic click select a composer day and keep focus", () => {
@@ -325,6 +329,140 @@ test("an empty trip offers transport and a quiet day instead of every builder", 
       },
     }), "");
     assert.equal((money.match(/Total /g) || []).length, 2);
+  } finally {
+    Object.assign(state, previous);
+  }
+});
+
+test("each date has its own PTO choice and weekends start off", () => {
+  assert.equal(defaultPtoAmount("2026-10-23"), "1");
+  assert.equal(defaultPtoAmount("2026-10-24"), "0");
+  assert.equal(defaultPtoAmount("2026-10-25"), "0");
+  assert.deepEqual(spanDates("2026-10-23", "2026-10-26"), [
+    "2026-10-23",
+    "2026-10-24",
+    "2026-10-25",
+    "2026-10-26",
+  ]);
+  assert.deepEqual(spanDates("2026-10-26", "2026-10-23"), []);
+  assert.deepEqual(
+    datesOutside("2026-10-24", "2026-10-26", ["2026-10-23", "2026-10-24", "2026-10-27"]),
+    ["2026-10-23", "2026-10-27"],
+  );
+
+  const previous = {
+    compose: state.compose,
+    composeDate: state.composeDate,
+    composeRole: state.composeRole,
+    edit: state.edit,
+    details: state.details,
+  };
+  state.compose = "";
+  state.composeDate = "";
+  state.composeRole = "outbound";
+  state.edit = null;
+  state.details = null;
+  try {
+    const trip = quietTrip({
+      start_date: "2026-10-23",
+      end_date: "2026-10-26",
+      span_days: 4,
+      nights: 3,
+      pto_mode: "dates",
+      pto_days: null,
+      pto_days_effective: "1",
+      pto: {
+        days: "1",
+        leftover_after: "-1",
+        conflicts: [{ on_date: "2026-10-26", amount: "2", labels: ["Kyoto", "Osaka"], trip_ids: [1, 2] }],
+      },
+      pto_dates: [
+        { on_date: "2026-10-23", amount: "0", provenance: "override" },
+        { on_date: "2026-10-24", amount: "0", provenance: "default" },
+        { on_date: "2026-10-25", amount: "0", provenance: "default" },
+        { on_date: "2026-10-26", amount: "1", provenance: "default" },
+      ],
+      days: ["2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26"].map((on_date) => ({
+        on_date,
+        city: "Kyoto",
+        items: [],
+        transports: [],
+      })),
+    });
+    const html = renderTrip(trip, "");
+    assert.match(html, /Saturday and Sunday start as not PTO/);
+    assert.match(html, /Select weekdays/);
+    assert.match(html, />Clear</);
+    assert.match(html, /data-pto-total>Total 1 day</);
+    assert.match(html, /data-date="2026-10-23"[^>]*>Not PTO</);
+    assert.match(html, /data-date="2026-10-24"[^>]*>Not PTO</);
+    assert.match(html, /data-date="2026-10-25"[^>]*>Not PTO</);
+    assert.match(html, /data-date="2026-10-26"[^>]*>PTO</);
+    assert.match(html, /metric--warn/);
+    assert.match(html, /is also counted on Osaka/);
+    assert.match(html, /<span>PTO<\/span>/);
+
+    const half = renderTrip(quietTrip({
+      ...trip,
+      pto: { days: "0.5", leftover_after: "1", conflicts: [] },
+      pto_dates: [{ on_date: "2026-10-23", amount: "0.5", provenance: "override" }],
+    }), "");
+    assert.match(half, /data-date="2026-10-23"[^>]*>PTO 0.5</);
+    assert.match(half, /Total 0.5 days/);
+
+    const legacy = renderTrip(quietTrip({
+      pto_mode: "legacy",
+      pto_days: "1.6667",
+      pto_dates: [],
+      pto: { days: "1.67", conflicts: [] },
+    }), "");
+    assert.match(legacy, /Custom total of 1\.67 days, not assigned to dates/);
+    assert.match(legacy, /Choosing days replaces this total/);
+    assert.equal(legacy.includes('data-action="pto-day"'), false);
+    assert.match(legacy, /Select weekdays/);
+
+    const kept = renderTrip(quietTrip({
+      counts_as_pto: false,
+      pto_mode: "dates",
+      pto_days_effective: "2",
+      pto: { days: "0", conflicts: [] },
+      pto_dates: trip.pto_dates,
+    }), "");
+    assert.match(kept, /This trip is not counted as PTO\. Day choices are kept \(2 days saved\)/);
+    assert.equal(kept.includes("<span>PTO</span>"), false);
+
+    state.edit = { kind: "trip", id: trip.id };
+    const editing = renderTrip(trip, "");
+    assert.equal(editing.includes('id="pto-days"'), false);
+    assert.match(editing, /data-pto-dates="\[/);
+    assert.match(editing, /2026-10-23/);
+    assert.match(editing, /data-pto-removed/);
+    assert.match(editing, /Saturday and Sunday start as not PTO/);
+
+    const card = renderTripCard({ ...trip, phase: "upcoming" });
+    assert.match(card, /PTO 1 day/);
+    assert.match(card, /PTO overlaps/);
+    assert.match(card, /left after/);
+
+    const weeks = monthMatrix(2026, 10);
+    const calendar = renderCalendar({
+      trips: [{
+        id: 1,
+        title: "Kyoto",
+        start_date: "2026-10-23",
+        end_date: "2026-10-26",
+        phase: "upcoming",
+        pto_dates: ["2026-10-23", "2026-10-26"],
+      }],
+      plans: [],
+    }, { year: 2026, month: 10 }, weeks, "");
+    assert.match(calendar, /cal-day--pto/);
+    assert.match(calendar, /aria-label="[^"]*Oct 23[^"]*PTO/);
+    assert.equal(/aria-label="[^"]*Oct 24[^"]*PTO/.test(calendar), false);
+
+    const pto = read("modules/views/pto.mjs");
+    assert.match(pto, /entry\.charges/);
+    assert.match(pto, /policy\.conflicts/);
   } finally {
     Object.assign(state, previous);
   }

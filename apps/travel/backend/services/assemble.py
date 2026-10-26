@@ -8,7 +8,6 @@ from apps.travel.backend.models import (
     Note,
     Parking,
     PlanItem,
-    PtoEntry,
     PtoPolicy,
     Reminder,
     Stay,
@@ -25,10 +24,13 @@ from apps.travel.backend.services.budget import (
 from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
 from apps.travel.backend.services.money import fmt_days, fmt_money, store_days, stored_days
 from apps.travel.backend.services.pto import (
-    effective_pto_days,
+    counted_pto_dates,
+    load_usages,
     policy_from_row,
+    pto_conflicts,
+    pto_dates_payload,
+    stored_pto_total,
     trip_projection,
-    usages_from_rows,
     walk,
 )
 
@@ -59,6 +61,7 @@ def load_trip(db, trip_id: int, user_id: int) -> Trip | None:
             selectinload(Trip.note_entries),
             selectinload(Trip.budget_lines),
             selectinload(Trip.pto_entry),
+            selectinload(Trip.pto_day_rows),
         )
         .one_or_none()
     )
@@ -398,7 +401,7 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
         for row in plans
         if row.on_date < trip.start_date or row.on_date > trip.end_date
     ]
-    effective, auto = effective_pto_days(trip.pto_days, trip.start_date, trip.end_date)
+    effective, auto = stored_pto_total(trip)
     open_reminders = sum(1 for row in trip.reminders if not row.done)
     return {
         "id": trip.id,
@@ -410,8 +413,10 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
         "origin_label": trip.origin_label,
         "notes": trip.notes,
         "counts_as_pto": bool(trip.counts_as_pto),
+        "pto_mode": trip.pto_mode,
         "pto_days": store_days(stored_days(trip.pto_days)) if trip.pto_days else None,
         "pto_days_effective": fmt_days(effective),
+        "pto_dates": pto_dates_payload(trip),
         "nights": nights_away(trip.start_date, trip.end_date),
         "span_days": span_days(trip.start_date, trip.end_date),
         "cities": [stay.city for stay in stays],
@@ -437,12 +442,7 @@ def pto_context(db, user_id: int):
     owner = user_id
     row = db.query(PtoPolicy).filter(PtoPolicy.user_id == owner).one_or_none()
     policy = policy_from_row(row)
-    usages = usages_from_rows(
-        db.query(PtoEntry)
-        .filter(PtoEntry.user_id == owner)
-        .order_by(PtoEntry.start_date, PtoEntry.id)
-        .all()
-    )
+    _entries, usages = load_usages(db, owner)
     return row, policy, usages
 
 
@@ -461,6 +461,7 @@ def snapshot_pto(policy, usages, today: date) -> dict:
             "hours_per_day": "8",
             "annual_cap_days": None,
             "today_before_balance_date": False,
+            "conflicts": [],
         }
     walked = walk(policy, usages, today)
     return {
@@ -478,6 +479,7 @@ def snapshot_pto(policy, usages, today: date) -> dict:
         if policy.annual_cap_days is not None
         else None,
         "today_before_balance_date": walked.before_balance_date,
+        "conflicts": pto_conflicts(usages),
     }
 
 
@@ -544,6 +546,7 @@ def build_home(db, today: date | None = None, *, user_id: int) -> dict:
             selectinload(Trip.reminders),
             selectinload(Trip.note_entries),
             selectinload(Trip.budget_lines),
+            selectinload(Trip.pto_day_rows),
         )
         .order_by(Trip.start_date, Trip.id)
         .all()
@@ -637,7 +640,7 @@ def build_calendar(db, start: date, end: date, today: date | None = None, *, use
     owner = user_id
     trips = (
         db.query(Trip)
-        .options(selectinload(Trip.stays))
+        .options(selectinload(Trip.stays), selectinload(Trip.pto_day_rows))
         .filter(Trip.user_id == owner, Trip.end_date >= start, Trip.start_date <= end)
         .order_by(Trip.start_date, Trip.id)
         .all()
@@ -656,6 +659,7 @@ def build_calendar(db, start: date, end: date, today: date | None = None, *, use
                 "phase": phase_for(trip.start_date, trip.end_date, today),
                 "status": trip.status,
                 "cities": [stay.city for stay in stays],
+                "pto_dates": counted_pto_dates(trip, start, end),
             }
         )
     plans = []

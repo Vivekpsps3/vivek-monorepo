@@ -63,7 +63,8 @@ export function renderTripCard(trip, inProgress = false) {
   const parking = trip.parking.map(parkingChip).join("");
   const ptoDays = trip.counts_as_pto ? daysText(trip.pto.days) : "";
   const leftover = trip.counts_as_pto && trip.pto.leftover_after != null ? balancePhrase(trip.pto.leftover_after) : "";
-  const pto = [ptoDays ? `PTO ${ptoDays}` : "", leftover ? `${leftover} left after` : ""].filter(Boolean).join(" · ");
+  const overlap = trip.pto?.conflicts?.length ? "PTO overlaps" : "";
+  const pto = [ptoDays ? `PTO ${ptoDays}` : "", leftover ? `${leftover} left after` : "", overlap].filter(Boolean).join(" · ");
   const open = inProgress ? `<p><a href="#/trips/${trip.id}">Open trip</a></p>` : "";
   const rides = inProgress ? "" : trip.transports.slice(0, 2).map((item) => `<p><span class="kicker">${esc(labelOf(ROLES, item.role))}</span> ${esc(transportSummary(item))}</p>`).join("");
   return `<article class="trip-card trip-card--${esc(trip.phase)}">

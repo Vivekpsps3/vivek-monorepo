@@ -26,6 +26,8 @@ export function renderCalendar(data, path, weeks, selected) {
     plans[plan.on_date] = plans[plan.on_date] || [];
     plans[plan.on_date].push(plan);
   });
+  const ptoDays = new Set();
+  data.trips.forEach((trip) => (trip.pto_dates || []).forEach((day) => ptoDays.add(day)));
   const dow = weekdayHeads().map((day) => `<div><abbr title="${esc(day.title)}">${esc(day.label)}</abbr></div>`).join("");
   const todayParts = todayIso.split("-").map(Number);
   const todayHref = `#/calendar/${todayParts[0]}/${todayParts[1]}/${todayIso}`;
@@ -59,13 +61,14 @@ export function renderCalendar(data, path, weeks, selected) {
           const muted = date.getMonth() !== path.month - 1 ? " cal-day--muted" : "";
           const today = iso === todayIso ? " cal-day--today" : "";
           const chosen = iso === selected ? " cal-day--selected" : "";
+          const pto = ptoDays.has(iso) ? " cal-day--pto" : "";
           const dayPlans = plans[iso] || [];
           const titles = data.trips.filter((trip) => trip.start_date <= iso && trip.end_date >= iso).map((trip) => trip.title);
-          const name = dayLinkName({ iso, todayIso, day: date, planCount: dayPlans.length, tripTitles: titles });
+          const name = dayLinkName({ iso, todayIso, day: date, planCount: dayPlans.length, tripTitles: titles, pto: ptoDays.has(iso) });
           const dots = dayPlans.slice(0, 4).map(() => `<i class="dot" aria-hidden="true"></i>`).join("");
           const current = iso === todayIso ? ` aria-current="date"` : "";
           const described = iso === selected ? ` aria-describedby="cal-selected"` : "";
-          return `<div class="cal-day${muted}${today}${chosen}"><a class="cal-num" href="#/calendar/${path.year}/${path.month}/${iso}" aria-label="${esc(name)}"${current}${described}>${date.getDate()}</a><div aria-hidden="true">${dots}</div></div>`;
+          return `<div class="cal-day${muted}${today}${chosen}${pto}"><a class="cal-num" href="#/calendar/${path.year}/${path.month}/${iso}" aria-label="${esc(name)}"${current}${described}>${date.getDate()}</a><div aria-hidden="true">${dots}</div></div>`;
         })
         .join("");
       const barHtml = bars
