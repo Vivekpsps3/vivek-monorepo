@@ -34,10 +34,10 @@ test("edit and delete names include the object", () => {
   assert.equal(new Set(names.filter((name) => name.startsWith("Delete reminder"))).size, 2);
 });
 
-test("empty sections name the missing ride group", () => {
+test("empty cities name the first city and quiet sections stay quiet", () => {
   assert.equal(sectionHint("cities", { empty: true }), "Add the first city.");
-  assert.equal(sectionHint("role", { empty: true, roleLabel: "Outbound" }), "No outbound ride yet.");
-  assert.equal(sectionHint("budget", { empty: true }), "No costs yet.");
+  assert.equal(sectionHint("role", { empty: true }), "");
+  assert.equal(sectionHint("budget", { empty: true }), "");
   assert.equal(sectionHint("notes", { empty: true }), "");
 });
 
@@ -97,7 +97,9 @@ test("the trip screen no longer asks the browser to confirm a delete", () => {
   assert.match(trip, /Edit trip/);
   assert.match(trip, /class="add-row/);
   assert.match(trip, /flagBox\("parking", item, "booked"/);
-  assert.match(trip, /sectionHint\("role"/);
+  assert.equal(trip.includes('sectionHint("role")'), false);
+  assert.match(trip, /Add transport/);
+  assert.match(trip, /class="date-strip"/);
   assert.match(html, /id="confirm"/);
   const css = readFileSync(new URL("app.css", root), "utf8");
   assert.equal(css.includes(".day-add input"), false);

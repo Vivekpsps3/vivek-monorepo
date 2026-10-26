@@ -52,6 +52,8 @@ test("P0 #2 a quick-add ride shows Mode instead of a hidden flight", async ({ pa
     stays: [{ city: "Kyoto", arrive_on: "2026-10-24", leave_on: "2026-10-30" }],
   });
   await openHash(page, `#/trips/${created.id}`);
+  await expect(page.locator('form[data-form="transport"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Add transport" }).click();
   const mode = page.locator('form[data-form="transport"] select[name="mode"]').first();
   await expect(mode).toBeVisible();
   await expect(mode.locator("option").first()).toHaveText("Choose…");
