@@ -4,6 +4,7 @@ import { esc, val, checked, daysText } from '../helpers.mjs';
 import { parseHash } from '../route-parser.mjs';
 import { renderTrip } from '../views/trip.mjs';
 import { clearFormErrors, dismissToast, fail, saved } from '../feedback.mjs';
+import { readHiddenFlight } from './flight.mjs';
 import { formError } from '../validate.mjs';
 
 export function readLeg(root, role) {
@@ -18,6 +19,7 @@ export function readLeg(root, role) {
     arrive_at: emptyInput(root, "arrive_at"),
     cost: emptyInput(root, "cost"),
     currency: (emptyInput(root, "currency") || "USD").toUpperCase(),
+    ...readHiddenFlight(root),
   };
 }
 export function emptyInput(root, name) {
@@ -62,30 +64,13 @@ export function readTransport(form) {
     arrive_place: val(form, "arrive_place"),
     depart_at: val(form, "depart_at"),
     arrive_at: val(form, "arrive_at"),
-    depart_tz: val(form, "depart_tz"),
-    arrive_tz: val(form, "arrive_tz"),
     confirmation: val(form, "confirmation"),
     seat: val(form, "seat"),
     cost: val(form, "cost"),
     currency: (val(form, "currency") || "USD").toUpperCase(),
     paid: checked(form, "paid"),
     notes: val(form, "notes"),
-    fa_ident: val(form, "fa_ident"),
-    fa_status: val(form, "fa_status"),
-    fa_aircraft: val(form, "fa_aircraft"),
-    fa_gate_origin: val(form, "fa_gate_origin"),
-    fa_gate_destination: val(form, "fa_gate_destination"),
-    fa_terminal_origin: val(form, "fa_terminal_origin"),
-    fa_terminal_destination: val(form, "fa_terminal_destination"),
-    fa_baggage_claim: val(form, "fa_baggage_claim"),
-    fa_delay_departure_seconds: numberOrNull(val(form, "fa_delay_departure_seconds")),
-    fa_delay_arrival_seconds: numberOrNull(val(form, "fa_delay_arrival_seconds")),
-    fa_scheduled_out: val(form, "fa_scheduled_out"),
-    fa_estimated_out: val(form, "fa_estimated_out"),
-    fa_actual_out: val(form, "fa_actual_out"),
-    fa_scheduled_in: val(form, "fa_scheduled_in"),
-    fa_estimated_in: val(form, "fa_estimated_in"),
-    fa_actual_in: val(form, "fa_actual_in"),
+    ...readHiddenFlight(form),
   };
 }
 function committed(kind, message) {
@@ -200,7 +185,6 @@ async function submitBody(kind, form, ui) {
     state.trip = await api(path, { method: form.dataset.id ? "PATCH" : "POST", body: JSON.stringify(body) });
     state.compose = "";
     state.edit = null;
-    state.flights = [];
     state.focusKey = form.dataset.id ? `edit-transport-${form.dataset.id}` : "add-transport";
     committed(kind, form.dataset.id ? "Ride saved." : "Ride added.");
     ui.paint(renderTrip(state.trip), "home");

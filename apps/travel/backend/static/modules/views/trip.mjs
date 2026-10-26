@@ -2,7 +2,8 @@ import { state, ROLES, MODES, KINDS, STATUSES, ARRANGEMENTS, NECESSARY } from '.
 import { DECISIONS } from '../decisions.mjs';
 import { esc, banner, field, area, select, check, actions, labelOf, prettyRange, prettyDate, money, daysText, budgetText, transportSummary, flightMeta, parkingChip, localInput, spanText, nightsAwayText } from '../helpers.mjs';
 import { actionName, sectionHint } from '../copy.mjs';
-import { hiddenFlight } from './new-trip.mjs';
+import { overridesFromSaved, savedProvenance } from '../actions/flight.mjs';
+import { hiddenFlight, flightScheduleControls } from './new-trip.mjs';
 
 export function editing(kind, id) {
   return state.edit && state.edit.kind === kind && String(state.edit.id) === String(id);
@@ -108,6 +109,8 @@ function rideForm(item) {
     : `<legend class="add-label">Add a ride</legend>`;
   const flightHidden = mode === "flight" ? "" : " hidden";
   const moreOpen = mode === "flight" ? " open" : "";
+  const suggested = role === "inbound" ? (state.trip?.end_date || state.trip?.start_date) : state.trip?.start_date;
+  const lookupOn = (item?.depart_at || "").slice(0, 10) || suggested || "";
   return `<form class="stack editor" data-form="transport"${item?.id ? ` data-id="${esc(item.id)}"` : ""}>
     <fieldset class="add-row is-pair">
       ${legend}
@@ -126,10 +129,8 @@ function rideForm(item) {
       <div class="form-grid">
         ${field("Carrier", "carrier", item?.carrier || "", { scope: `ride-${focus}` })}
         ${field("Number", "number", item?.number || "", { scope: `ride-${focus}` })}
-        ${field("Lookup date", "lookup_on", (item?.depart_at || "").slice(0, 10), "date", { scope: `ride-${focus}` })}
       </div>
-      <button class="btn btn-secondary btn-sm" type="button" data-action="lookup-flight">Look up flight</button>
-      <div id="flight-results"></div>
+      ${flightScheduleControls(lookupOn, overridesFromSaved(item).join(","), savedProvenance(item))}
     </div>
     <details class="ride-more"${moreOpen}><summary>More details</summary><div class="form-grid">
       ${select("Status", "status", item?.status || "planned", DECISIONS.legStatuses, { scope: `ride-${focus}` })}
@@ -153,7 +154,7 @@ function rideEditor(item) {
 function rideRow(item) {
   const editor = rideEditor(item);
   if (editor) return editor;
-  const meta = flightMeta(item);
+  const meta = [flightMeta(item), savedProvenance(item)].filter(Boolean).join(" · ");
   const name = transportSummary(item) || labelOf(MODES, item.mode);
   return `<div class="ride"><div><p class="kicker">${esc(labelOf(MODES, item.mode))}</p><p>${esc(transportSummary(item))}</p>${meta ? `<p class="meta">${esc(meta)}</p>` : ""}</div>${rowActions([
     flagBox("transport", item, "paid", "Paid"),

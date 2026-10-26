@@ -2,6 +2,7 @@ import { api } from '../api.mjs';
 import { applyFieldError, clearFieldError, clearFormErrors, dismissToast, fail, saved } from '../feedback.mjs';
 import { parseHash } from '../route-parser.mjs';
 import { DECISIONS } from '../decisions.mjs';
+import { suggestFlightDate } from '../actions/flight.mjs';
 import { legFields } from './new-trip.mjs';
 import { readLeg, emptyInput } from '../actions/forms.mjs';
 import {
@@ -291,7 +292,7 @@ export function mountComposer() {
         <button type="button" class="btn btn-primary" data-save aria-disabled="true" aria-describedby="save-help">Save trip</button>
       </div>
       <p id="save-help" class="field-help">Pick dates and name every destination.</p>
-      ${DECISIONS.moreDetails ? `<details class="more-details"><summary>Add travel details (optional)</summary>${legFields("outbound")}<div id="connections"></div><p><button class="btn btn-ghost btn-sm" type="button" data-action="add-connection">Add a connection</button></p>${legFields("inbound")}</details>` : ""}`;
+      ${DECISIONS.moreDetails ? `<details class="more-details"><summary>Add travel details (optional)</summary>${legFields("outbound", model.start)}<div id="connections"></div><p><button class="btn btn-ghost btn-sm" type="button" data-action="add-connection">Add a connection</button></p>${legFields("inbound", model.end || model.start)}</details>` : ""}`;
   }
 
   function focusToken(node) {
@@ -357,6 +358,10 @@ export function mountComposer() {
     if (end) end.value = model.end || "";
     const span = root.querySelector("#composer-span");
     if (span) span.textContent = summaryText(model.start, model.end);
+    const outboundDate = root.querySelector('[data-leg="outbound"] [name="lookup_on"]');
+    const inboundDate = root.querySelector('[data-leg="inbound"] [name="lookup_on"]');
+    if (suggestFlightDate(outboundDate, model.start)) outboundDate.dispatchEvent(new Event("input", { bubbles: true }));
+    if (suggestFlightDate(inboundDate, model.end || model.start)) inboundDate.dispatchEvent(new Event("input", { bubbles: true }));
     const note = root.querySelector("#composer-range-note");
     const text = note?.querySelector("p");
     const confirm = root.querySelector("[data-confirm-span]");
@@ -510,7 +515,7 @@ export function mountComposer() {
     }
     root.querySelectorAll("[data-connection]").forEach((row) => {
       const leg = readLeg(row, "connection");
-      if (leg.depart_place || leg.arrive_place) transports.push(leg);
+      if (leg.depart_place || leg.arrive_place || leg.number) transports.push(leg);
     });
     const button = root.querySelector("[data-save]");
     button?.setAttribute("aria-busy", "true");

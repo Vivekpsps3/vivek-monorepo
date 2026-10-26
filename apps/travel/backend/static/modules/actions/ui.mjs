@@ -8,7 +8,17 @@ import { cityFields, connectionFields } from '../views/new-trip.mjs';
 import { submit, refetchTrip } from './forms.mjs';
 import { dismissToast, fail, openConfirm, saved } from '../feedback.mjs';
 import { deletionMode, dialogCopy, undoCopy, restoreBody, restorePath, flagBody, flagToast, findItem, deletePath, patchPath } from '../restore.mjs';
-import { applyFlight, renderFlightChoices } from './flight.mjs';
+import {
+  cancelFlightLookup,
+  chooseFlight,
+  editFlightManually,
+  flightScope,
+  noteTypedFlight,
+  queueFlightLookup,
+  SCHEDULE_FIELDS,
+  suggestFlightDate,
+  useFlightSchedule,
+} from './flight.mjs';
 import { safeStorageSet } from '../../../shared-browser/dom.mjs';
 
 const THEME_CHOICES = ["system", "light", "dark"];
@@ -38,7 +48,10 @@ export async function onAction(button, ui) {
     return;
   }
   if (action === "add-connection") {
-    document.querySelector("#connections").insertAdjacentHTML("beforeend", connectionFields());
+    const host = document.querySelector("#connections");
+    if (!host) return;
+    const suggested = document.querySelector("[data-range=start]")?.value || state.trip?.start_date || "";
+    host.insertAdjacentHTML("beforeend", connectionFields(suggested));
     return;
   }
   if (action === "remove-row") {
@@ -84,20 +97,13 @@ export async function onAction(button, ui) {
     await removeItem(kind, id, ui);
     return;
   }
-  if (action === "lookup-flight") {
-    const form = button.closest("form");
-    const ident = val(form, "number");
-    const departOn = val(form, "lookup_on") || (val(form, "depart_at") || "").slice(0, 10);
-    const result = await api("/api/flights/lookup", { method: "POST", body: JSON.stringify({ ident, depart_on: departOn }) });
-    state.flights = result.flights;
-    renderFlightChoices(form, result.flights);
-    return;
-  }
-  if (action === "use-flight") {
-    const form = button.closest("form");
-    applyFlight(form, state.flights[Number(button.dataset.index)]);
-    const box = form.querySelector("#flight-results");
-    if (box) box.innerHTML = `<p class="meta">Filled from FlightAware in airport local time. Review it, then save.</p>`;
+  if (action === "refresh-flight" || action === "choose-flight" || action === "use-flight-schedule" || action === "edit-flight-manually") {
+    const scope = flightScope(button);
+    if (!scope) return;
+    if (action === "refresh-flight") queueFlightLookup(scope, true);
+    else if (action === "choose-flight") chooseFlight(scope, Number(button.dataset.index));
+    else if (action === "use-flight-schedule") useFlightSchedule(scope);
+    else editFlightManually(scope);
     return;
   }
   if (action === "find-place") {
@@ -362,14 +368,22 @@ export function bindEvents(ui) {
       return;
     }
     if (target?.name === "notes") updateNotesCount(target);
+    watchFlightField(event);
+    if (target?.name === "role") suggestRoleDate(target);
     if (target?.name !== "mode") return;
-    const form = target.closest("form");
-    const flight = form && form.querySelector("[data-flight-only]");
+    const scope = flightScope(target);
+    const flight = scope && scope.querySelector("[data-flight-only]");
     if (flight) flight.hidden = target.value !== "flight";
     if (target.value === "flight") {
-      const extra = form?.querySelector("details.ride-more");
+      const extra = scope?.querySelector("details.ride-more");
       if (extra) extra.open = true;
-    }
+      const date = scope?.querySelector('[name="lookup_on"]');
+      if (date && !date.value && !date.dataset.edited) {
+        const suggestion = flightDateSuggestion(scope);
+        if (suggestion) date.value = suggestion;
+      }
+      if (scope) queueFlightLookup(scope, false);
+    } else if (scope) cancelFlightLookup(scope);
   });
   document.addEventListener("input", (event) => {
     if (event.target?.name === "notes") updateNotesCount(event.target);
@@ -377,6 +391,7 @@ export function bindEvents(ui) {
     if (form?.dataset?.form === "trip" && (event.target.name === "start_date" || event.target.name === "end_date")) {
       noteRemovedPto(form);
     }
+    watchFlightField(event);
   });
   document.addEventListener("keydown", (event) => {
     const themeRadio = event.target?.closest?.("[data-action=theme]");
@@ -416,7 +431,6 @@ function closeEditor() {
   state.edit = null;
   state.details = null;
   state.error = "";
-  state.flights = [];
   if (edit?.kind === "trip") state.focusKey = "edit-trip";
   else if (edit?.kind) state.focusKey = `edit-${edit.kind}-${edit.id}`;
   else if (compose === "transport") state.focusKey = "add-transport";
@@ -428,6 +442,33 @@ function closeEditor() {
   state.compose = compose === "plan" || edit?.kind === "plan" ? "skip" : "";
   state.composeDate = "";
   return edit;
+}
+
+function flightDateSuggestion(scope) {
+  const role = scope?.querySelector('[name="role"]')?.value;
+  if (role === "inbound") return state.trip?.end_date || state.trip?.start_date || "";
+  return state.trip?.start_date || document.querySelector("[data-range=start]")?.value || "";
+}
+
+function suggestRoleDate(target) {
+  const scope = flightScope(target);
+  const date = scope?.querySelector('[name="lookup_on"]');
+  if (!date || date.dataset.edited) return;
+  const suggestion = target.value === "inbound"
+    ? (state.trip?.end_date || state.trip?.start_date || "")
+    : flightDateSuggestion(scope);
+  if (!suggestFlightDate(date, suggestion)) return;
+  queueFlightLookup(scope, false);
+}
+
+function watchFlightField(event) {
+  const target = event.target;
+  if (!target?.name) return;
+  const scope = flightScope(target);
+  if (!scope) return;
+  if (target.name === "lookup_on" && event.isTrusted) target.dataset.edited = "true";
+  if (event.isTrusted && SCHEDULE_FIELDS.includes(target.name)) noteTypedFlight(scope, target.name);
+  if (target.name === "number" || target.name === "lookup_on") queueFlightLookup(scope, false);
 }
 
 function updateNotesCount(field) {
