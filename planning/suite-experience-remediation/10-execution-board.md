@@ -17,7 +17,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 | [ ] | ARC-02 | Backend platform | QA-00 | Explicit root app factory, shared identity/session/DB dependencies; migrated harnesses and removed reflection/fallbacks. |
 | [ ] | ARC-03 | Toolchain/composition | ARC-01 | One workspace/lock/build/router bootstrap and tested feature import boundary. |
 | [x] | API-01 | Backend platform + domains | ARC-02 | Session/error/provider contracts, request deadlines, provider IO outside DB writes, upstream auth separated. |
-| [ ] | UX-01 | Design/shell | QA-00, ARC-01 | Shared product/visual/interaction contract and first representative screens, contrast/fallback specs. |
+| [x] | UX-01 | Design/shell | QA-00, ARC-01 | Shared product/visual/interaction contract and first representative screens, contrast/fallback specs. |
 | [ ] | NAV-01 | Design/shell | ARC-03, UX-01 | One persistent shell with Hub, local nav, account/theme and dirty-route policy. |
 | [ ] | NAV-02 | Finance integration | NAV-01 | Finance navigation migrated; old Hub/tab/menu duplication removed; deep links and guards pass. |
 | [ ] | HUB-01 | Web composition | NAV-01, API-01 | Suite-owned Hub/account with independent summary recovery and lazy Finance facade. |
