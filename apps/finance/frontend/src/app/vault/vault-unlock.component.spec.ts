@@ -38,4 +38,32 @@ describe('VaultUnlockComponent', () => {
     expect(router.navigateByUrl).toHaveBeenCalled();
     expect(fixture.componentInstance.busy).toBeFalse();
   });
+
+  it('keeps the passphrase when unlock fails', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['loadSession']);
+    auth.currentUser = { username: 'vivek', email: 'vivek@pending.local' };
+    const vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
+    vault.isUnlocked = false;
+    vault.refreshStatus.and.resolveTo({ exists: true });
+    vault.unlock.and.rejectWith(new Error('Unlock failed'));
+
+    TestBed.configureTestingModule({
+      imports: [VaultUnlockComponent],
+      providers: [
+        { provide: AuthService, useValue: auth },
+        { provide: VaultService, useValue: vault },
+        provideRouter([]),
+      ],
+    });
+    const fixture: ComponentFixture<VaultUnlockComponent> = TestBed.createComponent(VaultUnlockComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    fixture.componentInstance.passphrase = 'correct horse battery staple';
+    await fixture.componentInstance.unlock();
+
+    expect(fixture.componentInstance.passphrase).toBe('correct horse battery staple');
+    expect(fixture.componentInstance.error).toBe('Unlock failed');
+    expect(vault.upgradeKdfIfNeeded).not.toHaveBeenCalled();
+  });
 });

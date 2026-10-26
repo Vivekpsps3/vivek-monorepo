@@ -7,7 +7,13 @@
 
   <main id="admin-main">
     @if (notice) { <p class="desk-notice" role="status">{{ notice }}</p> }
-    @if (usersError) { <p class="desk-notice is-error" role="alert">{{ usersError }}</p> }
+    @if (usersError) {
+      <div class="desk-notice is-error" role="alert">
+        <span>{{ usersError }}</span>
+        <span>Entered names stay here.</span>
+        <button type="button" class="text-action" (click)="load()">Retry</button>
+      </div>
+    }
 
     <section class="services" aria-label="Apps">
       @for (service of services; track service.name) {

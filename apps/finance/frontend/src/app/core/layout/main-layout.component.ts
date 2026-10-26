@@ -4,7 +4,7 @@ import { ApiHealthService } from '../../services/api-health.service';
 import { AuthUser } from '../../auth/auth.models';
 import { AuthService } from '../../auth/auth.service';
 import { Subject, filter, takeUntil } from 'rxjs';
-import { UiButtonComponent, UiCardComponent, UiIconComponent, UiIconName } from '@vivek/ui';
+import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiIconName } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceService } from '../../services/finance.service';
@@ -32,7 +32,7 @@ interface NavGroup {
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, SuiteHubLinkComponent],
+  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, UiDialogComponent, SuiteHubLinkComponent],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -51,9 +51,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private routePath = '';
   private routeEnterTimer?: ReturnType<typeof setTimeout>;
+  private guideOpener: HTMLElement | null = null;
   routeEntering = false;
 
   apiOffline = false;
+  apiRetrying = false;
   theme: Theme = this.themeService.current;
   user: AuthUser | null = null;
   isResettingData = false;
@@ -61,6 +63,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   marketState: MarketRefreshState = this.marketRefresh.currentState;
   readonly marketRefreshDisclosure = this.marketRefresh.disclosure;
 
+  /** shortLabel is the 320px tab; the accessible name is label. */
   readonly navGroups: NavGroup[] = [
     {
       label: 'Home',
@@ -252,19 +255,35 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     });
   }
 
-  openTutorial(): void {
+  openTutorial(event: MouseEvent): void {
+    this.guideOpener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     this.showTutorial = true;
     this.cdr.markForCheck();
   }
 
-  closeTutorial(): void {
+  closeTutorial(restoreFocus = true): void {
+    const opener = this.guideOpener;
+    this.guideOpener = null;
     this.showTutorial = false;
     this.cdr.markForCheck();
+    if (restoreFocus) setTimeout(() => opener?.focus());
   }
 
   refreshApiStatus(): void {
-    this.health.checkWithRetries().subscribe(ok => {
+    this.health.checkWithRetries().pipe(takeUntil(this.destroy$)).subscribe(ok => {
       this.apiOffline = !ok;
+      this.cdr.markForCheck();
+    });
+  }
+
+  /** Re-checks the server only. It does not navigate or clear records already on screen. */
+  retryConnection(): void {
+    if (this.apiRetrying) return;
+    this.apiRetrying = true;
+    this.cdr.markForCheck();
+    this.health.checkOnce().pipe(takeUntil(this.destroy$)).subscribe(ok => {
+      this.apiOffline = !ok;
+      this.apiRetrying = false;
       this.cdr.markForCheck();
     });
   }

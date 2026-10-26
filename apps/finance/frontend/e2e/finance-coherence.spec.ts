@@ -614,7 +614,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     if (width > 320) await vault.open('/');
     await page.setViewportSize({ width, height: 844 });
     const navigation = page.locator('.mobile-tabbar');
-    const plan = navigation.getByRole('link', { name: 'Plan', exact: true });
+    const plan = navigation.getByRole('link', { name: 'Planning', exact: true });
     await expect(plan).toBeVisible();
     const layout = await navigation.evaluate(node => {
       const nav = node.getBoundingClientRect();

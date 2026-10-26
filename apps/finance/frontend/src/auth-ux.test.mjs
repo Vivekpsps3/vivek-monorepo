@@ -28,6 +28,16 @@ test("finance keeps one hub control in the header at every width", () => {
   assert.doesNotMatch(html, /class="nav-tab" routerLink="\/hub"/);
   assert.doesNotMatch(html, /class="mobile-tab" routerLink="\/hub"/);
   assert.doesNotMatch(css, /\.suite-hub/);
+  assert.match(html, /\[attr\.aria-label\]="group\.label"/);
+  assert.match(html, /class="mobile-tab"/);
+  assert.doesNotMatch(html, /Start the backend/);
+  assert.match(html, /Your records stay in this browser/);
+  assert.match(html, /retryConnection\(\)/);
+  assert.match(html, /<ui-dialog/);
+  assert.match(html, /panelClass="tutorial-panel/);
+  assert.doesNotMatch(html, /tutorial-backdrop/);
+  assert.doesNotMatch(html, /aria-modal/);
+  assert.match(html, /\[attr\.inert\]="showTutorial \? '' : null"/);
   assert.match(css, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
   assert.doesNotMatch(css, /repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(read("app/admin/suite-admin.component.html"), /<app-suite-hub/);

@@ -23,6 +23,14 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  @media not (forced-colors: active) {
+    body {
+      background:
+        radial-gradient(72rem 24rem at 8% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 64%),
+        var(--bg);
+    }
+  }
+
   a {
     color: inherit;
   }

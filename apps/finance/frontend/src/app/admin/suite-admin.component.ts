@@ -104,7 +104,7 @@ export class SuiteAdminComponent implements OnInit {
         id: `down-${service.name}`,
         icon: 'alert',
         title: `${service.name} is down`,
-        detail: 'Open it and check that the app is running.',
+        detail: 'It did not answer. Open the app to try again.',
         href: service.href,
         action: `Open ${service.name}`,
       });
