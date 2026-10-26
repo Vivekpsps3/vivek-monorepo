@@ -15,7 +15,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | NAV-01 | open | make test-fast exit 2; check-shared-boundaries failed with recipe error 1. Inspected 04-hub-finance.md, main-layout.component.html/css, travel and media index.html, app.css, controls.css. One visible suite-hub on Finance, Travel, and Media at desktop and narrow, old tab/menu/footer Hub links gone, deep links kept; command was not exit 0. |
 | TRV-01 | done | node --test apps/travel/backend/static/tests/*.test.mjs exit 0. Inspected 05-travel.md, composer.mjs, composer-model.mjs, new-trip.mjs, app.css, tr3.test.mjs, router.mjs. toggleSplit and Split… removed; dates and Destination city precede one Rename trip title; changeCity keeps typed cities and blocks a blank stay. |
 | MED-01 | done | ./scripts/coverage-gate.sh media exit 0 (70 passed). Inspected 06-media-library.md, records.py, journal.py, membership.py, providers.py, and views.mjs. UserEntry saves are explicit; discography and legacy music_albums do not insert album or song membership. _load_artist_catalog and backfill_missing_tracks are gone. |
-| NAV-02 | open | pending |
+| NAV-02 | done | CHROME_BIN set, npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI exit 0 (425 SUCCESS). Inspected 04-hub-finance.md, main-layout.component.html/ts/css, suite-hub-link.component.ts, app.routes.ts, auth.guard.ts, vault.guard.ts: one header Hub control, old nav-tab and mobile-tab /hub links absent, five section tabs, guards and deep-link redirects unchanged. |
 | TRV-05 | open | pending |
 | MED-02 | open | pending |
 | HUB-01 | open | pending |
