@@ -3,11 +3,10 @@ import {
   financeSnapshot,
   hasManualCashAndBrokerage,
   largestPositions,
-  journalKindLabel,
-  mediaReleaseLabel,
   portfolioAccounts,
   priceFreshnessSummary,
-} from './hub-summary';
+} from './finance-hub-snapshot';
+import { journalKindLabel, mediaReleaseLabel } from './hub-summary';
 
 function holding(partial: Partial<Holding>): Holding {
   return {
