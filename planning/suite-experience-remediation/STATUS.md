@@ -14,7 +14,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | UX-01 | open | Not done. Finance subscriptions marks required fields and collapses optional ones. Travel and Media only add required/optional notes. Shared controls gained hover, disabled, invalid, and mobile scroll-margin. No contrast measurement, fallback spec, or interaction evidence. |
 | NAV-01 | open | make test-fast exit 2; check-shared-boundaries failed with recipe error 1. Inspected 04-hub-finance.md, main-layout.component.html/css, travel and media index.html, app.css, controls.css. One visible suite-hub on Finance, Travel, and Media at desktop and narrow, old tab/menu/footer Hub links gone, deep links kept; command was not exit 0. |
 | TRV-01 | done | node --test apps/travel/backend/static/tests/*.test.mjs exit 0. Inspected 05-travel.md, composer.mjs, composer-model.mjs, new-trip.mjs, app.css, tr3.test.mjs, router.mjs. toggleSplit and Split… removed; dates and Destination city precede one Rename trip title; changeCity keeps typed cities and blocks a blank stay. |
-| MED-01 | open | pending |
+| MED-01 | done | ./scripts/coverage-gate.sh media exit 0 (70 passed). Inspected 06-media-library.md, records.py, journal.py, membership.py, providers.py, and views.mjs. UserEntry saves are explicit; discography and legacy music_albums do not insert album or song membership. _load_artist_catalog and backfill_missing_tracks are gone. |
 | NAV-02 | open | pending |
 | TRV-05 | open | pending |
 | MED-02 | open | pending |
