@@ -45,6 +45,8 @@ class CatalogItem(Base):
     source_id: Mapped[str | None] = mapped_column(String(120))
     extra: Mapped[str | None] = mapped_column(Text)
     external_ratings: Mapped[str | None] = mapped_column(Text)
+    # Set only on catalog rows this migration inserted. Reused rows stay null.
+    migration_provenance: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -77,6 +79,16 @@ class UserEntry(Base):
     progress_unit: Mapped[str | None] = mapped_column(String(20))
     favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     anticipated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Personal artist portrait. Null means use the shared catalog image.
+    portrait_url: Mapped[str | None] = mapped_column(Text)
+    portrait_source_url: Mapped[str | None] = mapped_column(Text)
+    portrait_source_id: Mapped[str | None] = mapped_column(String(120))
+    portrait_crop: Mapped[str | None] = mapped_column(String(120))
+    # Artist relationship. Null on every non-artist entry. 0 is unfollowed.
+    followed: Mapped[bool | None] = mapped_column(Boolean)
+    follow_provenance: Mapped[str | None] = mapped_column(String(40))
+    # Set only on album/song entries the membership migration inserted.
+    membership_provenance: Mapped[str | None] = mapped_column(String(60))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -225,6 +237,69 @@ class TrackRating(Base):
         ForeignKey("music_tracks.id", ondelete="CASCADE"), nullable=False, index=True
     )
     rating: Mapped[float | None] = mapped_column(Float)
+
+
+class MusicLink(Base):
+    """Public music relationship. A row here is not a personal save."""
+
+    __tablename__ = "music_links"
+    __table_args__ = (
+        UniqueConstraint("parent_catalog_id", "child_catalog_id", "relation", name="uq_music_link"),
+        UniqueConstraint("legacy_album_id", name="uq_music_link_legacy_album"),
+        UniqueConstraint("legacy_track_id", name="uq_music_link_legacy_track"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    parent_catalog_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    child_catalog_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    relation: Mapped[str] = mapped_column(String(40), nullable=False)
+    namespace: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_id: Mapped[str | None] = mapped_column(String(120))
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    credit: Mapped[str | None] = mapped_column(String(300))
+    legacy_album_id: Mapped[int | None] = mapped_column(Integer)
+    legacy_track_id: Mapped[int | None] = mapped_column(Integer)
+    provenance: Mapped[str] = mapped_column(String(40), nullable=False)
+
+
+class SeriesLifecycle(Base):
+    """Production lifecycle for a show. Personal watch status stays on UserEntry."""
+
+    __tablename__ = "series_lifecycles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    catalog_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    lifecycle: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
+    raw_value: Mapped[str | None] = mapped_column(String(80))
+    source: Mapped[str | None] = mapped_column(String(40))
+    source_id: Mapped[str | None] = mapped_column(String(120))
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completeness: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
+    freshness: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
+
+
+class MediaMigrationReport(Base):
+    """Visible mapping conflicts. Original score rows are not rewritten from this."""
+
+    __tablename__ = "media_migration_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(60), nullable=False)
+    subject: Mapped[str] = mapped_column(String(40), nullable=False)
+    legacy_table: Mapped[str | None] = mapped_column(String(40))
+    legacy_id: Mapped[int | None] = mapped_column(Integer)
+    user_id: Mapped[int | None] = mapped_column(Integer)
+    catalog_id: Mapped[int | None] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="SET NULL")
+    )
+    entry_id: Mapped[int | None] = mapped_column(ForeignKey("user_entries.id", ondelete="SET NULL"))
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class Release(Base):
