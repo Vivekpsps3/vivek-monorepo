@@ -19,7 +19,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | TRV-05 | done | node --test apps/travel/backend/static/tests/*.test.mjs exited 0 (61 passed). Inspected 05-travel.md, trip.mjs, new-trip.mjs, ui.mjs, and blockers.test.mjs: empty trips show one btn-sm Add transport and quiet days; always-open ride, day, parking, note, and reminder builders are gone. |
 | MED-02 | done | node --test apps/media/backend/static/tests/*.test.mjs exited 0. Inspected 06-media-library.md, views.mjs libraryCard/savedExpansion/discographyHtml, app.mjs viewLibrary/libraryCards/viewDiscography, app.css .card/.is-artist, and index.html. artistSection, buildLibraryTree, and movieBrowseCards are absent from live JS. |
 | HUB-01 | done | npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI exit 0 (446 SUCCESS, CHROME_BIN set). Inspected 04-hub-finance.md, hub.component.ts/html, hub-load.ts, finance-hub-facade.ts, dek-store.ts, hub-summary.ts: failed cards recover alone; vault facade imports only after financeVaultPresent; old Hub VaultService inject and loadDashboard path is gone. |
-| TRV-02 | open | pending |
+| TRV-02 | done | ./scripts/coverage-gate.sh travel exit 0 (55 passed). Inspected 05-travel.md, pto.py, models.py, assemble.py, routers/pto.py, trips.py, trip.mjs, pto.mjs, test_pto_allocation.py. One TripPtoDay per date, weekends default 0, and trip, home, calendar, preview, and PTO board forecasts use those charges. |
 | MED-04 | open | pending |
 | WEB-01 | open | pending |
 | TRV-03 | open | pending |
