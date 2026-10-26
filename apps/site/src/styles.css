@@ -174,8 +174,7 @@ a { color: inherit; }
 .error-message { color: var(--danger) !important; }
 .ciphertext { overflow-wrap: anywhere; }
 .ciphertext code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.demo-group markdown { line-height: 1.65; color: var(--text-secondary); }
-.demo-group markdown p { margin: 0 0 var(--space-3); }
+.decrypted-message { line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 textarea {
   width: 100%;
