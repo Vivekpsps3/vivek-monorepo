@@ -11,6 +11,7 @@ import { FinanceService } from '../../services/finance.service';
 import { Theme, ThemeService } from '../../services/theme.service';
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
+import { SuiteHubLinkComponent } from './suite-hub-link.component';
 
 export interface NavItem {
   path: string;
@@ -31,7 +32,7 @@ interface NavGroup {
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent],
+  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, SuiteHubLinkComponent],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

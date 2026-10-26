@@ -59,6 +59,8 @@ describe('SuiteAdminComponent', () => {
     flush();
     expect(fixture.componentInstance.usersLoading).toBeFalse();
     expect(fixture.componentInstance.services.map(service => service.status)).toEqual(['ok', 'ok', 'down']);
+    expect(fixture.nativeElement.querySelector('a.suite-hub')?.getAttribute('href')).toBe('/hub');
+    expect(fixture.nativeElement.querySelector('.desk-mark')).toBeNull();
   });
 
   it('shows who needs an action instead of raw table counts', () => {

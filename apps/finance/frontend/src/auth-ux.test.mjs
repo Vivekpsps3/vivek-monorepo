@@ -20,12 +20,20 @@ test("sign-in names the username and signup does not probe a signed-out browser"
 test("finance keeps one hub control in the header at every width", () => {
   const html = read("app/core/layout/main-layout.component.html");
   const css = read("app/core/layout/main-layout.component.css");
-  assert.equal((html.match(/routerLink="\/hub"/g) || []).length, 1);
-  assert.match(html, /class="suite-hub" routerLink="\/hub"/);
+  const hub = read("app/core/layout/suite-hub-link.component.ts");
+  assert.equal((html.match(/<app-suite-hub/g) || []).length, 1);
+  assert.equal((html.match(/routerLink="\/hub"/g) || []).length, 0);
+  assert.match(hub, /class="suite-hub" routerLink="\/hub"/);
+  assert.match(hub, /min-height: 44px/);
   assert.doesNotMatch(html, /class="nav-tab" routerLink="\/hub"/);
   assert.doesNotMatch(html, /class="mobile-tab" routerLink="\/hub"/);
+  assert.doesNotMatch(css, /\.suite-hub/);
   assert.match(css, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
   assert.doesNotMatch(css, /repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(read("app/admin/suite-admin.component.html"), /<app-suite-hub/);
+  assert.doesNotMatch(read("app/admin/suite-admin.component.html"), /desk-mark/);
+  assert.match(read("app/vault/vault-unlock.component.ts"), /<app-suite-hub/);
+  assert.match(read("app/vault/vault-setup.component.ts"), /<app-suite-hub/);
 });
 
 test("the hub panel uses journal labels, deep links, next episodes, and retry", () => {
