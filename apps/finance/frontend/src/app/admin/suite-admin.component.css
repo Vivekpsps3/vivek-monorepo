@@ -12,8 +12,9 @@
   background: color-mix(in srgb, var(--bg) 92%, transparent);
 }
 .desk-title { margin: 0; font-weight: 650; letter-spacing: -0.03em; text-decoration: none; color: inherit; }
-.desk-notice { margin: 0 0 var(--space-4); color: var(--text-secondary); }
+.desk-notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: 0 0 var(--space-4); color: var(--text-secondary); }
 .desk-notice.is-error { color: var(--danger, #b42318); }
+.desk-notice .text-action { min-height: 44px; }
 
 .services { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-6); }
 .service {

@@ -1,6 +1,6 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
-<nav class="navbar" aria-label="Main navigation">
+<nav class="navbar" aria-label="Main navigation" [attr.inert]="showTutorial ? '' : null">
   <div class="nav-content">
     <div class="logo-lockup">
       <a routerLink="/" class="logo" aria-label="Finance home">
@@ -33,7 +33,7 @@
       }
     </div>
     <div class="account-menu">
-      <ui-button variant="secondary" size="sm" (clicked)="openTutorial()">Guide</ui-button>
+      <ui-button variant="secondary" size="sm" (clicked)="openTutorial($event)">Guide</ui-button>
       <details class="account-actions">
         <summary>
           <span class="account-avatar" aria-hidden="true">{{ (user?.username || user?.email)?.charAt(0)?.toUpperCase() || 'U' }}</span>
@@ -61,34 +61,35 @@
   </div>
 </nav>
 
-<nav class="mobile-tabbar" aria-label="Finance sections">
+<nav class="mobile-tabbar" aria-label="Finance sections" [attr.inert]="showTutorial ? '' : null">
   @for (group of visibleNavGroups; track group.label) {
     <a
       [routerLink]="group.items[0].path"
       class="mobile-tab"
       [class.active]="isActiveGroup(group)"
-      [attr.aria-current]="isActiveGroup(group) ? 'page' : null">
+      [attr.aria-current]="isActiveGroup(group) ? 'page' : null"
+      [attr.aria-label]="group.label">
       <ui-icon [name]="group.icon" size="sm" />
-      <span>{{ group.shortLabel }}</span>
+      <span aria-hidden="true">{{ group.shortLabel }}</span>
     </a>
   }
 </nav>
 
 @if (apiOffline) {
-  <div class="api-banner-wrap">
+  <div class="api-banner-wrap" [attr.inert]="showTutorial ? '' : null">
     <ui-card class="api-banner-card" padding="none">
       <div class="api-banner" role="alert">
         <ui-icon name="spark" size="sm" />
-        <strong class="api-banner__title">The API is not available</strong>
-        <span class="api-banner__detail">Start the backend. Then try again.</span>
-        <ui-button variant="secondary" size="sm" (clicked)="refreshApiStatus()">Try again</ui-button>
+        <strong class="api-banner__title">Can't reach Finance right now</strong>
+        <span class="api-banner__detail">Your records stay in this browser. Retry the connection when you are ready.</span>
+        <ui-button variant="secondary" size="sm" [disabled]="apiRetrying" (clicked)="retryConnection()">{{ apiRetrying ? 'Retrying…' : 'Retry' }}</ui-button>
       </div>
     </ui-card>
   </div>
 }
 
 @if (marketNoticeVisible) {
-  <div class="market-banner-wrap">
+  <div class="market-banner-wrap" [attr.inert]="showTutorial ? '' : null">
     <ui-card class="market-banner-card" padding="none">
       <div class="market-banner" [class.market-banner--error]="marketState.phase === 'partial' || marketState.phase === 'failed'" role="status" aria-live="polite">
         <div class="market-banner__copy">
@@ -109,57 +110,53 @@
   </div>
 }
 
-<main id="main-content" class="main-content" [class.is-entering]="routeEntering" tabindex="-1">
+<main id="main-content" class="main-content" [class.is-entering]="routeEntering" [attr.inert]="showTutorial ? '' : null" tabindex="-1">
   <router-outlet />
 </main>
 
-@if (showTutorial) {
-  <div class="tutorial-backdrop" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
-    <section class="tutorial-panel">
-      <div class="tutorial-header">
-        <div>
-          <p class="section-eyebrow">Guide</p>
-          <h2 id="tutorial-title">How to start</h2>
-          <p>Add the records you need. Each area keeps its own job.</p>
-        </div>
-        <ui-button variant="ghost" size="sm" (clicked)="closeTutorial()">Close</ui-button>
-      </div>
-
-      <div class="tutorial-grid">
-        <article class="tutorial-step tutorial-step--primary">
-          <span class="tutorial-step__number">1</span>
-          <h3>What you have</h3>
-          <p>Enter current balances and positions. Holdings have their own list.</p>
-          <a routerLink="/have" [queryParams]="{ t: 'assets' }" (click)="closeTutorial()">Add assets and debts</a>
-          <a routerLink="/have" [queryParams]="{ t: 'holdings' }" (click)="closeTutorial()">Add holdings</a>
-        </article>
-        <article class="tutorial-step">
-          <span class="tutorial-step__number">2</span>
-          <h3>Spending</h3>
-          <p>Import CSVs or view and edit card activity. Transactions do not change net worth.</p>
-          <a routerLink="/spending" [queryParams]="{ t: 'imports' }" (click)="closeTutorial()">Import bank CSVs</a>
-          <a routerLink="/spending" [queryParams]="{ t: 'activity' }" (click)="closeTutorial()">Open Activity</a>
-        </article>
-        <article class="tutorial-step">
-          <span class="tutorial-step__number">3</span>
-          <h3>Recurring</h3>
-          <p>Keep job income separate from scheduled bills and subscriptions.</p>
-          <a routerLink="/recurring" [queryParams]="{ t: 'pay' }" (click)="closeTutorial()">Add jobs and pay</a>
-          <a routerLink="/recurring" [queryParams]="{ t: 'spend' }" (click)="closeTutorial()">Add bills and subscriptions</a>
-        </article>
-        <article class="tutorial-step">
-          <span class="tutorial-step__number">4</span>
-          <h3>Planning</h3>
-          <p>Try what-if numbers. This does not change real balances.</p>
-          <a routerLink="/planning" (click)="closeTutorial()">Open Planning</a>
-        </article>
-      </div>
-
-      <div class="tutorial-rules" aria-label="Rules">
-        <span>Card activity does not change net worth</span>
-        <span>Planning does not change real balances</span>
-        <span>Do not enter the same cash twice</span>
-      </div>
-    </section>
+<ui-dialog [open]="showTutorial" labelledBy="tutorial-title" panelClass="tutorial-panel ui-dialog-panel--wide" (closed)="closeTutorial()">
+  <div class="tutorial-header">
+    <div>
+      <p class="section-eyebrow">Guide</p>
+      <h2 id="tutorial-title" tabindex="-1" data-dialog-initial-focus>How to start</h2>
+      <p>Add the records you need. Each area keeps its own job.</p>
+    </div>
+    <ui-button variant="ghost" size="sm" (clicked)="closeTutorial()">Close</ui-button>
   </div>
-}
+
+  <div class="tutorial-grid">
+    <article class="tutorial-step">
+      <span class="tutorial-step__number">1</span>
+      <h3>What you have</h3>
+      <p>Enter current balances and positions. Holdings have their own list.</p>
+      <a routerLink="/have" [queryParams]="{ t: 'assets' }" (click)="closeTutorial(false)">Add assets and debts</a>
+      <a routerLink="/have" [queryParams]="{ t: 'holdings' }" (click)="closeTutorial(false)">Add holdings</a>
+    </article>
+    <article class="tutorial-step">
+      <span class="tutorial-step__number">2</span>
+      <h3>Spending</h3>
+      <p>Import CSVs or view and edit card activity. Transactions do not change net worth.</p>
+      <a routerLink="/spending" [queryParams]="{ t: 'imports' }" (click)="closeTutorial(false)">Import bank CSVs</a>
+      <a routerLink="/spending" [queryParams]="{ t: 'activity' }" (click)="closeTutorial(false)">Open Activity</a>
+    </article>
+    <article class="tutorial-step">
+      <span class="tutorial-step__number">3</span>
+      <h3>Recurring</h3>
+      <p>Keep job income separate from scheduled bills and subscriptions.</p>
+      <a routerLink="/recurring" [queryParams]="{ t: 'pay' }" (click)="closeTutorial(false)">Add jobs and pay</a>
+      <a routerLink="/recurring" [queryParams]="{ t: 'spend' }" (click)="closeTutorial(false)">Add bills and subscriptions</a>
+    </article>
+    <article class="tutorial-step">
+      <span class="tutorial-step__number">4</span>
+      <h3>Planning</h3>
+      <p>Try what-if numbers. This does not change real balances.</p>
+      <a routerLink="/planning" (click)="closeTutorial(false)">Open Planning</a>
+    </article>
+  </div>
+
+  <div class="tutorial-rules" aria-label="Rules">
+    <span>Card activity does not change net worth</span>
+    <span>Planning does not change real balances</span>
+    <span>Do not enter the same cash twice</span>
+  </div>
+</ui-dialog>
