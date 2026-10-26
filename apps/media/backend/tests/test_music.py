@@ -629,3 +629,201 @@ def test_a_score_does_not_create_membership(client, tmp_path):
     assert client.get(f"/api/entries/{song_id}").json()["rating"] is None
     titles = sorted(item["title"] for item in client.get("/api/library").json()["items"])
     assert titles == ["Also", "Dune", "Kept", "Left", "Only", "Other"]
+
+
+def test_studio_browse_names_the_releases_it_leaves_out():
+    from apps.media.backend.services.providers import musicbrainz_artist_catalog
+
+    groups = [
+        {
+            "id": "rg-studio",
+            "title": "Studio",
+            "primary-type": "Album",
+            "first-release-date": "1999",
+        },
+        {
+            "id": "rg-live",
+            "title": "Live",
+            "primary-type": "Album",
+            "secondary-types": ["Live"],
+            "first-release-date": "2001",
+        },
+        {
+            "id": "rg-single",
+            "title": "Single",
+            "primary-type": "Single",
+            "first-release-date": "2002",
+        },
+        {
+            "id": "rg-comp",
+            "title": "Comp",
+            "primary-type": "Album",
+            "secondary-types": ["Compilation"],
+            "first-release-date": "1990",
+        },
+        {"id": "rg-bare", "title": "Bare"},
+    ]
+
+    class Response:
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.body
+
+    class Http:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, url, params=None):
+            self.calls.append((url, dict(params or {})))
+            if url.endswith("/release-group"):
+                return Response({"release-groups": groups, "release-group-count": len(groups)})
+            return Response({"releases": [], "release-count": 0})
+
+    studio_http = Http()
+    studio = musicbrainz_artist_catalog(studio_http, "artist-a")
+    assert [row["title"] for row in studio["albums"]] == ["Studio", "Bare"]
+    assert studio_http.calls[0][1]["type"] == "album"
+    live_http = Http()
+    live = musicbrainz_artist_catalog(live_http, "artist-a", release_type="live")
+    assert [row["title"] for row in live["albums"]] == ["Live", "Bare"]
+    assert live_http.calls[0][1]["type"] == "live"
+    single = musicbrainz_artist_catalog(Http(), "artist-a", release_type="single")
+    assert [row["title"] for row in single["albums"]] == ["Single", "Bare"]
+
+
+def test_discography_save_keeps_one_song_without_its_album(client, monkeypatch, tmp_path):
+    seen = []
+
+    def catalog(_http, artist_id, group_offset=0, release_offset=0, max_pages=1, release_type=None):
+        seen.append(release_type)
+        return {"partial": False, "group_offset": 0, "release_offset": 0, "albums": []}
+
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
+    artist = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": "artist-a",
+            "kind": "artist",
+            "title": "Artist A",
+            "status": "want",
+        },
+    ).json()
+    default = client.get(f"/api/entries/{artist['id']}/discography")
+    assert default.status_code == 200, default.text
+    assert default.json()["release"] == "studio"
+    assert seen == [None]
+    live = client.get(f"/api/entries/{artist['id']}/discography", params={"release": "live"})
+    assert live.status_code == 200, live.text
+    assert live.json()["release"] == "live"
+    assert seen == [None, "live"]
+    assert (
+        client.get(
+            f"/api/entries/{artist['id']}/discography", params={"release": "nope"}
+        ).status_code
+        == 422
+    )
+
+    album = client.post(
+        f"/api/entries/{artist['id']}/discography",
+        json={"kind": "album", "source_id": "rg-a1", "title": "A1", "year": 1999},
+    )
+    assert album.status_code == 200, album.text
+    album_id = album.json()["id"]
+    assert album.json()["already_saved"] is False
+    song = client.post(
+        f"/api/entries/{artist['id']}/discography",
+        json={
+            "kind": "track",
+            "source_id": "rec-a2",
+            "title": "A2",
+            "album_source_id": "rg-a1",
+            "album_title": "A1",
+            "position": 1,
+        },
+    )
+    assert song.status_code == 200, song.text
+    loose = client.post(
+        f"/api/entries/{artist['id']}/discography",
+        json={
+            "kind": "track",
+            "source_id": "rec-b1",
+            "title": "B1",
+            "album_source_id": "rg-b",
+            "album_title": "B",
+            "position": 1,
+        },
+    )
+    assert loose.status_code == 200, loose.text
+    again = client.post(
+        f"/api/entries/{artist['id']}/discography",
+        json={"kind": "album", "source_id": "rg-a1", "title": "A1", "year": 1999},
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["already_saved"] is True
+    assert again.json()["id"] == album_id
+
+    library = client.get("/api/library").json()["items"]
+    assert {item["title"] for item in library} == {"Artist A", "A1", "A2", "B1"}
+    card = next(item for item in library if item["id"] == artist["id"])
+    assert card["saved_count"] == 3
+    music = client.get(f"/api/entries/{artist['id']}").json()["music"]
+    assert [row["title"] for row in music["albums"]] == ["A1"]
+    assert [row["title"] for row in music["albums"][0]["tracks"]] == ["A2"]
+    assert [row["title"] for row in music["songs"]] == ["B1"]
+    stored = sqlite3.connect(tmp_path / "media.db")
+    catalog_titles = {row[0] for row in stored.execute("select title from catalog_items")}
+    entry_titles = {
+        row[0]
+        for row in stored.execute(
+            "select catalog_items.title from user_entries "
+            "join catalog_items on catalog_items.id = user_entries.catalog_id"
+        )
+    }
+    stored.close()
+    assert "B" in catalog_titles
+    assert "B" not in entry_titles
+
+    other = client.post(
+        "/api/library", json={"kind": "artist", "title": "Artist A", "status": "want"}
+    ).json()
+    assert other["id"] != artist["id"]
+    other_music = client.get(f"/api/entries/{other['id']}").json()["music"]
+    assert other_music["albums"] == []
+    assert other_music["songs"] == []
+
+    taken = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": "rec-taken",
+            "kind": "track",
+            "title": "Taken",
+            "status": "want",
+        },
+    ).json()
+    stored = sqlite3.connect(tmp_path / "media.db")
+    before_entries = stored.execute("select count(*) from user_entries").fetchone()[0]
+    before_catalogs = stored.execute("select count(*) from catalog_items").fetchone()[0]
+    stored.close()
+    rejected = client.post(
+        f"/api/entries/{artist['id']}/discography",
+        json={
+            "kind": "track",
+            "source_id": "rec-fresh",
+            "title": "Fresh",
+            "album_source_id": "rec-taken",
+            "album_title": "Taken",
+        },
+    )
+    assert rejected.status_code == 422
+    assert taken["id"]
+    stored = sqlite3.connect(tmp_path / "media.db")
+    assert stored.execute("select count(*) from user_entries").fetchone()[0] == before_entries
+    assert stored.execute("select count(*) from catalog_items").fetchone()[0] == before_catalogs
+    stored.close()

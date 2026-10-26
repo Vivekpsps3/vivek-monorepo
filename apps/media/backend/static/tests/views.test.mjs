@@ -10,8 +10,10 @@ import {
   emptyMonthHtml,
   graphCenter,
   legendHtml,
-  buildLibraryTree,
+  discographyHtml,
+  libraryCard,
   libraryEmptyCopy,
+  savedExpansion,
   markNextLabel,
   noteCardHtml,
   noteCountText,
@@ -77,45 +79,93 @@ test("library filters name what is showing and offer a reset", () => {
   assert.match(appCss, /align-items:\s*flex-end/);
 });
 
-test("the default library nests albums and loose songs under artists", () => {
-  const tree = buildLibraryTree([
-    { id: 9, kind: "artist", title: "Nobody", music: { albums: [] } },
-    { id: 1, kind: "movie", title: "Dune" },
-    {
-      id: 2,
-      kind: "artist",
-      title: "Snail Mail",
-      music: {
-        albums: [
-          { title: "Valentine", year: 2021, tracks: [{ title: "Valentine", position: 1 }] },
-          { title: "Lush", year: 2018, tracks: [{ title: "Pristine", position: 1 }, { title: "Heat Wave", position: 2 }] },
-        ],
+test("a saved artist uses the same collapsed card as any other item", () => {
+  const movie = libraryCard({ id: 3, kind: "movie", title: "Dune", year: 2021, status: "want", rating: 8 });
+  const artist = libraryCard({
+    id: 1,
+    kind: "artist",
+    title: "Artist A",
+    status: "want",
+    rating: 5,
+    saved_count: 2,
+  });
+  const sameName = libraryCard({ id: 2, kind: "artist", title: "Artist A", status: "want", saved_count: 0 });
+  assert.match(movie, /<a class="card" href="#\/item\/3">/);
+  assert.match(movie, /Dune/);
+  assert.match(movie, /Movie · 2021/);
+  assert.match(movie, /Want to watch · 8\/10/);
+  assert.doesNotMatch(movie, /saved-toggle|is-artist/);
+  assert.match(artist, /<article class="card is-artist"/);
+  assert.match(artist, /<a class="card-open" href="#\/item\/1">/);
+  assert.match(artist, /<span class="meta">Artist<\/span><span class="meta">Following · 5\/10<\/span>/);
+  assert.match(artist, /<\/a><button type="button" class="saved-toggle" data-action="toggle-saved" data-artist="1" aria-expanded="false" aria-controls="saved-1" aria-label="Saved albums and songs, 2">/);
+  assert.match(artist, /class="saved-count">2</);
+  assert.match(artist, /<div id="saved-1" class="saved-children" hidden>/);
+  assert.match(sameName, /href="#\/item\/2"/);
+  assert.match(sameName, /id="saved-2"/);
+  assert.doesNotMatch(sameName, /id="saved-1"/);
+  const saved = savedExpansion(1, {
+    albums: [{ id: 10, title: "A1", year: 1999, tracks: [{ id: 11, title: "A2", rating: 4 }] }],
+    songs: [{ id: 12, title: "Loose" }],
+  });
+  assert.match(saved, /href="#\/item\/10"/);
+  assert.match(saved, /A1/);
+  assert.match(saved, /href="#\/item\/11"/);
+  assert.match(saved, /A2/);
+  assert.match(saved, /href="#\/item\/12"/);
+  assert.doesNotMatch(saved, /Browse discography|>B<|>B1</);
+  const empty = savedExpansion(2, { albums: [], songs: [] }, { browse: true });
+  assert.match(empty, /No saved albums or songs\./);
+  assert.match(empty, /href="#\/item\/2\/discography">Browse discography</);
+  const page = discographyHtml({
+    artistId: 1,
+    artist: "Artist A",
+    release: "studio",
+    partial: true,
+    albums: [
+      {
+        source_id: "rg-a1",
+        title: "A1",
+        year: 1999,
+        saved: true,
+        saved_id: 10,
+        tracks: [{ source_id: "rec-a2", title: "A2", position: 1, saved: true, saved_id: 11 }],
       },
-    },
-    { id: 3, kind: "album", title: "Lush", creator: "Snail Mail", year: 2018 },
-    { id: 4, kind: "track", title: "Heat Wave", creator: "Snail Mail" },
-    { id: 5, kind: "track", title: "Mint", creator: "Snail Mail" },
-    { id: 6, kind: "track", title: "Let Down", creator: "Radiohead", album: "OK Computer" },
-    { id: 7, kind: "album", title: "OK Computer", creator: "Radiohead", year: 1997 },
-    { id: 8, kind: "track", title: "Orphan", creator: "" },
-  ]);
-  assert.equal(tree.rest.length, 1);
-  assert.equal(tree.rest[0].title, "Dune");
-  assert.deepEqual(tree.artists.map(artist => artist.name), ["Nobody", "Snail Mail", "Radiohead", "Unknown artist"]);
-  assert.equal(tree.artists[0].albums.length, 0);
-  assert.deepEqual(tree.artists[1].albums.map(album => album.title), ["Lush", "Valentine"]);
-  assert.equal(tree.artists[1].albums[0].item.id, 3);
-  assert.deepEqual(tree.artists[1].albums[0].songs.map(song => song.title), ["Pristine", "Heat Wave"]);
-  assert.equal(tree.artists[1].albums[0].songs[1].item.id, 4);
-  assert.deepEqual(tree.artists[1].songs.map(song => song.title), ["Mint"]);
-  assert.equal(tree.artists[2].albums[0].songs[0].item.id, 6);
-  assert.equal(tree.artists[3].songs[0].title, "Orphan");
-  assert.match(appSource, /if \(kind\) return libraryCards/);
+      {
+        source_id: "rg-b",
+        title: "B",
+        year: 2010,
+        saved: false,
+        tracks: [{ source_id: "rec-b1", title: "B1", position: 1, saved: false }],
+      },
+    ],
+  });
+  assert.match(page, /Studio albums only/);
+  assert.match(page, /data-release="single"[^>]*>Singles</);
+  assert.match(page, /data-release="studio"[^>]*aria-pressed="true"/);
+  assert.match(page, /data-action="save-discovered" data-kind="track" data-source="rec-b1"/);
+  assert.match(page, /class="in-library">Saved<\/span> <a href="#\/item\/10">Open<\/a>/);
+  assert.match(page, /data-action="discography-more">Load more</);
+  assert.doesNotMatch(page, /Nothing in this list/);
+  const failed = discographyHtml({
+    artistId: 1,
+    artist: "Artist A",
+    albums: [{ source_id: "rg-b", title: "B", saved: false, tracks: [] }],
+    error: "The discography could not be loaded.",
+  });
+  assert.match(failed, /The discography could not be loaded\./);
+  assert.match(failed, /<h2>B<\/h2>/);
+  assert.match(failed, /data-action="discography-retry">Try again</);
+  assert.doesNotMatch(appSource, /buildLibraryTree|artistSection|movieBrowseCards|\/api\/movies/);
+  assert.doesNotMatch(appSource, /if \(kind\) return libraryCards/);
 });
 
 test("library empty copy names the filter, and search stays quiet until two letters", () => {
   assert.equal(libraryEmptyCopy({}).title, "Your library is empty");
-  assert.equal(libraryEmptyCopy({}).primary, null);
+  assert.equal(libraryEmptyCopy({}).primary.href, "#/search");
+  assert.equal(libraryEmptyCopy({}).primary.label, "Search");
+  assert.equal(libraryEmptyCopy({}).secondary.href, "#/new");
+  assert.equal(libraryEmptyCopy({}).secondary.label, "Add by title");
   assert.equal(libraryEmptyCopy({ kind: "book", status: "dropped" }).title, "No books marked Dropped");
   assert.equal(libraryEmptyCopy({ q: "dune" }).title, "No matches for “dune”");
   assert.match(libraryEmptyCopy({ q: "dune" }).primary.label, /Search all of Media/);

@@ -602,22 +602,55 @@ def musicbrainz_artists(http: httpx.Client, query: str) -> list[dict]:
     return found
 
 
+_RELEASE_TYPES = {
+    "single": "single",
+    "ep": "ep",
+    "live": "live",
+    "remix": "remix",
+    "compilation": "compilation",
+}
+
+
+def _mb_release_type(release_type: str | None) -> str:
+    if not release_type or release_type == "studio":
+        return "album"
+    return _RELEASE_TYPES.get(release_type, "album")
+
+
+def _keep_release_group(group: dict, release_type: str | None) -> bool:
+    """Studio browse hides non-studio rows. Other filters keep only that type."""
+    if not release_type or release_type == "studio":
+        return not _skipped_album(group)
+    wanted = release_type.casefold()
+    primary = str(group.get("primary-type") or "").casefold()
+    secondary = group.get("secondary-types") or []
+    names = [primary] if primary else []
+    if isinstance(secondary, list):
+        names.extend(str(item).casefold() for item in secondary if item)
+    if not names:
+        return True
+    return wanted in names
+
+
 def musicbrainz_artist_catalog(
     http: httpx.Client,
     artist_id: str,
     group_offset: int = 0,
     release_offset: int = 0,
     max_pages: int = 1,
+    release_type: str | None = None,
 ) -> dict:
-    """One bounded page of public studio albums and songs. This saves nothing.
+    """One bounded page of public releases and songs. This saves nothing.
 
-    Offsets continue a previous page. max_pages keeps a single request from
-    walking an entire discography.
+    The default is studio albums. Singles, EPs, live, remix, and compilation
+    rows are a separate request so a studio page does not imply they are absent.
+    Offsets continue a previous page. max_pages keeps one request bounded.
     """
+    mb_type = _mb_release_type(release_type)
     groups, groups_partial, group_next = _mb_pages(
         http,
         "https://musicbrainz.org/ws/2/release-group",
-        {"artist": artist_id, "type": "album", "fmt": "json"},
+        {"artist": artist_id, "type": mb_type, "fmt": "json"},
         "release-groups",
         "release-group-count",
         max_pages=max_pages,
@@ -628,7 +661,7 @@ def musicbrainz_artist_catalog(
         "https://musicbrainz.org/ws/2/release",
         {
             "artist": artist_id,
-            "type": "album",
+            "type": mb_type,
             "status": "official",
             "inc": "recordings release-groups",
             "fmt": "json",
@@ -657,7 +690,7 @@ def musicbrainz_artist_catalog(
     for group in groups:
         if not isinstance(group, dict) or not isinstance(group.get("id"), str):
             continue
-        if group["id"] in seen or _skipped_album(group):
+        if group["id"] in seen or not _keep_release_group(group, release_type):
             continue
         seen.add(group["id"])
         released = group.get("first-release-date") or ""
