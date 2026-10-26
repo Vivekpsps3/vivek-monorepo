@@ -2228,7 +2228,8 @@ document.addEventListener("change", async event => {
     }
     if (creator) {
       const input = creator.querySelector("input");
-      creator.firstChild.textContent = `${creatorLabel(target.value)} `;
+      const text = [...creator.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+      if (text) text.textContent = `${creatorLabel(target.value)} `;
       if (input) creator.append(input);
     }
     return;

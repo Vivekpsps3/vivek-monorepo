@@ -403,7 +403,7 @@ body.is-signed-out .more-menu [data-nav="settings"] { display: none; }
 .composer-city > label { grid-column: 2; grid-row: 1; }
 .composer-city > input { grid-column: 2; grid-row: 2; }
 .city-swatch { width: 8px; height: 8px; border-radius: 99px; background: var(--city, var(--accent)); }
-.composer-city input, .pto-balance, .pto-amount, #pto-asof, #pto-name, #pto-balance, #pto-amount {
+.pto-balance, .pto-amount, #pto-asof, #pto-name, #pto-balance, #pto-amount {
   width: 100%;
   background: transparent;
   color: inherit;

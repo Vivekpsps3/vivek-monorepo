@@ -12,7 +12,8 @@
   color: var(--text-secondary);
 }
 
-.ui-field__optional {
+.ui-field__optional,
+.ui-field__required {
   font-weight: 500;
 }
 

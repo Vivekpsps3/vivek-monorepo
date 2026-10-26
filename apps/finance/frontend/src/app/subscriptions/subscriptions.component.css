@@ -74,23 +74,52 @@
   max-width: 100%;
 }
 
-label {
-  display: grid;
-  gap: var(--space-1);
-}
-
-input:not([type="checkbox"]):not([type="radio"]),
-textarea,
-select {
+#subscription-form input:not([type="checkbox"]):not([type="radio"]),
+#subscription-form textarea,
+#subscription-form select {
   width: 100%;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-  color: var(--text);
+  border-color: var(--border-control);
+}
+
+#subscription-form input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled),
+#subscription-form textarea:hover:not(:disabled),
+#subscription-form select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+#subscription-form input:not([type="checkbox"]):not([type="radio"]):disabled,
+#subscription-form textarea:disabled,
+#subscription-form select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#subscription-form input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"],
+#subscription-form textarea[aria-invalid="true"],
+#subscription-form select[aria-invalid="true"],
+#subscription-form input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"]:hover,
+#subscription-form textarea[aria-invalid="true"]:hover,
+#subscription-form select[aria-invalid="true"]:hover {
+  border-color: var(--danger);
+}
+
+.more-details {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.more-details summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .wide,
@@ -128,6 +157,19 @@ select {
   min-width: 0;
   max-width: min(560px, 100%);
   overflow-x: auto;
+}
+
+:host ::ng-deep #subscription-form .ui-field__control {
+  border-color: var(--border-control);
+}
+
+:host ::ng-deep #subscription-form .ui-field__control:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+:host ::ng-deep #subscription-form .ui-field__control[aria-invalid="true"],
+:host ::ng-deep #subscription-form .ui-field__control[aria-invalid="true"]:hover {
+  border-color: var(--danger);
 }
 
 .metric-value {
@@ -171,5 +213,13 @@ select {
   :host ::ng-deep .ui-dialog-panel {
     width: 100%;
     max-width: 100%;
+  }
+
+  #subscription-form input:not([type="checkbox"]):not([type="radio"]),
+  #subscription-form textarea,
+  #subscription-form select,
+  :host ::ng-deep #subscription-form .ui-field__control {
+    font-size: 1rem;
+    scroll-margin-bottom: 40vh;
   }
 }

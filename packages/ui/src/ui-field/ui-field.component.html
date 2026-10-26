@@ -1,7 +1,7 @@
 <div class="ui-field" [class.ui-field--invalid]="!!error()">
   @if (label()) {
     <label class="ui-field__label" [for]="resolvedId()">
-      {{ label() }}@if (optional()) { <span class="ui-field__optional"> (optional)</span> }
+      {{ label() }}@if (required()) { <span class="ui-field__required"> (required)</span> } @else if (optional()) { <span class="ui-field__optional"> (optional)</span> }
     </label>
   }
   <ng-content />

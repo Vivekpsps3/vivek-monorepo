@@ -77,18 +77,18 @@ export function addFormInner({
   const selected = KINDS.some(([value]) => value === kind) ? kind : "movie";
   const identity = prefilled
     ? `<div class="add-prefill"><p class="add-title">${esc(title)}</p><p class="meta">${esc([kindLabel(selected), year, creator].filter(Boolean).join(" · "))}</p><input type="hidden" name="title" value="${esc(title)}"><input type="hidden" name="kind" value="${esc(selected)}"><input type="hidden" name="creator" value="${esc(creator)}"><input type="hidden" name="year" value="${esc(year)}"></div>`
-    : `<label>Title <input name="title" required value="${esc(title)}" autocomplete="off" aria-describedby="title-error"></label>
+    : `<label>Title <span class="field-note">(required)</span> <input name="title" required value="${esc(title)}" autocomplete="off" aria-describedby="title-error" aria-required="true"></label>
       <p id="title-error" class="field-error" hidden></p>
       <div class="status-row" role="radiogroup" aria-label="Type">${kindRadios(selected)}</div>
-      <label data-creator-label>${esc(creatorLabel(selected))} <input name="creator" value="${esc(creator)}" autocomplete="off"></label>
-      <label>Year <input name="year" inputmode="numeric" value="${esc(year)}" autocomplete="off" aria-describedby="year-error"></label>
+      <label data-creator-label>${esc(creatorLabel(selected))} <span class="field-note">(optional)</span> <input name="creator" value="${esc(creator)}" autocomplete="off"></label>
+      <label>Year <span class="field-note">(optional)</span> <input name="year" inputmode="numeric" value="${esc(year)}" autocomplete="off" aria-describedby="year-error"></label>
       <p id="year-error" class="field-error" hidden></p>`;
   return `${identity}
     <div class="field-label">Status</div>
     <div class="status-row" role="radiogroup" aria-label="Status" data-add-status>${statusRadios(selected, status)}</div>
     <div class="field-label">Your score</div>
     ${scoreControl({ value: null, label: "Your score" })}
-    <label>Note <textarea name="review" rows="3">${esc(note)}</textarea></label>
+    <label>Note <span class="field-note">(optional)</span> <textarea name="review" rows="3">${esc(note)}</textarea></label>
     <p class="form-error" data-form-error role="alert" hidden></p>
     <div class="dialog-actions">
       <button class="btn" type="button" data-action="close-quick">Cancel</button>

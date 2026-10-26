@@ -30,6 +30,7 @@ export class UiFieldControlDirective {
 export class UiFieldComponent {
   label = input<string | undefined>(undefined);
   optional = input(false);
+  required = input(false);
   hint = input<string | undefined>(undefined);
   error = input<string | null | undefined>(undefined);
   fieldId = input<string | undefined>(undefined);
@@ -55,6 +56,7 @@ export class UiFieldComponent {
         if (hint) control.setAttribute('aria-describedby', hintId);
         else control.removeAttribute('aria-describedby');
       }
+      if (this.required()) control.setAttribute('aria-required', 'true');
     });
   }
 

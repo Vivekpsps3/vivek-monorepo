@@ -267,12 +267,12 @@ export function mountComposer() {
       const remove = index > 0 ? `<button type="button" data-unsplit="${escapeAttr(part.key)}">Remove split</button>` : "";
       return `<div class="composer-city" style="--city:${cityColor(index)}">
         <span class="city-swatch" aria-hidden="true"></span>
-        <label for="city-${escapeAttr(part.key)}">City ${index + 1} · ${escapeAttr(shortRange(part.arrive, part.leave))}</label>
-        <input id="city-${escapeAttr(part.key)}" data-city-start="${escapeAttr(part.key)}" value="${escapeAttr(model.cities[part.key] || "")}" autocomplete="off">
+        <label for="city-${escapeAttr(part.key)}">City ${index + 1} · ${escapeAttr(shortRange(part.arrive, part.leave))} <span class="field-note">(required)</span></label>
+        <input id="city-${escapeAttr(part.key)}" data-city-start="${escapeAttr(part.key)}" value="${escapeAttr(model.cities[part.key] || "")}" autocomplete="off" aria-required="true">
         ${options ? `<select data-split-day data-split-for="${escapeAttr(part.key)}" aria-label="Split ${index + 1} after">${options}</select><button type="button" class="chip-choice" data-split="${escapeAttr(part.key)}">Split…</button>` : ""}
         ${remove}
       </div>`;
-    }).join("") + (parts.length ? `<label for="trip-name">Trip name</label><input id="trip-name" data-trip-name value="${escapeAttr(model.tripName || defaultTripName(model))}" autocomplete="off">` : "");
+    }).join("") + (parts.length ? `<label for="trip-name">Trip name <span class="field-note">(optional)</span></label><input id="trip-name" data-trip-name value="${escapeAttr(model.tripName || defaultTripName(model))}" autocomplete="off">` : "");
     if (model.cityError) {
       const input = root.querySelector("[data-city-start]");
       if (input) input.name = "city";

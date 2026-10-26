@@ -1,6 +1,6 @@
 <div class="ui-field">
   @if (label()) {
-    <label class="ui-field__label" [for]="resolvedId()">{{ label() }}</label>
+    <label class="ui-field__label" [for]="resolvedId()">{{ label() }}@if (required()) { <span class="ui-field__required"> (required)</span> }</label>
   }
   <div class="ui-field__control-wrap">
     <select

@@ -117,6 +117,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.saveError = '';
     this.showModal = true;
     this.cdr.markForCheck();
+    this.setOptionalOpen(false);
   }
 
   openEditModal(row: Subscription): void {
@@ -135,6 +136,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.saveError = '';
     this.showModal = true;
     this.cdr.markForCheck();
+    this.setOptionalOpen(Boolean(row.end_date || row.payment_account || row.notes || (row.category && row.category !== 'Subscriptions')));
   }
 
   closeModal(): void {
@@ -207,6 +209,13 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
 
   frequencyLabel(value: FixedExpenseFrequency): string {
     return this.frequencyOptions.find(option => option.value === value)?.label || value;
+  }
+
+  private setOptionalOpen(open: boolean): void {
+    setTimeout(() => {
+      const details = document.querySelector('#subscription-form details.more-details');
+      if (details instanceof HTMLDetailsElement) details.open = open;
+    });
   }
 
   private emptyForm(): SubscriptionCreate {
