@@ -62,6 +62,9 @@ test("the shell has five mobile tabs and a currentColor favicon", () => {
   const tabNav = tab.slice(0, tab.indexOf("</nav>"));
   assert.equal((tabNav.match(/data-nav="/g) || []).length, 5);
   assert.match(html, /class="mobile-bar"/);
+  assert.equal((html.match(/class="suite-hub" href="\/hub"/g) || []).length, 2);
+  assert.equal((html.match(/href="\/hub"/g) || []).length, 2);
+  assert.doesNotMatch(html, /role="menuitem" href="\/hub"/);
   assert.match(html, /data-action="open-add"/);
   assert.doesNotMatch(html, /Your notes stay in this journal/);
   assert.doesNotMatch(html, /aria-current="false"/);

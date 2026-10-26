@@ -166,6 +166,38 @@
   font-weight: 700;
 }
 
+.suite-hub {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.suite-hub svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.suite-hub:hover {
+  background: var(--surface-hover);
+}
+
+.suite-hub:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .nav-tabs {
   display: flex;
   gap: var(--space-1);
@@ -581,6 +613,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: var(--space-2);
     width: 100%;
   }
@@ -588,6 +621,13 @@
   .logo-lockup {
     width: auto;
     min-width: 0;
+    flex: 0 1 auto;
+    gap: var(--space-2);
+  }
+
+  .suite-hub {
+    gap: var(--space-1);
+    padding-inline: var(--space-2);
   }
 
   .logo {
@@ -634,7 +674,7 @@
 
   .mobile-tabbar {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     position: fixed;
     left: 0;
     right: 0;
@@ -681,12 +721,15 @@
 
   .account-menu {
     width: auto;
+    flex: 1 1 auto;
+    flex-shrink: 1;
     justify-content: flex-end;
+    min-width: 0;
     gap: var(--space-1);
   }
 
   .account-email {
-    max-width: min(28vw, 7.5rem);
+    max-width: min(16vw, 4.5rem);
   }
 
   .account-popover {

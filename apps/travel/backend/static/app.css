@@ -100,13 +100,6 @@
 }
 
 .shell { padding: clamp(var(--space-6), 4vw, var(--space-10)) 0 var(--space-12); }
-.footer {
-  padding: var(--space-4) 0 max(var(--space-8), env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  line-height: 1.6;
-}
 .page-head { margin-bottom: var(--space-5); }
 .page-head h1 { font-size: var(--text-2xl); font-weight: 600; letter-spacing: -0.03em; }
 .lede { color: var(--text-secondary); font-size: var(--text-sm); max-width: 46rem; margin-top: var(--space-1); }
@@ -318,7 +311,7 @@ label { display: block; margin-bottom: var(--space-1); color: var(--text-seconda
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
-  .topbar-inner { min-height: 56px; }
+  .topbar-inner { min-height: 56px; flex-wrap: wrap; gap: var(--space-2); }
   .new-wide { display: none; }
   .new-narrow { display: inline; }
   .nav {

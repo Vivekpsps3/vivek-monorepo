@@ -38,6 +38,10 @@ test("the header is one row and the old wide breakpoints are gone", () => {
   assert.match(html, /aria-label="More"/);
   assert.match(html, /role="radiogroup"/);
   assert.equal(html.includes(">Hub</a>\n        <a class=\"btn btn-primary"), false);
+  assert.equal((html.match(/href="\/hub"/g) || []).length, 1);
+  assert.match(html, /class="suite-hub" href="\/hub"/);
+  assert.equal(html.includes("<footer"), false);
+  assert.equal(html.includes(">Hub</a>\n          </div>"), false);
   assert.equal(css.includes("max-width: 960px"), false);
   assert.equal(css.includes("max-width: 900px"), false);
   assert.equal(css.includes("max-width: 800px"), false);

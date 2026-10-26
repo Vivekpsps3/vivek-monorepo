@@ -17,6 +17,17 @@ test("sign-in names the username and signup does not probe a signed-out browser"
   assert.doesNotMatch(index, /apple-mobile-web-app-capable/);
 });
 
+test("finance keeps one hub control in the header at every width", () => {
+  const html = read("app/core/layout/main-layout.component.html");
+  const css = read("app/core/layout/main-layout.component.css");
+  assert.equal((html.match(/routerLink="\/hub"/g) || []).length, 1);
+  assert.match(html, /class="suite-hub" routerLink="\/hub"/);
+  assert.doesNotMatch(html, /class="nav-tab" routerLink="\/hub"/);
+  assert.doesNotMatch(html, /class="mobile-tab" routerLink="\/hub"/);
+  assert.match(css, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(css, /repeat\(6, minmax\(0, 1fr\)\)/);
+});
+
 test("the hub panel uses journal labels, deep links, next episodes, and retry", () => {
   const html = read("app/hub/hub.component.html");
   assert.match(html, /kindLabel\(item\.kind\)/);

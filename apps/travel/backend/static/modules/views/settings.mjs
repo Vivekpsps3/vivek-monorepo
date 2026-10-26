@@ -16,7 +16,6 @@ export function renderSettings(settings) {
     </section>
     <section class="card"><h2>Account</h2>
       <p class="lede">${esc(accountLine(settings.account ? settings.account.name : ""))}</p>
-      <p class="row-actions"><a class="btn btn-secondary" href="/hub">Back to Hub</a></p>
     </section>`;
 }
 export function renderLogin() {

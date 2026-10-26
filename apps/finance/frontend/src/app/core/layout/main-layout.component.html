@@ -10,6 +10,7 @@
         </svg>
         <span class="logo-text">Finance</span>
       </a>
+      <a class="suite-hub" routerLink="/hub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M1 1h6v6H1zm8 0h6v6H9zM1 9h6v6H1zm8 0h6v6H9z"/></svg>Hub</a>
       @if (marketState.phase === 'refreshing') {
         <span class="price-pulse" role="status">
           <span class="price-pulse__dot" aria-hidden="true"></span>
@@ -30,10 +31,6 @@
           <span class="nav-link__short">{{ group.shortLabel }}</span>
         </a>
       }
-      <a class="nav-tab" routerLink="/hub">
-        <ui-icon name="spark" size="sm" />
-        <span>Hub</span>
-      </a>
     </div>
     <div class="account-menu">
       <ui-button variant="secondary" size="sm" (clicked)="openTutorial()">Guide</ui-button>
@@ -75,10 +72,6 @@
       <span>{{ group.shortLabel }}</span>
     </a>
   }
-  <a class="mobile-tab" routerLink="/hub">
-    <ui-icon name="spark" size="sm" />
-    <span>Hub</span>
-  </a>
 </nav>
 
 @if (apiOffline) {
