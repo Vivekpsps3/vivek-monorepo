@@ -32,7 +32,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 | [x] | MED-01 | Media domain | DB-02, API-01 | Explicit personal child membership and ID relationships; ordinary reads DB-only; eager hydration deleted. |
 | [x] | MED-02 | Media UI | MED-01, NAV-01 | Uniform saved-only library with collapsed saved-child expansion and separate discography. |
 | [ ] | MED-03 | Media art/UI | DB-02, SRC-01, MED-02 | Search/select/reset personal artist portrait, attribution and effective-artwork fallback. |
-| [ ] | MED-04 | Media domain/UI | MED-01, DB-02 | Following-only artists across API/UI/filters/Now/Hub; no invented listens. |
+| [x] | MED-04 | Media domain/UI | MED-01, DB-02 | Following-only artists across API/UI/filters/Now/Hub; no invented listens. |
 | [ ] | SRC-01 | Media providers | API-01 | Concrete source authority/detail/pacing contracts for every supported media kind. |
 | [ ] | SRC-02 | Media search/UI | SRC-01, NAV-01 | The Gentlemen fixtures, relevance-before-cap, identity-safe dedup, pagination and full search state UX. |
 | [ ] | SRC-03 | Media cache | SRC-01, DB-02 | Ephemeral bounded search cache and durable saved metadata; search-only persistence removed. |

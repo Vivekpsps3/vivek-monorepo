@@ -20,7 +20,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | MED-02 | done | node --test apps/media/backend/static/tests/*.test.mjs exited 0. Inspected 06-media-library.md, views.mjs libraryCard/savedExpansion/discographyHtml, app.mjs viewLibrary/libraryCards/viewDiscography, app.css .card/.is-artist, and index.html. artistSection, buildLibraryTree, and movieBrowseCards are absent from live JS. |
 | HUB-01 | done | npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI exit 0 (446 SUCCESS, CHROME_BIN set). Inspected 04-hub-finance.md, hub.component.ts/html, hub-load.ts, finance-hub-facade.ts, dek-store.ts, hub-summary.ts: failed cards recover alone; vault facade imports only after financeVaultPresent; old Hub VaultService inject and loadDashboard path is gone. |
 | TRV-02 | done | ./scripts/coverage-gate.sh travel exit 0 (55 passed). Inspected 05-travel.md, pto.py, models.py, assemble.py, routers/pto.py, trips.py, trip.mjs, pto.mjs, test_pto_allocation.py. One TripPtoDay per date, weekends default 0, and trip, home, calendar, preview, and PTO board forecasts use those charges. |
-| MED-04 | open | pending |
+| MED-04 | done | ./scripts/coverage-gate.sh media exit 0. Inspected 06-media-library.md, domain.py, records.py, summary.py, membership.py, calendar.py, format.mjs, app.mjs, views.mjs, hub.component.html, test_artist_follow.py. Artists are following or unfollowed; legacy in_progress is not a listen and no song or experience is created. |
 | WEB-01 | open | pending |
 | TRV-03 | open | pending |
 | SRC-01 | open | pending |
