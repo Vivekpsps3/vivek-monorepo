@@ -39,7 +39,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 | [ ] | ERR-01 | Platform + UI owners | API-01, NAV-01 | Consistent typed local/retry errors and honest partial provider coverage across screens. |
 | [ ] | TV-01 | Media progress | DB-02, MED-01 | Idempotent Mark caught up + safe undo, aired/specials/unknown-date rules, progress reconciliation. |
 | [ ] | TV-02 | Media providers/UI | TV-01, SRC-01 | Production lifecycle/freshness and new-episode resurfacing in detail/library/Now/calendar/Hub. |
-| [ ] | FIN-01 | Finance UI | NAV-02, UX-01 | Route/state refresh preserving financial invariants, import/vault behavior and useful dense data. |
+| [x] | FIN-01 | Finance UI | NAV-02, UX-01 | Route/state refresh preserving financial invariants, import/vault behavior and useful dense data. |
 | [ ] | ARC-05 | Platform + domains | MED-01, SRC-03, TRV-02 | Hot-path query/IO/caching improvements and recorded performance evidence. |
 | [ ] | DEL-ALL | Integration + owners | Each replacement slice | [Deletion ledger](15-deletion-ledger.md) closed; no unowned temporary runtimes/compatibility frameworks. |
 | [ ] | UX-02 | Design + app owners | Domain screens, WEB-01, FIN-01 | Final fluid glass integration, responsive/a11y/cascade cleanup, screenshot review. |
