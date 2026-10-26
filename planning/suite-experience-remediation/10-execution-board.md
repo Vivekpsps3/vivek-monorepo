@@ -22,7 +22,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 | [ ] | NAV-02 | Finance integration | NAV-01 | Finance navigation migrated; old Hub/tab/menu duplication removed; deep links and guards pass. |
 | [ ] | HUB-01 | Web composition | NAV-01, API-01 | Suite-owned Hub/account with independent summary recovery and lazy Finance facade. |
 | [ ] | WEB-01 | Public/toolchain | ARC-03, UX-01 | Public feature integrated with static HTML/SEO and coherent Workspace entry; local ECDH preserved. |
-| [ ] | DB-01 | Migration + Travel | ARC-02, API-01 | PTO allocation schema/backfill/legacy contract and migration evidence. |
+| [x] | DB-01 | Migration + Travel | ARC-02, API-01 | PTO allocation schema/backfill/legacy contract and migration evidence. |
 | [ ] | DB-02 | Migration + Media | ARC-02, API-01 | Music membership/art/follow/lifecycle schema and lossless mapping/conflict report. |
 | [ ] | TRV-01 | Travel UI | NAV-01, API-01 | Minimum trip + named segments + one title + accessible split + preserved drafts; old composer path removed. |
 | [ ] | TRV-02 | Travel domain/UI | DB-01, TRV-01 | Per-date PTO, weekend defaults, all forecast views and overlap/date-edit rules. |

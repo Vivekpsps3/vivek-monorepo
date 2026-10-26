@@ -8,7 +8,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | ARC-01 | open | Not done. The diff deletes unused apps/site/src/app/app.routes.server.ts and the 3-line Travel app.js shim, and scripts/composition-path.test.mjs passes. Finance still has its own bootstrapApplication. Travel and Media still use hash routers. No root build, CSP, SEO, vault, or map spike was added. |
 | ARC-02 | open | ./scripts/coverage-gate.sh server exited 0 (66 passed). Inspected apps/server/main.py, database.py, auth.py, test_composition.py, and finance/travel/media app.py plus e2e servers. One server create_app, database lifecycle, and Principal exist and domain factories are gone, but travel/media/finance e2e servers still import deleted create_app, AuthResult, Principal, init_db, and finance app. |
 | API-01 | done | ./scripts/coverage-gate.sh server exit 0. Inspected 09-architecture-migrations.md, apps/server/database.py, errors.py, main.py, flights.py, places.py, integrations.py, market_data.py, providers.py. release_for_provider_io commits before provider IO; typed APIError uses 502 not suite 401; prefixes remain /api, /travel/api, /media/api. |
-| DB-01 | open | pending |
+| DB-01 | done | ./scripts/coverage-gate.sh travel exit 0 (51 passed). Single unified head site_trip_pto_days_v1 revises site_auth_challenge_purpose_v2. Inspected 09-architecture-migrations.md, 05-travel.md, site_trip_pto_days_v1.py, models.py, services/pto.py, test_pto_allocation.py, schema.py. |
 | DB-02 | open | pending |
 | ARC-03 | open | pending |
 | UX-01 | open | pending |
