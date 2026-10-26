@@ -43,6 +43,9 @@ class Trip(Base):
     counts_as_pto = Column(Boolean, nullable=False, default=True)
     # Null means "count weekdays in the trip". A value is an explicit override.
     pto_days = Column(String(32), nullable=True)
+    # dates: trip_pto_days is the allocation. legacy: pto_days is an unallocated
+    # total and must not be spread across guessed dates. Null until backfill.
+    pto_mode = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
@@ -56,6 +59,11 @@ class Trip(Base):
     note_entries = relationship("Note", cascade="all, delete-orphan", order_by="Note.created_at")
     budget_lines = relationship("BudgetLine", cascade="all, delete-orphan")
     pto_entry = relationship("PtoEntry", cascade="all, delete-orphan", uselist=False)
+    pto_day_rows = relationship(
+        "TripPtoDay",
+        cascade="all, delete-orphan",
+        order_by="TripPtoDay.on_date",
+    )
 
 
 class Stay(Base):
@@ -232,6 +240,24 @@ class PtoPolicy(Base):
     balance_days = Column(String(32), nullable=False, default="0")
     balance_as_of = Column(Date, nullable=False)
     annual_cap_days = Column(String(32), nullable=True)
+
+
+class TripPtoDay(Base):
+    """One PTO amount for one trip date. The trip owns the row."""
+
+    __tablename__ = "trip_pto_days"
+    __table_args__ = (UniqueConstraint("trip_id", "on_date", name="uq_trip_pto_day"),)
+
+    id = Column(Integer, primary_key=True)
+    trip_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    on_date = Column(Date, nullable=False)
+    amount = Column(String(32), nullable=False)
+    # default follows the weekday policy. override is an explicit choice.
+    provenance = Column(String(20), nullable=False)
+    # Set only when the allocation migration inserted the row.
+    migration_source = Column(String(40), nullable=True)
 
 
 class PtoEntry(Base):

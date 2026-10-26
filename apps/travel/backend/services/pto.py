@@ -15,7 +15,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
 
-from apps.travel.backend.services.dates import weekday_count
+from apps.travel.backend.services.dates import iter_dates, weekday_count
 from apps.travel.backend.services.money import (
     DAY_STEP,
     fmt_days,
@@ -31,6 +31,12 @@ PERIOD_DAYS = {
     "monthly": Fraction(365, 12),
     "yearly": Fraction(365),
 }
+PTO_MODE_DATES = "dates"
+PTO_MODE_LEGACY = "legacy"
+PTO_PROVENANCE_DEFAULT = "default"
+# Rows inserted by the allocation revision. App-created rows leave this blank.
+MIGRATION_SOURCE_AUTOMATIC = "backfill-automatic"
+PTO_DAY_LIMIT = Decimal(1)
 
 
 @dataclass(frozen=True)
@@ -120,10 +126,146 @@ def effective_pto_days(pto_days: str | None, start: date, end: date) -> tuple[De
     return explicit, False
 
 
+def default_pto_amount(day: date) -> Decimal:
+    """Monday–Friday counts as one day. Saturday and Sunday count as zero."""
+    return Decimal(0 if day.weekday() >= 5 else 1)
+
+
+def pto_allocation_mode(pto_days: str | None) -> str:
+    """Blank uses the weekday policy. Any stored total stays unallocated."""
+    if pto_days is None or pto_days == "":
+        return PTO_MODE_DATES
+    return PTO_MODE_LEGACY
+
+
+def validate_pto_day(start: date, end: date, on_date: date, amount: object) -> Decimal:
+    """A stored day is finite, from 0 through 1, and inside the trip."""
+    parsed = parse_days(amount)
+    if parsed > PTO_DAY_LIMIT:
+        raise ValueError("A PTO day cannot be more than 1.")
+    if end < start or on_date < start or on_date > end:
+        raise ValueError("PTO dates have to sit inside the trip.")
+    return parsed
+
+
+def backfill_statements() -> tuple[str, str, str]:
+    """SQL for the allocation revision. Idempotent and lossless.
+
+    Automatic trips gain one default row per date. A stored total, including
+    zero, a fraction, or a value equal to the weekday count, is marked legacy
+    and is not assigned to dates. Invalid spans are legacy too. Manual
+    ``pto_entries`` are not mentioned here, so they stay as they are.
+    """
+    insert = f"""
+        INSERT INTO trip_pto_days (trip_id, on_date, amount, provenance, migration_source)
+        WITH RECURSIVE span AS (
+            SELECT id AS trip_id, start_date AS on_date, end_date
+            FROM trips
+            WHERE (pto_days IS NULL OR pto_days = '')
+              AND end_date >= start_date
+              AND id NOT IN (SELECT trip_id FROM trip_pto_days)
+            UNION ALL
+            SELECT trip_id, date(on_date, '+1 day'), end_date
+            FROM span
+            WHERE on_date < end_date
+        )
+        SELECT
+            trip_id,
+            on_date,
+            CASE
+                WHEN CAST(strftime('%w', on_date) AS INTEGER) IN (0, 6) THEN '0.0000'
+                ELSE '1.0000'
+            END,
+            '{PTO_PROVENANCE_DEFAULT}',
+            '{MIGRATION_SOURCE_AUTOMATIC}'
+        FROM span
+    """
+    mark_dates = f"""
+        UPDATE trips
+        SET pto_mode = '{PTO_MODE_DATES}'
+        WHERE pto_mode IS NULL
+          AND (pto_days IS NULL OR pto_days = '')
+          AND end_date >= start_date
+    """
+    mark_legacy = f"""
+        UPDATE trips
+        SET pto_mode = '{PTO_MODE_LEGACY}'
+        WHERE pto_mode IS NULL
+    """
+    return insert, mark_dates, mark_legacy
+
+
+def backfill_trip_pto_days(connection) -> tuple[int, int, int]:
+    """Run the allocation backfill. Returns (dates trips, legacy trips, day rows)."""
+    from sqlalchemy import text
+
+    for statement in backfill_statements():
+        connection.execute(text(statement))
+    dates_trips = int(
+        connection.execute(
+            text("SELECT count(*) FROM trips WHERE pto_mode = :mode"),
+            {"mode": PTO_MODE_DATES},
+        ).scalar_one()
+    )
+    legacy_trips = int(
+        connection.execute(
+            text("SELECT count(*) FROM trips WHERE pto_mode = :mode"),
+            {"mode": PTO_MODE_LEGACY},
+        ).scalar_one()
+    )
+    day_rows = int(connection.execute(text("SELECT count(*) FROM trip_pto_days")).scalar_one())
+    return dates_trips, legacy_trips, day_rows
+
+
+def sync_allocated_pto_days(db, trip) -> None:
+    """Store weekday defaults, or keep an explicit total unallocated.
+
+    In-range rows keep migration provenance. Amounts stay on the weekday
+    policy so the stored days and the start-date charge describe one total.
+    A later per-date edit has to change the charge in the same transaction.
+    """
+    from apps.travel.backend.models import TripPtoDay
+
+    rows = db.query(TripPtoDay).filter(TripPtoDay.trip_id == trip.id).all()
+    invalid_span = trip.end_date < trip.start_date
+    if pto_allocation_mode(trip.pto_days) == PTO_MODE_LEGACY or invalid_span:
+        trip.pto_mode = PTO_MODE_LEGACY
+        for row in rows:
+            db.delete(row)
+        return
+    by_date = {row.on_date: row for row in rows}
+    trip.pto_mode = PTO_MODE_DATES
+    for day in iter_dates(trip.start_date, trip.end_date):
+        amount = store_days(
+            validate_pto_day(trip.start_date, trip.end_date, day, default_pto_amount(day))
+        )
+        row = by_date.pop(day, None)
+        if row is None:
+            db.add(
+                TripPtoDay(
+                    trip_id=trip.id,
+                    on_date=day,
+                    amount=amount,
+                    provenance=PTO_PROVENANCE_DEFAULT,
+                    migration_source=None,
+                )
+            )
+            continue
+        row.amount = amount
+        row.provenance = PTO_PROVENANCE_DEFAULT
+    for row in by_date.values():
+        db.delete(row)
+
+
 def sync_trip_pto(db, trip) -> None:
-    """Keep one PTO row aligned with the trip. Manual rows are left alone."""
+    """Keep one PTO row aligned with the trip. Manual rows are left alone.
+
+    The entry is still subtracted on the trip start date. Per-date rows are
+    the stored allocation; they do not change that charge in this revision.
+    """
     from apps.travel.backend.models import PtoEntry
 
+    sync_allocated_pto_days(db, trip)
     entry = db.query(PtoEntry).filter(PtoEntry.trip_id == trip.id).one_or_none()
     if not trip.counts_as_pto:
         if entry is not None:
