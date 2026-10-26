@@ -1,4 +1,5 @@
 import {
+  artworkUrl,
   dayLabel,
   emptyState,
   escapeHtml as esc,
@@ -10,6 +11,7 @@ import {
   statusLabel,
   statusOptions,
 } from "./format.mjs";
+import { icon } from "./icons.mjs";
 import { scoreControl } from "./score.mjs";
 
 const KINDS = [
@@ -159,8 +161,8 @@ export function libraryEmptyCopy({ kind = "", status = "", q = "" } = {}) {
   return {
     title: "Your library is empty",
     body: "Save things you've watched, read, played or want to.",
-    primary: null,
-    secondary: null,
+    primary: { href: "#/search", label: "Search" },
+    secondary: { href: "#/new", label: "Add by title" },
   };
 }
 
@@ -168,125 +170,154 @@ export function libraryEmptyHtml(filters) {
   return emptyState(libraryEmptyCopy(filters));
 }
 
-const LIBRARY_MUSIC = new Set(["artist", "album", "track"]);
-
-function libraryKey(value) {
-  return String(value ?? "").trim().toLowerCase();
+function posterHtml(item) {
+  const art = artworkUrl(item);
+  if (art) return `<img alt="" src="${esc(art)}" width="342" height="513" loading="lazy" decoding="async">`;
+  const letter = kindLabel(item?.kind || "").slice(0, 1) || "M";
+  return `<span class="poster-fallback" aria-hidden="true">${esc(letter)}</span>`;
 }
 
-function albumTitleOf(item) {
-  const extra = item?.extra && typeof item.extra === "object" ? item.extra : {};
-  return String(item?.album || item?.album_title || extra.album || extra.album_title || "").trim();
+function cardFields(item) {
+  const progress = item.progress_label ? ` · ${item.progress_label}` : "";
+  const star = item.favorite ? `<span class="fav-badge" aria-label="Favorite">★</span>` : "";
+  const percent = item.progress_unit === "percent" && item.progress_value != null
+    ? `<span class="progress-bar" style="width:${Math.max(0, Math.min(100, Number(item.progress_value)))}%"></span>`
+    : "";
+  const identity = [kindLabel(item.kind), item.year, item.creator].filter(value => value != null && value !== "").join(" · ");
+  const status = item.status ? statusLabel(item.kind, item.status) : "";
+  const state = `${status}${status ? " · " : ""}${ratingText(item.rating)}${progress}`;
+  return { star, percent, identity, state };
 }
 
-function ensureArtist(artists, name, index) {
-  const label = String(name || "").trim() || "Unknown artist";
-  const key = libraryKey(label);
-  let node = artists.get(key);
-  if (!node) {
-    node = { key, name: label, item: null, order: index, albums: new Map(), songs: [] };
-    artists.set(key, node);
-  } else if (index < node.order) node.order = index;
-  return node;
-}
-
-function ensureAlbum(artist, title, year) {
-  const label = String(title || "").trim() || "Untitled";
-  const key = libraryKey(label);
-  let album = artist.albums.get(key);
-  if (!album) {
-    album = { key, title: label, year: year ?? null, item: null, songs: [] };
-    artist.albums.set(key, album);
-  } else if (album.year == null && year != null) album.year = year;
-  return album;
-}
-
-function addSong(list, song) {
-  const key = libraryKey(song.title);
-  const open = list.find(row => libraryKey(row.title) === key && !row.item);
-  if (song.item && open) {
-    open.item = song.item;
-    if (open.rating == null) open.rating = song.rating;
-    return;
+/** One library row. Artists add a collapsed saved-child toggle that is not the Open link. */
+export function libraryCard(item, { expanded = false, nested = false, savedHtml = "", ready = false } = {}) {
+  if (!item || item.id == null) return "";
+  const href = `#/item/${item.id}`;
+  const fields = cardFields(item);
+  const poster = `<span class="poster">${posterHtml(item)}${fields.star}${fields.percent}</span>`;
+  const text = `<span class="card-title">${esc(item.title)}</span><span class="meta">${esc(fields.identity)}</span><span class="meta">${esc(fields.state)}</span>`;
+  if (nested) {
+    return `<a class="card card-nested" href="${href}">${poster}<span class="card-copy">${text}</span></a>`;
   }
-  if (!song.item && list.some(row => libraryKey(row.title) === key)) return;
-  if (song.item && list.some(row => row.item && row.item.id === song.item.id)) return;
-  list.push(song);
+  if (item.kind !== "artist") return `<a class="card" href="${href}">${poster}${text}</a>`;
+  const id = esc(item.id);
+  const known = Number.isInteger(item.saved_count) ? item.saved_count : null;
+  const label = known == null ? "Saved albums and songs" : `Saved albums and songs, ${known}`;
+  const count = known == null ? "" : `<span class="saved-count">${known}</span>`;
+  const hidden = expanded ? "" : " hidden";
+  const filled = ready ? ` data-ready="true"` : "";
+  return `<article class="card is-artist" data-library-card="${id}"><a class="card-open" href="${href}">${poster}${text}</a><button type="button" class="saved-toggle" data-action="toggle-saved" data-artist="${id}" aria-expanded="${expanded ? "true" : "false"}" aria-controls="saved-${id}" aria-label="${esc(label)}">${icon("chevron")}${count}</button><div id="saved-${id}" class="saved-children"${hidden}${filled}>${savedHtml}</div></article>`;
 }
 
-export function buildLibraryTree(items) {
-  const rest = [];
-  const artists = new Map();
-  const artistItems = [];
-  const albumItems = [];
-  const trackItems = [];
-  (items || []).forEach((item, index) => {
-    if (!item) return;
-    if (item.kind === "artist") artistItems.push([item, index]);
-    else if (item.kind === "album") albumItems.push([item, index]);
-    else if (item.kind === "track") trackItems.push([item, index]);
-    else if (!LIBRARY_MUSIC.has(item.kind)) rest.push(item);
-  });
-  artistItems.forEach(([item, index]) => {
-    const artist = ensureArtist(artists, item.title, index);
-    if (!artist.item) artist.item = item;
-    (item.music?.albums || []).forEach(album => {
-      const node = ensureAlbum(artist, album.title, album.year);
-      (album.tracks || []).forEach((track, trackIndex) => {
-        addSong(node.songs, {
-          title: track.title || "Untitled",
-          item: null,
-          rating: track.rating,
-          position: track.position ?? trackIndex,
-        });
-      });
+function childCard(row, kind) {
+  if (!row || row.id == null) return "";
+  return libraryCard({
+    id: row.id,
+    kind,
+    title: row.title || "Untitled",
+    year: row.year,
+    creator: row.creator || "",
+    artwork_url: row.artwork_url,
+    rating: row.rating,
+    status: row.status || "",
+  }, { nested: true });
+}
+
+/** Saved albums and songs for one artist. Remote discography rows do not belong here. */
+export function savedExpansion(artistId, music, { browse = false } = {}) {
+  const rows = [];
+  (music?.albums || []).forEach(album => {
+    const card = childCard(album, "album");
+    if (card) rows.push(card);
+    (album?.tracks || []).forEach(track => {
+      const song = childCard(track, "track");
+      if (song) rows.push(song);
     });
   });
-  albumItems.forEach(([item, index]) => {
-    const artist = ensureArtist(artists, item.creator, index);
-    const node = ensureAlbum(artist, item.title, item.year);
-    if (!node.item) node.item = item;
+  (music?.songs || []).forEach(song => {
+    const card = childCard(song, "track");
+    if (card) rows.push(card);
   });
-  trackItems.forEach(([item, index]) => {
-    const artist = ensureArtist(artists, item.creator, index);
-    const song = {
-      title: item.title || "Untitled",
-      item,
-      rating: item.rating,
-      position: item.position ?? 9999,
-    };
-    const albumName = albumTitleOf(item);
-    if (albumName) {
-      addSong(ensureAlbum(artist, albumName, null).songs, song);
-      return;
-    }
-    const matches = [...artist.albums.values()].filter(album => (
-      album.songs.some(row => libraryKey(row.title) === libraryKey(song.title))
-    ));
-    if (matches.length === 1) addSong(matches[0].songs, song);
-    else artist.songs.push(song);
-  });
-  const ordered = [...artists.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-  return {
-    artists: ordered.map(artist => ({
-      name: artist.name,
-      item: artist.item,
-      albums: [...artist.albums.values()]
-        .sort((a, b) => {
-          if ((a.year == null) !== (b.year == null)) return a.year == null ? 1 : -1;
-          if (a.year != null && b.year != null && a.year !== b.year) return a.year - b.year;
-          return a.title.localeCompare(b.title);
-        })
-        .map(album => ({
-          title: album.title,
-          year: album.year,
-          item: album.item,
-          songs: [...album.songs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.title.localeCompare(b.title)),
-        })),
-      songs: artist.songs,
-    })),
-    rest,
-  };
+  const link = `<a href="#/item/${esc(artistId)}/discography">Browse discography</a>`;
+  if (!rows.length) return `<p class="quiet">No saved albums or songs.</p>${browse ? link : ""}`;
+  return `<div class="saved-list">${rows.join("")}</div>${browse ? link : ""}`;
+}
+
+export const DISCOGRAPHY_RELEASES = [
+  ["studio", "Studio albums"],
+  ["single", "Singles"],
+  ["ep", "EPs"],
+  ["live", "Live"],
+  ["remix", "Remixes"],
+  ["compilation", "Compilations"],
+];
+
+const DISCOGRAPHY_KIND = {
+  studio: "Album",
+  single: "Single",
+  ep: "EP",
+  live: "Live",
+  remix: "Remix",
+  compilation: "Compilation",
+};
+
+export function discographyRelease(value) {
+  return DISCOGRAPHY_RELEASES.some(([item]) => item === value) ? value : "studio";
+}
+
+export function discographyNote(release) {
+  if (!release || release === "studio") {
+    return "Studio albums only. Singles, EPs, live albums, remixes, and compilations are listed separately, so a missing title here is not proof it does not exist.";
+  }
+  const label = DISCOGRAPHY_RELEASES.find(([item]) => item === release)?.[1] || "Releases";
+  return `${label} from the public catalog. Nothing here is saved until you add it.`;
+}
+
+function discoverAction(row, kind, album) {
+  if (row?.saved) {
+    const open = row.saved_id ? ` <a href="#/item/${esc(row.saved_id)}">Open</a>` : "";
+    return `<span class="in-library">Saved</span>${open}`;
+  }
+  if (!row?.source_id) return `<span class="meta">No provider id</span>`;
+  const year = row.year ? ` data-year="${esc(row.year)}"` : "";
+  const art = row.artwork_url ? ` data-art="${esc(row.artwork_url)}"` : "";
+  const albumSource = album?.source_id ? ` data-album-source="${esc(album.source_id)}"` : "";
+  const albumTitle = album?.title ? ` data-album-title="${esc(album.title)}"` : "";
+  const position = kind === "track" && row.position ? ` data-position="${esc(row.position)}"` : "";
+  return `<button type="button" class="btn btn-secondary btn-sm" data-action="save-discovered" data-kind="${kind}" data-source="${esc(row.source_id)}" data-title="${esc(row.title || "Untitled")}"${year}${art}${albumSource}${albumTitle}${position}>Add</button>`;
+}
+
+export function discographyHtml({
+  artistId,
+  artist = "",
+  release = "studio",
+  albums = [],
+  partial = false,
+  loading = false,
+  error = "",
+} = {}) {
+  const selected = discographyRelease(release);
+  const filters = DISCOGRAPHY_RELEASES.map(([value, label]) => {
+    const on = value === selected;
+    return `<button type="button" class="flag${on ? " is-on" : ""}" data-action="discography-filter" data-release="${value}" aria-pressed="${on ? "true" : "false"}">${esc(label)}</button>`;
+  }).join("");
+  const kindWord = DISCOGRAPHY_KIND[selected] || "Album";
+  const rows = (albums || []).map(album => {
+    const tracks = (album.tracks || []).map(track => {
+      const title = track.position ? `${track.position}. ${track.title || "Untitled"}` : (track.title || "Untitled");
+      return `<li class="discog-track"><span>${esc(title)}</span>${discoverAction(track, "track", album)}</li>`;
+    }).join("");
+    const meta = [album.year, kindWord].filter(value => value != null && value !== "").join(" · ");
+    return `<article class="discog-album" data-source="${esc(album.source_id || "")}"><div class="discog-album-head"><h2>${esc(album.title || "Untitled")}</h2><p class="meta">${esc(meta)}</p>${discoverAction(album, "album", null)}</div>${tracks ? `<ol class="discog-tracks">${tracks}</ol>` : ""}</article>`;
+  }).join("");
+  const status = loading && !(albums || []).length ? `<p class="quiet" role="status">Loading discography…</p>` : "";
+  const problem = error
+    ? `<p class="quiet" role="alert">${esc(error)}</p><button type="button" class="btn" data-action="discography-retry">Try again</button>`
+    : "";
+  const empty = !loading && !error && !(albums || []).length ? `<p class="quiet">Nothing in this list.</p>` : "";
+  const more = partial && !loading ? `<button type="button" class="btn" data-action="discography-more">Load more</button>` : "";
+  const loadingMore = loading && (albums || []).length ? `<p class="quiet" role="status">Loading more…</p>` : "";
+  return `<article class="discog-page" data-discography="${esc(artistId)}"><p class="eyebrow"><a href="#/item/${esc(artistId)}">${esc(artist || "Artist")}</a></p><h1>Discography</h1><p class="quiet">${esc(discographyNote(selected))}</p><div class="chip-row" role="group" aria-label="Release type">${filters}</div>${problem}<div class="discog-list" aria-busy="${loading ? "true" : "false"}">${status}${rows}${empty}</div>${loadingMore}${more}</article>`;
 }
 
 export const LIBRARY_PAGE_SIZE = 60;

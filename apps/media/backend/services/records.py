@@ -328,6 +328,82 @@ def create_from_provider(db: Session, user_id: int, body: dict) -> tuple[UserEnt
     return new_entry(db, user_id, catalog, body), False
 
 
+def save_discovered(
+    db: Session, user_id: int, artist: UserEntry, body: dict
+) -> tuple[UserEntry, bool]:
+    """Save one album or song from a discography browse. Does not save the other."""
+    if artist.catalog.kind != "artist":
+        fail("Discography is for a saved artist.")
+    kind = choice(body.get("kind"), {"album", "track"}, "Media type")
+    source_id = clean_text(body.get("source_id"), 120, "Provider id", required=True)
+    title = clean_text(body.get("title"), 300, "Title", required=True)
+    creator = clean_text(body.get("creator"), 300, "Creator") or artist.catalog.title
+    year = _year(body.get("year"))
+    raw_extra = body.get("extra")
+    extra = raw_extra if isinstance(raw_extra, dict) else {}
+    album_title = clean_text(body.get("album_title"), 300, "Album")
+    if kind == "track" and album_title and not extra.get("album"):
+        extra = {**extra, "album": album_title}
+    entry, already = create_from_provider(
+        db,
+        user_id,
+        {
+            "source": "musicbrainz",
+            "source_id": source_id,
+            "kind": kind,
+            "title": title,
+            "creator": creator,
+            "year": year,
+            "artwork_url": body.get("artwork_url"),
+            "status": body.get("status") or "want",
+            "extra": extra,
+        },
+    )
+    if kind == "album":
+        _ensure_link(
+            db,
+            artist.catalog_id,
+            entry.catalog_id,
+            "artist-release-group",
+            _next_position(db, artist.catalog_id, _ALBUM_RELATIONS),
+            artist.catalog.title,
+        )
+        return entry, already
+    album_source = clean_text(body.get("album_source_id"), 120, "Album id")
+    if album_source:
+        album = _public_catalog(
+            db,
+            kind="album",
+            source="musicbrainz",
+            source_id=album_source,
+            title=album_title or "Untitled",
+            creator=creator,
+            year=year,
+            artwork=None,
+        )
+        _ensure_link(
+            db,
+            artist.catalog_id,
+            album.id,
+            "artist-release-group",
+            _next_position(db, artist.catalog_id, _ALBUM_RELATIONS),
+            artist.catalog.title,
+        )
+        raw_position = body.get("position")
+        if isinstance(raw_position, bool) or not isinstance(raw_position, int) or raw_position < 1:
+            position = _next_position(db, album.id, _TRACK_RELATIONS)
+        else:
+            position = raw_position
+        _ensure_link(
+            db,
+            album.id,
+            entry.catalog_id,
+            "release-group-recording",
+            position,
+        )
+    return entry, already
+
+
 def normalize_ratings(value) -> list:
     if not isinstance(value, list):
         return []
@@ -815,6 +891,44 @@ def _manual_catalog(
     return row
 
 
+def _public_catalog(
+    db: Session,
+    *,
+    kind: str,
+    source: str,
+    source_id: str,
+    title: str,
+    creator: str | None,
+    year: int | None,
+    artwork: str | None,
+) -> CatalogItem:
+    """A public album row so a saved song can name its release. Not a membership."""
+    row = (
+        db.query(CatalogItem)
+        .filter(CatalogItem.source == source, CatalogItem.source_id == source_id)
+        .one_or_none()
+    )
+    if row is not None:
+        if row.kind != kind:
+            fail("That provider id is already a different type.")
+        return row
+    row = CatalogItem(
+        kind=kind,
+        title=title,
+        creator=creator,
+        year=year,
+        artwork_url=artwork,
+        source=source,
+        source_id=source_id,
+        genres=dumps([]),
+        extra=dumps({}),
+        external_ratings=dumps([]),
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
 def _next_position(db: Session, parent_catalog_id: int, relations: tuple[str, ...]) -> int:
     positions = [
         row[0]
@@ -848,6 +962,28 @@ def _link_child(
     db.add(link)
     db.flush()
     return link
+
+
+def _ensure_link(
+    db: Session,
+    parent_catalog_id: int,
+    child_catalog_id: int,
+    relation: str,
+    position: int,
+    credit: str | None = None,
+) -> MusicLink:
+    found = (
+        db.query(MusicLink)
+        .filter(
+            MusicLink.parent_catalog_id == parent_catalog_id,
+            MusicLink.child_catalog_id == child_catalog_id,
+            MusicLink.relation == relation,
+        )
+        .one_or_none()
+    )
+    if found is not None:
+        return found
+    return _link_child(db, parent_catalog_id, child_catalog_id, relation, position, credit)
 
 
 def _album_memberships(db: Session, entry: UserEntry) -> list[tuple[UserEntry, MusicLink]]:
@@ -901,10 +1037,22 @@ def _track_memberships(
     return ordered
 
 
+def _linked_album_ids(db: Session, entry: UserEntry) -> list[int]:
+    rows = (
+        db.query(MusicLink.child_catalog_id)
+        .filter(
+            MusicLink.parent_catalog_id == entry.catalog_id,
+            MusicLink.relation.in_(_ALBUM_RELATIONS),
+        )
+        .all()
+    )
+    return list(dict.fromkeys(row[0] for row in rows))
+
+
 def saved_child_count(db: Session, entry: UserEntry) -> int:
     """Saved albums and songs linked to this artist. The artist is not included."""
     albums = _album_memberships(db, entry)
-    tracks = _track_memberships(db, entry.user_id, [album.catalog_id for album, _link in albums])
+    tracks = _track_memberships(db, entry.user_id, _linked_album_ids(db, entry))
     return len(albums) + len({track.id for track, _link in tracks})
 
 
@@ -1045,16 +1193,22 @@ def music_state(db: Session, entry: UserEntry) -> dict:
             ],
         }
     albums = _album_memberships(db, entry)
+    saved_album_ids = {album.catalog_id for album, _link in albums}
     grouped: dict[int, list] = {}
-    for track, link in _track_memberships(
-        db, entry.user_id, [album.catalog_id for album, _link in albums]
-    ):
-        grouped.setdefault(link.parent_catalog_id, []).append(_track_payload(track, link))
+    songs: list[dict] = []
+    seen_songs: set[int] = set()
+    for track, link in _track_memberships(db, entry.user_id, _linked_album_ids(db, entry)):
+        if link.parent_catalog_id in saved_album_ids:
+            grouped.setdefault(link.parent_catalog_id, []).append(_track_payload(track, link))
+        elif track.id not in seen_songs:
+            seen_songs.add(track.id)
+            songs.append(_track_payload(track, link))
     return {
         "partial": False,
         "albums": [
             _album_payload(album, grouped.get(album.catalog_id, [])) for album, _link in albums
         ],
+        "songs": songs,
     }
 
 

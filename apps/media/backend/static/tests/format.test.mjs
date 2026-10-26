@@ -143,5 +143,6 @@ test("empty state escapes its copy and route errors are one panel", () => {
   assert.equal(routeErrorCopy("library", { status: 503, message: "nope" }).title, "Sign-in is unavailable right now");
   assert.equal(routeErrorCopy("library", { status: 503, message: "nope" }).body, "Try again in a minute.");
   assert.equal(routeErrorCopy("calendar", { status: 500, message: "Nope." }).title, "Couldn't load the calendar");
+  assert.equal(routeErrorCopy("discography", { status: 500, message: "Nope." }).title, "Couldn't load this discography");
   assert.equal(routeErrorCopy("home", { status: 500, message: "Nope." }).links[0].label, "Open library");
 });

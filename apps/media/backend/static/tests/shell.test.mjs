@@ -20,7 +20,12 @@ test("unknown hashes are not Now", () => {
   assert.equal(parseRoute("#/library?sort=title").name, "library");
   assert.equal(parseRoute("#/item/4/episode/9").name, "episode");
   assert.equal(parseRoute("#/item/4/season/2").seasonNumber, 2);
+  const discography = parseRoute("#/item/4/discography?release=live");
+  assert.equal(discography.name, "discography");
+  assert.equal(discography.id, 4);
+  assert.equal(discography.params.get("release"), "live");
   assert.equal(navKey("item"), "library");
+  assert.equal(navKey("discography"), "library");
   assert.equal(navKey("episode"), "library");
   assert.equal(navKey("missing"), "");
   assert.equal(navKey("new"), "new");
@@ -33,6 +38,9 @@ test("document titles follow the screen map", () => {
   assert.equal(documentTitle({ name: "search" }), "Search · Media");
   assert.equal(documentTitle({ name: "new" }), "Add · Media");
   assert.equal(documentTitle({ name: "item" }, { title: "Dune" }), "Dune · Media");
+  assert.equal(documentTitle({ name: "discography" }, { title: "Artist A" }), "Artist A · Discography · Media");
+  assert.equal(documentTitle({ name: "discography" }), "Discography · Media");
+  assert.equal(screenTitle({ name: "discography" }), "Discography");
   assert.equal(documentTitle({ name: "episode" }, { season: 1, episode: 3, episodeTitle: "Pilot", show: "Dune" }), "S1 E3 Pilot · Dune · Media");
   assert.equal(documentTitle({ name: "calendar" }, { monthLabel: "October 2026" }), "October 2026 · Calendar · Media");
   assert.equal(documentTitle({ name: "missing" }), "Not found · Media");

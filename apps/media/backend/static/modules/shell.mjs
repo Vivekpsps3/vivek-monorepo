@@ -1,6 +1,6 @@
 import { escapeHtml } from "./format.mjs";
 
-const KNOWN = new Set(["home", "library", "search", "calendar", "new", "item", "episode", "season"]);
+const KNOWN = new Set(["home", "library", "search", "calendar", "new", "item", "episode", "season", "discography"]);
 
 /**
  * Hash routes. Anything that is not a screen is `missing`, so the not-found
@@ -14,6 +14,8 @@ export function parseRoute(hash) {
   if (episode) return { name: "episode", id: Number(episode[1]), episodeId: Number(episode[2]), params, path };
   const season = path.match(/^\/item\/(\d+)\/season\/(\d+)$/);
   if (season) return { name: "season", id: Number(season[1]), seasonNumber: Number(season[2]), params, path };
+  const discography = path.match(/^\/item\/(\d+)\/discography$/);
+  if (discography) return { name: "discography", id: Number(discography[1]), params, path };
   const item = path.match(/^\/item\/(\d+)$/);
   if (item) return { name: "item", id: Number(item[1]), params, path };
   if (path === "/" || path === "") return { name: "home", params, path: "/" };
@@ -26,7 +28,7 @@ export function parseRoute(hash) {
 
 /** Which primary nav item is current. Item pages mark Library. Add is mobile-only. */
 export function navKey(name) {
-  if (name === "item" || name === "episode" || name === "season") return "library";
+  if (name === "item" || name === "episode" || name === "season" || name === "discography") return "library";
   if (name === "home" || name === "library" || name === "search" || name === "calendar" || name === "new") return name;
   return "";
 }
@@ -40,6 +42,7 @@ export function documentTitle(route, extra = {}) {
     return query ? `“${query}” · Search · Media` : "Search · Media";
   }
   if (name === "new") return "Add · Media";
+  if (name === "discography") return extra.title ? `${extra.title} · Discography · Media` : "Discography · Media";
   if (name === "item" || name === "season") return extra.title ? `${extra.title} · Media` : "Media";
   if (name === "episode") {
     if (!extra.show) return "Media";
@@ -58,6 +61,7 @@ export function screenTitle(route, extra = {}) {
   if (name === "search") return "Search";
   if (name === "calendar") return extra.monthLabel || "Calendar";
   if (name === "new") return "Add";
+  if (name === "discography") return "Discography";
   if (name === "item" || name === "season") return extra.title || "Library";
   if (name === "episode") return extra.episodeTitle || extra.show || "Library";
   return "Not found";

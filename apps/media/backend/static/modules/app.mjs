@@ -11,12 +11,14 @@ import {
   caughtUpText,
   connectionsFailureHtml,
   creatorLabel,
+  discographyHtml,
+  discographyRelease,
   emptyMonthHtml,
   episodeCode,
   eventWord,
   graphCenter,
   legendHtml,
-  buildLibraryTree,
+  libraryCard,
   libraryEmptyHtml,
   markNextLabel,
   monthEventCount,
@@ -25,6 +27,7 @@ import {
   overviewHtml,
   relatedHtml,
   releaseInformative,
+  savedExpansion,
   searchIdleHtml,
   searchResultHeading,
   validateAdd,
@@ -54,7 +57,6 @@ import {
   chooseReview,
   failedNoteAfterReload,
   artworkUrl,
-  coverImage,
   dayLabel,
   draftKey,
   emptyState,
@@ -80,6 +82,7 @@ import {
 
 const app = document.querySelector("#app");
 const routeLoads = createSequence();
+let routeSignal = null;
 const searchLoads = createKeyedFetch();
 let searchResults = [];
 let quickIndex = -1;
@@ -358,20 +361,6 @@ function poster(item) {
   return `<span class="poster-fallback" aria-hidden="true">${esc(kindLabel(item.kind).slice(0, 1))}</span>`;
 }
 
-function card(item) {
-  const progress = item.progress_label ? ` · ${item.progress_label}` : "";
-  const star = item.favorite ? `<span class="fav-badge" aria-label="Favorite">★</span>` : "";
-  const percent = item.progress_unit === "percent" && item.progress_value != null
-    ? `<span class="progress-bar" style="width:${Math.max(0, Math.min(100, Number(item.progress_value)))}%"></span>`
-    : "";
-  return `<a class="card" href="#/item/${item.id}">
-    <span class="poster">${poster(item)}${star}${percent}</span>
-    <span class="card-title">${esc(item.title)}</span>
-    <span class="meta">${esc([kindLabel(item.kind), item.year, item.creator].filter(Boolean).join(" · "))}</span>
-    <span class="meta">${esc(`${statusLabel(item.kind, item.status)} · ${ratingText(item.rating)}${progress}`)}</span>
-  </a>`;
-}
-
 function syncWeek() {
   const start = String(weekStartsOn());
   document.querySelectorAll("[data-week-start]").forEach(button => {
@@ -441,7 +430,7 @@ async function viewHome(ticket) {
     return `<li class="next-row"><a href="#/item/${item.entry_id}?season=${encodeURIComponent(item.season)}"><span class="poster poster-next">${poster(item)}</span><span class="next-copy"><strong>${esc(item.show_title)}</strong><span class="next-name">${name}</span>${airs}</span></a>${button}</li>`;
   }).join("");
   const inProgress = current.length
-    ? `<div class="grid">${current.map(card).join("")}</div>`
+    ? `<div class="grid">${current.map(item => libraryCard(item)).join("")}</div>`
     : `<p class="quiet">Nothing in progress. <a href="#/library?status=want">Open library</a></p>`;
   const coming = upcoming.length
     ? `<ul class="plain">${upcoming.map(item => `<li><a href="#/item/${item.id}">${esc(item.title)}</a><span>${esc(whenLabel(item))}</span></li>`).join("")}</ul>`
@@ -550,7 +539,7 @@ function band(title, events) {
 
 function section(title, items, empty) {
   const body = items.length
-    ? `<div class="grid">${items.map(card).join("")}</div>`
+    ? `<div class="grid">${items.map(item => libraryCard(item)).join("")}</div>`
     : empty;
   return `<section><h2>${esc(title)}</h2>${body}</section>`;
 }
@@ -655,6 +644,20 @@ function libraryPage(kind, status, q, sort, body, resume, fav) {
 let libraryItems = [];
 let libraryResume = null;
 let libraryShown = LIBRARY_PAGE_SIZE;
+let libraryScrollY = 0;
+const expandedSaved = new Set();
+const savedCache = new Map();
+let discographyState = {
+  id: 0,
+  artist: "",
+  release: "studio",
+  albums: [],
+  partial: false,
+  groupOffset: 0,
+  releaseOffset: 0,
+  error: "",
+  loading: false,
+};
 
 function filteredLibrary(items, q, fav) {
   const needle = String(q || "").trim().toLowerCase();
@@ -665,61 +668,31 @@ function filteredLibrary(items, q, fav) {
   });
 }
 
+function savedPanelHtml(id) {
+  const key = String(id);
+  if (!expandedSaved.has(key)) return { html: "", ready: false };
+  const cached = savedCache.get(key);
+  if (!cached) return { html: `<p class="quiet">Loading saved albums and songs…</p>`, ready: false };
+  return { html: savedExpansion(key, cached, { browse: true }), ready: true };
+}
+
 function libraryCards(items) {
   const shown = items.slice(0, libraryShown);
   const more = items.length - shown.length;
   const button = more > 0 ? `<button type="button" class="btn" data-action="show-more">Show more</button>` : "";
-  return `<div class="grid">${shown.map(card).join("")}</div>${button}`;
+  const cards = shown.map(item => {
+    const panel = savedPanelHtml(item.id);
+    return libraryCard(item, {
+      expanded: expandedSaved.has(String(item.id)),
+      savedHtml: panel.html,
+      ready: panel.ready,
+    });
+  }).join("");
+  return `<div class="grid">${cards}</div>${button}`;
 }
 
-function movieBrowseCards(items) {
-  return `<div class="grid">${items.map(item => `<article class="card">
-    <span class="poster">${poster(item)}</span>
-    <span class="card-title">${esc(item.title)}</span>
-    <span class="meta">${esc([kindLabel("movie"), item.year].filter(Boolean).join(" · "))}</span>
-  </article>`).join("")}</div>`;
-}
-
-function songRow(song) {
-  const label = esc(song.title);
-  const name = song.item ? `<a href="#/item/${song.item.id}">${label}</a>` : `<span>${label}</span>`;
-  const score = song.rating == null || song.rating === "" ? "" : `<span class="meta">${esc(ratingText(song.rating))}</span>`;
-  return `<li data-library-song>${name}${score}</li>`;
-}
-
-function songList(songs) {
-  if (!songs.length) return "";
-  return `<ul class="plain library-songs">${songs.map(songRow).join("")}</ul>`;
-}
-
-function albumBlock(album) {
-  const title = esc(album.title);
-  const name = album.item ? `<a href="#/item/${album.item.id}">${title}</a>` : `<span>${title}</span>`;
-  const year = album.year ? `<span class="meta">${esc(album.year)}</span>` : "";
-  return `<div class="library-album" data-library-album><h3 class="library-album-name">${name}${year}</h3>${songList(album.songs)}</div>`;
-}
-
-function artistSection(artist) {
-  const name = esc(artist.name);
-  const heading = artist.item ? `<a href="#/item/${artist.item.id}">${name}</a>` : name;
-  const art = artist.item ? `<span class="poster poster-sm">${poster(artist.item)}</span>` : "";
-  const albums = artist.albums.length ? `<div class="library-albums">${artist.albums.map(albumBlock).join("")}</div>` : "";
-  return `<section class="library-artist" data-library-artist><h2 class="library-artist-head">${art}${heading}</h2>${albums}${songList(artist.songs)}</section>`;
-}
-
-function libraryStandard(items) {
-  const { artists, rest } = buildLibraryTree(items);
-  const tree = artists.length ? `<div class="library-tree">${artists.map(artistSection).join("")}</div>` : "";
-  const shown = rest.slice(0, libraryShown);
-  const more = rest.length - shown.length;
-  const grid = shown.length ? `<div class="grid">${shown.map(card).join("")}</div>` : "";
-  const button = more > 0 ? `<button type="button" class="btn" data-action="show-more">Show more</button>` : "";
-  return `${tree}${grid}${button}`;
-}
-
-function libraryMarkup(items, kind) {
-  if (kind) return libraryCards(items);
-  return libraryStandard(items);
+function libraryMarkup(items) {
+  return libraryCards(items);
 }
 
 function paintLibrary(params, resume) {
@@ -729,8 +702,9 @@ function paintLibrary(params, resume) {
   const sort = params.get("sort") || "activity";
   const fav = params.get("fav") === "1";
   const visible = filteredLibrary(libraryItems, q, fav);
-  const body = visible.length ? libraryMarkup(visible, kind) : libraryEmptyHtml({ kind, status, q });
+  const body = visible.length ? libraryMarkup(visible) : libraryEmptyHtml({ kind, status, q });
   commitView(libraryPage(kind, status, q, sort, body, resume, fav));
+  hydrateExpanded();
 }
 
 async function viewLibrary(params, ticket) {
@@ -759,20 +733,7 @@ async function viewLibrary(params, ticket) {
     libraryItems = payload.items || [];
     libraryShown = LIBRARY_PAGE_SIZE;
     libraryResume = (!kind || kind === "tv") ? continueItem(payload.continue) : null;
-    const savedMovies = filteredLibrary(libraryItems, q, fav);
-    if (kind === "movie" && !savedMovies.length && !status && !q && !fav) {
-      try {
-        const catalog = await api("/api/movies", { signal: ticket.signal });
-        if (!ticket.isCurrent()) return;
-        const movies = (catalog.results || []).filter(item => item && item.title);
-        if (movies.length) {
-          commitView(libraryPage(kind, status, q, sort, movieBrowseCards(movies), libraryResume, fav));
-          return;
-        }
-      } catch (error) {
-        if (error?.name === "AbortError" || !ticket.isCurrent()) return;
-      }
-    }
+    savedCache.clear();
     paintLibrary(params, libraryResume);
   } catch (error) {
     window.clearTimeout(cardsTimer);
@@ -1162,29 +1123,133 @@ function albumSongs(entry) {
 }
 
 function musicBlock(entry) {
-  const music = entry.music || { albums: [], partial: false };
-  const albums = music.albums.map(album => `
-    <li class="cover" data-album-row data-id="${entry.id}" data-album="${album.id}">
-      <button type="button" class="cover-face" data-album-open aria-expanded="false" aria-label="${esc(album.title)}">
-        ${coverImage(album.artwork_url)}
-        <span>${esc(album.title)}</span>
-      </button>
-      ${scoreMarks(album.rating, album.title, true)}
-      <ol class="cover-tracks" hidden>
-        ${(album.tracks || []).map(track => `<li data-track-row data-id="${entry.id}" data-track="${track.id}"><span class="song-name">${esc(track.title)}</span>${scoreMarks(track.rating, track.title, true)}</li>`).join("")}
-      </ol>
-    </li>`).join("");
-  const partial = music.partial ? `<p class="quiet">Some albums are still loading. Check back in a minute.</p>` : "";
-    return `
-    <section class="discog">
-      ${partial}
-      <ul class="covers">${albums}</ul>
-      <form class="cover cover-add" data-action="add-album" data-id="${entry.id}">
-        <input name="title" aria-label="Album" placeholder="Album" required>
-        <input name="year" aria-label="Year" inputmode="numeric" placeholder="Year">
-        <button type="submit" aria-label="Add album">+</button>
-      </form>
-    </section>`;
+  return `<section class="detail-section" aria-label="In your library"><h2>In your library</h2>${savedExpansion(entry.id, entry.music)}<p><a class="btn" href="#/item/${entry.id}/discography">Browse discography</a></p><form class="cover-add" data-action="add-album" data-id="${entry.id}"><input name="title" aria-label="Album" placeholder="Album" required><input name="year" aria-label="Year" inputmode="numeric" placeholder="Year"><button class="btn" type="submit">Add album</button></form></section>`;
+}
+
+function hydrateExpanded() {
+  document.querySelectorAll('[data-action="toggle-saved"][aria-expanded="true"]').forEach(button => {
+    const panel = document.getElementById(button.getAttribute("aria-controls") || "");
+    if (!panel || panel.dataset.ready === "true") return;
+    void fillSavedPanel(button.dataset.artist, panel);
+  });
+}
+
+async function fillSavedPanel(id, panel) {
+  if (!panel) return;
+  const key = String(id);
+  const cached = savedCache.get(key);
+  if (cached) {
+    panel.innerHTML = savedExpansion(key, cached, { browse: true });
+    panel.dataset.ready = "true";
+    return;
+  }
+  panel.innerHTML = `<p class="quiet">Loading saved albums and songs…</p>`;
+  try {
+    const entry = await api(`/api/entries/${key}`);
+    if (!panel.isConnected) return;
+    const toggle = document.querySelector(`[data-action="toggle-saved"][data-artist="${key}"]`);
+    if (!toggle || toggle.getAttribute("aria-expanded") !== "true") return;
+    const music = { albums: entry?.music?.albums || [], songs: entry?.music?.songs || [] };
+    savedCache.set(key, music);
+    panel.innerHTML = savedExpansion(key, music, { browse: true });
+    panel.dataset.ready = "true";
+  } catch (error) {
+    if (error?.name === "AbortError" || !panel.isConnected) return;
+    panel.innerHTML = `<p class="quiet">Saved albums and songs couldn't load.</p><button type="button" class="btn btn-sm" data-action="retry-saved" data-artist="${esc(key)}">Try again</button>`;
+  }
+}
+
+function browseTicket() {
+  const signal = routeSignal;
+  return {
+    signal,
+    isCurrent: () => Boolean(signal) && !signal.aborted && route().name === "discography",
+  };
+}
+
+function resetDiscography(id, artist, release) {
+  discographyState = {
+    id,
+    artist,
+    release,
+    albums: [],
+    partial: false,
+    groupOffset: 0,
+    releaseOffset: 0,
+    error: "",
+    loading: true,
+  };
+}
+
+function paintDiscography() {
+  const state = discographyState;
+  commitView(discographyHtml({
+    artistId: state.id,
+    artist: state.artist,
+    release: state.release,
+    albums: state.albums,
+    partial: state.partial,
+    loading: state.loading,
+    error: state.error,
+  }));
+  applyChrome(route(), { title: state.artist });
+}
+
+async function loadDiscographyPage(ticket, { append }) {
+  const state = discographyState;
+  const query = new URLSearchParams();
+  if (state.groupOffset) query.set("group_offset", String(state.groupOffset));
+  if (state.releaseOffset) query.set("release_offset", String(state.releaseOffset));
+  if (state.release && state.release !== "studio") query.set("release", state.release);
+  const suffix = query.toString() ? `?${query}` : "";
+  try {
+    const page = await api(`/api/entries/${state.id}/discography${suffix}`, { signal: ticket?.signal });
+    if (ticket && !ticket.isCurrent()) return;
+    const albums = page.albums || [];
+    state.albums = append ? state.albums.concat(albums) : albums;
+    state.partial = Boolean(page.partial);
+    state.groupOffset = page.group_offset || 0;
+    state.releaseOffset = page.release_offset || 0;
+    state.error = "";
+    state.loading = false;
+    paintDiscography();
+  } catch (error) {
+    if (error?.name === "AbortError" || (ticket && !ticket.isCurrent())) return;
+    state.loading = false;
+    state.error = error?.status === 503
+      ? "The discography could not be loaded."
+      : (error?.message || "The discography could not be loaded.");
+    paintDiscography();
+  }
+}
+
+async function viewDiscography(id, params, ticket) {
+  const release = discographyRelease(params.get("release"));
+  const entry = await api(`/api/entries/${id}`, { signal: ticket.signal });
+  if (!ticket.isCurrent()) return;
+  if (entry.kind !== "artist") {
+    commitView(`<p class="quiet">Discography is for an artist.</p><p><a href="#/item/${id}">Back</a></p>`);
+    applyChrome(route(), { title: entry.title || "" });
+    return;
+  }
+  resetDiscography(id, entry.title || "Artist", release);
+  paintDiscography();
+  await loadDiscographyPage(ticket, { append: false });
+}
+
+function markDiscovered(sourceId, savedId, kind) {
+  discographyState.albums = discographyState.albums.map(album => {
+    if (kind === "album" && album.source_id === sourceId) {
+      return { ...album, saved: true, saved_id: savedId };
+    }
+    if (kind !== "track") return album;
+    return {
+      ...album,
+      tracks: (album.tracks || []).map(track => (
+        track.source_id === sourceId ? { ...track, saved: true, saved_id: savedId } : track
+      )),
+    };
+  });
 }
 
 let webNodes = [];
@@ -1431,6 +1496,7 @@ async function render() {
   if (progress instanceof HTMLInputElement && progress.dataset.dirty === "true") saveProgress();
   searchLoads.start("");
   const ticket = routeLoads.start();
+  routeSignal = ticket.signal;
   // Wait for an in-flight note save so this refetch cannot paint the pre-save
   // text. The note PATCH aborts after 10s, so the wait cannot wedge the view.
   if (staying) await Promise.all([progressChain, noteChain]);
@@ -1444,6 +1510,14 @@ async function render() {
   const current = route();
   const scrolling = document.scrollingElement;
   const scrollY = scrolling ? scrolling.scrollTop : 0;
+  const previousHash = app.dataset.view || "";
+  if (previousHash.startsWith("#/library")) libraryScrollY = scrollY;
+  if (current.name !== "discography") {
+    discographyState.albums = [];
+    discographyState.partial = false;
+    discographyState.error = "";
+    discographyState.loading = false;
+  }
   const same = app.dataset.view === location.hash;
   const waits = current.name !== "search" && current.name !== "new" && current.name !== "missing";
   if (waits) {
@@ -1461,6 +1535,7 @@ async function render() {
     else if (current.name === "calendar") await viewCalendar(current.params, ticket);
     else if (current.name === "library") await viewLibrary(current.params, ticket);
     else if (current.name === "search") viewSearch(current.params);
+    else if (current.name === "discography") await viewDiscography(current.id, current.params, ticket);
     else if (current.name === "new") viewNew(current.params);
     else if (current.name === "episode") await viewEpisode(current.id, current.episodeId, ticket);
     else if (current.name === "item" || current.name === "season") await viewItem(current.id, ticket, current.name === "season" ? current.seasonNumber : null);
@@ -1474,7 +1549,8 @@ async function render() {
       app.querySelector("h1")?.focus();
     }
     restoreFocus(focusKey);
-    if (scrolling) scrolling.scrollTop = same ? scrollY : 0;
+    const restoreLibrary = current.name === "library" && previousHash.startsWith("#/item/");
+    if (scrolling) scrolling.scrollTop = same ? scrollY : (restoreLibrary ? libraryScrollY : 0);
   } catch (error) {
     if (error?.name === "AbortError" || !ticket.isCurrent()) return;
     if (error?.status === 401) {
@@ -1536,7 +1612,6 @@ document.addEventListener("click", async event => {
     const painted = paintScore(group, next);
     const season = painted.closest("[data-season-marks]");
     const track = painted.closest("[data-track-row]");
-    const album = painted.closest("[data-album-row]");
     const opinion = painted.closest(".opinion");
     try {
       if (season) {
@@ -1550,11 +1625,6 @@ document.addEventListener("click", async event => {
         });
       } else if (track) {
         await api(`/api/entries/${track.dataset.id}/tracks/${track.dataset.track}/rating`, {
-          method: "POST",
-          body: JSON.stringify({ rating: next }),
-        });
-      } else if (album) {
-        await api(`/api/entries/${album.dataset.id}/albums/${album.dataset.album}/rating`, {
           method: "POST",
           body: JSON.stringify({ rating: next }),
         });
@@ -1598,15 +1668,6 @@ document.addEventListener("click", async event => {
   if (season) {
     keepButtonClick(event, target);
     location.hash = `#/item/${season.dataset.id}?season=${season.dataset.season}`;
-    return;
-  }
-  const cover = target.closest("[data-album-open]");
-  if (cover) {
-    keepButtonClick(event, target);
-    const tracks = cover.parentElement?.querySelector(".cover-tracks");
-    const open = tracks ? tracks.hidden : false;
-    if (tracks) tracks.hidden = !open;
-    cover.setAttribute("aria-expanded", open ? "true" : "false");
     return;
   }
   const restore = target.closest("[data-restore-note]");
@@ -1694,12 +1755,95 @@ document.addEventListener("click", async event => {
       const current = route();
       if (slot && current.name === "library") {
         const visible = filteredLibrary(libraryItems, current.params.get("q") || "", current.params.get("fav") === "1");
-        slot.innerHTML = visible.length ? libraryMarkup(visible, current.params.get("kind") || "") : libraryEmptyHtml({
+        slot.innerHTML = visible.length ? libraryMarkup(visible) : libraryEmptyHtml({
           kind: current.params.get("kind") || "",
           status: current.params.get("status") || "",
           q: current.params.get("q") || "",
         });
+        hydrateExpanded();
       }
+      return;
+    }
+    if (action === "toggle-saved") {
+      const key = button.dataset.artist;
+      const panel = document.getElementById(button.getAttribute("aria-controls") || "");
+      const open = button.getAttribute("aria-expanded") === "true";
+      if (open) {
+        button.setAttribute("aria-expanded", "false");
+        if (panel) panel.hidden = true;
+        expandedSaved.delete(key);
+        return;
+      }
+      button.setAttribute("aria-expanded", "true");
+      if (panel) panel.hidden = false;
+      expandedSaved.add(key);
+      await fillSavedPanel(key, panel);
+      return;
+    }
+    if (action === "retry-saved") {
+      const key = button.dataset.artist;
+      const panel = document.getElementById(`saved-${key}`);
+      savedCache.delete(key);
+      if (panel) {
+        delete panel.dataset.ready;
+        await fillSavedPanel(key, panel);
+      }
+      return;
+    }
+    if (action === "discography-filter") {
+      const release = discographyRelease(button.dataset.release);
+      const id = discographyState.id || route().id;
+      const hash = release === "studio" ? `#/item/${id}/discography` : `#/item/${id}/discography?release=${encodeURIComponent(release)}`;
+      if (location.hash !== hash) location.hash = hash;
+      return;
+    }
+    if (action === "discography-more") {
+      if (!discographyState.partial || discographyState.loading) return;
+      discographyState.loading = true;
+      discographyState.error = "";
+      paintDiscography();
+      await loadDiscographyPage(browseTicket(), { append: true });
+      return;
+    }
+    if (action === "discography-retry") {
+      const append = discographyState.albums.length > 0;
+      discographyState.loading = true;
+      discographyState.error = "";
+      paintDiscography();
+      await loadDiscographyPage(browseTicket(), { append });
+      return;
+    }
+    if (action === "save-discovered") {
+      const artistId = discographyState.id;
+      if (!artistId || !button.dataset.source) return;
+      const kind = button.dataset.kind === "track" ? "track" : "album";
+      const body = {
+        source: "musicbrainz",
+        source_id: button.dataset.source,
+        kind,
+        title: button.dataset.title || "Untitled",
+        creator: discographyState.artist || null,
+        year: button.dataset.year || null,
+        artwork_url: button.dataset.art || null,
+        status: "want",
+      };
+      if (kind === "track") {
+        body.album_source_id = button.dataset.albumSource || null;
+        body.album_title = button.dataset.albumTitle || null;
+        body.position = button.dataset.position ? Number(button.dataset.position) : null;
+        if (body.album_title) body.extra = { album: body.album_title };
+      }
+      const saved = await api(`/api/entries/${artistId}/discography`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      markDiscovered(button.dataset.source, saved.id, kind);
+      savedCache.delete(String(artistId));
+      paintDiscography();
+      toast(saved.already_saved ? `${body.title} is already in your library.` : `Added ${body.title}.`, "status", {
+        label: "Open",
+        href: `#/item/${saved.id}`,
+      });
       return;
     }
     if (action === "toggle-overview") {
@@ -1923,6 +2067,7 @@ document.addEventListener("submit", async event => {
         title: data.title,
         year: data.year || null,
       }) });
+      savedCache.delete(String(id));
       toast("Album added.");
       await render();
       return;
@@ -2258,18 +2403,6 @@ document.addEventListener("change", async event => {
     return;
   }
   if (target instanceof HTMLSelectElement && target.id === "search-kind") runSearch();
-  if (target instanceof HTMLInputElement && target.name === "rating") {
-    const track = target.closest("[data-track-row]");
-    if (track) {
-      await saveMusicScore(track, "tracks", track.dataset.track, "Song rating saved.", target);
-      return;
-    }
-    const album = target.closest("[data-album-row]");
-    if (album) {
-      await saveMusicScore(album, "albums", album.dataset.album, "Album rating saved.", target);
-      return;
-    }
-  }
   const row = target instanceof HTMLInputElement ? target.closest("[data-season-row]") : null;
   if (!row) return;
   try {
@@ -2286,23 +2419,6 @@ document.addEventListener("change", async event => {
     fail(error);
   }
 });
-
-async function saveMusicScore(row, kind, itemId, notice, input) {
-  const rating = input instanceof HTMLInputElement ? input : row.querySelector('input[name="rating"]');
-  const path = kind === "albums"
-    ? `/api/entries/${row.dataset.id}/albums/${itemId}/rating`
-    : `/api/entries/${row.dataset.id}/tracks/${itemId}/rating`;
-  try {
-    await api(path, {
-      method: "POST",
-      body: JSON.stringify({ rating: rating && rating.value !== "" ? rating.value : null }),
-    });
-    toast(notice);
-    await render();
-  } catch (error) {
-    fail(error);
-  }
-}
 
 function progressSnapshot() {
   const input = document.querySelector("#progress");

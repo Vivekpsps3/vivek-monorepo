@@ -277,6 +277,7 @@ const ROUTE_TITLES = {
   item: "Couldn't load this item",
   episode: "Couldn't load this episode",
   season: "Couldn't load this item",
+  discography: "Couldn't load this discography",
 };
 
 const ROUTE_LINKS = {
@@ -288,6 +289,7 @@ const ROUTE_LINKS = {
   item: [{ href: "#/library", label: "Open library" }],
   episode: [{ href: "#/library", label: "Open library" }],
   season: [{ href: "#/library", label: "Open library" }],
+  discography: [{ href: "#/library", label: "Open library" }],
 };
 
 export function routeErrorCopy(name, error) {

@@ -109,31 +109,54 @@ def read_entry(
     return records.detail(db, entry)
 
 
-@router.get("/entries/{entry_id}/discography")
-def discography(
-    entry_id: int,
-    group_offset: int = Query(0, ge=0, le=10000),
-    release_offset: int = Query(0, ge=0, le=10000),
-    db: Session = Depends(get_db),
-    principal: Principal = Depends(require_principal),
-):
-    """One page of public albums and songs. Nothing here is saved."""
-    entry = records.owned_entry(db, principal.id, entry_id)
+_DISCOGRAPHY_RELEASES = {"studio", "single", "ep", "live", "remix", "compilation"}
+
+
+def _discography_artist(db: Session, user_id: int, entry_id: int):
+    entry = records.owned_entry(db, user_id, entry_id)
     catalog = entry.catalog
     if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
         raise HTTPException(
             status_code=422, detail="Discography is for a saved MusicBrainz artist."
         )
+    return entry
+
+
+@router.get("/entries/{entry_id}/discography")
+def discography(
+    entry_id: int,
+    group_offset: int = Query(0, ge=0, le=10000),
+    release_offset: int = Query(0, ge=0, le=10000),
+    release: str = "studio",
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    """One page of public releases. Nothing here is saved."""
+    entry = _discography_artist(db, principal.id, entry_id)
+    chosen = release.strip().lower()
+    if chosen not in _DISCOGRAPHY_RELEASES:
+        raise HTTPException(status_code=422, detail="That release filter is not available.")
+    catalog = entry.catalog
     http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
     try:
         release_for_provider_io(db)
-        payload = providers.musicbrainz_artist_catalog(
-            http,
-            catalog.source_id,
-            group_offset=group_offset,
-            release_offset=release_offset,
-            max_pages=1,
-        )
+        if chosen == "studio":
+            payload = providers.musicbrainz_artist_catalog(
+                http,
+                catalog.source_id,
+                group_offset=group_offset,
+                release_offset=release_offset,
+                max_pages=1,
+            )
+        else:
+            payload = providers.musicbrainz_artist_catalog(
+                http,
+                catalog.source_id,
+                group_offset=group_offset,
+                release_offset=release_offset,
+                max_pages=1,
+                release_type=chosen,
+            )
     except Exception:
         raise HTTPException(
             status_code=503, detail="The discography could not be loaded."
@@ -155,18 +178,17 @@ def discography(
                 continue
             track_id = track.get("source_id") if isinstance(track.get("source_id"), str) else None
             track_key = ("musicbrainz", track_id) if track_id else None
-            tracks.append(
-                {
-                    "source_id": track_id,
-                    "title": track.get("title")
-                    if isinstance(track.get("title"), str)
-                    else "Untitled",
-                    "position": track.get("position")
-                    if isinstance(track.get("position"), int)
-                    else None,
-                    "saved": bool(track_key and track_key in saved),
-                }
-            )
+            track_row = {
+                "source_id": track_id,
+                "title": track.get("title") if isinstance(track.get("title"), str) else "Untitled",
+                "position": track.get("position")
+                if isinstance(track.get("position"), int)
+                else None,
+                "saved": bool(track_key and track_key in saved),
+            }
+            if track_key and track_key in saved:
+                track_row["saved_id"] = saved[track_key]
+            tracks.append(track_row)
         row = {
             "source_id": source_id,
             "title": album.get("title") if isinstance(album.get("title"), str) else "Untitled",
@@ -184,8 +206,24 @@ def discography(
         "partial": bool(payload.get("partial")),
         "group_offset": payload.get("group_offset") or 0,
         "release_offset": payload.get("release_offset") or 0,
+        "release": chosen,
         "albums": albums,
     }
+
+
+@router.post("/entries/{entry_id}/discography")
+def save_discography_item(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    """Save one discovered album or song. Does not save the rest of the page."""
+    artist = _discography_artist(db, principal.id, entry_id)
+    entry, already = records.save_discovered(db, principal.id, artist, body)
+    payload = records.entry_card(entry)
+    payload["already_saved"] = already
+    return payload
 
 
 @router.patch("/entries/{entry_id}")
