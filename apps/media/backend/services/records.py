@@ -2,24 +2,19 @@
 
 import json
 import math
-import time
 from datetime import UTC, date, datetime
-from urllib.parse import urlparse
 
 from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from apps.media.backend.models import (
-    AlbumRating,
     CatalogItem,
     Episode,
     EpisodeProgress,
-    MusicAlbum,
-    MusicTrack,
+    MusicLink,
     Release,
     SeasonProgress,
-    TrackRating,
     UserEntry,
     utc_now,
 )
@@ -41,7 +36,10 @@ from apps.media.backend.services.validate import (
     watched_flag,
 )
 from apps.media.backend.services.when import is_released
-from apps.server.database import release_for_provider_io
+
+# Public links. A row here is not a personal save.
+_ALBUM_RELATIONS = ("artist-album", "artist-release-group")
+_TRACK_RELATIONS = ("album-recording", "release-group-recording")
 
 
 def dumps(value) -> str | None:
@@ -111,7 +109,8 @@ def library_card(db: Session, entry: UserEntry) -> dict:
     card = entry_card(entry)
     kind = entry.catalog.kind
     if kind == "artist":
-        card["music"] = music_state(db, entry)
+        # Count saved children. Do not embed a discography.
+        card["saved_count"] = saved_child_count(db, entry)
     elif kind == "track":
         extra = loads(entry.catalog.extra, {})
         album = ""
@@ -375,6 +374,9 @@ def new_entry(db: Session, user_id: int, catalog: CatalogItem, body: dict) -> Us
         if body.get("progress_unit")
         else None,
     )
+    if catalog.kind == "artist":
+        entry.followed = entry.status != "dropped"
+        entry.follow_provenance = "explicit"
     if entry.review:
         entry.review_updated_at = utc_now()
     if (
@@ -732,19 +734,6 @@ def cached_collaborators(catalog: CatalogItem):
     return rows if isinstance(rows, list) else None
 
 
-def album_needs_lookup(catalog: CatalogItem) -> bool:
-    if catalog.kind != "album" or catalog.source != "musicbrainz" or not catalog.source_id:
-        return False
-    return not _extra(catalog).get("album_loaded")
-
-
-def artist_needs_catalog(catalog: CatalogItem) -> bool:
-    if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
-        return False
-    extra = _extra(catalog)
-    return not extra.get("catalog_loaded") or bool(extra.get("catalog_partial"))
-
-
 def apply_artist_portraits(db: Session, entries, *, deep: bool = False) -> None:
     """Fill a blank artist image with a URL the browser can load."""
     import httpx
@@ -778,33 +767,6 @@ def apply_artist_portraits(db: Session, entries, *, deep: bool = False) -> None:
             catalog.artwork_url = url[:1000]
 
 
-def catalog_list_complete(catalog: CatalogItem) -> bool:
-    extra = _extra(catalog)
-    return bool(extra.get("catalog_loaded")) and not extra.get("catalog_list_partial")
-
-
-def catalog_resume(catalog: CatalogItem) -> tuple[int, int]:
-    extra = _extra(catalog)
-    return _offset(extra.get("catalog_group_offset")), _offset(extra.get("catalog_release_offset"))
-
-
-def remember_catalog_page(catalog: CatalogItem, payload: dict) -> None:
-    extra = _extra(catalog)
-    partial = bool(isinstance(payload, dict) and payload.get("partial"))
-    extra["catalog_loaded"] = True
-    extra["catalog_list_partial"] = partial
-    extra["catalog_group_offset"] = _offset(payload.get("group_offset")) if partial else 0
-    extra["catalog_release_offset"] = _offset(payload.get("release_offset")) if partial else 0
-    _save_extra(catalog, extra)
-
-
-def mark_catalog_loaded(catalog: CatalogItem, partial: bool) -> None:
-    extra = _extra(catalog)
-    extra["catalog_loaded"] = True
-    extra["catalog_partial"] = bool(partial)
-    _save_extra(catalog, extra)
-
-
 def _extra(catalog: CatalogItem) -> dict:
     extra = loads(catalog.extra, {})
     return extra if isinstance(extra, dict) else {}
@@ -813,184 +775,6 @@ def _extra(catalog: CatalogItem) -> dict:
 def _save_extra(catalog: CatalogItem, extra: dict) -> None:
     catalog.extra = dumps(extra)
     catalog.updated_at = utc_now()
-
-
-def _offset(value) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        return 0
-    return value if value > 0 else 0
-
-
-def store_music_catalog(db: Session, catalog: CatalogItem, albums: list) -> None:
-    if catalog.kind != "artist" or not isinstance(albums, list):
-        return
-    for index, item in enumerate(albums):
-        if not isinstance(item, dict):
-            continue
-        title = clean_text(item.get("title"), 300, "Album", required=True)
-        source_id = clean_text(item.get("source_id"), 120, "Album id")
-        row = None
-        if source_id:
-            row = (
-                db.query(MusicAlbum)
-                .filter(MusicAlbum.catalog_id == catalog.id, MusicAlbum.source_id == source_id)
-                .one_or_none()
-            )
-        raw_year = item.get("year")
-        if raw_year in (None, ""):
-            year = None
-        else:
-            try:
-                year = _year(raw_year)
-            except HTTPException:
-                # MusicBrainz dates like "0000" are not a reason to drop the
-                # rest of the discography. Skip this release and keep going.
-                continue
-        if row is None:
-            row = MusicAlbum(
-                catalog_id=catalog.id, title=title, source_id=source_id, position=index
-            )
-            db.add(row)
-        row.title = title
-        row.position = index
-        if year is not None:
-            row.year = year
-        artwork = item.get("artwork_url")
-        if isinstance(artwork, str) and artwork.startswith("https://"):
-            row.artwork_url = artwork[:1000]
-        db.flush()
-        _store_tracks(db, row, item.get("tracks"))
-    _rerank_albums(db, catalog)
-
-
-def backfill_missing_tracks(db: Session, catalog: CatalogItem, http, limit: int = 8) -> bool:
-    """Fetch songs for albums the browse left empty. Returns whether any remain.
-
-    Albums that already failed a lookup wait until every other album has been
-    tried, so one empty release group cannot block the rest of the discography.
-    """
-    from apps.media.backend.services.providers import release_group_tracks
-
-    extra = _extra(catalog)
-    failed = set(extra.get("track_lookup_failed") or [])
-    missing = _albums_without_tracks(db, catalog)
-    pending = [album for album in missing if album.source_id not in failed]
-    retry = [album for album in missing if album.source_id in failed]
-    for album in (pending or retry)[:limit]:
-        release_for_provider_io(db)
-        time.sleep(1.05)
-        try:
-            tracks = release_group_tracks(http, album.source_id)
-        except Exception:
-            tracks = []
-        if tracks:
-            _store_tracks(db, album, tracks)
-            failed.discard(album.source_id)
-        else:
-            failed.add(album.source_id)
-    extra = _extra(catalog)
-    extra["track_lookup_failed"] = sorted(failed)
-    _save_extra(catalog, extra)
-    return bool(_albums_without_tracks(db, catalog))
-
-
-def _albums_without_tracks(db: Session, catalog: CatalogItem) -> list[MusicAlbum]:
-    albums = (
-        db.query(MusicAlbum)
-        .filter(MusicAlbum.catalog_id == catalog.id, MusicAlbum.source_id.isnot(None))
-        .order_by(MusicAlbum.position, MusicAlbum.id)
-        .all()
-    )
-    missing = []
-    for album in albums:
-        stored = db.query(MusicTrack).filter(MusicTrack.album_id == album.id).count()
-        if stored == 0:
-            missing.append(album)
-    return missing
-
-
-def _rerank_albums(db: Session, catalog: CatalogItem) -> None:
-    albums = db.query(MusicAlbum).filter(MusicAlbum.catalog_id == catalog.id).all()
-    albums.sort(key=lambda row: ((row.year or 9999), row.title.casefold(), row.id))
-    for index, album in enumerate(albums):
-        album.position = index
-    db.flush()
-
-
-def store_album_release(db: Session, catalog: CatalogItem, payload: dict) -> None:
-    """Songs for an album the user added. Cover bytes stay on the cover host."""
-    if catalog.kind != "album" or not isinstance(payload, dict):
-        return
-    artwork = payload.get("artwork_url")
-    current = catalog.artwork_url or ""
-    if (
-        isinstance(artwork, str)
-        and artwork.startswith("https://")
-        and (not current or _release_cover(current))
-    ):
-        catalog.artwork_url = artwork[:1000]
-    group_id = payload.get("release_group_id")
-    source_id = group_id if isinstance(group_id, str) and group_id else catalog.source_id
-    row = (
-        db.query(MusicAlbum)
-        .filter(MusicAlbum.catalog_id == catalog.id, MusicAlbum.source_id == source_id)
-        .one_or_none()
-    )
-    if row is None:
-        row = MusicAlbum(
-            catalog_id=catalog.id,
-            title=catalog.title,
-            source_id=source_id,
-            year=catalog.year,
-            position=0,
-            artwork_url=catalog.artwork_url,
-        )
-        db.add(row)
-    row.title = catalog.title
-    row.year = catalog.year
-    row.artwork_url = catalog.artwork_url
-    db.flush()
-    _store_tracks(db, row, payload.get("tracks"))
-    extra = _extra(catalog)
-    extra["album_loaded"] = True
-    if isinstance(group_id, str) and group_id:
-        extra["release_group_id"] = group_id
-    _save_extra(catalog, extra)
-
-
-def _release_cover(url: str) -> bool:
-    parsed = urlparse(url)
-    return (
-        parsed.scheme in {"http", "https"}
-        and parsed.netloc == "coverartarchive.org"
-        and parsed.path.startswith("/release/")
-    )
-
-
-def _store_tracks(db: Session, album: MusicAlbum, tracks) -> None:
-    if not isinstance(tracks, list):
-        return
-    for index, item in enumerate(tracks):
-        if not isinstance(item, dict):
-            continue
-        title = clean_text(item.get("title"), 300, "Song", required=True)
-        source_id = clean_text(item.get("source_id"), 120, "Song id")
-        row = None
-        if source_id:
-            row = (
-                db.query(MusicTrack)
-                .filter(MusicTrack.album_id == album.id, MusicTrack.source_id == source_id)
-                .one_or_none()
-            )
-        if row is None:
-            row = MusicTrack(
-                album_id=album.id, title=title, source_id=source_id, position=index + 1
-            )
-            db.add(row)
-        row.title = title
-        position = item.get("position")
-        row.position = position if isinstance(position, int) and position > 0 else index + 1
-    db.flush()
 
 
 def _year(value) -> int | None:
@@ -1005,145 +789,271 @@ def _year(value) -> int | None:
     return year
 
 
-def add_album(db: Session, entry: UserEntry, body: dict) -> None:
-    if entry.catalog.kind != "artist":
-        fail("Albums belong on an artist.")
-    title = clean_text(body.get("title"), 300, "Album", required=True)
-    position = db.query(MusicAlbum).filter(MusicAlbum.catalog_id == entry.catalog_id).count()
-    row = MusicAlbum(
-        catalog_id=entry.catalog_id,
+def _manual_catalog(
+    db: Session,
+    *,
+    kind: str,
+    title: str,
+    creator: str | None,
+    year: int | None = None,
+    artwork: str | None = None,
+    extra: dict | None = None,
+) -> CatalogItem:
+    row = CatalogItem(
+        kind=kind,
         title=title,
-        year=_year(body.get("year")),
-        position=position,
-        artwork_url=http_url(body.get("artwork_url")) if body.get("artwork_url") else None,
+        creator=creator,
+        year=year,
+        artwork_url=artwork,
+        source="manual",
+        genres=dumps([]),
+        extra=dumps(extra or {}),
+        external_ratings=dumps([]),
     )
     db.add(row)
     db.flush()
+    return row
 
 
-def add_track(db: Session, entry: UserEntry, album_id: int, body: dict) -> None:
-    album = _owned_album(db, entry, album_id)
-    title = clean_text(body.get("title"), 300, "Song", required=True)
-    position = db.query(MusicTrack).filter(MusicTrack.album_id == album.id).count() + 1
-    db.add(MusicTrack(album_id=album.id, title=title, position=position))
+def _next_position(db: Session, parent_catalog_id: int, relations: tuple[str, ...]) -> int:
+    positions = [
+        row[0]
+        for row in db.query(MusicLink.position)
+        .filter(
+            MusicLink.parent_catalog_id == parent_catalog_id,
+            MusicLink.relation.in_(relations),
+        )
+        .all()
+    ]
+    return (max(positions) + 1) if positions else 1
+
+
+def _link_child(
+    db: Session,
+    parent_catalog_id: int,
+    child_catalog_id: int,
+    relation: str,
+    position: int,
+    credit: str | None = None,
+) -> MusicLink:
+    link = MusicLink(
+        parent_catalog_id=parent_catalog_id,
+        child_catalog_id=child_catalog_id,
+        relation=relation,
+        namespace="manual",
+        position=position,
+        credit=credit,
+        provenance="explicit-save",
+    )
+    db.add(link)
     db.flush()
+    return link
 
 
-def _owned_album(db: Session, entry: UserEntry, album_id: int) -> MusicAlbum:
-    album = db.get(MusicAlbum, album_id)
-    if album is None or album.catalog_id != entry.catalog_id or entry.catalog.kind != "artist":
+def _album_memberships(db: Session, entry: UserEntry) -> list[tuple[UserEntry, MusicLink]]:
+    rows = (
+        db.query(UserEntry, MusicLink)
+        .join(MusicLink, MusicLink.child_catalog_id == UserEntry.catalog_id)
+        .filter(
+            UserEntry.user_id == entry.user_id,
+            MusicLink.parent_catalog_id == entry.catalog_id,
+            MusicLink.relation.in_(_ALBUM_RELATIONS),
+        )
+        .all()
+    )
+    found: dict[int, tuple[UserEntry, MusicLink]] = {}
+    for child, link in rows:
+        if child.catalog.kind == "album":
+            found.setdefault(child.id, (child, link))
+    ordered = list(found.values())
+    ordered.sort(
+        key=lambda pair: (
+            pair[0].catalog.year is None,
+            pair[0].catalog.year or 0,
+            pair[0].catalog.title.casefold(),
+            pair[0].id,
+        )
+    )
+    return ordered
+
+
+def _track_memberships(
+    db: Session, user_id: int, album_catalog_ids: list[int]
+) -> list[tuple[UserEntry, MusicLink]]:
+    if not album_catalog_ids:
+        return []
+    rows = (
+        db.query(UserEntry, MusicLink)
+        .join(MusicLink, MusicLink.child_catalog_id == UserEntry.catalog_id)
+        .filter(
+            UserEntry.user_id == user_id,
+            MusicLink.parent_catalog_id.in_(album_catalog_ids),
+            MusicLink.relation.in_(_TRACK_RELATIONS),
+        )
+        .all()
+    )
+    found: dict[int, tuple[UserEntry, MusicLink]] = {}
+    for child, link in rows:
+        if child.catalog.kind == "track":
+            found.setdefault(child.id, (child, link))
+    ordered = list(found.values())
+    ordered.sort(key=lambda pair: (pair[1].position, pair[0].catalog.title.casefold(), pair[0].id))
+    return ordered
+
+
+def saved_child_count(db: Session, entry: UserEntry) -> int:
+    """Saved albums and songs linked to this artist. The artist is not included."""
+    albums = _album_memberships(db, entry)
+    tracks = _track_memberships(db, entry.user_id, [album.catalog_id for album, _link in albums])
+    return len(albums) + len({track.id for track, _link in tracks})
+
+
+def _saved_album(db: Session, entry: UserEntry, album_id: int) -> UserEntry:
+    album = db.get(UserEntry, album_id)
+    if album is None or album.user_id != entry.user_id or album.catalog.kind != "album":
+        fail_missing()
+    if entry.catalog.kind == "album":
+        if album.id != entry.id:
+            fail_missing()
+        return album
+    if entry.catalog.kind != "artist":
+        fail("Albums belong on an artist.")
+    linked = (
+        db.query(MusicLink.id)
+        .filter(
+            MusicLink.parent_catalog_id == entry.catalog_id,
+            MusicLink.child_catalog_id == album.catalog_id,
+            MusicLink.relation.in_(_ALBUM_RELATIONS),
+        )
+        .first()
+    )
+    if linked is None:
         fail_missing()
     return album
 
 
+def add_album(db: Session, entry: UserEntry, body: dict) -> None:
+    if entry.catalog.kind != "artist":
+        fail("Albums belong on an artist.")
+    title = clean_text(body.get("title"), 300, "Album", required=True)
+    catalog = _manual_catalog(
+        db,
+        kind="album",
+        title=title,
+        creator=entry.catalog.title,
+        year=_year(body.get("year")),
+        artwork=http_url(body.get("artwork_url")) if body.get("artwork_url") else None,
+    )
+    new_entry(db, entry.user_id, catalog, {"status": "want"})
+    _link_child(
+        db,
+        entry.catalog_id,
+        catalog.id,
+        "artist-album",
+        _next_position(db, entry.catalog_id, _ALBUM_RELATIONS),
+        entry.catalog.title,
+    )
+
+
+def add_track(db: Session, entry: UserEntry, album_id: int, body: dict) -> None:
+    album = _saved_album(db, entry, album_id)
+    title = clean_text(body.get("title"), 300, "Song", required=True)
+    catalog = _manual_catalog(
+        db,
+        kind="track",
+        title=title,
+        creator=album.catalog.creator or entry.catalog.title,
+        extra={"album": album.catalog.title},
+    )
+    new_entry(db, entry.user_id, catalog, {"status": "want"})
+    _link_child(
+        db,
+        album.catalog_id,
+        catalog.id,
+        "album-recording",
+        _next_position(db, album.catalog_id, _TRACK_RELATIONS),
+    )
+
+
 def save_album_rating(db: Session, entry: UserEntry, album_id: int, body: dict) -> None:
-    album = _owned_album(db, entry, album_id)
+    if entry.catalog.kind != "artist":
+        fail("Albums belong on an artist.")
+    album = _saved_album(db, entry, album_id)
     if "rating" not in body:
         fail("Rating is required.")
-    rating = rating_value(body.get("rating"))
-    row = (
-        db.query(AlbumRating)
-        .filter(
-            AlbumRating.user_id == entry.user_id,
-            AlbumRating.entry_id == entry.id,
-            AlbumRating.album_id == album.id,
-        )
-        .one_or_none()
-    )
-    if rating is None:
-        if row is not None:
-            db.delete(row)
-        db.flush()
-        return
-    if row is None:
-        row = AlbumRating(user_id=entry.user_id, entry_id=entry.id, album_id=album.id)
-        db.add(row)
-    row.rating = rating
+    album.rating = rating_value(body.get("rating"))
+    album.updated_at = utc_now()
     db.flush()
 
 
 def save_track_rating(db: Session, entry: UserEntry, track_id: int, body: dict) -> None:
     if entry.catalog.kind not in {"artist", "album"}:
         fail("Songs belong on an artist or an album.")
-    track = db.get(MusicTrack, track_id)
-    album = db.get(MusicAlbum, track.album_id) if track is not None else None
-    if track is None or album is None or album.catalog_id != entry.catalog_id:
+    track = db.get(UserEntry, track_id)
+    if track is None or track.user_id != entry.user_id or track.catalog.kind != "track":
+        fail_missing()
+    if entry.catalog.kind == "album":
+        parents = [entry.catalog_id]
+    else:
+        parents = [album.catalog_id for album, _link in _album_memberships(db, entry)]
+    linked = (
+        db.query(MusicLink.id)
+        .filter(
+            MusicLink.parent_catalog_id.in_(parents or [-1]),
+            MusicLink.child_catalog_id == track.catalog_id,
+            MusicLink.relation.in_(_TRACK_RELATIONS),
+        )
+        .first()
+    )
+    if linked is None:
         fail_missing()
     if "rating" not in body:
         fail("Rating is required.")
-    rating = rating_value(body.get("rating"))
-    row = (
-        db.query(TrackRating)
-        .filter(
-            TrackRating.user_id == entry.user_id,
-            TrackRating.entry_id == entry.id,
-            TrackRating.track_id == track.id,
-        )
-        .one_or_none()
-    )
-    if rating is None:
-        if row is not None:
-            db.delete(row)
-        db.flush()
-        return
-    if row is None:
-        row = TrackRating(user_id=entry.user_id, entry_id=entry.id, track_id=track.id)
-        db.add(row)
-    row.rating = rating
+    track.rating = rating_value(body.get("rating"))
+    track.updated_at = utc_now()
     db.flush()
 
 
-def music_state(db: Session, entry: UserEntry) -> dict:
-    albums = (
-        db.query(MusicAlbum)
-        .filter(MusicAlbum.catalog_id == entry.catalog_id)
-        .order_by(MusicAlbum.position, MusicAlbum.id)
-        .all()
-    )
-    album_ids = [album.id for album in albums]
-    tracks = (
-        db.query(MusicTrack)
-        .filter(MusicTrack.album_id.in_(album_ids))
-        .order_by(MusicTrack.position, MusicTrack.id)
-        .all()
-        if album_ids
-        else []
-    )
-    album_scores = {
-        row.album_id: row.rating
-        for row in db.query(AlbumRating).filter(
-            AlbumRating.user_id == entry.user_id, AlbumRating.entry_id == entry.id
-        )
-    }
-    track_scores = {
-        row.track_id: row.rating
-        for row in db.query(TrackRating).filter(
-            TrackRating.user_id == entry.user_id, TrackRating.entry_id == entry.id
-        )
-    }
-    grouped: dict[int, list] = {}
-    for track in tracks:
-        grouped.setdefault(track.album_id, []).append(
-            {
-                "id": track.id,
-                "title": track.title,
-                "position": track.position,
-                "rating": track_scores.get(track.id),
-            }
-        )
-    extra = loads(entry.catalog.extra, {})
+def _track_payload(track: UserEntry, link: MusicLink) -> dict:
     return {
-        "partial": bool(isinstance(extra, dict) and extra.get("catalog_partial")),
+        "id": track.id,
+        "title": track.catalog.title,
+        "position": link.position,
+        "rating": track.rating,
+    }
+
+
+def _album_payload(album: UserEntry, tracks: list[dict]) -> dict:
+    return {
+        "id": album.id,
+        "title": album.catalog.title,
+        "year": album.catalog.year,
+        "artwork_url": album.catalog.artwork_url,
+        "rating": album.rating,
+        "tracks": tracks,
+    }
+
+
+def music_state(db: Session, entry: UserEntry) -> dict:
+    """Saved albums and songs only. Public metadata is not membership."""
+    if entry.catalog.kind == "album":
+        tracks = _track_memberships(db, entry.user_id, [entry.catalog_id])
+        return {
+            "partial": False,
+            "albums": [
+                _album_payload(entry, [_track_payload(track, link) for track, link in tracks])
+            ],
+        }
+    albums = _album_memberships(db, entry)
+    grouped: dict[int, list] = {}
+    for track, link in _track_memberships(
+        db, entry.user_id, [album.catalog_id for album, _link in albums]
+    ):
+        grouped.setdefault(link.parent_catalog_id, []).append(_track_payload(track, link))
+    return {
+        "partial": False,
         "albums": [
-            {
-                "id": album.id,
-                "title": album.title,
-                "year": album.year,
-                "artwork_url": album.artwork_url,
-                "rating": album_scores.get(album.id),
-                "tracks": grouped.get(album.id, []),
-            }
-            for album in albums
+            _album_payload(album, grouped.get(album.catalog_id, [])) for album, _link in albums
         ],
     }
 
