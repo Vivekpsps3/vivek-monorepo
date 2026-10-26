@@ -2,6 +2,26 @@
 
 Nothing on this list is done until an independent verifier has re-run the task's command, seen exit code 0, and checked the behavior in the tree. `open` is not done. Do not change a row because an implementer says it is finished.
 
+## Handoff
+
+Paused on 2026-10-26 after the TRV-03, SRC-01, and FIN-01 wave. The `suite-remediation` workflow is paused on branch `suite-experience-remediation` at `3d9dd10`. Resume only when asked. Do not push `main`.
+
+Checked done in this session: QA-00, API-01, DB-01, DB-02, TRV-01, MED-01, NAV-02, TRV-05, MED-02, HUB-01, TRV-02, MED-04, WEB-01, TRV-03, SRC-01, FIN-01. FIN-01's verifier recorded a passing finance coverage gate. A spot check found `ui-dialog` in place of the old tutorial backdrop, no "Start the backend" copy, and `computeNetWorth` still in use. That gate was not re-run for this handoff.
+
+Open with evidence, not finished:
+
+- ARC-01 removed a Travel shim and an unused site route file only. Finance, Travel, and Media still have separate routers. There is no shared root build and no CSP, SEO, vault, or map spike.
+- ARC-02 has one server factory, and the server coverage gate passed. Travel, Media, and Finance end-to-end servers still import symbols that factory deleted.
+- ARC-03 collapsed the duplicate Karma configs without an Angular major upgrade. `make test-fast` then failed in `scripts/check-shared-boundaries.py`.
+- UX-01 added required and optional notes. There is no contrast measurement, fallback spec, or interaction evidence.
+- NAV-01 shows one Hub control on Finance, Travel, and Media. `make test-fast` exited 2 on the same shared-boundary check.
+
+Not started, or started and not kept: TRV-04, SRC-02, SRC-03, MED-03, TV-01, TV-02, ERR-01, ARC-05, DEL-ALL, UX-02, DOC-01, QA-01, PR-01. TRV-04 and SRC-02 implementers had just started when the pause landed. They were cancelled, nothing of theirs was merged, and both rows stay pending.
+
+The workflow journal already accepted ARC-01 and UX-01 before those rows were reopened, so a resume will not retry them. ARC-02, ARC-03, and NAV-01 failed verification, so the script's final sweep should still attempt them. Finish the reopened foundation rows by hand if the sweep skips them.
+
+Keep the same rules. Delete the path a change replaces. Do not add a framework or a one-caller abstraction. Finance vault plaintext stays in the browser. Do not lower a coverage floor. Open one pull request only after every row above is done and the full gate matrix has passed.
+
 | ID | Status | Evidence |
 | --- | --- | --- |
 | QA-00 | done | test -s planning/suite-experience-remediation/evidence/QA-00.md exited 0. Inspected QA-00.md against make test-fast (exit 0, only duration_ms differed), git status (clean; quote matches pre-commit parent f36fb602), and byte-identical Travel/Media static entries index.html, app.js, and modules/app.mjs. No app source changed. |
