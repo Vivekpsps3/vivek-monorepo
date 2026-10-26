@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { UiIconComponent, UiIconName } from '@vivek/ui';
 import { apiUrl } from '../core/api-url';
+import { SuiteHubLinkComponent } from '../core/layout/suite-hub-link.component';
 import { silentErrorToast } from '../core/http-error.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser, UserRole } from '../auth/auth.models';
@@ -36,7 +36,7 @@ export interface AttentionItem {
 @Component({
   selector: 'app-suite-admin',
   standalone: true,
-  imports: [RouterLink, UiIconComponent],
+  imports: [UiIconComponent, SuiteHubLinkComponent],
   templateUrl: './suite-admin.component.html',
   styleUrl: './suite-admin.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

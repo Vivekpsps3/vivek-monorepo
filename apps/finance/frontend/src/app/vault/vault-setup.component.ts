@@ -4,12 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { VaultService } from '../crypto/vault.service';
 import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '@vivek/ui';
+import { SuiteHubLinkComponent } from '../core/layout/suite-hub-link.component';
 
 @Component({
   selector: 'app-vault-setup',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent],
+  imports: [CommonModule, FormsModule, UiPageHeaderComponent, UiCardComponent, UiButtonComponent, SuiteHubLinkComponent],
   template: `
+    <app-suite-hub />
     <div class="page vault-page">
       <ui-page-header [title]="'Create your vault'">
 
@@ -38,11 +40,24 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '@vive
   `,
   styles: [
     `
+      :host {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+      }
+      app-suite-hub {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        align-self: flex-start;
+        margin: max(var(--space-2), env(safe-area-inset-top)) 0 0 max(var(--space-3), env(safe-area-inset-left));
+      }
       .vault-page {
         box-sizing: border-box;
+        flex: 1 1 auto;
         width: min(100%, 26.5rem);
         max-width: 26.5rem;
-        min-height: 100dvh;
+        min-height: 0;
         justify-content: center;
         justify-content: safe center;
         margin-inline: auto;

@@ -31,6 +31,8 @@ describe('VaultUnlockComponent', () => {
     fixture.componentInstance.passphrase = 'correct horse battery staple';
     await fixture.componentInstance.unlock();
 
+    expect(fixture.nativeElement.querySelector('a.suite-hub')?.getAttribute('href')).toBe('/hub');
+    expect(fixture.nativeElement.querySelector('.nav-tab, .mobile-tab')).toBeNull();
     expect(vault.unlock).toHaveBeenCalledWith('correct horse battery staple');
     expect(vault.upgradeKdfIfNeeded).toHaveBeenCalledWith('correct horse battery staple');
     expect(router.navigateByUrl).toHaveBeenCalled();
