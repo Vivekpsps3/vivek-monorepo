@@ -95,8 +95,6 @@ def create_from_provider(
     body: dict, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
 ):
     entry, already = records.create_from_provider(db, principal.id, body)
-    _load_artist_catalog(db, entry)
-    _load_album_tracks(db, entry)
     payload = records.detail(db, entry)
     payload["already_saved"] = already
     return payload
@@ -107,10 +105,87 @@ def read_entry(
     entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
-    _load_artist_catalog(db, entry)
-    _load_album_tracks(db, entry)
     records.apply_artist_portraits(db, [entry], deep=True)
     return records.detail(db, entry)
+
+
+@router.get("/entries/{entry_id}/discography")
+def discography(
+    entry_id: int,
+    group_offset: int = Query(0, ge=0, le=10000),
+    release_offset: int = Query(0, ge=0, le=10000),
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_principal),
+):
+    """One page of public albums and songs. Nothing here is saved."""
+    entry = records.owned_entry(db, principal.id, entry_id)
+    catalog = entry.catalog
+    if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
+        raise HTTPException(
+            status_code=422, detail="Discography is for a saved MusicBrainz artist."
+        )
+    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
+    try:
+        release_for_provider_io(db)
+        payload = providers.musicbrainz_artist_catalog(
+            http,
+            catalog.source_id,
+            group_offset=group_offset,
+            release_offset=release_offset,
+            max_pages=1,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503, detail="The discography could not be loaded."
+        ) from None
+    finally:
+        http.close()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=503, detail="The discography could not be loaded.")
+    saved = records.saved_source_ids(db, principal.id)
+    albums = []
+    for album in payload.get("albums") or []:
+        if not isinstance(album, dict):
+            continue
+        source_id = album.get("source_id") if isinstance(album.get("source_id"), str) else None
+        key = ("musicbrainz", source_id) if source_id else None
+        tracks = []
+        for track in album.get("tracks") or []:
+            if not isinstance(track, dict):
+                continue
+            track_id = track.get("source_id") if isinstance(track.get("source_id"), str) else None
+            track_key = ("musicbrainz", track_id) if track_id else None
+            tracks.append(
+                {
+                    "source_id": track_id,
+                    "title": track.get("title")
+                    if isinstance(track.get("title"), str)
+                    else "Untitled",
+                    "position": track.get("position")
+                    if isinstance(track.get("position"), int)
+                    else None,
+                    "saved": bool(track_key and track_key in saved),
+                }
+            )
+        row = {
+            "source_id": source_id,
+            "title": album.get("title") if isinstance(album.get("title"), str) else "Untitled",
+            "year": album.get("year") if isinstance(album.get("year"), int) else None,
+            "artwork_url": album.get("artwork_url")
+            if isinstance(album.get("artwork_url"), str)
+            else None,
+            "saved": bool(key and key in saved),
+            "tracks": tracks,
+        }
+        if key and key in saved:
+            row["saved_id"] = saved[key]
+        albums.append(row)
+    return {
+        "partial": bool(payload.get("partial")),
+        "group_offset": payload.get("group_offset") or 0,
+        "release_offset": payload.get("release_offset") or 0,
+        "albums": albums,
+    }
 
 
 @router.patch("/entries/{entry_id}")
@@ -224,58 +299,6 @@ def rate_track(
     if (entry.rating, entry.review, entry.summary) != before:
         raise HTTPException(status_code=500, detail="A song score changed the artist rating.")
     return records.detail(db, entry)
-
-
-def _load_album_tracks(db: Session, entry) -> None:
-    if not records.album_needs_lookup(entry.catalog):
-        return
-    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
-    try:
-        release_for_provider_io(db)
-        payload = providers.musicbrainz_release_detail(http, entry.catalog.source_id)
-    except Exception:
-        return
-    finally:
-        http.close()
-    if isinstance(payload, dict):
-        records.store_album_release(db, entry.catalog, payload)
-
-
-def _load_artist_catalog(db: Session, entry) -> None:
-    if not records.artist_needs_catalog(entry.catalog):
-        return
-    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
-    try:
-        if not records.catalog_list_complete(entry.catalog):
-            group_offset, release_offset = records.catalog_resume(entry.catalog)
-            source_id = entry.catalog.source_id
-
-            def fetch_page():
-                if group_offset or release_offset:
-                    return providers.musicbrainz_artist_catalog(
-                        http, source_id, group_offset=group_offset, release_offset=release_offset
-                    )
-                return providers.musicbrainz_artist_catalog(http, source_id)
-
-            if group_offset or release_offset:
-                release_for_provider_io(db)
-                payload = fetch_page()
-            else:
-                payload = providers.cached_call(
-                    db, f"musicbrainz:artist-catalog:{source_id}", fetch_page
-                )
-            if not isinstance(payload, dict):
-                return
-            records.store_music_catalog(db, entry.catalog, payload.get("albums") or [])
-            records.remember_catalog_page(entry.catalog, payload)
-        remaining = records.backfill_missing_tracks(db, entry.catalog, http)
-        records.mark_catalog_loaded(
-            entry.catalog, (not records.catalog_list_complete(entry.catalog)) or remaining
-        )
-    except Exception:
-        return
-    finally:
-        http.close()
 
 
 @router.post("/entries/{entry_id}/seasons")

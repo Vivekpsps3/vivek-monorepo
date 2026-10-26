@@ -111,31 +111,29 @@ def test_scores_do_not_cascade(client, tmp_path):
     assert _scores(cleared_album) == (9, [("Lush", None, [("Pristine", 0), ("Heat Wave", None)])])
 
     stored = sqlite3.connect(tmp_path / "media.db")
-    assert stored.execute("select rating from user_entries").fetchone() == (9,)
+    ratings = stored.execute(
+        "select catalog_items.kind, user_entries.rating from user_entries "
+        "join catalog_items on catalog_items.id = user_entries.catalog_id "
+        "order by user_entries.id"
+    ).fetchall()
+    assert ratings == [("artist", 9), ("album", None), ("track", 0), ("track", None)]
     assert stored.execute("select rating from album_ratings").fetchall() == []
-    assert stored.execute("select rating from track_ratings").fetchone() == (0,)
+    assert stored.execute("select rating from track_ratings").fetchall() == []
+    assert stored.execute("select count(*) from music_albums").fetchone() == (0,)
+    assert stored.execute("select count(*) from music_tracks").fetchone() == (0,)
 
 
-def test_follow_loads_albums_and_songs_without_scores(client, monkeypatch):
-    def fake(_http, artist_id):
-        assert artist_id == "artist-1"
-        return {
-            "partial": False,
-            "albums": [
-                {
-                    "source_id": "rg-1",
-                    "title": "Valentine",
-                    "year": 2021,
-                    "artwork_url": "https://coverartarchive.org/release-group/rg-1/front-250",
-                    "tracks": [
-                        {"source_id": "rec-1", "title": "Valentine", "position": 1},
-                        {"source_id": "rec-2", "title": "Ben Franklin", "position": 2},
-                    ],
-                }
-            ],
-        }
+def _forbid_catalog(monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("metadata availability tried to load a discography")
 
-    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", fake)
+    monkeypatch.setattr(
+        "apps.media.backend.services.providers.musicbrainz_artist_catalog", forbidden
+    )
+
+
+def test_follow_does_not_insert_albums_or_songs(client, monkeypatch, tmp_path):
+    _forbid_catalog(monkeypatch)
     followed = client.post(
         "/api/library/from-provider",
         json={
@@ -146,68 +144,28 @@ def test_follow_loads_albums_and_songs_without_scores(client, monkeypatch):
             "rating": 7,
         },
     )
-    assert followed.status_code == 200
+    assert followed.status_code == 200, followed.text
     body = followed.json()
     assert body["already_saved"] is False
-    assert _scores(body) == (
-        7,
-        [("Valentine", None, [("Valentine", None), ("Ben Franklin", None)])],
+    assert body["music"]["albums"] == []
+    assert body["music"]["partial"] is False
+    library = client.get("/api/library").json()
+    assert [item["title"] for item in library["items"]] == ["Snail Mail"]
+    assert library["items"][0]["saved_count"] == 0
+    assert "music" not in library["items"][0]
+    again = client.get(f"/api/entries/{body['id']}")
+    assert again.status_code == 200
+    assert again.json()["music"]["albums"] == []
+    stored = sqlite3.connect(tmp_path / "media.db")
+    assert stored.execute("select kind from catalog_items").fetchall() == [("artist",)]
+    assert stored.execute("select count(*) from user_entries").fetchone() == (1,)
+    assert stored.execute("select followed, follow_provenance from user_entries").fetchone() == (
+        1,
+        "explicit",
     )
-
-    again = client.get(f"/api/entries/{body['id']}").json()
-    assert _scores(again) == _scores(body)
-
-
-def test_missing_songs_resume_on_the_next_view(client, monkeypatch):
-    monkeypatch.setattr("apps.media.backend.services.records.time.sleep", lambda _seconds: None)
-    lookups = []
-
-    def catalog(_http, artist_id, group_offset=0, release_offset=0):
-        assert artist_id == "artist-1"
-        assert group_offset == 0 and release_offset == 0
-        return {
-            "partial": False,
-            "albums": [
-                {
-                    "source_id": f"rg-{number}",
-                    "title": f"Album {number}",
-                    "year": 2000 + number,
-                    "artwork_url": f"https://coverartarchive.org/release-group/rg-{number}/front-250",
-                    "tracks": [],
-                }
-                for number in range(1, 11)
-            ],
-        }
-
-    def tracks(_http, group_id):
-        lookups.append(group_id)
-        return [{"source_id": f"{group_id}-song", "title": "Only Song", "position": 1}]
-
-    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
-    monkeypatch.setattr("apps.media.backend.services.providers.release_group_tracks", tracks)
-    followed = client.post(
-        "/api/library/from-provider",
-        json={
-            "source": "musicbrainz",
-            "source_id": "artist-1",
-            "kind": "artist",
-            "title": "Snail Mail",
-        },
-    )
-    assert followed.status_code == 200, followed.text
-    first = followed.json()["music"]
-    assert first["partial"] is True
-    assert [album["title"] for album in first["albums"] if album["tracks"]] == [
-        f"Album {number}" for number in range(1, 9)
-    ]
-    assert len(lookups) == 8
-
-    again = client.get(f"/api/entries/{followed.json()['id']}").json()["music"]
-    assert again["partial"] is False
-    assert [album["title"] for album in again["albums"] if album["tracks"]] == [
-        f"Album {number}" for number in range(1, 11)
-    ]
-    assert lookups == [f"rg-{number}" for number in range(1, 11)]
+    assert stored.execute("select count(*) from music_albums").fetchone() == (0,)
+    assert stored.execute("select count(*) from music_tracks").fetchone() == (0,)
+    assert stored.execute("select count(*) from music_links").fetchone() == (0,)
 
 
 def test_manual_album_artwork_url_must_be_http(client):
@@ -276,30 +234,8 @@ def test_album_search_uses_the_release_group_cover():
     )
 
 
-def test_imported_album_lists_its_songs(client, monkeypatch):
-    calls = {"n": 0}
-
-    def detail(_http, release_id):
-        calls["n"] += 1
-        assert release_id == "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe"
-        return {
-            "release_group_id": "2b8f453f-ffd6-4860-8742-7cff1c2feae3",
-            "artwork_url": "https://coverartarchive.org/release-group/2b8f453f-ffd6-4860-8742-7cff1c2feae3/front-250",
-            "tracks": [
-                {
-                    "source_id": "b7dc9ce7-92cd-4da3-88b3-088904a92564",
-                    "title": "kiss me",
-                    "position": 1,
-                },
-                {
-                    "source_id": "84e20513-d08a-4682-8908-7d31e5d6be58",
-                    "title": "petal",
-                    "position": 3,
-                },
-            ],
-        }
-
-    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_release_detail", detail)
+def test_saving_an_album_does_not_insert_its_songs(client, monkeypatch, tmp_path):
+    _forbid_catalog(monkeypatch)
     created = client.post(
         "/api/library/from-provider",
         json={
@@ -316,26 +252,34 @@ def test_imported_album_lists_its_songs(client, monkeypatch):
     )
     assert created.status_code == 200, created.text
     body = created.json()
-    assert calls["n"] == 1
     assert body["rating"] is None
     assert (
         body["artwork_url"]
-        == "https://coverartarchive.org/release-group/2b8f453f-ffd6-4860-8742-7cff1c2feae3/front-250"
+        == "https://coverartarchive.org/release/0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe/front-250"
     )
-    tracks = body["music"]["albums"][0]["tracks"]
-    assert [track["title"] for track in tracks] == ["kiss me", "petal"]
+    assert body["music"]["albums"][0]["tracks"] == []
+    added = client.post(
+        f"/api/entries/{body['id']}/albums/{body['id']}/tracks",
+        json={"title": "kiss me"},
+    )
+    assert added.status_code == 200, added.text
+    song = added.json()["music"]["albums"][0]["tracks"][0]
+    assert song["title"] == "kiss me"
     rated = client.post(
-        f"/api/entries/{body['id']}/tracks/{tracks[0]['id']}/rating",
+        f"/api/entries/{body['id']}/tracks/{song['id']}/rating",
         json={"rating": 8},
     ).json()
     assert rated["rating"] is None
     assert rated["music"]["albums"][0]["tracks"][0]["rating"] == 8
     again = client.get(f"/api/entries/{body['id']}").json()
-    assert calls["n"] == 1
-    assert [track["title"] for track in again["music"]["albums"][0]["tracks"]] == [
-        "kiss me",
-        "petal",
-    ]
+    assert [track["title"] for track in again["music"]["albums"][0]["tracks"]] == ["kiss me"]
+    stored = sqlite3.connect(tmp_path / "media.db")
+    assert stored.execute("select count(*) from music_tracks").fetchone() == (0,)
+    assert stored.execute(
+        "select catalog_items.kind from user_entries "
+        "join catalog_items on catalog_items.id = user_entries.catalog_id "
+        "order by user_entries.id"
+    ).fetchall() == [("album",), ("track",)]
 
 
 def test_disc_two_keeps_its_place_in_the_song_order():
@@ -363,3 +307,325 @@ def test_disc_two_keeps_its_place_in_the_song_order():
         ("Two", 2),
         ("Three", 3),
     ]
+
+
+def test_metadata_rows_are_not_library_membership(client, tmp_path):
+    artist = client.post(
+        "/api/library",
+        json={"kind": "artist", "title": "Artist A", "status": "want", "rating": 5},
+    ).json()
+    album = client.post(
+        f"/api/entries/{artist['id']}/albums", json={"title": "A1", "year": 1999}
+    ).json()
+    album_id = album["music"]["albums"][0]["id"]
+    song = client.post(
+        f"/api/entries/{artist['id']}/albums/{album_id}/tracks", json={"title": "A2"}
+    ).json()
+    song_id = song["music"]["albums"][0]["tracks"][0]["id"]
+    client.post(f"/api/entries/{artist['id']}/albums/{album_id}/rating", json={"rating": 6})
+    client.post(f"/api/entries/{artist['id']}/tracks/{song_id}/rating", json={"rating": 4})
+
+    stored = sqlite3.connect(tmp_path / "media.db")
+    catalog_id = artist["catalog"]["id"]
+    stored.execute(
+        "INSERT INTO music_albums (catalog_id, title, year, source_id, position) "
+        "VALUES (?, 'Fetched', 2001, 'rg-fetched', 0)",
+        (catalog_id,),
+    )
+    legacy_album = stored.execute("select last_insert_rowid()").fetchone()[0]
+    stored.execute(
+        "INSERT INTO music_tracks (album_id, title, position, source_id) "
+        "VALUES (?, 'B1', 1, 'rec-fetched')",
+        (legacy_album,),
+    )
+    stored.execute(
+        "INSERT INTO catalog_items (kind, title, source, source_id, created_at, updated_at) "
+        "VALUES ('album', 'Linked Only', 'musicbrainz', 'rg-linked', '2020-01-01', '2020-01-01')"
+    )
+    linked = stored.execute("select last_insert_rowid()").fetchone()[0]
+    stored.execute(
+        "INSERT INTO music_links (parent_catalog_id, child_catalog_id, relation, namespace, "
+        "position, provenance) VALUES (?, ?, 'artist-release-group', "
+        "'musicbrainz:release-group', 0, 'provider-release-group')",
+        (catalog_id, linked),
+    )
+    stored.commit()
+
+    detail = client.get(f"/api/entries/{artist['id']}").json()
+    assert [row["title"] for row in detail["music"]["albums"]] == ["A1"]
+    assert [row["title"] for row in detail["music"]["albums"][0]["tracks"]] == ["A2"]
+    library = client.get("/api/library").json()["items"]
+    assert sorted(item["title"] for item in library) == ["A1", "A2", "Artist A"]
+    artist_card = next(item for item in library if item["kind"] == "artist")
+    assert artist_card["saved_count"] == 2
+    assert "music" not in artist_card
+    assert client.get("/api/library", params={"kind": "album"}).json()["items"][0]["title"] == "A1"
+    assert client.get("/api/library", params={"kind": "track"}).json()["items"][0]["title"] == "A2"
+    assert stored.execute("select count(*) from user_entries").fetchone() == (3,)
+
+    other = client.post(
+        "/api/library", json={"kind": "artist", "title": "Artist A", "status": "want"}
+    ).json()
+    other_album = client.post(
+        f"/api/entries/{other['id']}/albums", json={"title": "A1", "year": 2004}
+    ).json()
+    assert other_album["music"]["albums"][0]["id"] != album_id
+    assert [
+        row["title"] for row in client.get(f"/api/entries/{artist['id']}").json()["music"]["albums"]
+    ] == ["A1"]
+    assert client.get(f"/api/entries/{other['id']}").json()["music"]["albums"][0]["year"] == 2004
+
+
+def test_removing_a_parent_keeps_saved_children(client):
+    artist = client.post(
+        "/api/library",
+        json={"kind": "artist", "title": "A", "status": "want", "rating": 9, "review": "Kept."},
+    ).json()
+    with_album = client.post(
+        f"/api/entries/{artist['id']}/albums", json={"title": "A1", "year": 2000}
+    ).json()
+    album_id = with_album["music"]["albums"][0]["id"]
+    with_song = client.post(
+        f"/api/entries/{artist['id']}/albums/{album_id}/tracks", json={"title": "A2"}
+    ).json()
+    song_id = with_song["music"]["albums"][0]["tracks"][0]["id"]
+    client.post(f"/api/entries/{artist['id']}/albums/{album_id}/rating", json={"rating": 6})
+    client.post(f"/api/entries/{artist['id']}/tracks/{song_id}/rating", json={"rating": 4})
+
+    removed_album = client.delete(f"/api/entries/{album_id}")
+    assert removed_album.status_code == 200
+    left = client.get("/api/library").json()["items"]
+    assert sorted(item["title"] for item in left) == ["A", "A2"]
+    artist_body = client.get(f"/api/entries/{artist['id']}").json()
+    assert artist_body["rating"] == 9
+    assert artist_body["review"] == "Kept."
+    assert artist_body["music"]["albums"] == []
+    assert client.get(f"/api/entries/{song_id}").json()["rating"] == 4
+
+    assert client.delete(f"/api/entries/{artist['id']}").status_code == 200
+    assert [item["title"] for item in client.get("/api/library").json()["items"]] == ["A2"]
+    assert client.get(f"/api/entries/{song_id}").json()["rating"] == 4
+
+    missed = client.post(f"/api/entries/{artist['id']}/albums/999/rating", json={"rating": 5})
+    assert missed.status_code == 404
+    assert [item["title"] for item in client.get("/api/library").json()["items"]] == ["A2"]
+
+
+def test_two_users_keep_independent_music_membership(client):
+    from apps.server.auth import Principal, require_principal
+
+    body = {
+        "source": "musicbrainz",
+        "source_id": "rg-shared",
+        "kind": "album",
+        "title": "Shared",
+        "creator": "Ada",
+        "rating": 8,
+        "review": "Mine.",
+        "status": "completed",
+    }
+    first = client.post("/api/library/from-provider", json=body).json()
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
+    assert client.get(f"/api/entries/{first['id']}").status_code == 404
+    second = client.post(
+        "/api/library/from-provider",
+        json={**body, "rating": 2, "review": "Theirs.", "status": "paused"},
+    ).json()
+    assert second["already_saved"] is False
+    assert second["id"] != first["id"]
+    assert second["rating"] == 2
+    assert second["review"] == "Theirs."
+    assert second["status"] == "paused"
+    assert [item["id"] for item in client.get("/api/library").json()["items"]] == [second["id"]]
+    client.app.dependency_overrides[require_principal] = lambda: Principal(1, "tester", "Tester")
+    again = client.get(f"/api/entries/{first['id']}").json()
+    assert again["rating"] == 8
+    assert again["review"] == "Mine."
+    assert again["status"] == "completed"
+
+
+def test_discography_browse_does_not_insert_membership(client, monkeypatch, tmp_path):
+    seen = []
+
+    def catalog(_http, artist_id, group_offset=0, release_offset=0, max_pages=1):
+        seen.append((artist_id, group_offset, release_offset, max_pages))
+        return {
+            "partial": True,
+            "group_offset": group_offset + 100,
+            "release_offset": release_offset,
+            "albums": [
+                "skip",
+                {
+                    "source_id": "rg-b",
+                    "title": "B",
+                    "year": 2010,
+                    "artwork_url": "https://coverartarchive.org/release-group/rg-b/front-250",
+                    "tracks": [
+                        {"source_id": "rec-b1", "title": "B1", "position": 1},
+                        "nope",
+                    ],
+                },
+                {
+                    "title": 12,
+                    "year": "nope",
+                    "artwork_url": None,
+                    "tracks": [{"title": 5, "position": "x"}],
+                },
+            ],
+        }
+
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
+    artist = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": "artist-a",
+            "kind": "artist",
+            "title": "Artist A",
+            "status": "want",
+        },
+    ).json()
+    assert artist["music"]["albums"] == []
+    page = client.get(
+        f"/api/entries/{artist['id']}/discography",
+        params={"group_offset": 100, "release_offset": 25},
+    )
+    assert page.status_code == 200, page.text
+    assert seen == [("artist-a", 100, 25, 1)]
+    body = page.json()
+    assert body["partial"] is True
+    assert body["group_offset"] == 200
+    assert body["albums"] == [
+        {
+            "source_id": "rg-b",
+            "title": "B",
+            "year": 2010,
+            "artwork_url": "https://coverartarchive.org/release-group/rg-b/front-250",
+            "saved": False,
+            "tracks": [
+                {"source_id": "rec-b1", "title": "B1", "position": 1, "saved": False},
+            ],
+        },
+        {
+            "source_id": None,
+            "title": "Untitled",
+            "year": None,
+            "artwork_url": None,
+            "saved": False,
+            "tracks": [
+                {"source_id": None, "title": "Untitled", "position": None, "saved": False},
+            ],
+        },
+    ]
+    assert client.get(f"/api/entries/{artist['id']}").json()["music"]["albums"] == []
+    assert [item["title"] for item in client.get("/api/library").json()["items"]] == ["Artist A"]
+    stored = sqlite3.connect(tmp_path / "media.db")
+    assert stored.execute("select count(*) from user_entries").fetchone() == (1,)
+    assert stored.execute("select count(*) from music_albums").fetchone() == (0,)
+    assert stored.execute("select count(*) from catalog_items").fetchone() == (1,)
+    stored.close()
+
+    saved = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": "rg-b",
+            "kind": "album",
+            "title": "B",
+            "creator": "Artist A",
+            "status": "want",
+        },
+    ).json()
+    marked = client.get(f"/api/entries/{artist['id']}/discography").json()
+    assert marked["albums"][0]["saved"] is True
+    assert marked["albums"][0]["saved_id"] == saved["id"]
+    stored = sqlite3.connect(tmp_path / "media.db")
+    assert stored.execute("select count(*) from music_albums").fetchone() == (0,)
+    assert stored.execute("select count(*) from user_entries").fetchone() == (2,)
+    stored.close()
+
+    book = client.post("/api/library", json={"kind": "book", "title": "Dune", "status": "want"})
+    assert client.get(f"/api/entries/{book.json()['id']}/discography").status_code == 422
+    assert (
+        client.get(
+            f"/api/entries/{artist['id']}/discography", params={"group_offset": -1}
+        ).status_code
+        == 422
+    )
+
+    def down(*_args, **_kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", down)
+    failed = client.get(f"/api/entries/{artist['id']}/discography")
+    assert failed.status_code == 503
+    stored = sqlite3.connect(tmp_path / "media.db")
+    assert stored.execute("select count(*) from user_entries").fetchone() == (3,)
+    stored.close()
+
+    def empty(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", empty)
+    assert client.get(f"/api/entries/{artist['id']}/discography").status_code == 503
+
+
+def test_a_score_does_not_create_membership(client, tmp_path):
+    created = client.post(
+        "/api/library", json={"kind": "artist", "title": "Left", "status": "dropped"}
+    )
+    assert created.status_code == 200, created.text
+    artist_id = created.json()["id"]
+    stored = sqlite3.connect(tmp_path / "media.db")
+    assert stored.execute("select followed, follow_provenance from user_entries").fetchone() == (
+        0,
+        "explicit",
+    )
+    stored.close()
+    assert client.get("/api/library").json()["items"][0]["saved_count"] == 0
+    book = client.post(
+        "/api/library", json={"kind": "book", "title": "Dune", "status": "want"}
+    ).json()
+    assert client.post(f"/api/entries/{book['id']}/albums", json={"title": "No"}).status_code == 422
+    assert (
+        client.post(
+            f"/api/entries/{artist_id}/albums/{artist_id}/rating", json={"rating": 1}
+        ).status_code
+        == 404
+    )
+    added = client.post(
+        f"/api/entries/{artist_id}/albums", json={"title": "Kept", "year": 2001}
+    ).json()
+    album_id = added["music"]["albums"][0]["id"]
+    assert (
+        client.post(f"/api/entries/{artist_id}/albums/{album_id}/rating", json={}).status_code
+        == 422
+    )
+    assert added["music"]["albums"][0]["rating"] is None
+    second = client.post(f"/api/entries/{artist_id}/albums", json={"title": "Also"}).json()
+    assert [row["title"] for row in second["music"]["albums"]] == ["Kept", "Also"]
+    song = client.post(
+        f"/api/entries/{artist_id}/albums/{album_id}/tracks", json={"title": "Only"}
+    ).json()
+    song_id = song["music"]["albums"][0]["tracks"][0]["id"]
+    assert (
+        client.post(f"/api/entries/{artist_id}/tracks/{song_id}/rating", json={}).status_code == 422
+    )
+    assert (
+        client.post(
+            f"/api/entries/{album_id}/albums/{album_id}/rating", json={"rating": 3}
+        ).status_code
+        == 422
+    )
+    other = client.post(
+        "/api/library", json={"kind": "artist", "title": "Other", "status": "want"}
+    ).json()
+    assert (
+        client.post(
+            f"/api/entries/{other['id']}/tracks/{song_id}/rating", json={"rating": 9}
+        ).status_code
+        == 404
+    )
+    assert client.get(f"/api/entries/{song_id}").json()["rating"] is None
+    titles = sorted(item["title"] for item in client.get("/api/library").json()["items"])
+    assert titles == ["Also", "Dune", "Kept", "Left", "Only", "Other"]

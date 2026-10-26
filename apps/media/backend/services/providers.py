@@ -607,12 +607,12 @@ def musicbrainz_artist_catalog(
     artist_id: str,
     group_offset: int = 0,
     release_offset: int = 0,
+    max_pages: int = 1,
 ) -> dict:
-    """Official studio albums and the songs on them. No personal ratings.
+    """One bounded page of public studio albums and songs. This saves nothing.
 
-    Offsets continue a previous page. Callers look up songs for albums that
-    arrived without a track list, a few at a time, so a long discography can
-    finish on a later view.
+    Offsets continue a previous page. max_pages keeps a single request from
+    walking an entire discography.
     """
     groups, groups_partial, group_next = _mb_pages(
         http,
@@ -620,6 +620,7 @@ def musicbrainz_artist_catalog(
         {"artist": artist_id, "type": "album", "fmt": "json"},
         "release-groups",
         "release-group-count",
+        max_pages=max_pages,
         start_offset=group_offset,
     )
     releases, releases_partial, release_next = _mb_pages(
@@ -634,6 +635,7 @@ def musicbrainz_artist_catalog(
         },
         "releases",
         "release-count",
+        max_pages=max_pages,
         start_offset=release_offset,
     )
     tracks_by_group: dict[str, list[dict]] = {}
@@ -1044,49 +1046,6 @@ def attach_artist_portraits(db: Session, results: list) -> None:
         url = images.get(str(row.get("source_id") or "").lower())
         if url:
             row["artwork_url"] = url
-
-
-def musicbrainz_release_detail(http: httpx.Client, release_id: str) -> dict:
-    """Songs and the release-group cover for one album. The image itself stays on the cover host."""
-    response = http.get(
-        f"https://musicbrainz.org/ws/2/release/{release_id}",
-        params={"inc": "recordings release-groups", "fmt": "json"},
-    )
-    if response.status_code == 404:
-        return {"release_group_id": None, "artwork_url": None, "tracks": []}
-    response.raise_for_status()
-    body = response.json()
-    if not isinstance(body, dict):
-        return {"release_group_id": None, "artwork_url": None, "tracks": []}
-    raw_group = body.get("release-group")
-    group = raw_group if isinstance(raw_group, dict) else {}
-    raw_id = group.get("id")
-    group_id = raw_id if isinstance(raw_id, str) else None
-    return {
-        "release_group_id": mbid(group_id),
-        "artwork_url": cover_art_url(release_id, group_id),
-        "tracks": _tracks_from_release(body),
-    }
-
-
-def release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
-    return _release_group_tracks(http, group_id)
-
-
-def _release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
-    response = http.get(
-        "https://musicbrainz.org/ws/2/release",
-        params={"release-group": group_id, "inc": "recordings", "fmt": "json", "limit": 25},
-    )
-    response.raise_for_status()
-    best: list[dict] = []
-    for release in response.json().get("releases") or []:
-        if not isinstance(release, dict):
-            continue
-        tracks = _tracks_from_release(release)
-        if len(tracks) > len(best):
-            best = tracks
-    return best
 
 
 def artist_name(credit) -> str | None:

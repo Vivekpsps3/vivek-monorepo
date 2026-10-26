@@ -248,32 +248,6 @@ def test_library_does_not_rebuild_the_full_summary(client, monkeypatch):
     assert listed.json()["continue"] == []
 
 
-def test_a_bad_musicbrainz_year_skips_one_album(client, monkeypatch):
-    def catalog(*_args, **_kwargs):
-        return {
-            "partial": False,
-            "albums": [
-                {"source_id": "bad", "title": "Year Zero", "year": "0000", "tracks": []},
-                {"source_id": "good", "title": "Kept", "year": 1999, "tracks": []},
-            ],
-        }
-
-    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
-    followed = client.post(
-        "/api/library/from-provider",
-        json={
-            "source": "musicbrainz",
-            "source_id": "artist-year",
-            "kind": "artist",
-            "title": "Catalog",
-            "status": "want",
-        },
-    )
-    assert followed.status_code == 200
-    titles = [album["title"] for album in followed.json()["music"]["albums"]]
-    assert titles == ["Kept"]
-
-
 def test_public_tmdb_page_pairs_each_title_with_its_poster():
     from apps.media.backend.services.providers import parse_tmdb_movie_page
 

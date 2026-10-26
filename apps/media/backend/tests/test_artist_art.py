@@ -47,20 +47,7 @@ def test_lastfm_portrait_is_kept_when_it_is_the_only_image():
     assert image_from_relations([{"type": "image", "url": {"resource": direct}}]) == direct
 
 
-def _catalog(monkeypatch):
-    monkeypatch.setattr(
-        "apps.media.backend.services.providers.musicbrainz_artist_catalog",
-        lambda *_args, **_kwargs: {
-            "albums": [],
-            "partial": False,
-            "group_offset": 0,
-            "release_offset": 0,
-        },
-    )
-
-
 def test_library_fills_a_saved_artist_that_had_no_image(client, monkeypatch):
-    _catalog(monkeypatch)
     monkeypatch.setattr(
         "apps.media.backend.services.providers.wikidata_artist_images",
         lambda _http, ids: {ids[0].lower(): PORTRAIT},
@@ -83,7 +70,6 @@ def test_library_fills_a_saved_artist_that_had_no_image(client, monkeypatch):
 
 
 def test_opening_an_artist_uses_musicbrainz_when_wikidata_has_no_image(client, monkeypatch):
-    _catalog(monkeypatch)
     monkeypatch.setattr(
         "apps.media.backend.services.providers.wikidata_artist_images",
         lambda _http, _ids: {},

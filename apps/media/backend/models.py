@@ -172,7 +172,7 @@ class EpisodeProgress(Base):
 
 
 class MusicAlbum(Base):
-    """Public album metadata for an artist. Personal scores live on AlbumRating."""
+    """Legacy public album row. A personal save is a user entry, not this row."""
 
     __tablename__ = "music_albums"
     __table_args__ = (UniqueConstraint("catalog_id", "source_id", name="uq_music_album_source"),)
@@ -191,7 +191,7 @@ class MusicAlbum(Base):
 
 
 class MusicTrack(Base):
-    """A song on an album. Its score is a TrackRating, not the album or artist score."""
+    """Legacy public song row. A personal save is a user entry, not this row."""
 
     __tablename__ = "music_tracks"
     __table_args__ = (UniqueConstraint("album_id", "source_id", name="uq_music_track_source"),)
@@ -206,7 +206,7 @@ class MusicTrack(Base):
 
 
 class AlbumRating(Base):
-    """This user's score for one album. Never copied onto the artist or its songs."""
+    """Legacy nested score. New saves store the score on the album's user entry."""
 
     __tablename__ = "album_ratings"
     __table_args__ = (UniqueConstraint("user_id", "entry_id", "album_id", name="uq_album_rating"),)
@@ -223,7 +223,7 @@ class AlbumRating(Base):
 
 
 class TrackRating(Base):
-    """This user's score for one song. Never copied onto the album or the artist."""
+    """Legacy nested score. New saves store the score on the song's user entry."""
 
     __tablename__ = "track_ratings"
     __table_args__ = (UniqueConstraint("user_id", "entry_id", "track_id", name="uq_track_rating"),)
