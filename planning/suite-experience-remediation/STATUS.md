@@ -22,7 +22,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | TRV-02 | done | ./scripts/coverage-gate.sh travel exit 0 (55 passed). Inspected 05-travel.md, pto.py, models.py, assemble.py, routers/pto.py, trips.py, trip.mjs, pto.mjs, test_pto_allocation.py. One TripPtoDay per date, weekends default 0, and trip, home, calendar, preview, and PTO board forecasts use those charges. |
 | MED-04 | done | ./scripts/coverage-gate.sh media exit 0. Inspected 06-media-library.md, domain.py, records.py, summary.py, membership.py, calendar.py, format.mjs, app.mjs, views.mjs, hub.component.html, test_artist_follow.py. Artists are following or unfollowed; legacy in_progress is not a listen and no song or experience is created. |
 | WEB-01 | done | npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI exit 0 with CHROME_BIN (8 SUCCESS). Inspected 04-hub-finance.md, app.routes.ts static titles, ecdh.service.ts local ECDH, secrets.component.html escaped text, app.component.html one Workspace /hub link, package.json and lock without socket.io-client, and apps/site/flask absent. |
-| TRV-03 | open | pending |
+| TRV-03 | done | node --test apps/travel/backend/static/tests/*.test.mjs exit 0. Inspected 05-travel.md TRV-03, flight.mjs, ui.mjs, new-trip.mjs, trip.mjs, composer.mjs, flights.py, integrations.py, and flight.test.mjs. A number and date debounce to /api/flights/lookup and preview one local-day candidate; edit-flight-manually keeps the typed depart_at. lookup-flight, applyFlight, and flight-results are absent. |
 | SRC-01 | open | pending |
 | FIN-01 | open | pending |
 | TRV-04 | open | pending |

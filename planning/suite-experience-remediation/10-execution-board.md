@@ -26,7 +26,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 | [x] | DB-02 | Migration + Media | ARC-02, API-01 | Music membership/art/follow/lifecycle schema and lossless mapping/conflict report. |
 | [x] | TRV-01 | Travel UI | NAV-01, API-01 | Minimum trip + named segments + one title + accessible split + preserved drafts; old composer path removed. |
 | [x] | TRV-02 | Travel domain/UI | DB-01, TRV-01 | Per-date PTO, weekend defaults, all forecast views and overlap/date-edit rules. |
-| [ ] | TRV-03 | Travel provider/UI | API-01, TRV-01 | Automatic schedule, disambiguation, clean manual override and robust provider states. |
+| [x] | TRV-03 | Travel provider/UI | API-01, TRV-01 | Automatic schedule, disambiguation, clean manual override and robust provider states. |
 | [ ] | TRV-04 | Travel map/UI | ARC-01, API-01, TRV-01 | Production-policy-compatible map, explicit location choice, visible errors/retry and compliant geocoder pacing. |
 | [x] | TRV-05 | Travel UI | TRV-01 | Quiet trip itinerary/add flow and obvious forms; redundant builders/empty sections removed. |
 | [x] | MED-01 | Media domain | DB-02, API-01 | Explicit personal child membership and ID relationships; ordinary reads DB-only; eager hydration deleted. |
