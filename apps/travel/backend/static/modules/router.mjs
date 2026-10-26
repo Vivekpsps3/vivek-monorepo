@@ -4,7 +4,7 @@ import { parseHash } from './route-parser.mjs';
 import { renderHome } from './views/home.mjs';
 import { buildCalendar } from './views/calendar.mjs';
 import { renderNewTrip } from './views/new-trip.mjs';
-import { mountComposer } from './views/composer.mjs';
+import { destroyComposer, mountComposer } from './views/composer.mjs';
 import { renderTrip, mountMap } from './views/trip.mjs';
 import { renderPto, mountPto } from './views/pto.mjs';
 import { renderSettings, renderLogin } from './views/settings.mjs';
@@ -28,6 +28,7 @@ export function paint(html, nav, options = {}) {
   const scrollTop = scrolling.scrollTop;
   const active = document.activeElement;
   const restore = active instanceof HTMLElement ? focusSelector(active) : "";
+  destroyComposer();
   destroyMap();
   root.innerHTML = html;
   root.querySelectorAll("form[data-form]").forEach((form) => {

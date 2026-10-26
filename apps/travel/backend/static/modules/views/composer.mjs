@@ -5,22 +5,27 @@ import { DECISIONS } from '../decisions.mjs';
 import { legFields } from './new-trip.mjs';
 import { readLeg, emptyInput } from '../actions/forms.mjs';
 import {
+  addDays,
   blankRange,
+  changeCity,
   cityColor,
   clearRange,
+  confirmSpan,
   dayName,
   defaultTripName,
   dragRange,
   gridDay,
+  guardSpan,
   monthRows,
+  moveChange,
   moveFocus,
+  parseIso,
   pickDay,
+  removeChange,
   saveState,
-  segmentDays,
   segments,
   shortRange,
   summaryText,
-  toggleSplit,
   toIso,
   weekdayHeads,
 } from '../composer-model.mjs';
@@ -29,9 +34,28 @@ function escapeAttr(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 }
 
+let stopComposer = () => {};
+
+export function destroyComposer() {
+  stopComposer();
+  stopComposer = () => {};
+}
+
+function daysBetween(after, through) {
+  const days = [];
+  if (!after || !through) return days;
+  for (let cursor = addDays(after, 1); cursor <= through; cursor = addDays(cursor, 1)) days.push(cursor);
+  return days;
+}
+
 export function mountComposer() {
   const root = document.querySelector("#trip-composer");
-  if (!root || root.dataset.bound) return;
+  if (!root) {
+    destroyComposer();
+    return;
+  }
+  if (root.dataset.bound) return;
+  destroyComposer();
   root.dataset.bound = "1";
   const seeded = parseHash().start;
   const today = new Date();
@@ -42,6 +66,7 @@ export function mountComposer() {
     model.anchor = new Date(start.getFullYear(), start.getMonth(), 1);
   }
   let focusIso = seeded || toIso(new Date(model.anchor.getFullYear(), model.anchor.getMonth(), 1));
+  let saving = null;
   let dragging = false;
   let dragOrigin = "";
   let dragMoved = false;
@@ -132,15 +157,44 @@ export function mountComposer() {
         clearFieldError(root, "city");
         model.cityError = false;
       }
-      if (!model.nameTouched) model.tripName = defaultTripName(model);
-      const name = root.querySelector("[data-trip-name]");
-      if (name && !model.nameTouched) name.value = model.tripName;
+      if (!model.nameTouched) syncTitle();
     }
     if (input.dataset.tripName != null) {
       model.nameTouched = true;
       model.tripName = input.value;
+      syncTitle();
     }
     refreshGate();
+  });
+  root.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.dataset.pto != null) {
+      model.pto = target.checked;
+      return;
+    }
+    if (target instanceof HTMLInputElement && target.dataset.range) {
+      const start = root.querySelector("[data-range=start]")?.value || "";
+      const end = root.querySelector("[data-range=end]")?.value || "";
+      readDraft();
+      model = guardSpan(model, start, end);
+      const reveal = target.value || model.start;
+      if (reveal && !model.pendingSpan) {
+        const date = parseIso(reveal);
+        model.anchor = new Date(date.getFullYear(), date.getMonth(), 1);
+      }
+      draw({ announce: true });
+      return;
+    }
+    if (!(target instanceof HTMLSelectElement)) return;
+    readDraft();
+    if (target.dataset.changeOn) {
+      const nextIso = target.value;
+      model = moveChange(model, target.dataset.changeOn, nextIso);
+      draw({ announce: true });
+      root.querySelector(`[data-change-on="${CSS.escape(nextIso)}"]`)?.focus();
+    } else if (target.dataset.addChange != null) {
+      model.addChoice = target.value;
+    }
   });
   root.addEventListener("click", async (event) => {
     const day = event.target.closest("[data-day]:not(.is-out)");
@@ -158,14 +212,33 @@ export function mountComposer() {
       draw({ announce: false });
       return;
     }
-    if (button.dataset.split != null) {
-      const select = button.parentElement?.querySelector("[data-split-day]") || root.querySelector(`[data-split-for="${button.dataset.split}"]`);
-      model = toggleSplit(model, select?.value || button.dataset.split);
+    if (button.dataset.addCity != null) {
+      readDraft();
+      const iso = root.querySelector("[data-add-change]")?.value;
+      model = changeCity(model, iso);
+      model.addChoice = "";
+      draw({ announce: true });
+      if (iso) root.querySelector(`[data-city-start="${CSS.escape(iso)}"]`)?.focus();
+      return;
+    }
+    if (button.dataset.removeChange != null) {
+      readDraft();
+      model = removeChange(model, button.dataset.removeChange);
       draw({ announce: true });
       return;
     }
-    if (button.dataset.unsplit != null) {
-      model = toggleSplit(model, button.dataset.unsplit);
+    if (button.dataset.confirmSpan != null) {
+      readDraft();
+      model = confirmSpan(model);
+      if (model.start) {
+        const date = parseIso(model.start);
+        model.anchor = new Date(date.getFullYear(), date.getMonth(), 1);
+      }
+      draw({ announce: true });
+      return;
+    }
+    if (button.dataset.keepSpan != null) {
+      model = { ...model, pendingSpan: null };
       draw({ announce: true });
       return;
     }
@@ -185,22 +258,83 @@ export function mountComposer() {
 
   function shell() {
     root.innerHTML = `
+      <div class="composer-dates">
+        <div>
+          <label for="trip-start">Leave date</label>
+          <input id="trip-start" type="date" data-range="start" value="${escapeAttr(model.start || "")}">
+        </div>
+        <div>
+          <label for="trip-end">Return date</label>
+          <input id="trip-end" type="date" data-range="end" value="${escapeAttr(model.end || "")}">
+        </div>
+        <p id="composer-span" class="composer-span"></p>
+        <div id="composer-range-note" class="composer-range-note" hidden>
+          <p></p>
+          <button type="button" class="btn btn-ghost btn-sm" data-confirm-span>Shorten anyway</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-keep-span>Keep these dates</button>
+        </div>
+      </div>
       <div class="composer-bar">
         <button type="button" data-shift="-1" aria-label="Previous month">‹ Previous month</button>
         <button type="button" data-shift="1" aria-label="Next month">Next month ›</button>
+      </div>
+      <div class="composer-months"></div>
+      <div class="composer-cities"></div>
+      <p class="composer-title" data-title-preview></p>
+      <details class="rename-trip">
+        <summary>Rename trip</summary>
+        <label for="trip-name">Trip title</label>
+        <input id="trip-name" data-trip-name value="" autocomplete="off">
+      </details>
+      <div class="composer-save">
         <label class="check"><input type="checkbox" data-pto checked> <span>Counts as PTO</span></label>
         <button type="button" class="btn btn-primary" data-save aria-disabled="true" aria-describedby="save-help">Save trip</button>
       </div>
-      <p id="save-help" class="field-help">Pick dates and name at least one city.</p>
-      <div class="composer-months"></div>
-      <div class="composer-cities"></div>
+      <p id="save-help" class="field-help">Pick dates and name every destination.</p>
       ${DECISIONS.moreDetails ? `<details class="more-details"><summary>Add travel details (optional)</summary>${legFields("outbound")}<div id="connections"></div><p><button class="btn btn-ghost btn-sm" type="button" data-action="add-connection">Add a connection</button></p>${legFields("inbound")}</details>` : ""}`;
-    root.querySelector("[data-pto]")?.addEventListener("change", (event) => {
-      model.pto = event.target.checked;
+  }
+
+  function focusToken(node) {
+    if (!(node instanceof HTMLElement) || !root.contains(node)) return null;
+    if (node.dataset.cityStart) return { kind: "city", value: node.dataset.cityStart, start: node.selectionStart, end: node.selectionEnd };
+    if (node.dataset.tripName != null) return { kind: "title", start: node.selectionStart, end: node.selectionEnd };
+    if (node.dataset.changeOn) return { kind: "change", value: node.dataset.changeOn };
+    if (node.dataset.addChange != null) return { kind: "add" };
+    return null;
+  }
+
+  function restoreFocus(token) {
+    if (!token) return;
+    let node = null;
+    if (token.kind === "city") node = root.querySelector(`[data-city-start="${CSS.escape(token.value)}"]`);
+    else if (token.kind === "title") node = root.querySelector("[data-trip-name]");
+    else if (token.kind === "change") node = root.querySelector(`[data-change-on="${CSS.escape(token.value)}"]`);
+    else if (token.kind === "add") node = root.querySelector("[data-add-change]");
+    if (!(node instanceof HTMLElement)) return;
+    node.focus({ preventScroll: true });
+    if (typeof token.start === "number" && node.setSelectionRange) {
+      try { node.setSelectionRange(token.start, token.end); } catch { /* date and select inputs */ }
+    }
+  }
+
+  function readDraft() {
+    const parts = segments(model);
+    const cities = { ...(model.cities || {}) };
+    root.querySelectorAll("[data-city-start]").forEach((input) => {
+      if (!parts.length || parts.some((part) => part.key === input.dataset.cityStart)) {
+        cities[input.dataset.cityStart] = input.value;
+      }
     });
+    model.cities = cities;
+    const named = root.querySelector("[data-trip-name]");
+    if (named && model.nameTouched) model.tripName = named.value;
+    else if (!model.nameTouched) model.tripName = "";
+    const pto = root.querySelector("[data-pto]");
+    if (pto) model.pto = pto.checked;
   }
 
   function draw({ announce }) {
+    const token = focusToken(document.activeElement);
     const offsets = narrow() ? [0] : [0, 1];
     const months = offsets.map((offset) => new Date(model.anchor.getFullYear(), model.anchor.getMonth() + offset, 1));
     const summary = summaryText(model.start, model.end);
@@ -209,20 +343,60 @@ export function mountComposer() {
     refreshGate();
     paintDays();
     paintCities();
+    syncDates();
+    syncTitle();
+    restoreFocus(token);
     const live = document.querySelector("#composer-summary");
     if (live && (announce || !live.textContent)) live.textContent = summary;
   }
 
+  function syncDates() {
+    const start = root.querySelector("[data-range=start]");
+    const end = root.querySelector("[data-range=end]");
+    if (start) start.value = model.start || "";
+    if (end) end.value = model.end || "";
+    const span = root.querySelector("#composer-span");
+    if (span) span.textContent = summaryText(model.start, model.end);
+    const note = root.querySelector("#composer-range-note");
+    const text = note?.querySelector("p");
+    const confirm = root.querySelector("[data-confirm-span]");
+    const pending = model.pendingSpan;
+    if (!note || !text || !confirm) return;
+    if (!pending?.dropped?.length) {
+      note.hidden = true;
+      return;
+    }
+    note.hidden = false;
+    const names = pending.dropped.map((item) => item.city).join(", ");
+    if (pending.reset) {
+      text.textContent = `Starting over drops ${names}. Start over, or keep these dates.`;
+      confirm.textContent = "Start over";
+    } else if (!pending.end || !pending.start) {
+      text.textContent = `That date change drops ${names}. Change the dates, or keep these dates.`;
+      confirm.textContent = "Change the dates";
+    } else {
+      text.textContent = `${names} would fall outside ${shortRange(pending.start, pending.end)}. Shorten anyway, or keep these dates.`;
+      confirm.textContent = "Shorten anyway";
+    }
+  }
+
+  function syncTitle() {
+    const generated = defaultTripName({ ...model, nameTouched: false });
+    const custom = model.nameTouched ? String(model.tripName || "").trim() : "";
+    const shown = custom || generated;
+    const preview = root.querySelector("[data-title-preview]");
+    if (preview) preview.textContent = shown ? `Trip title: ${shown}` : "Trip title follows the destinations.";
+    const input = root.querySelector("[data-trip-name]");
+    if (input && document.activeElement !== input && !model.nameTouched) input.value = generated;
+  }
+
   function refreshGate() {
-    root.querySelectorAll("[data-city-start]").forEach((input) => {
-      model.cities[input.dataset.cityStart] = input.value;
-    });
-    const named = root.querySelector("[data-trip-name]");
-    if (named) model.tripName = named.value;
-    const gate = saveState({ ...model, tripName: model.tripName || defaultTripName(model) });
-    root.querySelector("[data-save]")?.setAttribute("aria-disabled", gate.ok ? "false" : "true");
+    const gate = saveState(model);
+    const button = root.querySelector("[data-save]");
+    if (saving) button?.setAttribute("aria-disabled", "true");
+    else button?.setAttribute("aria-disabled", gate.ok ? "false" : "true");
     const help = root.querySelector("#save-help");
-    if (help && !root.querySelector("[aria-invalid=true]")) help.textContent = gate.ok ? "" : "Pick dates and name at least one city.";
+    if (help && !root.querySelector("[aria-invalid=true]")) help.textContent = gate.ok ? "" : (gate.helper || "Pick dates and name every destination.");
   }
 
   function drawMonth(monthDate) {
@@ -233,7 +407,7 @@ export function mountComposer() {
       const selected = Boolean(model.start && cell.iso >= model.start && model.end && cell.iso <= model.end) || cell.iso === model.start;
       return gridDay(cell, { focusIso, selected, label: escapeAttr(dayName(cell.iso, model)) });
     }).join("")}</div>`).join("");
-    return `<section><h2>${escapeAttr(label)}</h2><div class="composer-grid" role="grid" aria-multiselectable="true" aria-label="${escapeAttr(label)}" style="touch-action:none"><div role="row" class="composer-dow">${heads}</div>${body}</div></section>`;
+    return `<section><h2>${escapeAttr(label)}</h2><div class="composer-grid" role="grid" aria-multiselectable="true" aria-label="${escapeAttr(label)}"><div role="row" class="composer-dow">${heads}</div>${body}</div></section>`;
   }
 
   function paintDays() {
@@ -257,37 +431,56 @@ export function mountComposer() {
     }
   }
 
+  function optionList(days, selected) {
+    return days.map((day) => `<option value="${day}"${day === selected ? " selected" : ""}>${escapeAttr(shortRange(day, day))}</option>`).join("");
+  }
+
   function paintCities() {
     const box = root.querySelector(".composer-cities");
     if (!box) return;
     const parts = segments(model);
-    box.innerHTML = parts.map((part, index) => {
-      const days = segmentDays(part).filter((day) => day > part.arrive);
-      const options = days.map((day) => `<option value="${day}">${escapeAttr(shortRange(day, day))}</option>`).join("");
-      const remove = index > 0 ? `<button type="button" data-unsplit="${escapeAttr(part.key)}">Remove split</button>` : "";
+    const cards = parts.map((part, index) => {
+      const label = index === 0 ? "Destination city" : "Next destination";
+      const boundary = index > 0 ? daysBetween(parts[index - 1].arrive, part.leave) : [];
+      const change = boundary.length ? `<div class="change-city">
+          <label for="change-${escapeAttr(part.key)}">Change city on</label>
+          <select id="change-${escapeAttr(part.key)}" data-change-on="${escapeAttr(part.key)}">${optionList(boundary, part.key)}</select>
+          <button type="button" class="btn btn-ghost btn-sm" data-remove-change="${escapeAttr(part.key)}">Remove change</button>
+        </div>` : "";
       return `<div class="composer-city" style="--city:${cityColor(index)}">
         <span class="city-swatch" aria-hidden="true"></span>
-        <label for="city-${escapeAttr(part.key)}">City ${index + 1} · ${escapeAttr(shortRange(part.arrive, part.leave))} <span class="field-note">(required)</span></label>
+        <label for="city-${escapeAttr(part.key)}">${label} <span class="field-note">(required)</span></label>
         <input id="city-${escapeAttr(part.key)}" data-city-start="${escapeAttr(part.key)}" value="${escapeAttr(model.cities[part.key] || "")}" autocomplete="off" aria-required="true">
-        ${options ? `<select data-split-day data-split-for="${escapeAttr(part.key)}" aria-label="Split ${index + 1} after">${options}</select><button type="button" class="chip-choice" data-split="${escapeAttr(part.key)}">Split…</button>` : ""}
-        ${remove}
+        ${change}
       </div>`;
-    }).join("") + (parts.length ? `<label for="trip-name">Trip name <span class="field-note">(optional)</span></label><input id="trip-name" data-trip-name value="${escapeAttr(model.tripName || defaultTripName(model))}" autocomplete="off">` : "");
+    }).join("");
+    const last = parts[parts.length - 1];
+    const openDays = last ? daysBetween(last.arrive, last.leave) : [];
+    const selectedAdd = openDays.includes(model.addChoice) ? model.addChoice : openDays[Math.floor((openDays.length - 1) / 2)] || "";
+    const add = openDays.length ? `<div class="change-city">
+        <label for="add-change">Change city on</label>
+        <select id="add-change" data-add-change>${optionList(openDays, selectedAdd)}</select>
+        <button type="button" class="btn btn-ghost btn-sm" data-add-city>Add destination</button>
+      </div>` : "";
+    const preview = parts.map((part) => {
+      const city = String(model.cities[part.key] || "").trim();
+      const when = shortRange(part.arrive, part.leave);
+      return `<li>${escapeAttr(city ? `${city} · ${when}` : when)}</li>`;
+    }).join("");
+    box.innerHTML = `${cards}${add}${preview ? `<ul class="segment-preview">${preview}</ul>` : ""}`;
     if (model.cityError) {
-      const input = root.querySelector("[data-city-start]");
+      const input = root.querySelector(`[data-city-start="${CSS.escape(model.cityErrorKey || "")}"]`) || root.querySelector("[data-city-start]");
       if (input) input.name = "city";
       applyFieldError(root, "city", "Name the city.", { focus: false });
     }
   }
 
   async function save() {
+    if (saving) return saving;
+    readDraft();
     clearFormErrors(root);
     clearFieldError(root, "city");
     model.cityError = false;
-    model.tripName = root.querySelector("[data-trip-name]")?.value ?? model.tripName;
-    root.querySelectorAll("[data-city-start]").forEach((input) => {
-      model.cities[input.dataset.cityStart] = input.value;
-    });
     const gate = saveState(model);
     const help = root.querySelector("#save-help");
     if (!gate.ok) {
@@ -295,16 +488,19 @@ export function mountComposer() {
       root.querySelector("[data-save]")?.setAttribute("aria-disabled", "true");
       if (gate.focus === "grid") root.querySelector('[data-day][tabindex="0"]')?.focus();
       if (gate.focus === "city") {
-        const input = root.querySelector("[data-city-start]");
+        const input = root.querySelector(`[data-city-start="${CSS.escape(gate.cityKey || "")}"]`) || root.querySelector("[data-city-start]");
+        model.cityErrorKey = gate.cityKey || input?.dataset.cityStart || "";
         if (input) input.name = "city";
         model.cityError = true;
         applyFieldError(root, "city", "Name the city.");
       }
       return;
     }
-    const stays = gate.parts
-      .map((part) => ({ city: String(model.cities[part.key] || "").trim(), arrive_on: part.arrive, leave_on: part.leave }))
-      .filter((stay) => stay.city);
+    const stays = gate.parts.map((part) => ({
+      city: part.city,
+      arrive_on: part.arrive,
+      leave_on: part.leave,
+    }));
     const transports = [];
     for (const role of ["outbound", "inbound"]) {
       const node = root.querySelector(`[data-leg=${role}]`);
@@ -316,6 +512,15 @@ export function mountComposer() {
       const leg = readLeg(row, "connection");
       if (leg.depart_place || leg.arrive_place) transports.push(leg);
     });
+    const button = root.querySelector("[data-save]");
+    button?.setAttribute("aria-busy", "true");
+    button?.setAttribute("aria-disabled", "true");
+    if (button) button.textContent = "Saving…";
+    saving = submit(gate, stays, transports);
+    return saving;
+  }
+
+  async function submit(gate, stays, transports) {
     try {
       const trip = await api("/api/trips", {
         method: "POST",
@@ -334,6 +539,11 @@ export function mountComposer() {
       saved("Trip created.");
       location.hash = `#/trips/${trip.id}`;
     } catch (reason) {
+      saving = null;
+      const button = root.querySelector("[data-save]");
+      if (button) button.textContent = "Save trip";
+      button?.removeAttribute("aria-busy");
+      refreshGate();
       const detail = reason?.message || "Something went wrong.";
       fail(
         { message: `Couldn't save the trip. ${detail}`, status: reason?.status || 0 },
@@ -345,9 +555,15 @@ export function mountComposer() {
   shell();
   draw({ announce: true });
   let wasNarrow = narrow();
-  window.addEventListener("resize", () => {
+  const onResize = () => {
+    if (!root.isConnected) {
+      destroyComposer();
+      return;
+    }
     if (narrow() === wasNarrow) return;
     wasNarrow = narrow();
     draw({ announce: false });
-  });
+  };
+  window.addEventListener("resize", onResize);
+  stopComposer = () => window.removeEventListener("resize", onResize);
 }
