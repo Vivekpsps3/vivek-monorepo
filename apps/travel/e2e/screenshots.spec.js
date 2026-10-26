@@ -309,55 +309,92 @@ test("travel ux matrix", async ({ page, request }) => {
         await expect(page.locator(".field-error[data-error-for]")).toBeVisible();
       });
       await go("transport-blank", `#/trips/${ids.one.id}`);
-      await go("transport-focused", `#/trips/${ids.one.id}`, () => page.locator("#add-transport-outbound").focus());
+      await go("transport-focused", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add transport" }).click();
+        await page.locator("#add-transport-outbound").focus();
+      });
       await go("transport-filled", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add transport" }).click();
         await page.locator("#add-transport-outbound").fill("SFO");
         await page.locator("#add-transport-outbound-to").fill("KIX");
       });
       await go("transport-validation", `#/trips/${ids.one.id}`, async () => {
-        await page.locator("#add-transport-local").fill("");
-        await page.locator("form[data-form=transport]").filter({ has: page.locator("#add-transport-local") }).getByRole("button", { name: "Add" }).click();
+        await page.getByRole("button", { name: "Add transport" }).click();
+        await page.locator("form[data-form=transport]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".field-error[data-error-for]")).toBeVisible();
       });
       await go("plan-blank", `#/trips/${ids.one.id}`);
-      await go("plan-focused", `#/trips/${ids.one.id}`, () => page.locator("#add-plan-2026-10-24").focus());
-      await go("plan-filled", `#/trips/${ids.one.id}`, () => page.locator("#add-plan-2026-10-24").fill("Morning walk"));
+      await go("plan-focused", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add activity" }).click();
+        await page.locator("#add-plan-2026-10-24").focus();
+      });
+      await go("plan-filled", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add activity" }).click();
+        await page.locator("#add-plan-2026-10-24").fill("Morning walk");
+      });
       await go("plan-validation", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add activity" }).click();
         await page.locator("#add-plan-2026-10-24").fill("");
-        await page.locator("form[data-form=plan]").first().getByRole("button", { name: "Add" }).click();
+        await page.locator("form.add-row[data-form=plan]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".field-error[data-error-for]")).toBeVisible();
       });
       await go("parking-blank", `#/trips/${ids.one.id}`);
-      await go("parking-focused", `#/trips/${ids.one.id}`, () => page.locator("#add-parking").focus());
-      await go("parking-filled", `#/trips/${ids.one.id}`, () => page.locator("#add-parking").fill("Garage"));
+      await go("parking-focused", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add parking" }).click();
+        await page.locator("#add-parking").focus();
+      });
+      await go("parking-filled", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add parking" }).click();
+        await page.locator("#add-parking").fill("Garage");
+      });
       await go("parking-validation", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add parking" }).click();
         await page.locator("#add-parking").fill("");
         await page.locator("form[data-form=parking]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".field-error[data-error-for]")).toBeVisible();
       });
       await go("budget-blank", `#/trips/${ids.one.id}`);
-      await go("budget-focused", `#/trips/${ids.one.id}`, () => page.locator("#add-cost").focus());
+      await go("budget-focused", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add cost" }).click();
+        await page.locator("#add-cost").focus();
+      });
       await go("budget-filled", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add cost" }).click();
         await page.locator("#add-cost").fill("Snacks");
         await page.locator("#add-cost-amount").fill("12.00");
       });
       await go("budget-validation", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add cost" }).click();
         await page.locator("#add-cost").fill("");
         await page.locator("form[data-form=budget]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".field-error[data-error-for]")).toBeVisible();
       });
       await go("note-blank", `#/trips/${ids.one.id}`);
-      await go("note-focused", `#/trips/${ids.one.id}`, () => page.locator("#add-note").focus());
-      await go("note-filled", `#/trips/${ids.one.id}`, () => page.locator("#add-note").fill("A long note about the train that keeps going so the field wraps."));
+      await go("note-focused", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add note" }).click();
+        await page.locator("#add-note").focus();
+      });
+      await go("note-filled", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add note" }).click();
+        await page.locator("#add-note").fill("A long note about the train that keeps going so the field wraps.");
+      });
       await go("note-validation", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add note" }).click();
         await page.locator("#add-note").fill("");
         await page.locator("form[data-form=note]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".field-error[data-error-for]")).toBeVisible();
       });
       await go("reminder-blank", `#/trips/${ids.one.id}`);
-      await go("reminder-focused", `#/trips/${ids.one.id}`, () => page.locator("#add-reminder").focus());
-      await go("reminder-filled", `#/trips/${ids.one.id}`, () => page.locator("#add-reminder").fill("Pack a coat"));
+      await go("reminder-focused", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add reminder" }).click();
+        await page.locator("#add-reminder").focus();
+      });
+      await go("reminder-filled", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add reminder" }).click();
+        await page.locator("#add-reminder").fill("Pack a coat");
+      });
       await go("reminder-validation", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add reminder" }).click();
         await page.locator("#add-reminder").fill("");
         await page.locator("form[data-form=reminder]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".field-error[data-error-for]")).toBeVisible();
@@ -510,6 +547,7 @@ test("travel ux matrix", async ({ page, request }) => {
       });
       await go("note-servererror", `#/trips/${ids.one.id}`, async () => {
         await page.route("**/api/trips/**/notes", (route) => route.fulfill({ status: 500, contentType: "application/json", body: '{"detail":"Synthetic server error."}' }));
+        await page.getByRole("button", { name: "Add note" }).click();
         await page.locator("#add-note").fill("Server please fail");
         await page.locator("form[data-form=note]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".toast").first()).toBeVisible();
@@ -517,6 +555,7 @@ test("travel ux matrix", async ({ page, request }) => {
       await page.unrouteAll({ behavior: "ignoreErrors" });
       await clearToasts(page);
       await go("note-success", `#/trips/${ids.one.id}`, async () => {
+        await page.getByRole("button", { name: "Add note" }).click();
         await page.locator("#add-note").fill("Saved from the form");
         await page.locator("form[data-form=note]").getByRole("button", { name: "Add" }).click();
         await expect(page.locator(".toast")).toContainText("Note added.");

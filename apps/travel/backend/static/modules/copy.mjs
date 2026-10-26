@@ -5,13 +5,9 @@ export function actionName(verb, noun, label) {
   return name ? `${verb} ${noun} ${name}` : `${verb} ${noun}`;
 }
 
-export function sectionHint(section, { empty = false, roleLabel = "" } = {}) {
-  if (section === "role" && empty) return `No ${String(roleLabel).toLowerCase()} ride yet.`;
+export function sectionHint(section, { empty = false } = {}) {
   if (!empty) return "";
   if (section === "cities") return "Add the first city.";
-  if (section === "transport") return "How are you getting there?";
-  if (section === "parking") return "Need parking at the airport?";
-  if (section === "budget") return "No costs yet.";
   return "";
 }
 

@@ -7,8 +7,48 @@ import { DECISIONS } from "../modules/decisions.mjs";
 import { formatDays } from "../modules/labels.mjs";
 import { deletionMode } from "../modules/restore.mjs";
 import { homeState, screenNav } from "../modules/screens.mjs";
-import { transportForm } from "../modules/views/new-trip.mjs";
+import { state } from "../modules/state.mjs";
+import { renderTrip } from "../modules/views/trip.mjs";
 import { weekStartsOn } from "../../shared-browser/week.mjs";
+
+function rideStatusHtml() {
+  const previous = {
+    compose: state.compose,
+    composeRole: state.composeRole,
+    composeDate: state.composeDate,
+    edit: state.edit,
+    details: state.details,
+  };
+  state.compose = "transport";
+  state.composeRole = "outbound";
+  state.composeDate = "";
+  state.edit = null;
+  state.details = null;
+  try {
+    return renderTrip({
+      id: 1,
+      title: "Kyoto",
+      status: "planning",
+      start_date: "2026-10-24",
+      end_date: "2026-10-24",
+      origin_label: "",
+      counts_as_pto: false,
+      span_days: 1,
+      nights: 0,
+      budget: { currencies: [], lines: [], manual: [] },
+      cities: [],
+      stays: [],
+      transports: [],
+      days: [{ on_date: "2026-10-24", city: "", items: [], transports: [] }],
+      outside_plans: [],
+      parking: [],
+      note_entries: [],
+      reminders: [],
+    }, "");
+  } finally {
+    Object.assign(state, previous);
+  }
+}
 
 function withFlag(key, value, run) {
   const previous = DECISIONS[key];
@@ -31,8 +71,8 @@ test("each decision flag changes the behavior it owns", () => {
   assert.equal(withFlag("cityRequired", true, () => saveState(open).ok), false);
   assert.equal(withFlag("cityRequired", false, () => saveState(open).ok), true);
 
-  assert.match(withFlag("legStatuses", [["planned", "Draft"]], () => transportForm(null, "outbound")), /Draft/);
-  assert.equal(withFlag("legStatuses", [["planned", "Planning"]], () => transportForm(null, "outbound").includes("Draft")), false);
+  assert.match(withFlag("legStatuses", [["planned", "Draft"]], rideStatusHtml), /Draft/);
+  assert.equal(withFlag("legStatuses", [["planned", "Planning"]], () => rideStatusHtml().includes("Draft")), false);
   assert.equal(screenNav("new"), "");
   assert.equal(homeState({ in_progress: [], upcoming: [], past: [] }).metrics, false);
   assert.equal(homeState({ in_progress: [{}], upcoming: [], past: [] }).metrics, true);

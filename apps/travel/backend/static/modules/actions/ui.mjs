@@ -26,25 +26,11 @@ export async function onAction(button, ui) {
     return;
   }
   if (action === "cancel") {
-    const edit = state.edit;
-    state.edit = null;
-    state.details = null;
-    state.compose = "";
-    state.error = "";
-    if (edit?.kind === "trip") state.focusKey = "edit-trip";
-    else if (edit?.kind) state.focusKey = `edit-${edit.kind}-${edit.id}`;
+    const edit = closeEditor();
     if (state.trip && parseHash().name === "trip") {
       if (edit?.kind === "trip" && state.trip.title) document.title = `${state.trip.title} · Travel`;
       ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     }
-    return;
-  }
-  if (action === "more-details") {
-    const kind = button.dataset.kind;
-    const id = button.dataset.id || "";
-    const same = state.details && state.details.kind === kind && String(state.details.id) === String(id);
-    state.details = same ? null : { kind, id };
-    if (state.trip && parseHash().name === "trip") ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     return;
   }
   if (action === "add-city") {
@@ -61,17 +47,33 @@ export async function onAction(button, ui) {
     return;
   }
   if (action === "compose") {
-    state.compose = button.dataset.compose;
-    state.composeDate = button.dataset.date || "";
-    state.composeRole = button.dataset.role || "outbound";
+    const next = button.dataset.compose || "";
+    const date = button.dataset.date || "";
+    const same = state.compose === next && state.composeDate === date;
     state.edit = null;
-    ui.paint(renderTrip(state.trip, state.composeDate), "home");
+    state.details = null;
+    state.error = "";
+    if (same) {
+      state.compose = next === "plan" ? "skip" : "";
+      state.composeDate = "";
+      state.focusKey = next === "plan" ? `day-${date}` : (button.dataset.focusKey || "");
+    } else {
+      state.compose = next;
+      state.composeDate = date;
+      state.composeRole = button.dataset.role || state.composeRole || "outbound";
+      if (next === "plan") state.focusKey = `add-plan-${date}`;
+      else if (next === "transport") state.focusKey = "add-transport";
+      else state.focusKey = button.dataset.focusKey || "";
+    }
+    if (state.trip) ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     return;
   }
   if (action === "edit") {
     state.edit = { kind: button.dataset.kind, id: Number(button.dataset.id) };
     state.compose = "";
+    state.composeDate = "";
     state.details = null;
+    state.focusKey = button.dataset.focusKey || "";
     if (button.dataset.kind === "trip") document.title = "Edit trip · Travel";
     ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
     return;
@@ -360,6 +362,10 @@ export function bindEvents(ui) {
     const form = target.closest("form");
     const flight = form && form.querySelector("[data-flight-only]");
     if (flight) flight.hidden = target.value !== "flight";
+    if (target.value === "flight") {
+      const extra = form?.querySelector("details.ride-more");
+      if (extra) extra.open = true;
+    }
   });
   document.addEventListener("input", (event) => {
     if (event.target?.name === "notes") updateNotesCount(event.target);
@@ -388,15 +394,32 @@ export function bindEvents(ui) {
       }
       return;
     }
-    if (!state.edit && !state.details) return;
-    const edit = state.edit;
-    state.edit = null;
-    state.details = null;
-    state.compose = "";
-    if (edit?.kind === "trip") state.focusKey = "edit-trip";
-    else if (edit?.kind) state.focusKey = `edit-${edit.kind}-${edit.id}`;
+    if (!state.edit && !state.compose) return;
+    const edit = closeEditor();
+    if (edit?.kind === "trip" && state.trip?.title) document.title = `${state.trip.title} · Travel`;
     if (state.trip && parseHash().name === "trip") ui.paint(renderTrip(state.trip, parseHash().focusDay), "home");
   });
+}
+
+function closeEditor() {
+  const edit = state.edit;
+  const compose = state.compose;
+  const composeDate = state.composeDate;
+  state.edit = null;
+  state.details = null;
+  state.error = "";
+  state.flights = [];
+  if (edit?.kind === "trip") state.focusKey = "edit-trip";
+  else if (edit?.kind) state.focusKey = `edit-${edit.kind}-${edit.id}`;
+  else if (compose === "transport") state.focusKey = "add-transport";
+  else if (compose === "plan") state.focusKey = `day-${composeDate}`;
+  else if (compose === "parking") state.focusKey = "add-parking";
+  else if (compose === "note") state.focusKey = "add-note";
+  else if (compose === "reminder") state.focusKey = "add-reminder";
+  else if (compose === "budget") state.focusKey = "add-cost";
+  state.compose = compose === "plan" || edit?.kind === "plan" ? "skip" : "";
+  state.composeDate = "";
+  return edit;
 }
 
 function updateNotesCount(field) {

@@ -200,7 +200,7 @@ async function submitBody(kind, form, ui) {
     state.compose = "";
     state.edit = null;
     state.flights = [];
-    state.focusKey = form.dataset.id ? `edit-transport-${form.dataset.id}` : `add-transport-${form.elements.role?.value || "outbound"}`;
+    state.focusKey = form.dataset.id ? `edit-transport-${form.dataset.id}` : "add-transport";
     committed(kind, form.dataset.id ? "Ride saved." : "Ride added.");
     ui.paint(renderTrip(state.trip), "home");
     return;
@@ -226,7 +226,7 @@ async function submitBody(kind, form, ui) {
     state.trip = await api(path, { method: form.dataset.id ? "PATCH" : "POST", body: JSON.stringify(body) });
     state.compose = "";
     state.edit = null;
-    state.focusKey = form.dataset.id ? `edit-plan-${form.dataset.id}` : `add-plan-${body.on_date}`;
+    state.focusKey = form.dataset.id ? `edit-plan-${form.dataset.id}` : `day-${body.on_date}`;
     committed(kind, form.dataset.id ? "Plan saved." : "Plan added.");
     ui.paint(renderTrip(state.trip, body.on_date), "home");
     return;

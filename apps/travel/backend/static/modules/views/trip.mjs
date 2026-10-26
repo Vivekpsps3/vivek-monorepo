@@ -1,24 +1,31 @@
-import { state, ROLES, MODES, KINDS, STATUSES } from '../state.mjs';
+import { state, ROLES, MODES, KINDS, STATUSES, ARRANGEMENTS, NECESSARY } from '../state.mjs';
 import { DECISIONS } from '../decisions.mjs';
 import { esc, banner, field, area, select, check, actions, labelOf, prettyRange, prettyDate, money, daysText, budgetText, transportSummary, flightMeta, parkingChip, localInput, spanText, nightsAwayText } from '../helpers.mjs';
 import { actionName, sectionHint } from '../copy.mjs';
-import { stayForm, transportForm, planForm, parkingForm } from './new-trip.mjs';
+import { hiddenFlight } from './new-trip.mjs';
 
 export function editing(kind, id) {
   return state.edit && state.edit.kind === kind && String(state.edit.id) === String(id);
-}
-
-function detailsOpen(kind, id) {
-  return DECISIONS.moreDetails && state.details && state.details.kind === kind && String(state.details.id) === String(id);
 }
 
 function hid(name, value) {
   return `<input type="hidden" name="${name}" value="${esc(value ?? "")}">`;
 }
 
-function moreButton(kind, id) {
-  if (!DECISIONS.moreDetails) return "";
-  return `<button class="btn btn-ghost btn-sm" type="button" data-action="more-details" data-kind="${esc(kind)}" data-id="${esc(id)}">More details</button>`;
+function composing(kind) {
+  return state.compose === kind && !(state.edit && state.edit.kind === kind);
+}
+
+function chosenDay(focusDay) {
+  if (state.compose === "plan") return state.composeDate || "";
+  if (state.compose) return "";
+  return focusDay || "";
+}
+
+function optionalSection(title, show, body, editor, kind, label, focusKey) {
+  if (!show) return "";
+  const add = editor || `<button class="btn btn-ghost btn-sm" type="button" data-action="compose" data-compose="${esc(kind)}" data-focus-key="${esc(focusKey)}">${esc(label)}</button>`;
+  return `<section class="card"><h2>${esc(title)}</h2>${body}${add}</section>`;
 }
 
 function iconButton(verb, noun, label, attrs) {
@@ -31,13 +38,12 @@ function flagBox(kind, item, flag, text) {
   return `<label class="check"><input type="checkbox" data-save-flag="${esc(flag)}" data-kind="${esc(kind)}" data-id="${esc(item.id)}" data-focus-key="flag-${kind}-${item.id}-${flag}"${on ? " checked" : ""}> <span>${esc(text)}</span></label>`;
 }
 
-function addForm({ kind, id = "", label, focusKey, controls, hidden = "", pair = false, submitLabel = "Add" }) {
+function addForm({ kind, id = "", label, focusKey, controls, hidden = "", pair = false, submitLabel = "Add", cancel = false, required = false }) {
   return `<form class="add-row${pair ? " is-pair" : ""}" data-form="${esc(kind)}"${id !== "" && id != null ? ` data-id="${esc(id)}"` : ""}>
-    <label class="add-label" for="${esc(focusKey)}">${esc(label)}</label>
+    <label class="add-label" for="${esc(focusKey)}">${esc(label)}${required ? requiredMark() : ""}</label>
     ${controls}
     <button class="btn btn-secondary btn-sm" type="submit">${esc(submitLabel)}</button>
-    ${moreButton(kind, id || "")}
-    ${id !== "" && id != null ? `<button class="btn btn-ghost btn-sm" type="button" data-action="cancel" data-focus-key="edit-${kind}-${id}">Cancel</button>` : ""}
+    ${cancel || (id !== "" && id != null) ? `<button class="btn btn-ghost btn-sm" type="button" data-action="cancel">Cancel</button>` : ""}
     ${hidden}
   </form>`;
 }
@@ -48,47 +54,100 @@ function rowActions(parts) {
   return `<div class="row-actions">${items.slice(0, 2).join("")}<details class="row-more"><summary class="btn btn-ghost btn-sm" aria-label="More actions">⋯</summary>${items.slice(2).join("")}</details></div>`;
 }
 
-function textControl(name, value, { id, placeholder = "", required = false, inputmode = "" } = {}) {
-  return `<input id="${esc(id)}" name="${esc(name)}" value="${esc(value ?? "")}"${placeholder ? ` placeholder="${esc(placeholder)}"` : ""} autocomplete="off"${required ? ` required aria-required="true"` : ""}${inputmode ? ` inputmode="${esc(inputmode)}"` : ""}>`;
+function textControl(name, value, { id, placeholder = "", required = false, inputmode = "", focusKey = "" } = {}) {
+  return `<input id="${esc(id)}" name="${esc(name)}" value="${esc(value ?? "")}"${placeholder ? ` placeholder="${esc(placeholder)}"` : ""} autocomplete="off"${required ? ` required aria-required="true"` : ""}${inputmode ? ` inputmode="${esc(inputmode)}"` : ""}${focusKey ? ` data-focus-key="${esc(focusKey)}"` : ""}>`;
 }
 
-function cityEditor(stay, trip) {
-  if (detailsOpen("stay", stay ? stay.id : "")) return stayForm(stay || { arrive_on: trip.start_date, leave_on: trip.end_date });
-  if (stay && editing("stay", stay.id)) {
-    return addForm({
-      kind: "stay",
-      id: stay.id,
-      label: "City",
-      focusKey: `edit-stay-${stay.id}`,
-      submitLabel: "Save",
-      controls: textControl("city", stay.city, { id: `edit-stay-${stay.id}`, required: true }),
-      hidden: `${hid("region", stay.region)}${hid("country", stay.country)}${hid("arrive_on", stay.arrive_on)}${hid("leave_on", stay.leave_on)}${hid("lodging_name", stay.lodging_name)}${hid("lodging_address", stay.lodging_address)}${hid("lat", stay.lat)}${hid("lng", stay.lng)}${hid("notes", stay.notes)}`,
-    });
-  }
-  return "";
+function requiredMark() {
+  return ` <span class="field-note">(required)</span>`;
+}
+
+function cityEditor(stay) {
+  if (!stay || !editing("stay", stay.id)) return "";
+  const focus = `edit-stay-${stay.id}`;
+  return `<form class="stack editor" data-form="stay" data-id="${esc(stay.id)}"><div class="form-grid">
+      ${field("City", "city", stay.city || "", { required: true, focusKey: focus, scope: `stay-${stay.id}` })}
+    </div>
+    <details class="ride-more"><summary>More details</summary><div class="form-grid">
+      ${field("Region", "region", stay.region || "", { scope: `stay-${stay.id}` })}
+      ${field("Country", "country", stay.country || "", { scope: `stay-${stay.id}` })}
+      ${field("Arrive", "arrive_on", stay.arrive_on || "", "date", { scope: `stay-${stay.id}` })}
+      ${field("Leave", "leave_on", stay.leave_on || "", "date", { scope: `stay-${stay.id}` })}
+      ${field("Lodging", "lodging_name", stay.lodging_name || "", { scope: `stay-${stay.id}` })}
+      ${field("Address", "lodging_address", stay.lodging_address || "", { wide: true, scope: `stay-${stay.id}` })}
+      ${field("Latitude", "lat", stay.lat ?? "", { scope: `stay-${stay.id}` })}
+      ${field("Longitude", "lng", stay.lng ?? "", { scope: `stay-${stay.id}` })}
+      ${area("Notes", "notes", stay.notes || "", { scope: `stay-${stay.id}` })}
+    </div><button class="btn btn-secondary btn-sm" type="button" data-action="find-place">Find on map</button><div data-place-hits></div></details>
+    ${actions("Save city")}</form>`;
 }
 
 function cityRow(stay) {
   const open = cityEditor(stay);
-  if (open && (editing("stay", stay.id) || detailsOpen("stay", stay.id))) return open;
+  if (open) return open;
   return `<div class="ride"${stay.lat != null ? ` data-map-lat="${stay.lat}" data-map-lng="${stay.lng}"` : ""}><div><strong>${esc(stay.city)}</strong><p class="meta">${esc(prettyRange(stay.arrive_on, stay.leave_on))}${stay.lodging_name ? ` · ${esc(stay.lodging_name)}` : ""}</p></div><div class="row-actions">${iconButton("Edit", "city", stay.city, `data-action="edit" data-kind="stay" data-id="${stay.id}" data-focus-key="edit-stay-${stay.id}"`)}${iconButton("Delete", "city", stay.city, `data-action="delete" data-kind="stay" data-id="${stay.id}"`)}</div></div>`;
 }
 
+function modeControl(id, selected, focusKey) {
+  const options = MODES.map(([key, text]) => `<option value="${esc(key)}"${key === selected ? " selected" : ""}>${esc(text)}</option>`).join("");
+  const focus = focusKey ? ` data-focus-key="${esc(focusKey)}"` : "";
+  return `<label class="add-label" for="mode-${esc(id)}">Mode${requiredMark()}</label><select id="mode-${esc(id)}" name="mode" required${focus}><option value="">Choose…</option>${options}</select>`;
+}
+
+function roleControl(role) {
+  const options = ROLES.map(([key, text]) => `<option value="${esc(key)}"${key === role ? " selected" : ""}>${esc(text)}</option>`).join("");
+  return `<label class="add-label" for="ride-role">Part of the trip</label><select id="ride-role" name="role">${options}</select>`;
+}
+
+function rideForm(item) {
+  const role = item?.role || state.composeRole || "outbound";
+  const focus = item ? `edit-transport-${item.id}` : `add-transport-${role}`;
+  const mode = item?.mode || "";
+  const legend = item
+    ? `<legend class="add-label">Edit ride</legend>`
+    : `<legend class="add-label">Add a ride</legend>`;
+  const flightHidden = mode === "flight" ? "" : " hidden";
+  const moreOpen = mode === "flight" ? " open" : "";
+  return `<form class="stack editor" data-form="transport"${item?.id ? ` data-id="${esc(item.id)}"` : ""}>
+    <fieldset class="add-row is-pair">
+      ${legend}
+      ${modeControl(item?.id || role, mode, item ? focus : "add-transport")}
+      ${roleControl(role)}
+      <label for="${focus}">From</label>
+      ${textControl("depart_place", item?.depart_place || "", { id: focus, required: true })}
+      <label for="${focus}-to">To</label>
+      ${textControl("arrive_place", item?.arrive_place || "", { id: `${focus}-to` })}
+    </fieldset>
+    <div class="form-grid">
+      ${field("Departs", "depart_at", localInput(item?.depart_at), "datetime-local", { scope: `ride-${focus}` })}
+      ${field("Arrives", "arrive_at", localInput(item?.arrive_at), "datetime-local", { scope: `ride-${focus}` })}
+    </div>
+    <div data-flight-only${flightHidden}>
+      <div class="form-grid">
+        ${field("Carrier", "carrier", item?.carrier || "", { scope: `ride-${focus}` })}
+        ${field("Number", "number", item?.number || "", { scope: `ride-${focus}` })}
+        ${field("Lookup date", "lookup_on", (item?.depart_at || "").slice(0, 10), "date", { scope: `ride-${focus}` })}
+      </div>
+      <button class="btn btn-secondary btn-sm" type="button" data-action="lookup-flight">Look up flight</button>
+      <div id="flight-results"></div>
+    </div>
+    <details class="ride-more"${moreOpen}><summary>More details</summary><div class="form-grid">
+      ${select("Status", "status", item?.status || "planned", DECISIONS.legStatuses, { scope: `ride-${focus}` })}
+      ${field("Confirmation", "confirmation", item?.confirmation || "", { scope: `ride-${focus}` })}
+      ${field("Seat", "seat", item?.seat || "", { scope: `ride-${focus}` })}
+      ${field("Cost", "cost", item?.cost || "", { scope: `ride-${focus}` })}
+      ${field("Currency", "currency", item?.currency || "USD", { scope: `ride-${focus}` })}
+      ${check("Paid", "paid", Boolean(item?.paid))}
+      ${area("Notes", "notes", item?.notes || "", { scope: `ride-${focus}` })}
+    </div></details>
+    ${hiddenFlight(item)}
+    ${actions(item ? "Save ride" : "Add ride")}
+  </form>`;
+}
+
 function rideEditor(item) {
-  if (detailsOpen("transport", item.id)) return transportForm(item, item.role);
   if (!editing("transport", item.id)) return "";
-  const extras = ["carrier", "number", "confirmation", "seat", "cost", "currency", "notes", "depart_tz", "arrive_tz", "fa_ident", "fa_status", "fa_aircraft", "fa_gate_origin", "fa_gate_destination", "fa_terminal_origin", "fa_terminal_destination", "fa_baggage_claim", "fa_delay_departure_seconds", "fa_delay_arrival_seconds", "fa_scheduled_out", "fa_estimated_out", "fa_actual_out", "fa_scheduled_in", "fa_estimated_in", "fa_actual_in"]
-    .map((name) => hid(name, item[name])).join("");
-  return addForm({
-    kind: "transport",
-    id: item.id,
-    label: "From",
-    focusKey: `edit-transport-${item.id}`,
-    pair: true,
-    submitLabel: "Save",
-    controls: `${textControl("depart_place", item.depart_place || "", { id: `edit-transport-${item.id}`, required: true })}${textControl("arrive_place", item.arrive_place || "", { id: `edit-transport-${item.id}-to`, placeholder: "To" })}`,
-    hidden: `${hid("role", item.role)}${hid("mode", item.mode)}${hid("status", item.status || "planned")}${hid("depart_at", localInput(item.depart_at))}${hid("arrive_at", localInput(item.arrive_at))}${hid("paid", "")}<input type="checkbox" name="paid"${item.paid ? " checked" : ""} hidden>${extras}`,
-  });
+  return rideForm(item);
 }
 
 function rideRow(item) {
@@ -103,48 +162,52 @@ function rideRow(item) {
   ])}</div>`;
 }
 
-function modeControl(role) {
-  const options = MODES.map(([key, text]) => `<option value="${esc(key)}">${esc(text)}</option>`).join("");
-  return `<label class="add-label" for="mode-${esc(role)}">Mode</label><select id="mode-${esc(role)}" name="mode" required><option value="">Choose…</option>${options}</select>`;
+function freeTime(item) {
+  return item.kind === "other"
+    && String(item.title || "").trim().toLowerCase() === "free time"
+    && !item.place_name
+    && !item.start_time
+    && !item.notes;
 }
 
-function rideAdd(role) {
-  if (detailsOpen("transport", `add-${role}`)) {
-    return transportForm(null, role);
-  }
-  const focus = `add-transport-${role}`;
-  return `<form class="add-row" data-form="transport">
-    <fieldset class="add-row is-pair">
-      <legend class="add-label">Add a ride</legend>
-      <label for="${focus}">From</label>
-      ${textControl("depart_place", "", { id: focus, required: true })}
-      <label for="${focus}-to">To</label>
-      ${textControl("arrive_place", "", { id: `${focus}-to` })}
-      ${modeControl(role)}
-      <button class="btn btn-secondary btn-sm" type="submit">Add</button>
-      ${moreButton("transport", `add-${role}`)}
-    </fieldset>
-    <input type="hidden" name="role" value="${esc(role)}"><input type="hidden" name="status" value="planned">
-  </form>`;
+function planDetails(item, scope) {
+  return `<details class="ride-more"><summary>More details</summary><div class="form-grid">
+      ${select("Kind", "kind", item?.kind || "activity", KINDS, { scope })}
+      ${field("Start", "start_time", item?.start_time || "", "time", { scope })}
+      ${field("End", "end_time", item?.end_time || "", "time", { scope })}
+      ${field("Place", "place_name", item?.place_name || "", { scope })}
+      ${field("Address", "address", item?.address || "", { wide: true, scope })}
+      ${field("Latitude", "lat", item?.lat ?? "", { scope })}
+      ${field("Longitude", "lng", item?.lng ?? "", { scope })}
+      ${field("Link", "url", item?.url || "", "url", { scope })}
+      ${field("Cost", "cost", item?.cost || "", { scope })}
+      ${field("Currency", "currency", item?.currency || "USD", { scope })}
+      ${check("Paid", "paid", Boolean(item?.paid))}
+      ${area("Notes", "notes", item?.notes || "", { scope })}
+    </div><button class="btn btn-secondary btn-sm" type="button" data-action="find-place">Find on map</button><div data-place-hits></div></details>`;
 }
 
 function planEditor(item) {
-  if (detailsOpen("plan", item.id)) return planForm(item, item.on_date);
   if (!editing("plan", item.id)) return "";
-  return addForm({
-    kind: "plan",
-    id: item.id,
-    label: "Plan",
-    focusKey: `edit-plan-${item.id}`,
-    submitLabel: "Save",
-    controls: textControl("title", item.title || "", { id: `edit-plan-${item.id}`, required: true }),
-    hidden: `${hid("on_date", item.on_date)}${hid("start_time", item.start_time)}${hid("end_time", item.end_time)}${hid("kind", item.kind || "activity")}${hid("place_name", item.place_name)}${hid("address", item.address)}${hid("lat", item.lat)}${hid("lng", item.lng)}${hid("url", item.url)}${hid("cost", item.cost)}${hid("currency", item.currency || "USD")}${hid("notes", item.notes)}<input type="checkbox" name="paid"${item.paid ? " checked" : ""} hidden>`,
-  });
+  const focus = `edit-plan-${item.id}`;
+  return `<form class="stack editor" data-form="plan" data-id="${esc(item.id)}">
+      <label class="add-label" for="${focus}">Activity${requiredMark()}</label>
+      ${textControl("title", item.title || "", { id: focus, required: true, focusKey: focus })}
+      ${hid("on_date", item.on_date)}
+      ${planDetails(item, `plan-${item.id}`)}
+      ${actions("Save plan")}
+    </form>`;
 }
 
 function planRow(item) {
   const editor = planEditor(item);
   if (editor) return editor;
+  if (freeTime(item)) {
+    return `<div class="plan"><div><p class="meta">Free time</p></div>${rowActions([
+      iconButton("Edit", "plan", item.title, `data-action="edit" data-kind="plan" data-id="${item.id}" data-focus-key="edit-plan-${item.id}"`),
+      iconButton("Delete", "plan", item.title, `data-action="delete" data-kind="plan" data-id="${item.id}"`),
+    ])}</div>`;
+  }
   return `<div class="plan"><div><p>${item.start_time ? `<strong>${esc(item.start_time)}</strong> · ` : ""}<span class="chip">${esc(labelOf(KINDS, item.kind))}</span> ${esc(item.title)}</p></div>${rowActions([
     flagBox("plan", item, "paid", "Paid"),
     iconButton("Edit", "plan", item.title, `data-action="edit" data-kind="plan" data-id="${item.id}" data-focus-key="edit-plan-${item.id}"`),
@@ -152,18 +215,51 @@ function planRow(item) {
   ])}</div>`;
 }
 
+function planAdd(day) {
+  const focus = `add-plan-${day.on_date}`;
+  const open = day.items.length
+    ? ""
+    : `<p class="meta">No plans yet. A quiet day is fine.</p><form data-form="plan" class="quiet-free">${hid("on_date", day.on_date)}${hid("kind", "other")}${hid("title", "Free time")}<button class="btn btn-ghost btn-sm" type="submit">Mark as free time</button></form>`;
+  return `${open}<form class="add-row" data-form="plan">
+      <label class="add-label" for="${focus}">Add activity${requiredMark()}</label>
+      ${textControl("title", "", { id: focus, required: true, focusKey: focus })}
+      <button class="btn btn-secondary btn-sm" type="submit">Add</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="cancel">Cancel</button>
+      ${hid("on_date", day.on_date)}
+      ${planDetails(null, `plan-${day.on_date}`)}
+    </form>`;
+}
+
+function parkingForm(item) {
+  const focus = item?.id ? `edit-parking-${item.id}` : "add-parking";
+  const rides = state.trip?.transports || [];
+  const tied = [["", "Not tied to one ride"], ...rides.map((ride) => [String(ride.id), transportSummary(ride) || labelOf(MODES, ride.mode)])];
+  return `<form class="stack editor" data-form="parking"${item?.id ? ` data-id="${esc(item.id)}"` : ""}>
+      <label class="add-label" for="${focus}">Parking${requiredMark()}</label>
+      ${textControl("place_name", item?.place_name || "", { id: focus, required: true, focusKey: focus })}
+      <details class="ride-more"><summary>More details</summary><div class="form-grid">
+        ${select("Is parking necessary?", "necessary", item?.necessary || "yes", NECESSARY, { scope: focus })}
+        ${select("How you'll handle it", "arrangement", item?.arrangement || "self_park", ARRANGEMENTS, { scope: focus })}
+        ${select("Tied to", "transport_id", item?.transport_id ? String(item.transport_id) : "", tied, { scope: focus })}
+        ${field("Address", "address", item?.address || "", { wide: true, scope: focus })}
+        ${field("Latitude", "lat", item?.lat ?? "", { scope: focus })}
+        ${field("Longitude", "lng", item?.lng ?? "", { scope: focus })}
+        ${field("Confirmation", "confirmation", item?.confirmation || "", { scope: focus })}
+        ${field("From", "start_at", localInput(item?.start_at), "datetime-local", { scope: focus })}
+        ${field("Until", "end_at", localInput(item?.end_at), "datetime-local", { scope: focus })}
+        ${field("Cost", "cost", item?.cost || "", { scope: focus })}
+        ${field("Currency", "currency", item?.currency || "USD", { scope: focus })}
+        ${check("Booked", "booked", Boolean(item?.booked))}
+        ${check("Paid", "paid", Boolean(item?.paid))}
+        ${area("Notes", "notes", item?.notes || "", { scope: focus })}
+      </div><button class="btn btn-secondary btn-sm" type="button" data-action="find-place">Find on map</button><div data-place-hits></div></details>
+      ${actions(item ? "Save parking" : "Add parking")}
+    </form>`;
+}
+
 function parkingEditor(item) {
-  if (detailsOpen("parking", item ? item.id : "")) return parkingForm(item, state.trip?.transports || []);
   if (!item || !editing("parking", item.id)) return "";
-  return addForm({
-    kind: "parking",
-    id: item.id,
-    label: "Parking",
-    focusKey: `edit-parking-${item.id}`,
-    submitLabel: "Save",
-    controls: textControl("place_name", item.place_name || "", { id: `edit-parking-${item.id}`, required: true }),
-    hidden: `${hid("necessary", item.necessary || "yes")}${hid("arrangement", item.arrangement || "self_park")}${hid("transport_id", item.transport_id || "")}${hid("address", item.address)}${hid("lat", item.lat)}${hid("lng", item.lng)}${hid("confirmation", item.confirmation)}${hid("start_at", localInput(item.start_at))}${hid("end_at", localInput(item.end_at))}${hid("cost", item.cost)}${hid("currency", item.currency || "USD")}${hid("notes", item.notes)}<input type="checkbox" name="booked"${item.booked ? " checked" : ""} hidden><input type="checkbox" name="paid"${item.paid ? " checked" : ""} hidden>`,
-  });
+  return parkingForm(item);
 }
 
 function parkingRow(item) {
@@ -181,7 +277,7 @@ function parkingRow(item) {
 export function renderTrip(trip, focusDay) {
   const editingTrip = editing("trip", trip.id);
   const tripForm = `<header class="page-head"><h1>Edit trip</h1></header><form class="stack" data-form="trip" data-id="${trip.id}"><div class="form-grid">
-      ${field("Trip name", "title", trip.title, { required: true, wide: true, scope: `trip-${trip.id}` })}
+      ${field("Trip name", "title", trip.title, { required: true, wide: true, scope: `trip-${trip.id}`, focusKey: "edit-trip" })}
       ${field("Day you leave", "start_date", trip.start_date, { type: "date", scope: `trip-${trip.id}` })}
       ${field("Day you come back", "end_date", trip.end_date, { type: "date", min: trip.start_date, scope: `trip-${trip.id}` })}
       ${field("Leaving from", "origin_label", trip.origin_label || "", { scope: `trip-${trip.id}` })}
@@ -203,32 +299,37 @@ export function renderTrip(trip, focusDay) {
       <article class="metric"><b>${trip.cities.length || "—"}</b><span>${esc(trip.cities.join(" · ") || "No cities yet")}</span></article>
     </section>`;
   const cityHint = sectionHint("cities", { empty: !trip.stays.length });
-  const cityAdd = detailsOpen("stay", "")
-    ? stayForm({ arrive_on: trip.start_date, leave_on: trip.end_date })
-    : addForm({
-      kind: "stay",
-      label: "Add a city",
-      focusKey: "add-city",
-      controls: textControl("city", "", { id: "add-city", placeholder: "City", required: true }),
-      hidden: `${hid("arrive_on", trip.start_date)}${hid("leave_on", trip.end_date)}`,
-    });
+  const cityAdd = addForm({
+    kind: "stay",
+    label: "Add a city",
+    focusKey: "add-city",
+    controls: textControl("city", "", { id: "add-city", placeholder: "City", required: true, focusKey: "add-city" }),
+    hidden: `${hid("arrive_on", trip.start_date)}${hid("leave_on", trip.end_date)}`,
+    required: true,
+  });
   const cityBlock = `<section class="card"><h2>Cities</h2>${cityHint ? `<p class="meta">${esc(cityHint)}</p>` : ""}${trip.stays.map(cityRow).join("")}${cityAdd}</section>`;
   const groups = ROLES.map(([role, label]) => {
     const rows = trip.transports.filter((item) => item.role === role);
-    const hint = sectionHint("role", { empty: !rows.length, roleLabel: label });
-    return `<section class="section"><h3>${esc(label)}</h3>${hint ? `<p class="meta">${esc(hint)}</p>` : ""}${rows.map(rideRow).join("")}${rideAdd(role)}</section>`;
+    if (!rows.length) return "";
+    return `<section class="section"><h3>${esc(label)}</h3>${rows.map(rideRow).join("")}</section>`;
   }).join("");
-  const transportHint = sectionHint("transport", { empty: !trip.transports.length });
+  const transportEditor = composing("transport") ? rideForm(null) : `<button class="btn btn-ghost btn-sm" type="button" data-action="compose" data-compose="transport" data-role="outbound" data-focus-key="add-transport">Add transport</button>`;
+  const selected = chosenDay(focusDay);
+  const quietDays = trip.days.filter((day) => !day.items.length && !day.transports.length).length;
+  const quietLine = quietDays ? `<p class="meta quiet-days">${quietDays === 1 ? "1 quiet day" : `${quietDays} quiet days`}</p>` : "";
+  const activityDate = (trip.days.find((day) => !day.items.length) || trip.days[0] || {}).on_date || "";
+  const strip = trip.days.map((day) => {
+    const on = day.on_date === selected;
+    return `<button type="button" class="date-chip${on ? " is-selected" : ""}${day.items.length ? " has-plan" : ""}" data-action="compose" data-compose="plan" data-date="${esc(day.on_date)}" data-focus-key="day-${esc(day.on_date)}"${on ? ` aria-current="date"` : ""}>${esc(prettyDate(day.on_date))}</button>`;
+  }).join("");
   const days = trip.days
+    .filter((day) => day.on_date === selected || day.items.length || day.transports.length)
     .map((day) => {
-      const focused = focusDay === day.on_date ? " data-focus" : "";
-      const heading = focusDay === day.on_date ? ` tabindex="-1" data-day-heading` : "";
+      const focused = day.on_date === selected ? " data-focus" : "";
+      const heading = day.on_date === selected ? ` tabindex="-1" data-day-heading` : "";
       const moves = day.transports.map((item) => `<p>${esc(item.movement === "arrives" ? "Arrives" : item.movement === "both" ? "Departs and arrives" : "Departs")} · ${esc(transportSummary(item))}</p>`).join("");
       const items = day.items.map(planRow).join("");
-      const focus = `add-plan-${day.on_date}`;
-      const adder = detailsOpen("plan", day.on_date)
-        ? planForm(null, day.on_date)
-        : `<form class="add-row" data-form="plan"><label class="add-label" for="${focus}">Add a plan for ${esc(prettyDate(day.on_date))}</label>${textControl("title", "", { id: focus, placeholder: day.city || prettyDate(day.on_date), required: true })}<button class="btn btn-secondary btn-sm" type="submit">Add</button>${moreButton("plan", day.on_date)}<input type="hidden" name="on_date" value="${esc(day.on_date)}"><input type="hidden" name="kind" value="activity"></form>`;
+      const adder = day.on_date === selected ? planAdd(day) : "";
       const here = trip.stays.find((stay) => stay.city === day.city && stay.lat != null);
       const pin = here ? ` data-map-lat="${here.lat}" data-map-lng="${here.lng}"` : "";
       return `<div class="day" id="day-${day.on_date}"${focused}${pin}><div class="day-date"${heading}>${esc(prettyDate(day.on_date))}${day.city ? `<br>${esc(day.city)}` : ""}</div><div>${moves}${items}${adder}</div></div>`;
@@ -237,16 +338,6 @@ export function renderTrip(trip, focusDay) {
   const outside = trip.outside_plans.length
     ? `<div class="section"><h3>Outside the trip dates</h3>${trip.outside_plans.map((item) => planRow(item)).join("")}</div>`
     : "";
-  const parkingHint = sectionHint("parking", { empty: !trip.parking.length });
-  const parkingAdd = detailsOpen("parking", "")
-    ? parkingForm(null, trip.transports || [])
-    : addForm({
-      kind: "parking",
-      label: "Add parking",
-      focusKey: "add-parking",
-      controls: textControl("place_name", "", { id: "add-parking", placeholder: "Parking", required: true }),
-      hidden: `${hid("necessary", "yes")}${hid("arrangement", "self_park")}`,
-    });
   const derived = (trip.budget.lines || []).filter((line) => line.source !== "manual");
   const budgetLines = derived
     .map((line) => `<div class="ride ride--muted"><div><p>${esc(line.label)}</p><p class="meta">${esc(line.category_label || line.category || "")}</p></div><strong class="money">${esc(money(line.amount, line.currency))}</strong></div>`)
@@ -257,24 +348,43 @@ export function renderTrip(trip, focusDay) {
   const totals = (trip.budget.currencies || [])
     .map((item) => `<p class="meta">Total ${esc(money(item.total, item.currency))}</p>`)
     .join("");
-  const budgetHint = sectionHint("budget", { empty: !derived.length && !(trip.budget.manual || []).length });
-  const budgetForm = `<form class="add-row is-pair" data-form="budget"><label class="add-label" for="add-cost">Add a cost</label>${textControl("label", "", { id: "add-cost", placeholder: "Cost", required: true })}${textControl("amount", "", { id: "add-cost-amount", placeholder: "0.00", required: true, inputmode: "decimal" })}<button class="btn btn-secondary btn-sm" type="submit">Add</button><input type="hidden" name="category" value="other"></form>`;
+  const budgetForm = composing("budget")
+    ? `<form class="add-row is-pair" data-form="budget"><label class="add-label" for="add-cost">Cost${requiredMark()}</label>${textControl("label", "", { id: "add-cost", placeholder: "Cost", required: true, focusKey: "add-cost" })}<label class="add-label" for="add-cost-amount">Amount${requiredMark()}</label>${textControl("amount", "", { id: "add-cost-amount", placeholder: "0.00", required: true, inputmode: "decimal" })}<label class="add-label" for="add-cost-currency">Currency</label>${textControl("currency", "USD", { id: "add-cost-currency" })}<button class="btn btn-secondary btn-sm" type="submit">Add</button><button class="btn btn-ghost btn-sm" type="button" data-action="cancel">Cancel</button><input type="hidden" name="category" value="other"></form>`
+    : "";
   const notes = trip.note_entries
     .map((note) => `<div class="ride"><div><p>${esc(note.body)}</p></div>${iconButton("Delete", "note", note.body, `data-action="delete" data-kind="note" data-id="${note.id}"`)}</div>`)
     .join("");
-  const noteForm = addForm({
-    kind: "note",
-    label: "Add a note",
-    focusKey: "add-note",
-    controls: textControl("body", "", { id: "add-note", placeholder: "Note", required: true }),
-  });
+  const noteForm = composing("note")
+    ? addForm({
+      kind: "note",
+      label: "Add a note",
+      focusKey: "add-note",
+      controls: textControl("body", "", { id: "add-note", placeholder: "Note", required: true, focusKey: "add-note" }),
+      cancel: true,
+      required: true,
+    })
+    : "";
   const reminders = trip.reminders
     .map((item) => `<div class="ride"><label class="check reminder${item.done ? " is-done" : ""}"><input type="checkbox" data-save-flag="done" data-kind="reminder" data-id="${item.id}" data-focus-key="flag-reminder-${item.id}-done" ${item.done ? " checked" : ""}> <span>${esc(item.title)}${item.done ? " ✓" : ""}</span></label>${iconButton("Delete", "reminder", item.title, `data-action="delete" data-kind="reminder" data-id="${item.id}"`)}</div>`)
     .join("");
   const reminderKind = DECISIONS.showPackingKind
     ? `<label class="add-label" for="reminder-kind">Kind</label><select id="reminder-kind" name="kind"><option value="general">General</option><option value="packing">Packing</option></select>`
     : `<input type="hidden" name="kind" value="general">`;
-  const reminderForm = `<form class="add-row" data-form="reminder"><label class="add-label" for="add-reminder">Add a reminder</label>${textControl("title", "", { id: "add-reminder", placeholder: "Reminder", required: true })}<button class="btn btn-secondary btn-sm" type="submit">Add</button>${reminderKind}</form>`;
+  const reminderForm = composing("reminder")
+    ? `<form class="add-row" data-form="reminder"><label class="add-label" for="add-reminder">Add a reminder${requiredMark()}</label>${textControl("title", "", { id: "add-reminder", placeholder: "Reminder", required: true, focusKey: "add-reminder" })}<button class="btn btn-secondary btn-sm" type="submit">Add</button><button class="btn btn-ghost btn-sm" type="button" data-action="cancel">Cancel</button>${reminderKind}</form>`
+    : "";
+  const parkingBlock = optionalSection("Parking", trip.parking.length || composing("parking"), trip.parking.map(parkingRow).join(""), composing("parking") ? parkingForm(null) : "", "parking", "Add parking", "add-parking");
+  const budgetBlock = optionalSection("Budget", derived.length || (trip.budget.manual || []).length || composing("budget"), `${budgetLines}${manual}${totals}`, budgetForm, "budget", "Add cost", "add-cost");
+  const noteBlock = optionalSection("Notes", trip.note_entries.length || composing("note"), notes, noteForm, "note", "Add note", "add-note");
+  const reminderBlock = optionalSection("Reminders", trip.reminders.length || composing("reminder"), reminders, reminderForm, "reminder", "Add reminder", "add-reminder");
+  const menu = [
+    ["parking", trip.parking.length, "Add parking", "add-parking"],
+    ["budget", derived.length || (trip.budget.manual || []).length, "Add cost", "add-cost"],
+    ["note", trip.note_entries.length, "Add note", "add-note"],
+    ["reminder", trip.reminders.length, "Add reminder", "add-reminder"],
+  ].filter(([kind, filled]) => !filled && !composing(kind))
+    .map(([kind, , label, key]) => `<button class="btn btn-ghost btn-sm" type="button" data-action="compose" data-compose="${kind}" data-focus-key="${key}">${label}</button>`)
+    .join("");
   const points = collectPoints(trip);
   const places = points.map((point, index) => {
     const stay = point.kind === "City" ? trip.stays.find((item) => item.city === point.label) : null;
@@ -282,14 +392,16 @@ export function renderTrip(trip, focusDay) {
     return `<li><span>${index + 1} ${esc(point.label)}${esc(when)}</span> <button type="button" class="btn btn-ghost btn-sm" data-action="show-on-map" data-lat="${point.lat}" data-lng="${point.lng}">Show ${esc(point.label)} on map</button></li>`;
   }).join("");
   const mapCard = points.length ? `<aside class="card map-card"><details class="map-fold"><summary>Show map</summary><div id="map" class="map" role="region" aria-label="Trip map"></div><p class="meta" data-tile-error hidden>Map tiles couldn't load.</p></details><ol class="places">${places}</ol></aside>` : "";
+  const addMenu = menu ? `<div class="add-menu">${menu}</div>` : "";
   return `${banner()}${header}${metrics}<div class="split"><div>
       ${cityBlock}
-      <section class="card"><h2>Getting there</h2>${transportHint ? `<p class="meta">${esc(transportHint)}</p>` : ""}${groups}</section>
-      <section class="card"><div class="card-head"><h2>Days</h2></div>${days}${outside}</section>
-      <section class="card"><h2>Parking</h2>${parkingHint ? `<p class="meta">${esc(parkingHint)}</p>` : ""}${trip.parking.map(parkingRow).join("")}${parkingAdd}</section>
-      <section class="card"><h2>Budget</h2>${budgetHint ? `<p class="meta">${esc(budgetHint)}</p>` : ""}${budgetLines}${manual}${totals}${budgetForm}</section>
-      <section class="card"><h2>Notes</h2>${notes}${noteForm}</section>
-      <section class="card"><h2>Reminders</h2>${reminders}${reminderForm}</section>
+      <section class="card"><h2>Getting there</h2>${groups}${transportEditor}</section>
+      <section class="card"><div class="card-head"><h2>Days</h2><button class="btn btn-ghost btn-sm" type="button" data-action="compose" data-compose="plan" data-date="${esc(activityDate)}">Add activity</button></div><div class="date-strip">${strip}</div>${quietLine}${days}${outside}</section>
+      ${parkingBlock}
+      ${budgetBlock}
+      ${noteBlock}
+      ${reminderBlock}
+      ${addMenu}
     </div>${mapCard}</div>`;
 }
 

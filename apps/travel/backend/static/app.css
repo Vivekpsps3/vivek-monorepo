@@ -430,6 +430,13 @@ body.is-signed-out .more-menu [data-nav="settings"] { display: none; }
 .add-row.is-pair { grid-template-columns: minmax(8rem, auto) minmax(0, 1fr) minmax(0, 1fr) auto auto; }
 .add-row input, .add-row select { min-width: 0; }
 .add-label { margin: 0; }
+.date-strip { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.date-chip { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--border-control); border-radius: 999px; background: transparent; cursor: pointer; }
+.date-chip.is-selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.date-chip.has-plan { font-weight: 620; }
+.add-menu { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.editor details, .ride-more { margin-top: var(--space-3); }
+.quiet-days { color: var(--text-secondary); }
 .row-actions { flex-wrap: wrap; }
 .btn-ghost.btn-danger {
   background: transparent;

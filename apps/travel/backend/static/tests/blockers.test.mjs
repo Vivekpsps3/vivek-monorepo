@@ -4,7 +4,9 @@ import test from "node:test";
 
 import { gridDay, monthCells, monthRows } from "../modules/composer-model.mjs";
 import { balancePhrase, formatDays } from "../modules/labels.mjs";
+import { state } from "../modules/state.mjs";
 import { formError } from "../modules/validate.mjs";
+import { renderTrip } from "../modules/views/trip.mjs";
 
 const root = new URL("../", import.meta.url);
 const read = (file) => readFileSync(new URL(file, root), "utf8");
@@ -203,6 +205,129 @@ test("focus uses the shared ring on keyboard and programmatic focus", () => {
   const css = read("app.css");
   assert.match(css, /input:focus/);
   assert.match(css, /outline:\s*3px solid var\(--focus-ring\)/);
+});
+
+function quietTrip(extra = {}) {
+  return {
+    id: 1,
+    title: "Kyoto",
+    status: "planning",
+    start_date: "2026-10-24",
+    end_date: "2026-10-26",
+    origin_label: "SFO",
+    counts_as_pto: true,
+    pto: { days: "2", leftover_after: "3" },
+    span_days: 3,
+    nights: 2,
+    budget: { currencies: [], lines: [], manual: [] },
+    cities: ["Kyoto"],
+    stays: [],
+    transports: [],
+    days: [
+      { on_date: "2026-10-24", city: "Kyoto", items: [], transports: [] },
+      { on_date: "2026-10-25", city: "Kyoto", items: [], transports: [] },
+      { on_date: "2026-10-26", city: "Kyoto", items: [], transports: [] },
+    ],
+    outside_plans: [],
+    parking: [],
+    note_entries: [],
+    reminders: [],
+    ...extra,
+  };
+}
+
+function forms(html, kind) {
+  return (html.match(new RegExp(`data-form="${kind}"`, "g")) || []).length;
+}
+
+test("an empty trip offers transport and a quiet day instead of every builder", () => {
+  const previous = {
+    compose: state.compose,
+    composeDate: state.composeDate,
+    composeRole: state.composeRole,
+    edit: state.edit,
+    details: state.details,
+  };
+  state.compose = "";
+  state.composeDate = "";
+  state.composeRole = "outbound";
+  state.edit = null;
+  state.details = null;
+  try {
+    const empty = renderTrip(quietTrip(), "");
+    assert.equal((empty.match(/Add transport/g) || []).length, 1);
+    assert.equal((empty.match(/Add activity/g) || []).length, 1);
+    assert.match(empty, /class="date-strip"/);
+    assert.match(empty, /data-date="2026-10-24"/);
+    assert.match(empty, /<h1>Kyoto<\/h1>/);
+    assert.match(empty, /<span>PTO<\/span>/);
+    assert.match(empty, /3 quiet days/);
+    for (const kind of ["transport", "plan", "parking", "budget", "note", "reminder"]) {
+      assert.equal(forms(empty, kind), 0);
+    }
+    assert.equal(empty.includes("<h3>Outbound</h3>"), false);
+    assert.equal(empty.includes("<h3>Inbound</h3>"), false);
+    assert.equal(empty.includes("<h3>Between cities</h3>"), false);
+
+    state.compose = "transport";
+    const ride = renderTrip(quietTrip(), "");
+    assert.equal(forms(ride, "transport"), 1);
+    assert.match(ride, /data-flight-only hidden/);
+    assert.equal(ride.includes("Latitude"), false);
+    assert.equal(/<details class="ride-more" open/.test(ride), false);
+    assert.match(ride, /<option value="">Choose…<\/option>/);
+    assert.match(ride, /name="mode" required/);
+
+    state.compose = "";
+    const outbound = renderTrip(quietTrip({
+      transports: [{ id: 4, role: "outbound", mode: "train", depart_place: "SFO", arrive_place: "KIX", paid: false, status: "planned" }],
+    }), "");
+    assert.match(outbound, /<h3>Outbound<\/h3>/);
+    assert.equal(outbound.includes("<h3>Inbound</h3>"), false);
+    assert.equal(outbound.includes("<h3>Between cities</h3>"), false);
+
+    const day = renderTrip(quietTrip(), "2026-10-24");
+    assert.equal((day.match(/id="add-plan-/g) || []).length, 1);
+    assert.match(day, /id="add-plan-2026-10-24"/);
+    assert.match(day, /No plans yet\. A quiet day is fine\./);
+    assert.match(day, /Mark as free time/);
+
+    state.compose = "plan";
+    state.composeDate = "2026-10-25";
+    const picked = renderTrip(quietTrip(), "");
+    assert.equal((picked.match(/id="add-plan-/g) || []).length, 1);
+    assert.match(picked, /id="add-plan-2026-10-25"/);
+
+    state.compose = "";
+    state.composeDate = "";
+    const free = renderTrip(quietTrip({
+      days: [{
+        on_date: "2026-10-24",
+        city: "Kyoto",
+        transports: [],
+        items: [{ id: 3, kind: "other", title: "Free time", place_name: "", start_time: "", notes: "", on_date: "2026-10-24", paid: false }],
+      }],
+    }), "2026-10-24");
+    assert.match(free, /<p class="meta">Free time<\/p>/);
+    assert.equal(free.includes("Name this plan"), false);
+
+    const money = renderTrip(quietTrip({
+      budget: {
+        currencies: [
+          { total: "10", currency: "USD" },
+          { total: "20", currency: "JPY" },
+        ],
+        lines: [
+          { label: "Flight", amount: "10", currency: "USD", source: "transport", category: "transport" },
+          { label: "Train", amount: "20", currency: "JPY", source: "transport", category: "transport" },
+        ],
+        manual: [],
+      },
+    }), "");
+    assert.equal((money.match(/Total /g) || []).length, 2);
+  } finally {
+    Object.assign(state, previous);
+  }
 });
 
 test("client day rounding matches half away from zero", () => {

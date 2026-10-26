@@ -78,6 +78,7 @@ export function checked(form, name) {
 }
 function fieldOptions(type, wide, extra) {
   if (type && typeof type === "object") return { type: "text", wide: false, ...type };
+  if (wide && typeof wide === "object") return { type: type || "text", wide: Boolean(wide.wide), ...wide };
   return { type: type || "text", wide: Boolean(wide), ...(extra || {}) };
 }
 
@@ -99,7 +100,8 @@ function fieldChrome(label, name, id, options, control) {
   const ids = described(id, options);
   const help = options.helper ? `<p class="field-help" id="${id}-help">${esc(options.helper)}</p>` : "";
   const error = options.error ? `<p class="field-error" id="${id}-error" data-error-for="${esc(name)}">⚠ ${esc(options.error)}</p>` : "";
-  return `<div class="field${options.wide ? " wide" : ""}${options.error ? " is-invalid" : ""}"><label for="${id}">${esc(label)}</label>${control}${help}${error}</div>`;
+  const required = options.required ? ` <span class="field-note">(required)</span>` : "";
+  return `<div class="field${options.wide ? " wide" : ""}${options.error ? " is-invalid" : ""}"><label for="${id}">${esc(label)}${required}</label>${control}${help}${error}</div>`;
 }
 
 function inputAttrs(id, name, options) {
