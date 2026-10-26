@@ -12,7 +12,7 @@ Nothing on this list is done until an independent verifier has re-run the task's
 | DB-02 | done | ./scripts/coverage-gate.sh media exit 0. Inspected 09-architecture-migrations.md, 06-media-library.md, site_media_membership_v1.py, models.py, membership.py. Sole head site_media_membership_v1 revises site_trip_pto_days_v1 with membership, portrait, follow, and lifecycle fields; legacy scores, episodes, and shared artwork kept. |
 | ARC-03 | open | make test-fast exited 2 because scripts/check-shared-boundaries.py failed. Inspected apps/karma.conf.js, apps/finance/frontend/angular.json, apps/site/angular.json, and both app package.json files; Angular stayed at 21.2.25. Replaced apps/finance/frontend/karma.conf.js and apps/site/karma.conf.js are gone, as is packages/ui/package-lock.json. |
 | UX-01 | open | Not done. Finance subscriptions marks required fields and collapses optional ones. Travel and Media only add required/optional notes. Shared controls gained hover, disabled, invalid, and mobile scroll-margin. No contrast measurement, fallback spec, or interaction evidence. |
-| NAV-01 | open | pending |
+| NAV-01 | open | make test-fast exit 2; check-shared-boundaries failed with recipe error 1. Inspected 04-hub-finance.md, main-layout.component.html/css, travel and media index.html, app.css, controls.css. One visible suite-hub on Finance, Travel, and Media at desktop and narrow, old tab/menu/footer Hub links gone, deep links kept; command was not exit 0. |
 | TRV-01 | open | pending |
 | MED-01 | open | pending |
 | NAV-02 | open | pending |
