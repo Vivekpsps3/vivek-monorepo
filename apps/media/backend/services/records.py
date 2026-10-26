@@ -305,34 +305,145 @@ def create_manual(db: Session, user_id: int, body: dict) -> UserEntry:
     return entry
 
 
+def _metadata_pending(catalog: CatalogItem) -> bool:
+    extra = loads(catalog.extra, {})
+    return isinstance(extra, dict) and extra.get("metadata_pending") is True
+
+
+def _text_or_blank(value, limit: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    return text[:limit]
+
+
+def _safe_https(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text.startswith("https://") or len(text) > 1000:
+        return None
+    return text
+
+
+def _apply_authoritative(db: Session, catalog: CatalogItem, detail: dict) -> None:
+    """Fill shared fields from the adapter. Leave a written overview alone."""
+    title = _text_or_blank(detail.get("title"), 300)
+    if title:
+        catalog.title = title
+    if not catalog.creator:
+        catalog.creator = _text_or_blank(detail.get("creator"), 300)
+    if not catalog.overview:
+        catalog.overview = _text_or_blank(detail.get("overview"), 8000)
+    if not catalog.artwork_url:
+        catalog.artwork_url = _safe_https(detail.get("artwork_url"))
+    if catalog.year is None and isinstance(detail.get("year"), int):
+        year = detail["year"]
+        if 1000 <= year <= 3000:
+            catalog.year = year
+    if not loads(catalog.genres, []):
+        genres = detail.get("genres") if isinstance(detail.get("genres"), list) else []
+        catalog.genres = dumps(
+            [item.strip() for item in genres if isinstance(item, str) and item.strip()][:12]
+        )
+    if not loads(catalog.external_ratings, []):
+        catalog.external_ratings = dumps(normalize_ratings(detail.get("external_ratings")))
+    extra = loads(catalog.extra, {})
+    if not isinstance(extra, dict):
+        extra = {}
+    incoming = detail.get("extra") if isinstance(detail.get("extra"), dict) else {}
+    for key, value in incoming.items():
+        if key not in {"metadata_pending", "provenance"} and key not in extra:
+            extra[key] = value
+    mark = detail.get("provenance")
+    if not isinstance(mark, dict):
+        from apps.media.backend.services.providers import provenance
+
+        mark = provenance(catalog.source, "official")
+    extra["provenance"] = mark
+    extra["metadata_pending"] = False
+    catalog.extra = dumps(extra)
+    catalog.updated_at = utc_now()
+    has_release = db.query(Release.id).filter(Release.catalog_id == catalog.id).first() is not None
+    if not has_release:
+        store_release(db, catalog, {"releases": detail.get("releases") or []})
+        db.flush()
+    if catalog.kind == "tv":
+        has_episode = (
+            db.query(Episode.id).filter(Episode.catalog_id == catalog.id).first() is not None
+        )
+        if not has_episode:
+            episodes = []
+            for item in detail.get("episodes") or []:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    season = int(item.get("season_number"))
+                    number = int(item.get("episode_number"))
+                except (TypeError, ValueError):
+                    continue
+                if season < 0 or number < 1:
+                    continue
+                episodes.append(item)
+            store_episodes(db, catalog, episodes)
+
+
+def _detail_matches(detail, source: str, kind: str, source_id: str) -> bool:
+    if not isinstance(detail, dict):
+        return False
+    if detail.get("source") != source or detail.get("kind") != kind:
+        return False
+    found = detail.get("source_id")
+    return isinstance(found, str) and found.strip().casefold() == source_id.casefold()
+
+
 def create_from_provider(db: Session, user_id: int, body: dict) -> tuple[UserEntry, bool]:
+    """Save the person's row first. Canonical fields come from detail, not the browser."""
+    from apps.media.backend.services import providers
+    from apps.server.database import release_for_provider_io
+
     source = choice(body.get("source"), SOURCES - {"manual"}, "Source")
     source_id = clean_text(body.get("source_id"), 120, "Provider id", required=True)
     kind = choice(body.get("kind"), KINDS, "Media type")
+    if source not in providers.sources_for_kind(kind):
+        fail("That source does not cover this type.")
+    title = clean_text(body.get("title"), 300, "Title", required=True)
     catalog = (
         db.query(CatalogItem)
         .filter(CatalogItem.source == source, CatalogItem.source_id == source_id)
         .one_or_none()
     )
+    if catalog is not None and catalog.kind != kind:
+        fail("That provider id is already a different type.")
+    detail = None
+    if catalog is None or _metadata_pending(catalog):
+        release_for_provider_io(db)
+        detail = providers.lookup_detail(source, kind, source_id)
     if catalog is None:
         catalog = CatalogItem(
             kind=kind,
-            title=clean_text(body.get("title"), 300, "Title", required=True),
-            creator=clean_text(body.get("creator"), 300, "Creator"),
-            overview=clean_text(body.get("overview"), 8000, "Description"),
-            artwork_url=http_url(body.get("artwork_url")),
+            title=title,
             source=source,
             source_id=source_id,
-            genres=dumps(body.get("genres") if isinstance(body.get("genres"), list) else []),
-            extra=dumps(body.get("extra") if isinstance(body.get("extra"), dict) else {}),
-            external_ratings=dumps(normalize_ratings(body.get("external_ratings"))),
+            genres=dumps([]),
+            extra=dumps(
+                {
+                    "metadata_pending": True,
+                    "provenance": {
+                        "provider": source,
+                        "coverage": "pending",
+                        "fetched_at": None,
+                    },
+                }
+            ),
+            external_ratings=dumps([]),
         )
-        if body.get("year") not in (None, ""):
-            apply_catalog_fields(catalog, {"year": body.get("year")}, fill_blanks_only=False)
         db.add(catalog)
         db.flush()
-        store_release(db, catalog, body)
-        store_episodes(db, catalog, body.get("episodes"))
+    if _detail_matches(detail, source, kind, source_id):
+        _apply_authoritative(db, catalog, detail)
     existing = (
         db.query(UserEntry)
         .filter(UserEntry.user_id == user_id, UserEntry.catalog_id == catalog.id)

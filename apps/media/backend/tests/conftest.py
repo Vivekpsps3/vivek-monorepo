@@ -51,6 +51,19 @@ def _clear_provider_health():
     providers._HEALTH.clear()
 
 
+@pytest.fixture(autouse=True)
+def _offline_provider_detail(monkeypatch):
+    """Saves must not call live metadata. A test can put lookup_detail back."""
+    from apps.media.backend.services import providers
+
+    monkeypatch.setattr(providers, "lookup_detail", lambda *_args, **_kwargs: None)
+    providers.MB_PACE.gap = 0
+    providers.MB_PACE._next = 0.0
+    yield
+    providers.MB_PACE.gap = 1.0
+    providers.MB_PACE._next = 0.0
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.delenv("TMDB_API_KEY", raising=False)
