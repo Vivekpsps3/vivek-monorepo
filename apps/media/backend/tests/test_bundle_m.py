@@ -15,7 +15,9 @@ def test_served_media_html_has_no_cloudflare_beacon(client: TestClient):
 
 
 def test_album_year_must_be_between_1000_and_3000(client: TestClient):
-    artist = client.post("/api/library", json={"kind": "artist", "title": "Band", "status": "want"})
+    artist = client.post(
+        "/api/library", json={"kind": "artist", "title": "Band", "status": "following"}
+    )
     assert artist.status_code == 200
     entry_id = artist.json()["id"]
     rejected = client.post(

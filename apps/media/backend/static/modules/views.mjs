@@ -10,6 +10,7 @@ import {
   seasonLabel,
   statusLabel,
   statusOptions,
+  defaultStatus,
 } from "./format.mjs";
 import { icon } from "./icons.mjs";
 import { scoreControl } from "./score.mjs";
@@ -59,8 +60,9 @@ function kindRadios(selected) {
 }
 
 function statusRadios(kind, selected) {
-  const value = selected || "want";
-  return statusOptions(kind).map(opt => {
+  const options = statusOptions(kind);
+  const value = options.some(opt => opt.value === selected) ? selected : defaultStatus(kind);
+  return options.map(opt => {
     const on = opt.value === value;
     return `<label class="status-mark"><input type="radio" name="status" value="${esc(opt.value)}"${on ? " checked" : ""}>${esc(opt.label)}</label>`;
   }).join("");
@@ -86,7 +88,7 @@ export function addFormInner({
       <label>Year <span class="field-note">(optional)</span> <input name="year" inputmode="numeric" value="${esc(year)}" autocomplete="off" aria-describedby="year-error"></label>
       <p id="year-error" class="field-error" hidden></p>`;
   return `${identity}
-    <div class="field-label">Status</div>
+    <div class="field-label" data-status-label>${selected === "artist" ? "Following" : "Status"}</div>
     <div class="status-row" role="radiogroup" aria-label="Status" data-add-status>${statusRadios(selected, status)}</div>
     <div class="field-label">Your score</div>
     ${scoreControl({ value: null, label: "Your score" })}
@@ -183,7 +185,8 @@ function cardFields(item) {
   const percent = item.progress_unit === "percent" && item.progress_value != null
     ? `<span class="progress-bar" style="width:${Math.max(0, Math.min(100, Number(item.progress_value)))}%"></span>`
     : "";
-  const identity = [kindLabel(item.kind), item.year, item.creator].filter(value => value != null && value !== "").join(" · ");
+  const artistName = item.artist?.title && item.artist.title !== item.creator ? item.artist.title : "";
+  const identity = [kindLabel(item.kind), item.year, item.creator, artistName].filter(value => value != null && value !== "").join(" · ");
   const status = item.status ? statusLabel(item.kind, item.status) : "";
   const state = `${status}${status ? " · " : ""}${ratingText(item.rating)}${progress}`;
   return { star, percent, identity, state };

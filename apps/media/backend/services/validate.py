@@ -4,8 +4,11 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
+from apps.media.backend.domain import ARTIST_STATUSES as ARTIST_STATUS_VALUES
+
 KINDS = {"movie", "tv", "book", "track", "album", "artist", "game"}
 STATUSES = {"want", "anticipating", "in_progress", "completed", "paused", "dropped"}
+ARTIST_STATUSES = set(ARTIST_STATUS_VALUES)
 PROGRESS_UNITS = {"page", "percent", "episode", "hour"}
 PRECISIONS = {"day", "month", "year", "unknown"}
 RELEASE_STATUSES = {"scheduled", "released", "postponed", "unknown"}

@@ -35,7 +35,7 @@ test.describe('phase 0 screenshot matrix', () => {
     const origin = process.env.MEDIA_E2E_ORIGIN || 'http://127.0.0.1:8097';
     const cover = `${origin}/synthetic-cover.png`;
     const artist = await request.post('/media/api/library', {
-      data: { kind: 'artist', title: 'Synthetic Band', status: 'want' },
+      data: { kind: 'artist', title: 'Synthetic Band', status: 'following' },
     });
     expect(artist.ok()).toBeTruthy();
     const artistId = (await artist.json()).id;

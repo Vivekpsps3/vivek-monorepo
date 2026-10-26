@@ -5,7 +5,7 @@ import math
 from datetime import UTC, date, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from apps.media.backend.models import (
@@ -20,6 +20,7 @@ from apps.media.backend.models import (
 )
 from apps.media.backend.services.clock import today
 from apps.media.backend.services.validate import (
+    ARTIST_STATUSES,
     KINDS,
     PRECISIONS,
     PROGRESS_UNITS,
@@ -84,6 +85,20 @@ def catalog_dict(row: CatalogItem) -> dict:
     }
 
 
+def artist_is_followed(entry: UserEntry) -> bool:
+    """Follow flag wins. A missing flag uses the legacy status only as a fallback."""
+    if entry.followed is not None:
+        return bool(entry.followed)
+    return entry.status not in {"dropped", "unfollowed"}
+
+
+def displayed_status(entry: UserEntry) -> str:
+    """Artists are following or unfollowed. The stored legacy status is not shown."""
+    if entry.catalog.kind != "artist":
+        return entry.status
+    return "following" if artist_is_followed(entry) else "unfollowed"
+
+
 def entry_card(entry: UserEntry) -> dict:
     catalog = entry.catalog
     return {
@@ -93,7 +108,7 @@ def entry_card(entry: UserEntry) -> dict:
         "creator": catalog.creator,
         "year": catalog.year,
         "artwork_url": catalog.artwork_url,
-        "status": entry.status,
+        "status": displayed_status(entry),
         "rating": entry.rating,
         "favorite": entry.favorite,
         "anticipated": entry.anticipated,
@@ -430,28 +445,39 @@ def normalize_ratings(value) -> list:
     return cleaned
 
 
+def personal_status(kind: str, body: dict) -> str:
+    if kind == "artist":
+        if body.get("anticipated"):
+            fail("Artists are followed, not anticipating.")
+        return choice(body.get("status"), ARTIST_STATUSES, "Status", "following")
+    return choice(
+        body.get("status"),
+        STATUSES,
+        "Status",
+        "anticipating" if body.get("anticipated") else "want",
+    )
+
+
 def new_entry(db: Session, user_id: int, catalog: CatalogItem, body: dict) -> UserEntry:
+    status = personal_status(catalog.kind, body)
     entry = UserEntry(
         user_id=user_id,
         catalog_id=catalog.id,
-        status=choice(
-            body.get("status"),
-            STATUSES,
-            "Status",
-            "anticipating" if body.get("anticipated") else "want",
-        ),
+        status=status,
         rating=rating_value(body.get("rating")) if "rating" in body else None,
         review=clean_text(body.get("review"), 20000, "Review"),
         summary=clean_text(body.get("summary"), 400, "Summary"),
         favorite=bool(body.get("favorite")),
-        anticipated=bool(body.get("anticipated")) or body.get("status") == "anticipating",
+        anticipated=False
+        if catalog.kind == "artist"
+        else bool(body.get("anticipated")) or status == "anticipating",
         progress_value=progress_number(body.get("progress_value")),
         progress_unit=choice(body.get("progress_unit"), PROGRESS_UNITS, "Progress unit", None)
         if body.get("progress_unit")
         else None,
     )
     if catalog.kind == "artist":
-        entry.followed = entry.status != "dropped"
+        entry.followed = status == "following"
         entry.follow_provenance = "explicit"
     if entry.review:
         entry.review_updated_at = utc_now()
@@ -536,7 +562,14 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
         key in body for key in ("release_on", "release_precision", "release_status", "releases")
     )
     if "status" in body:
-        entry.status = choice(body.get("status"), STATUSES, "Status")
+        if entry.catalog.kind == "artist":
+            state = choice(body.get("status"), ARTIST_STATUSES, "Status")
+            entry.status = state
+            entry.followed = state == "following"
+            if not str(entry.follow_provenance or "").startswith("legacy:"):
+                entry.follow_provenance = "explicit"
+        else:
+            entry.status = choice(body.get("status"), STATUSES, "Status")
     if "rating" in body:
         entry.rating = rating_value(body.get("rating"))
     if "review" in body:
@@ -554,7 +587,12 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     if "favorite" in body:
         entry.favorite = bool(body.get("favorite"))
     if "anticipated" in body:
-        entry.anticipated = bool(body.get("anticipated"))
+        if entry.catalog.kind == "artist":
+            if body.get("anticipated"):
+                fail("Artists are followed, not anticipating.")
+            entry.anticipated = False
+        else:
+            entry.anticipated = bool(body.get("anticipated"))
     if "progress_value" in body:
         entry.progress_value = progress_number(body.get("progress_value"))
     if "progress_unit" in body:
@@ -588,6 +626,17 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     return entry
 
 
+def _artist_followed_filter(followed: bool):
+    is_followed = or_(
+        UserEntry.followed.is_(True),
+        and_(
+            UserEntry.followed.is_(None),
+            UserEntry.status.notin_(("dropped", "unfollowed")),
+        ),
+    )
+    return is_followed if followed else ~is_followed
+
+
 def list_library(
     db: Session, user_id: int, kind: str | None, status: str | None, query: str | None, sort: str
 ) -> list[UserEntry]:
@@ -595,7 +644,19 @@ def list_library(
     if kind:
         rows = rows.filter(CatalogItem.kind == choice(kind, KINDS, "Media type"))
     if status:
-        rows = rows.filter(UserEntry.status == choice(status, STATUSES, "Status"))
+        if status in ARTIST_STATUSES:
+            if kind and kind != "artist":
+                return []
+            rows = rows.filter(
+                CatalogItem.kind == "artist",
+                _artist_followed_filter(status == "following"),
+            )
+        elif status in STATUSES:
+            if kind == "artist":
+                return []
+            rows = rows.filter(CatalogItem.kind != "artist", UserEntry.status == status)
+        else:
+            choice(status, STATUSES, "Status")
     if query:
         like = f"%{query.strip()}%"
         rows = rows.filter(or_(CatalogItem.title.ilike(like), CatalogItem.creator.ilike(like)))

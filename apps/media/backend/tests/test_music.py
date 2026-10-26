@@ -23,7 +23,7 @@ def test_scores_do_not_cascade(client, tmp_path):
         json={
             "kind": "artist",
             "title": "Snail Mail",
-            "status": "want",
+            "status": "following",
             "rating": 8,
             "review": "The artist.",
             "summary": "One line.",
@@ -170,7 +170,7 @@ def test_follow_does_not_insert_albums_or_songs(client, monkeypatch, tmp_path):
 
 def test_manual_album_artwork_url_must_be_http(client):
     created = client.post(
-        "/api/library", json={"kind": "artist", "title": "Synthetic Band", "status": "want"}
+        "/api/library", json={"kind": "artist", "title": "Synthetic Band", "status": "following"}
     )
     assert created.status_code == 200, created.text
     artist_id = created.json()["id"]
@@ -312,7 +312,7 @@ def test_disc_two_keeps_its_place_in_the_song_order():
 def test_metadata_rows_are_not_library_membership(client, tmp_path):
     artist = client.post(
         "/api/library",
-        json={"kind": "artist", "title": "Artist A", "status": "want", "rating": 5},
+        json={"kind": "artist", "title": "Artist A", "status": "following", "rating": 5},
     ).json()
     album = client.post(
         f"/api/entries/{artist['id']}/albums", json={"title": "A1", "year": 1999}
@@ -364,7 +364,7 @@ def test_metadata_rows_are_not_library_membership(client, tmp_path):
     assert stored.execute("select count(*) from user_entries").fetchone() == (3,)
 
     other = client.post(
-        "/api/library", json={"kind": "artist", "title": "Artist A", "status": "want"}
+        "/api/library", json={"kind": "artist", "title": "Artist A", "status": "following"}
     ).json()
     other_album = client.post(
         f"/api/entries/{other['id']}/albums", json={"title": "A1", "year": 2004}
@@ -379,7 +379,13 @@ def test_metadata_rows_are_not_library_membership(client, tmp_path):
 def test_removing_a_parent_keeps_saved_children(client):
     artist = client.post(
         "/api/library",
-        json={"kind": "artist", "title": "A", "status": "want", "rating": 9, "review": "Kept."},
+        json={
+            "kind": "artist",
+            "title": "A",
+            "status": "following",
+            "rating": 9,
+            "review": "Kept.",
+        },
     ).json()
     with_album = client.post(
         f"/api/entries/{artist['id']}/albums", json={"title": "A1", "year": 2000}
@@ -482,7 +488,7 @@ def test_discography_browse_does_not_insert_membership(client, monkeypatch, tmp_
             "source_id": "artist-a",
             "kind": "artist",
             "title": "Artist A",
-            "status": "want",
+            "status": "following",
         },
     ).json()
     assert artist["music"]["albums"] == []
@@ -572,7 +578,7 @@ def test_discography_browse_does_not_insert_membership(client, monkeypatch, tmp_
 
 def test_a_score_does_not_create_membership(client, tmp_path):
     created = client.post(
-        "/api/library", json={"kind": "artist", "title": "Left", "status": "dropped"}
+        "/api/library", json={"kind": "artist", "title": "Left", "status": "unfollowed"}
     )
     assert created.status_code == 200, created.text
     artist_id = created.json()["id"]
@@ -618,7 +624,7 @@ def test_a_score_does_not_create_membership(client, tmp_path):
         == 422
     )
     other = client.post(
-        "/api/library", json={"kind": "artist", "title": "Other", "status": "want"}
+        "/api/library", json={"kind": "artist", "title": "Other", "status": "following"}
     ).json()
     assert (
         client.post(
@@ -711,7 +717,7 @@ def test_discography_save_keeps_one_song_without_its_album(client, monkeypatch, 
             "source_id": "artist-a",
             "kind": "artist",
             "title": "Artist A",
-            "status": "want",
+            "status": "following",
         },
     ).json()
     default = client.get(f"/api/entries/{artist['id']}/discography")
@@ -790,7 +796,7 @@ def test_discography_save_keeps_one_song_without_its_album(client, monkeypatch, 
     assert "B" not in entry_titles
 
     other = client.post(
-        "/api/library", json={"kind": "artist", "title": "Artist A", "status": "want"}
+        "/api/library", json={"kind": "artist", "title": "Artist A", "status": "following"}
     ).json()
     assert other["id"] != artist["id"]
     other_music = client.get(f"/api/entries/{other['id']}").json()["music"]

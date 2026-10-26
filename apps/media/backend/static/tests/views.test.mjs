@@ -85,11 +85,11 @@ test("a saved artist uses the same collapsed card as any other item", () => {
     id: 1,
     kind: "artist",
     title: "Artist A",
-    status: "want",
+    status: "following",
     rating: 5,
     saved_count: 2,
   });
-  const sameName = libraryCard({ id: 2, kind: "artist", title: "Artist A", status: "want", saved_count: 0 });
+  const sameName = libraryCard({ id: 2, kind: "artist", title: "Artist A", status: "following", saved_count: 0 });
   assert.match(movie, /<a class="card" href="#\/item\/3">/);
   assert.match(movie, /Dune/);
   assert.match(movie, /Movie · 2021/);
@@ -104,6 +104,21 @@ test("a saved artist uses the same collapsed card as any other item", () => {
   assert.match(sameName, /href="#\/item\/2"/);
   assert.match(sameName, /id="saved-2"/);
   assert.doesNotMatch(sameName, /id="saved-1"/);
+  const listening = libraryCard({
+    id: 9,
+    kind: "track",
+    title: "A2",
+    status: "in_progress",
+    artist: { title: "Artist A", entry_id: 1, status: "unfollowed" },
+  });
+  assert.match(listening, /A2/);
+  assert.match(listening, /Listening/);
+  assert.match(listening, /Artist A/);
+  assert.doesNotMatch(listening, /is-artist|Following/);
+  const artistForm = addFormInner({ kind: "artist", title: "Artist A", status: "in_progress" });
+  assert.match(artistForm, /value="following" checked/);
+  assert.match(artistForm, /Unfollowed/);
+  assert.doesNotMatch(artistForm, /Listening|Listened|Anticipating|Paused|value="want"|value="in_progress"/);
   const saved = savedExpansion(1, {
     albums: [{ id: 10, title: "A1", year: 1999, tracks: [{ id: 11, title: "A2", rating: 4 }] }],
     songs: [{ id: 12, title: "Loose" }],

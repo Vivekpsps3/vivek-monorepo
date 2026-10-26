@@ -2,6 +2,8 @@
 
 KINDS = ("movie", "tv", "book", "track", "album", "artist", "game")
 STATUSES = ("want", "anticipating", "in_progress", "completed", "paused", "dropped")
+# Artists are a relationship. Songs and albums keep STATUSES.
+ARTIST_STATUSES = ("following", "unfollowed")
 EXPERIENCE_KINDS = ("watch", "rewatch", "read", "reread", "listen", "replay", "play")
 PROGRESS_UNITS = ("page", "percent", "episode", "hour")
 SOURCES = ("manual", "tmdb", "musicbrainz", "openlibrary", "rawg", "tvmaze", "itunes", "steam")
