@@ -51,7 +51,6 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await expect(page.getByText(/of \d+ tickers/)).toHaveCount(0);
   await expect(page.locator('.mobile-tabbar')).toBeVisible();
   await expect(page.locator('.nav-tabs')).toBeHidden();
-  await expect(page.locator('html')).toHaveAttribute('data-viewport', 'mobile');
   await expectFits(page, 'home');
 
   await page.locator('.mobile-tab', { hasText: 'Have' }).click();
@@ -105,11 +104,8 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   const tutorialBox = await tutorial.boundingBox();
   expect(tutorialBox?.width ?? 999).toBeLessThanOrEqual(390);
   expect(tutorialBox?.height ?? 999).toBeLessThanOrEqual(844);
+  await expect(tutorial).toContainText('Only ticker symbols are sent for market quotes');
   await page.getByRole('button', { name: 'Close' }).click();
-
-  await page.locator('.account-actions > summary').click();
-  await expect(page.locator('.account-popover__note')).toContainText('ticker symbols');
-  await page.locator('.account-actions > summary').click();
 
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(page.locator('.mobile-tabbar')).toBeVisible();

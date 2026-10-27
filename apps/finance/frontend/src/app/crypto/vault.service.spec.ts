@@ -2,7 +2,7 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { TestBed } from '@angular/core/testing';
 import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
-import { SILENT_ERROR_TOAST } from '../core/http-error.interceptor';
+import { SILENT_ERROR_TOAST } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { VaultService } from './vault.service';
 
@@ -119,5 +119,17 @@ describe('VaultService per-request silence', () => {
     expect(requests[0].request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
     expect(requests[1].request.context.get(SILENT_ERROR_TOAST)).toBeFalse();
     requests.forEach(request => request.flush({ deleted: 1 }));
+  });
+});
+
+describe('VaultService whenReady', () => {
+  afterEach(() => localStorage.removeItem('finance-dek'));
+
+  it('resolves before a missing browser key is treated as unlocked', async () => {
+    localStorage.removeItem('finance-dek');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    expect(service.isUnlocked).toBeFalse();
   });
 });

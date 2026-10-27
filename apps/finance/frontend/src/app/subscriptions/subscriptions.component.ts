@@ -6,7 +6,8 @@ import { ConfirmService } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
 import { ToastService, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
 import { FixedExpenseFrequency, Subscription, SubscriptionCreate } from '../models/transaction.model';
-import { amountProblem, countableCents, dollarsFromCountedCents, needsFixing, todayIsoDate, toDollars, validateMoney, validateSubscription, type FieldIssue } from '@vivek/browser';
+import { dollarsFromCountedCents, todayIsoDate, toDollars } from '@vivek/browser';
+import { amountProblem, countableCents, needsFixing, validateMoney, validateSubscription, type FieldIssue } from '../utils/validators';
 import {
   UiBadgeComponent,
   UiButtonComponent,
@@ -19,8 +20,8 @@ import {
   UiDialogComponent,
 } from '@vivek/ui';
 import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary, focusField } from '../shared/form-validation';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { MoneyPipe } from '@vivek/ui';
+import { AppDatePipe } from '@vivek/ui';
 
 @Component({
   selector: 'app-subscriptions',
@@ -117,6 +118,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.saveError = '';
     this.showModal = true;
     this.cdr.markForCheck();
+    this.setOptionalOpen(false);
   }
 
   openEditModal(row: Subscription): void {
@@ -135,6 +137,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.saveError = '';
     this.showModal = true;
     this.cdr.markForCheck();
+    this.setOptionalOpen(Boolean(row.end_date || row.payment_account || row.notes || (row.category && row.category !== 'Subscriptions')));
   }
 
   closeModal(): void {
@@ -207,6 +210,13 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
 
   frequencyLabel(value: FixedExpenseFrequency): string {
     return this.frequencyOptions.find(option => option.value === value)?.label || value;
+  }
+
+  private setOptionalOpen(open: boolean): void {
+    setTimeout(() => {
+      const details = document.querySelector('#subscription-form details.more-details');
+      if (details instanceof HTMLDetailsElement) details.open = open;
+    });
   }
 
   private emptyForm(): SubscriptionCreate {

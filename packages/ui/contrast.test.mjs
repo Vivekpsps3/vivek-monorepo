@@ -42,3 +42,15 @@ test('light and dark contrast tokens meet the finance foundation ratios', () => 
   assert.equal(dark('--on-accent'), '#141311');
   assert.ok(contrast(dark('--on-accent'), dark('--accent')) >= 10.63);
 });
+
+test('shared content, links and control boundaries retain contrast in both themes', () => {
+  for (const theme of ['light', 'dark']) {
+    const token = block(theme);
+    for (const surface of ['--bg', '--bg-elevated', '--surface-2', '--card-bg']) {
+      assert.ok(contrast(token('--border-control'), token(surface)) >= 3, `${theme} control / ${surface}`);
+      for (const text of ['--text', '--text-secondary', '--accent']) {
+        assert.ok(contrast(token(text), token(surface)) >= 4.5, `${theme} ${text} / ${surface}`);
+      }
+    }
+  }
+});

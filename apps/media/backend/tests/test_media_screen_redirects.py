@@ -1,36 +1,18 @@
-"""Plain screen URLs enter the hash router."""
+"""Real screen routes use the suite shell; unknown routes stay true 404s."""
 
-from fastapi.testclient import TestClient
-
-
-def test_media_screens_redirect_to_the_hash(client):
-    with TestClient(client.app, root_path="/media") as mounted:
-        library = mounted.get("/library", follow_redirects=False)
-        assert library.status_code == 302
-        assert library.headers["location"] == "/media/#/library"
-
-        head = mounted.head("/library", follow_redirects=False)
-        assert head.status_code == 302
-        assert head.headers["location"] == "/media/#/library"
-
-        search = mounted.get("/search", params={"q": "dune"}, follow_redirects=False)
-        assert search.status_code == 302
-        assert search.headers["location"] == "/media/#/search?q=dune"
-
-        calendar = mounted.get("/calendar/", follow_redirects=False)
-        assert calendar.status_code == 302
-        assert calendar.headers["location"] == "/media/#/calendar"
-
-        added = mounted.get("/new", follow_redirects=False)
-        assert added.status_code == 302
-        assert added.headers["location"] == "/media/#/new"
-
-        missing = mounted.get("/not-a-screen", follow_redirects=False)
-        assert missing.status_code == 302
-        assert missing.headers["location"] == "/media/#/not-a-screen"
+import pytest
 
 
-def test_screen_redirect_without_a_mount_stays_on_this_host(client):
-    response = client.get("/library", follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["location"] == "/#/library"
+@pytest.mark.parametrize(
+    "path", ["/", "/library", "/search?q=dune", "/calendar/", "/add", "/item/12"]
+)
+def test_media_screens_load_the_root_shell(client, path):
+    response = client.get(path, follow_redirects=False)
+    assert response.status_code == 200
+    assert "<app-root ngCspNonce=" in response.text
+    assert client.head(path, follow_redirects=False).status_code == 200
+
+
+def test_missing_screen_and_asset_are_not_fake_success(client):
+    assert client.get("/not-a-screen", follow_redirects=False).status_code == 404
+    assert client.get("/missing.js", follow_redirects=False).status_code == 404

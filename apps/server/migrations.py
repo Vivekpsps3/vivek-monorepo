@@ -24,9 +24,9 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
 import sqlite3
 import tempfile
+from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from alembic import command
@@ -415,6 +415,15 @@ def _offline_sql(url: str, start: str, end: str) -> str:
     buffer = io.StringIO()
     cfg = make_config(url)
     cfg.stdout = buffer
+    # Data migrations need a read-only snapshot when rendering a plan. A missing
+    # database starts empty; never create it merely to print SQL.
+    path = database_path(url)
+    rows = []
+    if path.is_file() and path.stat().st_size:
+        with connect(path, readonly=True) as db:
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='catalog_items'").fetchone():
+                rows = db.execute("SELECT id, title FROM catalog_items").fetchall()
+    cfg.attributes["catalog_title_rows"] = rows
     command.upgrade(cfg, f"{start}:{end}", sql=True)
     return buffer.getvalue()
 

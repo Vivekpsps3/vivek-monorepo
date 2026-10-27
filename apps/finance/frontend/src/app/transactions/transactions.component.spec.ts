@@ -50,7 +50,7 @@ describe('Transactions multi-file import UI', () => {
           events: new Subject(),
           navigate: () => Promise.resolve(true),
           createUrlTree: () => ({}),
-          serializeUrl: () => '/recurring?t=pay',
+          serializeUrl: () => '/finance/recurring?t=pay',
         } },
       ],
     }).compileComponents();
@@ -494,7 +494,7 @@ describe('Transactions multi-file import UI', () => {
 
     router.navigate.calls.reset();
     component.viewImportedTransactions(receipt({ id: 4 }));
-    expect(router.navigate).toHaveBeenCalledWith(['/spending'], jasmine.objectContaining({
+    expect(router.navigate).toHaveBeenCalledWith(['/finance/spending'], jasmine.objectContaining({
       queryParams: jasmine.objectContaining({ t: 'activity', v: 'all', receipt: 4, receipts: null }),
     }));
 
@@ -504,7 +504,7 @@ describe('Transactions multi-file import UI', () => {
       filenames: ['statement.csv'],
       unresolved: [{ line: 1, filename: 'statement.csv', reason: 'bad row' }],
     }));
-    expect(router.navigate).toHaveBeenCalledWith(['/spending'], jasmine.objectContaining({
+    expect(router.navigate).toHaveBeenCalledWith(['/finance/spending'], jasmine.objectContaining({
       queryParams: jasmine.objectContaining({ t: 'activity', receipts: '1', add: '1', reattach: 9, reattach_file: 'statement.csv' }),
     }));
 

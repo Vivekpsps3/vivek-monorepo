@@ -1,24 +1,34 @@
-import os
-
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from apps.finance.backend.app import create_app
+from apps.server.database import open_database
+from apps.server.main import Dependencies, Settings, create_app
+
+
+def _app(*, openapi: bool):
+    database = open_database("sqlite:///:memory:")
+    return create_app(
+        Settings(
+            database_url=database.url,
+            release="test",
+            web_root=Path("/app/web/finance"),
+            openapi=openapi,
+        ),
+        Dependencies(database=database, check_schema=False, check_frontend=False),
+    )
 
 
 def test_openapi_disabled_when_env_set(monkeypatch):
     monkeypatch.setenv("DISABLE_OPENAPI", "1")
-    app = create_app()
-    client = TestClient(app)
+    client = TestClient(_app(openapi=False))
     assert client.get("/openapi.json").status_code == 404
     assert client.get("/docs").status_code == 404
 
 
 def test_openapi_excludes_retired_plaintext_finance_paths(monkeypatch):
     monkeypatch.delenv("DISABLE_OPENAPI", raising=False)
-    app = create_app()
-    client = TestClient(app)
+    client = TestClient(_app(openapi=True))
 
     res = client.get("/openapi.json")
 

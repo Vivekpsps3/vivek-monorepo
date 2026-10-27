@@ -28,13 +28,14 @@ import {
   stockPurchaseSnapshot,
   stockSnapshotAt,
 } from '../utils/job-compensation.util';
-import { formatDate, todayIsoDate, toDollars, validateJob, validateMoney, type FieldIssue } from '@vivek/browser';
+import { formatDate, todayIsoDate, toDollars } from '@vivek/browser';
+import { validateJob, validateMoney, type FieldIssue } from '../utils/validators';
 import { formatEstimate } from '../shared/stored-money';
 import { dialogSaveAlert, focusDialogAlert, focusErrorSummary } from '../shared/form-validation';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
-import { AppDateRangePipe } from '../shared/pipes/app-date.pipe';
+import { MoneyPipe } from '@vivek/ui';
+import { AppDatePipe } from '@vivek/ui';
+import { AppDateRangePipe } from '@vivek/ui';
 
 interface StockPriceDraft {
   date: string;

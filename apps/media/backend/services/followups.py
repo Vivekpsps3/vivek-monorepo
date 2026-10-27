@@ -55,31 +55,33 @@ def numeric_id(source_id: str | None, kind: str) -> str | None:
 
 def lookup(db: Session, key: str, job, budget: Budget):
     row = db.get(ProviderCache, key)
-    if (
-        row is not None
-        and providers.as_utc(row.fetched_at) >= datetime.now(timezone.utc) - providers.TTL
-    ):
+    cached = None
+    if row is not None:
         try:
             payload = json.loads(row.payload)
         except json.JSONDecodeError:
             payload = None
         if isinstance(payload, list):
-            return payload
+            cached = payload
+            if providers.as_utc(row.fetched_at) >= datetime.now(timezone.utc) - providers.TTL:
+                return cached
     if not budget.allow():
-        return None
+        return cached
     try:
         payload = providers.cached_call(db, key, job)
     except Exception:
         budget.fail()
-        return None
+        return cached
     if isinstance(payload, list):
         return payload
     return None
 
 
-def refresh_show(db: Session, catalog: CatalogItem, http: httpx.Client, budget: Budget) -> None:
+def refresh_show(
+    db: Session, catalog: CatalogItem, http: httpx.Client | None, budget: Budget
+) -> None:
     """Update stored episode rows from the provider this show was saved from."""
-    if catalog.kind != "tv" or not catalog.source_id:
+    if http is None or catalog.kind != "tv" or not catalog.source_id:
         return
     if catalog.source == "tvmaze":
         show_id = numeric_id(catalog.source_id, "tv") or numeric_id(catalog.source_id, "tvmaze")
@@ -107,7 +109,9 @@ def refresh_show(db: Session, catalog: CatalogItem, http: httpx.Client, budget: 
             records.upsert_episode(db, catalog, cleaned)
 
 
-def follow_ups(db: Session, catalog: CatalogItem, http: httpx.Client, budget: Budget) -> list[dict]:
+def follow_ups(
+    db: Session, catalog: CatalogItem, http: httpx.Client | None, budget: Budget
+) -> list[dict]:
     """Sequels and spin-offs of one watched movie. Not written to the library."""
     if catalog.kind != "movie" or not (catalog.title or "").strip():
         return []
@@ -118,14 +122,19 @@ def follow_ups(db: Session, catalog: CatalogItem, http: httpx.Client, budget: Bu
             parts = lookup(
                 db,
                 f"tmdb:collection:{movie_id}",
-                lambda: tmdb_collection_parts(http, movie_id),
+                lambda: tmdb_collection_parts(http, movie_id) if http is not None else [],
                 budget,
             )
             if parts:
                 found.extend(parts)
     year = catalog.year if isinstance(catalog.year, int) else None
     key = f"wikidata:related:{norm_title(catalog.title)}:{year if year is not None else '-'}"
-    wiki = lookup(db, key, lambda: wikidata_related(http, catalog.title, year), budget)
+    wiki = lookup(
+        db,
+        key,
+        lambda: wikidata_related(http, catalog.title, year) if http is not None else [],
+        budget,
+    )
     if wiki:
         found.extend(wiki)
     return dedupe_related(found, catalog.title, year)

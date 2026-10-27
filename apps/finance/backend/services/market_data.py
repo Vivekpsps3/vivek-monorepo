@@ -1,14 +1,14 @@
-import os
 import json
 import math
+import os
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from apps.finance.backend.logging_config import get_logger
 from apps.finance.backend.models import MarketResearchCache, TickerQuote
@@ -20,6 +20,7 @@ from apps.finance.backend.schemas_market import (
     MarketResearchResponse,
     MarketSplitEvent,
 )
+from apps.server.database import release_for_provider_io
 
 logger = get_logger()
 
@@ -487,6 +488,8 @@ class MarketDataService:
                     self._memory[symbol] = (price, fetched, source, quote_date)
                     return price, source, fetched
 
+        if db is not None:
+            release_for_provider_io(db)
         try:
             price, quote_date, source = self._fetch_eod(symbol)
         except Exception as exc:
@@ -519,6 +522,8 @@ class MarketDataService:
             cached = self._research_cache_get(db, symbol, period)
             if cached:
                 return cached
+        if db is not None:
+            release_for_provider_io(db)
         response = self._fetch_research(symbol, period)
         response.cache_status = "refresh" if force_refresh else "miss"
         if db is not None and response.valid:

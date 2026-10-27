@@ -1,5 +1,6 @@
 """Request and response shapes for the travel API."""
 
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from math import isfinite
@@ -218,6 +219,22 @@ class TransportIn(BaseModel):
         return value
 
 
+class PtoDateIn(BaseModel):
+    on_date: date
+    amount: Decimal
+
+    @field_validator("amount")
+    @classmethod
+    def amount_ok(cls, value: Decimal) -> Decimal:
+        if not value.is_finite():
+            raise ValueError("Enter a finite number of days.")
+        if value < 0:
+            raise ValueError("Days cannot be negative.")
+        if value > 1:
+            raise ValueError("A PTO day cannot be more than 1.")
+        return value
+
+
 class TripCreate(BaseModel):
     title: str
     start_date: date
@@ -229,6 +246,8 @@ class TripCreate(BaseModel):
     pto_days: Decimal | None = None
     stays: list[StayIn] = Field(default_factory=list)
     transports: list[TransportIn] = Field(default_factory=list)
+    pto_dates: list[PtoDateIn] | None = None
+    client_request_id: str | None = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -245,10 +264,28 @@ class TripCreate(BaseModel):
     def notes_ok(cls, value: str | None) -> str | None:
         return _blank(value, 8000)
 
+    @field_validator("client_request_id")
+    @classmethod
+    def request_id_ok(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            return None
+        if re.fullmatch(r"[A-Za-z0-9_-]{8,80}", text) is None:
+            raise ValueError(
+                "Use 8 to 80 letters, numbers, hyphens, or underscores for the save id."
+            )
+        return text
+
     @model_validator(mode="after")
     def dates_ok(self):
         if self.end_date < self.start_date:
             raise ValueError("The return date has to be on or after the day you leave.")
+        if self.pto_dates is not None:
+            dates = [item.on_date for item in self.pto_dates]
+            if len(dates) != len(set(dates)):
+                raise ValueError("Each PTO date can only be chosen once.")
         if self.pto_days is not None:
             if not self.pto_days.is_finite():
                 raise ValueError("PTO days have to be a finite number.")
@@ -266,6 +303,7 @@ class TripPatch(BaseModel):
     notes: str | None = None
     counts_as_pto: bool | None = None
     pto_days: Decimal | None = None
+    pto_dates: list[PtoDateIn] | None = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -292,6 +330,14 @@ class TripPatch(BaseModel):
         if value < 0 or value > 366:
             raise ValueError("PTO days have to be between 0 and 366.")
         return value
+
+    @model_validator(mode="after")
+    def one_choice_per_date(self):
+        if self.pto_dates:
+            dates = [item.on_date for item in self.pto_dates]
+            if len(dates) != len(set(dates)):
+                raise ValueError("Each PTO date can only be chosen once.")
+        return self
 
 
 class PlanIn(BaseModel):

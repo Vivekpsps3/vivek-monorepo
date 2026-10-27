@@ -56,7 +56,7 @@ def by_title(payload, title):
 
 
 def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monkeypatch):
-    from apps.media.backend.deps import AuthResult, Principal
+    from apps.server.auth import Principal, require_principal
 
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-16")
     seen = []
@@ -216,7 +216,7 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
     add_movie(client, "Logging", status="completed", year=2018)
 
     before = {item["title"] for item in client.get("/api/library").json()["items"]}
-    payload = client.get("/api/calendar").json()
+    payload = client.post("/api/calendar/refresh").json()
     assert payload["month"] == "2026-10"
     assert payload["today"] == "2026-10-16"
     assert payload["partial"] is False
@@ -281,24 +281,22 @@ def test_calendar_lists_episodes_anticipated_movies_and_follow_ups(client, monke
     assert "Halfway" not in looked_up
     assert "Soon" not in looked_up
 
-    november = client.get("/api/calendar", params={"month": "2026-11"}).json()
+    november = client.post("/api/calendar/refresh", params={"month": "2026-11"}).json()
     assert by_title(november, "November")[0]["date"] == "2026-11-01"
     assert by_title(november, "Next") == []
     assert by_title(november, "Sometime") == []
     assert by_title(november, "Undated") == []
     assert by_title(november, "This Year")[0]["band"] == "year_band"
-    later = client.get("/api/calendar", params={"month": "2027-01"}).json()
+    later = client.post("/api/calendar/refresh", params={"month": "2027-01"}).json()
     assert by_title(later, "Next Year")[0]["band"] == "year_band"
     assert by_title(later, "Next Year")[0]["on"] is None
 
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(2, "other", "Other"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
     assert "Serial" not in json.dumps(
-        client.get("/api/calendar", params={"month": "2026-10"}).json()
+        client.post("/api/calendar/refresh", params={"month": "2026-10"}).json()
     )
-    assert client.get("/api/calendar", params={"month": "2026-13"}).status_code == 422
-    assert client.get("/api/calendar", params={"month": "October"}).status_code == 422
+    assert client.post("/api/calendar/refresh", params={"month": "2026-13"}).status_code == 422
+    assert client.post("/api/calendar/refresh", params={"month": "October"}).status_code == 422
 
 
 def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client, monkeypatch):
@@ -350,12 +348,21 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
             "kind": "tv",
             "title": "Maze Show",
             "status": "completed",
-            "episodes": [
-                {"season_number": 1, "episode_number": 1, "title": "Old", "air_date": "2026-10-02"}
-            ],
         },
     )
     assert maze.status_code == 200
+    assert (
+        client.post(
+            f"/api/entries/{maze.json()['id']}/episodes",
+            json={
+                "season_number": 1,
+                "episode_number": 1,
+                "title": "Old",
+                "air_date": "2026-10-02",
+            },
+        ).status_code
+        == 200
+    )
     manual = add_movie(client, "Typed Show", kind="tv", status="in_progress")
     assert (
         client.post(
@@ -377,19 +384,23 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
             "kind": "tv",
             "title": "Keyed Show",
             "status": "in_progress",
-            "episodes": [
-                {
-                    "season_number": 1,
-                    "episode_number": 1,
-                    "title": "Stored Ep",
-                    "air_date": "2026-10-06",
-                }
-            ],
         },
     )
     assert tmdb.status_code == 200
+    assert (
+        client.post(
+            f"/api/entries/{tmdb.json()['id']}/episodes",
+            json={
+                "season_number": 1,
+                "episode_number": 1,
+                "title": "Stored Ep",
+                "air_date": "2026-10-06",
+            },
+        ).status_code
+        == 200
+    )
 
-    failed = client.get("/api/calendar", params={"month": "2026-10"}).json()
+    failed = client.post("/api/calendar/refresh", params={"month": "2026-10"}).json()
     assert by_title(failed, "Old")[0]["date"] == "2026-10-02"
     assert by_title(failed, "Manual Ep")
     assert by_title(failed, "Stored Ep")
@@ -399,7 +410,7 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
 
     mode["tvmaze"] = "ok"
     monkeypatch.setenv("TMDB_API_KEY", "test-key")
-    refreshed = client.get("/api/calendar", params={"month": "2026-10"}).json()
+    refreshed = client.post("/api/calendar/refresh", params={"month": "2026-10"}).json()
     assert by_title(refreshed, "New")[0]["date"] == "2026-10-28"
     assert by_title(refreshed, "From TMDB")[0]["date"] == "2026-10-07"
     assert by_title(refreshed, "Later") == []
@@ -419,12 +430,12 @@ def test_linked_shows_refresh_and_a_provider_failure_keeps_saved_episodes(client
         raise RuntimeError("tmdb down")
 
     monkeypatch.setattr("apps.media.backend.services.followups.tmdb_episodes", tmdb_down)
-    cached = client.get("/api/calendar", params={"month": "2026-10"}).json()
+    cached = client.post("/api/calendar/refresh", params={"month": "2026-10"}).json()
     assert by_title(cached, "New")
     assert by_title(cached, "From TMDB")
     assert by_title(cached, "Old")
     assert (len(tvmaze_calls), len(tmdb_calls)) == calls_after
-    november = client.get("/api/calendar", params={"month": "2026-11"}).json()
+    november = client.post("/api/calendar/refresh", params={"month": "2026-11"}).json()
     assert by_title(november, "Later")[0]["date"] == "2026-11-02"
 
 
@@ -524,7 +535,7 @@ def test_follow_up_queries_keep_precision_and_keys_off_the_response(client, monk
     )
     assert saved.status_code == 200
     before = client.get("/api/library").json()["items"]
-    october = client.get("/api/calendar", params={"month": "2026-10"})
+    october = client.post("/api/calendar/refresh", params={"month": "2026-10"})
     assert october.status_code == 200
     payload = october.json()
     assert "test-key" not in october.text
@@ -548,7 +559,7 @@ def test_follow_up_queries_keep_precision_and_keys_off_the_response(client, monk
     assert someday["band"] == "unknown"
     assert someday["on"] is None
     calls = len(hosts)
-    november = client.get("/api/calendar", params={"month": "2026-11"}).json()
+    november = client.post("/api/calendar/refresh", params={"month": "2026-11"}).json()
     assert len(hosts) == calls
     assert by_title(november, "Hello Again")[0]["date"] == "2026-11-02"
     assert by_title(november, "Hello Again")[0]["type"] == "sequel"
@@ -556,13 +567,13 @@ def test_follow_up_queries_keep_precision_and_keys_off_the_response(client, monk
     assert by_title(november, "Hello Later") == []
     assert by_title(november, "Hello Undated") == []
     assert by_title(november, "Hello Year")[0]["band"] == "year_band"
-    january = client.get("/api/calendar", params={"month": "2026-01"}).json()
+    january = client.post("/api/calendar/refresh", params={"month": "2026-01"}).json()
     assert "Hello Year" not in titles_on(january, "2026-01-01")
     after = client.get("/api/library").json()["items"]
     assert [item["title"] for item in after] == [item["title"] for item in before]
 
 
-def test_uncached_follow_ups_finish_on_the_next_view(client, monkeypatch):
+def test_uncached_follow_ups_finish_on_the_next_explicit_refresh(client, monkeypatch):
     monkeypatch.setenv("MEDIA_TODAY", "2026-10-16")
     calls = []
 
@@ -583,11 +594,11 @@ def test_uncached_follow_ups_finish_on_the_next_view(client, monkeypatch):
     silence(monkeypatch, wiki=wiki)
     for number in range(1, 10):
         add_movie(client, f"Film {number}", status="completed", year=2000 + number)
-    first = client.get("/api/calendar", params={"month": "2026-10"}).json()
+    first = client.post("/api/calendar/refresh", params={"month": "2026-10"}).json()
     assert first["partial"] is True
     assert len(calls) == 8
     assert len([event for event in all_events(first) if event["title"].endswith("Returns")]) == 8
-    second = client.get("/api/calendar", params={"month": "2026-10"}).json()
+    second = client.post("/api/calendar/refresh", params={"month": "2026-10"}).json()
     assert second["partial"] is False
     assert len(calls) == 9
     returned = {event["title"] for event in all_events(second) if event["type"] == "sequel"}
@@ -656,3 +667,42 @@ def test_public_follow_up_parsers_do_not_pin_a_month_to_a_day():
     assert parts[0]["precision"] == "month"
     assert parts[0]["released_on"] == "2026-10-01"
     assert "test-key" not in json.dumps(parts)
+
+
+def test_calendar_view_is_database_only_and_retains_explicit_refresh_results(client, monkeypatch):
+    from apps.media.backend.models import ProviderCache
+
+    monkeypatch.setenv("MEDIA_TODAY", "2026-10-16")
+    calls = []
+
+    def related(_http, title, _year):
+        calls.append(title)
+        return [
+            {
+                "relation": "sequel",
+                "title": "Saved sequel",
+                "year": 2026,
+                "precision": "day",
+                "released_on": "2026-10-16",
+            }
+        ]
+
+    silence(monkeypatch, wiki=related)
+    add_movie(client, "Watched film", status="completed")
+    before = client.get("/api/calendar", params={"month": "2026-10"}).json()
+    assert calls == []
+    assert before["partial"] is True
+    with client.app.state.database.sessionmaker() as db:
+        assert db.query(ProviderCache).count() == 0
+
+    refreshed = client.post("/api/calendar/refresh", params={"month": "2026-10"}).json()
+    assert by_title(refreshed, "Saved sequel")
+    assert calls == ["Watched film"]
+
+    def no_http(*_args, **_kwargs):
+        raise AssertionError("Calendar views must not create provider clients")
+
+    monkeypatch.setattr("apps.media.backend.routers.journal.httpx.Client", no_http)
+    cached = client.get("/api/calendar", params={"month": "2026-10"}).json()
+    assert by_title(cached, "Saved sequel")
+    assert calls == ["Watched film"]

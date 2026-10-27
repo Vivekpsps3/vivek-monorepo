@@ -10,10 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
-from conftest import TEST_PASSWORD, seed_user
 from apps.finance.backend.database import SessionLocal
 from apps.finance.backend.main import Base, app, engine, market_data
-from apps.finance.backend.models import UserSession
+from apps.finance.backend.tests.conftest import TEST_PASSWORD, seed_user
+from apps.server.identity.models import UserSession
 
 
 @pytest.fixture(autouse=True)

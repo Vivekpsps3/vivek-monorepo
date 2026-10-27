@@ -1,12 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { Inject, ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { Subject, finalize, takeUntil } from 'rxjs';
-import { AuthService } from '../auth/auth.service';
+import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
 import { NetWorth } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { MoneyPipe } from '@vivek/ui';
 
 @Component({
   selector: 'app-net-worth-embed',
@@ -56,7 +56,7 @@ export class NetWorthEmbedComponent implements OnInit, OnDestroy {
   constructor(
     private finance: FinanceService,
     private cdr: ChangeDetectorRef,
-    private auth: AuthService,
+    @Inject(SESSION_CONTEXT) private auth: SessionPort,
     private vault: VaultService,
     private marketRefresh: MarketRefreshCoordinatorService
   ) {}

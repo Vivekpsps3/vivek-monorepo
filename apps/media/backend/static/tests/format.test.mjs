@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEEK_STARTS_ON, artworkUrl, chooseReview, coverImage, dayLabel, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, weekDayLabels, whenLabel } from "../modules/format.mjs";
+import { WEEK_STARTS_ON, weekStartsOn, artworkUrl, chooseReview, coverImage, dayLabel, defaultStatus, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, libraryStatusForKind, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, statusOptions, weekDayLabels, whenLabel } from "../../../frontend/src/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
@@ -37,8 +37,16 @@ test("keeps unrated distinct from zero and labels statuses by medium", () => {
   assert.equal(statusLabel("game", "in_progress"), "Playing");
   assert.equal(statusLabel("tv", "in_progress"), "Watching");
   assert.equal(statusLabel("album", "want"), "Want to listen");
-  assert.equal(statusLabel("artist", "want"), "Following");
-  assert.equal(statusLabel("artist", "dropped"), "Unfollowed");
+  assert.equal(statusLabel("artist", "following"), "Following");
+  assert.equal(statusLabel("artist", "unfollowed"), "Unfollowed");
+  assert.deepEqual(statusOptions("artist").map(row => row.label), ["Following", "Unfollowed"]);
+  assert.equal(statusOptions("artist").some(row => /Listening|Listened|Anticipating|Paused/.test(row.label)), false);
+  assert.equal(defaultStatus("artist"), "following");
+  assert.equal(defaultStatus("album"), "want");
+  assert.equal(libraryStatusForKind("artist", "in_progress"), "");
+  assert.equal(libraryStatusForKind("artist", "following"), "following");
+  assert.equal(libraryStatusForKind("movie", "following"), "");
+  assert.equal(libraryStatusForKind("", "in_progress"), "in_progress");
   assert.equal(statusLabel("movie", "want"), "Want to watch");
   assert.equal(statusLabel("book", "want"), "Want to read");
   assert.equal(statusLabel("game", "want"), "Want to play");
@@ -88,6 +96,13 @@ test("library query drops unknown sort, kind, and status", () => {
   const title = normalizeLibraryQuery("sort=title&kind=book");
   assert.equal(title.changed, false);
   assert.equal(title.params.get("sort"), "title");
+  const artistListening = normalizeLibraryQuery("kind=artist&status=in_progress");
+  assert.equal(artistListening.changed, true);
+  assert.equal(artistListening.params.get("kind"), "artist");
+  assert.equal(artistListening.params.get("status"), null);
+  const artistFollow = normalizeLibraryQuery("kind=artist&status=following");
+  assert.equal(artistFollow.changed, false);
+  assert.equal(artistFollow.params.get("status"), "following");
   const cased = normalizeLibraryQuery("sort=Title");
   assert.equal(cased.droppedSort, false);
   assert.equal(cased.changed, true);
@@ -143,5 +158,24 @@ test("empty state escapes its copy and route errors are one panel", () => {
   assert.equal(routeErrorCopy("library", { status: 503, message: "nope" }).title, "Sign-in is unavailable right now");
   assert.equal(routeErrorCopy("library", { status: 503, message: "nope" }).body, "Try again in a minute.");
   assert.equal(routeErrorCopy("calendar", { status: 500, message: "Nope." }).title, "Couldn't load the calendar");
+  assert.equal(routeErrorCopy("discography", { status: 500, message: "Nope." }).title, "Couldn't load this discography");
   assert.equal(routeErrorCopy("home", { status: 500, message: "Nope." }).links[0].label, "Open library");
+});
+
+test("Media calendar follows the shared week setting", () => {
+  const previous = globalThis.localStorage;
+  const memory = new Map();
+  globalThis.localStorage = { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value) };
+  try {
+    assert.equal(weekStartsOn(), 0);
+    localStorage.setItem("suite-week-start", "1");
+    assert.equal(weekStartsOn(), 1);
+    assert.equal(weekDayLabels()[0], "Mon");
+    assert.equal(monthCells("2026-10")[3], "2026-10-01");
+    localStorage.setItem("suite-week-start", "0");
+    assert.equal(weekStartsOn(), 0);
+  } finally {
+    if (previous === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previous;
+  }
 });

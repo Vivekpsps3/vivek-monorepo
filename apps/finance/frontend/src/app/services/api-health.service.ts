@@ -11,14 +11,22 @@ export class ApiHealthService {
 
   constructor(private http: HttpClient) {}
 
+  /** One health check. Retry uses this so a click does not sit through startup delays. */
+  checkOnce(): Observable<boolean> {
+    return this.probe().pipe(catchError(() => of(false)));
+  }
+
   /**
    * Up to 10 attempts, 1.5s apart — covers Alembic startup and uvicorn --reload gaps.
    */
   checkWithRetries(): Observable<boolean> {
-    return this.http.get<{ status: string }>(this.healthUrl).pipe(
-      map(() => true),
+    return this.probe().pipe(
       retry({ count: 9, delay: 1500 }),
       catchError(() => of(false))
     );
+  }
+
+  private probe(): Observable<boolean> {
+    return this.http.get<{ status: string }>(this.healthUrl).pipe(map(() => true));
   }
 }

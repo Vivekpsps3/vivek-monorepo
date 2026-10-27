@@ -1,57 +1,19 @@
 """Private journal rules. These tests do not call live metadata providers."""
 
 import httpx
-import pytest
-from fastapi import HTTPException
-from starlette.requests import Request
+
+from apps.server.auth import require_principal
 
 
-def _request(method: str, headers: list[tuple[bytes, bytes]] | None = None) -> Request:
-    return Request(
-        {
-            "type": "http",
-            "method": method,
-            "path": "/api/library",
-            "headers": headers or [],
-            "query_string": b"",
-            "scheme": "http",
-            "server": ("test", 80),
-            "client": ("127.0.0.1", 9),
-        }
-    )
-
-
-def test_reads_and_writes_follow_the_finance_session(monkeypatch):
-    from apps.media.backend.deps import fetch_principal
-
-    with pytest.raises(HTTPException) as missing:
-        fetch_principal(_request("POST", [(b"cookie", b"finance_session=abc")]))
-    assert missing.value.status_code == 403
-
-    def fake_request(method, url, headers, timeout):
-        assert method == "GET"
-        assert url.endswith("/api/auth/me")
-        assert headers["cookie"] == "finance_session=abc"
-        return httpx.Response(401, json={"detail": "Login required"})
-
-    monkeypatch.setattr(httpx, "request", fake_request)
-    with pytest.raises(HTTPException) as denied:
-        fetch_principal(_request("GET", [(b"cookie", b"finance_session=abc")]))
-    assert denied.value.status_code == 401
-
-
-def test_private_routes_reject_a_signed_out_browser(client, monkeypatch):
-    client.app.state.principal_checker = None
-
-    def reject(method, url, headers, timeout):
-        return httpx.Response(401, json={"detail": "Login required"})
-
-    monkeypatch.setattr(httpx, "request", reject)
+def test_private_routes_reject_a_signed_out_browser(client):
+    client.app.dependency_overrides.pop(require_principal, None)
     assert client.get("/api/health").status_code == 200
-    assert client.get("/api/library").status_code == 401
+    denied = client.get("/api/library")
+    assert denied.status_code == 401
+    assert denied.json()["detail"] == "Login required"
     assert client.get("/api/summary").status_code == 401
     assert client.get("/api/calendar").status_code == 401
-    assert client.post("/api/library", json={"kind": "movie", "title": "Nope"}).status_code == 403
+    assert client.post("/api/library", json={"kind": "movie", "title": "Nope"}).status_code == 401
 
 
 def test_manual_entry_rating_and_review_round_trip(client):
@@ -285,7 +247,7 @@ def test_release_awareness_uses_the_test_clock_and_date_precision(client, monkey
 
 
 def test_library_filters_and_owner_isolation(client):
-    from apps.media.backend.deps import AuthResult, Principal
+    from apps.server.auth import Principal, require_principal
 
     movie = client.post(
         "/api/library",
@@ -297,15 +259,11 @@ def test_library_filters_and_owner_isolation(client):
             "rating": 10,
         },
     ).json()
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(2, "other", "Other"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
     assert client.get(f"/api/entries/{movie['id']}").status_code == 404
     assert client.get("/api/library").json()["items"] == []
     assert client.get("/api/summary").json()["counts"]["library"] == 0
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(1, "tester", "Tester"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(1, "tester", "Tester")
     listed = client.get("/api/library", params={"kind": "album", "sort": "rating"}).json()["items"]
     assert [item["title"] for item in listed] == ["Secret"]
     page = client.get("/")
@@ -351,7 +309,8 @@ def test_provider_metadata_cannot_overwrite_a_review_and_outages_keep_saved_rows
     ).json()
     assert patched["catalog"]["title"] == "Original"
     assert patched["catalog"]["overview"] == "Filled blank"
-    assert patched["catalog"]["external_ratings"][0]["scale"] == "0–5"
+    assert patched["catalog"]["external_ratings"] == []
+    assert patched["catalog"]["extra"]["metadata_pending"] is True
 
     def boom(*_args, **_kwargs):
         raise RuntimeError("provider down")
@@ -398,7 +357,9 @@ def test_search_uses_a_cache_and_marks_saved_items(client, monkeypatch):
         "/api/library/from-provider",
         json={**first["results"][0], "status": "completed", "rating": 10},
     ).json()
-    assert added["releases"][0]["precision"] == "year"
+    assert added["releases"] == []
+    assert added["catalog"]["extra"]["metadata_pending"] is True
+    assert added["catalog"]["title"] == "Song"
     marked = client.get("/api/search", params={"q": "song", "kind": "track"}).json()
     assert marked["results"][0]["already_saved"] is True
 
@@ -437,6 +398,7 @@ def test_movie_search_reads_the_public_page_without_a_key(client, monkeypatch):
     assert body["results"][0]["title"] == "Inception"
     assert body["results"][0]["artwork_url"].endswith("/poster.jpg")
     assert body["providers"]["tmdb"] == "ok"
+    assert body["results"][0]["provenance"]["coverage"] == "extraction"
     assert "itunes" not in body["providers"]
     saved = client.post(
         "/api/library/from-provider", json={**body["results"][0], "status": "want"}
@@ -445,7 +407,7 @@ def test_movie_search_reads_the_public_page_without_a_key(client, monkeypatch):
     assert saved["catalog"]["title"] == "Inception"
 
 
-def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client, monkeypatch):
+def test_scrape_mode_preserves_distinct_source_identities_with_the_same_title(client, monkeypatch):
     monkeypatch.setenv("MEDIA_SCRAPE_MODE", "1")
     monkeypatch.setenv("TMDB_API_KEY", "test-key")
 
@@ -507,18 +469,22 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
     monkeypatch.setattr("apps.media.backend.services.providers.tmdb_search", tmdb)
     monkeypatch.setattr("apps.media.backend.services.providers.itunes_search", itunes)
     found = client.get("/api/search", params={"q": "inception", "kind": "movie"}).json()
-    assert [item["source"] for item in found["results"]] == ["tmdb", "itunes"]
-    assert found["results"][1]["title"] == "Inception: The App"
+    assert {(item["source"], item["source_id"]) for item in found["results"]} == {
+        ("tmdb", "movie:27205"),
+        ("itunes", "413416"),
+        ("itunes", "99"),
+    }
+    app = next(item for item in found["results"] if item["source_id"] == "99")
+    assert all(item["provenance"]["coverage"] == "official" for item in found["results"])
+    assert app["provenance"]["provider"] == "itunes"
+    assert app["title"] == "Inception: The App"
     assert found["providers"]["itunes"] == "ok"
-    saved = client.post(
-        "/api/library/from-provider", json={**found["results"][1], "status": "want"}
-    ).json()
+    saved = client.post("/api/library/from-provider", json={**app, "status": "want"}).json()
     assert saved["catalog"]["source"] == "itunes"
     assert saved["catalog"]["title"] == "Inception: The App"
 
 
 def test_tvmaze_summary_is_plain_text():
-    import httpx
     from apps.media.backend.services.providers import tvmaze_search
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -607,7 +573,8 @@ def test_series_and_games_search_without_keys(client, monkeypatch):
     assert series["results"][0]["title"] == "Breaking Bad"
     assert series["results"][0]["artwork_url"].startswith("https://static.tvmaze.com/")
     assert series["providers"]["tvmaze"] == "ok"
-    assert series["providers"]["tmdb"] == "ok"
+    assert "tmdb" not in series["providers"]
+    assert series["results"][0]["provenance"]["provider"] == "tvmaze"
     game = client.get("/api/search", params={"q": "hades", "kind": "game"}).json()
     assert game["results"][0]["source"] == "steam"
     assert game["results"][0]["artwork_url"].startswith("https://shared.akamai.steamstatic.com/")
@@ -621,8 +588,6 @@ def test_series_and_games_search_without_keys(client, monkeypatch):
 
 
 def test_steam_search_keeps_title_and_capsule():
-    import httpx
-
     from apps.media.backend.services.providers import steam_search
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -659,12 +624,10 @@ def test_steam_search_keeps_title_and_capsule():
     assert len(rows) == 1
 
 
-def test_home_page_and_tokens_render_without_private_rows(client):
-    html = client.get("/").text
-    assert "Media" in html
-    assert "media-theme" in html
-    assert 'href="#/calendar"' in html
-    assert client.get("/tokens.css").status_code == 200
-    assert "controls.css" in html
-    assert client.get("/controls.css").status_code == 200
-    assert client.get("/favicon.svg").status_code == 200
+def test_home_page_loads_one_suite_bundle_without_private_rows(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "<app-root ngCspNonce=" in response.text
+    assert 'src="/main.js"' in response.text
+    assert "media-theme" not in response.text
+    assert client.get("/api/library").json()["items"] == []

@@ -172,13 +172,13 @@ shared cache cannot reuse a nonce. Production Angular builds disable
 critical-CSS inlining because that injects an `onload` handler, which a script
 policy without `'unsafe-inline'` refuses.
 
-| App | What is different |
+| Document | Policy |
 | --- | --- |
-| Finance (`/finance`, `/hub`, `/auth`) | `img-src 'self' data:`, `connect-src 'self'`, Trusted Types with an empty policy allowlist (`require-trusted-types-for 'script'`). `frame-ancestors 'none'`. |
-| Portfolio (`/`, `/home`, `/work`, `/about`, `/secrets`, other documents) | Same script rules as finance, without Trusted Types. `frame-ancestors 'none'`. No map or artwork hosts. |
-| Travel | `img-src` adds only `https://tile.openstreetmap.org`. No Trusted Types, because trip pages assign HTML strings. `frame-ancestors 'none'`. |
-| Media | `img-src` adds the artwork hosts the providers emit, plus the hosts their redirects land on: `image.tmdb.org`, `static.tvmaze.com`, `coverartarchive.org`, `covers.openlibrary.org`, `archive.org`, `*.archive.org`, `*.mzstatic.com`, `media.rawg.io`, `shared.akamai.steamstatic.com`. No blanket `https:`. No Trusted Types. |
-| API and health (`/api`, `/travel/api`, `/media/api`, `/health`, `/metrics`) | `default-src 'none'` and the same lock on scripts, images, connect, base, forms, and framing. |
+| All private routes (`/auth`, `/hub`, `/finance`, `/travel`, `/media`) | One strict nonce/Trusted Types policy with Angular's required named policies, `connect-src 'self'`, `frame-ancestors 'none'` and an explicit image-host allowlist for tiles/artwork. SPA navigation keeps the same policy. No blanket `https:` or HTML/script bypass. |
+| Public prerenders | Nonce/strict-dynamic scripts, no private API loading and no remote artwork/tile capability. Public/private transitions use document navigation where policy changes. |
+| API/health/metrics | `default-src 'none'`, no scripts, framing, images or outbound browser connections. |
+
+The private image allowlist includes OSM tiles, TMDB, TVMaze, Cover Art Archive/Archive, Open Library, iTunes artwork, RAWG, Commons uploads, Last.fm artwork and Steam capsules. This is one common document policy, including on Finance: a narrower Finance-only image policy cannot survive a client-side route transition to Travel/Media. Paths never isolated vault storage. Strict scripting and Trusted Types apply across every private feature.
 
 Every document policy also sets `script-src` to a per-response nonce plus
 `'strict-dynamic'` (with `'self'` only as a fallback for old browsers),
@@ -220,18 +220,9 @@ process budget and can mute further logs for up to 60 seconds, while the
 counter still increments. The handler does not store or log `script-sample`,
 which could contain page text.
 
-Trusted Types are enforced on the finance shell only, with an empty
-`trusted-types` allowlist. Finance source does not call `bypassSecurityTrust*`
-or assign `innerHTML` (`scripts/check-shared-boundaries.py` fails the build if
-a bypass appears). The production bundle can create `angular#unsafe-bypass`
-lazily for a script-URL bypass, and nothing on the finance shell calls that
-helper, so the name is not allowlisted. Chart.js 4 in this build does not
-assign `innerHTML`. `angular#bundler` is not emitted. ngx-markdown is the
-portfolio secrets demo, not finance; it assigns a string to `innerHTML`, and
-enforcing Trusted Types there blanks that demo. Travel and Media render with
-`innerHTML` / `insertAdjacentHTML`. A policy that allowed those assignments
-would be a passthrough. Enabling Trusted Types for those shells means rewriting
-them onto DOM APIs or a sanitizer that returns TrustedHTML.
+Trusted Types are enforced throughout the private Angular app. The vendored Leaflet adaptation creates text/element nodes instead of assigning HTML strings. Features use Angular templates and never create permissive Trusted Types policies or call `bypassSecurityTrust*`; the shared-boundary gate checks this. Negative browser probes verify that raw HTML assignment and injected scripts are refused, while normal map popups and artwork load under the same policy. Public ECDH content renders as escaped text and uses browser WebCrypto locally.
+
+The global Referrer-Policy stays `same-origin`; only Leaflet tile image requests explicitly use `origin`, so OSM receives the origin without a private path/query. Deterministic browser tests intercept tiles and artwork instead of contacting public services. CSP reports still count attempted violations.
 
 ### Separating the finance origin
 
@@ -327,9 +318,9 @@ server {
    - Serve the finance shell, `/hub`, `/auth`, and `/api` only when `Host` is
      `finance.vivekpanchagnula.com`.
    - Before that gate flips, issue Travel and Media an apex session that is
-     not `finance_session`. They currently read that cookie
-     (`apps/server/auth.py`, `apps/travel/backend/static/modules/api.mjs`,
-     `apps/media/backend/static/modules/api.mjs`).
+     not `finance_session`. The current suite session is shared
+     by the server identity dependency and root web platform. A future host split
+     must migrate both together; the retired domain static clients are removed.
    - Rename the finance cookies to `__Host-finance_session` and
      `__Host-finance_csrf` with `Secure`, `Path=/`, and no `Domain`. The
      `__Host-` prefix makes the browser reject a `Domain` attribute, so an
@@ -341,8 +332,7 @@ server {
      old key. Do that only at cutover. Doing it while finance still shares the
      apex origin would delete the live vault key. `Clear-Site-Data: "storage"`
      on the apex redirects covers browsers that never load those shells again.
-   - Rebuild the finance bundle with `<base href="/">` (the image currently
-     uses `--base-href /finance/`).
+   - Preserve the root build `<base href="/">` and review all public/private route ownership at host cutover.
    - Point hub links at `https://finance.vivekpanchagnula.com/hub`.
    - Set `CORS_ORIGINS` to `https://finance.vivekpanchagnula.com` only.
    - Re-run the browser CSP check against both hosts.

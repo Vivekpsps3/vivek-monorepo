@@ -9,12 +9,13 @@ import { CompensationReportComponent } from '../income/compensation-report.compo
 import { FixedExpensesComponent } from '../fixed-expenses/fixed-expenses.component';
 import { SubscriptionsComponent } from '../subscriptions/subscriptions.component';
 import { FinanceService } from '../services/finance.service';
-import { UiButtonComponent } from '@vivek/ui';
+import { UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
 import { FixedExpense, Subscription } from '../models/transaction.model';
-import { countableCents, dollarsFromCountedCents, needsFixing } from '@vivek/browser';
+import { dollarsFromCountedCents } from '@vivek/browser';
+import { countableCents, needsFixing } from '../utils/validators';
 import { UiBadgeComponent } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { MoneyPipe } from '@vivek/ui';
+import { AppDatePipe } from '@vivek/ui';
 
 export interface CommitmentRow {
   id: number;
@@ -38,7 +39,7 @@ export interface CommitmentRow {
   standalone: true,
   imports: [
     AppDatePipe,
-    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
+    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
   template: `
     <div class="page recurring-page">
       <nav class="hub-tabs" aria-label="Recurring">
@@ -107,7 +108,7 @@ export interface CommitmentRow {
           } @else if (rows.length) {
             <p class="commitment-empty">No items match these filters. Choose “All types” and “Active and inactive” to see every bill and subscription.</p>
           } @else if (!loadError) {
-            <div class="commitment-empty"><strong>No bills or subscriptions yet.</strong></div>
+            <ui-empty-state message="No bills or subscriptions yet." />
           }
         </section>
         <app-fixed-expenses [embedded]="true" [editorOnly]="true" />
@@ -258,7 +259,7 @@ export class RecurringHubComponent implements OnInit {
         params.keys.forEach(key => { const value = params.get(key); if (value !== null) queryParams[key] = value; });
         queryParams['t'] = 'pay';
         queryParams['history'] = '1';
-        void this.router.navigate(['/recurring'], { queryParams, replaceUrl: true });
+        void this.router.navigate(['/finance/recurring'], { queryParams, replaceUrl: true });
         return;
       }
       this.tab = requested === 'spend' || requested === 'bills' || requested === 'subs' ? 'spend' : 'pay';

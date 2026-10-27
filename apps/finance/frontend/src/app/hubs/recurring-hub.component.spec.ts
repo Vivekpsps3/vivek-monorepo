@@ -96,7 +96,7 @@ describe('RecurringHubComponent', () => {
       keys: ['t', 'year', 'start', 'end'],
     });
     component.ngOnInit();
-    expect(router.navigate).toHaveBeenCalledWith(['/recurring'], {
+    expect(router.navigate).toHaveBeenCalledWith(['/finance/recurring'], {
       queryParams: { t: 'pay', year: '2025', start: '2025-02-01', end: '2025-09-30', history: '1' },
       replaceUrl: true,
     });

@@ -86,8 +86,7 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
   teal accent (`#8FD0C8`). Do not invert one palette to invent the other.
 - Theme choices are System, Light, and Dark. System follows the operating
   system and stays selected when the OS theme changes. The choice is stored
-  per app (`ft-theme` in Finance and the Hub, `travel-theme`, `media-theme`,
-  `vw-theme` on the public site) and applied before first paint.
+  in the shared `suite-theme` preference and applied before first paint. Legacy app keys are read only for migration.
 - Keep content width near 72rem. Use alignment, type, spacing, and thin dividers
   to establish hierarchy. Reserve bordered surfaces for related content and
   shadows for overlays.
@@ -98,7 +97,7 @@ Planning separates fixed, variable, and irregular annual spending, identifies th
 - Keep forms focused and concise. State the passphrase recovery limit beside
   the sign-in fields. Use content-first rows for trips and portfolio work.
 - Cards group real data. Avoid decorative icon badges, nested card layouts,
-  gradients, oversized hero panels, generic bento grids, and repeated copy.
+  oversized hero panels, generic bento grids, and repeated copy. Use restrained glass on navigation/overlays and subtle background gradients; keep content surfaces opaque and readable. Reduced transparency uses a solid fallback.
 - Keep focus states visible, charts accessible, and table values available for
   people who need precise numbers.
 

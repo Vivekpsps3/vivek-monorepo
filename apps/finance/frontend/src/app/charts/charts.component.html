@@ -34,9 +34,9 @@
                 @for (row of monthlyRows; track row.label) {
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td><a [routerLink]="['/spending']" [queryParams]="monthlyRowQuery(row, 0)" [attr.aria-label]="'Open ' + row.label + ' income in Activity'">{{ row.income | money }}</a></td>
-                    <td><a [routerLink]="['/spending']" [queryParams]="monthlyRowQuery(row, 1)" [attr.aria-label]="'Open ' + row.label + ' spending in Activity'">{{ row.expense | money }}</a></td>
-                    <td [class.positive]="row.net >= 0"><a [routerLink]="['/spending']" [queryParams]="monthlyRowQuery(row, 2)" [attr.aria-label]="'Open ' + row.label + ' activity'">{{ row.net >= 0 ? '+' : '−' }}{{ (row.net < 0 ? -row.net : row.net) | money }}</a></td>
+                    <td><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 0)" [attr.aria-label]="'Open ' + row.label + ' income in Activity'">{{ row.income | money }}</a></td>
+                    <td><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 1)" [attr.aria-label]="'Open ' + row.label + ' spending in Activity'">{{ row.expense | money }}</a></td>
+                    <td [class.positive]="row.net >= 0"><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 2)" [attr.aria-label]="'Open ' + row.label + ' activity'">{{ row.net >= 0 ? '+' : '−' }}{{ (row.net < 0 ? -row.net : row.net) | money }}</a></td>
                   </tr>
                 }
               </tbody>
@@ -67,7 +67,7 @@
                     @if (row.synthetic) {
                       <button type="button" class="chart-drilldown-link" (click)="toggleCategories()">{{ row.label }} · Show all categories</button>
                     } @else {
-                      <a [routerLink]="['/spending']" [queryParams]="categoryRowQuery(row) || {}">{{ row.label }}</a>
+                      <a [routerLink]="['/finance/spending']" [queryParams]="categoryRowQuery(row) || {}">{{ row.label }}</a>
                     }
                   </td>
                   <td>{{ row.value | money }}</td>

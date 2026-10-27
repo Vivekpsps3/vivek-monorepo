@@ -265,7 +265,7 @@ def test_flight_lookup_and_place_cache(client, monkeypatch):
 
 
 def test_trips_stay_with_the_finance_user(client):
-    from apps.travel.backend.deps import AuthResult, Principal
+    from apps.server.auth import Principal, require_principal
 
     created = client.post(
         "/api/trips",
@@ -279,24 +279,20 @@ def test_trips_stay_with_the_finance_user(client):
     )
     assert created.status_code == 201, created.text
     trip_id = created.json()["id"]
-    client.app.state.principal_checker = lambda _request: AuthResult(
-        Principal(2, "other", "Other"), []
-    )
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
     assert client.get(f"/api/trips/{trip_id}").status_code == 404
     assert client.get("/api/home").json()["upcoming"] == []
     assert client.get("/api/settings").json()["account"]["name"] == "Other"
 
 
-def test_cities_are_placed_on_the_map_when_the_trip_is_saved(client):
+def test_places_are_chosen_explicitly_and_trip_reads_do_not_call_the_geocoder(client):
     from apps.travel.backend.deps import get_geocoder
 
+    calls = []
+
     def fetch(query):
-        places = {
-            "lisbon": {"label": "Lisbon", "lat": 38.72, "lng": -9.14},
-            "porto": {"label": "Porto", "lat": 41.15, "lng": -8.61},
-        }
-        hit = places.get(query.split(",")[0].strip().lower())
-        return [hit] if hit else []
+        calls.append(query)
+        return [{"label": "Lisbon", "lat": 38.72, "lng": -9.14}]
 
     client.app.dependency_overrides[get_geocoder] = lambda: fetch
     created = client.post(
@@ -305,30 +301,28 @@ def test_cities_are_placed_on_the_map_when_the_trip_is_saved(client):
             "title": "Portugal",
             "start_date": "2026-12-02",
             "end_date": "2026-12-06",
-            "stays": [
-                {"city": "Lisbon", "arrive_on": "2026-12-02", "leave_on": "2026-12-04"},
-                {"city": "Porto", "arrive_on": "2026-12-04", "leave_on": "2026-12-06"},
-            ],
-            "transports": [],
+            "stays": [{"city": "Lisbon", "arrive_on": "2026-12-02", "leave_on": "2026-12-06"}],
         },
     )
     assert created.status_code == 201, created.text
-    stays = {stay["city"]: stay for stay in created.json()["stays"]}
-    assert stays["Lisbon"]["lat"] == 38.72
-    assert stays["Porto"]["lng"] == -8.61
-    again = client.get(f"/api/trips/{created.json()['id']}")
-    assert again.json()["stays"][0]["lat"] == 38.72
+    stay = created.json()["stays"][0]
+    assert stay["lat"] is None
+    assert client.get(f"/api/trips/{created.json()['id']}").status_code == 200
+    assert calls == []
+    chosen = client.get("/api/places/search", params={"q": "Lisbon"}).json()["results"][0]
+    saved = client.patch(
+        f"/api/stays/{stay['id']}", json={**stay, "lat": chosen["lat"], "lng": chosen["lng"]}
+    )
+    assert saved.status_code == 200, saved.text
+    again = client.get(f"/api/trips/{created.json()['id']}").json()
+    assert again["stays"][0]["lat"] == 38.72
+    assert calls == ["Lisbon"]
 
 
-def test_finance_session_is_required(client, monkeypatch):
-    from fastapi import HTTPException
+def test_finance_session_is_required(client):
+    from apps.server.auth import require_principal
 
-    client.app.state.principal_checker = None
-
-    def deny(_request):
-        raise HTTPException(status_code=401, detail="Sign in through Finance.")
-
-    monkeypatch.setattr("apps.travel.backend.deps.fetch_principal", deny)
+    client.app.dependency_overrides.pop(require_principal, None)
     assert client.get("/api/health").status_code == 200
     assert client.get("/api/home").status_code == 401
-    assert client.get("/api/home").json()["detail"] == "Sign in through Finance."
+    assert client.get("/api/home").json()["detail"] == "Login required"

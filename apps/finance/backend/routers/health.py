@@ -12,7 +12,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-def health(db: Session = Depends(get_db)):
+def health(db: Session = Depends(get_db, scope="function")):
     db_status = "ok"
     try:
         db.execute(text("SELECT 1"))

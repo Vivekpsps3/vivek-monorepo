@@ -1,54 +1,27 @@
 # Travel
 
-> Current unified development/deployment commands are in [Operations](OPERATIONS.md).
-> Standalone app commands below are historical domain references.
+Travel's domain code stays in `apps/travel`, with Angular presentation in `frontend` and FastAPI routers/services in `backend`. The root site serves `/travel/`; API routes retain `/travel/api`. Identity, CSRF and the request database session come from the server platform in-process. Trip costs never write Finance records or alter net worth.
 
-Travel is a separate app in `apps/travel/`. The suite hosts it at `/travel/`, Finance at `/finance/`, and the Hub at `/hub` on the same origin. Travel checks the finance session cookie by calling the finance API. It does not open `finance.db`, the encrypted vault, or net worth. Trip costs stay in the travel database. `GET /api/summary` returns only the next trip's destination, dates, and a next action for the Hub.
+Use the root workflow in [Development](DEVELOPMENT.md). There is one service and one SQLite database; there is no standalone Travel deployment. Sign-in is `/auth/login`, and the persistent Hub control returns to `/hub`.
 
-Sign-in is `/auth/login` on the suite origin. The browser sends `finance_session` to both `/finance/` and `/travel/`. Travel reads call `GET /api/auth/me`. Changes call `POST /api/auth/session` and send the finance CSRF token. Rows are stored under that finance user id. `make travel-dev` serves this app at `/` on port 8090, so its sign-in link (`/auth/login`) is not served by that process. Use the compose origin for the shared session.
+## Trips and forms
 
-## Run
+A trip spans departure through return, inclusive. Start with dates and a destination. Add destination changes on the first date at the next city; keep one optional trip-name editor. Every destination needs a name. Reversed dates cannot save. Same-day and one-night trips have explicit wording.
 
-The supported host is the repo-root compose stack:
+Transport and activities appear only on request. Notes, reminders, parking and extra costs use optional editors. Failed saves keep drafts; route and document exit guards protect unsaved changes. A completed create retries the same database-backed user/request key, including after process restarts and concurrent submissions. Missing keys intentionally create separate trips. Deleting a trip removes its children and PTO usage after confirmation; individual rows offer Undo with a retained snapshot and an explicit retry if restoration fails.
 
-```bash
-docker compose up --build
-```
-
-Hub: `http://127.0.0.1:8080/hub`. Finance: `http://127.0.0.1:8080/finance/`. Travel: `http://127.0.0.1:8080/travel/`. Health: `http://127.0.0.1:8080/api/health`.
-
-`make travel-install && make travel-dev` still serves the travel UI on port 8090 for debugging. Use the compose origin when you want the finance session.
-
-## Trip
-
-A trip is one span: `start_date` is the day you leave and `end_date` is the day you come back, inclusive. Multi-city trips are `stays` whose dates sit inside that span. Outbound, inbound, connection, and local rides are `transports` (`flight`, `drive`, `train`, `bus`, `ferry`, `other`).
-
-Day plans (`plan_items`) are restaurants, activities, lodging, and similar items on a date. Notes and reminders belong to the trip. Parking says whether a spot is necessary, whether it is booked, and whether the arrangement is self-park, drop-off, pickup, rideshare, or none.
-
-## Budget
-
-Costs typed on a transport, plan, or parking row are rolled up automatically. Extra `budget_lines` are only for costs that are not already on the trip. Outbound flights, inbound flights, and other categories stay labeled. Totals are never added across currencies.
-
-These amounts do not create finance transactions and do not change net worth.
+Costs on transport, plan and parking rows roll up automatically. Extra budget lines represent other costs. Totals stay separate by currency. Parking records whether it is necessary and booked. Home lists open reminders, needed unbooked parking and PTO overlaps.
 
 ## Flights and maps
 
-Flight lookup calls FlightAware AeroAPI `GET /flights/{ident}` with the ident and a two-day window. The API key stays on the server (`FLIGHTAWARE_API_KEY`, or a settings row if the environment variable is unset). The browser receives the normalized schedule, airports, gates, terminals, aircraft, and delay.
+A valid flight number and departure date trigger bounded FlightAware AeroAPI lookup. Multiple candidates need an explicit choice. Scheduled, estimated and actual times stay distinct; local timezone/offset and date-line wording remain visible. Manual edits survive lookup; Use flight schedule deliberately resets overrides. Missing key, provider authentication, throttling, timeout and no match remain separate from suite authentication. Keys stay on the server.
 
-Map search calls OpenStreetMap Nominatim only when you use Find on map. Results are cached. The map tiles also come from OpenStreetMap.
+Places resolve only after explicit search and selection. Normal trip reads never geocode. Nominatim requests use an identifying User-Agent, aggregate one-second pacing and a cache with positive/empty expiry. Maps use the app-owned Leaflet DOM adaptation under the enforced private CSP and Trusted Types policy. Tiles receive only the site origin as Referer. Tile/library failures explain the failure, retain a textual place list and expose recovery. Tests use synthetic tiles.
 
 ## PTO
 
-PTO is a projection. The saved balance is the balance at the **end** of `balance_as_of`. Accrual starts the next day and is spread evenly:
+Each trip date stores 0, 0.5 or 1 PTO days. Weekdays start at 1; Saturday/Sunday start at 0. Turning PTO off retains selections. Date edits retain intersecting choices and default newly added dates. Trip, calendar, home and forecast use the same dated charges. Overlaps are reported with dates and labels rather than silently merged.
 
-- yearly: that many days across the next 365 days
-- monthly: 12 periods per 365 days
-- semimonthly: 24 periods per 365 days
-- biweekly: one period per 14 days
-- weekly: one period per 7 days
+A saved balance is the balance at the end of `balance_as_of`. Accrual begins the next day: annual amount /365, monthly amount ×12/365, semimonthly ×24/365, biweekly /14 and weekly /7. Hours convert using `hours_per_day`; a cap pauses accrual while reached. Dated trip charges apply on their dates; historical/manual aggregate usage retains its recorded start-date semantics.
 
-Hours are converted with `hours_per_day`. An optional cap pauses accrual while the balance is already at the cap. PTO that starts after the balance date is subtracted on its start date.
-
-A trip that counts as PTO uses the weekday count (Monday–Friday) unless `pto_days` is set. The trip page shows the balance on the morning you leave and the leftover at the end of the return date. Weekend-only trips count as 0 days until you override them.
-
-Lost or changed assumptions are not payroll. Set the balance date to the day you know the balance, before the vacation you want projected.
+Legacy custom trip totals remain explicitly unallocated until the owner confirms a dated allocation. Migration preserves the original total, including zero/fractions. It never guesses which dates a custom amount meant. This is a planning projection, not payroll. [Migrations](MIGRATIONS.md) documents the unified schema.

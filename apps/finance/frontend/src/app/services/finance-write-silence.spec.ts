@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
 import { firstValueFrom } from 'rxjs';
-import { SILENT_ERROR_TOAST, httpErrorInterceptor } from '../core/http-error.interceptor';
+import { SILENT_ERROR_TOAST, httpErrorInterceptor } from '@vivek/ui';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import { FinanceService } from './finance.service';

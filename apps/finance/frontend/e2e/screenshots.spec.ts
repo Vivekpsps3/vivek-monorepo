@@ -3,7 +3,7 @@ import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 import { syntheticVault } from './synthetic-vault';
 
-const dir = process.env.SCREENSHOT_DIR;
+const dir = process.env.SCREENSHOT_DIR || path.resolve('test-results/finance/screenshots');
 const backgrounds = {
   light: 'rgb(246, 243, 238)',
   dark: 'rgb(20, 19, 17)',
@@ -67,14 +67,13 @@ async function thawCharts(page: Page) {
 }
 
 async function chooseTheme(page: Page, vault: Awaited<ReturnType<typeof syntheticVault>>, theme: 'light' | 'dark') {
-  await page.evaluate(value => localStorage.setItem('ft-theme', value), theme);
+  await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
   await vault.reload();
   await expectNoStrayToast(page);
   await assertTheme(page, theme);
 }
 
 test.describe('finance F1 screenshot matrix', () => {
-  test.skip(!dir, 'Set SCREENSHOT_DIR to capture the 390/768/1280 light and dark matrix.');
   test.use({ reducedMotion: 'reduce' });
 
   test('review scenes at 390, 768, and 1280 in light and dark', async ({ page }) => {

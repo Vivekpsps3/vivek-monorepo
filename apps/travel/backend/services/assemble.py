@@ -4,12 +4,10 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import selectinload
 
-from apps.travel.backend.deps import require_actor
 from apps.travel.backend.models import (
     Note,
     Parking,
     PlanItem,
-    PtoEntry,
     PtoPolicy,
     Reminder,
     Stay,
@@ -24,12 +22,15 @@ from apps.travel.backend.services.budget import (
     rollup,
 )
 from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
-from apps.travel.backend.services.money import fmt_days, fmt_money, store_days, stored_days
+from apps.travel.backend.services.money import fmt_days, fmt_money, store_days
 from apps.travel.backend.services.pto import (
-    effective_pto_days,
+    counted_pto_dates,
+    load_usages,
     policy_from_row,
+    pto_conflicts,
+    pto_dates_payload,
+    stored_pto_total,
     trip_projection,
-    usages_from_rows,
     walk,
 )
 
@@ -60,6 +61,7 @@ def load_trip(db, trip_id: int, user_id: int) -> Trip | None:
             selectinload(Trip.note_entries),
             selectinload(Trip.budget_lines),
             selectinload(Trip.pto_entry),
+            selectinload(Trip.pto_day_rows),
         )
         .one_or_none()
     )
@@ -241,59 +243,59 @@ def _movement(row: Transport, day: date) -> str | None:
 
 def budget_for(trip: Trip) -> dict:
     lines: list[BudgetInput] = []
-    for row in trip.transports:
-        if row.cost_cents is None:
+    for transport in trip.transports:
+        if transport.cost_cents is None:
             continue
         lines.append(
             BudgetInput(
                 "transport",
-                row.id,
-                category_for_transport(row.role, row.mode),
-                _budget_label(row),
-                row.cost_cents,
-                row.currency,
-                bool(row.paid),
+                transport.id,
+                category_for_transport(transport.role, transport.mode),
+                _budget_label(transport),
+                transport.cost_cents,
+                transport.currency,
+                bool(transport.paid),
             )
         )
-    for row in trip.plans:
-        if row.cost_cents is None:
+    for plan in trip.plans:
+        if plan.cost_cents is None:
             continue
-        label = row.title if not row.place_name else f"{row.title} · {row.place_name}"
+        label = plan.title if not plan.place_name else f"{plan.title} · {plan.place_name}"
         lines.append(
             BudgetInput(
                 "plan",
-                row.id,
-                category_for_plan(row.kind),
+                plan.id,
+                category_for_plan(plan.kind),
                 label,
-                row.cost_cents,
-                row.currency,
-                bool(row.paid),
+                plan.cost_cents,
+                plan.currency,
+                bool(plan.paid),
             )
         )
-    for row in trip.parking:
-        if row.cost_cents is None:
+    for parking in trip.parking:
+        if parking.cost_cents is None:
             continue
         lines.append(
             BudgetInput(
                 "parking",
-                row.id,
+                parking.id,
                 "parking",
-                row.place_name or "Parking",
-                row.cost_cents,
-                row.currency,
-                bool(row.paid),
+                parking.place_name or "Parking",
+                parking.cost_cents,
+                parking.currency,
+                bool(parking.paid),
             )
         )
-    for row in trip.budget_lines:
+    for extra_cost in trip.budget_lines:
         lines.append(
             BudgetInput(
                 "manual",
-                row.id,
-                row.category,
-                row.label,
-                row.amount_cents,
-                row.currency,
-                bool(row.paid),
+                extra_cost.id,
+                extra_cost.category,
+                extra_cost.label,
+                extra_cost.amount_cents,
+                extra_cost.currency,
+                bool(extra_cost.paid),
             )
         )
     rolled = rollup(lines)
@@ -399,7 +401,7 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
         for row in plans
         if row.on_date < trip.start_date or row.on_date > trip.end_date
     ]
-    effective, auto = effective_pto_days(trip.pto_days, trip.start_date, trip.end_date)
+    effective, auto = stored_pto_total(trip)
     open_reminders = sum(1 for row in trip.reminders if not row.done)
     return {
         "id": trip.id,
@@ -411,8 +413,10 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
         "origin_label": trip.origin_label,
         "notes": trip.notes,
         "counts_as_pto": bool(trip.counts_as_pto),
-        "pto_days": store_days(stored_days(trip.pto_days)) if trip.pto_days else None,
+        "pto_mode": trip.pto_mode,
+        "pto_days": trip.pto_days if trip.pto_days is not None else None,
         "pto_days_effective": fmt_days(effective),
+        "pto_dates": pto_dates_payload(trip),
         "nights": nights_away(trip.start_date, trip.end_date),
         "span_days": span_days(trip.start_date, trip.end_date),
         "cities": [stay.city for stay in stays],
@@ -434,16 +438,11 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
     }
 
 
-def pto_context(db, user_id: int | None = None):
-    owner = require_actor().id if user_id is None else user_id
+def pto_context(db, user_id: int):
+    owner = user_id
     row = db.query(PtoPolicy).filter(PtoPolicy.user_id == owner).one_or_none()
     policy = policy_from_row(row)
-    usages = usages_from_rows(
-        db.query(PtoEntry)
-        .filter(PtoEntry.user_id == owner)
-        .order_by(PtoEntry.start_date, PtoEntry.id)
-        .all()
-    )
+    _entries, usages = load_usages(db, owner)
     return row, policy, usages
 
 
@@ -462,6 +461,7 @@ def snapshot_pto(policy, usages, today: date) -> dict:
             "hours_per_day": "8",
             "annual_cap_days": None,
             "today_before_balance_date": False,
+            "conflicts": [],
         }
     walked = walk(policy, usages, today)
     return {
@@ -479,6 +479,7 @@ def snapshot_pto(policy, usages, today: date) -> dict:
         if policy.annual_cap_days is not None
         else None,
         "today_before_balance_date": walked.before_balance_date,
+        "conflicts": pto_conflicts(usages),
     }
 
 
@@ -530,9 +531,9 @@ def attention_for(detail: dict) -> list[dict]:
     return items
 
 
-def build_home(db, today: date | None = None) -> dict:
+def build_home(db, today: date | None = None, *, user_id: int) -> dict:
     today = today or date.today()
-    owner = require_actor().id
+    owner = user_id
     _row, policy, usages = pto_context(db, owner)
     trips = (
         db.query(Trip)
@@ -545,6 +546,7 @@ def build_home(db, today: date | None = None) -> dict:
             selectinload(Trip.reminders),
             selectinload(Trip.note_entries),
             selectinload(Trip.budget_lines),
+            selectinload(Trip.pto_day_rows),
         )
         .order_by(Trip.start_date, Trip.id)
         .all()
@@ -601,10 +603,10 @@ def build_home(db, today: date | None = None) -> dict:
     }
 
 
-def build_summary(db, today: date | None = None) -> dict:
+def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
     """Small next-trip card for the Hub. No budgets, notes, or PTO."""
     today = today or date.today()
-    home = build_home(db, today)
+    home = build_home(db, today, user_id=user_id)
     card = home["metrics"]["next_trip"]
     if card is None:
         return {"today": today, "next_trip": None}
@@ -624,21 +626,21 @@ def build_summary(db, today: date | None = None) -> dict:
             "phase": card["phase"],
             "days_until": card["days_until"],
             "next_action": _next_action(card["phase"], card["days_until"]),
-            "href": f"/travel/#/trips/{card['id']}",
+            "href": f"/travel/trips/{card['id']}",
         },
     }
 
 
-def build_calendar(db, start: date, end: date, today: date | None = None) -> dict:
+def build_calendar(db, start: date, end: date, today: date | None = None, *, user_id: int) -> dict:
     today = today or date.today()
     if end < start:
         raise ValueError("The calendar end date has to be on or after the start.")
     if (end - start).days > 70:
         raise ValueError("Ask for at most 70 calendar days at a time.")
-    owner = require_actor().id
+    owner = user_id
     trips = (
         db.query(Trip)
-        .options(selectinload(Trip.stays))
+        .options(selectinload(Trip.stays), selectinload(Trip.pto_day_rows))
         .filter(Trip.user_id == owner, Trip.end_date >= start, Trip.start_date <= end)
         .order_by(Trip.start_date, Trip.id)
         .all()
@@ -657,6 +659,7 @@ def build_calendar(db, start: date, end: date, today: date | None = None) -> dic
                 "phase": phase_for(trip.start_date, trip.end_date, today),
                 "status": trip.status,
                 "cities": [stay.city for stay in stays],
+                "pto_dates": counted_pto_dates(trip, start, end),
             }
         )
     plans = []

@@ -9,7 +9,7 @@ history files, host timers, scheduler logs, or new runner accounts.
 
 **compose.yml is the single deployment definition**: image, environment defaults,
 ports, mounts, limits, health checks, backup schedule, and monitoring helper.
-The root Dockerfile builds both UIs and the modular FastAPI service. Its pinned
+The root Dockerfile builds one root Angular UI and the modular FastAPI service. Its pinned
 base images and hashed Python lock make builds reproducible.
 
 Production currently has no configured API secrets and needs no host environment
@@ -39,9 +39,9 @@ state through Docker. Stateless containers do not remove that trust boundary.
 ## Application and data flow
 
 Browser -> nginx-edge HTTPS -> 127.0.0.1:8085 -> site :8000 -> /data/site.db.
-The public portfolio is at `/`; Apps links to `/hub`. Finance, Travel, and Media
+The public portfolio is at `/`; Workspace links to `/hub`. Finance, Travel, and Media
 remain at `/finance/`, `/travel/`, and `/media/`, with shared `/auth/login` and
-`/api/auth`. Both UIs ship in the same immutable image.
+`/api/auth`. The root web build ships in the same immutable image.
 
 The three domains are modules in one process and use one engine and identity
 store. Travel and Media validate sessions and CSRF directly, without HTTP auth
@@ -80,7 +80,7 @@ to an autoheal helper.
 
 ## Release and rollback
 
-GitHub-hosted CI runs domain tests, both frontend production builds, migration and
+GitHub-hosted CI runs domain tests, the root frontend production build, migration and
 restore tests, runtime dependency audits, and image checks for authenticated reads,
 writes, CSRF, isolation, deletion, routing, and caching. Desktop/mobile Chromium
 checks run against the built image. Official Actions and image bases are pinned.

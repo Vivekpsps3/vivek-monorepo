@@ -17,8 +17,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from apps.media.backend.services.title_sort import title_sort_key
 
 
 def utc_now() -> datetime:
@@ -36,6 +40,9 @@ class CatalogItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
+    title_sort: Mapped[str] = mapped_column(
+        String(300), nullable=False, default="", server_default=text("''")
+    )
     creator: Mapped[str | None] = mapped_column(String(300))
     year: Mapped[int | None] = mapped_column(Integer)
     overview: Mapped[str | None] = mapped_column(Text)
@@ -45,6 +52,8 @@ class CatalogItem(Base):
     source_id: Mapped[str | None] = mapped_column(String(120))
     extra: Mapped[str | None] = mapped_column(Text)
     external_ratings: Mapped[str | None] = mapped_column(Text)
+    # Set only on catalog rows this migration inserted. Reused rows stay null.
+    migration_provenance: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -55,6 +64,12 @@ class CatalogItem(Base):
     entries: Mapped[list["UserEntry"]] = relationship(back_populates="catalog")
     episodes: Mapped[list["Episode"]] = relationship(cascade="all, delete-orphan")
     releases: Mapped[list["Release"]] = relationship(cascade="all, delete-orphan")
+
+
+@event.listens_for(CatalogItem, "before_insert")
+@event.listens_for(CatalogItem, "before_update")
+def _sync_title_sort(_mapper, _connection, target: CatalogItem) -> None:
+    target.title_sort = title_sort_key(target.title or "")
 
 
 class UserEntry(Base):
@@ -77,6 +92,17 @@ class UserEntry(Base):
     progress_unit: Mapped[str | None] = mapped_column(String(20))
     favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     anticipated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Personal artist portrait. Null means use the shared catalog image.
+    portrait_url: Mapped[str | None] = mapped_column(Text)
+    portrait_source_url: Mapped[str | None] = mapped_column(Text)
+    portrait_source_id: Mapped[str | None] = mapped_column(String(120))
+    portrait_crop: Mapped[str | None] = mapped_column(String(120))
+    portrait_attribution: Mapped[str | None] = mapped_column(Text)
+    # Artist relationship. Null on every non-artist entry. 0 is unfollowed.
+    followed: Mapped[bool | None] = mapped_column(Boolean)
+    follow_provenance: Mapped[str | None] = mapped_column(String(40))
+    # Set only on album/song entries the membership migration inserted.
+    membership_provenance: Mapped[str | None] = mapped_column(String(60))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -157,10 +183,28 @@ class EpisodeProgress(Base):
     )
     watched: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     watched_on: Mapped[date | None] = mapped_column(Date)
+    operation_token: Mapped[str | None] = mapped_column(String(36))
+
+
+class ProgressOperation(Base):
+    """Undo scope for one atomic catch-up command; personal edits clear the token."""
+
+    __tablename__ = "progress_operations"
+
+    token: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    entry_id: Mapped[int] = mapped_column(
+        ForeignKey("user_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    changed_ids: Mapped[str] = mapped_column(Text, nullable=False)
+    undone: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class MusicAlbum(Base):
-    """Public album metadata for an artist. Personal scores live on AlbumRating."""
+    """Legacy public album row. A personal save is a user entry, not this row."""
 
     __tablename__ = "music_albums"
     __table_args__ = (UniqueConstraint("catalog_id", "source_id", name="uq_music_album_source"),)
@@ -179,7 +223,7 @@ class MusicAlbum(Base):
 
 
 class MusicTrack(Base):
-    """A song on an album. Its score is a TrackRating, not the album or artist score."""
+    """Legacy public song row. A personal save is a user entry, not this row."""
 
     __tablename__ = "music_tracks"
     __table_args__ = (UniqueConstraint("album_id", "source_id", name="uq_music_track_source"),)
@@ -194,7 +238,7 @@ class MusicTrack(Base):
 
 
 class AlbumRating(Base):
-    """This user's score for one album. Never copied onto the artist or its songs."""
+    """Legacy nested score. New saves store the score on the album's user entry."""
 
     __tablename__ = "album_ratings"
     __table_args__ = (UniqueConstraint("user_id", "entry_id", "album_id", name="uq_album_rating"),)
@@ -211,7 +255,7 @@ class AlbumRating(Base):
 
 
 class TrackRating(Base):
-    """This user's score for one song. Never copied onto the album or the artist."""
+    """Legacy nested score. New saves store the score on the song's user entry."""
 
     __tablename__ = "track_ratings"
     __table_args__ = (UniqueConstraint("user_id", "entry_id", "track_id", name="uq_track_rating"),)
@@ -225,6 +269,69 @@ class TrackRating(Base):
         ForeignKey("music_tracks.id", ondelete="CASCADE"), nullable=False, index=True
     )
     rating: Mapped[float | None] = mapped_column(Float)
+
+
+class MusicLink(Base):
+    """Public music relationship. A row here is not a personal save."""
+
+    __tablename__ = "music_links"
+    __table_args__ = (
+        UniqueConstraint("parent_catalog_id", "child_catalog_id", "relation", name="uq_music_link"),
+        UniqueConstraint("legacy_album_id", name="uq_music_link_legacy_album"),
+        UniqueConstraint("legacy_track_id", name="uq_music_link_legacy_track"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    parent_catalog_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    child_catalog_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    relation: Mapped[str] = mapped_column(String(40), nullable=False)
+    namespace: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_id: Mapped[str | None] = mapped_column(String(120))
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    credit: Mapped[str | None] = mapped_column(String(300))
+    legacy_album_id: Mapped[int | None] = mapped_column(Integer)
+    legacy_track_id: Mapped[int | None] = mapped_column(Integer)
+    provenance: Mapped[str] = mapped_column(String(40), nullable=False)
+
+
+class SeriesLifecycle(Base):
+    """Production lifecycle for a show. Personal watch status stays on UserEntry."""
+
+    __tablename__ = "series_lifecycles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    catalog_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    lifecycle: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
+    raw_value: Mapped[str | None] = mapped_column(String(80))
+    source: Mapped[str | None] = mapped_column(String(40))
+    source_id: Mapped[str | None] = mapped_column(String(120))
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completeness: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
+    freshness: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
+
+
+class MediaMigrationReport(Base):
+    """Visible mapping conflicts. Original score rows are not rewritten from this."""
+
+    __tablename__ = "media_migration_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(60), nullable=False)
+    subject: Mapped[str] = mapped_column(String(40), nullable=False)
+    legacy_table: Mapped[str | None] = mapped_column(String(40))
+    legacy_id: Mapped[int | None] = mapped_column(Integer)
+    user_id: Mapped[int | None] = mapped_column(Integer)
+    catalog_id: Mapped[int | None] = mapped_column(
+        ForeignKey("catalog_items.id", ondelete="SET NULL")
+    )
+    entry_id: Mapped[int | None] = mapped_column(ForeignKey("user_entries.id", ondelete="SET NULL"))
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class Release(Base):

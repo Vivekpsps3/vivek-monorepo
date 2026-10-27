@@ -115,10 +115,10 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: apps/finance/frontend/package-lock.json
-      - run: npm ci --prefix apps/finance/frontend
+          cache-dependency-path: package-lock.json
+      - run: npm ci
       - id: playwright-version
-        run: echo "version=$(node -p "require('./apps/finance/frontend/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: playwright-browsers
         with:
@@ -131,9 +131,9 @@ jobs:
       # 16 minutes. The browser zip itself took a few seconds. Install
       # Chromium only. Screenshots are saved, not pixel-compared.
       - name: Install Playwright browser
-        working-directory: apps/finance/frontend
         run: npx playwright install chromium
-      - run: NODE_PATH=apps/finance/frontend/node_modules apps/finance/frontend/node_modules/.bin/playwright test --config apps/media/e2e/playwright.config.ts
+      - run: make build-frontends
+      - run: npx playwright test --config apps/media/e2e/playwright.config.ts
 
   travel-e2e:
     name: Travel Playwright
@@ -151,10 +151,10 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: apps/travel/e2e/package-lock.json
-      - run: npm ci --prefix apps/travel/e2e
+          cache-dependency-path: package-lock.json
+      - run: npm ci
       - id: playwright-version
-        run: echo "version=$(node -p "require('./apps/travel/e2e/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: playwright-browsers
         with:
@@ -163,8 +163,13 @@ jobs:
       - name: Install Playwright browser
         working-directory: apps/travel/e2e
         run: npx playwright install chromium
+      - run: make build-frontends
       - working-directory: apps/travel/e2e
         run: npx playwright test
+        env:
+          PYTHON: python
+      - name: Public and cross-app accessibility acceptance
+        run: npx playwright test --project=suite
         env:
           PYTHON: python
 
@@ -174,53 +179,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app:
-          - { dir: apps/finance/frontend, lock: apps/finance/frontend/package-lock.json }
-          - { dir: apps/site, lock: apps/site/package-lock.json }
+        project: [finance, site, web]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: ${{ matrix.app.lock }}
-      - working-directory: ${{ matrix.app.dir }}
-        run: npm ci
-      - working-directory: ${{ matrix.app.dir }}
-        run: npm audit --omit=dev --audit-level=high
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
       - name: ESLint
-        run: |
-          if [ "${{ matrix.app.dir }}" = "apps/finance/frontend" ]; then
-            python3 scripts/quality_ratchet.py check eslint-finance
-            python3 scripts/quality_ratchet.py check eslint-packages
-          else
-            python3 scripts/quality_ratchet.py check eslint-site
-          fi
+        run: make lint-web
       - name: Typecheck
-        run: |
-          if [ "${{ matrix.app.dir }}" = "apps/finance/frontend" ]; then
-            npx --prefix apps/finance/frontend tsc -p apps/finance/frontend/tsconfig.app.json --noEmit --pretty false
-            npx --prefix apps/finance/frontend tsc -p apps/finance/frontend/tsconfig.spec.json --noEmit --pretty false
-            npx --prefix apps/finance/frontend tsc -p packages/tsconfig.json --noEmit --pretty false
-          else
-            npx --prefix apps/site tsc -p apps/site/tsconfig.app.json --noEmit --pretty false
-            npx --prefix apps/site tsc -p apps/site/tsconfig.spec.json --noEmit --pretty false
-          fi
-      - working-directory: ${{ matrix.app.dir }}
-        run: npm test -- --watch=false --browsers=ChromeHeadlessCI
+        run: make typecheck-web
+      - run: npm run test:${{ matrix.project }} -- --watch=false --browsers=ChromeHeadlessCI
       - name: Karma coverage summary
         if: always()
-        working-directory: ${{ matrix.app.dir }}
         run: |
-          if [ ! -d coverage ]; then
-            exit 0
-          fi
-          summary=$(find coverage -name coverage-summary.json -print -quit)
-          if [ -n "$summary" ]; then
-            node "$GITHUB_WORKSPACE/scripts/karma-coverage-summary.mjs" "$summary" "${{ matrix.app.dir }}"
-          fi
-      - working-directory: ${{ matrix.app.dir }}
-        run: npx ng build --configuration production
+          while IFS= read -r summary; do
+            node scripts/karma-coverage-summary.mjs "$summary" "${{ matrix.project }}"
+          done < <(find apps -path '*/coverage/*/coverage-summary.json' -print)
+      - name: Shared browser and UI contracts
+        if: matrix.project == 'web'
+        run: node --test packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs
+      - name: Unified production build and public prerenders
+        if: matrix.project == 'web'
+        run: make build-frontends
 
   unified:
     # deploy.yml "Require the seeded schema rehearsal" matches this name.
@@ -278,7 +263,7 @@ jobs:
           set -euo pipefail
           # Anchored, so the Alembic alternative has to consume the rest of
           # the path. A bare "apps/server/alembic/" never matches a file name.
-          pattern='^(apps/[^/]+/backend/models\.py|apps/server/alembic(/.*|\.ini)|apps/server/(migrations|schema|migrate|database)\.py|scripts/(seed_dev_db\.py|validate-seeded-adoption\.sh|backup-site\.py|deploy-site\.sh)|compose\.yml|Dockerfile|\.github/workflows/ci\.yml)$'
+          pattern='^(apps/[^/]+/backend/models\.py|apps/server/alembic(/.*|\.ini)|apps/server/(identity/models|migrations|schema|migrate|database)\.py|scripts/(seed_dev_db\.py|validate-seeded-adoption\.sh|backup-site\.py|deploy-site\.sh)|compose\.yml|Dockerfile|\.github/workflows/ci\.yml)$'
           check() {
             path="$1"
             expect="$2"
@@ -305,6 +290,7 @@ jobs:
           check apps/server/schema.py run
           check apps/server/migrate.py run
           check apps/server/database.py run
+          check apps/server/identity/models.py run
           check scripts/seed_dev_db.py run
           check scripts/validate-seeded-adoption.sh run
           check scripts/backup-site.py run
@@ -377,14 +363,13 @@ jobs:
         with:
           node-version: "24"
       - id: playwright-version
-        run: echo "version=$(node -p "require('./apps/finance/frontend/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: playwright-browsers
         with:
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       - name: Install browser tooling
-        working-directory: apps/finance/frontend
         run: |
           npm ci
           if [ "${{ steps.playwright-browsers.outputs.cache-hit }}" = "true" ]; then
@@ -430,17 +415,16 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: apps/finance/frontend/package-lock.json
+          cache-dependency-path: package-lock.json
       - id: playwright-version
-        run: echo "version=$(node -p "require('./apps/finance/frontend/package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: playwright-browsers
         with:
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-      - run: npm ci --prefix apps/finance/frontend
+      - run: npm ci
       - name: Install Playwright browser
-        working-directory: apps/finance/frontend
         run: |
           if [ "${{ steps.playwright-browsers.outputs.cache-hit }}" = "true" ]; then
             npx playwright install chromium

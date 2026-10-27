@@ -1,6 +1,6 @@
 # Frontend conventions
 
-Angular 21 standalone app under `apps/finance/frontend/src/app/`.
+One Angular 21 application under `apps/web`, composing public and app-owned lazy features. Finance owns `apps/finance/frontend/src/app`; Travel and Media own their `frontend/src` folders.
 
 ## Stack
 
@@ -30,7 +30,7 @@ Angular 21 standalone app under `apps/finance/frontend/src/app/`.
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
-Shell: `MainLayoutComponent` (five hubs plus a Travel link to `/travel/`, `#main-content`). Admin and account actions live in the account menu. Dev API: `apiUrl: '/api'` + `proxy.conf.js` (`/api/**` → FastAPI). `ng serve` stays at `/`. The production image uses `<base href="/finance/">`, so these router paths are served under `/finance/` and `router.navigateByUrl('/have')` must stay unprefixed. Shared sign-in is `/auth/login` and `/auth/signup` on the suite origin, outside the `/finance/` base. `/login` remains the in-app route for `ng serve`.
+The table above lists Finance paths relative to `/finance`; Hub/admin and shared sign-in are root routes. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control plus account/theme actions visible; Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
 
 ## Design tokens
 
@@ -52,8 +52,7 @@ Charts: shared palette and Chart.js options live in `@vivek/ui` (`packages/ui/sr
 **Appearance:** light is the default token set (warm paper `#F6F3EE`, warm-white
 cards `#FFFCF8`, ink `#1C1916`, deep teal `#0F6E6A`). Dark is warm ink
 (`#141311` canvas, `#1E1C19` cards, soft teal `#8FD0C8`) on
-`[data-theme="dark"]`. First visit follows the OS. The account menu has a
-System / Light / Dark split. Choice is stored in `localStorage` key `ft-theme`.
+`[data-theme="dark"]`. First visit follows the OS. The persistent header offers System / Light / Dark. Choice is stored in `suite-theme`, with legacy app keys read during migration.
 Controls use the shared 8–20px radii; status and date shapes retain familiar forms.
 Reduced transparency and increased contrast media queries are honored.
 Typography prefers the system stack (no remote font fetch). Locale money and
@@ -148,10 +147,4 @@ Fixed-expense schedules use `due_day` where supplied; subscriptions use `next_bi
 
 ## Build
 
-```bash
-cd apps/finance/frontend
-npm install
-npx ng build --configuration development
-```
-
-Do not break `FinanceService` public method signatures without coordinating with apps/finance/backend/docs.
+Run `make build-frontends` from the root. One production build writes `dist/web/browser`, five public prerenders and the release manifest. `npm ci` installs the single root lock; app package files only forward existing test commands. Browser suites use `tests/e2e/server.py` and exercise that bundle through the production middleware. See [Development](DEVELOPMENT.md) and [Quality](QUALITY.md).

@@ -1,0 +1,35 @@
+{
+  "public": [
+    "",
+    "home",
+    "work",
+    "about",
+    "secrets"
+  ],
+  "private": [
+    "auth/(?:login|signup)",
+    "hub(?:/admin)?",
+    "account",
+    "finance(?:/(?:have|spending|recurring|planning|embed|vault/(?:setup|unlock)|balance-sheet|portfolio|transactions|calendar|income|fixed-expenses|subscriptions|investment-insights|stock-lab|charts))?",
+    "travel(?:/(?:trips/(?:new|[0-9]+)|calendar|pto|settings))?",
+    "media(?:/(?:library|search|calendar|add|item/[0-9]+(?:/(?:season/[0-9]+|discography))?))?"
+  ],
+  "aliases": {
+    "login": "auth/login",
+    "signup": "auth/signup",
+    "enroll": "auth/signup",
+    "auth": "auth/login",
+    "auth/enroll": "auth/signup",
+    "admin": "hub/admin",
+    "admin/users": "hub/admin",
+    "hub/media": "media/",
+    "have": "finance/have",
+    "spending": "finance/spending",
+    "recurring": "finance/recurring",
+    "planning": "finance/planning",
+    "vault/setup": "finance/vault/setup",
+    "vault/unlock": "finance/vault/unlock",
+    "media/new": "media/add",
+    "blog": "home"
+  }
+}

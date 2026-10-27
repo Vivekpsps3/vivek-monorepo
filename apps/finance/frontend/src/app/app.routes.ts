@@ -1,69 +1,11 @@
 import { Routes } from '@angular/router';
 import { MainLayoutComponent } from './core/layout/main-layout.component';
-import { adminGuard, authGuard } from './auth/auth.guard';
+import { authGuard } from '@vivek/ui';
 import { vaultGuard } from './crypto/vault.guard';
 
 export const routes: Routes = [
-  {
-    path: 'auth/login',
-    title: 'Sign in',
-    loadComponent: () => import('./auth/login.component').then(m => m.LoginComponent),
-  },
-  {
-    path: 'auth/signup',
-    title: 'Create account',
-    loadComponent: () => import('./auth/signup.component').then(m => m.SignupComponent),
-  },
-  {
-    path: 'login',
-    title: 'Sign in',
-    loadComponent: () => import('./auth/login.component').then(m => m.LoginComponent),
-  },
-  {
-    path: 'signup',
-    title: 'Create account',
-    loadComponent: () => import('./auth/signup.component').then(m => m.SignupComponent),
-  },
-  {
-    path: 'enroll',
-    redirectTo: 'signup',
-    pathMatch: 'full',
-  },
-  {
-    path: 'vault/setup',
-    title: 'Create vault · Finance',
-    canActivate: [authGuard],
-    loadComponent: () => import('./vault/vault-setup.component').then(m => m.VaultSetupComponent),
-  },
-  {
-    path: 'vault/unlock',
-    title: 'Unlock vault · Finance',
-    canActivate: [authGuard],
-    loadComponent: () => import('./vault/vault-unlock.component').then(m => m.VaultUnlockComponent),
-  },
-  {
-    path: 'hub/admin',
-    title: 'Admin',
-    canActivate: [authGuard, adminGuard],
-    loadComponent: () => import('./admin/suite-admin.component').then(m => m.SuiteAdminComponent),
-  },
-  {
-    path: 'hub',
-    title: 'Hub',
-    pathMatch: 'full',
-    canActivate: [authGuard],
-    loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent),
-  },
-  {
-    path: 'admin',
-    redirectTo: 'hub/admin',
-    pathMatch: 'full',
-  },
-  {
-    path: 'admin/users',
-    redirectTo: 'hub/admin',
-    pathMatch: 'full',
-  },
+  { path: 'vault/setup', title: 'Create vault · Finance', canActivate: [authGuard], loadComponent: () => import('./vault/vault-setup.component').then(m => m.VaultSetupComponent) },
+  { path: 'vault/unlock', title: 'Unlock vault · Finance', canActivate: [authGuard], loadComponent: () => import('./vault/vault-unlock.component').then(m => m.VaultUnlockComponent) },
   {
     path: 'embed',
     title: 'Net worth · Finance',
@@ -102,15 +44,15 @@ export const routes: Routes = [
         title: 'Planning · Finance',
         loadComponent: () => import('./hubs/planning-hub.component').then(m => m.PlanningHubComponent),
       },
-      { path: 'balance-sheet', pathMatch: 'full', redirectTo: () => '/have' },
-      { path: 'portfolio', pathMatch: 'full', redirectTo: () => '/have?t=holdings' },
-      { path: 'transactions', pathMatch: 'full', redirectTo: () => '/spending' },
-      { path: 'calendar', pathMatch: 'full', redirectTo: () => '/spending?t=calendar' },
-      { path: 'income', pathMatch: 'full', redirectTo: () => '/recurring' },
-      { path: 'fixed-expenses', pathMatch: 'full', redirectTo: () => '/recurring?t=spend' },
-      { path: 'subscriptions', pathMatch: 'full', redirectTo: () => '/recurring?t=spend' },
-      { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/planning?t=growth' },
-      { path: 'stock-lab', pathMatch: 'full', redirectTo: () => '/planning?t=stocks' },
+      { path: 'balance-sheet', pathMatch: 'full', redirectTo: () => '/finance/have' },
+      { path: 'portfolio', pathMatch: 'full', redirectTo: () => '/finance/have?t=holdings' },
+      { path: 'transactions', pathMatch: 'full', redirectTo: () => '/finance/spending' },
+      { path: 'calendar', pathMatch: 'full', redirectTo: () => '/finance/spending?t=calendar' },
+      { path: 'income', pathMatch: 'full', redirectTo: () => '/finance/recurring' },
+      { path: 'fixed-expenses', pathMatch: 'full', redirectTo: () => '/finance/recurring?t=spend' },
+      { path: 'subscriptions', pathMatch: 'full', redirectTo: () => '/finance/recurring?t=spend' },
+      { path: 'investment-insights', pathMatch: 'full', redirectTo: () => '/finance/planning?t=growth' },
+      { path: 'stock-lab', pathMatch: 'full', redirectTo: () => '/finance/planning?t=stocks' },
       { path: 'charts', pathMatch: 'full', redirectTo: '' },
       {
         path: '**',

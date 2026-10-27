@@ -2,7 +2,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
-import { SILENT_ERROR_TOAST, httpErrorInterceptor } from '../core/http-error.interceptor';
+import { SILENT_ERROR_TOAST, httpErrorInterceptor } from '@vivek/ui';
 import { EncryptedStoreService } from './encrypted-store.service';
 import { VaultService } from './vault.service';
 

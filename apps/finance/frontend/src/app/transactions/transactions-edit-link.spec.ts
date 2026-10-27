@@ -45,7 +45,7 @@ describe('Transactions edit link', () => {
           events: new Subject(),
           navigate: () => Promise.resolve(true),
           createUrlTree: () => ({}),
-          serializeUrl: () => '/spending',
+          serializeUrl: () => '/finance/spending',
         } },
       ],
     });

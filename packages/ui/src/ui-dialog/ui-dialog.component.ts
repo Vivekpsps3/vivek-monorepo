@@ -7,11 +7,31 @@ import {
   OnDestroy,
   ViewChild,
   input,
+  inject,
   output,
 } from '@angular/core';
+import { UPDATE_NOTICE } from '../update-notice';
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const dialogs: HTMLElement[] = [];
+const priorInert = new Map<HTMLElement, boolean>();
+
+/** Only the top dialog's ancestor branch remains interactive. */
+function updateModalBackground(): void {
+  for (const [element, original] of priorInert) element.inert = original;
+  priorInert.clear();
+  let branch = dialogs.at(-1);
+  while (branch?.parentElement) {
+    for (const sibling of Array.from(branch.parentElement.children)) {
+      if (sibling === branch || !(sibling instanceof HTMLElement)) continue;
+      priorInert.set(sibling, sibling.inert);
+      sibling.inert = true;
+    }
+    branch = branch.parentElement;
+  }
+}
 
 @Component({
   selector: 'ui-dialog',
@@ -21,6 +41,8 @@ const FOCUSABLE =
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UiDialogComponent implements AfterViewChecked, OnDestroy {
+  readonly updateNotice = inject(UPDATE_NOTICE, { optional: true });
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   open = input(false);
   labelledBy = input<string | undefined>(undefined);
   describedBy = input<string | undefined>(undefined);
@@ -40,9 +62,12 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
     if (this.open() && !this.focusedOpen) {
       this.lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       this.focusedOpen = true;
+      dialogs.push(this.host.nativeElement);
+      updateModalBackground();
       this.lockBackgroundScroll();
       this.bindVisualViewport();
       queueMicrotask(() => {
+        if (!this.open()) return;
         this.applyVisualViewport();
         const root = this.panel?.nativeElement;
         if (!root) return;
@@ -54,19 +79,27 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
     }
     if (!this.open() && this.focusedOpen) {
       this.focusedOpen = false;
+      this.releaseModal();
       this.unlockBackgroundScroll();
       this.restoreFocus();
     }
   }
 
   ngOnDestroy(): void {
+    this.releaseModal();
     this.unlockBackgroundScroll();
     this.restoreFocus();
   }
 
+  private releaseModal(): void {
+    const index = dialogs.indexOf(this.host.nativeElement);
+    if (index >= 0) dialogs.splice(index, 1);
+    updateModalBackground();
+  }
+
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    if (this.open()) this.closed.emit();
+    if (this.open() && dialogs.at(-1) === this.host.nativeElement) this.closed.emit();
   }
 
   onBackdrop(): void {
@@ -76,7 +109,7 @@ export class UiDialogComponent implements AfterViewChecked, OnDestroy {
   onKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Tab' || !this.panel) return;
     const focusable = Array.from(this.panel.nativeElement.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      el => !el.hasAttribute('disabled') && el.tabIndex !== -1
+      el => !el.hasAttribute('disabled') && el.tabIndex !== -1 && el.getClientRects().length > 0
     );
     if (focusable.length === 0) return;
     const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);

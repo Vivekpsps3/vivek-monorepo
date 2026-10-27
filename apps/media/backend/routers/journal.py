@@ -3,37 +3,55 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from apps.media.backend.database import get_db
-from apps.media.backend.deps import require_actor
 from apps.media.backend.models import Episode, Experience
-from apps.media.backend.services import providers, records
+from apps.media.backend.services import metadata, portraits, progress, providers, records
 from apps.media.backend.services.calendar import build_calendar
 from apps.media.backend.services.providers import UA
-from apps.media.backend.services.summary import build_summary, next_episodes
+from apps.media.backend.services.summary import build_summary
 from apps.media.backend.services.validate import clean_text
+from apps.server.auth import Principal, require_principal
+from apps.server.database import release_for_provider_io
 
 router = APIRouter()
 
 
 @router.get("/me")
-def me():
-    current = require_actor()
-    return {"username": current.username or "", "display_name": current.display_name}
+def me(principal: Principal = Depends(require_principal)):
+    return {"username": principal.username or "", "display_name": principal.display_name}
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db)):
-    return build_summary(db, require_actor().id)
+def summary(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    return build_summary(db, principal.id)
 
 
 @router.get("/calendar")
-def calendar(month: str | None = None, tz: str | None = None, db: Session = Depends(get_db)):
-    user_id = require_actor().id
+def calendar(
+    month: str | None = None,
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    return build_calendar(db, principal.id, month, tz=tz)
+
+
+@router.post("/calendar/refresh")
+def refresh_calendar(
+    month: str | None = None,
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    user_id = principal.id
     http = httpx.Client(
         timeout=8.0,
         headers={"User-Agent": UA, "Accept": "application/sparql-results+json, application/json"},
     )
     try:
-        return build_calendar(db, user_id, month, http, tz)
+        return build_calendar(db, user_id, month, http, tz, refresh=True)
     finally:
         http.close()
 
@@ -44,25 +62,32 @@ def library(
     status: str | None = None,
     q: str | None = None,
     sort: str = "activity",
-    db: Session = Depends(get_db),
+    offset: int = Query(0, ge=0, le=100000),
+    limit: int = Query(50, ge=1, le=100),
+    favorite: bool = False,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     sort = sort.strip().lower()
     if sort not in {"added", "rating", "activity", "release", "title"}:
         sort = "activity"
-    user_id = require_actor().id
-    rows = records.list_library(db, user_id, kind, status, q, sort)
-    records.apply_artist_portraits(db, rows)
-    # The Continue rail is the only summary slice the library paints.
-    # Chip and sort changes must not rebuild upcoming, reviews, and counts.
+    user_id = principal.id
+    rows, total = records.list_library(db, user_id, kind, status, q, sort, offset, limit, favorite)
+    # Continuation is served by /summary for Now; filters only need this page.
     return {
-        "items": [records.library_card(db, row) for row in rows],
-        "continue": next_episodes(db, user_id),
+        "items": records.library_cards(db, rows),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(rows) < total,
     }
 
 
 @router.get("/movies")
-def movies(db: Session = Depends(get_db)):
-    require_actor()
+def movies(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     http = httpx.Client(
         timeout=12.0,
         headers={"User-Agent": UA, "Accept": "text/html,application/json"},
@@ -78,40 +103,256 @@ def movies(db: Session = Depends(get_db)):
 
 
 @router.post("/library")
-def create_manual(body: dict, db: Session = Depends(get_db)):
-    entry = records.create_manual(db, require_actor().id, body)
+def create_manual(
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.create_manual(db, principal.id, body)
     return records.detail(db, entry)
 
 
 @router.post("/library/from-provider")
-def create_from_provider(body: dict, db: Session = Depends(get_db)):
-    entry, already = records.create_from_provider(db, require_actor().id, body)
-    _load_artist_catalog(db, entry)
-    _load_album_tracks(db, entry)
+def create_from_provider(
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry, already = records.create_from_provider(db, principal.id, body)
     payload = records.detail(db, entry)
     payload["already_saved"] = already
     return payload
 
 
 @router.get("/entries/{entry_id}")
-def read_entry(entry_id: int, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
-    _load_artist_catalog(db, entry)
-    _load_album_tracks(db, entry)
-    records.apply_artist_portraits(db, [entry], deep=True)
+def read_entry(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     return records.detail(db, entry)
 
 
+_DISCOGRAPHY_RELEASES = {"studio", "single", "ep", "live", "remix", "compilation"}
+
+
+def _discography_artist(db: Session, user_id: int, entry_id: int):
+    entry = records.owned_entry(db, user_id, entry_id)
+    catalog = entry.catalog
+    if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
+        raise HTTPException(
+            status_code=422, detail="Discography is for a saved MusicBrainz artist."
+        )
+    return entry
+
+
+@router.get("/entries/{entry_id}/discography")
+def discography(
+    entry_id: int,
+    group_offset: int = Query(0, ge=0, le=10000),
+    release_offset: int = Query(0, ge=0, le=10000),
+    release: str = "studio",
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    """One page of public releases. Nothing here is saved."""
+    entry = _discography_artist(db, principal.id, entry_id)
+    chosen = release.strip().lower()
+    if chosen not in _DISCOGRAPHY_RELEASES:
+        raise HTTPException(status_code=422, detail="That release filter is not available.")
+    catalog = entry.catalog
+    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
+    try:
+        release_for_provider_io(db)
+        if chosen == "studio":
+            payload = providers.musicbrainz_artist_catalog(
+                http,
+                catalog.source_id,
+                group_offset=group_offset,
+                release_offset=release_offset,
+                max_pages=1,
+            )
+        else:
+            payload = providers.musicbrainz_artist_catalog(
+                http,
+                catalog.source_id,
+                group_offset=group_offset,
+                release_offset=release_offset,
+                max_pages=1,
+                release_type=chosen,
+            )
+    except Exception:
+        raise HTTPException(
+            status_code=503, detail="The discography could not be loaded."
+        ) from None
+    finally:
+        http.close()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=503, detail="The discography could not be loaded.")
+    saved = records.saved_source_ids(db, principal.id)
+    albums = []
+    for album in payload.get("albums") or []:
+        if not isinstance(album, dict):
+            continue
+        source_id = album.get("source_id") if isinstance(album.get("source_id"), str) else None
+        key = ("musicbrainz", source_id) if source_id else None
+        tracks = []
+        for track in album.get("tracks") or []:
+            if not isinstance(track, dict):
+                continue
+            track_id = track.get("source_id") if isinstance(track.get("source_id"), str) else None
+            track_key = ("musicbrainz", track_id) if track_id else None
+            track_row = {
+                "source_id": track_id,
+                "title": track.get("title") if isinstance(track.get("title"), str) else "Untitled",
+                "position": track.get("position")
+                if isinstance(track.get("position"), int)
+                else None,
+                "saved": bool(track_key and track_key in saved),
+            }
+            if track_key and track_key in saved:
+                track_row["saved_id"] = saved[track_key]
+            tracks.append(track_row)
+        row = {
+            "source_id": source_id,
+            "title": album.get("title") if isinstance(album.get("title"), str) else "Untitled",
+            "year": album.get("year") if isinstance(album.get("year"), int) else None,
+            "artwork_url": album.get("artwork_url")
+            if isinstance(album.get("artwork_url"), str)
+            else None,
+            "saved": bool(key and key in saved),
+            "tracks": tracks,
+        }
+        if key and key in saved:
+            row["saved_id"] = saved[key]
+        albums.append(row)
+    return {
+        "partial": bool(payload.get("partial")),
+        "group_offset": payload.get("group_offset") or 0,
+        "release_offset": payload.get("release_offset") or 0,
+        "release": chosen,
+        "albums": albums,
+    }
+
+
+@router.post("/entries/{entry_id}/discography")
+def save_discography_item(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    """Save one discovered album or song. Does not save the rest of the page."""
+    artist = _discography_artist(db, principal.id, entry_id)
+    entry, already = records.save_discovered(db, principal.id, artist, body)
+    payload = records.entry_card(entry)
+    payload["already_saved"] = already
+    return payload
+
+
 @router.patch("/entries/{entry_id}")
-def patch_entry(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def patch_entry(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     records.patch_entry(db, entry, body)
     return records.detail(db, entry)
 
 
+@router.get("/entries/{entry_id}/portraits")
+def portrait_search(
+    entry_id: int,
+    q: str,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    return {"results": portraits.search(db, entry, q)}
+
+
+@router.put("/entries/{entry_id}/portrait")
+def portrait_select(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    portraits.select(db, entry, body)
+    return records.detail(db, entry)
+
+
+@router.delete("/entries/{entry_id}/portrait")
+def portrait_reset(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    portraits.reset(db, entry)
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/refresh")
+def refresh_metadata(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    metadata.refresh(db, entry)
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/link-metadata")
+def link_metadata(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    if entry.catalog.source != "manual":
+        raise HTTPException(422, "This item already has a provider identity.")
+    metadata.refresh(db, entry, body)
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/caught-up")
+def catch_up(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    operation = progress.catch_up(db, entry, body)
+    return {**records.detail(db, entry), "operation": operation}
+
+
+@router.post("/entries/{entry_id}/caught-up/{token}/undo")
+def undo_catch_up(
+    entry_id: int,
+    token: str,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    result = progress.undo(db, entry, token)
+    return {**records.detail(db, entry), "undo": result}
+
+
 @router.delete("/entries/{entry_id}")
-def delete_entry(entry_id: int, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def delete_entry(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     db.query(Experience).filter(
         Experience.entry_id == entry.id, Experience.user_id == entry.user_id
     ).delete()
@@ -142,8 +383,13 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/albums")
-def add_album(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def add_album(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review)
     records.add_album(db, entry, body)
     db.refresh(entry)
@@ -153,8 +399,14 @@ def add_album(entry_id: int, body: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/albums/{album_id}/tracks")
-def add_track(entry_id: int, album_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def add_track(
+    entry_id: int,
+    album_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review)
     records.add_track(db, entry, album_id, body)
     db.refresh(entry)
@@ -164,8 +416,14 @@ def add_track(entry_id: int, album_id: int, body: dict, db: Session = Depends(ge
 
 
 @router.post("/entries/{entry_id}/albums/{album_id}/rating")
-def rate_album(entry_id: int, album_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def rate_album(
+    entry_id: int,
+    album_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review, entry.summary)
     records.save_album_rating(db, entry, album_id, body)
     db.refresh(entry)
@@ -175,8 +433,14 @@ def rate_album(entry_id: int, album_id: int, body: dict, db: Session = Depends(g
 
 
 @router.post("/entries/{entry_id}/tracks/{track_id}/rating")
-def rate_track(entry_id: int, track_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def rate_track(
+    entry_id: int,
+    track_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review, entry.summary)
     records.save_track_rating(db, entry, track_id, body)
     db.refresh(entry)
@@ -185,59 +449,14 @@ def rate_track(entry_id: int, track_id: int, body: dict, db: Session = Depends(g
     return records.detail(db, entry)
 
 
-def _load_album_tracks(db: Session, entry) -> None:
-    if not records.album_needs_lookup(entry.catalog):
-        return
-    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
-    try:
-        payload = providers.musicbrainz_release_detail(http, entry.catalog.source_id)
-    except Exception:
-        return
-    finally:
-        http.close()
-    if isinstance(payload, dict):
-        records.store_album_release(db, entry.catalog, payload)
-
-
-def _load_artist_catalog(db: Session, entry) -> None:
-    if not records.artist_needs_catalog(entry.catalog):
-        return
-    http = httpx.Client(timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"})
-    try:
-        if not records.catalog_list_complete(entry.catalog):
-            group_offset, release_offset = records.catalog_resume(entry.catalog)
-            source_id = entry.catalog.source_id
-
-            def fetch_page():
-                if group_offset or release_offset:
-                    return providers.musicbrainz_artist_catalog(
-                        http, source_id, group_offset=group_offset, release_offset=release_offset
-                    )
-                return providers.musicbrainz_artist_catalog(http, source_id)
-
-            if group_offset or release_offset:
-                payload = fetch_page()
-            else:
-                payload = providers.cached_call(
-                    db, f"musicbrainz:artist-catalog:{source_id}", fetch_page
-                )
-            if not isinstance(payload, dict):
-                return
-            records.store_music_catalog(db, entry.catalog, payload.get("albums") or [])
-            records.remember_catalog_page(entry.catalog, payload)
-        remaining = records.backfill_missing_tracks(db, entry.catalog, http)
-        records.mark_catalog_loaded(
-            entry.catalog, (not records.catalog_list_complete(entry.catalog)) or remaining
-        )
-    except Exception:
-        return
-    finally:
-        http.close()
-
-
 @router.post("/entries/{entry_id}/seasons")
-def save_season(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def save_season(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     before = (entry.rating, entry.review)
     records.save_season(db, entry, body)
     db.refresh(entry)
@@ -247,8 +466,13 @@ def save_season(entry_id: int, body: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/episodes")
-def add_episode(entry_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def add_episode(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     if entry.catalog.kind != "tv":
         raise HTTPException(status_code=422, detail="Episodes belong on a show.")
     records.upsert_episode(db, entry.catalog, body)
@@ -256,8 +480,14 @@ def add_episode(entry_id: int, body: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/entries/{entry_id}/episodes/{episode_id}/watched")
-def watched(entry_id: int, episode_id: int, body: dict, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+def watched(
+    entry_id: int,
+    episode_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
     episode = db.get(Episode, episode_id)
     if episode is None or episode.catalog_id != entry.catalog_id:
         raise HTTPException(status_code=404, detail="That episode is not on this show.")
@@ -265,24 +495,32 @@ def watched(entry_id: int, episode_id: int, body: dict, db: Session = Depends(ge
         records.parse_date(body.get("watched_on"), "Watched on") if body.get("watched_on") else None
     )
     records.mark_watched(
-        db, require_actor().id, episode, bool(body.get("watched", True)), watched_on
+        db, principal.id, episode, records.watched_flag(body.get("watched", True)), watched_on
     )
     return records.detail(db, entry)
 
 
 @router.post("/entries/{entry_id}/episodes/next")
-def next_episode(entry_id: int, db: Session = Depends(get_db)):
-    entry = records.owned_entry(db, require_actor().id, entry_id)
-    state = records.mark_next(db, require_actor().id, entry)
+def next_episode(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    state = records.mark_next(db, principal.id, entry)
     payload = records.detail(db, entry)
     payload["show"] = state
     return payload
 
 
 @router.get("/entries/{entry_id}/web")
-def entry_web(entry_id: int, db: Session = Depends(get_db)):
+def entry_web(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     """Collaborators for an artist, or sequels and spin-offs for a movie."""
-    entry = records.owned_entry(db, require_actor().id, entry_id)
+    entry = records.owned_entry(db, principal.id, entry_id)
     catalog = entry.catalog
     if catalog.kind == "artist":
         nodes = records.cached_collaborators(catalog)
@@ -291,6 +529,7 @@ def entry_web(entry_id: int, db: Session = Depends(get_db)):
                 timeout=20.0, headers={"User-Agent": UA, "Accept": "application/json"}
             )
             try:
+                release_for_provider_io(db)
                 nodes = records.store_collaborators(
                     catalog, providers.musicbrainz_collaborators(http, catalog.source_id)
                 )
@@ -319,17 +558,30 @@ def entry_web(entry_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/search")
-def search(q: str = Query(""), kind: str | None = None, db: Session = Depends(get_db)):
+def search(
+    q: str = Query(""),
+    kind: str | None = None,
+    offset: int = Query(0, ge=0, le=10000),
+    limit: int = Query(20, ge=1, le=50),
+    retry: bool = False,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     query = clean_text(q, 120, "Search", required=True)
     if len(query) < 2:
         raise HTTPException(status_code=422, detail="Type at least two letters.")
-    user_id = require_actor().id
-    payload = providers.search(db, query, kind)
-    providers.attach_artist_portraits(db, payload["results"])
+    user_id = principal.id
+    kind = None if kind in (None, "", "all") else kind
+    if kind is not None and kind not in records.KINDS:
+        raise HTTPException(status_code=422, detail="This media type is not supported.")
+    payload = providers.search(db, query, kind, offset=offset, limit=limit, retry_errors=retry)
     saved = records.saved_source_ids(db, user_id)
+    artwork = records.saved_artist_artwork(db, user_id)
     for result in payload["results"]:
         key = (result.get("source"), result.get("source_id"))
         result["already_saved"] = key in saved
         if key in saved:
             result["saved_id"] = saved[key]
+            if result.get("kind") == "artist" and key in artwork:
+                result["artwork_url"] = artwork[key]
     return payload

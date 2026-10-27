@@ -2,8 +2,8 @@ import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:
 import { errors, expect, Locator, Page } from '@playwright/test';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
 
-// Production e2e builds with --base-href /finance/. ng serve stays at /.
-const BASE_PREFIX = process.env.E2E_DIST ? '/finance' : '';
+// Finance is a feature of the root router in every test and deployment.
+const BASE_PREFIX = '/finance';
 
 function canonicalUrl(url: string): string {
   const queryAt = url.indexOf('?');
@@ -22,7 +22,7 @@ export function externalPath(internal: string): string {
   if (pathname === '/auth' || pathname.startsWith('/auth/') || pathname === '/hub' || pathname.startsWith('/hub/')) {
     return `${pathname}${search}`;
   }
-  if (!BASE_PREFIX) return `${pathname}${search}`;
+  if (pathname === '/finance' || pathname.startsWith('/finance/')) return `${pathname}${search}`;
   if (pathname === '/') return `${BASE_PREFIX}/${search}`;
   return `${BASE_PREFIX}${pathname}${search}`;
 }

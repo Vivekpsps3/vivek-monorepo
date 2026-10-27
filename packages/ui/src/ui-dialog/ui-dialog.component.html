@@ -11,6 +11,12 @@
       (click)="$event.stopPropagation()"
       (keydown)="onKeydown($event)">
       <ng-content />
+      @if (updateNotice?.noticeVisible()) {
+        <aside class="ui-dialog-update" aria-live="polite">
+          <p>{{ updateNotice?.updateAvailable() ? 'A new version is ready.' : 'A page section could not load.' }} Finish or save your edits before reloading.</p>
+          <button type="button" (click)="updateNotice?.dismissNotice()">Dismiss update notice</button>
+        </aside>
+      }
     </div>
   </div>
 }

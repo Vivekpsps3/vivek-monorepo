@@ -1,429 +1,212 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { addItem, openItem, resetMedia, savedItem } from './media-test';
 
-test('an empty add form explains itself and does not leave the page', async ({ page }) => {
-  await page.goto('/media/#/new');
-  await page.getByRole('button', { name: 'Add to library' }).click();
-  await expect(page.getByText('Enter a title.')).toBeVisible();
-  await expect(page.getByLabel('Title')).toBeFocused();
-  await expect(page).toHaveURL(/#\/new/);
-  await page.getByLabel('Year').fill('99');
-  await page.getByLabel('Title').fill('Synthetic Year');
-  await page.getByRole('button', { name: 'Add to library' }).click();
-  await expect(page.getByText('Year must be a number from 1000 to 3000.')).toBeVisible();
-  await expect(page).toHaveURL(/#\/new/);
+test.beforeEach(async ({ request }) => resetMedia(request));
+
+test('manual add requires a title and a valid year without losing the form', async ({ page }) => {
+  await page.goto('/media/add');
+  await expect(page.getByRole('button', { name: 'Add to library' })).toBeDisabled();
+  await page.getByText('Optional details', { exact: true }).click();
+  await page.getByLabel('Release year').fill('99');
+  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Synthetic year');
+  await expect(page.getByRole('button', { name: 'Add to library' })).toBeDisabled();
+  await expect(page).toHaveURL(/\/media\/add$/);
+  await page.getByLabel('Release year').fill('2026');
+  await expect(page.getByRole('button', { name: 'Add to library' })).toBeEnabled();
 });
 
-test('search tells the truth when movie and game catalogs are missing', async ({ page }) => {
-  await page.route('**/api/search**', async route => {
-    const url = new URL(route.request().url());
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        query: url.searchParams.get('q'),
-        results: [],
-        providers: { tmdb: 'unconfigured', rawg: 'unconfigured', openlibrary: 'ok', musicbrainz: 'ok' },
-      }),
-    });
+test('search distinguishes unavailable, unconfigured and available source coverage', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/media/api/search?**', route => {
+    requests++;
+    return route.fulfill({ json: { results: [], total: 0, offset: 0, has_more: false, partial: true, sources: [
+      { id: 'rawg', state: 'unconfigured', kinds: ['game'], coverage: 'official', cached: false, reason: 'This source is not configured. Steam coverage remains available.', retryable: false },
+      { id: 'steam', state: 'ok', kinds: ['game'], coverage: 'keyless', cached: false, reason: null, retryable: false },
+      { id: 'tmdb', state: 'provider_auth', kinds: ['movie'], coverage: 'official', cached: false, reason: 'This source needs valid credentials.', retryable: true },
+    ] } });
   });
-  await page.goto('/media/#/search');
-  await expect(page.getByText('Results come from public catalogs.')).toBeVisible();
-  await page.getByRole('searchbox', { name: 'Search' }).fill('d');
-  await expect(page.getByText('Type at least 2 letters.')).toBeVisible();
-  await page.getByRole('searchbox', { name: 'Search' }).fill('dune');
-  await expect(page.getByText("Movies, series and games can't be searched right now.")).toBeVisible();
-  await expect(page.getByRole('heading', { name: /No public match for/ })).toBeVisible();
+  await page.goto('/media/search');
+  await page.getByRole('searchbox').fill('d');
+  await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
+  expect(requests).toBe(0);
+  await page.getByRole('searchbox').fill('dune');
+  await expect(page.getByText('Search is incomplete.', { exact: true })).toBeVisible();
+  await page.getByText('Source coverage · all types', { exact: true }).click();
+  await expect(page.locator('.source-details')).toContainText('Steam coverage remains available');
+  await expect(page.locator('.source-details')).toContainText('needs valid credentials');
+  await expect(page.getByRole('heading', { name: 'Available sources returned no matches' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Account', exact: false })).toBeVisible();
 });
 
-test('Now, Library, and Calendar use the spec headings and one library list', async ({ page }) => {
-  await page.goto('/media/#/');
-  await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
-  await expect(page.locator('.grid .card').first()).toBeVisible();
-
-  await page.goto('/media/#/library');
-  await expect(page.getByLabel('Search your library')).toBeVisible();
-  await expect(page.getByLabel('Search your library')).toBeVisible();
-  await expect(page.locator('.grid .card').first()).toBeVisible();
-  const libraryLoad = page.waitForResponse(response => (
-    response.url().includes('/api/library') && response.request().method() === 'GET'
-  ));
-  await page.getByRole('button', { name: 'Favorites' }).click();
-  const response = await libraryLoad;
-  expect(response.ok()).toBeTruthy();
+test('library pages and favorites filter count only matching memberships and survive Back', async ({ page, request }) => {
+  for (let number = 0; number < 26; number++) await addItem(request, { title: 'Paged ' + String(number).padStart(2, '0'), favorite: number % 2 === 0 });
+  await page.goto('/media/library?sort=title');
+  await expect(page.locator('media-card')).toHaveCount(24);
+  await expect(page.getByText('29 saved items', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Next items' }).click();
+  await expect(page.locator('media-card')).toHaveCount(5);
+  await expect(page).toHaveURL(/offset=24/);
+  const name = await page.locator('media-card h2 a').first().innerText();
+  await page.locator('media-card h2 a').first().click();
+  await expect(page.locator('main h1')).toHaveText(name);
+  await page.goBack();
+  await expect(page.locator('media-card')).toHaveCount(5);
+  await page.getByRole('checkbox', { name: 'Favorites only' }).check();
+  await expect(page.getByText('13 saved items', { exact: true })).toBeVisible();
+  await expect(page.locator('media-card')).toHaveCount(13);
   await expect(page).toHaveURL(/fav=1/);
-  await expect(page.getByRole('button', { name: '★ Favorites' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('group', { name: 'Favorites' })).toBeVisible();
-
-  await page.goto('/media/#/calendar');
-  await expect(page.getByRole('grid')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Today' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Previous month' })).toBeVisible();
 });
 
-test('removing an item asks before it deletes, and cancel leaves it in place', async ({ page }) => {
-  await page.goto('/media/#/library');
-  await page.getByRole('link', { name: /Dune/ }).click();
+test('artist expansion is saved-only, survives Back, and removing the artist preserves its music', async ({ page, request }) => {
+  const artist = await addItem(request, { kind: 'artist', title: 'Saved artist', status: 'following' });
+  let detail = await (await request.post('/media/api/entries/' + artist.id + '/albums', { data: { title: 'Saved album' } })).json();
+  const album = detail.music.saved_children.find((child: any) => child.kind === 'album');
+  detail = await (await request.post('/media/api/entries/' + artist.id + '/albums/' + album.id + '/tracks', { data: { title: 'Saved song' } })).json();
+  await page.goto('/media/library?sort=title');
+  const expansion = page.getByRole('button', { name: 'Show saved albums and songs (2)', exact: true });
+  await expect(expansion).toHaveAttribute('aria-expanded', 'false');
+  await expansion.click();
+  const children = page.locator('#saved-' + artist.id);
+  await expect(children.locator('media-card h2')).toHaveText(['Saved album', 'Saved song']);
+  await page.getByRole('link', { name: 'Saved artist', exact: true }).click();
+  await expect(page.locator('main h1')).toHaveText('Saved artist');
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Hide saved albums and songs (2)' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(children.locator('media-card')).toHaveCount(2);
+  await page.getByRole('link', { name: 'Saved artist', exact: true }).click();
   await page.getByRole('button', { name: 'Remove from library' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Remove Dune?' });
-  await expect(dialog.getByRole('heading', { name: 'Remove Dune?' })).toBeVisible();
-  await expect(dialog).toContainText('album and song scores');
-  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await request.get('/media/api/entries/' + artist.id)).ok()).toBeTruthy();
+  await page.getByRole('button', { name: 'Remove from library' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove item' }).click();
+  await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Saved album', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Saved song', exact: true })).toBeVisible();
 });
 
-test('a failed status save retires after the save succeeds and when the item changes', async ({ page, request }) => {
-  const listed = await request.get('/media/api/library');
-  const items = (await listed.json()).items;
-  const dune = items.find((item: { title: string }) => item.title === 'Dune');
-  const alpha = items.find((item: { title: string }) => item.title === 'Alpha');
-  let failStatus = true;
-  await page.route('**/api/entries/**', async route => {
-    if (failStatus && route.request().method() === 'PATCH') {
-      const body = route.request().postData() || '';
-      if (body.includes('"status"')) {
-        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Status was not saved.' }) });
-        return;
-      }
+test('manual artist, album and song can be added and edited independently', async ({ page, request }) => {
+  const artist = await addItem(request, { kind: 'artist', title: 'Manual artist', status: 'following' });
+  await openItem(page, artist.id, artist.title);
+  await page.getByRole('button', { name: 'Add album manually' }).click();
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill('Manual album');
+  await page.getByRole('dialog').getByRole('button', { name: 'Add to library' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Manual album', exact: true }).click();
+  await page.getByRole('button', { name: 'Add song manually' }).click();
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill('Manual song');
+  await page.getByRole('dialog').getByRole('button', { name: 'Add to library' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Manual song', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Manual song', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'State', exact: true }).selectOption('completed');
+  await page.getByLabel('Rating').fill('0');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
+  expect((await savedItem(request, artist.id)).status).toBe('following');
+  expect((await savedItem(request, artist.id)).rating).toBeNull();
+});
+
+test('season disclosures work with the keyboard and keep unknown dates separate from future dates', async ({ page, request }) => {
+  const show = await addItem(request, { kind: 'tv', title: 'Keyboard series', status: 'in_progress' });
+  for (const episode of [
+    { season_number: 0, episode_number: 1, title: 'Special', air_date: '2000-01-01' },
+    { season_number: 1, episode_number: 1, title: 'Aired', air_date: '2000-01-01' },
+    { season_number: 2, episode_number: 1, title: 'Future', air_date: '2099-01-01' },
+    { season_number: 2, episode_number: 2, title: 'Unknown' },
+  ]) await request.post('/media/api/entries/' + show.id + '/episodes', { data: episode });
+  await openItem(page, show.id, show.title);
+  const season = page.locator('summary').filter({ hasText: /^Season 2/ });
+  await season.focus();
+  await expect(season).toBeFocused();
+  await page.keyboard.press('Enter');
+  const panel = season.locator('..');
+  await expect(panel).toHaveAttribute('open', '');
+  await expect(panel.getByText('Air date unknown', { exact: true })).toBeVisible();
+  await expect(panel.locator('.episode-row').filter({ hasText: 'Future' }).getByRole('button', { name: 'Mark watched' })).toBeDisabled();
+  await expect(panel.locator('.episode-row').filter({ hasText: 'Unknown' }).getByRole('button', { name: 'Mark watched' })).toBeEnabled();
+  await page.keyboard.press('Enter');
+  await expect(panel).not.toHaveAttribute('open', '');
+});
+
+test('calendar uses browser timezone, keeps imprecise dates in bands and refreshes only on request', async ({ page }) => {
+  let refreshes = 0;
+  const calendar = { month: '2026-10', today: '2026-10-26', partial: false, days: [], month_band: [
+    { title: 'Month-only release', release_on: '2026-10', entry_id: null },
+  ], year_band: [{ title: 'Year-only release', release_on: '2026', entry_id: null }], unknown: [{ title: 'Unknown release', release_on: null, entry_id: null }] };
+  await page.route('**/media/api/calendar**', route => {
+    expect(new URL(route.request().url()).searchParams.get('tz')).toBeTruthy();
+    if (route.request().method() === 'POST') { refreshes++; return route.fulfill({ status: 502, json: { message: 'Release source unavailable' } }); }
+    return route.fulfill({ json: calendar });
+  });
+  await page.goto('/media/calendar?month=2026-10');
+  await expect(page.getByText('Today in your timezone: 2026-10-26')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'This month', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'This year', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Date to be announced', exact: true })).toBeVisible();
+  await expect(page.getByText('No dated releases this month.', { exact: true })).toBeVisible();
+  expect(refreshes).toBe(0);
+  await page.getByRole('button', { name: 'Refresh release metadata' }).click();
+  await expect(page.locator('main [role=alert]')).toContainText('Release source unavailable');
+  await expect(page.getByText('Month-only release · 2026-10', { exact: true })).toBeVisible();
+  expect(refreshes).toBe(1);
+});
+
+test('a failed item save stays local and never appears on another item', async ({ page, request }) => {
+  const first = await addItem(request, { title: 'First item' }), second = await addItem(request, { title: 'Second item' });
+  await openItem(page, first.id, first.title);
+  await page.route('**/media/api/entries/' + first.id, route => route.request().method() === 'PATCH'
+    ? route.fulfill({ status: 502, json: { message: 'First item failure' } }) : route.continue());
+  await page.getByLabel('Note').fill('First item draft');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.locator('main [role=alert]')).toContainText('First item failure');
+  await page.getByRole('link', { name: '← Library' }).click();
+  await page.getByRole('button', { name: 'Leave item' }).click();
+  await page.getByRole('link', { name: second.title, exact: true }).click();
+  await expect(page.getByRole('heading', { name: second.title, exact: true })).toBeVisible();
+  await expect(page.locator('main [role=alert]')).toHaveCount(0);
+  await expect(page.getByLabel('Note')).toHaveValue('');
+});
+
+test('broken photo candidates are disabled and a failed selection preserves the prior portrait', async ({ page, request }) => {
+  const artist = await addItem(request, { kind: 'artist', title: 'Photo artist', status: 'following' });
+  await page.route('https://upload.wikimedia.org/**', route => route.fulfill({ status: 404 }));
+  await openItem(page, artist.id, artist.title);
+  await page.getByRole('button', { name: 'Choose photo' }).click();
+  await expect(page.getByRole('button', { name: 'Photo unavailable' })).toBeDisabled();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await savedItem(request, artist.id)).portrait).toBeNull();
+});
+
+test('the main Media screens pass accessibility in both themes at phone and desktop widths', async ({ page, request }) => {
+  test.setTimeout(180_000);
+  const artist = await addItem(request, { kind: 'artist', title: 'A very long synthetic artist name that must wrap', status: 'following' });
+  const routes = ['/media', '/media/library', '/media/search', '/media/calendar', '/media/add', '/media/item/' + artist.id];
+  for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of routes) {
+      await page.goto(route);
+      await expect(page.locator('main h1')).toBeVisible();
+      await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+      await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(246, 241, 234)' : 'rgb(28, 25, 22)');
+      await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+      const result = await new AxeBuilder({ page }).analyze();
+      expect(result.violations.filter(item => ['serious', 'critical'].includes(item.impact)), route + ' ' + width + ' ' + theme).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
-    await route.continue();
-  });
-  await page.goto(`/media/#/item/${dune.id}`);
-  await page.getByRole('radio', { name: 'Paused' }).click();
-  await expect(page.locator('[data-toast-key^="status:"]')).toBeVisible();
-  await page.evaluate(id => { location.hash = `#/item/${id}`; }, String(alpha.id));
-  await expect(page.getByRole('heading', { name: 'Alpha' })).toBeVisible();
-  await expect(page.locator('[data-toast-key^="status:"]')).toHaveCount(0);
-  await page.evaluate(id => { location.hash = `#/item/${id}`; }, String(dune.id));
-  await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
-  failStatus = false;
-  await page.getByRole('radio', { name: 'Paused' }).click();
-  await expect(page.getByRole('radio', { name: 'Paused' })).toHaveClass(/is-on/);
-  await expect(page.locator('[data-toast-key^="status:"]')).toHaveCount(0);
-});
-
-test('a failed note or progress save retires when the item changes', async ({ page, request }) => {
-  const listed = await request.get('/media/api/library');
-  const items = (await listed.json()).items;
-  const dune = items.find((item: { title: string }) => item.title === 'Dune');
-  const alpha = items.find((item: { title: string }) => item.title === 'Alpha');
-  let mode: 'note' | 'progress' = 'note';
-  await page.route('**/api/entries/**', async route => {
-    if (route.request().method() === 'PATCH') {
-      const body = route.request().postData() || '';
-      const failNote = mode === 'note' && body.includes('"review"');
-      const failProgress = mode === 'progress' && body.includes('"progress_value"');
-      if (failNote || failProgress) {
-        await route.fulfill({
-          status: 500,
-          contentType: 'application/json',
-          body: JSON.stringify({ detail: 'Not saved.' }),
-        });
-        return;
-      }
-    }
-    await route.continue();
-  });
-
-  await page.goto(`/media/#/item/${dune.id}`);
-  const note = page.locator('#note');
-  await note.fill('A note that fails to save');
-  await note.blur();
-  await expect(page.locator('[data-toast-key^="note:"]')).toBeVisible();
-  await page.evaluate(id => { location.hash = `#/item/${id}`; }, String(alpha.id));
-  await expect(page.getByRole('heading', { name: 'Alpha' })).toBeVisible();
-  await expect(page.locator('[data-toast-key^="note:"]')).toHaveCount(0);
-
-  mode = 'progress';
-  await page.evaluate(id => { location.hash = `#/item/${id}`; }, String(dune.id));
-  await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
-  const progress = page.getByLabel('Progress', { exact: true });
-  await progress.fill('120');
-  await progress.press('Enter');
-  await expect(page.locator('[data-toast-key^="progress:"]')).toBeVisible();
-  await page.evaluate(id => { location.hash = `#/item/${id}`; }, String(alpha.id));
-  await expect(page.getByRole('heading', { name: 'Alpha' })).toBeVisible();
-  await expect(page.locator('[data-toast-key^="progress:"]')).toHaveCount(0);
-});
-
-test('axe reports no serious or critical issues on the main screens', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/media/');
-  await page.evaluate(() => {
-    localStorage.setItem('suite-theme', 'light');
-    localStorage.setItem('media-theme', 'light');
-  });
-  const screens: Array<[string, string]> = [
-    ['#/', 'now'],
-    ['#/library', 'library'],
-    ['#/search', 'search'],
-    ['#/calendar', 'calendar'],
-    ['#/item/1', 'item'],
-    ['#/new', 'add'],
-  ];
-  for (const [hash, name] of screens) {
-    await page.evaluate(value => { location.hash = value; }, hash);
-    if (name === 'now') await expect(page.getByRole('heading', { name: /In progress/ })).toBeVisible();
-    if (name === 'library') await expect(page.locator('.grid .card').first()).toBeVisible();
-    if (name === 'search') await expect(page.getByText('Results come from public catalogs.')).toBeVisible();
-    if (name === 'calendar') await expect(page.getByRole('link', { name: 'Today' })).toBeVisible();
-    if (name === 'item') await expect(page.locator('.opinion .status-mark').first()).toBeVisible();
-    if (name === 'add') await expect(page.getByLabel('Title')).toBeVisible();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    const results = await new AxeBuilder({ page }).analyze();
-    const serious = results.violations.filter(row => row.impact === 'serious' || row.impact === 'critical');
-    expect(serious, `${name}: ${JSON.stringify(serious, null, 2)}`).toEqual([]);
   }
 });
 
-test('a late save failure stays with the item it came from', async ({ page, request }) => {
-  const listed = await request.get('/media/api/library');
-  const items = (await listed.json()).items;
-  const dune = items.find((item: { title: string }) => item.title === 'Dune');
-  const alpha = items.find((item: { title: string }) => item.title === 'Alpha');
-  let fail = true;
-  await page.route('**/api/entries/**', async route => {
-    if (fail && route.request().method() === 'PATCH') {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      await route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Not saved.' }),
-      });
-      return;
-    }
-    await route.continue();
-  });
-  const cases = [
-    {
-      name: 'note',
-      needle: '"review"',
-      act: async () => {
-        const note = page.locator('#note');
-        await note.fill('A note that fails after leaving');
-        await note.blur();
-      },
-    },
-    {
-      name: 'score',
-      needle: '"rating"',
-      act: async () => {
-        await page.locator('.opinion .mark[data-score="7"]').click({ position: { x: 24, y: 16 } });
-      },
-    },
-    {
-      name: 'status',
-      needle: '"status"',
-      act: async () => {
-        await page.getByRole('radio', { name: 'Paused' }).click();
-      },
-    },
-    {
-      name: 'favorite',
-      needle: '"favorite"',
-      act: async () => {
-        await page.getByRole('button', { name: 'Favorite', exact: true }).click();
-      },
-    },
-  ];
-  for (const step of cases) {
-    await page.goto(`/media/#/item/${dune.id}`);
-    await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
-    const pending = page.waitForRequest(req => (
-      req.method() === 'PATCH' && (req.postData() || '').includes(step.needle)
-    ));
-    await step.act();
-    await pending;
-    await page.evaluate(id => { location.hash = `#/item/${id}`; }, String(alpha.id));
-    await expect(page.getByRole('heading', { name: 'Alpha' })).toBeVisible();
-    const toast = page.locator('#toast-alerts .toast').filter({ hasText: 'Save failed for Dune.' });
-    await expect(toast).toBeVisible();
-    fail = false;
-    const retry = page.waitForRequest(req => (
-      req.method() === 'PATCH'
-      && req.url().includes(`/api/entries/${dune.id}`)
-      && (req.postData() || '').includes(step.needle)
-    ));
-    await toast.getByRole('button', { name: 'Retry' }).click();
-    const sent = await retry;
-    expect(sent.postData() || '').toContain(step.needle);
-    await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Alpha' })).toBeVisible();
-    fail = true;
-  }
-});
-
-test('a successful status, favorite, or rating save clears its toast', async ({ page, request }) => {
-  const listed = await request.get('/media/api/library');
-  const dune = (await listed.json()).items.find((item: { title: string }) => item.title === 'Dune');
-  let failField = '';
-  await page.route('**/api/entries/**', async route => {
-    const body = route.request().postData() || '';
-    const field = body.includes('"status"')
-      ? 'status'
-      : body.includes('"favorite"')
-        ? 'favorite'
-        : body.includes('"rating"')
-          ? 'rating'
-          : '';
-    if (route.request().method() === 'PATCH' && field && field === failField) {
-      await route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Not saved.' }),
-      });
-      return;
-    }
-    await route.continue();
-  });
-  await page.goto(`/media/#/item/${dune.id}`);
-  await expect(page.getByRole('heading', { name: 'Dune' })).toBeVisible();
-
-  failField = 'status';
-  await page.getByRole('radio', { name: 'Paused' }).click();
-  await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
-  failField = '';
-  await page.getByRole('radio', { name: 'Paused' }).click();
-  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
-  await expect(page).toHaveURL(new RegExp(`#/item/${dune.id}`));
-
-  failField = 'favorite';
-  await page.getByRole('button', { name: 'Favorite', exact: true }).click();
-  await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
-  failField = '';
-  await page.getByRole('button', { name: 'Favorite', exact: true }).click();
-  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
-  await expect(page).toHaveURL(new RegExp(`#/item/${dune.id}`));
-
-  failField = 'rating';
-  await page.locator('.opinion .mark[data-score="3"]').click({ position: { x: 20, y: 10 } });
-  await expect(page.locator('#toast-alerts .toast')).toHaveCount(1);
-  failField = '';
-  await page.locator('.opinion .mark[data-score="3"]').click({ position: { x: 20, y: 10 } });
-  await expect(page.locator('#toast-alerts .toast')).toHaveCount(0);
-  await expect(page).toHaveURL(new RegExp(`#/item/${dune.id}`));
-});
-
-test('season tabs move with the arrow keys and the chip label fits', async ({ page, request }) => {
-  const show = await request.post('/media/api/library', {
-    data: { kind: 'tv', title: 'Tab Show', status: 'in_progress' },
-  });
-  expect(show.ok()).toBeTruthy();
-  const showId = (await show.json()).id as number;
-  try {
-    for (const season of [0, 1, 2]) {
-      for (const episode of [1, 2, 3]) {
-        expect((await request.post(`/media/api/entries/${showId}/episodes`, {
-          data: { season_number: season, episode_number: episode, title: `S${season}E${episode}` },
-        })).ok()).toBeTruthy();
-      }
-    }
-    const detail = await (await request.get(`/media/api/entries/${showId}`)).json();
-    const watched = (detail.show.episodes as Array<{ id: number; season_number: number; episode_number: number }>)
-      .filter(episode => episode.season_number === 0 || (episode.season_number === 1 && episode.episode_number < 3));
-    for (const episode of watched) {
-      expect((await request.post(`/media/api/entries/${showId}/episodes/${episode.id}/watched`, {
-        data: { watched: true },
-      })).ok()).toBeTruthy();
-    }
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(`/media/#/item/${showId}`);
-    await expect(page.getByRole('heading', { name: 'Tab Show' })).toBeVisible();
-    const seasonOne = page.getByRole('tab', { name: 'Season 1' });
-    await seasonOne.focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
-    const chip = page.getByRole('tab', { name: 'Specials' });
-    const chipBox = await chip.boundingBox();
-    expect(chipBox?.width).toBeGreaterThanOrEqual(44);
-    const fits = await chip.evaluate(node => node.scrollWidth <= node.clientWidth + 1);
-    expect(fits).toBeTruthy();
-  } finally {
-    await request.delete(`/media/api/entries/${showId}`);
-  }
-});
-
-test('the month grid lays weeks across the row at 1280', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/media/#/calendar?month=2026-10');
-  await expect(page.getByRole('grid')).toBeVisible();
-  const headers = page.locator('.calendar-grid [role="columnheader"]');
-  const sun = await headers.nth(0).boundingBox();
-  const monday = await headers.nth(1).boundingBox();
-  expect(sun && monday && sun.x < monday.x).toBeTruthy();
-  const week = page.locator('.calendar-grid [role="row"]').nth(1);
-  const cells = week.locator('[role="gridcell"]');
-  const ys = [];
-  for (let index = 0; index < 7; index += 1) ys.push(Math.round((await cells.nth(index).boundingBox())?.y || 0));
-  expect(new Set(ys).size).toBe(1);
-  const octoberFourth = await page.locator('[data-date="2026-10-04"]').boundingBox();
-  expect(sun && octoberFourth && Math.abs(octoberFourth.x - sun.x)).toBeLessThan(2);
-});
-
-test('item, add, and an artist stay inside a 390px viewport', async ({ page, request }) => {
-  const artist = await request.post('/media/api/library', {
-    data: { kind: 'artist', title: 'Narrow Band', status: 'want' },
-  });
-  const artistId = (await artist.json()).id as number;
-  try {
-    expect((await request.post(`/media/api/entries/${artistId}/albums`, {
-      data: { title: 'Narrow Album' },
-    })).ok()).toBeTruthy();
-    await page.setViewportSize({ width: 390, height: 800 });
-    for (const hash of ['#/item/1', '#/new', `#/item/${artistId}`]) {
-      await page.goto(`/media/${hash}`);
-      if (hash === '#/new') await expect(page.getByRole('textbox', { name: 'Title' })).toBeVisible();
-      else await expect(page.locator('h1').first()).toBeVisible();
-      const right = await page.evaluate(() => {
-        let max = 0;
-        for (const node of document.body.querySelectorAll('*')) {
-          const style = getComputedStyle(node);
-          if (style.display === 'none' || style.visibility === 'hidden') continue;
-          const box = node.getBoundingClientRect();
-          if (box.width === 0 || box.height === 0) continue;
-          max = Math.max(max, box.right);
-        }
-        return max;
-      });
-      expect(right, hash).toBeLessThanOrEqual(391);
-    }
-  } finally {
-    await request.delete(`/media/api/entries/${artistId}`);
-  }
-});
-
-test('in-content links clear 4.5:1 on a dark 390px screen', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 800 });
-  await page.goto('/media/');
-  await page.evaluate(() => {
-    localStorage.setItem('suite-theme', 'dark');
-    localStorage.setItem('media-theme', 'dark');
-  });
-  await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  const ratio = await page.evaluate(() => {
-    const host = document.querySelector('main');
-    if (!host) return 0;
-    const link = document.createElement('a');
-    link.href = '#/library';
-    link.textContent = 'Open library';
-    host.append(link);
-    const parse = (value: string) => {
-      const parts = value.match(/[\d.]+/g)?.slice(0, 3).map(Number) || [0, 0, 0];
-      return parts.map(part => (part <= 1 ? Math.round(part * 255) : part));
-    };
-    const channel = (part: number) => {
-      const s = part / 255;
-      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    };
-    const luminance = (rgb: number[]) => 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
-    const fg = luminance(parse(getComputedStyle(link).color));
-    const bg = luminance(parse(getComputedStyle(document.body).backgroundColor));
-    link.remove();
-    const lighter = Math.max(fg, bg);
-    const darker = Math.min(fg, bg);
-    return (lighter + 0.05) / (darker + 0.05);
-  });
-  expect(ratio).toBeGreaterThanOrEqual(4.5);
+test('a real session expiry removes private drafts and returns to sign-in', async ({ page, request }) => {
+  const item = await addItem(request);
+  await openItem(page, item.id);
+  await page.getByLabel('Note').fill('Private expired-session draft');
+  const ended=await page.request.post('/api/auth/logout',{headers:{'X-CSRF-Token':'synthetic-csrf','Origin':new URL(page.url()).origin}});expect(ended.ok(),await ended.text()).toBeTruthy();expect((await page.request.get('/api/auth/me')).status()).toBe(401);
+  await page.route('**/media/api/entries/' + item.id, route => route.fulfill({ status: 401, json: { detail: 'Session expired' } }));
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page).toHaveURL(/\/auth\/login/);
+  await expect(page.getByLabel('Note')).toHaveCount(0);
+  expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('media-item-draft:')))).toEqual([]);
 });

@@ -1,0 +1,984 @@
+{
+  "baseline": "73de49c before uncommitted refactor",
+  "original_declarations": 69,
+  "note": "Declaration inventory, not expanded runtime case counts. Every original Travel/Media browser declaration has an explicit current acceptance target and interaction disposition. Finance files/stories remain in the root discovery matrix.",
+  "rows": [
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'an empty add form explains itself and does not leave the page'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'manual add requires a title and a valid year without losing the form'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'search tells the truth when movie and game catalogs are missing'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'search distinguishes unavailable, unconfigured and available source coverage'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'Now, Library, and Calendar use the spec headings and one library list'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/native.spec.ts",
+          "story": "'native library, persistent shell, notes and progress survive reload'"
+        },
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'library pages and favorites filter count only matching memberships and survive Back'"
+        },
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'calendar uses browser timezone, keeps imprecise dates in bands and refreshes only on request'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'removing an item asks before it deletes, and cancel leaves it in place'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'artist expansion is saved-only, survives Back, and removing the artist preserves its music'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'a failed status save retires after the save succeeds and when the item changes'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'a failed note or progress save retires when the item changes'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'a failed item save stays local and never appears on another item'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a stalled save times out, retains the draft and leaves an explicit retry'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'axe reports no serious or critical issues on the main screens'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'the main Media screens pass accessibility in both themes at phone and desktop widths'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'a late save failure stays with the item it came from'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'a failed item save stays local and never appears on another item'"
+        },
+        {
+          "path": "apps/media/e2e/detail-races.spec.ts",
+          "story": "'a late portrait save cannot replace the saved album opened from its artist'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'a successful status, favorite, or rating save clears its toast'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'season tabs move with the arrow keys and the chip label fits'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'season disclosures work with the keyboard and keep unknown dates separate from future dates'"
+        }
+      ],
+      "disposition": "Native season disclosures replace the custom roving-tab widget. Keyboard operation and aired/unknown-date rules are preserved."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'the month grid lays weeks across the row at 1280'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'calendar uses browser timezone, keeps imprecise dates in bands and refreshes only on request'"
+        }
+      ],
+      "disposition": "Media calendar is an agenda with precision bands, replacing a seven-column month grid. Timezone, dates, unknown precision and explicit refresh remain tested."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'item, add, and an artist stay inside a 390px viewport'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'the main Media screens pass accessibility in both themes at phone and desktop widths'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/bundle-m.spec.ts",
+        "story": "'in-content links clear 4.5:1 on a dark 390px screen'"
+      },
+      "replacement": [
+        {
+          "path": "packages/ui/contrast.test.mjs",
+          "story": "shared text/link/control ratios in both themes"
+        },
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'the main Media screens pass accessibility in both themes at phone and desktop widths'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'hub and screen URLs redirect into the journal'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'legacy screen and hash bookmarks resolve to canonical journal screens'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'progress saves with a unit and survives reload and Again'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'progress and its unit survive explicit save, state changes and reload'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'title sort works and an unknown sort does not fail the page'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'title sort and an unknown sort preserve membership without crashing'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a saved note clears its draft and an older draft loses'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving a note clears its recovery copy and a same-version draft restores after reload'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'an older draft is offered explicitly and never overwrites newer saved text'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'discarding a stale draft keeps the saved note and removes only its recovery copy'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'calendar marks today in the browser timezone'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'calendar uses browser timezone, keeps imprecise dates in bands and refreshes only on request'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'navigation does not wait for a slow progress save'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'leaving a slow save is deliberate and does not block the next screen'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a failed progress draft does not overwrite a newer save'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'an older draft is offered explicitly and never overwrites newer saved text'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a conflicting note remains editable and can be compared with a reloaded saved item'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'restoring a progress draft saves on blur and navigation'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'progress and its unit survive explicit save, state changes and reload'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving a note clears its recovery copy and a same-version draft restores after reload'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'an older draft is offered explicitly and never overwrites newer saved text'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'an unknown progress draft unit is not saved as null'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'an invalid progress draft unit cannot silently become a saved null unit'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'blurring an unchanged note does not overwrite a newer save'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'an unchanged note does not ride along with a favorite update and overwrite another tab'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a slower library response cannot replace a newer screen'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a late library response cannot replace Search and a late old-type search cannot replace the current type'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a slower search for the previous type cannot replace the current one'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a late library response cannot replace Search and a late old-type search cannot replace the current type'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'progress stays 120 after a status change re-renders the item'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'progress and its unit survive explicit save, state changes and reload'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'status, favorite, and again keep focus on the same control'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a missing item is one error panel and a success toast survives navigation'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a missing item is one local error and its retry can recover'"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a slow route shows a skeleton and a fast one does not flash'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a slow item shows loading after the delay and a quick item does not flash it'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'try again focuses the page heading when the route recovers'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/library-recovery.spec.ts",
+          "story": "'a failed library load returns focus to the heading when retry succeeds'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a slow status change does not skeleton the open item'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'library keeps the current cards until the skeleton delay'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/library-recovery.spec.ts",
+          "story": "'a failed library load returns focus to the heading when retry succeeds'"
+        },
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'library pages and favorites filter count only matching memberships and survive Back'"
+        }
+      ],
+      "disposition": "Immediate native loading status and retained existing cards replace delayed library skeleton timing. Cancellation/retry/focus and result membership remain tested; the old skeleton-delay visual preference is retired."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'typing a search does not move focus onto the error'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'typing a failed search retains focus in the query and a retry recovers locally'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'media routes stay quiet under the enforced content security policy'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'Media screens stay quiet under the production content security policy'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a finished progress save does not dismiss another item draft'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'a failed item save stays local and never appears on another item'"
+        },
+        {
+          "path": "apps/media/e2e/detail-races.spec.ts",
+          "story": "'a late portrait save cannot replace the saved album opened from its artist'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'the theme toggle names the theme it applies'"
+      },
+      "replacement": [
+        {
+          "path": "packages/ui/src/theme-preference.spec.ts",
+          "story": "preference precedence/migration/storage/listener cleanup"
+        },
+        {
+          "path": "apps/travel/e2e/axe.spec.js",
+          "story": "'the shared theme choice replaces an earlier choice and persists on reload'"
+        }
+      ],
+      "disposition": "Native theme select replaces toggle wording; suite precedence, migration and reload behavior remain tested."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'two quick note saves use the base from the first response'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'typing during an in-flight save is retained and the next save uses the returned base'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a status click waits for the note save before drawing the new field'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'typing during an in-flight save is retained and the next save uses the returned base'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'progress can change back to the previous value while a save is in flight'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'progress typed during an in-flight save is kept and the next save sends it'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a failed note save keeps the typed text'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a stalled save times out, retains the draft and leaves an explicit retry'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a conflicting note remains editable and can be compared with a reloaded saved item'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a retry toast stays until it is dismissed'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a stalled save times out, retains the draft and leaves an explicit retry'"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'the toast cap keeps a persistent toast and evicts an older transient one'"
+      },
+      "replacement": [
+        {
+          "path": "packages/ui/src/toast.service.spec.ts",
+          "story": "persistent/transient cap, all-persistent eviction, paused lifetime"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a later progress save retires the persistent retry toast'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a same-item render waits for the in-flight note save'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'typing during an in-flight save is retained and the next save uses the returned base'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a stalled note save times out and lets the item render'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a stalled save times out, retains the draft and leaves an explicit retry'"
+        },
+        {
+          "path": "apps/web/src/app/platform/request-policy.interceptor.spec.ts",
+          "story": "bounds a stalled save and lets the owning screen show its retained draft"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a stalled csrf preflight still lets Favorite land'"
+      },
+      "replacement": [
+        {
+          "path": "apps/web/src/app/platform/request-policy.interceptor.spec.ts",
+          "story": "bounds a stalled save and lets the owning screen show its retained draft"
+        },
+        {
+          "path": "apps/web/src/app/platform/auth/auth.interceptor.spec.ts",
+          "story": "shared CSRF request policy"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a timed-out note the server stored retries without a conflict'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/backend/tests/test_library_sort.py",
+          "story": "test_same_review_text_with_a_stale_base_is_a_noop"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a stalled save times out, retains the draft and leaves an explicit retry'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a later note save retires the persistent retry toast'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a second failure with the same key replaces the toast'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a stalled save times out, retains the draft and leaves an explicit retry'"
+        },
+        {
+          "path": "packages/ui/src/toast.service.spec.ts",
+          "story": "persistent/transient cap, all-persistent eviction, paused lifetime"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'the toast cap evicts the oldest toast when every toast is persistent'"
+      },
+      "replacement": [
+        {
+          "path": "packages/ui/src/toast.service.spec.ts",
+          "story": "persistent/transient cap, all-persistent eviction, paused lifetime"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'opening a different item retires the previous item toasts'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/bundle-m.spec.ts",
+          "story": "'a failed item save stays local and never appears on another item'"
+        }
+      ],
+      "disposition": "Media uses item-local persistent errors with explicit retry; shared toast cap/lifetime remains separately tested. Keyed legacy renderer toast retirement is no longer a product mechanism."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/phase0.spec.ts",
+        "story": "'a stalled status, favorite, or rating save offers retry'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'a stalled save times out, retains the draft and leaves an explicit retry'"
+        },
+        {
+          "path": "apps/media/e2e/phase0.spec.ts",
+          "story": "'saving status, favorite and rating keeps the controls mounted and clears local errors'"
+        }
+      ],
+      "disposition": "Explicit Save changes replaces blur/status autosave. Draft ownership, newer edits, timeout/retry, conflicts and field independence are preserved by the cited cases."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/screenshots.spec.ts",
+        "story": "'progress, sort, and album art at the spec widths'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/screenshots.spec.ts",
+          "story": "'Media empty, populated, photo, progress and error scenes at ' + width + ' ' + theme"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/screenshots.spec.ts",
+        "story": "'batch 1 views at 390, 768, and 1280 in light and dark'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/screenshots.spec.ts",
+          "story": "'Media empty, populated, photo, progress and error scenes at ' + width + ' ' + theme"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/screenshots.spec.ts",
+        "story": "'travel form borders at 390, 768, and 1280 in light and dark'"
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/screenshots.spec.js",
+          "story": "'Travel empty, populated, editor, error and focus scenes at ' + width + ' ' + theme"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/media/e2e/screenshots.spec.ts",
+        "story": "'bundle M screens at 390, 768, and 1280 in light and dark'"
+      },
+      "replacement": [
+        {
+          "path": "apps/media/e2e/screenshots.spec.ts",
+          "story": "'Media empty, populated, photo, progress and error scenes at ' + width + ' ' + theme"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/axe.spec.js",
+        "story": "\"axe on the travel pages at 1280 light\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/axe.spec.js",
+          "story": "'axe on all native Travel screens in light and dark at phone and desktop widths'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/axe.spec.js",
+        "story": "\"a dark suite-theme replaces an earlier light choice\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/axe.spec.js",
+          "story": "'the shared theme choice replaces an earlier choice and persists on reload'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P1 #1 the tab bar sits at the bottom of a 390px screen\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'phone navigation stays visible, fits the viewport and offers every Travel section'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P0 #2 a quick-add ride shows Mode instead of a hidden flight\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'quick transport starts with a visible mode choice and hides flight fields until chosen'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P0 #3 Retry sends the Booked value that was chosen\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'retrying parking preserves the Booked value that was chosen'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P0 #4 Space and a synthetic click pick a composer day\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'native date controls support keyboard entry and preserve range through resize'"
+        }
+      ],
+      "disposition": "Native date controls and explicit change-city action replace the custom calendar grid. Keyboard entry, retained range/title/cities, resize and deliberate shortened-date handling remain tested."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P0 #5 a cadence change keeps the typed balance and a later pointerup does not\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'changing PTO cadence keeps a typed balance and native dates ignore unrelated pointer events'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P1 #6 delete closes the dialog before focusing the heading, and a failure is an alert\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'delete cancellation preserves a trip, failure is local, and success closes the dialog'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P1 #7 a successful save dismisses the Retry toast\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'successful trip retry clears its error and never creates a second trip'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"P1 #8 Name the city stays visible at 390 after a resize and clears on input\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'an unnamed retained city blocks saving through resize and does not lose a renamed title'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/blockers.spec.js",
+        "story": "\"composer Enter and Escape keep focus, and outside days are a single tab stop\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/blockers.spec.js",
+          "story": "'keyboard destination changes and shortened dates require deliberate handling'"
+        }
+      ],
+      "disposition": "Native date controls and explicit change-city action replace the custom calendar grid. Keyboard entry, retained range/title/cities, resize and deliberate shortened-date handling remain tested."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/focus-ring.spec.js",
+        "story": "\"a focused checkbox is not the same picture as the unfocused one\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/focus-ring.spec.js",
+          "story": "'PTO checkbox has a visible keyboard focus ring and Space changes its selection'"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    },
+    {
+      "before": {
+        "path": "apps/travel/e2e/screenshots.spec.js",
+        "story": "\"travel ux matrix\""
+      },
+      "replacement": [
+        {
+          "path": "apps/travel/e2e/screenshots.spec.js",
+          "story": "'Travel empty, populated, editor, error and focus scenes at ' + width + ' ' + theme"
+        }
+      ],
+      "disposition": "Behavior retained in the current native story; selectors/layout reflect Angular composition."
+    }
+  ]
+}

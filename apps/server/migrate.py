@@ -5,13 +5,13 @@ Stop legacy writers before taking the final snapshots. Rehearsals may use live r
 """
 
 import argparse
-from collections import Counter
 import hashlib
 import json
 import os
-from pathlib import Path
 import sqlite3
 import tempfile
+from collections import Counter
+from pathlib import Path
 
 from apps.server.migrations import adopt_or_upgrade, sqlite_url
 from apps.server.schema import VERSION, metadata

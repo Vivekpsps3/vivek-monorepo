@@ -19,9 +19,9 @@ from sqlalchemy.exc import IntegrityError
 from apps.finance.backend.database import SessionLocal
 from apps.finance.backend.kdf_policy import MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.main import Base, app, engine
-from apps.finance.backend.models import AuditEvent
-from apps.finance.backend.rate_limit import clear_limits
-from apps.finance.backend.services.auth_decoy import AUTH_WRAP_BYTES
+from apps.server.identity.auth_decoy import AUTH_WRAP_BYTES
+from apps.server.identity.models import AuditEvent
+from apps.server.rate_limit import clear_limits
 
 PASSPHRASE = "correct horse battery staple"
 COLLECTION = "assets"
@@ -391,7 +391,7 @@ def test_username_change_is_rate_limited(monkeypatch):
 
 def test_legacy_email_stays_and_a_taken_mailbox_conflicts(monkeypatch):
     _open_signup(monkeypatch)
-    from apps.finance.backend.auth import create_user
+    from apps.server.identity.session import create_user
 
     db = SessionLocal()
     try:
@@ -426,7 +426,7 @@ def test_legacy_email_stays_and_a_taken_mailbox_conflicts(monkeypatch):
     _holder, _key, _auth, _vault, _dek = _signup("mailbox.holder")
     db = SessionLocal()
     try:
-        from apps.finance.backend.models import User
+        from apps.server.identity.models import User
 
         row = db.query(User).filter(User.username == "mailbox.holder").one()
         field = "email"
@@ -442,7 +442,7 @@ def test_legacy_email_stays_and_a_taken_mailbox_conflicts(monkeypatch):
 
 
 def _retarget_username(current: str, username: str, email: str | None = None) -> None:
-    from apps.finance.backend.models import User
+    from apps.server.identity.models import User
 
     db = SessionLocal()
     try:
@@ -541,7 +541,7 @@ def test_synthetic_mailbox_follows_an_email_username_until_it_is_taken(monkeypat
     holder, _key, _a, _v, _d = _signup("mailbox.holder")
     db = SessionLocal()
     try:
-        from apps.finance.backend.models import User
+        from apps.server.identity.models import User
 
         row = db.query(User).filter(User.username == "mailbox.holder").one()
         field = "email"
@@ -645,7 +645,7 @@ def test_unique_constraint_race_reports_a_collision(monkeypatch):
     def boom(*_args, **_kwargs):
         raise IntegrityError("UPDATE users", {}, Exception("unique"))
 
-    monkeypatch.setattr("apps.finance.backend.services.username_change.apply_username", boom)
+    monkeypatch.setattr("apps.server.identity.username_change.apply_username", boom)
     response = _rename(client, private_key, "owner.name", "renamed.owner")
     assert response.status_code == 409
     assert client.get("/api/auth/me").json()["user"]["username"] == "owner.name"

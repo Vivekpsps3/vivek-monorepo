@@ -1,6 +1,6 @@
 # Architecture (one page)
 
-Local-first personal finance: **Angular 21** UI, **FastAPI** API, **SQLite** persistence, app-native user accounts, and a browser-owned encrypted finance vault.
+One Angular 21 web application, one explicit FastAPI application factory, one identity/session implementation and one SQLite database compose the public site, Hub, Finance, Travel and Media. App-owned domain code stays in its own folder. Finance plaintext remains in the browser.
 
 ## Active API surface
 
@@ -21,12 +21,7 @@ Local-first personal finance: **Angular 21** UI, **FastAPI** API, **SQLite** per
 
 These names describe logical encrypted collections, not SQL tables. The active
 SQL schema holds auth/session data, vault wraps, ciphertext and sync metadata,
-blind indexes, and public market caches. Startup checks for legacy plaintext
-rows and password-only users before any schema mutation. A clean new database
-creates the current ORM schema and stamps Alembic head `e0f6a2b3c4d5`; an
-existing database upgrades through Alembic, whose final revision removes empty
-legacy plaintext tables. See [LIFECYCLE.md](./LIFECYCLE.md) and
-[SECURITY_MODEL.md](./SECURITY_MODEL.md#migration-ordering).
+blind indexes, and public market caches. The unified server checks schema readiness at startup without modifying it. Offline migrations in `apps/server/alembic` create or upgrade `site.db`, including the original Finance revision marker `e0f6a2b3c4d5`. Historical Finance preflight/upgrade fixtures remain migration-only. See [Migrations](MIGRATIONS.md) and [Lifecycle](LIFECYCLE.md).
 
 ## Finance UX and data behavior
 
@@ -47,14 +42,7 @@ Current implementation status for fields and flows is documented in [DATA_MODEL.
 `packages/` holds app-neutral reusable code. The source-only `@vivek/browser`
 package provides browser and crypto primitives; `@vivek/ui` provides generic
 Angular presentation components, services, theme preferences, and chart
-colors. Finance and site resolve these package APIs through their own TypeScript
-configuration and compile the shared source with the owning app. Travel serves
-the browser runtime from `packages/browser/runtime` to its static modules.
-Packages must
-not import app code, and one app must not import another app's source. Finance,
-Travel, and site routes, security policy, and domain behavior stay in their
-respective `apps/` directories. The `make test-fast` boundary check guards these
-rules.
+colors. Root `tsconfig.json` resolves shared source. Only `apps/web` composes frontend features through their public entrypoints. Domain features inject the neutral session port from `packages/auth`/`packages/ui`; they do not import the web platform implementation or sibling internals. The server factory alone composes domain routers. Domain routes depend on server platform identity/session/database modules, which never import domains. `make test-fast` checks the allowed graph.
 
 Tax document storage was removed. Do not add document vault/BLOB storage back without a fresh product/security decision.
 
@@ -70,35 +58,15 @@ never the browser's calculation time. See [SECURITY_MODEL.md](./SECURITY_MODEL.m
 
 ## Request flow
 
-```
-Browser (:4200 dev proxy, or :8080 Docker web)
-  -> /hub after sign-in, unless a deep link asked for a specific app
-  -> login page / session cookie / CSRF token
-  -> /api/*  ->  FastAPI app.py
-        → routers: health, auth/admin, vault, market
-        → encrypted_records ciphertext in SQLite
-        → browser decrypts and computes finance views/imports/planning
-  → SQLite finance.db
+```text
+Browser -> nginx-edge TLS -> apps.server.main:production_app --factory
+                         -> one request session -> /data/site.db
+                         -> one root web build / lazy domain features
 ```
 
-The Hub is a route in the finance Angular app because net worth exists only after the browser unlocks the vault. Travel (`/travel/api/summary`) and Media (`/media/api/summary`) expose small authenticated summaries. Those endpoints do not read the finance vault. The public portfolio is served at the root of the same site, with links to the private tools.
+The root Angular shell owns Hub, sign-in, account, theme and HTTP policy. Hub loads independent authenticated Travel/Media summaries and lazily calls the Finance facade only when the browser has an unlocked vault. Public pages prerender real content and do not request private APIs. All private SPA transitions use one strict CSP/Trusted Types policy; public/private transitions load a new document where needed.
 
-Production is now one modular application, not separately deployed backends:
-
-```
-Browser -> nginx-edge TLS -> unified site :8000 -> site.db
-                             | portfolio at /
-                             | shared auth and Hub
-                             | Finance, Travel, Media modules
-```
-
-Both frontend builds are in the same immutable image. All domains share one
-SQLite engine and identity store; Travel and Media authenticate in process.
-The unified `site.db` is versioned by `apps/server/alembic` (baseline
-`site_schema_v1`), not by the historical Finance Alembic chain whose head
-remains `e0f6a2b3c4d5`. See [Migrations](MIGRATIONS.md) and
-[Operations](OPERATIONS.md) for exact paths, deployment, schema migration,
-and recovery. Historical standalone domain entrypoints remain test helpers.
+`create_app(Settings, Dependencies)` explicitly installs domain routers and middleware once. Engines and sessionmakers belong to the app instance; imports do not open a database. Offline migrations remain separate from startup. Ordinary Media saved reads and Travel reads perform no provider IO. Explicit provider work releases the database unit of work first. See [Migrations](MIGRATIONS.md), [Security](SECURITY_MODEL.md), and [Operations](OPERATIONS.md).
 
 ## Auth And Users
 
@@ -129,8 +97,8 @@ There is no active plaintext analytics or planning router. Monte Carlo inputs an
 
 ## Frontend
 
-- Shell: `MainLayoutComponent` (five hubs: Home, What you have, Spending, Recurring, Planning); lazy feature routes in `app.routes.ts`; `authGuard` + `vaultGuard` protect the app shell. `adminGuard` protects `/hub/admin`, which is outside the Finance shell. `/admin` and `/finance/admin` redirect there.
-- Vault routes (auth only, outside shell): `/vault/setup`, `/vault/unlock`.
+- Finance local navigation: `MainLayoutComponent` (five hubs: Home, What you have, Spending, Recurring, Planning); lazy feature routes in `app.routes.ts`; `authGuard` + `vaultGuard` protect the app shell. `adminGuard` protects `/hub/admin`, which is outside the Finance shell. `/admin` and `/finance/admin` redirect there.
+- Vault routes: `/finance/vault/setup`, `/finance/vault/unlock`; shared sign-in remains `/auth/login`.
 - State: `FinanceService` / `PlanningService` use the encrypted client store after vault unlock; `VaultService` / `EncryptedStoreService`; `AuthService`.
 - Prices: manual/imported prices remain local. After authenticated entry and vault unlock, one bounded, nonblocking session refresh sends deduplicated holding and configured employer ticker symbols to `/api/market`; Portfolio retry and Stock Lab/typed lookup also disclose symbols. Shares, values, account details, and other holding fields remain encrypted. See [SECURITY_MODEL.md](./SECURITY_MODEL.md#holdings-price-privacy).
 - Server-blind storage: `/api/vault/*` stores wraps + ciphertext only; backend never decrypts. Plaintext finance HTTP is unmounted.

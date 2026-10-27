@@ -81,7 +81,7 @@ def test_summary_next_trip(client):
         "phase": "upcoming",
         "days_until": 12,
         "next_action": "Review the plan",
-        "href": f"/travel/#/trips/{trip_id}",
+        "href": f"/travel/trips/{trip_id}",
     }
     assert {"budget", "pto"}.isdisjoint(_keys(body))
 
@@ -110,7 +110,7 @@ def test_summary_next_trip(client):
     assert current["next_trip"]["next_action"] == "Open today's plan"
     assert current["next_trip"]["destination"] == "Oakland"
     assert current["next_trip"]["days_until"] == 0
-    assert current["next_trip"]["href"] == f"/travel/#/trips/{live.json()['id']}"
+    assert current["next_trip"]["href"] == f"/travel/trips/{live.json()['id']}"
     assert {"budget", "pto"}.isdisjoint(_keys(current))
 
 

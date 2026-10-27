@@ -1,0 +1,43 @@
+import { expect, test } from '@playwright/test';
+import { resetMedia } from './media-test';
+
+test.beforeEach(async ({ request }) => resetMedia(request));
+test('a late portrait save cannot replace the saved album opened from its artist', async ({ page, request }) => {
+  const artist = await (await request.post('/media/api/library', { data: { kind: 'artist', title: 'Portrait artist', status: 'following' } })).json();
+  const withAlbum = await (await request.post(`/media/api/entries/${artist.id}/albums`, { data: { title: 'Independent album' } })).json();
+  const album = withAlbum.music.saved_children.find((item: { title: string }) => item.title === 'Independent album');
+  expect(album).toBeTruthy();
+  await page.route('https://upload.wikimedia.org/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64') }));
+  let release!: () => void;
+  let stored!: () => void;
+  let delivered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const saved = new Promise<void>(resolve => { stored = resolve; });
+  const returned = new Promise<void>(resolve => { delivered = resolve; });
+  await page.route(`**/media/api/entries/${artist.id}/portrait`, async route => {
+    const response = await route.fetch();
+    stored();
+    await gate;
+    await route.fulfill({ response });
+    delivered();
+  });
+  await page.goto(`/media/item/${artist.id}`);
+  await page.getByRole('button', { name: 'Choose photo', exact: true }).click();
+  await page.getByRole('button', { name: 'File:Synthetic portrait.jpg' }).click();
+  await page.getByRole('button', { name: 'Use this photo', exact: true }).click();
+  await saved;
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('link', { name: 'Independent album', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Independent album', exact: true })).toBeVisible();
+  await page.getByLabel('Note', { exact: false }).fill('Keep the album draft');
+  release();
+  await returned;
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(page.getByRole('heading', { level: 1, name: 'Independent album', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Note', { exact: false })).toHaveValue('Keep the album draft');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
+  const result = await (await request.get(`/media/api/entries/${album.id}`)).json();
+  expect(result.review).toBe('Keep the album draft');
+  expect(result.title).toBe('Independent album');
+});

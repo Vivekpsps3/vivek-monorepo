@@ -10,13 +10,13 @@ from sqlalchemy.exc import IntegrityError
 
 from apps.finance.backend.database import engine
 from apps.finance.backend.main import Base, app
-from apps.finance.backend.rate_limit import clear_limits
 from apps.finance.backend.tests.test_change_username import (
     _open_signup,
     _proof,
     _raw_signature,
     _signup,
 )
+from apps.server.rate_limit import clear_limits
 
 
 def setup_function():
@@ -128,7 +128,7 @@ def test_collision_race_keeps_the_challenge_spent(monkeypatch):
     def boom(*_args, **_kwargs):
         raise IntegrityError("UPDATE users", {}, Exception("unique"))
 
-    monkeypatch.setattr("apps.finance.backend.services.username_change.apply_username", boom)
+    monkeypatch.setattr("apps.server.identity.username_change.apply_username", boom)
     first = client.patch("/api/account/username", json=body)
     assert first.status_code == 409
     second = client.patch("/api/account/username", json=body)

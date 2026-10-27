@@ -137,10 +137,20 @@ def test_baseline_database_is_stamped_then_upgraded(tmp_path):
         assert db.execute("SELECT title FROM trips").fetchone() == ("Keep me",)
         columns = {row[1] for row in db.execute("PRAGMA table_info(auth_challenges)")}
         assert "purpose" in columns
-        assert db.execute(
-            "SELECT compatible_head FROM site_revision_compatibility WHERE revision = ?",
-            (head_revision(),),
-        ).fetchone() == ("site_schema_v1",)
+        assert {
+            row[0]
+            for row in db.execute(
+                "SELECT compatible_head FROM site_revision_compatibility WHERE revision = ?",
+                (head_revision(),),
+            ).fetchall()
+        } == {
+            "site_schema_v1",
+            "site_auth_challenge_purpose_v2",
+            "site_trip_pto_days_v1",
+            "site_media_membership_v1",
+            "site_media_progress_v1",
+            "site_catalog_title_sort_v1",
+        }
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     assert model_diff(database) == []
 

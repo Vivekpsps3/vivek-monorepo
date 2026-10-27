@@ -49,14 +49,14 @@ describe('RecurringHubComponent editor handoff', () => {
 
     await TestBed.configureTestingModule({
       providers: [
-        provideRouter([{ path: 'recurring', component: RecurringHubComponent }]),
+        provideRouter([{ path: 'finance/recurring', component: RecurringHubComponent }]),
         { provide: FinanceService, useValue: finance },
         { provide: ConfirmService, useValue: { ask: () => Promise.resolve(true) } },
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
       ],
     }).compileComponents();
     harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/recurring?t=spend', RecurringHubComponent);
+    await harness.navigateByUrl('/finance/recurring?t=spend', RecurringHubComponent);
     await harness.fixture.whenStable();
     harness.detectChanges();
   });

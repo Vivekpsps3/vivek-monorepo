@@ -72,6 +72,7 @@ export async function rewrapSigningKey(
 }
 
 export { USERNAME_PATTERN, usernameForStorage } from './username';
+export type { SessionPort, SessionUser, SessionUser as AuthUser, UserRole } from './session-contract';
 
 export async function signChallenge(
   passphrase: string,
@@ -84,3 +85,5 @@ export async function signChallenge(
   );
   return encodeBase64(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, toArrayBuffer(encoder.encode(message))));
 }
+
+export { safeNextPathFrom } from './navigation.mjs';

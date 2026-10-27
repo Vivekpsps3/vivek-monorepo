@@ -18,7 +18,8 @@ import {
   ProfilePayload,
 } from '../models/planning.model';
 import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
-import { countableCents, dollarsFromCountedCents, isOnOrBeforeToday, parseDateOnly, todayIsoDate } from '@vivek/browser';
+import { dollarsFromCountedCents, isOnOrBeforeToday, parseDateOnly, todayIsoDate } from '@vivek/browser';
+import { countableCents } from '../utils/validators';
 
 @Injectable({ providedIn: 'root' })
 export class PlanningService {

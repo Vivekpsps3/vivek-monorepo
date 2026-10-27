@@ -89,13 +89,9 @@ _log_windows: dict[str, tuple[float, int]] = {}
 _global_window_start: float | None = None
 _global_count = 0
 
-# Finance source does not call bypassSecurityTrust* or assign innerHTML.
-# ngx-markdown is the portfolio app, and that shell does not enable Trusted
-# Types. The finance production bundle can create angular#unsafe-bypass lazily
-# for a script-URL bypass, but nothing on the finance shell calls it, so the
-# allowlist is empty. require-trusted-types-for still rejects string assignment
-# to script sinks. angular#bundler is not in this build. Travel and Media
-# assign strings to innerHTML, so Trusted Types stay off there.
+# One Angular runtime serves every route. Private app navigation shares this
+# document policy; public entry uses a document navigation when policy differs.
+# Leaflet's vendored DOM adaptation uses text and element nodes, with no bypass.
 _MEDIA_IMG = (
     "'self' data: https://image.tmdb.org https://static.tvmaze.com "
     "https://coverartarchive.org https://covers.openlibrary.org "
@@ -164,7 +160,9 @@ def expects_shell(path: str) -> bool:
         "/media/",
     }:
         return True
-    return False
+    return any(
+        normalized.startswith(prefix) for prefix in ("/finance/", "/travel/", "/media/")
+    ) and not re.search(r"\.[a-z0-9]+$", normalized)
 
 
 def content_security_policy(kind: str, nonce: str) -> str:
@@ -187,12 +185,11 @@ def content_security_policy(kind: str, nonce: str) -> str:
             "form-action 'none'",
         ]
     else:
-        if kind == "travel":
-            images = "'self' data: https://tile.openstreetmap.org"
-        elif kind == "media":
-            images = _MEDIA_IMG
-        else:
-            images = "'self' data:"
+        images = (
+            _MEDIA_IMG + " https://tile.openstreetmap.org"
+            if kind in {"finance", "travel", "media"}
+            else "'self' data:"
+        )
         # 'self' is a fallback for browsers that ignore 'strict-dynamic'.
         # Browsers that honor 'strict-dynamic' ignore that host allowlist.
         parts = [
@@ -214,11 +211,8 @@ def content_security_policy(kind: str, nonce: str) -> str:
             "base-uri 'self'",
             "form-action 'self'",
         ]
-        # Portfolio markdown assigns strings to innerHTML, so Trusted Types stay
-        # on the finance shell only. See docs/SECURITY_MODEL.md.
-        if kind == "finance":
-            parts.append("require-trusted-types-for 'script'")
-            parts.append("trusted-types")
+        parts.append("require-trusted-types-for 'script'")
+        parts.append("trusted-types angular angular#bundler")
         parts.append("upgrade-insecure-requests")
     parts.append(f"report-uri {REPORT_PATH}")
     parts.append(f"report-to {REPORT_GROUP}")
@@ -312,38 +306,15 @@ def validate_response_headers(headers, path: str, body: bytes | str = b"") -> No
         assert parsed["connect-src"] == "'self'"
         assert parsed["frame-src"] == "'none'"
         assert "https:" not in parsed["connect-src"]
-        if kind == "finance":
-            assert parsed["frame-ancestors"] == "'none'"
+        assert parsed["frame-ancestors"] == "'none'"
+        assert parsed["require-trusted-types-for"] == "'script'"
+        assert parsed["trusted-types"] == "angular angular#bundler"
+        assert "angular#unsafe-bypass" not in policy
+        if kind in {"finance", "travel", "media"}:
+            assert parsed["img-src"] == _MEDIA_IMG + " https://tile.openstreetmap.org"
+        else:
             assert parsed["img-src"] == "'self' data:"
-            assert parsed["require-trusted-types-for"] == "'script'"
-            assert parsed["trusted-types"] == ""
-            assert "angular#unsafe-bypass" not in policy
-            assert "angular#bundler" not in policy
-            assert "tile.openstreetmap.org" not in policy
-            assert "image.tmdb.org" not in policy
-            assert "archive.org" not in policy
-        elif kind == "portfolio":
-            assert parsed["frame-ancestors"] == "'none'"
-            assert parsed["img-src"] == "'self' data:"
-            assert "require-trusted-types-for" not in parsed
-        elif kind == "travel":
-            assert parsed["frame-ancestors"] == "'none'"
-            assert "https://tile.openstreetmap.org" in parsed["img-src"]
-            assert "image.tmdb.org" not in parsed["img-src"]
-            assert "require-trusted-types-for" not in parsed
-        elif kind == "media":
-            assert parsed["frame-ancestors"] == "'none'"
-            assert "https://image.tmdb.org" in parsed["img-src"]
-            assert "https://archive.org" in parsed["img-src"].split()
-            assert "https://*.archive.org" in parsed["img-src"].split()
-            assert "https://*.mzstatic.com" in parsed["img-src"]
-            assert "https://media.rawg.io" in parsed["img-src"]
-            assert "https://shared.akamai.steamstatic.com" in parsed["img-src"]
-            assert "https://upload.wikimedia.org" in parsed["img-src"]
-            assert "https://lastfm.freetls.fastly.net" in parsed["img-src"]
-            assert "tile.openstreetmap.org" not in parsed["img-src"]
-            assert "https:" not in parsed["img-src"].split()
-            assert "require-trusted-types-for" not in parsed
+        assert "https:" not in parsed["img-src"].split()
         for name, value in parsed.items():
             if "unsafe-inline" in value:
                 assert name == "style-src-attr", (name, value)
@@ -357,7 +328,7 @@ def validate_response_headers(headers, path: str, body: bytes | str = b"") -> No
                 assert opens and all("nonce=" in tag for tag in opens), path
                 assert f'nonce="{nonce}"' in text, path
                 assert "no-store" in _header(headers, "cache-control").lower(), path
-                if kind in {"finance", "portfolio"}:
+                if kind in {"finance", "portfolio", "travel", "media"}:
                     assert f'ngCspNonce="{nonce}"' in text, path
             else:
                 assert f'nonce="{nonce}"' not in text, path

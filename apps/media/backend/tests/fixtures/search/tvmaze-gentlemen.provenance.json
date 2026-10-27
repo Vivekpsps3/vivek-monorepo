@@ -1,0 +1,5 @@
+{
+  "url": "https://api.tvmaze.com/search/shows?q=The+Gentlemen",
+  "captured_at": "2026-10-26T05:06:03.920340+00:00",
+  "purpose": "Single public response sample; deterministic regression input, not an availability guarantee."
+}

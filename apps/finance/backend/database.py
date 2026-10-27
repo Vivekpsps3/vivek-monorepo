@@ -1,47 +1,44 @@
-import os
+"""Finance session names.
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+The engine is opened by apps.server.database. Importing this module does not
+create a file. init_database remains for the historical Finance Alembic tests;
+the site process does not call it.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from typing import cast
+
+from sqlalchemy import inspect
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from apps.finance.backend.models import Base
+from apps.server.database import Database, get_db
+
+# Bound by publish(). Untyped None would make every caller look optional.
+engine = cast(Engine, None)
+SessionLocal = cast(sessionmaker[Session], None)
+SQLALCHEMY_DATABASE_URL = ""
 
 
-def _resolve_database_url(raw_url: str) -> str:
-    """Keep relative SQLite files anchored to backend/, independent of process cwd."""
-    if (
-        not raw_url.startswith("sqlite:///")
-        or raw_url.startswith("sqlite:////")
-        or ":memory:" in raw_url
-    ):
-        return raw_url
-
-    relative_path = raw_url.removeprefix("sqlite:///")
-    if os.path.isabs(relative_path):
-        return raw_url
-
-    backend_dir = os.path.dirname(os.path.abspath(__file__))
-    absolute_path = os.path.abspath(os.path.join(backend_dir, relative_path))
-    return f"sqlite:///{absolute_path}"
-
-
-SQLALCHEMY_DATABASE_URL = _resolve_database_url(os.getenv("DATABASE_URL", "sqlite:///./finance.db"))
-SQL_ECHO = os.getenv("LOG_SQL", "").lower() in ("1", "true", "yes")
-
-_engine_kwargs = {"connect_args": {"check_same_thread": False}}
-if SQLALCHEMY_DATABASE_URL.endswith(":memory:") or SQLALCHEMY_DATABASE_URL.rstrip("/").endswith(
-    ":memory:"
-):
-    _engine_kwargs["poolclass"] = StaticPool
-
-engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=SQL_ECHO, **_engine_kwargs)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def publish(database: Database) -> None:
+    global engine, SessionLocal, SQLALCHEMY_DATABASE_URL
+    engine = database.engine
+    SessionLocal = database.sessionmaker
+    SQLALCHEMY_DATABASE_URL = database.url
 
 
 def init_database() -> None:
-    from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
-    from sqlalchemy import inspect
+    from alembic import command
+    from alembic.config import Config
 
+    from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
+
+    if engine is None:
+        raise RuntimeError("Database is not open")
     # Check before create_all or any historical upgrade can change the source DB.
     with engine.connect() as connection:
         assert_safe_to_remove_legacy_schema(connection)
@@ -55,10 +52,6 @@ def init_database() -> None:
     # A clean file database gets the current schema directly. Historical migrations
     # remain available for existing databases that need the guarded cleanup revision.
     if ":memory:" not in SQLALCHEMY_DATABASE_URL:
-        from alembic.config import Config
-        from alembic import command
-        import logging
-
         log = logging.getLogger(__name__)
         strict = os.getenv("ALEMBIC_STRICT", "1").lower() not in ("0", "false", "no")
         try:
@@ -70,20 +63,18 @@ def init_database() -> None:
                 command.stamp(alembic_cfg, "head")
             else:
                 command.upgrade(alembic_cfg, "head")
-        except Exception as e:
+        except Exception as exc:
             if strict:
-                log.error("Alembic upgrade failed (ALEMBIC_STRICT=1): %s", e)
+                log.error("Alembic upgrade failed (ALEMBIC_STRICT=1): %s", exc)
                 raise
-            log.warning("Alembic upgrade skipped or failed: %s", e)
+            log.warning("Alembic upgrade skipped or failed: %s", exc)
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
+__all__ = [
+    "SQLALCHEMY_DATABASE_URL",
+    "SessionLocal",
+    "engine",
+    "get_db",
+    "init_database",
+    "publish",
+]

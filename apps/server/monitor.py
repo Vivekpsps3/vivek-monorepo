@@ -1,17 +1,17 @@
 """Small independent probe exporter. Contains no database or application credentials."""
 
-from concurrent.futures import ThreadPoolExecutor
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
-from pathlib import Path
-import ssl
 import socket
-import time
+import ssl
 import subprocess
 import sys
 import threading
+import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 TARGETS = {
     "public": "https://vivekpanchagnula.com/",

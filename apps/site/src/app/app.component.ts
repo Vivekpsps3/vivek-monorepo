@@ -7,7 +7,7 @@ import { filter } from 'rxjs';
 import { bindSystemTheme, readThemeChoice, setThemePreference, type ThemeChoice } from '@vivek/ui';
 
 @Component({
-  selector: 'app-root',
+  selector: 'site-layout',
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.component.html',
@@ -42,7 +42,6 @@ export class AppComponent {
       )
       .subscribe(() => this.updatePageMetadata());
 
-    this.updatePageMetadata();
   }
 
   private updatePageMetadata(): void {

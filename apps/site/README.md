@@ -22,41 +22,12 @@ npx ng build --configuration development
 
 The build writes to `dist/personal-website`.
 
-## Encryption demo backend
+## Encryption demo
 
-The `/secrets` page uses the separate Socket.IO service in `flask/`. Install its
-bounded Python dependencies and run the local demo from that directory:
-
-```bash
-cd apps/site/flask
-python -m pip install -r requirements-dev.txt
-SITE_ALLOWED_ORIGINS=http://localhost:4200 python server.py
-```
-
-The server accepts only the two local Angular origins by default. Set
-`SITE_ALLOWED_ORIGINS` to a comma-separated list of exact site origins in each
-deployment, for example `https://vivekpanchagnula.com`; wildcard origins are
-rejected. `SITE_DEBUG` defaults to `false`. The built-in server is for local
-development. A production deployment can serve the Socket.IO Flask app with
-Gunicorn's threaded worker (one worker keeps Socket.IO sessions in one process):
-
-```bash
-cd apps/site/flask
-SITE_ALLOWED_ORIGINS=https://vivekpanchagnula.com \
-  gunicorn --workers 1 --threads 100 --bind 0.0.0.0:5000 server:app
-```
-
-The encryption demo protects the browser-to-demo-server transport. The Flask
-server decrypts the prompt and passes its plaintext to the configured local
-Ollama model, so the server can read it. This demo is separate from Finance and
-does not access Finance data. Tests inject a fake model response and make no
-model or network requests.
-
-The optional OpenAI-compatible adapter is `flask/api.py`; it loads its
-GitHub-backed chat client only when a chat request arrives. It shares the same
-`SITE_ALLOWED_ORIGINS` setting. Run `python -m src.chat` interactively to
-authorize its GitHub Copilot client; the token is stored under
-`$XDG_CONFIG_HOME/vivek-site/` (or `~/.config/vivek-site/`) outside the repo.
+`/secrets` demonstrates ECDH and AES-GCM in the browser. Messages and keys stay
+on this page. The demo has no chat server and does not access Finance data.
+Public navigation is Home, Work, and About, with one Workspace link to `/hub`.
+Page titles stay on the routes in `src/app/app.routes.ts`.
 
 ## Content ownership
 

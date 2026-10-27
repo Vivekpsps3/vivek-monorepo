@@ -18,7 +18,7 @@ services:
     build:
       context: .
       args: {SITE_RELEASE: "${SITE_RELEASE:-development}"}
-    command: [uvicorn, apps.server.main:app, --host, 0.0.0.0, --port, "8000", --limit-concurrency, "100", --timeout-keep-alive, "5", --no-access-log]
+    command: [uvicorn, apps.server.main:production_app, --factory, --host, 0.0.0.0, --port, "8000", --limit-concurrency, "100", --timeout-keep-alive, "5", --no-access-log]
     environment:
       # Gateway of SITE_SUBNET. If this drifts, per-IP limits collapse into one bucket.
       FORWARDED_ALLOW_IPS: 10.85.0.1

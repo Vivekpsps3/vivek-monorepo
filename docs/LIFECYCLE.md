@@ -13,13 +13,13 @@ guard confirms they contain no rows and no password-only users remain.
 | **migration-only** | Exists for upgrade/enroll paths; not a daily product surface |
 | **reserved** | Schema/table present; no product HTTP/UI |
 
-## HTTP routers (`apps/finance/backend/app.py`)
+## Active composition (`apps/server/main.py`)
 
 | Surface | Module | Lifecycle | Owner |
 |---------|--------|-----------|-------|
 | Health | `routers/health.py` | active | ops |
-| Auth / admin users | `routers/auth_routes.py` | active | auth |
-| Password → passwordless enroll | `auth_routes` migrate path | migration-only; legacy accounts require previous release because current startup preflight blocks password-only users | auth |
+| Auth / admin users | `apps/server/identity/routes.py` | active | auth |
+| Password → passwordless enroll | identity migration route | migration-only; legacy accounts require previous release because current startup preflight blocks password-only users | auth |
 | Vault ciphertext API | `routers/vault.py` | active | vault |
 | Market quotes / research | `routers/market.py` | active | market |
 | Plaintext Finance migration API | — | retired | — |
@@ -30,7 +30,7 @@ Plaintext finance HTTP (transactions, assets, holdings, imports, planning, cashf
 
 | Module | Lifecycle | Notes |
 |--------|-----------|-------|
-| `schemas_auth.py` | active | Passwordless + admin invitation contracts |
+| `apps/server/identity/schemas.py` | active | Passwordless + admin invitation contracts |
 | `schemas_vault.py` | active | Ciphertext records, indexes, sync |
 | `schemas_market.py` | active | Quotes and research (ticker disclosure intentional) |
 
@@ -38,15 +38,11 @@ Plaintext finance HTTP (transactions, assets, holdings, imports, planning, cashf
 
 | Authority | Path | Role |
 |-----------|------|------|
-| Startup preflight | `legacy_schema_guard.py` | Refuses schema changes if legacy plaintext finance rows or password-only users remain |
-| ORM `create_all` | `database.py` | Creates active model tables after preflight |
-| Alembic | `alembic/versions/*` | Versioned upgrades to head `e0f6a2b3c4d5`; retires empty plaintext tables |
+| Root readiness check | `apps/server/schema.py` | Startup verifies the current or explicitly compatible revision; no writes |
+| Unified Alembic | `apps/server/alembic/versions` | Only active production upgrade/adoption chain for `site.db` |
+| Historical Finance guard/Alembic | `apps/finance/backend/legacy_schema_guard.py`, `apps/finance/backend/alembic` | Migration fixtures and older database history only; never a site startup path |
 
-Startup order: inspect existing DB and run the preflight guard → `create_all` →
-fresh DBs stamp current head; existing DBs run Alembic `upgrade head`. The
-guard runs before any schema mutation. A blocked upgrade leaves the original
-database tables and rows untouched. Startup no longer runs lightweight
-plaintext-table backfills, and `create_all` cannot recreate the retired tables.
+`apps.server.main:production_app --factory` creates one app with explicit database and identity dependencies. Normal request sessions belong to that app. No import opens a database or creates tables. `metadata.create_all` remains confined to disposable fixtures/historical migration tests. The offline migration command backs up production state before adoption/upgrade and rejects incompatible or unsafe legacy data. See [Migrations](MIGRATIONS.md).
 
 ## Encrypted collections
 

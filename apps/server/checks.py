@@ -5,8 +5,8 @@ Run inside the built image: python -m apps.server.checks
 
 import hashlib
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 
 def assert_media_e2e_is_not_shipped() -> None:
@@ -36,13 +36,21 @@ def main():
         os.environ["SITE_DATABASE_URL"] = f"sqlite:///{root}/site.db"
         os.environ["SESSION_COOKIE_SECURE"] = "1"
         os.environ["SESSION_COOKIE_SAMESITE"] = "lax"
-        from apps.server.main import app, engine
-        from apps.finance.backend.database import SessionLocal
-        from apps.finance.backend.models import User, UserRole, UserSession
-        from apps.finance.backend.auth import utc_now_naive
         from datetime import timedelta
+
         from fastapi.testclient import TestClient
         from sqlalchemy import text
+
+        from apps.server.database import open_database
+        from apps.server.identity.models import User, UserRole, UserSession
+        from apps.server.identity.session import utc_now_naive
+        from apps.server.main import Dependencies, Settings, create_app
+
+        settings = Settings.from_environ()
+        database = open_database(settings.database_url)
+        app = create_app(settings, Dependencies(database=database))
+        engine = database.engine
+        SessionLocal = database.sessionmaker
 
         for index, role in ((1, UserRole.admin), (2, UserRole.user)):
             with SessionLocal() as db:
@@ -74,25 +82,10 @@ def main():
 
         httpx.request = no_auth_http
         with TestClient(app, base_url="https://testserver") as client:
-            for url, location in (
-                ("/hub/media", "/media/"),
-                ("/hub/media/", "/media/"),
-                ("/hub/media/extra", "/media/"),
-                ("/media/library", "/media/#/library"),
-                ("/media/search?q=dune", "/media/#/search?q=dune"),
-                ("/media/calendar", "/media/#/calendar"),
-                ("/media/new", "/media/#/new"),
-            ):
-                response = client.get(url, follow_redirects=False)
-                assert response.status_code == 302, (
-                    url,
-                    response.status_code,
-                    response.headers.get("location"),
-                )
-                assert response.headers.get("location") == location, (
-                    url,
-                    response.headers.get("location"),
-                )
+            for url in ("/media/library", "/media/search?q=dune", "/media/calendar", "/media/add"):
+                assert client.get(url, follow_redirects=False).status_code == 200
+            alias = client.get("/media/new", follow_redirects=False)
+            assert alias.status_code == 308 and alias.headers["location"] == "/media/add"
             from apps.server.security_headers import validate_response_headers
 
             for url in (
@@ -116,15 +109,13 @@ def main():
                 response = client.get(url)
                 assert response.status_code == 200, (url, response.status_code, response.text[:150])
                 validate_response_headers(response.headers, url, response.content)
-            from apps.server.main import WEB_ROOT
-
-            bundle = next(WEB_ROOT.glob("main-*.js"))
-            asset = client.get("/finance/" + bundle.name)
+            bundle = next(settings.web_root.glob("main-*.js"))
+            asset = client.get("/" + bundle.name)
             assert "immutable" in asset.headers.get("cache-control", "")
-            validate_response_headers(asset.headers, "/finance/" + bundle.name, asset.content)
-            index = client.get("/finance/index.html")
+            validate_response_headers(asset.headers, "/" + bundle.name, asset.content)
+            index = client.get("/finance/")
             assert index.headers.get("cache-control") == "no-store"
-            validate_response_headers(index.headers, "/finance/index.html", index.content)
+            validate_response_headers(index.headers, "/finance/", index.content)
             report = client.post(
                 "/csp-report",
                 content=b'{"csp-report":{"document-uri":"https://testserver/finance/","violated-directive":"script-src","blocked-uri":"inline","script-sample":"not-stored"}}',

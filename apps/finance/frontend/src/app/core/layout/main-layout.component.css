@@ -11,7 +11,7 @@
   padding: var(--space-3) max(var(--space-6), env(safe-area-inset-right)) var(--space-2)
     max(var(--space-6), env(safe-area-inset-left));
   position: sticky;
-  top: 0;
+  top: var(--suite-header-height, 4.5rem);
   z-index: 10;
 }
 
@@ -62,11 +62,6 @@
 
 .api-banner__detail {
   color: var(--text-secondary);
-}
-
-.api-banner code {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
 }
 
 .market-banner-card {
@@ -209,12 +204,6 @@
 
 .nav-link__short {
   display: none;
-}
-
-.nav-external-icon {
-  width: 1rem;
-  height: 1rem;
-  flex: 0 0 auto;
 }
 
 .mobile-tabbar {
@@ -369,28 +358,6 @@
   padding-bottom: var(--space-12);
 }
 
-.tutorial-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
-  backdrop-filter: blur(10px);
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--space-4);
-}
-
-.tutorial-panel {
-  width: min(760px, 100%);
-  max-height: calc(100vh - var(--space-8));
-  overflow: auto;
-  background: var(--card-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-8);
-}
-
 .tutorial-header {
   display: flex;
   justify-content: space-between;
@@ -407,53 +374,13 @@
 
 .tutorial-header p,
 .tutorial-step p,
-.tutorial-callout,
-.tutorial-map,
 .tutorial-rules {
   color: var(--text-secondary);
 }
 
-.tutorial-map {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-2);
-  margin-bottom: var(--space-6);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
-}
-
-.tutorial-map div {
-  min-width: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--card-bg) 72%, transparent);
-  border: 1px solid transparent;
-}
-
-.tutorial-map div:hover,
 .tutorial-step:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
   background: color-mix(in srgb, var(--surface-hover) 70%, var(--surface-2));
-}
-
-.tutorial-map span,
-.tutorial-step__group {
-  display: block;
-  margin: 0 0 var(--space-1);
-  color: var(--text-tertiary);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.tutorial-map strong {
-  display: block;
-  color: var(--text);
-  font-size: var(--text-sm);
-  line-height: 1.35;
 }
 
 .tutorial-grid {
@@ -474,10 +401,6 @@
 }
 
 
-
-.tutorial-step--primary {
-  background: var(--surface-2);
-}
 
 .tutorial-step__number {
   display: inline-flex;
@@ -506,30 +429,16 @@
   text-decoration: underline;
 }
 
-.tutorial-link-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.tutorial-link-row a,
 .tutorial-step > a {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  min-height: 44px;
+  margin-top: var(--space-2);
+  margin-right: var(--space-2);
   padding: var(--space-1) var(--space-3);
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent-glow) 42%, transparent);
-}
-
-.tutorial-callout {
-  margin-top: var(--space-5);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--accent-glow) 40%, var(--surface-2));
-  padding: var(--space-4);
 }
 
 .tutorial-rules {
@@ -566,8 +475,8 @@
   :host {
     display: flex;
     flex-direction: column;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: calc(100dvh - var(--suite-header-height, 4rem));
+    max-height: calc(100dvh - var(--suite-header-height, 4rem));
   }
 
   .navbar {
@@ -581,6 +490,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: var(--space-2);
     width: 100%;
   }
@@ -588,6 +498,8 @@
   .logo-lockup {
     width: auto;
     min-width: 0;
+    flex: 0 1 auto;
+    gap: var(--space-2);
   }
 
   .logo {
@@ -634,7 +546,7 @@
 
   .mobile-tabbar {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     position: fixed;
     left: 0;
     right: 0;
@@ -681,12 +593,15 @@
 
   .account-menu {
     width: auto;
+    flex: 1 1 auto;
+    flex-shrink: 1;
     justify-content: flex-end;
+    min-width: 0;
     gap: var(--space-1);
   }
 
   .account-email {
-    max-width: min(28vw, 7.5rem);
+    max-width: min(16vw, 4.5rem);
   }
 
   .account-popover {
@@ -700,33 +615,16 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .tutorial-backdrop {
-    padding: 0;
-    align-items: stretch;
-  }
-
-  .tutorial-panel {
-    box-sizing: border-box;
-    width: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
-    padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
-      max(var(--space-5), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
-    border-radius: 0;
-  }
-
   .tutorial-header {
     align-items: flex-start;
   }
 
-  .tutorial-map {
-    grid-template-columns: 1fr;
-  }
-
-  .tutorial-link-row a,
   .tutorial-step > a,
   .tutorial-rules span {
+    box-sizing: border-box;
     width: 100%;
     justify-content: center;
   }
 }
+
+.finance-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}

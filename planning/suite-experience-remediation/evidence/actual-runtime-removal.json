@@ -1,0 +1,354 @@
+{
+  "approved": "User explicitly approved the 66-file proposal and completion of the remaining four tasks on 2026-10-27.",
+  "removed": [
+    {
+      "path": "apps/media/backend/static/app.css",
+      "sha256": "38099c6ac1d415a38a127d756e19050cc6c23125711dc7ea45363adea9b6184e",
+      "bytes": 37906
+    },
+    {
+      "path": "apps/media/backend/static/favicon.svg",
+      "sha256": "92f43911acefae2ae3fc070de03e2e0d73e027a98725923ee64c93556b612fca",
+      "bytes": 448
+    },
+    {
+      "path": "apps/media/backend/static/index.html",
+      "sha256": "0fac3126f0a7e8415238bbae7e2ac1421f46ad7838db4107d4a338348da69042",
+      "bytes": 6799
+    },
+    {
+      "path": "apps/media/backend/static/modules/api.mjs",
+      "sha256": "abbf3636652b2e1e1ac77c5593e7b6732e1524db755729bce79d6edb7cd61d4e",
+      "bytes": 2859
+    },
+    {
+      "path": "apps/media/backend/static/modules/app.mjs",
+      "sha256": "e981b0f0ab931236331dcd7bdc1bcd585a43a2c235e72f5a7fdf4990ef8bcbf5",
+      "bytes": 115764
+    },
+    {
+      "path": "apps/media/backend/static/modules/format.mjs",
+      "sha256": "29220a245fa97893f52491883b21493892e22a70b57b8bc3f2b770d5b2bce934",
+      "bytes": 14532
+    },
+    {
+      "path": "apps/media/backend/static/modules/guard.mjs",
+      "sha256": "eddbb888c860c9a53c01b9b3a7435d6236b94b4457af9e8995e1529e962ef68a",
+      "bytes": 931
+    },
+    {
+      "path": "apps/media/backend/static/modules/icons.mjs",
+      "sha256": "c12176d770795a7829ae3b8fc04ebfaf7a388b0cd7debf8a2b41fa2488a2e8a8",
+      "bytes": 1038
+    },
+    {
+      "path": "apps/media/backend/static/modules/score.mjs",
+      "sha256": "d1869c4bbd76f17bdb03b2fe30dd365abdb7afb74cb82f21d6ca278ce6baceca",
+      "bytes": 2876
+    },
+    {
+      "path": "apps/media/backend/static/modules/search-groups.mjs",
+      "sha256": "22c18fc1ed16d616feebd47f529f54ed587473d5a5fd19dd5a52214dfab5d463",
+      "bytes": 1855
+    },
+    {
+      "path": "apps/media/backend/static/modules/shell.mjs",
+      "sha256": "cffc880ca81a94717c3cad10fa2ec7b7d88800bb08b034dd67f992bbd9c46066",
+      "bytes": 4385
+    },
+    {
+      "path": "apps/media/backend/static/modules/views.mjs",
+      "sha256": "dc25ab9c237198801470f2e5c08df504dcd2f90ed7d3f2ec91a37c8d5214ab9a",
+      "bytes": 18313
+    },
+    {
+      "path": "apps/media/backend/static/tests/api.test.mjs",
+      "sha256": "2f9508e1468da9d520296f7fd853df50ce535d4b089ada097d8d41f5fc334d4f",
+      "bytes": 2746
+    },
+    {
+      "path": "apps/media/backend/static/tests/contrast.test.mjs",
+      "sha256": "1c389f460eb9d6bf597558a3a612440d17e882edf0926ed7a8c95563a3c64022",
+      "bytes": 6621
+    },
+    {
+      "path": "apps/media/backend/static/tests/guard.test.mjs",
+      "sha256": "8c56d216a1596a2b07673587a6b90a7caa6fa8dd7f291329e378761aee9bb406",
+      "bytes": 948
+    },
+    {
+      "path": "apps/media/backend/static/tests/score.test.mjs",
+      "sha256": "faae5d2078152deda54e9c529a3bd9223cc5c25390a0ebedbbe022ce29b1414c",
+      "bytes": 1740
+    },
+    {
+      "path": "apps/media/backend/static/tests/search-groups.test.mjs",
+      "sha256": "350ac5ac60dd403cd90c1db117c30061ccc6ba4edcef0b5ed665312b7918826c",
+      "bytes": 1518
+    },
+    {
+      "path": "apps/media/backend/static/tests/shell.test.mjs",
+      "sha256": "3d0a8d01162a7d6509092c652f9a9d45f5092b613baede6ec0f4d63941726923",
+      "bytes": 4696
+    },
+    {
+      "path": "apps/media/backend/static/tests/suite.test.mjs",
+      "sha256": "1c325f972a70added7869276e1b85ab39551c8fecfdaf2613441fad9c3330c34",
+      "bytes": 1494
+    },
+    {
+      "path": "apps/media/backend/static/tests/views.test.mjs",
+      "sha256": "b04ce66d507399bb125c2448722ba05c2cf03ea776c5505df873b94b41b0bfa2",
+      "bytes": 10754
+    },
+    {
+      "path": "apps/travel/backend/static/app.css",
+      "sha256": "7cd3d91df9225840234589436a411df0ab0dfe5d64f8d2ce626af5b3b5bb2b07",
+      "bytes": 25882
+    },
+    {
+      "path": "apps/travel/backend/static/favicon.svg",
+      "sha256": "76dccd5751b6d0907cb227de2a229e9a6378e1b600eca54dcb9daa2f33295d04",
+      "bytes": 347
+    },
+    {
+      "path": "apps/travel/backend/static/index.html",
+      "sha256": "3d8d4517a29f8c3134bc24aa662acc4e1bfa15c67bbf528d19cbbd8c754f81c7",
+      "bytes": 4205
+    },
+    {
+      "path": "apps/travel/backend/static/modules/actions/flight.mjs",
+      "sha256": "08bfa6eb8b3c0e121d343c5beb3dbcb1d7630ab18097f1e2f3cd122376125dee",
+      "bytes": 20683
+    },
+    {
+      "path": "apps/travel/backend/static/modules/actions/forms.mjs",
+      "sha256": "4ed80c4e07a97139b645365d14c92852bb87940aa0ee72babf1d14cd5ea5fcbf",
+      "bytes": 12624
+    },
+    {
+      "path": "apps/travel/backend/static/modules/actions/ui.mjs",
+      "sha256": "76ef82be0c8cf706e5004ada0a62e624247cea251a3de52bad740e733e991b91",
+      "bytes": 20348
+    },
+    {
+      "path": "apps/travel/backend/static/modules/api.mjs",
+      "sha256": "4a423a72a33b169dd5c7edf2852824ef285df1599f86aabf31fef40d26635371",
+      "bytes": 1789
+    },
+    {
+      "path": "apps/travel/backend/static/modules/app.mjs",
+      "sha256": "feb91a5c6f3f90cb4eaaf40ca7dadfdd9a351f9b0b9130fe3448b02ee85f62ca",
+      "bytes": 975
+    },
+    {
+      "path": "apps/travel/backend/static/modules/calendar-model.mjs",
+      "sha256": "c3931ca15a7f245a0ccbe47fa2a5c4625b9180a006859ce80f5c269b240f15a1",
+      "bytes": 2769
+    },
+    {
+      "path": "apps/travel/backend/static/modules/copy.mjs",
+      "sha256": "bc4f5f674890b5881291bf62ae25f2921df1c21e68ccfc61920a59a997d60870",
+      "bytes": 1020
+    },
+    {
+      "path": "apps/travel/backend/static/modules/decisions.mjs",
+      "sha256": "50ea47866952f4ba302af4ca0953a5620dce1c26405b57ed717266b31fc6eb9c",
+      "bytes": 1287
+    },
+    {
+      "path": "apps/travel/backend/static/modules/feedback.mjs",
+      "sha256": "316a5e60bb41280fc013f3bbf0f9166ac3f6210a365587885e5183c2b3c560b3",
+      "bytes": 6707
+    },
+    {
+      "path": "apps/travel/backend/static/modules/helpers.mjs",
+      "sha256": "3a720d63f0ae2bafbea577a2612ff6d462a5f87d7ca1d510f94eb4e20b6412b0",
+      "bytes": 9199
+    },
+    {
+      "path": "apps/travel/backend/static/modules/labels.mjs",
+      "sha256": "a8e2e23f0c7e7c2f4bb7842fcd4faee4f7ef422324a58dc42f50bb1c13519e18",
+      "bytes": 3054
+    },
+    {
+      "path": "apps/travel/backend/static/modules/messages.mjs",
+      "sha256": "e8886c6dfa0eb84d22320def118344a2f30fc4df42426c04bc2c165589b82441",
+      "bytes": 2271
+    },
+    {
+      "path": "apps/travel/backend/static/modules/restore.mjs",
+      "sha256": "5c91c3f5efb8aab65a64379ba8a8f7549a4a22422c39398172e4086d2f235f7d",
+      "bytes": 6430
+    },
+    {
+      "path": "apps/travel/backend/static/modules/route-parser.mjs",
+      "sha256": "1b42a2c45a6d3009ad7a24233d4d3d7af16ddb78b4ea520eb74e6ad3c504d528",
+      "bytes": 1159
+    },
+    {
+      "path": "apps/travel/backend/static/modules/router.mjs",
+      "sha256": "a32c710d7e4e50ed1c1a7a89562b1ba57fa6fc3db2388fc19e53a858c9cdd531",
+      "bytes": 6394
+    },
+    {
+      "path": "apps/travel/backend/static/modules/screens.mjs",
+      "sha256": "afae177f555737c5245e5d02ca00683f5388bd3c19719d2698932a14d9794fe8",
+      "bytes": 1144
+    },
+    {
+      "path": "apps/travel/backend/static/modules/state.mjs",
+      "sha256": "fbdd713be381377120f48b333534a75367fe477b97a4c532efb6e91410fe096a",
+      "bytes": 1371
+    },
+    {
+      "path": "apps/travel/backend/static/modules/states.mjs",
+      "sha256": "c41a626056f67b2450c680c367672f3d7e7cf2b526da767a7bcad756eb0849dc",
+      "bytes": 3170
+    },
+    {
+      "path": "apps/travel/backend/static/modules/validate.mjs",
+      "sha256": "25d18c5b98b83d1f46196416eaeb1f4128e002d301f9a054826bec49c3ec22b2",
+      "bytes": 3999
+    },
+    {
+      "path": "apps/travel/backend/static/modules/views/calendar.mjs",
+      "sha256": "7f7bd0bc22dec9b417fbb0d5c1084336aa9b917a444a67bba9c6c79a482f58bc",
+      "bytes": 7296
+    },
+    {
+      "path": "apps/travel/backend/static/modules/views/composer.mjs",
+      "sha256": "31262d03f19937cdb9cbab0904c6cd7d262b5b3373045771e2b7fb97559c706e",
+      "bytes": 24016
+    },
+    {
+      "path": "apps/travel/backend/static/modules/views/home.mjs",
+      "sha256": "c8073dd65a6f6f2ce2dc91e6d9cf766dec20584c0047779b11aac233f72050a8",
+      "bytes": 5393
+    },
+    {
+      "path": "apps/travel/backend/static/modules/views/new-trip.mjs",
+      "sha256": "1fc5ec69b4d19caec4b7cd988f5a174ad97855a07fe2737bcbca9fe9c495bb1e",
+      "bytes": 3592
+    },
+    {
+      "path": "apps/travel/backend/static/modules/views/pto.mjs",
+      "sha256": "b0cfe9c68e268a8b3a85a991f9daf912c83c115ff4734f3571ca7acb4b8433db",
+      "bytes": 18476
+    },
+    {
+      "path": "apps/travel/backend/static/modules/views/settings.mjs",
+      "sha256": "54a4832a419e0158ea231d122cfe5d452cd94049a303cc242a7be12f367bc9d5",
+      "bytes": 1435
+    },
+    {
+      "path": "apps/travel/backend/static/modules/views/trip.mjs",
+      "sha256": "93d079bcd5f7ee0648e6ac77775511d316169f209c664f0e23df1d7e16dcdb68",
+      "bytes": 35076
+    },
+    {
+      "path": "apps/travel/backend/static/tests/blockers.test.mjs",
+      "sha256": "512b043ef8a6e6da76d7a1624144bfc198da21fd59d47183121f7142d85400a1",
+      "bytes": 19994
+    },
+    {
+      "path": "apps/travel/backend/static/tests/bundle.test.mjs",
+      "sha256": "417d31103d1597fe2608e97c449ef560da3e634b9576ce8ba8b5af4c0b1c8990",
+      "bytes": 4471
+    },
+    {
+      "path": "apps/travel/backend/static/tests/decisions.test.mjs",
+      "sha256": "d4d07cb2607665b4c6b466f7099b37b17e674824c41a5a6c51cf134737334405",
+      "bytes": 3622
+    },
+    {
+      "path": "apps/travel/backend/static/tests/runtime.test.mjs",
+      "sha256": "61191f32318ae277235b621307a808509e35cb3c37b4a80a2553764f657a0c6c",
+      "bytes": 2174
+    },
+    {
+      "path": "apps/travel/backend/static/tests/toast.test.mjs",
+      "sha256": "0fc9a3e2c8a1c41b584892d729217cb580607cfd94a4aeaa431e2837fcdbd00a",
+      "bytes": 7307
+    },
+    {
+      "path": "apps/travel/backend/static/tests/tr4.test.mjs",
+      "sha256": "8be52f8adca9b80608396bb18748c5b97a393beb5367a8ddf100620aeaa8f71e",
+      "bytes": 2472
+    },
+    {
+      "path": "apps/travel/backend/static/tests/week-header.test.mjs",
+      "sha256": "83728d2191582171904946173ca414eb781abef51afa8a975d4fc54226d70a79",
+      "bytes": 1195
+    },
+    {
+      "path": "apps/travel/backend/static/vendor/images/layers-2x.png",
+      "sha256": "066daca850d8ffbef007af00b06eac0015728dee279c51f3cb6c716df7c42edf",
+      "bytes": 1259
+    },
+    {
+      "path": "apps/travel/backend/static/vendor/images/layers.png",
+      "sha256": "1dbbe9d028e292f36fcba8f8b3a28d5e8932754fc2215b9ac69e4cdecf5107c6",
+      "bytes": 696
+    },
+    {
+      "path": "apps/travel/backend/static/vendor/images/marker-icon-2x.png",
+      "sha256": "00179c4c1ee830d3a108412ae0d294f55776cfeb085c60129a39aa6fc4ae2528",
+      "bytes": 2464
+    },
+    {
+      "path": "apps/travel/backend/static/vendor/images/marker-icon.png",
+      "sha256": "574c3a5cca85f4114085b6841596d62f00d7c892c7b03f28cbfa301deb1dc437",
+      "bytes": 1466
+    },
+    {
+      "path": "apps/travel/backend/static/vendor/images/marker-shadow.png",
+      "sha256": "264f5c640339f042dd729062cfc04c17f8ea0f29882b538e3848ed8f10edb4da",
+      "bytes": 618
+    },
+    {
+      "path": "apps/travel/backend/static/vendor/leaflet.css",
+      "sha256": "a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6",
+      "bytes": 14806
+    },
+    {
+      "path": "apps/travel/backend/static/vendor/leaflet.js",
+      "sha256": "85d455b4522415f6badc42a0e7d17c919d100347d6b8958bd0dc738fdecd6d50",
+      "bytes": 147563
+    },
+    {
+      "path": "packages/browser/runtime/dom.mjs",
+      "sha256": "2e8cf6c86e144bfbcc946f440cdab378c57226ee2660413500a14fa97fab87a3",
+      "bytes": 1153
+    },
+    {
+      "path": "packages/browser/runtime/theme.mjs",
+      "sha256": "c2765c2fcefdc6404bb852cde40fb84d1adaeb2e0e9404ae119b8d8b91504643",
+      "bytes": 994
+    },
+    {
+      "path": "packages/browser/runtime/toast.mjs",
+      "sha256": "adbd4f68e7148c6579ff417fdd028911d745aa4df30edb4dadb5b508afdf164f",
+      "bytes": 6351
+    }
+  ],
+  "preserved_models": [
+    "apps/travel/frontend/src/calendar-model.mjs",
+    "apps/travel/frontend/src/labels.mjs",
+    "apps/travel/frontend/src/messages.mjs",
+    "apps/travel/frontend/src/validate.mjs",
+    "apps/travel/frontend/src/restore-model.mjs",
+    "apps/media/frontend/src/format.mjs"
+  ],
+  "retained_node_tests": "Existing backend/static/tests paths remain discoverable by CI; useful assertions now import app-owned pure models.",
+  "backup": "/tmp/suite-runtime-before-removal.tar.gz",
+  "retired_packaging_symlinks": [
+    "apps/travel/backend/shared-browser",
+    "apps/media/backend/shared-browser"
+  ],
+  "symlink_note": "Both formerly mirrored packages/browser/runtime; all useful model imports now address their real package paths. Symlinks are excluded from source-line reduction.",
+  "removed_files": 66,
+  "removed_code_lines_from_preserved_snapshot": 13392,
+  "removed_bytes": 688939,
+  "all_proposed_paths_absent": true
+}

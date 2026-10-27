@@ -1,0 +1,11 @@
+{
+  "baseline": "73de49c before uncommitted root refactor; source totals do not include earlier commits in this PR history",
+  "before_source_files": 545,
+  "current_source_files": 580,
+  "before_source_lines": 103220,
+  "current_source_lines": 95953,
+  "net_source_lines": -7267,
+  "approved_retirement_gross_lines": 13392,
+  "method": "git ls-tree 73de49c vs existing git ls-files --cached --others --exclude-standard; byte splitlines, suffixes .css, .html, .js, .mjs, .py, .scss, .ts",
+  "note": "Includes tests and vendored source with these suffixes. Excludes lockfiles, docs, shell/config and binary assets. Source moves are identified separately in frontend-moves.json and actual-runtime-removal.json. Gross retired lines include the preserved uncommitted runtime; they are not an additional reduction to add to the baseline net total."
+}

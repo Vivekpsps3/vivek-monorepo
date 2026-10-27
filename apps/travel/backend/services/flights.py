@@ -5,18 +5,34 @@ two-day window to FlightAware. The API key stays on the server.
 """
 
 import re
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 
 AEROAPI_URL = "https://aeroapi.flightaware.com/aeroapi/flights/{ident}"
+# GET /flights/{ident} rejects a start or end outside this window.
+LOOKUP_PAST_DAYS = 10
+LOOKUP_FUTURE_DAYS = 2
+OUT_OF_WINDOW = (
+    "FlightAware only returns flights from 10 days ago through 2 days ahead. "
+    "Type the times yourself."
+)
 
 
 class FlightAwareError(Exception):
-    def __init__(self, status_code: int, message: str):
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        *,
+        code: str,
+        retry_after: int | None = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.message = message
+        self.code = code
+        self.retry_after = retry_after
 
 
 def normalize_ident(raw: str) -> str:
@@ -35,9 +51,15 @@ def _text(value) -> str | None:
 
 def _airport(node) -> dict:
     if not isinstance(node, dict):
-        return {"iata": None, "city": None, "name": None, "timezone": None}
+        return {"iata": None, "icao": None, "city": None, "name": None, "timezone": None}
+    iata = _text(node.get("code_iata"))
+    icao = _text(node.get("code_icao"))
+    code = _text(node.get("code"))
+    if not icao and code and code != iata:
+        icao = code
     return {
-        "iata": _text(node.get("code_iata")),
+        "iata": iata,
+        "icao": icao,
         "city": _text(node.get("city")),
         "name": _text(node.get("name")),
         "timezone": _text(node.get("timezone")),
@@ -70,13 +92,17 @@ def parse_flights(payload: dict) -> list[dict]:
             {
                 "ident": _text(flight.get("ident")) or ident,
                 "ident_iata": _text(flight.get("ident_iata")),
+                "operator": _text(flight.get("operator")),
+                "operator_iata": _text(flight.get("operator_iata")),
                 "status": _text(flight.get("status")),
                 "aircraft_type": _text(flight.get("aircraft_type")),
                 "origin_iata": origin["iata"],
+                "origin_icao": origin["icao"],
                 "origin_city": origin["city"],
                 "origin_name": origin["name"],
                 "origin_timezone": origin["timezone"],
                 "destination_iata": destination["iata"],
+                "destination_icao": destination["icao"],
                 "destination_city": destination["city"],
                 "destination_name": destination["name"],
                 "destination_timezone": destination["timezone"],
@@ -99,14 +125,41 @@ def parse_flights(payload: dict) -> list[dict]:
     return parsed
 
 
+def lookup_bounds(depart_on: date, today: date) -> tuple[date, date]:
+    """Inclusive start and exclusive end that AeroAPI will accept.
+
+    End cannot be later than two days ahead, so a departure on that last day
+    has no window. Callers surface that instead of inventing a schedule.
+    """
+    earliest = today - timedelta(days=LOOKUP_PAST_DAYS)
+    latest = today + timedelta(days=LOOKUP_FUTURE_DAYS)
+    if depart_on < earliest or depart_on > latest:
+        raise FlightAwareError(422, OUT_OF_WINDOW, code="schedule_unavailable")
+    end = depart_on + timedelta(days=2)
+    if end > latest:
+        end = latest
+    if end <= depart_on:
+        raise FlightAwareError(422, OUT_OF_WINDOW, code="schedule_unavailable")
+    return depart_on, end
+
+
 def lookup_flights(
-    ident: str, depart_on: date, api_key: str, client: httpx.Client | None = None
+    ident: str,
+    depart_on: date,
+    api_key: str,
+    client: httpx.Client | None = None,
+    *,
+    today: date | None = None,
 ) -> list[dict]:
     """Return normalized candidates. Raises FlightAwareError on provider failure."""
     normalized = normalize_ident(ident)
+    start, end = lookup_bounds(depart_on, today or datetime.now(UTC).date())
+    # The form collects a flight number. ident_type keeps a tail number from
+    # stealing a designator, including a codeshare typed as the marketed flight.
     params = {
-        "start": f"{depart_on.isoformat()}T00:00:00Z",
-        "end": f"{(depart_on + timedelta(days=2)).isoformat()}T00:00:00Z",
+        "ident_type": "designator",
+        "start": f"{start.isoformat()}T00:00:00Z",
+        "end": f"{end.isoformat()}T00:00:00Z",
     }
     headers = {"x-apikey": api_key, "Accept": "application/json"}
     url = AEROAPI_URL.format(ident=normalized)
@@ -114,21 +167,50 @@ def lookup_flights(
     client = client or httpx.Client(timeout=20.0)
     try:
         response = client.get(url, params=params, headers=headers)
+    except httpx.TimeoutException as exc:
+        raise FlightAwareError(
+            504, "FlightAware took too long. Type the times yourself.", code="provider_timeout"
+        ) from exc
     except httpx.HTTPError as exc:
-        raise FlightAwareError(502, "FlightAware could not be reached.") from exc
+        raise FlightAwareError(
+            502, "FlightAware could not be reached.", code="provider_unavailable"
+        ) from exc
     finally:
         if owns_client:
             client.close()
     if response.status_code == 401:
-        raise FlightAwareError(401, "FlightAware rejected the API key.")
+        # Upstream credentials are not a suite session failure.
+        raise FlightAwareError(502, "FlightAware rejected the API key.", code="provider_auth")
     if response.status_code == 404:
         return []
     if response.status_code == 429:
-        raise FlightAwareError(429, "FlightAware rate limit reached. Try again shortly.")
+        raise FlightAwareError(
+            429,
+            "FlightAware rate limit reached. Try again shortly.",
+            code="provider_throttled",
+            retry_after=_retry_after(response),
+        )
     if response.status_code >= 400:
-        raise FlightAwareError(502, "FlightAware could not look up that flight.")
+        raise FlightAwareError(
+            502, "FlightAware could not look up that flight.", code="provider_unavailable"
+        )
     try:
         payload = response.json()
     except ValueError as exc:
-        raise FlightAwareError(502, "FlightAware returned an unreadable response.") from exc
+        raise FlightAwareError(
+            502, "FlightAware returned an unreadable response.", code="provider_unavailable"
+        ) from exc
     return parse_flights(payload)
+
+
+def _retry_after(response: httpx.Response) -> int | None:
+    raw = response.headers.get("retry-after")
+    if raw is None:
+        return None
+    try:
+        seconds = int(raw)
+    except ValueError:
+        return None
+    if seconds < 0 or seconds > 86400:
+        return None
+    return seconds

@@ -37,5 +37,38 @@ class SinkRegexTests(unittest.TestCase):
         self.assertIsNone(self.sink.search("function writeNote() { return 1 }"))
 
 
+class PlatformBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        self.allowed = load_checker()._platform_import
+
+    def test_domain_uses_only_declared_platform_contracts(self):
+        source = Path("apps/travel/backend/routers/integrations.py")
+        for module in ("apps.server.auth", "apps.server.database", "apps.server.errors"):
+            self.assertTrue(self.allowed(source, module), module)
+        for module in (
+            "apps.server.main",
+            "apps.server.migrations",
+            "apps.server.security_headers",
+        ):
+            self.assertFalse(self.allowed(source, module), module)
+
+    def test_factory_and_migrations_are_available_only_to_tests(self):
+        source = Path("apps/travel/backend/tests/test_pto_allocation.py")
+        self.assertTrue(self.allowed(source, "apps.server.main"))
+        self.assertTrue(self.allowed(source, "apps.server.migrations"))
+
+    def test_only_web_composes_declared_feature_entrypoints(self):
+        checker = load_checker()
+        source = checker.ROOT / "apps/web/src/app/routes.ts"
+        public_api = checker.ROOT / "apps/travel/frontend/src/public-api"
+        self.assertTrue(checker._feature_entrypoint(source, public_api))
+        self.assertFalse(
+            checker._feature_entrypoint(source, public_api.parent / "travel.component")
+        )
+        self.assertFalse(
+            checker._feature_entrypoint(checker.ROOT / "apps/media/frontend/src/a.ts", public_api)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

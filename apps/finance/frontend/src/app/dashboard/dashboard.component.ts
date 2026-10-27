@@ -22,8 +22,8 @@ import {
   portfolioDateSummary,
   totalPortfolioValue,
 } from '../utils/portfolio.util';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { MoneyPipe } from '@vivek/ui';
+import { AppDatePipe } from '@vivek/ui';
 import { PluralPipe } from '../shared/pipes/plural.pipe';
 
 @Component({

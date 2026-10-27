@@ -1,15 +1,16 @@
-import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, PLATFORM_ID, inject } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EcdhService } from '../../services/ecdh.service';
-import { MarkdownModule } from 'ngx-markdown';
 
 @Component({
   selector: 'app-secrets',
   standalone: true,
-  imports: [FormsModule, MarkdownModule],
+  imports: [FormsModule],
   templateUrl: './secrets.component.html',
 })
 export class SecretsComponent implements OnInit {
+  private readonly browser = isPlatformBrowser(inject(PLATFORM_ID));
   decryptedMessage = '';
   encryptedData: any = null;
   message = '';
@@ -21,6 +22,7 @@ export class SecretsComponent implements OnInit {
   constructor(private ecdhService: EcdhService, private change: ChangeDetectorRef) {}
 
   ngOnInit(): void {
+    if (!this.browser) return;
     void this.ecdhService.whenReady().then(() => {
       this.keyExchangeComplete = true;
       this.change.markForCheck();

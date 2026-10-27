@@ -81,39 +81,39 @@
             </ul>
           </div>
         }
-        <ui-field label="Name" [error]="fieldError('name')">
+        <ui-field label="Name" [required]="true" [error]="fieldError('name')">
           <input uiFieldControl data-field="name" name="name" [(ngModel)]="form.name" data-dialog-initial-focus (blur)="revalidate()" />
         </ui-field>
-        <ui-field label="Category" [optional]="true">
-          <input uiFieldControl name="category" [(ngModel)]="form.category" />
-        </ui-field>
-        <ui-field label="Amount" [error]="fieldError('amount')">
+        <ui-field label="Amount" [required]="true" [error]="fieldError('amount')">
           <input uiFieldControl data-field="amount" name="amount" type="text" inputmode="decimal" [(ngModel)]="form.amount" (blur)="revalidate()" />
         </ui-field>
         <ui-select
           label="Frequency"
+          [required]="true"
           [options]="frequencyOptions"
           [(value)]="form.frequency" />
-        <label>
-          <span>Next bill date</span>
-          <input name="next_bill_date" type="date" [(ngModel)]="form.next_bill_date" required />
-        </label>
-        <label>
-          <span>Payment account</span>
-          <input name="payment_account" [(ngModel)]="form.payment_account" placeholder="Card or account" />
-        </label>
-        <label>
-          <span>End date</span>
-          <input name="end_date" type="date" [(ngModel)]="form.end_date" />
-        </label>
+        <ui-field label="Next bill date" [required]="true">
+          <input uiFieldControl name="next_bill_date" type="date" [(ngModel)]="form.next_bill_date" required />
+        </ui-field>
         <label class="checkbox-row">
           <input name="is_active" type="checkbox" [(ngModel)]="form.is_active" />
           <span>Active</span>
         </label>
-        <label class="wide">
-          <span>Notes</span>
-          <textarea name="notes" rows="3" [(ngModel)]="form.notes"></textarea>
-        </label>
+        <details class="more-details">
+          <summary>More details</summary>
+          <ui-field label="Category" [optional]="true">
+            <input uiFieldControl name="category" [(ngModel)]="form.category" />
+          </ui-field>
+          <ui-field label="Payment account" [optional]="true">
+            <input uiFieldControl name="payment_account" [(ngModel)]="form.payment_account" placeholder="Visa" />
+          </ui-field>
+          <ui-field label="End date" [optional]="true">
+            <input uiFieldControl name="end_date" type="date" [(ngModel)]="form.end_date" />
+          </ui-field>
+          <ui-field label="Notes" [optional]="true">
+            <textarea uiFieldControl name="notes" rows="3" [(ngModel)]="form.notes"></textarea>
+          </ui-field>
+        </details>
         <div class="modal-actions">
           <ui-button type="button" variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
           <ui-button type="submit" variant="primary" [disabled]="saving">

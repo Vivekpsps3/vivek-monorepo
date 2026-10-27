@@ -4,15 +4,28 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from apps.media.backend.models import Release, UserEntry
+from apps.media.backend.models import CatalogItem, MusicLink, Release, UserEntry
 from apps.media.backend.services.clock import today
-from apps.media.backend.services.records import entry_card, episode_state, iso, progress_label
+from apps.media.backend.services.records import (
+    displayed_status,
+    entry_card,
+    episode_state,
+    iso,
+    progress_label,
+)
+
+_ALBUM_RELATIONS = ("artist-album", "artist-release-group")
+_TRACK_RELATIONS = ("album-recording", "release-group-recording")
 
 
 def build_summary(db: Session, user_id: int) -> dict:
     current = today()
     entries = db.query(UserEntry).filter(UserEntry.user_id == user_id).all()
-    currently = [card_with_progress(entry) for entry in entries if entry.status == "in_progress"]
+    currently = [
+        activity_card(db, entry)
+        for entry in entries
+        if entry.catalog.kind != "artist" and entry.status == "in_progress"
+    ]
     currently.sort(key=lambda item: item["updated_at"] or "", reverse=True)
     reviewed = [entry for entry in entries if entry.review]
     reviewed.sort(key=lambda entry: entry.review_updated_at or entry.updated_at, reverse=True)
@@ -31,7 +44,7 @@ def build_summary(db: Session, user_id: int) -> dict:
         )
     upcoming = []
     for entry in entries:
-        if not entry.anticipated and entry.status != "anticipating":
+        if not is_anticipated(entry):
             continue
         release = primary_release(db, entry.catalog_id)
         when = classify_release(release, current)
@@ -67,9 +80,7 @@ def build_summary(db: Session, user_id: int) -> dict:
         "counts": {
             "library": len(entries),
             "in_progress": len(currently),
-            "anticipated": sum(
-                1 for entry in entries if entry.anticipated or entry.status == "anticipating"
-            ),
+            "anticipated": sum(1 for entry in entries if is_anticipated(entry)),
         },
     }
 
@@ -84,9 +95,18 @@ def next_episodes(db: Session, user_id: int, entries: list[UserEntry] | None = N
             "in_progress",
             "want",
             "anticipating",
+            "completed",
         }:
             continue
         state = episode_state(db, user_id, entry.catalog)
+        if entry.status == "completed":
+            from apps.media.backend.services.metadata import lifecycle
+
+            if (
+                lifecycle(db, entry.catalog_id)["state"] != "ongoing"
+                or state["next_episode"] is None
+            ):
+                continue
         chosen = state["next_episode"] or (
             state["upcoming_episodes"][0] if state["upcoming_episodes"] else None
         )
@@ -104,15 +124,76 @@ def next_episodes(db: Session, user_id: int, entries: list[UserEntry] | None = N
                 "title": chosen.get("title"),
                 "air_date": chosen.get("air_date"),
                 "state": "next" if aired else "upcoming",
+                "lifecycle": lifecycle(db, entry.catalog_id)
+                if entry.status == "completed"
+                else None,
             }
         )
     return found[:4]
+
+
+def is_anticipated(entry: UserEntry) -> bool:
+    if entry.catalog.kind == "artist":
+        return False
+    return bool(entry.anticipated or entry.status == "anticipating")
 
 
 def card_with_progress(entry: UserEntry) -> dict:
     card = entry_card(entry)
     card["progress_label"] = progress_label(entry)
     return card
+
+
+def activity_card(db: Session, entry: UserEntry) -> dict:
+    """The song or album is the listen. The artist, when linked, is only the relationship."""
+    card = card_with_progress(entry)
+    artist = linked_artist(db, entry)
+    if artist is not None:
+        card["artist"] = artist
+    return card
+
+
+def linked_artist(db: Session, entry: UserEntry) -> dict | None:
+    kind = entry.catalog.kind
+    if kind == "album":
+        album_ids = [entry.catalog_id]
+    elif kind == "track":
+        album_ids = [
+            row[0]
+            for row in db.query(MusicLink.parent_catalog_id)
+            .filter(
+                MusicLink.child_catalog_id == entry.catalog_id,
+                MusicLink.relation.in_(_TRACK_RELATIONS),
+            )
+            .all()
+        ]
+    else:
+        return None
+    if not album_ids:
+        return None
+    found = (
+        db.query(CatalogItem)
+        .join(MusicLink, MusicLink.parent_catalog_id == CatalogItem.id)
+        .filter(
+            MusicLink.child_catalog_id.in_(album_ids),
+            MusicLink.relation.in_(_ALBUM_RELATIONS),
+            CatalogItem.kind == "artist",
+        )
+        .order_by(MusicLink.position, MusicLink.id)
+        .first()
+    )
+    if found is None:
+        return None
+    saved = (
+        db.query(UserEntry)
+        .filter(UserEntry.user_id == entry.user_id, UserEntry.catalog_id == found.id)
+        .one_or_none()
+    )
+    return {
+        "title": found.title,
+        "entry_id": None if saved is None else saved.id,
+        "status": None if saved is None else displayed_status(saved),
+    }
 
 
 def primary_release(db: Session, catalog_id: int) -> Release | None:

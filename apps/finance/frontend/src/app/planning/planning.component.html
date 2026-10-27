@@ -10,13 +10,13 @@
       <div>
         <span>Current net worth</span>
         <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
-        <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open assets and debts</a>
+        <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }">Open assets and debts</a>
         <small>Oldest valid balance date: {{ inputs?.oldest_balance_as_of | appDate }}</small>
       </div>
       <div>
         <span>Portfolio value</span>
         <strong>{{ formatMoney(inputs?.net_worth_portfolio) }}</strong>
-        <a routerLink="/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
+        <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
         <small>
           Oldest quote {{ inputs?.oldest_portfolio_quote_date | appDate }} ·
           position {{ inputs?.oldest_portfolio_position_date | appDate }}
@@ -25,13 +25,13 @@
       <div>
         <span>Annual take-home pay</span>
         <strong>{{ formatMoney((inputs?.avg_monthly_income || 0) * 12) }}</strong>
-        <a routerLink="/recurring" [queryParams]="{ t: 'pay' }">Open jobs and pay</a>
+        <a routerLink="/finance/recurring" [queryParams]="{ t: 'pay' }">Open jobs and pay</a>
         <small>Active job-income schedules</small>
       </div>
       <div>
         <span>Scheduled annual costs</span>
         <strong>{{ formatMoney(inputs?.recurring_annual_spending) }}</strong>
-        <a routerLink="/recurring" [queryParams]="{ t: 'spend' }">Open bills and subscriptions</a>
+        <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">Open bills and subscriptions</a>
         <small>Active scheduled costs · {{ formatMoney(inputs?.annual_fixed_expenses) }} fixed · {{ formatMoney(inputs?.annual_subscriptions) }} subscriptions</small>
       </div>
     </div>

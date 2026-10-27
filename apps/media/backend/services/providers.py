@@ -1,20 +1,44 @@
-"""Public metadata adapters. Personal listening and watching history is never sent."""
+"""Public metadata adapters. Personal listening and watching history is never sent.
+
+One search and one detail call per kind. Keys stay on the server. Search rows are
+only enough to choose. Add loads detail by source id and does not copy arbitrary
+browser fields into the shared catalog. MusicBrainz search, catalog, and detail
+share MB_PACE (one request a second). A 429 pushes that pace by Retry-After and
+is not retried immediately. Other calls use the per-request timeout.
+
+| Kind | Search | Detail | Coverage |
+| movie | TMDB /3/search/movie, or the public search page | /3/movie/{id}, or the public movie page | official with a key, otherwise extraction |
+| movie | iTunes search, only when MEDIA_SCRAPE_MODE is on | iTunes lookup by track id | official |
+| tv | TVMaze /search/shows | /shows/{id} and /episodes | official; lifecycle and episodes |
+| tv | TMDB /3/search/tv when a key is set | /3/tv/{id} | official; no TMDB series call without a key |
+| artist, album, track | MusicBrainz ws/2 search | lookup by MBID | official; cover art is a Cover Art Archive URL |
+| book | Open Library search.json | works or editions JSON | official; a year is not stored as a day |
+| game | RAWG /games when RAWG_API_KEY is set | /games/{id} | official |
+| game | Steam storesearch when RAWG is unset | appdetails | keyless; no Metacritic score |
+
+Adapters retain up to 50 candidates per source before relevance and pagination.
+Detail is one id. Public query rows are bounded process memory only. A failed detail leaves the saved title in place with metadata_pending.
+"""
 
 import hashlib
 import html
 import json
 import os
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import quote, unquote, urlparse
 
 import httpx
 from sqlalchemy.orm import Session
 
 from apps.media.backend.models import ProviderCache, utc_now
+from apps.media.backend.services.search_cache import PartialSearchError, SearchCache, SearchResult
+from apps.server.database import release_for_provider_io
 
 UA = "VivekMedia/1.0 (personal media journal)"
 TTL = timedelta(hours=24)
@@ -26,29 +50,108 @@ MBID = re.compile(
 )
 
 
+def _mapping(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _text(value) -> str:
+    return value if isinstance(value, str) else ""
+
+
 def scrape_mode() -> bool:
     return os.getenv("MEDIA_SCRAPE_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def provider_status() -> dict[str, str]:
-    rawg_key = bool(os.getenv("RAWG_API_KEY", "").strip())
-    status = {
-        # Movie search uses the official API when a key is set, and TMDB's
-        # public search page otherwise. Series search uses TVMaze either way.
-        "tmdb": "ok",
-        "musicbrainz": "ok",
-        "openlibrary": "ok",
-        "rawg": "ok" if rawg_key else "unconfigured",
-        "tvmaze": "ok",
-    }
-    if not rawg_key:
-        status["steam"] = "ok"
-    if scrape_mode():
-        status["itunes"] = "ok"
-    return status
+def _monotonic() -> float:
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+class Pace:
+    """The next allowed call time for one upstream. Shared by every request."""
+
+    def __init__(self, gap: float):
+        self.gap = gap
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def wait(self) -> None:
+        with self._lock:
+            moment = _monotonic()
+            delay = self._next - moment
+            if delay > 3.0:
+                raise FuturesTimeout()
+            scheduled = moment if delay <= 0 else self._next
+            self._next = scheduled + max(self.gap, 0.0)
+        if delay > 0:
+            _sleep(delay)
+
+    def defer(self, retry_after: str | None) -> None:
+        delay = self.gap
+        if isinstance(retry_after, str) and retry_after.strip().isdigit():
+            delay = min(float(retry_after.strip()), 30.0)
+        with self._lock:
+            moment = _monotonic()
+            self._next = max(self._next, moment + max(delay, 0.0))
+
+
+# MusicBrainz asks for about one request per second across the whole process.
+MB_PACE = Pace(1.0)
+DETAIL_TIMEOUT = 3.0
+
+KIND_SOURCES = {
+    "movie": frozenset({"tmdb", "itunes"}),
+    "tv": frozenset({"tmdb", "tvmaze"}),
+    "book": frozenset({"openlibrary"}),
+    "game": frozenset({"rawg", "steam"}),
+    "artist": frozenset({"musicbrainz"}),
+    "album": frozenset({"musicbrainz"}),
+    "track": frozenset({"musicbrainz"}),
+}
+
+
+def sources_for_kind(kind: str) -> frozenset[str]:
+    return KIND_SOURCES.get(kind, frozenset())
+
+
+def provenance(provider: str, coverage: str) -> dict:
+    fetched = datetime.now(UTC).replace(microsecond=0).isoformat()
+    return {"provider": provider, "coverage": coverage, "fetched_at": fetched}
+
+
+def _with_provenance(rows, provider: str, coverage: str) -> list:
+    mark = provenance(provider, coverage)
+    stamped = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        if not isinstance(item.get("provenance"), dict):
+            item["provenance"] = dict(mark)
+        stamped.append(item)
+    return stamped
+
+
+def mb_get(http: httpx.Client, url: str, params=None, headers=None):
+    """One MusicBrainz call. 429 moves the shared pace and does not retry."""
+    MB_PACE.wait()
+    if headers is None:
+        response = http.get(url, params=params)
+    else:
+        response = http.get(url, params=params, headers=headers)
+    if getattr(response, "status_code", 200) == 429:
+        header = getattr(response, "headers", {}).get("Retry-After")
+        MB_PACE.defer(header if isinstance(header, str) else None)
+        response.raise_for_status()
+    return response
 
 
 SEARCH_TIMEOUT = 3.0
+SEARCH_CACHE = SearchCache()
+_SEARCH_POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="media-source")
 HEALTH_TTL = 60.0
 _HEALTH: dict[str, tuple[float, str]] = {}
 
@@ -91,117 +194,225 @@ def _now() -> float:
 
 
 def _invoke(job):
+    started = _now()
+
+    def deadline(request):
+        remaining = SEARCH_TIMEOUT - (_now() - started)
+        if remaining <= 0:
+            raise FuturesTimeout()
+        request.extensions["timeout"] = dict.fromkeys(
+            ("connect", "read", "write", "pool"), remaining
+        )
+
     http = httpx.Client(
         timeout=SEARCH_TIMEOUT,
         headers={"User-Agent": UA, "Accept": "application/json"},
         follow_redirects=True,
+        event_hooks={"request": [deadline]},
     )
-    started = _now()
     try:
         payload = job(http)
     finally:
         http.close()
-    # The pool's wait is a backstop. A job that returns after its own budget
-    # is still a timeout, so tests can advance a fake clock instead of sleeping.
     if _now() - started > SEARCH_TIMEOUT + 0.5:
         raise FuturesTimeout()
     return payload
 
 
-def search(db: Session, query: str, kind: str | None, client: httpx.Client | None = None) -> dict:
-    status = provider_status()
-    results = []
+def search(
+    db: Session,
+    query: str,
+    kind: str | None,
+    client: httpx.Client | None = None,
+    *,
+    offset: int = 0,
+    limit: int = 20,
+    retry_errors: bool = False,
+) -> dict:
+    """Rank public identities before pagination. Only saved flags use the database."""
+    query = " ".join(query.split())
+    kind = None if kind in (None, "", "all") else kind
     jobs = []
+    missing = []
     tmdb_key = bool(os.getenv("TMDB_API_KEY", "").strip())
     rawg_key = bool(os.getenv("RAWG_API_KEY", "").strip())
-    if kind in (None, "", "movie", "tv"):
-        if tmdb_key:
-            jobs.append(("tmdb", lambda http: tmdb_search(http, query, kind)))
-        elif kind in (None, "", "movie"):
-            jobs.append(("tmdb", lambda http: tmdb_public_search(http, query)))
-        if kind in (None, "", "tv"):
-            jobs.append(("tvmaze", lambda http: tvmaze_search(http, query)))
-        if scrape_mode() and kind in (None, "", "movie"):
-            jobs.append(("itunes", lambda http: itunes_search(http, query)))
-    if kind in (None, "", "track", "album", "artist"):
 
-        def music(http):
-            try:
-                return musicbrainz_search(http, query, kind)
-            except Exception:
-                return musicbrainz_search(http, query, kind)
+    def add(name, coverage, job):
+        jobs.append((name, coverage, job))
 
-        jobs.append(("musicbrainz", music))
-    if kind in (None, "", "book"):
-        jobs.append(("openlibrary", lambda http: openlibrary_search(http, query)))
-    if kind in (None, "", "game"):
+    if tmdb_key and kind in (None, "movie", "tv"):
+        add("tmdb", "official", lambda http: tmdb_search(http, query, kind))
+    elif kind in (None, "movie"):
+        add("tmdb", "extraction", lambda http: tmdb_public_search(http, query))
+    if kind in (None, "tv"):
+        add("tvmaze", "official", lambda http: tvmaze_search(http, query))
+    if scrape_mode() and kind in (None, "movie"):
+        add("itunes", "official", lambda http: itunes_search(http, query))
+    if kind in (None, "track", "album", "artist"):
+        add("musicbrainz", "official", lambda http: musicbrainz_search(http, query, kind))
+    if kind in (None, "book"):
+        add("openlibrary", "official", lambda http: openlibrary_search(http, query))
+    if kind in (None, "game"):
         if rawg_key:
-            jobs.append(("rawg", lambda http: rawg_search(http, query)))
+            add("rawg", "official", lambda http: rawg_search(http, query))
         else:
-            jobs.append(("steam", lambda http: steam_search(http, query)))
-    pending = []
-    for name, job in jobs:
-        if status.get(name) == "unconfigured":
-            continue
-        key = f"{name}:{kind or 'all'}:{query.lower()}"
-        if name == "tmdb" and not tmdb_key:
-            key += ":page"
-        if name == "musicbrainz":
-            key += ":rg-cover"
-        hit = None if client is not None else _cache_get(db, key)
-        if hit is not None:
-            results.extend(hit)
-            status[name] = sticky_status(name, "ok")
-            continue
-        pending.append((name, key, job))
+            missing.append(("rawg", "unconfigured"))
+            add("steam", "keyless", lambda http: steam_search(http, query))
+    cache = SEARCH_CACHE if client is None else SearchCache(max_entries=0)
+    release_for_provider_io(db)
+    capability = hashlib.sha256(
+        (
+            os.getenv("TMDB_API_KEY", "")
+            + ":"
+            + os.getenv("RAWG_API_KEY", "")
+            + ":"
+            + str(scrape_mode())
+        ).encode()
+    ).hexdigest()[:12]
+    results = []
+    status = dict(missing)
+    sources = [
+        {
+            "id": name,
+            "state": state,
+            "kinds": ["game"],
+            "coverage": "official",
+            "cached": False,
+            "retryable": False,
+            "reason": "This source is not configured. Steam coverage remains available.",
+        }
+        for name, state in missing
+    ]
+
+    def work(name, coverage, job):
+        key = f"v2:{name}:{kind or 'all'}:{query.casefold()}:{coverage}:{capability}"
+        if retry_errors:
+            cache.retry_failure(key)
+
+        def load():
+            try:
+                rows = job(client) if client is not None else _invoke(job)
+            except PartialSearchError as error:
+                raise PartialSearchError(
+                    _with_provenance(error.rows, name, coverage), error.failed_kinds
+                ) from error
+            return _with_provenance(rows, name, coverage)
+
+        return cache.run(key, load)
+
+    def accept(name, coverage, outcome):
+        results.extend(outcome.rows)
+        status[name] = sticky_status(name, "ok" if outcome.state == "ok" else "error")
+        kinds = [
+            media_kind
+            for media_kind, names in KIND_SOURCES.items()
+            if name in names and (kind is None or kind == media_kind)
+        ]
+        sources.append(
+            {
+                "id": name,
+                "state": outcome.state,
+                "kinds": ["movie"] if name == "tmdb" and coverage == "extraction" else kinds,
+                "failed_kinds": list(outcome.failed_kinds),
+                "coverage": coverage,
+                "cached": outcome.cached,
+                "fetched_at": outcome.fetched_at,
+                "retryable": outcome.state != "ok",
+                "reason": {
+                    "partial": "Some media types from this source could not finish. Matching results are still shown.",
+                    "timeout": "This source timed out.",
+                    "throttled": "This source is rate limited.",
+                    "provider_auth": "This source needs valid credentials.",
+                    "unavailable": "This source is unavailable.",
+                }.get(outcome.state),
+            }
+        )
+
     if client is not None:
-        for name, key, job in pending:
-            try:
-                payload = job(client)
-                _cache_put(db, key, payload)
-                results.extend(payload)
-                status[name] = sticky_status(name, "ok")
-            except Exception:
-                status[name] = sticky_status(name, "error")
-    elif pending:
-        pool = ThreadPoolExecutor(max_workers=len(pending))
-        payloads: dict[str, list] = {}
+        for name, coverage, job in jobs:
+            accept(name, coverage, work(name, coverage, job))
+    elif jobs:
+        pending = {
+            _SEARCH_POOL.submit(work, name, coverage, job): (name, coverage)
+            for name, coverage, job in jobs
+        }
         try:
-            futures = {pool.submit(_invoke, job): (name, key) for name, key, job in pending}
-            try:
-                for future in as_completed(futures, timeout=SEARCH_TIMEOUT + 0.5):
-                    name, key = futures.pop(future)
-                    try:
-                        payload = future.result()
-                        _cache_put(db, key, payload)
-                        payloads[name] = payload
-                        status[name] = sticky_status(name, "ok")
-                    except Exception:
-                        status[name] = sticky_status(name, "error")
-            except FuturesTimeout:
-                for name, _key in futures.values():
-                    status[name] = sticky_status(name, "error")
-        finally:
-            pool.shutdown(wait=False, cancel_futures=True)
-        for name, _key, _job in pending:
-            results.extend(payloads.get(name, []))
-    return {"query": query, "results": prefer_unique(results)[:40], "providers": status}
+            for future in as_completed(pending, timeout=SEARCH_TIMEOUT + 0.5):
+                name, coverage = pending.pop(future)
+                accept(name, coverage, future.result())
+        except FuturesTimeout:
+            for future, (name, coverage) in pending.items():
+                future.cancel()
+                accept(name, coverage, SearchResult([], "timeout", datetime.now(UTC).isoformat()))
+    ranked = rank_results(prefer_unique(results), query)
+    return {
+        "query": query,
+        "results": ranked[offset : offset + limit],
+        "providers": status,
+        "sources": sorted(sources, key=lambda source: source["id"]),
+        "partial": any(source["state"] not in {"ok", "unconfigured"} for source in sources),
+        "offset": offset,
+        "limit": limit,
+        "total": len(ranked),
+        "has_more": len(ranked) > offset + limit,
+    }
 
 
 def prefer_unique(results: list[dict]) -> list[dict]:
+    """A name/year collision does not prove two works are the same identity."""
     seen = set()
     unique = []
     for item in results:
-        title = " ".join((item.get("title") or "").casefold().split())
-        year = item.get("year")
-        creator = " ".join((item.get("creator") or "").casefold().split())
-        key = (item.get("kind"), title, year if isinstance(year, int) else creator)
-        if title and key in seen:
+        source, identity, kind = item.get("source"), item.get("source_id"), item.get("kind")
+        key = (source, str(identity), kind) if source and identity is not None else None
+        if key is not None and key in seen:
             continue
-        if title:
+        if key is not None:
             seen.add(key)
         unique.append(item)
     return unique
+
+
+def rank_results(results: list[dict], query: str) -> list[dict]:
+    def normalized(value):
+        return " ".join(re.sub(r"[^\w\s]", " ", str(value).casefold()).split())
+
+    wanted = normalized(query)
+
+    def relevance(item):
+        title = normalized(item.get("title") or "")
+        return (
+            0 if title == wanted else 1 if title.startswith(wanted) else 2 if wanted in title else 3
+        )
+
+    # Interleave kinds at equal relevance, so exact movie and series matches both survive a cap.
+    groups: dict[int, dict[str, list[dict]]] = {}
+    for item in sorted(
+        results,
+        key=lambda row: (
+            relevance(row),
+            normalized(row.get("title") or ""),
+            str(row.get("year") or ""),
+            str(row.get("source") or ""),
+            str(row.get("source_id") or ""),
+        ),
+    ):
+        groups.setdefault(relevance(item), {}).setdefault(
+            str(item.get("kind") or "unknown"), []
+        ).append(item)
+    ranked = []
+    for score in sorted(groups):
+        buckets = groups[score]
+        while any(buckets.values()):
+            for media_kind in ("movie", "tv", "book", "game", "artist", "album", "track"):
+                if buckets.get(media_kind):
+                    ranked.append(buckets[media_kind].pop(0))
+            for media_kind in sorted(
+                (key for key in buckets if key not in KIND_SOURCES), key=lambda key: str(key or "")
+            ):
+                if buckets[media_kind]:
+                    ranked.append(buckets[media_kind].pop(0))
+    return ranked
 
 
 def plain_text(value, limit: int = 400) -> str | None:
@@ -221,7 +432,9 @@ def cached_call(db: Session, key: str, job):
     row = db.get(ProviderCache, key)
     if row is not None and as_utc(row.fetched_at) >= datetime.now(UTC) - TTL:
         return json.loads(row.payload)
+    release_for_provider_io(db)
     payload = job()
+    row = db.get(ProviderCache, key)
     if row is None:
         row = ProviderCache(cache_key=key, payload=json.dumps(payload), fetched_at=utc_now())
         db.add(row)
@@ -258,7 +471,7 @@ def tmdb_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
     key = os.getenv("TMDB_API_KEY", "").strip()
     if not key:
         return []
-    kinds = ["movie", "tv"] if kind in (None, "") else [kind]
+    kinds = ["movie", "tv"] if kind is None or kind == "" else [kind]
     found = []
     for media in kinds:
         response = http.get(
@@ -266,7 +479,7 @@ def tmdb_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
             params={"query": query, "include_adult": "false", "api_key": key},
         )
         response.raise_for_status()
-        for item in response.json().get("results", [])[:8]:
+        for item in response.json().get("results", [])[:50]:
             if isinstance(item, dict):
                 found.append(tmdb_media_hit(item, media))
     return found
@@ -387,7 +600,7 @@ def parse_tmdb_search_page(page: str, media: str = "movie") -> list[dict]:
                 "episodes": [],
             }
         )
-        if len(found) >= 8:
+        if len(found) >= 50:
             break
     return found
 
@@ -424,14 +637,9 @@ def tmdb_popular(http: httpx.Client) -> list[dict]:
 
 
 def popular_movies(db: Session, http: httpx.Client) -> list[dict]:
-    key = "tmdb:popular:movies"
-    cached = _cache_get(db, key)
-    if isinstance(cached, list) and cached:
-        return cached
-    rows = tmdb_popular(http)
-    if rows:
-        _cache_put(db, key, rows)
-    return rows
+    release_for_provider_io(db)
+    capability = "official" if os.getenv("TMDB_API_KEY", "").strip() else "extraction"
+    return SEARCH_CACHE.run(f"tmdb:popular:movies:{capability}", lambda: tmdb_popular(http)).rows
 
 
 def tmdb_rating(item: dict) -> list[dict]:
@@ -494,21 +702,21 @@ SKIPPED_ALBUM_TYPES = {
 
 def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list[dict]:
     found = []
-    failed = False
+    failures: list[tuple[str, Exception]] = []
 
-    def attempt(load):
-        nonlocal failed
+    def attempt(media_kind, load):
         try:
             found.extend(load())
-        except Exception:
-            failed = True
+        except Exception as error:
+            failures.append((media_kind, error))
 
     if kind in (None, "", "track"):
 
         def recordings():
-            response = http.get(
+            response = mb_get(
+                http,
                 "https://musicbrainz.org/ws/2/recording",
-                params={"query": query, "fmt": "json", "limit": 8},
+                params={"query": query, "fmt": "json", "limit": 50},
             )
             response.raise_for_status()
             rows = []
@@ -525,22 +733,21 @@ def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list
                 )
             return rows
 
-        attempt(recordings)
+        attempt("track", recordings)
     if kind in (None, "", "album"):
 
         def albums():
-            response = http.get(
+            response = mb_get(
+                http,
                 "https://musicbrainz.org/ws/2/release",
-                params={"query": f"{query} AND primarytype:album", "fmt": "json", "limit": 8},
+                params={"query": f"{query} AND primarytype:album", "fmt": "json", "limit": 50},
             )
             response.raise_for_status()
             rows = []
             for item in response.json().get("releases", []):
                 artist = artist_name(item.get("artist-credit"))
                 release_id = item.get("id") if isinstance(item.get("id"), str) else None
-                group = (
-                    item.get("release-group") if isinstance(item.get("release-group"), dict) else {}
-                )
+                group = _mapping(item.get("release-group"))
                 group_id = group.get("id") if isinstance(group.get("id"), str) else None
                 result = music_result(
                     "album", release_id, item.get("title"), artist, item.get("date")
@@ -551,25 +758,28 @@ def musicbrainz_search(http: httpx.Client, query: str, kind: str | None) -> list
                 rows.append(result)
             return rows
 
-        attempt(albums)
+        attempt("album", albums)
     if kind in (None, "", "artist"):
-        attempt(lambda: musicbrainz_artists(http, query))
-    if not found and failed:
-        raise RuntimeError("MusicBrainz search failed")
+        attempt("artist", lambda: musicbrainz_artists(http, query))
+    if failures:
+        if not found:
+            raise failures[0][1]
+        raise PartialSearchError(found, tuple(media_kind for media_kind, _error in failures))
     return found
 
 
 def musicbrainz_artists(http: httpx.Client, query: str) -> list[dict]:
-    response = http.get(
+    response = mb_get(
+        http,
         "https://musicbrainz.org/ws/2/artist",
-        params={"query": query, "fmt": "json", "limit": 8},
+        params={"query": query, "fmt": "json", "limit": 50},
     )
     response.raise_for_status()
     found = []
     for item in response.json().get("artists", []):
         if not isinstance(item, dict) or not item.get("id"):
             continue
-        span = item.get("life-span") if isinstance(item.get("life-span"), dict) else {}
+        span = _mapping(item.get("life-span"))
         begin = span.get("begin") or ""
         year = (
             int(begin[:4])
@@ -593,24 +803,58 @@ def musicbrainz_artists(http: httpx.Client, query: str) -> list[dict]:
     return found
 
 
+_RELEASE_TYPES = {
+    "single": "single",
+    "ep": "ep",
+    "live": "live",
+    "remix": "remix",
+    "compilation": "compilation",
+}
+
+
+def _mb_release_type(release_type: str | None) -> str:
+    if not release_type or release_type == "studio":
+        return "album"
+    return _RELEASE_TYPES.get(release_type, "album")
+
+
+def _keep_release_group(group: dict, release_type: str | None) -> bool:
+    """Studio browse hides non-studio rows. Other filters keep only that type."""
+    if not release_type or release_type == "studio":
+        return not _skipped_album(group)
+    wanted = release_type.casefold()
+    primary = str(group.get("primary-type") or "").casefold()
+    secondary = group.get("secondary-types") or []
+    names = [primary] if primary else []
+    if isinstance(secondary, list):
+        names.extend(str(item).casefold() for item in secondary if item)
+    if not names:
+        return True
+    return wanted in names
+
+
 def musicbrainz_artist_catalog(
     http: httpx.Client,
     artist_id: str,
     group_offset: int = 0,
     release_offset: int = 0,
+    max_pages: int = 1,
+    release_type: str | None = None,
 ) -> dict:
-    """Official studio albums and the songs on them. No personal ratings.
+    """One bounded page of public releases and songs. This saves nothing.
 
-    Offsets continue a previous page. Callers look up songs for albums that
-    arrived without a track list, a few at a time, so a long discography can
-    finish on a later view.
+    The default is studio albums. Singles, EPs, live, remix, and compilation
+    rows are a separate request so a studio page does not imply they are absent.
+    Offsets continue a previous page. max_pages keeps one request bounded.
     """
+    mb_type = _mb_release_type(release_type)
     groups, groups_partial, group_next = _mb_pages(
         http,
         "https://musicbrainz.org/ws/2/release-group",
-        {"artist": artist_id, "type": "album", "fmt": "json"},
+        {"artist": artist_id, "type": mb_type, "fmt": "json"},
         "release-groups",
         "release-group-count",
+        max_pages=max_pages,
         start_offset=group_offset,
     )
     releases, releases_partial, release_next = _mb_pages(
@@ -618,22 +862,21 @@ def musicbrainz_artist_catalog(
         "https://musicbrainz.org/ws/2/release",
         {
             "artist": artist_id,
-            "type": "album",
+            "type": mb_type,
             "status": "official",
             "inc": "recordings release-groups",
             "fmt": "json",
         },
         "releases",
         "release-count",
+        max_pages=max_pages,
         start_offset=release_offset,
     )
     tracks_by_group: dict[str, list[dict]] = {}
     for release in releases:
         if not isinstance(release, dict):
             continue
-        group = (
-            release.get("release-group") if isinstance(release.get("release-group"), dict) else {}
-        )
+        group = _mapping(release.get("release-group"))
         group_id = group.get("id")
         if not isinstance(group_id, str):
             continue
@@ -646,7 +889,7 @@ def musicbrainz_artist_catalog(
     for group in groups:
         if not isinstance(group, dict) or not isinstance(group.get("id"), str):
             continue
-        if group["id"] in seen or _skipped_album(group):
+        if group["id"] in seen or not _keep_release_group(group, release_type):
             continue
         seen.add(group["id"])
         released = group.get("first-release-date") or ""
@@ -696,10 +939,8 @@ def _mb_pages(
     offset = start_offset if isinstance(start_offset, int) and start_offset > 0 else 0
     total = None
     partial = False
-    for page in range(max_pages):
-        if page:
-            time.sleep(1.05)
-        response = http.get(url, params={**params, "limit": 100, "offset": offset})
+    for _page in range(max_pages):
+        response = mb_get(http, url, params={**params, "limit": 100, "offset": offset})
         response.raise_for_status()
         body = response.json()
         if not isinstance(body, dict):
@@ -728,7 +969,7 @@ def _tracks_from_release(release: dict) -> list[dict]:
         for track in medium.get("tracks") or []:
             if not isinstance(track, dict):
                 continue
-            recording = track.get("recording") if isinstance(track.get("recording"), dict) else {}
+            recording = _mapping(track.get("recording"))
             title = track.get("title") or recording.get("title")
             if not isinstance(title, str) or not title.strip():
                 continue
@@ -749,7 +990,8 @@ def _tracks_from_release(release: dict) -> list[dict]:
 
 def musicbrainz_collaborators(http: httpx.Client, artist_id: str) -> list[dict]:
     """People and groups linked to this artist. Cached by the journal, not scored."""
-    response = http.get(
+    response = mb_get(
+        http,
         f"https://musicbrainz.org/ws/2/artist/{artist_id}",
         params={"inc": "artist-rels", "fmt": "json"},
     )
@@ -879,7 +1121,8 @@ def musicbrainz_artist_image(http: httpx.Client, artist_id: str) -> str | None:
     artist = mbid(artist_id)
     if not artist:
         return None
-    response = http.get(
+    response = mb_get(
+        http,
         f"https://musicbrainz.org/ws/2/artist/{artist}",
         params={"inc": "url-rels", "fmt": "json"},
     )
@@ -976,6 +1219,7 @@ def cached_artist_portraits(
             continue
         need_wiki.append(artist_id)
     if need_wiki:
+        release_for_provider_io(db)
         try:
             found = wikidata_artist_images(http, need_wiki)
         except Exception:
@@ -1000,6 +1244,7 @@ def cached_artist_portraits(
                         {"artwork_url": None, "checked": "wiki"},
                     )
     for artist_id in need_deep:
+        release_for_provider_io(db)
         try:
             url = musicbrainz_artist_image(http, artist_id)
         except Exception:
@@ -1035,49 +1280,6 @@ def attach_artist_portraits(db: Session, results: list) -> None:
             row["artwork_url"] = url
 
 
-def musicbrainz_release_detail(http: httpx.Client, release_id: str) -> dict:
-    """Songs and the release-group cover for one album. The image itself stays on the cover host."""
-    response = http.get(
-        f"https://musicbrainz.org/ws/2/release/{release_id}",
-        params={"inc": "recordings release-groups", "fmt": "json"},
-    )
-    if response.status_code == 404:
-        return {"release_group_id": None, "artwork_url": None, "tracks": []}
-    response.raise_for_status()
-    body = response.json()
-    if not isinstance(body, dict):
-        return {"release_group_id": None, "artwork_url": None, "tracks": []}
-    raw_group = body.get("release-group")
-    group = raw_group if isinstance(raw_group, dict) else {}
-    raw_id = group.get("id")
-    group_id = raw_id if isinstance(raw_id, str) else None
-    return {
-        "release_group_id": mbid(group_id),
-        "artwork_url": cover_art_url(release_id, group_id),
-        "tracks": _tracks_from_release(body),
-    }
-
-
-def release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
-    return _release_group_tracks(http, group_id)
-
-
-def _release_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
-    response = http.get(
-        "https://musicbrainz.org/ws/2/release",
-        params={"release-group": group_id, "inc": "recordings", "fmt": "json", "limit": 25},
-    )
-    response.raise_for_status()
-    best: list[dict] = []
-    for release in response.json().get("releases") or []:
-        if not isinstance(release, dict):
-            continue
-        tracks = _tracks_from_release(release)
-        if len(tracks) > len(best):
-            best = tracks
-    return best
-
-
 def artist_name(credit) -> str | None:
     if not isinstance(credit, list) or not credit:
         return None
@@ -1104,7 +1306,9 @@ def music_result(
     if year:
         releases.append(
             {
-                "released_on": released[:10] if precision == "day" else f"{year}-01-01",
+                "released_on": released[:10]
+                if precision == "day" and released is not None
+                else f"{year}-01-01",
                 "precision": precision,
                 "status": "released",
             }
@@ -1127,7 +1331,7 @@ def music_result(
 
 
 def openlibrary_search(http: httpx.Client, query: str) -> list[dict]:
-    response = http.get("https://openlibrary.org/search.json", params={"q": query, "limit": 8})
+    response = http.get("https://openlibrary.org/search.json", params={"q": query, "limit": 50})
     response.raise_for_status()
     found = []
     for item in response.json().get("docs", []):
@@ -1161,6 +1365,52 @@ def openlibrary_search(http: httpx.Client, query: str) -> list[dict]:
     return [item for item in found if item["source_id"]]
 
 
+def _tvmaze_show(show: dict) -> dict | None:
+    if not show.get("id"):
+        return None
+    premiered = show.get("premiered") or ""
+    year = int(premiered[:4]) if len(premiered) >= 4 and premiered[:4].isdigit() else None
+    image = _mapping(show.get("image"))
+    artwork = image.get("medium") or image.get("original")
+    rating = _mapping(show.get("rating"))
+    average = rating.get("average")
+    ratings = []
+    if isinstance(average, (int, float)) and average > 0:
+        ratings.append(
+            {
+                "provider": "tvmaze",
+                "label": "TVMaze",
+                "value": round(float(average), 1),
+                "scale": "0–10",
+                "votes": None,
+            }
+        )
+    channel = (
+        show.get("network") if isinstance(show.get("network"), dict) else show.get("webChannel")
+    )
+    creator = channel.get("name") if isinstance(channel, dict) else None
+    releases = release_from_day(premiered) if len(premiered) >= 10 else []
+    if not releases and year:
+        releases = [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}]
+    return {
+        "source": "tvmaze",
+        "source_id": str(show.get("id")),
+        "kind": "tv",
+        "title": show.get("name") or "Untitled",
+        "creator": creator,
+        "year": year,
+        "overview": plain_text(show.get("summary")),
+        "artwork_url": artwork
+        if isinstance(artwork, str) and artwork.startswith("https://")
+        else None,
+        "genres": [genre for genre in show.get("genres") or [] if isinstance(genre, str)],
+        "external_ratings": ratings,
+        "extra": {"lifecycle": show.get("status")},
+        "releases": releases,
+        "episodes": [],
+    }
+
+
 def tvmaze_search(http: httpx.Client, query: str) -> list[dict]:
     response = http.get("https://api.tvmaze.com/search/shows", params={"q": query})
     response.raise_for_status()
@@ -1168,67 +1418,24 @@ def tvmaze_search(http: httpx.Client, query: str) -> list[dict]:
     if not isinstance(payload, list):
         return []
     found = []
-    for row in payload[:8]:
+    for row in payload[:50]:
         show = row.get("show") if isinstance(row, dict) else None
-        if not isinstance(show, dict) or not show.get("id"):
+        if not isinstance(show, dict):
             continue
-        premiered = show.get("premiered") or ""
-        year = int(premiered[:4]) if len(premiered) >= 4 and premiered[:4].isdigit() else None
-        image = show.get("image") if isinstance(show.get("image"), dict) else {}
-        artwork = image.get("medium") or image.get("original")
-        rating = show.get("rating") if isinstance(show.get("rating"), dict) else {}
-        average = rating.get("average")
-        ratings = []
-        if isinstance(average, (int, float)) and average > 0:
-            ratings.append(
-                {
-                    "provider": "tvmaze",
-                    "label": "TVMaze",
-                    "value": round(float(average), 1),
-                    "scale": "0–10",
-                    "votes": None,
-                }
-            )
-        channel = (
-            show.get("network") if isinstance(show.get("network"), dict) else show.get("webChannel")
-        )
-        creator = channel.get("name") if isinstance(channel, dict) else None
-        found.append(
-            {
-                "source": "tvmaze",
-                "source_id": str(show.get("id")),
-                "kind": "tv",
-                "title": show.get("name") or "Untitled",
-                "creator": creator,
-                "year": year,
-                "overview": plain_text(show.get("summary")),
-                "artwork_url": artwork
-                if isinstance(artwork, str) and artwork.startswith("https://")
-                else None,
-                "genres": [genre for genre in show.get("genres") or [] if isinstance(genre, str)],
-                "external_ratings": ratings,
-                "extra": {},
-                "releases": release_from_day(premiered)
-                if len(premiered) >= 10
-                else (
-                    [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}]
-                    if year
-                    else []
-                ),
-                "episodes": [],
-            }
-        )
+        item = _tvmaze_show(show)
+        if item is not None:
+            found.append(item)
     return found
 
 
 def itunes_search(http: httpx.Client, query: str) -> list[dict]:
     response = http.get(
         "https://itunes.apple.com/search",
-        params={"term": query, "media": "movie", "entity": "movie", "limit": 8},
+        params={"term": query, "media": "movie", "entity": "movie", "limit": 50},
     )
     response.raise_for_status()
     found = []
-    for item in response.json().get("results", [])[:8]:
+    for item in response.json().get("results", [])[:50]:
         track_id = item.get("trackId")
         if not track_id:
             continue
@@ -1265,7 +1472,7 @@ def rawg_search(http: httpx.Client, query: str) -> list[dict]:
     if not key:
         return []
     response = http.get(
-        "https://api.rawg.io/api/games", params={"key": key, "search": query, "page_size": 8}
+        "https://api.rawg.io/api/games", params={"key": key, "search": query, "page_size": 50}
     )
     response.raise_for_status()
     found = []
@@ -1327,7 +1534,7 @@ def steam_search(http: httpx.Client, query: str) -> list[dict]:
     if not isinstance(items, list):
         return []
     found: list[dict] = []
-    for item in items[:8]:
+    for item in items[:50]:
         if not isinstance(item, dict) or item.get("type") not in {None, "app", "game"}:
             continue
         app_id = item.get("id")
@@ -1363,3 +1570,597 @@ def steam_search(http: httpx.Client, query: str) -> list[dict]:
             }
         )
     return found
+
+
+def _positive_int(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text.isdigit():
+        return None
+    number = int(text)
+    if number < 1:
+        return None
+    return str(number)
+
+
+def _media_id(source_id: str, media: str) -> str | None:
+    text = source_id.strip()
+    prefix = f"{media}:"
+    if text.startswith(prefix):
+        text = text[len(prefix) :]
+    return _positive_int(text)
+
+
+def _loose_release(text: str | None) -> tuple[int | None, list]:
+    """ISO day, ISO month, or a bare year. Anything else is not a date."""
+    if not isinstance(text, str):
+        return None, []
+    label = text.strip()
+    if len(label) >= 10 and label[:4].isdigit() and label[4] == "-" and label[7] == "-":
+        day = label[:10]
+        if day[5:7].isdigit() and day[8:10].isdigit():
+            year = int(day[:4])
+            return year, [{"released_on": day, "precision": "day", "status": "released"}]
+    if len(label) == 7 and label[:4].isdigit() and label[4] == "-" and label[5:7].isdigit():
+        year = int(label[:4])
+        month = int(label[5:7])
+        if 1 <= month <= 12:
+            released = f"{year}-{month:02d}-01"
+            return year, [{"released_on": released, "precision": "month", "status": "released"}]
+    if len(label) == 4 and label.isdigit():
+        year = int(label)
+        return year, [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}]
+    return None, []
+
+
+def _https_artwork(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text.startswith("https://") or len(text) > 1000:
+        return None
+    return text
+
+
+def _genre_names(items) -> list[str]:
+    names = []
+    for item in items or []:
+        if isinstance(item, str) and item.strip():
+            names.append(item.strip())
+        elif isinstance(item, dict) and isinstance(item.get("name"), str) and item["name"].strip():
+            names.append(item["name"].strip())
+    return names[:12]
+
+
+OG_META = re.compile(
+    r"<meta\s+[^>]*property=[\"']og:([^\"']+)[\"'][^>]*content=[\"']([^\"']*)[\"']"
+    r"|<meta\s+[^>]*content=[\"']([^\"']*)[\"'][^>]*property=[\"']og:([^\"']+)[\"']",
+    re.I,
+)
+TITLE_YEAR = re.compile(r"\((\d{4})\)\s*$")
+
+
+def _og(page: str) -> dict[str, str]:
+    found: dict[str, str] = {}
+    if not isinstance(page, str):
+        return found
+    for match in OG_META.finditer(page):
+        if match.group(1):
+            key, value = match.group(1), match.group(2)
+        else:
+            value, key = match.group(3), match.group(4)
+        found.setdefault(key.lower(), html.unescape(value))
+    return found
+
+
+def parse_tmdb_public_detail(page: str, movie_id: str) -> dict | None:
+    """Title, year, and poster from one public TMDB movie page. No score."""
+    meta = _og(page)
+    raw_title = (meta.get("title") or "").strip()
+    if not raw_title or not _positive_int(movie_id):
+        return None
+    head = re.split(r"\s+[|—–]\s+", raw_title, maxsplit=1)[0].strip()
+    year_match = TITLE_YEAR.search(head)
+    year = int(year_match.group(1)) if year_match else None
+    if year_match:
+        head = head[: year_match.start()].strip()
+    if not head:
+        return None
+    releases = []
+    if year:
+        releases = [{"released_on": f"{year}-01-01", "precision": "year", "status": "released"}]
+    return {
+        "source": "tmdb",
+        "source_id": f"movie:{movie_id}",
+        "kind": "movie",
+        "title": head,
+        "creator": None,
+        "year": year,
+        "overview": plain_text(meta.get("description"), 4000),
+        "artwork_url": tmdb_poster_url(meta.get("image") or ""),
+        "genres": [],
+        "external_ratings": [],
+        "extra": {},
+        "releases": releases,
+        "episodes": [],
+        "provenance": provenance("tmdb", "extraction"),
+    }
+
+
+def _detail_base(source: str, source_id: str, kind: str, title: str, coverage: str) -> dict:
+    return {
+        "source": source,
+        "source_id": source_id,
+        "kind": kind,
+        "title": title or "Untitled",
+        "creator": None,
+        "year": None,
+        "overview": None,
+        "artwork_url": None,
+        "genres": [],
+        "external_ratings": [],
+        "extra": {},
+        "releases": [],
+        "episodes": [],
+        "provenance": provenance(source, coverage),
+    }
+
+
+def tmdb_movie_detail(http: httpx.Client, source_id: str) -> dict | None:
+    movie_id = _media_id(source_id, "movie")
+    if not movie_id:
+        return None
+    key = os.getenv("TMDB_API_KEY", "").strip()
+    if not key:
+        response = http.get(
+            f"https://www.themoviedb.org/movie/{movie_id}",
+            headers={"Accept": "text/html", "User-Agent": UA},
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        row = parse_tmdb_public_detail(response.text, movie_id)
+        if row is not None:
+            row["source_id"] = source_id.strip()
+        return row
+    response = http.get(
+        f"https://api.themoviedb.org/3/movie/{movie_id}",
+        params={"api_key": key},
+    )
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict) or not item.get("id"):
+        return None
+    row = tmdb_media_hit(item, "movie")
+    row["source_id"] = source_id.strip()
+    row["overview"] = plain_text(item.get("overview"), 4000)
+    row["genres"] = _genre_names(item.get("genres"))
+    row["provenance"] = provenance("tmdb", "official")
+    return row
+
+
+def tmdb_tv_detail(http: httpx.Client, source_id: str) -> dict | None:
+    show_id = _media_id(source_id, "tv")
+    if not show_id or not os.getenv("TMDB_API_KEY", "").strip():
+        return None
+    key = os.getenv("TMDB_API_KEY", "").strip()
+    response = http.get(f"https://api.themoviedb.org/3/tv/{show_id}", params={"api_key": key})
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict) or not item.get("id"):
+        return None
+    row = tmdb_media_hit(item, "tv")
+    row["source_id"] = source_id.strip()
+    row["overview"] = plain_text(item.get("overview"), 4000)
+    row["genres"] = _genre_names(item.get("genres"))
+    networks = item.get("networks") if isinstance(item.get("networks"), list) else []
+    if networks and isinstance(networks[0], dict):
+        name = networks[0].get("name")
+        if isinstance(name, str) and name.strip():
+            row["creator"] = name.strip()
+    extra: dict[str, Any] = {}
+    status = item.get("status")
+    if isinstance(status, str) and status.strip():
+        extra["lifecycle"] = status.strip()
+    if isinstance(item.get("in_production"), bool):
+        extra["in_production"] = item["in_production"]
+    count = item.get("number_of_episodes")
+    if isinstance(count, int) and count >= 0:
+        extra["episode_count"] = count
+    row["extra"] = extra
+    row["provenance"] = provenance("tmdb", "official")
+    return row
+
+
+def tvmaze_detail(http: httpx.Client, source_id: str) -> dict | None:
+    show_id = _positive_int(source_id)
+    if not show_id:
+        return None
+    response = http.get(f"https://api.tvmaze.com/shows/{show_id}")
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    show = response.json()
+    if not isinstance(show, dict):
+        return None
+    row = _tvmaze_show(show)
+    if row is None:
+        return None
+    row["source_id"] = source_id.strip()
+    status = _text(show.get("status"))
+    if status.strip():
+        row["extra"] = {"lifecycle": status.strip()}
+    row["provenance"] = provenance("tvmaze", "official")
+    row["extra"]["episode_completeness"] = "complete"
+    try:
+        from apps.media.backend.services.followups import tvmaze_episodes
+
+        episodes = tvmaze_episodes(http, show_id)
+    except Exception:
+        row["extra"]["episode_completeness"] = "partial"
+        episodes = []
+    cleaned = []
+    for item in episodes:
+        if not isinstance(item, dict):
+            continue
+        try:
+            season = int(item.get("season_number", -1))
+            number = int(item.get("episode_number", -1))
+        except (TypeError, ValueError):
+            continue
+        if season < 0 or number < 1:
+            continue
+        cleaned.append(
+            {
+                "season_number": season,
+                "episode_number": number,
+                "title": item.get("title") if isinstance(item.get("title"), str) else None,
+                "air_date": item.get("air_date") if isinstance(item.get("air_date"), str) else None,
+                "overview": plain_text(item.get("overview"), 4000),
+                "source_id": item.get("source_id"),
+            }
+        )
+    row["episodes"] = cleaned
+    return row
+
+
+def itunes_detail(http: httpx.Client, source_id: str) -> dict | None:
+    track_id = _positive_int(source_id)
+    if not track_id:
+        return None
+    response = http.get("https://itunes.apple.com/lookup", params={"id": track_id})
+    response.raise_for_status()
+    payload = response.json()
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if not isinstance(results, list) or not results:
+        return None
+    item = results[0]
+    if not isinstance(item, dict) or str(item.get("trackId")) != track_id:
+        return None
+    released = item.get("releaseDate") or ""
+    year = int(released[:4]) if len(released) >= 4 and released[:4].isdigit() else None
+    artwork = item.get("artworkUrl100") or ""
+    if isinstance(artwork, str) and "100x100bb" in artwork:
+        artwork = artwork.replace("100x100bb", "300x300bb")
+    genre = item.get("primaryGenreName")
+    return {
+        "source": "itunes",
+        "source_id": source_id.strip(),
+        "kind": "movie",
+        "title": item.get("trackName") or "Untitled",
+        "creator": item.get("artistName") if isinstance(item.get("artistName"), str) else None,
+        "year": year,
+        "overview": plain_text(item.get("longDescription") or item.get("shortDescription")),
+        "artwork_url": artwork
+        if isinstance(artwork, str) and artwork.startswith("https://")
+        else None,
+        "genres": [genre] if isinstance(genre, str) and genre else [],
+        "external_ratings": [],
+        "extra": {},
+        "releases": release_from_day(released[:10]) if len(released) >= 10 else [],
+        "episodes": [],
+        "provenance": provenance("itunes", "official"),
+    }
+
+
+def _openlibrary_record(source_id: str) -> tuple[str, str] | None:
+    text = source_id.strip()
+    if not text or "/" in text or len(text) > 40:
+        return None
+    if text.endswith("W"):
+        return "work", f"https://openlibrary.org/works/{text}.json"
+    if text.endswith("M"):
+        return "edition", f"https://openlibrary.org/books/{text}.json"
+    return None
+
+
+def openlibrary_detail(http: httpx.Client, source_id: str) -> dict | None:
+    located = _openlibrary_record(source_id)
+    if located is None:
+        return None
+    record, url = located
+    response = http.get(url)
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict):
+        return None
+    title = _text(item.get("title"))
+    if not title.strip():
+        return None
+    description = item.get("description")
+    if isinstance(description, dict):
+        description = description.get("value")
+    authors = []
+    for author in item.get("authors") or []:
+        if isinstance(author, dict) and isinstance(author.get("name"), str):
+            authors.append(author["name"])
+        elif isinstance(author, str):
+            authors.append(author)
+    if not authors and isinstance(item.get("by_statement"), str):
+        authors.append(item["by_statement"])
+    dated = item.get("first_publish_date") or item.get("publish_date")
+    year, releases = _loose_release(dated if isinstance(dated, str) else None)
+    covers = item.get("covers") if isinstance(item.get("covers"), list) else []
+    cover = covers[0] if covers and isinstance(covers[0], int) else None
+    row = _detail_base("openlibrary", source_id.strip(), "book", title.strip(), "official")
+    row["creator"] = authors[0] if authors else None
+    row["year"] = year
+    row["overview"] = plain_text(description, 4000) if isinstance(description, str) else None
+    row["artwork_url"] = f"https://covers.openlibrary.org/b/id/{cover}-M.jpg" if cover else None
+    row["releases"] = releases
+    row["extra"] = {"record": record}
+    return row
+
+
+def rawg_detail(http: httpx.Client, source_id: str) -> dict | None:
+    game_id = _positive_int(source_id)
+    key = os.getenv("RAWG_API_KEY", "").strip()
+    if not game_id or not key:
+        return None
+    response = http.get(f"https://api.rawg.io/api/games/{game_id}", params={"key": key})
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict) or not item.get("id"):
+        return None
+    released = item.get("released") or ""
+    year, releases = _loose_release(released if isinstance(released, str) else None)
+    if not releases and isinstance(released, str) and len(released) >= 10:
+        releases = release_from_day(released)
+        if releases and year is None and released[:4].isdigit():
+            year = int(released[:4])
+    rating = item.get("rating")
+    ratings = []
+    if isinstance(rating, (int, float)) and rating > 0:
+        ratings.append(
+            {
+                "provider": "rawg",
+                "label": "RAWG",
+                "value": round(float(rating), 2),
+                "scale": "0–5",
+                "votes": item.get("ratings_count")
+                if isinstance(item.get("ratings_count"), int)
+                else None,
+            }
+        )
+    platforms = [
+        row.get("platform", {}).get("name")
+        for row in item.get("platforms") or []
+        if isinstance(row, dict)
+    ]
+    names = [name for name in platforms if isinstance(name, str) and name]
+    row = _detail_base(
+        "rawg", source_id.strip(), "game", item.get("name") or "Untitled", "official"
+    )
+    row["year"] = year
+    description = item.get("description_raw") or item.get("description")
+    row["overview"] = plain_text(description, 4000) if isinstance(description, str) else None
+    row["artwork_url"] = _https_artwork(item.get("background_image"))
+    row["genres"] = _genre_names(item.get("genres"))
+    row["external_ratings"] = ratings
+    row["extra"] = {"platforms": names} if names else {}
+    row["releases"] = releases
+    return row
+
+
+def _steam_platforms(platforms: dict) -> list[str]:
+    return [
+        label
+        for key, label in (("windows", "Windows"), ("mac", "Mac"), ("linux", "Linux"))
+        if platforms.get(key) is True
+    ]
+
+
+def steam_detail(http: httpx.Client, source_id: str) -> dict | None:
+    app_id = _positive_int(source_id)
+    if not app_id:
+        return None
+    response = http.get(
+        "https://store.steampowered.com/api/appdetails",
+        params={"appids": app_id},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    entry = payload.get(app_id) if isinstance(payload, dict) else None
+    if not isinstance(entry, dict) or entry.get("success") is not True:
+        return None
+    item = entry.get("data") if isinstance(entry.get("data"), dict) else None
+    if not item or not isinstance(item.get("name"), str) or not item["name"].strip():
+        return None
+    released = item.get("release_date") if isinstance(item.get("release_date"), dict) else {}
+    coming = released.get("coming_soon") is True
+    label = _text(released.get("date"))
+    year = None
+    releases: list = []
+    parsed = None
+    for fmt in ("%d %b, %Y", "%b %d, %Y"):
+        try:
+            parsed = datetime.strptime(label.strip(), fmt)
+        except ValueError:
+            continue
+        break
+    if parsed is not None:
+        year = parsed.year
+        releases = [
+            {
+                "released_on": parsed.date().isoformat(),
+                "precision": "day",
+                "status": "scheduled" if coming else "released",
+            }
+        ]
+    else:
+        year, releases = _loose_release(label)
+        if coming and releases:
+            releases = [{**releases[0], "status": "scheduled"}]
+    names = _steam_platforms(
+        item.get("platforms") if isinstance(item.get("platforms"), dict) else {}
+    )
+    row = _detail_base("steam", source_id.strip(), "game", item["name"].strip(), "keyless")
+    row["year"] = year
+    row["overview"] = plain_text(item.get("short_description"), 4000)
+    row["artwork_url"] = _https_artwork(item.get("header_image"))
+    row["extra"] = {"platforms": names} if names else {}
+    row["releases"] = releases
+    row["external_ratings"] = []
+    return row
+
+
+def musicbrainz_artist_detail(http: httpx.Client, source_id: str) -> dict | None:
+    artist_id = mbid(source_id)
+    if not artist_id:
+        return None
+    response = mb_get(
+        http,
+        f"https://musicbrainz.org/ws/2/artist/{artist_id}",
+        params={"fmt": "json", "inc": "url-rels"},
+    )
+    if getattr(response, "status_code", 200) == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict) or not item.get("name"):
+        return None
+    span = _mapping(item.get("life-span"))
+    begin = _text(span.get("begin"))
+    year = int(begin[:4]) if len(begin) >= 4 and begin[:4].isdigit() else None
+    note = item.get("disambiguation") if isinstance(item.get("disambiguation"), str) else None
+    row = music_result("artist", source_id.strip(), item.get("name"), item.get("type"), None)
+    row["artwork_url"] = image_from_relations(item.get("relations"))
+    row["year"] = year
+    row["overview"] = (note or "")[:400] or None
+    row["releases"] = []
+    row["provenance"] = provenance("musicbrainz", "official")
+    return row
+
+
+def musicbrainz_album_detail(http: httpx.Client, source_id: str) -> dict | None:
+    release_id = mbid(source_id)
+    if not release_id:
+        return None
+    response = mb_get(
+        http,
+        f"https://musicbrainz.org/ws/2/release/{release_id}",
+        params={"inc": "artists release-groups", "fmt": "json"},
+    )
+    if getattr(response, "status_code", 200) == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict) or not item.get("title"):
+        return None
+    group = _mapping(item.get("release-group"))
+    group_id = group.get("id") if isinstance(group.get("id"), str) else None
+    row = music_result(
+        "album",
+        source_id.strip(),
+        item.get("title"),
+        artist_name(item.get("artist-credit")),
+        item.get("date") if isinstance(item.get("date"), str) else None,
+    )
+    row["artwork_url"] = cover_art_url(release_id, group_id)
+    extra = {}
+    if mbid(group_id):
+        extra["release_group_id"] = group_id
+    if isinstance(group.get("primary-type"), str):
+        extra["primary_type"] = group["primary-type"]
+    row["extra"] = extra
+    row["provenance"] = provenance("musicbrainz", "official")
+    return row
+
+
+def musicbrainz_track_detail(http: httpx.Client, source_id: str) -> dict | None:
+    recording_id = mbid(source_id)
+    if not recording_id:
+        return None
+    response = mb_get(
+        http,
+        f"https://musicbrainz.org/ws/2/recording/{recording_id}",
+        params={"inc": "artist-credits", "fmt": "json"},
+    )
+    if getattr(response, "status_code", 200) == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict) or not item.get("title"):
+        return None
+    released = (
+        item.get("first-release-date") if isinstance(item.get("first-release-date"), str) else None
+    )
+    row = music_result(
+        "track",
+        source_id.strip(),
+        item.get("title"),
+        artist_name(item.get("artist-credit")),
+        released,
+    )
+    row["provenance"] = provenance("musicbrainz", "official")
+    return row
+
+
+def lookup_detail(source: str, kind: str, source_id: str) -> dict | None:
+    """Authoritative detail for one saved id. None means metadata stays pending."""
+    if (
+        source not in sources_for_kind(kind)
+        or not isinstance(source_id, str)
+        or not source_id.strip()
+    ):
+        return None
+    http = httpx.Client(
+        timeout=DETAIL_TIMEOUT,
+        headers={"User-Agent": UA, "Accept": "application/json"},
+        follow_redirects=True,
+    )
+    try:
+        if source == "tmdb" and kind == "movie":
+            return tmdb_movie_detail(http, source_id)
+        if source == "tmdb" and kind == "tv":
+            return tmdb_tv_detail(http, source_id)
+        if source == "tvmaze" and kind == "tv":
+            return tvmaze_detail(http, source_id)
+        if source == "itunes" and kind == "movie":
+            return itunes_detail(http, source_id)
+        if source == "openlibrary" and kind == "book":
+            return openlibrary_detail(http, source_id)
+        if source == "rawg" and kind == "game":
+            return rawg_detail(http, source_id)
+        if source == "steam" and kind == "game":
+            return steam_detail(http, source_id)
+        if source == "musicbrainz" and kind == "artist":
+            return musicbrainz_artist_detail(http, source_id)
+        if source == "musicbrainz" and kind == "album":
+            return musicbrainz_album_detail(http, source_id)
+        if source == "musicbrainz" and kind == "track":
+            return musicbrainz_track_detail(http, source_id)
+        return None
+    except Exception:
+        return None
+    finally:
+        http.close()

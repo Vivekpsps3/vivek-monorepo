@@ -1,7 +1,7 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { httpErrorInterceptor } from '../core/http-error.interceptor';
+import { httpErrorInterceptor } from '@vivek/ui';
 import { EncryptedBrokerageStageStore } from './encrypted-store.brokerage-stages';
 import { EncryptedRecordPersistence } from './encrypted-store.persistence';
 import { EncryptedStoreService } from './encrypted-store.service';

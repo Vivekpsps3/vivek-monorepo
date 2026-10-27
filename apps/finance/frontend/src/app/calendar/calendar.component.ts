@@ -40,8 +40,8 @@ import {
   UiPageHeaderComponent,
   UiIconComponent,
 } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { MoneyPipe } from '@vivek/ui';
+import { AppDatePipe } from '@vivek/ui';
 
 interface CalendarDay {
   date: string;

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { AuthService } from '../auth/auth.service';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
 import { VaultUnlockComponent } from './vault-unlock.component';
 
@@ -17,7 +17,7 @@ describe('VaultUnlockComponent', () => {
     TestBed.configureTestingModule({
       imports: [VaultUnlockComponent],
       providers: [
-        { provide: AuthService, useValue: auth },
+        { provide: SESSION_CONTEXT, useValue: auth },
         { provide: VaultService, useValue: vault },
         provideRouter([]),
       ],
@@ -31,9 +31,38 @@ describe('VaultUnlockComponent', () => {
     fixture.componentInstance.passphrase = 'correct horse battery staple';
     await fixture.componentInstance.unlock();
 
+    expect(fixture.nativeElement.querySelector('.nav-tab, .mobile-tab')).toBeNull();
     expect(vault.unlock).toHaveBeenCalledWith('correct horse battery staple');
     expect(vault.upgradeKdfIfNeeded).toHaveBeenCalledWith('correct horse battery staple');
-    expect(router.navigateByUrl).toHaveBeenCalled();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/finance/embed');
     expect(fixture.componentInstance.busy).toBeFalse();
+  });
+
+  it('keeps the passphrase when unlock fails', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['loadSession']);
+    auth.currentUser = { username: 'vivek', email: 'vivek@pending.local' };
+    const vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
+    vault.isUnlocked = false;
+    vault.refreshStatus.and.resolveTo({ exists: true });
+    vault.unlock.and.rejectWith(new Error('Unlock failed'));
+
+    TestBed.configureTestingModule({
+      imports: [VaultUnlockComponent],
+      providers: [
+        { provide: SESSION_CONTEXT, useValue: auth },
+        { provide: VaultService, useValue: vault },
+        provideRouter([]),
+      ],
+    });
+    const fixture: ComponentFixture<VaultUnlockComponent> = TestBed.createComponent(VaultUnlockComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    fixture.componentInstance.passphrase = 'correct horse battery staple';
+    await fixture.componentInstance.unlock();
+
+    expect(fixture.componentInstance.passphrase).toBe('correct horse battery staple');
+    expect(fixture.componentInstance.error).toBe('Unlock failed');
+    expect(vault.upgradeKdfIfNeeded).not.toHaveBeenCalled();
   });
 });

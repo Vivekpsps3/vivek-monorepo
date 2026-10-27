@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
-import { AuthService } from '../auth/auth.service';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
 import { FinanceService } from './finance.service';
 import { MarketRefreshCoordinatorService } from './market-refresh-coordinator.service';
@@ -39,7 +39,7 @@ describe('MarketRefreshCoordinatorService', () => {
     TestBed.configureTestingModule({
       providers: [
         MarketRefreshCoordinatorService,
-        { provide: AuthService, useValue: auth },
+        { provide: SESSION_CONTEXT, useValue: auth },
         { provide: FinanceService, useValue: finance },
         { provide: VaultService, useValue: vault },
         { provide: Router, useValue: router },

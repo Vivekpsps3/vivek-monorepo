@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Keep shared package and application imports within their intended boundaries."""
 
-from pathlib import Path
 import re
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SUFFIXES = {".ts", ".tsx", ".js", ".mjs", ".cjs", ".py"}
@@ -53,6 +52,26 @@ def import_target(path: Path, module: str) -> Path | None:
     return None
 
 
+# Domain code may use the site database, the principal, and — from tests only —
+# the app factory. It may not import another domain or the rest of the server.
+_PLATFORM = (
+    "apps.server.database",
+    "apps.server.auth",
+    "apps.server.errors",
+    "apps.server.identity",
+    "apps.server.api_key",
+    "apps.server.rate_limit",
+)
+
+
+def _platform_import(source: Path, module: str) -> bool:
+    if any(module == name or module.startswith(name + ".") for name in _PLATFORM):
+        return True
+    if module in {"apps.server.main", "apps.server.migrations"}:
+        return "tests" in source.parts
+    return False
+
+
 def app_name(path: Path) -> str | None:
     try:
         relative = path.resolve().relative_to(ROOT)
@@ -61,6 +80,21 @@ def app_name(path: Path) -> str | None:
     if len(relative.parts) >= 2 and relative.parts[0] == "apps":
         return relative.parts[1]
     return None
+
+
+def _feature_entrypoint(source: Path, target: Path) -> bool:
+    if (
+        app_name(source) == "web"
+        and source.name.endswith(".spec.ts")
+        and target.resolve() == ROOT / "apps/finance/frontend/src/testing"
+    ):
+        return True
+    return app_name(source) == "web" and target.resolve() in {
+        ROOT / "apps/site/src/public-api",
+        ROOT / "apps/finance/frontend/src/public-api",
+        ROOT / "apps/travel/frontend/src/public-api",
+        ROOT / "apps/media/frontend/src/public-api",
+    }
 
 
 def main() -> int:
@@ -87,9 +121,12 @@ def main() -> int:
                 target_app = app_name(target) if target else None
                 if (
                     target_app
+                    and target is not None
                     and source_app
                     and target_app != source_app
                     and source_app != "server"
+                    and not _platform_import(source, module)
+                    and not _feature_entrypoint(source, target)
                 ):
                     errors.append(
                         f"cross-app source import: {source.relative_to(ROOT)} -> {module} (apps/{target_app})"

@@ -1,14 +1,14 @@
 import importlib.util
 import json
 import os
-from pathlib import Path
 import sqlite3
 import sys
+from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from apps.server.migrate import migrate, check_integrity
+from apps.server.migrate import check_integrity, migrate
 
 
 def test_fresh_database_and_backup_restore(tmp_path):
@@ -53,10 +53,11 @@ def test_foreign_keys_and_owner_validation(tmp_path):
 
 
 def test_migration_rejects_nonempty_unknown_tables(tmp_path):
-    from apps.finance.backend.models import Base as Finance
-    from apps.travel.backend.models import Base as Travel
-    from apps.media.backend.models import Base as Media
     from sqlalchemy import create_engine
+
+    from apps.finance.backend.models import Base as Finance
+    from apps.media.backend.models import Base as Media
+    from apps.travel.backend.models import Base as Travel
 
     sources = tmp_path / "sources"
     sources.mkdir()

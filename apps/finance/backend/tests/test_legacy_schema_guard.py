@@ -58,6 +58,7 @@ def test_guard_allows_empty_legacy_schema_and_passwordless_users():
 
 def _upgrade_file(url, monkeypatch, target="head"):
     from pathlib import Path
+
     from alembic import command
     from alembic.config import Config
 
@@ -71,9 +72,11 @@ def _upgrade_file(url, monkeypatch, target="head"):
 
 def test_cleanup_preserves_ciphertext_and_keys_and_stays_clean_on_restart(tmp_path, monkeypatch):
     from sqlalchemy import inspect
-    from apps.finance.backend import database
-    from apps.finance.backend.models import Base, User, UserVault, EncryptedRecord, UserRole
     from sqlalchemy.orm import Session
+
+    from apps.finance.backend import database
+    from apps.finance.backend.models import Base, EncryptedRecord, UserVault
+    from apps.server.identity.models import User, UserRole
 
     url = f"sqlite:///{tmp_path / 'vault.db'}"
     engine = create_engine(url)
@@ -154,6 +157,7 @@ def test_head_upgrade_refuses_legacy_data_before_any_schema_changes(tmp_path, mo
 
 def test_fresh_file_startup_creates_only_current_schema(tmp_path, monkeypatch):
     from sqlalchemy import inspect
+
     from apps.finance.backend import database
 
     url = f"sqlite:///{tmp_path / 'fresh.db'}"
@@ -181,6 +185,7 @@ def test_fresh_file_startup_creates_only_current_schema(tmp_path, monkeypatch):
 
 def test_finance_offline_sql_refuses_the_site_database_url(tmp_path, monkeypatch):
     from pathlib import Path
+
     from alembic import command
     from alembic.config import Config
 

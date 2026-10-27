@@ -3,16 +3,16 @@
 
 import argparse
 import fcntl
-from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import sqlite3
 import tempfile
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 # Hourly snapshots use the site- prefix and SITE_BACKUP_KEEP (usually 1).
 # Pre-migration snapshots use premigrate-<rev>- and are never pruned by that glob.

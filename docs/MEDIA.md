@@ -1,59 +1,43 @@
 # Media journal
 
-> Current unified development/deployment commands are in [Operations](OPERATIONS.md).
-> Standalone app commands below are historical domain references.
+Media owns its domain code under `apps/media`; the root Angular web app loads its `frontend` routes at `/media/`. FastAPI APIs retain `/media/api`. The shared server validates session/CSRF in-process and supplies the request database session. The unified SQLite file stores app-owned Media tables; ordinary saved reads do not fetch providers. Finance vault access is unnecessary. Use the root workflow in [Development](DEVELOPMENT.md).
 
-Media is a separate app in `apps/media/`. The suite hosts it at `/media/`. It checks the finance session cookie by calling the finance API. It does not open `finance.db`, the encrypted vault, or travel data.
+## Membership and personal data
 
-Personal data is private to the signed-in user: library entries, the one overall rating and review, optional experiences, episode progress, season watched marks and season ratings, artist album scores, artist song scores, favorites, tags, and anticipation. Album and song scores are stored on their own rows. They do not change the artist rating, and the artist rating does not change them. Catalog rows hold public metadata and can be shared by provider id. There is no public profile, feed, or social action.
+Library entries, ratings, reviews, progress, favorites, experiences and artist portrait choices belong to the signed-in user. Public catalog metadata is shared by stable provider identity. Saving/following an artist does not save albums or songs. Artists use the same card treatment and a collapsed saved-child expansion; Browse discography is a separate bounded discovery flow. Add each album/song explicitly. Removing an artist preserves independently saved music. Artists are Following or Unfollowed, while real albums and songs carry listening progress.
 
-`GET /api/summary` returns a short authenticated snapshot for the Hub: items in progress, recent review excerpts, anticipated releases, and the next episode of a followed show. It does not include the full review text.
+Library filters, counts, Unicode title order and pagination run in SQL. Page-scoped relationship/progress queries replace per-card lookups. Zero is a valid rating; clearing the field means unrated. Legacy nested album/song scores remain preserved by the membership migration, including conflict provenance.
 
-`GET /api/calendar?month=YYYY-MM` returns that month for the signed-in user. Omit `month` to use the current month.
+Detail forms use explicit Save changes. Updates send changed fields and keep review-base conflict checks. Newer typing during an in-flight save stays on the form. Up to ten per-tab recovery drafts are scoped to the signed-in user: matching-version drafts restore locally, stale drafts require Restore/Discard, and nothing is sent until Save. Sign-out/expiry clears private drafts. Failed operations stay local and retain editable input.
 
-## Logging
+Artist photos use explicit Wikimedia Commons search, preview and selection, with license/source attribution. Broken candidates cannot be selected. The server resolves the selected source identity instead of fetching a browser-supplied URL. The override belongs to that user; reset reveals catalog artwork again without changing anyone else's choice.
 
-Manual entry is enough. From the journal: search, or Add, then set a status, a rating out of 10 in half steps, and an optional review. Unrated is an empty rating. Zero is a real score.
+## Search and saved metadata
 
-An experience (a viewing, reread, listen, or replay) has its own date, notes, and optional score. Saving one does not change the overall rating or review.
+Search is transient. A process cache is bounded by TTL, entry count, bytes and in-flight requests; search writes no query history or library rows to SQLite. Saving an item hydrates authoritative metadata by source identity and persists it independently of later search/provider outages. Same-named works are not merged by title alone. Relevance ranks before the result cap, with Previous/More results pagination.
 
-Follow an artist from search to save them and load their studio albums and the songs on those albums from MusicBrainz. Rate the artist, each album, and each song separately. A blank score stays unrated. Zero is a real score. Clearing one score does not clear the others.
+The UI shows the active type/query, source coverage, partial failure, missing configuration, timeout, throttling, empty results and retry. Deterministic The Gentlemen movie/series fixtures cover ambiguous titles and partial source failure. They establish regression behavior rather than proving a past intermittent production cause.
 
-TV progress is manual. Mark the next aired episode, or toggle a single episode. Future episodes stay upcoming. On a series, each season also has its own watched checkbox and rating. Those scores do not change the show rating, the summary, the review, or any episode mark. The summary and review stay the one written opinion for the whole show. A season does not have its own description. A season with no stored episodes can still be added. Clearing that season, when it is not watched and has no rating, removes it. Book and game progress is an optional page, percent, or hour value.
+| Source | Capability |
+| --- | --- |
+| TMDB | Movies/series using `TMDB_API_KEY`; public movie-search fallback without a key |
+| TVMaze | Keyless series search and explicit saved-show episode refresh |
+| MusicBrainz | Artist/album/song identity and on-demand discography, with paced requests |
+| Cover Art Archive | Album artwork by release identity |
+| Open Library | Books, editions and covers |
+| RAWG / Steam | Games with RAWG key, otherwise keyless Steam search |
+| iTunes Search | Optional additional movie results when `MEDIA_SCRAPE_MODE=1` |
+| Wikimedia Commons | Explicit artist portrait search/selection and attribution |
+| Wikidata | Explicit calendar follow-up discovery for saved movie activity |
 
-Release dates keep the precision they were given. A month or a year is not shown as a specific day. `MEDIA_TODAY=YYYY-MM-DD` overrides the clock in tests.
+Keys stay server-side. Source-specific identity, date precision and rating scales remain distinct. Saved library/detail reads remain useful with no provider keys and during outages.
 
-## Calendar
+## TV and calendar
 
-The calendar lists three kinds of dates:
+Mark caught up marks known aired episodes once, excluding specials unless requested and excluding future/unknown air dates. Undo changes only marks still owned by that operation, preserving later individual edits; repeated catch-up/undo is idempotent. Unknown-date episodes can be handled individually. No metadata is not proof of completion.
 
-- Episodes of every series in the library, including shows you finished or dropped, when the air date falls in the month. A show saved from TVMaze refreshes its episode list from TVMaze. A show saved from TMDB refreshes seasons only when `TMDB_API_KEY` is set. A show you typed in uses the episodes you entered. The journal does not look up a TVMaze id for a manual title.
-- Movies marked anticipating, or flagged as anticipated. A day lands on that day. A month or a year stays in a "sometime in" band for that month or year.
-- Sequels and spin-offs of movies you finished, or logged a watch or rewatch for. Want, in progress, paused, and dropped do not count unless a watch or rewatch is logged. When the movie was saved from TMDB and a key is set, its collection is included. Wikidata supplies sequels (`P156`, and films that follow this one), spin-offs (`P2512`), and later parts of the same series (`P179`). Results are cached for about 24 hours and are not added to the library. A follow-up you already finished is left off.
+Production lifecycle (ongoing, ended, canceled, unknown), freshness/completeness and personal progress remain separate. Explicit refresh reconciles episodes by provider identity without losing personal marks. Newly aired episodes reappear in Now/Hub and library/detail progress even after earlier catch-up. A manual show can be linked to a chosen provider identity; the server never guesses from its title.
 
-The movie title and year are sent to Wikidata, and to TMDB when a key is set. Episode refresh sends the provider id already stored for that show. If a lookup fails, saved episodes stay as they were. The first view loads a limited number of uncached lookups; open the month again to fill in the rest.
+Calendar GET reads saved/cached data only. Refresh is explicit and releases the database transaction before provider IO. Episodes use browser timezone; movie month/year precision stays in a band rather than becoming a fictitious day. Saved dates survive an unavailable refresh. Anticipated movies and discovered sequels/spin-offs remain distinct from library membership. `MEDIA_TODAY` is a deterministic test clock.
 
-## Metadata providers
-
-| Provider | Needs a key | Used for |
-| --- | --- | --- |
-| TMDB | `TMDB_API_KEY` for the official API. Movie search still works without it by reading TMDB’s public search page. | Movies and series when a key is set. Movies only, from the public page, when it is not. Poster. Vote average on TMDB’s 0–10 scale comes from the official API. |
-| TVMaze | No | Series search. The calendar also refreshes episodes for a show already saved from TVMaze. |
-| iTunes Search | No, and only when `MEDIA_SCRAPE_MODE` is on | Extra movie results. Artwork and description. No critic score. |
-| Steam store search | No | Games when `RAWG_API_KEY` is not set. Title and capsule image. No Metacritic score. |
-| MusicBrainz | No | Artists, songs, and albums. Following an artist loads that artist's studio albums and songs. No key. |
-| Cover Art Archive | No | Album artwork, addressed by MusicBrainz release id. |
-| Open Library | No | Books and covers. |
-| RAWG | `RAWG_API_KEY` | Games when the key is set. Rating stays on RAWG’s 0–5 scale. |
-
-Keys stay on the server. The browser never receives them. Provider failures leave saved entries readable. Rotten Tomatoes, Metacritic, Spotify, and IGDB are not used.
-
-Series search calls TVMaze with no key. Movie search calls TMDB’s official API when `TMDB_API_KEY` is set, and otherwise reads TMDB’s public search page for the title and poster. Game search calls RAWG when `RAWG_API_KEY` is set, and otherwise calls Steam’s public store search. `MEDIA_SCRAPE_MODE=1` is optional and off by default. When it is on, movie search also calls the iTunes Search API. A TMDB result for the same title and year is kept and the iTunes duplicate is dropped. Turning the flag off leaves TVMaze, the public movie page, and Steam search in place. It does not stop the calendar from refreshing a show you already saved from TVMaze.
-
-Wikidata is used only for the calendar follow-up lookup above. It does not need a key. It is not used for search.
-
-## Local run
-
-`make media-install` then `make media-dev` serves the app on port 8091. Sign-in for the suite is still `/auth/login` on the suite origin. Docker stores the database at `data/media.db` via `MEDIA_DATABASE_URL`.
-
-Theme choice is `media-theme` in this browser: `system`, `light`, or `dark`.
+See [Migrations](MIGRATIONS.md), [Quality](QUALITY.md), and [Security](SECURITY_MODEL.md).

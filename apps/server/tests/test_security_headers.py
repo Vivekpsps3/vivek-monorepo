@@ -24,9 +24,8 @@ from apps.server.security_headers import (
     validate_response_headers,
 )
 
-
 FINANCE_PAGE = "<!doctype html><head><script>var finance = 1;</script></head><body><app-root></app-root></body>"
-PLAIN_PAGE = '<!doctype html><script>var ready = 1;</script><link rel="stylesheet" href="/app.css"><link rel="modulepreload" href="/chunk.js">'
+PLAIN_PAGE = '<!doctype html><app-root></app-root><script>var ready = 1;</script><link rel="stylesheet" href="/app.css"><link rel="modulepreload" href="/chunk.js">'
 
 
 def _app() -> FastAPI:
@@ -66,7 +65,7 @@ def _app() -> FastAPI:
     @media.get("/")
     def media_index():
         return HTMLResponse(
-            "<!doctype html><script>var media = 1;</script>",
+            "<!doctype html><app-root></app-root><script>var media = 1;</script>",
             headers={"Cache-Control": "no-cache", SHELL_HEADER: "1"},
         )
 
@@ -134,37 +133,31 @@ def test_api_policy_is_locked_down_and_does_not_embed_the_nonce():
     assert parsed["report-uri"] == "/csp-report"
 
 
-def test_finance_policy_is_stricter_than_travel_and_media():
-    finance = directives(content_security_policy("finance", "n"))
-    travel = directives(content_security_policy("travel", "n"))
-    media = directives(content_security_policy("media", "n"))
+def test_private_navigation_uses_one_strict_policy_without_html_bypasses():
+    policies = [
+        directives(content_security_policy(kind, "n")) for kind in ("finance", "travel", "media")
+    ]
+    assert policies[0] == policies[1] == policies[2]
     portfolio = directives(content_security_policy("portfolio", "n"))
-    assert finance["img-src"] == "'self' data:"
-    assert "tile.openstreetmap.org" in travel["img-src"]
-    assert "image.tmdb.org" not in travel["img-src"]
-    assert "image.tmdb.org" in media["img-src"]
-    assert "https://archive.org" in media["img-src"].split()
-    assert "https://*.archive.org" in media["img-src"].split()
-    assert "archive.org" not in finance["img-src"]
-    assert "archive.org" not in travel["img-src"]
-    assert "tile.openstreetmap.org" not in media["img-src"]
-    assert finance["frame-ancestors"] == "'none'"
-    assert finance["trusted-types"] == ""
-    assert "angular#unsafe-bypass" not in content_security_policy("finance", "n")
-    assert "require-trusted-types-for" in finance
-    assert "require-trusted-types-for" not in portfolio
-    assert "require-trusted-types-for" not in travel
-    assert "require-trusted-types-for" not in media
-    for parsed in (finance, travel, media, portfolio):
+    assert portfolio["img-src"] == "'self' data:"
+    for parsed in [*policies, portfolio]:
+        assert parsed["require-trusted-types-for"] == "'script'"
+        assert parsed["trusted-types"] == "angular angular#bundler"
+        assert "angular#unsafe-bypass" not in parsed["trusted-types"]
+        assert "default" not in parsed["trusted-types"].split()
         assert "unsafe-inline" not in parsed["script-src"]
         assert "unsafe-eval" not in parsed["script-src"]
         assert parsed["script-src-attr"] == "'none'"
         assert parsed["connect-src"] == "'self'"
-        assert "cloudflare" not in parsed["script-src"]
-        assert "cloudflare" not in parsed["connect-src"]
+        assert parsed["frame-ancestors"] == "'none'"
         assert parsed["object-src"] == "'none'"
         assert parsed["base-uri"] == "'self'"
         assert parsed["form-action"] == "'self'"
+        assert "https:" not in parsed["img-src"].split()
+    assert "tile.openstreetmap.org" in policies[0]["img-src"]
+    assert "image.tmdb.org" in policies[0]["img-src"]
+    assert "https://archive.org" in policies[0]["img-src"].split()
+    assert "https://*.archive.org" in policies[0]["img-src"].split()
 
 
 def test_inject_nonce_covers_scripts_styles_modulepreload_and_angular_root():

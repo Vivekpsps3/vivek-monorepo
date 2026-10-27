@@ -18,6 +18,10 @@
   color: var(--text-secondary);
 }
 
+.ui-field__required {
+  font-weight: 500;
+}
+
 .ui-field__control-wrap {
   position: relative;
   width: 100%;

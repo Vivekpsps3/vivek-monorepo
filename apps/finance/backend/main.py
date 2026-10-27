@@ -1,22 +1,19 @@
-"""
-ASGI entrypoint. Tests and uvicorn use: uvicorn main:app
+"""Finance names the site process and tests share.
+
+Historical Finance fixtures publish app and engine here. Production composition uses
+apps.server.main and never publishes ambient app/database state. Import opens nothing.
 """
 
-from apps.finance.backend.app import app, uvicorn_log_config
-from apps.finance.backend.database import engine
+from typing import cast
+
+from fastapi import FastAPI
+from sqlalchemy.engine import Engine
+
+from apps.finance.backend.logging_config import uvicorn_log_config
 from apps.finance.backend.models import Base
 from apps.finance.backend.services.market_data import market_data
 
-__all__ = ["Base", "app", "engine", "market_data"]
+app = cast(FastAPI, None)
+engine = cast(Engine, None)
 
-if __name__ == "__main__":
-    import os
-
-    import uvicorn
-
-    uvicorn.run(
-        app,
-        host=os.getenv("API_HOST", "127.0.0.1"),
-        port=int(os.getenv("PORT", os.getenv("API_PORT", "8000"))),
-        log_config=uvicorn_log_config(),
-    )
+__all__ = ["Base", "app", "engine", "market_data", "uvicorn_log_config"]

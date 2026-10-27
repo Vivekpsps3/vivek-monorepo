@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { apiUrl } from '../core/api-url';
-import { silentErrorToast } from '../core/http-error.interceptor';
+import { silentErrorToast } from '@vivek/ui';
 import { MarketResearchBatchResponse, MarketResearchResponse } from '../models/stock-lab.model';
 
 @Injectable({ providedIn: 'root' })
