@@ -2,7 +2,6 @@
 
 import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from pathlib import Path
 
 MONEY_STEP = Decimal("0.01")
 DAY_STEP = Decimal("0.0001")
@@ -77,25 +76,14 @@ def parse_days(value, *, allow_zero: bool = True) -> Decimal:
     return amount
 
 
-def pto_day_decimals() -> int:
-    """D3 lives in decisions.mjs. Display rounding reads that setting."""
-    source = Path(__file__).resolve().parents[1].joinpath("static", "modules", "decisions.mjs")
-    match = re.search(r"ptoDayDecimals:\s*(\d+)", source.read_text(encoding="utf-8"))
-    if match is None:
-        raise RuntimeError("ptoDayDecimals is missing from decisions.mjs")
-    return int(match.group(1))
-
-
 def store_days(value: Decimal) -> str:
     """Persist DAY_STEP precision. Display trimming belongs in fmt_days."""
     amount = Decimal(value).quantize(DAY_STEP, rounding=ROUND_HALF_UP)
     return format(amount, "f")
 
 
-def fmt_days(value: Decimal, places: int | None = None) -> str:
-    """Up to D3 decimal places, trailing zeros trimmed. Half away from zero."""
-    if places is None:
-        places = pto_day_decimals()
+def fmt_days(value: Decimal, places: int = 2) -> str:
+    """Display two decimals by default; persist full precision in store_days."""
     step = Decimal("1").scaleb(-places)
     amount = Decimal(value).quantize(step, rounding=ROUND_HALF_UP)
     if amount == 0:

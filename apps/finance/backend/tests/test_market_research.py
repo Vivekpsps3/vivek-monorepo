@@ -3,9 +3,9 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import delete
 
-from conftest import authenticated_client
 from apps.finance.backend.main import Base, app, engine, market_data
 from apps.finance.backend.schemas_market import MarketResearchResponse
+from apps.finance.backend.tests.conftest import authenticated_client
 
 
 @pytest.fixture(autouse=True)

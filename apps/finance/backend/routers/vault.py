@@ -5,9 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from apps.finance.backend.auth import get_current_user
 from apps.finance.backend.database import get_db
-from apps.finance.backend.models import User
 from apps.finance.backend.schemas_vault import (
     BlindIndexLookupRequest,
     EncryptedRecordBatchDelete,
@@ -18,6 +16,8 @@ from apps.finance.backend.schemas_vault import (
     VaultUpdateRequest,
 )
 from apps.finance.backend.services import encrypted_storage as store
+from apps.server.identity.models import User
+from apps.server.identity.session import get_current_user
 
 router = APIRouter(prefix="/vault", tags=["vault"])
 logger = logging.getLogger("finance.auth")
@@ -50,7 +50,9 @@ def _vault_response(db: Session, user_id: int) -> VaultResponse:
 
 
 @router.get("/status", response_model=VaultResponse)
-def vault_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def vault_status(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
     return _vault_response(db, current_user.id)
 
 
@@ -58,7 +60,7 @@ def vault_status(current_user: User = Depends(get_current_user), db: Session = D
 def vault_setup(
     body: VaultCreateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     store.create_vault(
         db,
@@ -78,7 +80,7 @@ def vault_setup(
 def vault_update_wraps(
     body: VaultUpdateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     # Session cookie plus CSRF. Not counted against the login IP or account budgets.
     previous = store.get_vault(db, _user_id(current_user))
@@ -112,7 +114,7 @@ def list_encrypted_records(
     collection: str | None = Query(default=None),
     since_revision: int | None = Query(default=None),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     rows = store.list_records(
         db, current_user.id, collection=collection, since_revision=since_revision
@@ -135,7 +137,7 @@ def list_encrypted_records(
 def upsert_encrypted_records(
     body: EncryptedRecordBatchUpsert,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     if not store.get_vault(db, current_user.id):
         raise HTTPException(status_code=400, detail="Vault required before storing records")
@@ -165,7 +167,7 @@ def upsert_encrypted_records(
 def delete_encrypted_records(
     body: EncryptedRecordBatchDelete,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     deleted = store.delete_records(
         db, current_user.id, [item.model_dump() for item in body.records]
@@ -178,7 +180,7 @@ def delete_encrypted_records(
 def lookup_index(
     body: BlindIndexLookupRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     client_ids = store.lookup_blind_index(
         db,
@@ -193,6 +195,6 @@ def lookup_index(
 @router.get("/counts")
 def encrypted_counts(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     return {"counts": store.collection_counts(db, current_user.id)}

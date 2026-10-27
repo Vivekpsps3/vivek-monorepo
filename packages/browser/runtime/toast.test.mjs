@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+const {
   HTTP_ERROR_FALLBACK,
   TOAST_DURATION_MS,
   TOAST_LIMIT,
@@ -9,7 +11,10 @@ import {
   successCopy,
   toastLive,
   toastRole,
-} from './toast.mjs';
+} = await import('data:text/javascript;base64,' + Buffer.from(ts.transpileModule(
+  readFileSync(new URL('../../ui/src/toast-contract.ts', import.meta.url), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.ES2022 } },
+).outputText).toString('base64'));
 
 test('toast contract matches the finance host', () => {
   assert.equal(TOAST_LIMIT, 3);

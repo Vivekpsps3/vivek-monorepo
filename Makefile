@@ -2,8 +2,7 @@ SHELL := /bin/bash
 SITE_IMAGE ?= personal-site:development
 SITE_RELEASE ?= $(shell git rev-parse HEAD)
 DEV_DATA := $(CURDIR)/.local/data
-FINANCE_WEB := $(CURDIR)/apps/finance/frontend/dist/finance-app/browser
-PORTFOLIO_WEB := $(CURDIR)/apps/site/dist/personal-website/browser
+WEB_ROOT := $(CURDIR)/dist/web/browser
 export PYTHONPATH := $(CURDIR)
 
 .PHONY: help install init-db dev build build-frontends test test-fast test-backend test-frontend test-suite-routes docker-build docker-up docker-down lint lint-python lint-web typecheck typecheck-python typecheck-web e2e lint-baseline coverage-pin db-upgrade db-revision db-check db-seed-dev db-validate-seeded
@@ -22,8 +21,7 @@ install:
 	python3 -m venv .venv
 	$(PY) -m pip install --require-hashes -r apps/server/requirements.lock
 	$(PY) -m pip install --require-hashes -r requirements-dev.txt
-	npm ci --prefix apps/finance/frontend
-	npm ci --prefix apps/site
+	npm ci
 
 init-db:
 	@mkdir -p $(DEV_DATA)
@@ -40,25 +38,25 @@ db-check:
 	$(PY) -m apps.server.migrations --check
 
 db-seed-dev:
-	$(PY) scripts/seed_dev_db.py --ensure-dev
+	$(PY) scripts/seed_dev_db.py --ensure-dev $(SEED_ARGS)
 
 db-validate-seeded:
 	bash scripts/validate-seeded-adoption.sh
 
 dev: init-db
-	SITE_DATABASE_URL=sqlite:///$(DEV_DATA)/site.db SITE_WEB_ROOT=$(FINANCE_WEB) SITE_PORTFOLIO_ROOT=$(PORTFOLIO_WEB) SESSION_COOKIE_SECURE=0 $(PY) -m uvicorn apps.server.main:app --host 127.0.0.1 --port 8000 --reload
+	SITE_DATABASE_URL=sqlite:///$(DEV_DATA)/site.db SITE_WEB_ROOT=$(WEB_ROOT) SESSION_COOKIE_SECURE=0 $(PY) -m uvicorn apps.server.main:production_app --factory --host 127.0.0.1 --port 8000 --reload
 
 build: build-frontends
 build-frontends:
-	cd apps/finance/frontend && npx ng build --configuration production --base-href /finance/ && node scripts/write-release-manifest.mjs
-	cd apps/site && npx ng build --configuration production
+	npm run build
+	node scripts/write-release-manifest.mjs
 
 test-fast:
 	./scripts/check-doc-paths.sh
 	./scripts/check-blame-ignore-revs.sh
 	python3 scripts/check-shared-boundaries.py
 	python3 scripts/check-finance-ux-f1.py
-	python3 -m unittest scripts/test_quality_ratchet.py scripts/test_check_shared_boundaries.py
+	python3 -m unittest scripts/test_quality_ratchet.py scripts/test_check_shared_boundaries.py scripts/test_migration_preservation.py
 	node --test scripts/serve-spa.test.mjs scripts/composition-path.test.mjs
 
 test-backend:
@@ -70,6 +68,7 @@ test-backend:
 test-frontend:
 	npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI
 	npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI
+	npm run test:web -- --watch=false --browsers=ChromeHeadlessCI
 
 lint: lint-python lint-web
 
@@ -91,15 +90,16 @@ typecheck-python:
 	 "$$py" scripts/quality_ratchet.py check mypy
 
 typecheck-web:
-	npx --prefix apps/finance/frontend tsc -p apps/finance/frontend/tsconfig.app.json --noEmit --pretty false
-	npx --prefix apps/finance/frontend tsc -p apps/finance/frontend/tsconfig.spec.json --noEmit --pretty false
-	npx --prefix apps/finance/frontend tsc -p packages/tsconfig.json --noEmit --pretty false
-	npx --prefix apps/site tsc -p apps/site/tsconfig.app.json --noEmit --pretty false
-	npx --prefix apps/site tsc -p apps/site/tsconfig.spec.json --noEmit --pretty false
+	npx tsc -p apps/web/tsconfig.app.json --noEmit --pretty false
+	npx tsc -p apps/web/tsconfig.spec.json --noEmit --pretty false
+	npx tsc -p apps/finance/frontend/tsconfig.app.json --noEmit --pretty false
+	npx tsc -p apps/finance/frontend/tsconfig.spec.json --noEmit --pretty false
+	npx tsc -p packages/tsconfig.json --noEmit --pretty false
+	npx tsc -p apps/site/tsconfig.app.json --noEmit --pretty false
+	npx tsc -p apps/site/tsconfig.spec.json --noEmit --pretty false
 
-e2e:
-	cd apps/finance/frontend && npx ng build --configuration production --base-href /finance/ && node scripts/write-release-manifest.mjs
-	cd apps/finance/frontend && E2E_DIST=dist/finance-app/browser npx playwright test
+e2e: build-frontends
+	npx playwright test --config apps/finance/frontend/playwright.config.ts
 
 lint-baseline:
 	@py='$(PY)'; [ -x "$$py" ] || py='$(PYTHON)'; \

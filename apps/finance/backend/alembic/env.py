@@ -1,10 +1,8 @@
+import os
 from logging.config import fileConfig
 
-import os
-
-from sqlalchemy import engine_from_config, pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,12 +19,12 @@ if config.config_file_name is not None:
 import sys
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[4]))
-from apps.finance.backend.models import Base
 from apps.finance.backend.legacy_schema_guard import (
     assert_not_unified_site_database,
     assert_offline_not_site_database,
     assert_safe_to_remove_legacy_schema,
 )
+from apps.finance.backend.models import Base
 
 target_metadata = Base.metadata
 

@@ -2,6 +2,8 @@
 
 import sqlite3
 
+import httpx
+
 
 def _scores(payload):
     artist = payload["rating"]
@@ -668,25 +670,20 @@ def test_studio_browse_names_the_releases_it_leaves_out():
         {"id": "rg-bare", "title": "Bare"},
     ]
 
-    class Response:
-        def __init__(self, body):
-            self.body = body
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return self.body
-
-    class Http:
+    class Http(httpx.Client):
         def __init__(self):
-            self.calls = []
+            self.calls: list[tuple[str, dict[str, str]]] = []
 
-        def get(self, url, params=None):
-            self.calls.append((url, dict(params or {})))
-            if url.endswith("/release-group"):
-                return Response({"release-groups": groups, "release-group-count": len(groups)})
-            return Response({"releases": [], "release-count": 0})
+            def handle(request):
+                self.calls.append((str(request.url), dict(request.url.params)))
+                payload = (
+                    {"release-groups": groups, "release-group-count": len(groups)}
+                    if request.url.path.endswith("/release-group")
+                    else {"releases": [], "release-count": 0}
+                )
+                return httpx.Response(200, json=payload)
+
+            super().__init__(transport=httpx.MockTransport(handle))
 
     studio_http = Http()
     studio = musicbrainz_artist_catalog(studio_http, "artist-a")

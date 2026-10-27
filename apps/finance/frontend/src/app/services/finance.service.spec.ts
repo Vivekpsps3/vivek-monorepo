@@ -235,7 +235,7 @@ describe('FinanceService', () => {
       next: result => {
         expect(result.updated).toBe(2);
         expect(encStore.bulkRenameTransactionCategories).toHaveBeenCalledWith([{ fromCategory: 'Dining', toCategory: 'Food' }]);
-        http.expectNone(r => r.url.includes('/transactions/categories'));
+        http.expectNone(r => r.url.includes('/finance/transactions/categories'));
         done();
       },
       error: done.fail,

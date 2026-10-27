@@ -1,5 +1,5 @@
 from datetime import date
-from typing import NoReturn
+from typing import Any, Literal, NoReturn, overload
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -17,6 +17,20 @@ SOURCES = {"manual", "tmdb", "musicbrainz", "openlibrary", "rawg", "tvmaze", "it
 
 def fail(detail: str) -> NoReturn:
     raise HTTPException(status_code=422, detail=detail)
+
+
+@overload
+def clean_text(value: Any, limit: int, field: str, required: Literal[True]) -> str: ...
+
+
+@overload
+def clean_text(
+    value: Any, limit: int, field: str, required: Literal[False] = False
+) -> str | None: ...
+
+
+@overload
+def clean_text(value: Any, limit: int, field: str, required: bool) -> str | None: ...
 
 
 def clean_text(value, limit: int, field: str, required: bool = False) -> str | None:

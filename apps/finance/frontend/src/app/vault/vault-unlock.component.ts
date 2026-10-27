@@ -1,17 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Inject, Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { continueAfterAuth } from '../auth/after-auth';
-import { AuthService } from '../auth/auth.service';
+import { continueAfterAuth } from '@vivek/ui';
+import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
 import { UiButtonComponent, UiCardComponent, UiInputComponent, UiPageHeaderComponent } from '@vivek/ui';
-import { SuiteHubLinkComponent } from '../core/layout/suite-hub-link.component';
 
 @Component({
   selector: 'app-vault-unlock',
   standalone: true,
-  imports: [UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiInputComponent, SuiteHubLinkComponent],
+  imports: [UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiInputComponent],
   template: `
-    <app-suite-hub />
+
     <div class="page vault-page">
       <ui-page-header [title]="'Unlock vault'" />
       <ui-card [title]="'Vault passphrase'">
@@ -50,7 +49,7 @@ export class VaultUnlockComponent implements OnInit {
 
   constructor(
     private vault: VaultService,
-    private auth: AuthService,
+    @Inject(SESSION_CONTEXT) private auth: SessionPort,
     private router: Router
   ) {}
 
@@ -58,7 +57,7 @@ export class VaultUnlockComponent implements OnInit {
     this.username = this.auth.currentUser?.username || this.auth.currentUser?.email || '';
     const status = await this.vault.refreshStatus();
     if (!status.exists) {
-      await this.router.navigateByUrl('/vault/setup');
+      await this.router.navigateByUrl('/finance/vault/setup');
       return;
     }
     if (this.vault.isUnlocked) {

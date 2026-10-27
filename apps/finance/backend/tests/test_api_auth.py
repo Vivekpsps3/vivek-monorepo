@@ -6,9 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
-from conftest import authenticated_client
 from apps.finance.backend.main import Base, app, engine, market_data
-from apps.finance.backend.models import UserRole
+from apps.finance.backend.tests.conftest import authenticated_client
+from apps.server.identity.models import UserRole
 
 
 @pytest.fixture(autouse=True)
@@ -36,9 +36,9 @@ def test_finance_api_requires_login():
 def test_session_cookie_persists_and_slides_while_the_browser_is_in_use():
     from datetime import timedelta
 
-    from apps.finance.backend.auth import utc_now_naive
     from apps.finance.backend.database import SessionLocal
-    from apps.finance.backend.models import UserSession
+    from apps.server.identity.models import UserSession
+    from apps.server.identity.session import utc_now_naive
 
     client = authenticated_client(app, email="persist@example.com")
     me = client.get("/api/auth/me")
@@ -135,9 +135,10 @@ def test_admin_can_delete_user_and_owned_data_is_removed():
     admin = authenticated_client(app, email="owner-admin@example.com", role=UserRole.admin)
     login = authenticated_client(app, email="delete-me@example.com")
     created = login.get("/api/auth/me").json()["user"]
-    db = next(__import__("apps.finance.backend.database", fromlist=["get_db"]).get_db())
+    db = app.state.database.sessionmaker()
     try:
-        from apps.finance.backend.models import EncryptedRecord, User
+        from apps.finance.backend.models import EncryptedRecord
+        from apps.server.identity.models import User
 
         db.add(
             EncryptedRecord(
@@ -169,7 +170,7 @@ def test_user_can_reset_own_data_without_affecting_other_users():
     other = authenticated_client(app, email="reset-other@example.com")
     owner_id = owner.get("/api/auth/me").json()["user"]["id"]
     other_id = other.get("/api/auth/me").json()["user"]["id"]
-    db = next(__import__("apps.finance.backend.database", fromlist=["get_db"]).get_db())
+    db = app.state.database.sessionmaker()
     try:
         from apps.finance.backend.models import EncryptedRecord
 
@@ -262,7 +263,7 @@ def test_public_password_signup_is_unmounted():
 
 def test_admin_can_sign_out_other_devices_without_wiping_the_current_one():
     from apps.finance.backend.database import SessionLocal
-    from apps.finance.backend.models import UserSession
+    from apps.server.identity.models import UserSession
 
     admin = authenticated_client(app, email="session-admin@example.com", role=UserRole.admin)
     me = admin.get("/api/auth/me").json()["user"]
@@ -289,7 +290,7 @@ def test_admin_can_sign_out_other_devices_without_wiping_the_current_one():
 
 
 def test_enrollment_link_can_be_replaced_and_reset_confirms_the_username():
-    from test_auth_challenge import passwordless_material
+    from apps.finance.backend.tests.test_auth_challenge import passwordless_material
 
     admin = authenticated_client(app, email="invite-admin@example.com", role=UserRole.admin)
     created = admin.post(

@@ -1,4 +1,4 @@
-/** Keep these constants identical to packages/browser/runtime/toast.mjs. */
+/** Shared toast behavior for the native suite host and domain features. */
 
 export const TOAST_LIMIT = 3;
 export const TOAST_DURATION_MS = 5000;

@@ -1,0 +1,1158 @@
+[
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "network and server failures use the travel sentences",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "a 422 sentence maps back to the field that failed",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "night counts use the singular and a day trip reads as one",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "PTO days trim trailing zeros and a negative balance says over",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "every parking chip branch has its own sentence",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "an out of range PTO balance is rejected before a request",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "trip, plan, note, and key forms reuse the server sentences",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "route errors are a heading panel and not an alert",
+    "replacement": [
+      "apps/travel/e2e/optional-forms.spec.js",
+      "apps/travel/e2e/blockers.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "a route is marked busy before its request returns",
+    "replacement": [
+      "apps/travel/e2e/optional-forms.spec.js",
+      "apps/travel/e2e/blockers.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/behavior.test.mjs",
+    "story": "each route has a skeleton that marks itself hidden from assistive tech",
+    "replacement": [
+      "apps/travel/e2e/optional-forms.spec.js",
+      "apps/travel/e2e/blockers.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR4.1 the narrow top bar drops the backdrop filter that traps the tab bar",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR2.4 a quick-add ride asks for a mode and refuses to save without one",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR2.3 a Booked retry sends the value the person chose",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR3.1 Space and a synthetic click select a composer day and keep focus",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "the composer grid has one tab stop and outside days are not announced",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR3.4 a PTO drag ends once, a cadence change keeps typed values, and radios rove",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR2.10 delete closes the dialog before it navigates and the error is an alert",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR1.2 a later success dismisses the persistent Retry toast",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR2.8 the city error survives a narrow redraw and clears when the city is typed",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR1.6 a saved key and a saved PTO entry restore focus",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR2.1 an error token is added without dropping the other description",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR2.2 a ride has From and To labels",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR4.3 row deletes stay ghost and the dialog confirm stays filled",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR4.1 theme radios rove and Escape closes More",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "TR2.10 a failed Undo offers Retry and the toast reports the rejection",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "focus uses the shared ring on keyboard and programmatic focus",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "an empty trip offers transport and a quiet day instead of every builder",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "each date has its own PTO choice and weekends start off",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/drafts.spec.js",
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/map-recovery.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/blockers.test.mjs",
+    "story": "client day rounding matches half away from zero",
+    "replacement": [
+      "apps/travel/backend/static/tests/behavior.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained exact rounding regression"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/bundle.test.mjs",
+    "story": "edit and delete names include the object",
+    "replacement": [
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/optional-forms.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/bundle.test.mjs",
+    "story": "empty cities name the first city and quiet sections stay quiet",
+    "replacement": [
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/optional-forms.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/bundle.test.mjs",
+    "story": "row deletes undo and trip delete uses a dialog",
+    "replacement": [
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/optional-forms.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/bundle.test.mjs",
+    "story": "undo posts the captured ride and a booked flag sends the whole parking row",
+    "replacement": [
+      "apps/travel/backend/static/tests/restore.test.mjs",
+      "apps/travel/e2e/undo.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "preserved Undo field whitelist and seven row retry stories"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/bundle.test.mjs",
+    "story": "settings copy drops the environment sentence unless the server owns the key",
+    "replacement": [
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/optional-forms.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/bundle.test.mjs",
+    "story": "the trip screen no longer asks the browser to confirm a delete",
+    "replacement": [
+      "apps/travel/e2e/undo.spec.js",
+      "apps/travel/e2e/optional-forms.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/decisions.test.mjs",
+    "story": "each decision flag changes the behavior it owns",
+    "replacement": [
+      "apps/travel/e2e/native.spec.js",
+      "apps/travel/backend/tests/test_pto_allocation.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/decisions.test.mjs",
+    "story": "D9 is only the Sunday default of the shared week start",
+    "replacement": [
+      "apps/travel/backend/static/tests/week.test.mjs",
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained shared-setting model checks; native agenda/date controls replace widget markup"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight-model.test.mjs",
+    "story": "Angular HTTP errors keep the provider code on the response body",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight-model.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight-model.test.mjs",
+    "story": "a date-line arrival and a repeated local hour stay distinct",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight-model.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight.test.mjs",
+    "story": "a flight number and date are one lookup, not a request per keystroke",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight-model.test.mjs",
+      "apps/travel/e2e/flights.spec.js",
+      "apps/travel/backend/tests/test_flights.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight.test.mjs",
+    "story": "a number and date preview scheduled local time, and edit manually keeps the typed time",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight.test.mjs",
+    "story": "several flights and the wrong local day stay choices, with scheduled time separate from actual",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight-model.test.mjs",
+      "apps/travel/e2e/flights.spec.js",
+      "apps/travel/backend/tests/test_flights.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight.test.mjs",
+    "story": "canceled, missing, date-line, and ICAO flights stay explicit",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight-model.test.mjs",
+      "apps/travel/e2e/flights.spec.js",
+      "apps/travel/backend/tests/test_flights.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight.test.mjs",
+    "story": "provider failures stay distinct from signing out",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/flight.test.mjs",
+    "story": "creation and editing share one flight schedule control",
+    "replacement": [
+      "apps/travel/backend/static/tests/flight-model.test.mjs",
+      "apps/travel/e2e/flights.spec.js",
+      "apps/travel/backend/tests/test_flights.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/runtime.test.mjs",
+    "story": "browser runtime escapes HTML and reads encoded cookies safely",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "packages/ui/src/after-auth.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/runtime.test.mjs",
+    "story": "storage helpers survive unavailable and throwing localStorage",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "packages/ui/src/after-auth.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/runtime.test.mjs",
+    "story": "hash routes parse travel home, calendar, trip day, PTO, and settings",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "packages/ui/src/after-auth.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "toasts are keyed, capped at three, and alert toasts carry the warning glyph",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "a plain toast leaves after five seconds and a persistent one stays",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "hover pauses the toast timer",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "focus inside a toast pauses its timer",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "clicking a toast action dismisses that toast",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "a fourth toast evicts the oldest and the cap stays at three",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "a late item failure keeps a key that item changes do not retire",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "a late note conflict keeps its key and clears when the item reopens",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/toast.test.mjs",
+    "story": "an action toast waits eight seconds",
+    "replacement": [
+      "packages/ui/src/toast.service.spec.ts",
+      "apps/finance/frontend/e2e/screenshots.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "tap then tap selects a range and a backwards tap swaps the ends",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "day buttons are named with the weekday and the range role",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "arrow keys move a day and escape clears the range",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "a missing city blocks save and one named city is the title",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "Kyoto until Oct 26 and Osaka from Oct 27 is one title and two stays",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "moving a boundary and shortening dates keep the destinations already typed",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "same-day trips, the last day, and adjacent stops stay predictable",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "calendar day names include plans and the bar name includes the range",
+    "replacement": [
+      "apps/travel/backend/static/tests/tr3.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr3.test.mjs",
+    "story": "the composer grid and the pto cadence are in the page source",
+    "replacement": [
+      "apps/travel/e2e/native.spec.js",
+      "apps/travel/e2e/blockers.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr4.test.mjs",
+    "story": "new trip highlights no nav item and upcoming stays current on a trip",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/axe.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr4.test.mjs",
+    "story": "an empty upcoming page hides metrics and a long trip caps planned days",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/axe.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/tr4.test.mjs",
+    "story": "the header is one row and the old wide breakpoints are gone",
+    "replacement": [
+      "apps/travel/e2e/blockers.spec.js",
+      "apps/travel/e2e/axe.spec.js"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/travel/backend/static/tests/week-header.test.mjs",
+    "story": "a Monday week start rotates the header and the first cell",
+    "replacement": [
+      "apps/travel/backend/static/tests/week.test.mjs",
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained shared-setting model checks; native agenda/date controls replace widget markup"
+  },
+  {
+    "before": "apps/media/backend/static/tests/api.test.mjs",
+    "story": "network, csrf, and unavailable errors use the journal sentences",
+    "replacement": [
+      "packages/ui/src/http-error.interceptor.spec.ts",
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/api.test.mjs",
+    "story": "a timeout with no caller signal uses the friendly network sentence",
+    "replacement": [
+      "packages/ui/src/http-error.interceptor.spec.ts",
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/api.test.mjs",
+    "story": "a timeout on the caller's signal stays a timeout",
+    "replacement": [
+      "packages/ui/src/http-error.interceptor.spec.ts",
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/api.test.mjs",
+    "story": "a failed csrf preflight uses the friendly network sentence",
+    "replacement": [
+      "packages/ui/src/http-error.interceptor.spec.ts",
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/beacon.test.mjs",
+    "story": "Media and Finance HTML do not load the Cloudflare beacon",
+    "replacement": [
+      "apps/media/backend/static/tests/beacon.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/contrast.test.mjs",
+    "story": "control boundaries stay at least 3:1 against their adjacent backgrounds",
+    "replacement": [
+      "packages/ui/contrast.test.mjs",
+      "tests/e2e/suite.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "escapes review text and rejects unsafe artwork urls",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "keeps unrated distinct from zero and labels statuses by medium",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "month and year releases are not shown as a day",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "review drafts win only when they still match the server base",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "library query drops unknown sort, kind, and status",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "progress units and cover images stay inside their own fields",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "calendar weeks start on Sunday for en-US and step across years",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/format.test.mjs",
+    "story": "empty state escapes its copy and route errors are one panel",
+    "replacement": [
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/guard.test.mjs",
+    "story": "a newer route load aborts the one before it",
+    "replacement": [
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/guard.test.mjs",
+    "story": "search keeps the response that matches the latest query and kind",
+    "replacement": [
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/score.test.mjs",
+    "story": "pointer and keyboard scores stay on half steps and do not invent a clear",
+    "replacement": [
+      "apps/media/e2e/rating.spec.ts",
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/score.test.mjs",
+    "story": "the score control is one tab stop and clicking the current value is not a clear",
+    "replacement": [
+      "apps/media/e2e/rating.spec.ts",
+      "apps/media/e2e/phase0.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/search-groups.test.mjs",
+    "story": "dune puts an exact book before other kinds",
+    "replacement": [
+      "apps/media/backend/tests/test_search_relevance.py",
+      "apps/media/e2e/bundle-m.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/search-groups.test.mjs",
+    "story": "a missing movie key says movies, series and games, and hides a healthy catalog",
+    "replacement": [
+      "apps/media/backend/tests/test_search_relevance.py",
+      "apps/media/e2e/bundle-m.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/search-groups.test.mjs",
+    "story": "a healthy keyless catalog covers the type a missing key used to block",
+    "replacement": [
+      "apps/media/backend/tests/test_search_relevance.py",
+      "apps/media/e2e/bundle-m.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/shell.test.mjs",
+    "story": "unknown hashes are not Now",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "apps/media/e2e/phase0.spec.ts",
+      "tests/e2e/suite.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/shell.test.mjs",
+    "story": "document titles follow the screen map",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "apps/media/e2e/phase0.spec.ts",
+      "tests/e2e/suite.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/shell.test.mjs",
+    "story": "not-found copy names the hash and offers Now",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "apps/media/e2e/phase0.spec.ts",
+      "tests/e2e/suite.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/shell.test.mjs",
+    "story": "a short viewport hides the tab bar only while scrolling down",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "apps/media/e2e/phase0.spec.ts",
+      "tests/e2e/suite.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/shell.test.mjs",
+    "story": "the shell has five mobile tabs and a currentColor favicon",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "apps/media/e2e/phase0.spec.ts",
+      "tests/e2e/suite.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/shell.test.mjs",
+    "story": "midnight is the next local day, not a fixed delay",
+    "replacement": [
+      "scripts/composition-path.test.mjs",
+      "apps/media/e2e/phase0.spec.ts",
+      "tests/e2e/suite.spec.ts"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/suite.test.mjs",
+    "story": "week start defaults to Sunday and follows the suite setting",
+    "replacement": [
+      "apps/travel/backend/static/tests/week.test.mjs",
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained shared-setting model checks; native agenda/date controls replace widget markup"
+  },
+  {
+    "before": "apps/media/backend/static/tests/suite.test.mjs",
+    "story": "suite-theme migrates a legacy key and keeps writing it",
+    "replacement": [
+      "packages/ui/src/theme-preference.spec.ts",
+      "packages/browser/runtime/date.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/today.test.mjs",
+    "story": "local today crosses the UTC day boundary",
+    "replacement": [
+      "apps/media/backend/static/tests/today.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained pure regression importing app-owned models"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "the add form asks for a title and refuses a native tooltip",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "a release row appears only when it adds a day, month, platform, or region",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "the overview toggle and the note count follow the spec",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "artist pages omit related and details",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "library filters name what is showing and offer a reset",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "a saved artist uses the same collapsed card as any other item",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "library empty copy names the filter, and search stays quiet until two letters",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "the calendar legend is absent for an empty month and today copy is specific",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "a show offers Mark S2 E3 watched until it is caught up",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "episodes that have not aired cannot be marked watched in the UI",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "a watched episode button toggles off",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "type scale and motion live in app.css",
+    "replacement": [
+      "apps/media/e2e/bundle-m.spec.ts",
+      "apps/media/e2e/native.spec.ts",
+      "apps/media/backend/tests/test_tv_progress.py"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retired obsolete widget/source assertion; current native acceptance is cited"
+  },
+  {
+    "before": "apps/media/backend/static/tests/views.test.mjs",
+    "story": "week start can be set to Monday and back to Sunday",
+    "replacement": [
+      "apps/travel/backend/static/tests/week.test.mjs",
+      "apps/media/backend/static/tests/format.test.mjs"
+    ],
+    "state": "implemented after explicit owner approval; final affected verification recorded in final-verification.md",
+    "disposition": "retained shared-setting model checks; native agenda/date controls replace widget markup"
+  }
+]

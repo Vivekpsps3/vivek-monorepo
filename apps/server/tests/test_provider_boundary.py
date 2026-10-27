@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from apps.server.database import install, open_database, release_for_provider_io
+from apps.server.database import open_database, release_for_provider_io
 from apps.server.errors import APIError
 
 
@@ -20,7 +20,6 @@ def test_api_error_never_uses_suite_unauthorized():
 
 def test_provider_io_commits_before_another_connection_writes(tmp_path):
     database = open_database(f"sqlite:///{tmp_path / 'boundary.db'}")
-    install(database)
     db = database.sessionmaker()
     db.execute(text("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)"))
     db.commit()
@@ -48,13 +47,11 @@ def _app(tmp_path: Path):
 
     url = f"sqlite:///{tmp_path / 'site.db'}"
     database = open_database(url)
-    install(database)
     application = create_app(
         Settings(
             database_url=url,
             release="test",
             web_root=tmp_path / "finance",
-            portfolio_root=tmp_path / "portfolio",
             openapi=False,
         ),
         Dependencies(

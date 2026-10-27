@@ -2,6 +2,14 @@
 
 Every deletion must identify its consumers, move any required behavior, pass the replacement checks, and remove old imports/docs/build references in the same integration slice. Retired source is recoverable in git; do not move whole dead systems into an “archive” directory in the live build. Data and applied migration history are different from obsolete application code.
 
+## Current checkpoint — 2026-10-27
+
+The owner explicitly approved retirement of the 66 listed files and completion of all remaining tasks. The [actual removal record](evidence/actual-runtime-removal.json) confirms every proposed path is absent, useful pure models/tests moved to app-owned frontends, and two unused shared-browser packaging symlinks are removed. A byte-identical `/tmp` backup preserves the original uncommitted inputs. This resolves the earlier approval block.
+
+The root lock/build/bootstrap, backend identity/session/database lifecycle, Finance-only validator ownership, root proxy, docs/CI and actual six-user seed use one supported workflow. Coverage exposed and fixed the backend’s hidden JavaScript rounding-file dependency. [All 113 static assertion dispositions](evidence/static-test-migration.json) and [69 original browser-story dispositions](evidence/browser-test-migration.json) identify their retained or native replacements. Applied migration history, useful URL aliases, provider distinctions, encryption, operational backup/adoption tooling and unchanged coverage floors remain.
+
+Final affected verification and task closure are recorded in [final verification](evidence/final-verification.md). The remaining `backend/static/tests` paths are CI test-discovery paths; no renderer/router/session runtime is retained there. Historical source anchors in planning documents describe the baseline rather than supported runtime paths. Pure formatter/model modules have no mounting, global action dispatcher or HTTP transport.
+
 | ID | Concrete candidate | Action and replacement | Proof / deletion condition |
 | --- | --- | --- | --- |
 | DEL-01 | `apps/site/flask/` backend, its tests/requirements/config | Delete retired Flask/Socket.IO/Ollama stack. Current `/secrets` is browser-local ECDH. | Search CI/docs/image/ops consumers, preserve any actual contract in local demo tests; remove stale README setup. Root image does not copy Flask. |
@@ -27,16 +35,16 @@ Every deletion must identify its consumers, move any required behavior, pass the
 
 ## Keep, or migrate before deleting
 
-- [ ] `apps/server/alembic` and already-applied historical revision files: keep revision history and identifiers. Remove unused execution entrypoints only after upgrade/adoption consumers migrate.
-- [ ] `apps/server/migrate.py`, `migrations.py`, `schema.py`: active adoption/upgrade/readiness behavior. Consolidate overlapping code only after equivalent seeded-adoption tests.
-- [ ] `scripts/backup-site.py`, monitoring/deploy/restore paths: active in image/compose/migrations. Do not delete because they reference legacy schema.
-- [ ] `scripts/serve-spa.mjs` and `scripts/test-site-browser.mjs`: active test infrastructure today. Replace consumers before removing; preserve production-like missing-asset/base-path/cache checks.
-- [ ] `packages/browser/runtime` mirrored paths: current shared-browser mirrors are symlinks in this checkout, not duplicate implementations. Remove obsolete packaging paths only after feature migration; do not count symlink removal as source LOC reduction.
-- [ ] `packages/auth`: keep small shared pure identity primitives with actual consumers; do not absorb into a generic platform mega-package for aesthetic consistency.
-- [ ] Finance encryption, staging, revision conflicts, source/evidence semantics and browser restore: preserve behavior and tests through relocation.
-- [ ] Small explicit old-URL redirects: usually cheaper than breaking useful bookmarks. Retain only documented reachable mappings; remove whole obsolete runtime behind them.
-- [ ] Source-specific provider identity/rating scales and release precision: preserve differences; do not flatten them to shorten serializers.
-- [ ] Coverage floors and meaningful regression suites: migrate paths/test runners with parity; deleting tests is not codebase simplification.
+- [x] `apps/server/alembic` and already-applied historical revision files: keep revision history and identifiers. Remove unused execution entrypoints only after upgrade/adoption consumers migrate.
+- [x] `apps/server/migrate.py`, `migrations.py`, `schema.py`: active adoption/upgrade/readiness behavior. Consolidate overlapping code only after equivalent seeded-adoption tests.
+- [x] `scripts/backup-site.py`, monitoring/deploy/restore paths: active in image/compose/migrations. Do not delete because they reference legacy schema.
+- [x] `scripts/serve-spa.mjs` and `scripts/test-site-browser.mjs`: active test infrastructure today. Replace consumers before removing; preserve production-like missing-asset/base-path/cache checks.
+- [x] `packages/browser/runtime` pure date/week modules remain shared; obsolete shared-browser packaging mirrors were symlinks and are now removed. Their removal is not counted as source LOC reduction.
+- [x] `packages/auth`: keep small shared pure identity primitives with actual consumers; do not absorb into a generic platform mega-package for aesthetic consistency.
+- [x] Finance encryption, staging, revision conflicts, source/evidence semantics and browser restore: preserve behavior and tests through relocation.
+- [x] Small explicit old-URL redirects: usually cheaper than breaking useful bookmarks. Retain only documented reachable mappings; remove whole obsolete runtime behind them.
+- [x] Source-specific provider identity/rating scales and release precision: preserve differences; do not flatten them to shorten serializers.
+- [x] Coverage floors and meaningful regression suites: migrate paths/test runners with parity; deleting tests is not codebase simplification.
 
 ## Evidence required from each owner
 

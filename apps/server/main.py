@@ -11,36 +11,29 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
 from starlette.responses import Response
 
-from apps.finance.backend.api_auth import ApiKeyMiddleware
-from apps.finance.backend.rate_limit import RateLimitMiddleware
+from apps.server.api_key import ApiKeyMiddleware
 from apps.server.auth import Principal, require_principal
-from apps.server.database import Database, database_url, install, open_database
+from apps.server.database import Database, database_url, open_database
 from apps.server.errors import APIError
-from apps.server.redirects import register_hub_media_redirects
+from apps.server.frontend import register_frontend
+from apps.server.rate_limit import RateLimitMiddleware
 from apps.server.schema import assert_ready
-from apps.server.security_headers import SHELL_HEADER, SecurityHeadersMiddleware, csp_report
+from apps.server.security_headers import SecurityHeadersMiddleware, csp_report
 
 logger = logging.getLogger("site")
 # Module-level so a second create_app does not re-register the same series.
 REQUESTS = Counter("site_requests_total", "HTTP requests", ["method", "status"])
 LATENCY = Histogram("site_request_duration_seconds", "Request latency", ["method"])
-
-engine = cast(Engine, None)
-RELEASE = os.environ.get("SITE_RELEASE", "development")
-WEB_ROOT = Path(os.environ.get("SITE_WEB_ROOT", "/app/web/finance")).resolve()
-PORTFOLIO_ROOT = Path(os.environ.get("SITE_PORTFOLIO_ROOT", "/app/web/portfolio")).resolve()
 
 
 @dataclass(frozen=True)
@@ -48,7 +41,6 @@ class Settings:
     database_url: str
     release: str
     web_root: Path
-    portfolio_root: Path
     openapi: bool = False
 
     @staticmethod
@@ -56,10 +48,7 @@ class Settings:
         return Settings(
             database_url=database_url(),
             release=os.environ.get("SITE_RELEASE", "development"),
-            web_root=Path(os.environ.get("SITE_WEB_ROOT", "/app/web/finance")).resolve(),
-            portfolio_root=Path(
-                os.environ.get("SITE_PORTFOLIO_ROOT", "/app/web/portfolio")
-            ).resolve(),
+            web_root=Path(os.environ.get("SITE_WEB_ROOT", "/app/web")).resolve(),
         )
 
 
@@ -71,27 +60,12 @@ class Dependencies:
     principal: Principal | None = None
     check_schema: bool = True
     check_frontend: bool = True
-
-
-def _static_headers(file: Path, root: Path, immutable: bool) -> dict[str, str]:
-    if file.suffix == ".html":
-        headers = {"Cache-Control": "no-store"}
-        if file.resolve() == (root / "index.html").resolve():
-            headers[SHELL_HEADER] = "1"
-        return headers
-    if immutable:
-        return {"Cache-Control": "public, max-age=31536000, immutable"}
-    return {"Cache-Control": "no-cache"}
-
-
-def _shell_headers() -> dict[str, str]:
-    return {"Cache-Control": "no-store", SHELL_HEADER: "1"}
+    test_router: APIRouter | None = None
 
 
 def create_app(settings: Settings, dependencies: Dependencies | None = None) -> FastAPI:
     """One factory. Callers pass the engine and any pinned principal. Import builds nothing."""
     from apps.finance.backend.app import register_finance
-    from apps.finance.backend.database import publish
     from apps.finance.backend.logging_config import get_logger, setup_logging
     from apps.media.backend.app import register_media
     from apps.travel.backend.app import register_travel, validation_response
@@ -100,38 +74,39 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     finance_logger = get_logger()
     dependencies = dependencies or Dependencies()
     database = dependencies.database or open_database(settings.database_url)
-    install(database)
-    publish(database)
 
-    global engine, RELEASE, WEB_ROOT, PORTFOLIO_ROOT
-    engine = database.engine
-    RELEASE = settings.release
     web_root = settings.web_root
-    portfolio_root = settings.portfolio_root
-    WEB_ROOT = web_root
-    PORTFOLIO_ROOT = portfolio_root
     release = settings.release
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        # Migrations stay offline. A test app skips the file and WAL checks and
-        # must not dispose the engine: later tests still share it.
-        if dependencies.check_schema or dependencies.check_frontend:
-            if dependencies.check_schema:
-                with database.engine.connect() as connection:
-                    assert_ready(connection)
-                    journal = connection.exec_driver_sql("PRAGMA journal_mode").scalar_one()
-                    if str(journal).lower() != "wal":
-                        raise RuntimeError(
-                            "Site database must use WAL; run python -m apps.server.migrations"
-                        )
-            if dependencies.check_frontend and not all(
-                (root / "index.html").is_file() for root in (web_root, portfolio_root)
-            ):
-                raise RuntimeError("Site frontend is missing")
-        yield
-        if dependencies.check_schema:
-            database.engine.dispose()
+        try:
+            # Migrations stay offline; injected engines belong to their caller.
+            if dependencies.check_schema or dependencies.check_frontend:
+                if dependencies.check_schema:
+                    with database.engine.connect() as connection:
+                        assert_ready(connection)
+                        journal = connection.exec_driver_sql("PRAGMA journal_mode").scalar_one()
+                        if str(journal).lower() != "wal":
+                            raise RuntimeError(
+                                "Site database must use WAL; run python -m apps.server.migrations"
+                            )
+                if dependencies.check_frontend and not all(
+                    (web_root / page).is_file()
+                    for page in (
+                        "index.html",
+                        "index.csr.html",
+                        "home/index.html",
+                        "work/index.html",
+                        "about/index.html",
+                        "secrets/index.html",
+                    )
+                ):
+                    raise RuntimeError("Site frontend is missing")
+            yield
+        finally:
+            if dependencies.database is None:
+                database.engine.dispose()
 
     application = FastAPI(
         title="Personal site",
@@ -140,6 +115,7 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
         redoc_url=None if not settings.openapi else "/redoc",
         openapi_url=None if not settings.openapi else "/openapi.json",
     )
+    application.state.database = database
 
     @application.exception_handler(HTTPException)
     async def log_http_exception(request: Request, exc: HTTPException):
@@ -261,9 +237,16 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
             )
         return {"status": "ok", "release": release}
 
+    from apps.server.identity import account
+    from apps.server.identity import routes as identity_routes
+
+    application.include_router(identity_routes.router, prefix="/api")
+    application.include_router(account.router, prefix="/api")
     register_finance(application)
     register_travel(application)
     register_media(application)
+    if dependencies.test_router is not None:
+        application.include_router(dependencies.test_router)
 
     @application.api_route(
         "/api/{path:path}",
@@ -278,10 +261,6 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
             content={"detail": "Not found"},
             headers={"Cache-Control": "no-store"},
         )
-
-    @application.get("/")
-    def home():
-        return FileResponse(portfolio_root / "index.html", headers=_shell_headers())
 
     @application.get("/api")
     def api_slash():
@@ -314,64 +293,11 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
             destination + ("?" + request.url.query if request.url.query else ""), status_code=302
         )
 
-    def shell():
-        return FileResponse(web_root / "index.html", headers=_shell_headers())
-
-    @application.get("/finance/{path:path}")
-    def finance_page(path: str):
-        file = (web_root / path).resolve()
-        if not file.is_relative_to(web_root):
-            return JSONResponse(status_code=404, content={"detail": "Not found"})
-        if path and file.is_file():
-            immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-            return FileResponse(file, headers=_static_headers(file, web_root, immutable))
-        if path and (Path(path).suffix or path.startswith("assets/")):
-            return JSONResponse(
-                status_code=404,
-                content={"detail": "Not found"},
-                headers={"Cache-Control": "no-store"},
-            )
-        return shell()
-
-    register_hub_media_redirects(application)
-
-    @application.get("/hub")
-    @application.get("/hub/")
-    @application.get("/hub/admin")
-    @application.get("/auth/login")
-    @application.get("/auth/signup")
-    def shared_shell():
-        return shell()
-
-    @application.get("/auth")
-    @application.get("/auth/")
-    def login():
-        return RedirectResponse("/auth/login", status_code=302)
-
-    @application.get("/auth/enroll")
-    def enroll(request: Request):
-        return RedirectResponse(
-            "/auth/signup" + ("?" + request.url.query if request.url.query else ""),
-            status_code=302,
-        )
-
     @application.post("/csp-report")
     async def csp_report_route(request: Request):
         return await csp_report(request)
 
-    @application.get("/{path:path}")
-    def portfolio_page(path: str):
-        file = (portfolio_root / path).resolve()
-        if not file.is_relative_to(portfolio_root):
-            return JSONResponse(status_code=404, content={"detail": "Not found"})
-        if file.is_file():
-            immutable = bool(re.search(r"-[A-Za-z0-9_-]{8}\.(js|css)$", file.name))
-            return FileResponse(file, headers=_static_headers(file, portfolio_root, immutable))
-        if path in {"home", "work", "about", "secrets"}:
-            return FileResponse(portfolio_root / "index.html", headers=_shell_headers())
-        return JSONResponse(
-            status_code=404, content={"detail": "Not found"}, headers={"Cache-Control": "no-store"}
-        )
+    register_frontend(application, web_root)
 
     origins = [
         item.strip()
@@ -398,11 +324,7 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     return application
 
 
-def _bootstrap() -> FastAPI | None:
-    if not os.environ.get("SITE_DATABASE_URL"):
-        return None
+def production_app() -> FastAPI:
+    """Uvicorn factory. Importing this module never opens a database."""
     os.environ["LOCAL_DEV_AUTH"] = "0"
     return create_app(Settings.from_environ())
-
-
-app = cast(FastAPI, _bootstrap())

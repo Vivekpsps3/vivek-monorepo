@@ -120,3 +120,21 @@ Executed read-only with Node 20.20.2 against existing exported modules; no app s
 - [ ] Link each fixed issue to its regression test and visual evidence where applicable.
 - [ ] Do not close a broad complaint such as “forms are unobvious” after fixing only one field.
 - [ ] Re-check this inventory after the final integrated browser pass; explicitly list unverified reports and accepted limits.
+
+
+## Findings from final implementation vetting — 2026-10-27
+
+The baseline anchors above are historical. Current proof and local gate results are in [final verification](evidence/final-verification.md). Runtime removal was explicitly approved and its final verification passed; PR delivery is recorded in STATUS.md. No independent-agent review is claimed.
+
+| Issue | Priority / evidence | Resolution and regression | Owner |
+| --- | --- | --- | --- |
+| QA-201 | P1, deterministic ASGI probe + real HTTP seed | A 201 preceded commit, so an immediate child create could return 404. Function-scoped sessions commit before response-start; commit-failure rollback is tested. Six-user seeding passes. | Integration |
+| QA-202 | P1, request-generation browser reproduction | A late portrait response could make an album note target the artist. Cancel auxiliary requests and reject stale item generations; `detail-races.spec.ts` preserves album identity/draft/save. | Media |
+| QA-203 | P2, root browser + HTML probe | Public `/` prerendered an empty shell. Prefer the public root route; all five public pages now have meaningful HTML and zero private API calls. | Web |
+| QA-204 | P2, isolated app/restart regression | Login decoys still used Finance's former global DB URL. Resolve the request app's database and cache per URL; separate-directory secrets and restart stability pass. | Identity |
+| QA-205 | P2, repeated full-browser failure | Library saved an outdated scroll-event value and raced router restoration. Capture the actual offset at navigation and restore after scrolling/content; 40 repeated recovery cases pass. | Media |
+| QA-206 | P2, public axe | Explore-link accessible names omitted the visible word. Include Explore; all public-page axe checks pass without suppressed rules. | Site |
+| QA-207 | P2, full migration gate | Unicode backfill tried to fetch rows from an offline Alembic connection. Read-only planning snapshot emits literal SQL; source-byte, data/backfill and drift tests pass. | Schema |
+| QA-208 | P2, real dev-seed exercise | Seed readiness used retired frontend outputs and artists used a retired status. Use the root bundle and an old/current-compatible default; six-user fixture passes through actual handlers. | Toolchain |
+
+| QA-209 | P1, retirement coverage gate | Travel backend read display precision from the retired static JavaScript file, breaking trip/PTO responses after deletion. Backend formatting now owns its two-decimal default, preserves explicit precision overrides and four-decimal storage, and passes a regression that forbids frontend file reads. | Travel |

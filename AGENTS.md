@@ -14,9 +14,10 @@ From the repo root, these are the commands CI runs. Run every one that touches t
 - `./scripts/coverage-gate.sh travel` and `node --test apps/travel/backend/static/tests/*.test.mjs` — Travel
 - `./scripts/coverage-gate.sh media` and `node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs` — Media
 - `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` — Finance Karma
-- `npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI` — site Karma
+- `npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI` — public site Karma
+- `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` — root shell/shared UI Karma
 - `make e2e` — Finance Playwright, after the production Finance bundle
-- `NODE_PATH=apps/finance/frontend/node_modules apps/finance/frontend/node_modules/.bin/playwright test --config apps/media/e2e/playwright.config.ts` — Media Playwright
+- `npx playwright test --config apps/media/e2e/playwright.config.ts` — Media Playwright
 - `npx playwright test` in `apps/travel/e2e` — Travel Playwright
 
-`make test` runs the fast checks, all four Python coverage gates, and both Karma suites. Run the Playwright command for any screen those suites open. Gates and floors are in [Quality gates](docs/QUALITY.md).
+`make test` runs the fast checks, all four Python coverage gates, and all three Karma suites. Run the Playwright command for any screen those suites open. Gates and floors are in [Quality gates](docs/QUALITY.md).

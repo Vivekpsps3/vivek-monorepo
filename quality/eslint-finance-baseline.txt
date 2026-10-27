@@ -4,14 +4,8 @@
 # update refuses a higher count unless --allow-increase is passed.
 apps/finance/frontend/e2e/finance-coherence.spec.ts	@typescript-eslint/no-explicit-any	10
 apps/finance/frontend/e2e/synthetic-vault.ts	@typescript-eslint/no-explicit-any	5
-apps/finance/frontend/src/app/app.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.spec.ts	@typescript-eslint/no-explicit-any	3
 apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.ts	@angular-eslint/prefer-inject	4
-apps/finance/frontend/src/app/auth/auth.service.ts	@typescript-eslint/no-explicit-any	3
-apps/finance/frontend/src/app/auth/login.component.spec.ts	@typescript-eslint/no-explicit-any	1
-apps/finance/frontend/src/app/auth/login.component.ts	@typescript-eslint/no-explicit-any	1
-apps/finance/frontend/src/app/auth/signup.component.ts	@typescript-eslint/no-explicit-any	2
-apps/finance/frontend/src/app/auth/suite-location.strategy.ts	@angular-eslint/prefer-inject	2
 apps/finance/frontend/src/app/calendar/calendar.component.spec.ts	@typescript-eslint/no-explicit-any	6
 apps/finance/frontend/src/app/calendar/calendar.component.ts	@angular-eslint/prefer-inject	2
 apps/finance/frontend/src/app/charts/charts.component.html	@angular-eslint/template/eqeqeq	1
@@ -31,7 +25,6 @@ apps/finance/frontend/src/app/dashboard/dashboard.component.ts	@angular-eslint/p
 apps/finance/frontend/src/app/embed/net-worth-embed.component.spec.ts	@typescript-eslint/no-explicit-any	6
 apps/finance/frontend/src/app/embed/net-worth-embed.component.ts	@angular-eslint/prefer-inject	5
 apps/finance/frontend/src/app/fixed-expenses/fixed-expenses.component.ts	@angular-eslint/prefer-inject	4
-apps/finance/frontend/src/app/hub/hub.component.html	@angular-eslint/template/eqeqeq	1
 apps/finance/frontend/src/app/hubs/recurring-hub.component.spec.ts	@typescript-eslint/no-explicit-any	3
 apps/finance/frontend/src/app/hubs/recurring-hub.component.ts	@angular-eslint/template/eqeqeq	2
 apps/finance/frontend/src/app/income/income-editor.component.spec.ts	@typescript-eslint/no-explicit-any	10
@@ -76,3 +69,9 @@ apps/finance/frontend/src/app/vault/vault-setup.component.ts	@angular-eslint/pre
 apps/finance/frontend/src/app/vault/vault-setup.component.ts	@typescript-eslint/no-explicit-any	1
 apps/finance/frontend/src/app/vault/vault-unlock.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/vault/vault-unlock.component.ts	@typescript-eslint/no-explicit-any	1
+apps/web/src/app/app.component.ts	@angular-eslint/prefer-inject	3
+apps/web/src/app/hub/hub.component.html	@angular-eslint/template/eqeqeq	1
+apps/web/src/app/platform/auth/auth.service.ts	@typescript-eslint/no-explicit-any	3
+apps/web/src/app/platform/auth/login.component.spec.ts	@typescript-eslint/no-explicit-any	1
+apps/web/src/app/platform/auth/login.component.ts	@typescript-eslint/no-explicit-any	1
+apps/web/src/app/platform/auth/signup.component.ts	@typescript-eslint/no-explicit-any	2

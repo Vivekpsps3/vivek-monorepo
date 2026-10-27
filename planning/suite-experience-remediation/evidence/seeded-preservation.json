@@ -1,0 +1,48 @@
+{
+  "adopt": {
+    "source_commit": "8dc554e8094237419571551ff82b0fbfe115bfbd",
+    "site_alembic_version": "site_trip_create_attempt_v1",
+    "integrity_after": "ok",
+    "foreign_key_check_after": [],
+    "preservation": {
+      "preserved_rows": 2521,
+      "new_catalog_rows": 36,
+      "new_membership_rows": 36,
+      "pruned_cache_rows": 0
+    },
+    "premigrate_backups": [
+      "premigrate-none-20261027T150353-cfb27211.db"
+    ],
+    "smoke": "passed",
+    "batch_proof": {
+      "revision": "site_schema_v2",
+      "recreate": "always",
+      "child_counts_unchanged": true,
+      "premigrate_backup": "premigrate-site_trip_create_attempt_v1-20261027T150401-541f671e.db",
+      "image_without_compatibility": "refused",
+      "image_with_compatibility": "accepted",
+      "previous_main_code": "accepted"
+    },
+    "sha256_identical": true,
+    "action": "stamp_and_upgrade"
+  },
+  "upgrade": {
+    "source_commit": "e439da28ce90178b73e1d8de2b668b52068c7037",
+    "source_revision": "site_auth_challenge_purpose_v2",
+    "site_alembic_version": "site_trip_create_attempt_v1",
+    "integrity_after": "ok",
+    "foreign_key_check_after": [],
+    "preservation": {
+      "preserved_rows": 2521,
+      "new_catalog_rows": 36,
+      "new_membership_rows": 36,
+      "pruned_cache_rows": 0
+    },
+    "premigrate_backups": [
+      "premigrate-site_auth_challenge_purpose_v2-20261027T150412-b9e8ffde.db"
+    ],
+    "smoke": "passed",
+    "sha256_identical": true,
+    "action": "upgrade"
+  }
+}

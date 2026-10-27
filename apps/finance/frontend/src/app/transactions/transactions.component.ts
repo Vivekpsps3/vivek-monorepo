@@ -35,7 +35,8 @@ import {
   TransactionCreate,
 } from '../models/transaction.model';
 import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
-import { downloadCsv, excludedAmountNote, plural } from '@vivek/browser';
+import { downloadCsv, plural } from '@vivek/browser';
+import { excludedAmountNote } from '../utils/validators';
 import { focusField } from '../shared/form-validation';
 import {
   normalizeSpendingLabel,
@@ -56,8 +57,8 @@ import {
   UiDataTableComponent,
   UiDialogComponent,
 } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { MoneyPipe } from '@vivek/ui';
+import { AppDatePipe } from '@vivek/ui';
 import { PluralPipe } from '../shared/pipes/plural.pipe';
 
 @Component({
@@ -589,7 +590,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   viewImportedTransactions(receipt: ImportReceipt): void {
-    void this.router.navigate(['/spending'], {
+    void this.router.navigate(['/finance/spending'], {
       queryParams: {
         t: 'activity', v: 'all', receipt: receipt.id, receipts: null,
         month: null, date: null, from: null, through: null,
@@ -601,7 +602,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   reattachCorrectedCsv(receipt: ImportReceipt): void {
     const filename = this.receiptFirstParseFilename(receipt);
-    void this.router.navigate(['/spending'], {
+    void this.router.navigate(['/finance/spending'], {
       queryParams: { t: 'activity', receipts: '1', add: '1', reattach: receipt.id, reattach_file: filename },
     });
   }

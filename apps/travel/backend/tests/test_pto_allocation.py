@@ -8,11 +8,10 @@ from io import StringIO
 import pytest
 from alembic import command
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, insert, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from apps.server.database import current
 from apps.server.migrations import (
     current_revision,
     head_revision,
@@ -244,7 +243,7 @@ def test_backfill_preserves_totals_without_inventing_legacy_dates():
     with engine.begin() as connection:
         for title, start, end, counts, pto_days in trips:
             connection.execute(
-                Trip.__table__.insert(),
+                insert(Trip),
                 {
                     "user_id": 1,
                     "title": title,
@@ -262,7 +261,7 @@ def test_backfill_preserves_totals_without_inventing_legacy_dates():
             for trip_id, title in connection.execute(text("SELECT id, title FROM trips"))
         }
         connection.execute(
-            PtoEntry.__table__.insert(),
+            insert(PtoEntry),
             [
                 {
                     "user_id": 1,
@@ -347,10 +346,14 @@ def test_backfill_preserves_totals_without_inventing_legacy_dates():
 
 def test_revision_backfill_downgrades_cleanly(tmp_path):
     script = ScriptDirectory.from_config(make_config("sqlite://"))
-    assert script.get_heads() == [HEAD]
+    assert script.get_heads() == ["site_trip_create_attempt_v1"]
+    assert (
+        script.get_revision("site_catalog_title_sort_v1").down_revision == "site_media_progress_v1"
+    )
+    assert script.get_revision("site_media_progress_v1").down_revision == HEAD
     assert script.get_revision(REVISION).down_revision == PARENT
     assert script.get_revision(HEAD).down_revision == REVISION
-    assert head_revision() == HEAD
+    assert head_revision() == "site_trip_create_attempt_v1"
 
     database = tmp_path / "site.db"
     url = sqlite_url(database)
@@ -392,7 +395,7 @@ def test_revision_backfill_downgrades_cleanly(tmp_path):
         db.commit()
 
     command.upgrade(cfg, "head")
-    assert current_revision(database) == HEAD
+    assert current_revision(database) == "site_trip_create_attempt_v1"
     assert model_diff(database) == []
     with sqlite3.connect(database) as db:
         assert (
@@ -449,10 +452,11 @@ def test_revision_backfill_downgrades_cleanly(tmp_path):
         ]
 
 
-def _saved_days(trip_id):
-    db = current().sessionmaker()
+def _saved_days(client, trip_id):
+    db = client.app.state.database.sessionmaker()
     try:
         trip = db.get(Trip, trip_id)
+        assert trip is not None
         rows = (
             db.query(TripPtoDay)
             .filter(TripPtoDay.trip_id == trip_id)
@@ -481,7 +485,7 @@ def test_trip_api_persists_per_date_defaults_and_legacy_zero(client):
     assert body["pto"]["days"] == "2"
     assert body["pto_days"] is None
     trip_id = body["id"]
-    assert _saved_days(trip_id) == (
+    assert _saved_days(client, trip_id) == (
         PTO_MODE_DATES,
         [
             (date(2026, 10, 23), "1.0000", PTO_PROVENANCE_DEFAULT, None),
@@ -490,7 +494,7 @@ def test_trip_api_persists_per_date_defaults_and_legacy_zero(client):
             (date(2026, 10, 26), "1.0000", PTO_PROVENANCE_DEFAULT, None),
         ],
     )
-    db = current().sessionmaker()
+    db = client.app.state.database.sessionmaker()
     try:
         friday = (
             db.query(TripPtoDay)
@@ -505,14 +509,14 @@ def test_trip_api_persists_per_date_defaults_and_legacy_zero(client):
     extended = client.patch(f"/api/trips/{trip_id}", json={"end_date": "2026-10-27"})
     assert extended.status_code == 200, extended.text
     assert extended.json()["pto"]["days"] == "3"
-    mode, rows = _saved_days(trip_id)
+    mode, rows = _saved_days(client, trip_id)
     assert mode == PTO_MODE_DATES
     assert rows[0][3] == MIGRATION_SOURCE_AUTOMATIC
     assert rows[-1] == (date(2026, 10, 27), "1.0000", PTO_PROVENANCE_DEFAULT, None)
 
     shortened = client.patch(f"/api/trips/{trip_id}", json={"end_date": "2026-10-23"})
     assert shortened.status_code == 200, shortened.text
-    assert _saved_days(trip_id)[1] == [
+    assert _saved_days(client, trip_id)[1] == [
         (date(2026, 10, 23), "1.0000", PTO_PROVENANCE_DEFAULT, MIGRATION_SOURCE_AUTOMATIC)
     ]
 
@@ -528,7 +532,7 @@ def test_trip_api_persists_per_date_defaults_and_legacy_zero(client):
     assert legacy.status_code == 201, legacy.text
     assert legacy.json()["pto_days"] == "0.0000"
     assert legacy.json()["pto"]["days"] == "0"
-    assert _saved_days(legacy.json()["id"]) == (PTO_MODE_LEGACY, [])
+    assert _saved_days(client, legacy.json()["id"]) == (PTO_MODE_LEGACY, [])
 
     off = client.post(
         "/api/trips",
@@ -541,7 +545,7 @@ def test_trip_api_persists_per_date_defaults_and_legacy_zero(client):
     )
     assert off.status_code == 201, off.text
     assert off.json()["pto"]["days"] == "0"
-    assert len(_saved_days(off.json()["id"])[1]) == 4
+    assert len(_saved_days(client, off.json()["id"])[1]) == 4
     assert all(
         row["trip_id"] != off.json()["id"] for row in client.get("/api/pto").json()["entries"]
     )
@@ -550,7 +554,7 @@ def test_trip_api_persists_per_date_defaults_and_legacy_zero(client):
     assert restored.json()["pto"]["days"] == "2"
 
     assert client.delete(f"/api/trips/{trip_id}").status_code == 204
-    db = current().sessionmaker()
+    db = client.app.state.database.sessionmaker()
     try:
         assert db.query(TripPtoDay).filter(TripPtoDay.trip_id == trip_id).count() == 0
     finally:

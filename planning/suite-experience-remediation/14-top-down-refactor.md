@@ -84,18 +84,20 @@ Browser features call their existing HTTP APIs; Finance financial records are de
 
 ## ARC-01 — One-iteration architecture spike
 
-- [ ] Capture current source/mechanism/dependency/build/browser metrics and critical behavior fixtures.
-- [ ] One root production build renders public Home, shared sign-in/Hub, one guarded Finance page, Travel date editor and real map, and one Media library/search scene.
-- [ ] Public initial download does not eagerly import FinanceService/VaultService/chart/crypto implementations. Finance AuthService currently injects FinanceService and VaultService; split session before moving it.
-- [ ] Meaningful public title/heading/description/social metadata exists in generated public HTML. Inspect generated output; existing server-route config alone does not prove prerender is wired.
-- [ ] Private pages contain no real user data in build/prerender output. Public pages never invoke authenticated data endpoints.
-- [ ] Direct reload and legacy hash links work. Hash translation runs browser-side because fragments never reach the server.
-- [ ] Use one private-document CSP with only required resource origins and Trusted Types. Browser CSP follows the loaded document, not Angular route changes.
-- [ ] Treat public↔private layout entry as an explicit full-document navigation when their security policies differ; use the same compiled application with the correct response policy. Private app↔app navigation stays in one runtime. Alternatively use a single suitably strict common document policy proven for every route. Do not assume client navigation can upgrade a public document to a more permissive private image policy.
-- [ ] Render real Leaflet controls, markers, popups and attribution under that policy. Leaflet itself has HTML sinks; replacing outer templates alone is insufficient. Use supported safe DOM interfaces or a narrowly reviewed compatible library path, with no permissive default trust policy.
-- [ ] Vault unlock, navigation to Travel/Media, return, expiry/sign-out and cross-tab cleanup work with existing encrypted data format.
-- [ ] Compare added/replaced source and active mechanisms. Demonstrate fewer routing/rendering/state paths for representative slices; record any bundle overhead honestly.
-- [ ] Freeze public/private document policy and root route manifest after the spike. Remove throwaway code before domain ports.
+Completed acceptance and limits are recorded in [final verification](evidence/final-verification.md).
+
+- [x] Capture current source/mechanism/dependency/build/browser metrics and critical behavior fixtures.
+- [x] One root production build renders public Home, shared sign-in/Hub, one guarded Finance page, Travel date editor and real map, and one Media library/search scene.
+- [x] Public initial download does not eagerly import FinanceService/VaultService/chart/crypto implementations. Finance AuthService currently injects FinanceService and VaultService; split session before moving it.
+- [x] Meaningful public title/heading/description/social metadata exists in generated public HTML. Inspect generated output; existing server-route config alone does not prove prerender is wired.
+- [x] Private pages contain no real user data in build/prerender output. Public pages never invoke authenticated data endpoints.
+- [x] Direct reload and legacy hash links work. Hash translation runs browser-side because fragments never reach the server.
+- [x] Use one private-document CSP with only required resource origins and Trusted Types. Browser CSP follows the loaded document, not Angular route changes.
+- [x] Treat public↔private layout entry as an explicit full-document navigation when their security policies differ; use the same compiled application with the correct response policy. Private app↔app navigation stays in one runtime. Alternatively use a single suitably strict common document policy proven for every route. Do not assume client navigation can upgrade a public document to a more permissive private image policy.
+- [x] Render real Leaflet controls, markers, popups and attribution under that policy. Leaflet itself has HTML sinks; replacing outer templates alone is insufficient. Use supported safe DOM interfaces or a narrowly reviewed compatible library path, with no permissive default trust policy.
+- [x] Vault unlock, navigation to Travel/Media, return, expiry/sign-out and cross-tab cleanup work with existing encrypted data format.
+- [x] Compare added/replaced source and active mechanisms. Demonstrate fewer routing/rendering/state paths for representative slices; record any bundle overhead honestly.
+- [x] Freeze public/private document policy and root route manifest after the spike. Remove throwaway code before domain ports.
 
 Failure at this checkpoint triggers a focused incompatibility fix or an explicit revised architecture decision. It does not authorize weakening Trusted Types, dropping public SEO, or leaving all old runtimes supported indefinitely.
 

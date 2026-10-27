@@ -14,12 +14,18 @@ router = APIRouter()
 
 
 @router.get("/home")
-def home(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+def home(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     return build_home(db, user_id=principal.id)
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+def summary(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     return build_summary(db, user_id=principal.id)
 
 
@@ -28,7 +34,7 @@ def calendar(
     start: date = Query(...),
     end: date = Query(...),
     tz: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     try:

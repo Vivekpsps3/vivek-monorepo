@@ -13,7 +13,7 @@ import {
   calculateGoalProjectedValue,
   calculateMonthlyGoalContribution,
 } from './planning-tools.util';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { AppDatePipe } from '@vivek/ui';
 
 @Component({
   selector: 'app-planning-quick-tools',

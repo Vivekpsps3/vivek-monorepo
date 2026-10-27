@@ -1,5 +1,7 @@
 # Maintainability and bug audit
 
+Historical audit: command names and architecture below describe its original revision. Use [Development](DEVELOPMENT.md) and [Quality](QUALITY.md) for the supported root workflow.
+
 This pass addressed the identified shared-code, oversized-module, protocol, and validation findings across Finance, Travel, and the public site. App-neutral browser and presentation code lives in `packages/`; each app owns its routes, data, security policy, and domain behavior. Apps do not import another app's source. The `make test-fast` boundary check enforces the package/app rule.
 
 ## Completed changes

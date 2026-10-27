@@ -4,9 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.constants import SYMBOL_PATTERN
-from apps.finance.backend.auth import get_current_user
 from apps.finance.backend.database import get_db
-from apps.finance.backend.models import User
 from apps.finance.backend.schemas_market import (
     MarketPriceResponse,
     MarketResearchBatchRequest,
@@ -16,6 +14,8 @@ from apps.finance.backend.schemas_market import (
 )
 from apps.finance.backend.services.market_data import market_data
 from apps.server.errors import APIError
+from apps.server.identity.models import User
+from apps.server.identity.session import get_current_user
 
 router = APIRouter(tags=["market"])
 
@@ -24,7 +24,7 @@ router = APIRouter(tags=["market"])
 def get_market_price(
     symbol: str,
     refresh: bool = Query(False, description="Bypass cache and fetch live"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     _current_user: User = Depends(get_current_user),
 ):
     upper = symbol.upper().strip()
@@ -47,7 +47,7 @@ def get_market_research(
     symbol: str,
     refresh: bool = Query(False, description="Bypass market research cache"),
     period: str = Query("10y", description="History period: 1y, 2y, 5y, 10y, max"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     _current_user: User = Depends(get_current_user),
 ):
     upper = symbol.upper().strip()
@@ -65,7 +65,7 @@ def get_market_research(
 @router.post("/market/research/batch", response_model=MarketResearchBatchResponse)
 def get_market_research_batch(
     body: MarketResearchBatchRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     _current_user: User = Depends(get_current_user),
 ):
     results = []

@@ -1,4 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
@@ -18,7 +20,7 @@ import {
   take,
 } from 'rxjs';
 import { apiUrl } from '../core/api-url';
-import { silentErrorToast } from '../core/http-error.interceptor';
+import { silentErrorToast } from '@vivek/ui';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
@@ -122,6 +124,7 @@ export class FinanceService {
     private encStore: EncryptedStoreService,
     private financeImports: FinanceImportService
   ) {
+    inject(SESSION_CONTEXT, { optional: true })?.cleared$?.pipe(takeUntilDestroyed()).subscribe(() => this.clearSessionState());
     this.market = new FinanceMarketCoordinator(this.encStore, {
       sessionToken: () => this.encStore.sessionToken,
       dataEpoch: collections => this.dataEpoch(collections),

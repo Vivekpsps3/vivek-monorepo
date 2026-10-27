@@ -2,11 +2,11 @@
 
 One public site with a portfolio, shared sign-in, and private Finance, Travel,
 and Media tools. One FastAPI service and one SQLite database run behind the
-existing nginx-edge TLS proxy. Both frontend builds ship in the same image.
+existing nginx-edge TLS proxy. One Angular web build ships in the same image.
 Finance data remains encrypted in the browser; combining databases does not
 decrypt or transform financial records.
 
-- `/` — public portfolio, with an Apps link
+- `/` — public portfolio, with a Workspace link
 - `/hub` — shared private home
 - `/finance/`, `/travel/`, `/media/` — tools
 - `/auth/login` — shared sign-in

@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from apps.finance.backend.constants import SYMBOL_PATTERN
 
-
 MarketCacheStatus = Literal["hit", "miss", "refresh"]
 
 

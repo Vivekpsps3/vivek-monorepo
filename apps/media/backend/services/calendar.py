@@ -19,11 +19,19 @@ WATCHED_EXPERIENCES = {"watch", "rewatch"}
 
 
 def build_calendar(
-    db: Session, user_id: int, month_text: str | None, http: httpx.Client, tz: str | None = None
+    db: Session,
+    user_id: int,
+    month_text: str | None,
+    http: httpx.Client | None = None,
+    tz: str | None = None,
+    *,
+    refresh: bool = False,
 ) -> dict:
     current = today(tz)
     month = parse_month(month_text, current)
-    budget = Budget()
+    # An ordinary view uses saved episodes and cached follow-ups only. Discovery
+    # and metadata writes belong to the explicit refresh action.
+    budget = Budget() if refresh else Budget(limit=0)
     entries = db.query(UserEntry).filter(UserEntry.user_id == user_id).all()
     entries.sort(key=lambda entry: entry.id)
     experience_kinds = experience_kinds_for(db, user_id, entries)
@@ -33,7 +41,8 @@ def build_calendar(
         if entry.catalog.kind in {"artist", "album", "track"}:
             continue
         if entry.catalog.kind == "tv":
-            refresh_show(db, entry.catalog, http, budget)
+            if refresh:
+                refresh_show(db, entry.catalog, http, budget)
             events.extend(episode_events(db, entry, month))
         elif is_anticipated_movie(entry):
             events.extend(anticipated_events(db, entry))

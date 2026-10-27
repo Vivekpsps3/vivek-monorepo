@@ -17,7 +17,9 @@ import {
 import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
 import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
-import { silentErrorToast } from '../core/http-error.interceptor';
+import { silentErrorToast } from '@vivek/ui';
+import { SESSION_CONTEXT } from '@vivek/ui';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface VaultStatus {
   exists: boolean;
@@ -46,6 +48,7 @@ export interface EncryptedRecordDto {
 
 @Injectable({ providedIn: 'root' })
 export class VaultService {
+  private epoch = 0;
   private dek: CryptoKey | null = null;
   private unlockedWrap: string | null = null;
   private statusSubject = new BehaviorSubject<VaultStatus | null>(null);
@@ -60,12 +63,14 @@ export class VaultService {
   readonly unlocked$ = this.unlockedSubject.asObservable();
 
   constructor(private http: HttpClient) {
+    inject(SESSION_CONTEXT, { optional: true })?.cleared$?.pipe(takeUntilDestroyed()).subscribe(() => this.lock());
     this.boot = this.hydrate();
   }
 
   private async hydrate(): Promise<void> {
+    const epoch = this.epoch;
     const dek = await restoreDekLocal();
-    if (!dek) return;
+    if (!dek || epoch !== this.epoch) return;
     this.dek = dek;
     this.unlockedSubject.next(true);
   }
@@ -139,6 +144,7 @@ export class VaultService {
   }
 
   lock(): void {
+    this.epoch += 1;
     this.dek = null;
     this.unlockedWrap = null;
     this.unlockedSubject.next(false);
@@ -148,7 +154,7 @@ export class VaultService {
   async setup(passphrase: string): Promise<void> {
     const material = await createVaultMaterial(passphrase);
     const status = await firstValueFrom(
-      this.http.post<VaultStatus>(apiUrl('/vault/setup'), material.setupPayload)
+      this.http.post<VaultStatus>(apiUrl('/finance/vault/setup'), material.setupPayload)
     );
     this.statusSubject.next(status);
     await this.hold(material.dek);

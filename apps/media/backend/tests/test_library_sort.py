@@ -31,6 +31,20 @@ def test_unknown_sort_falls_back_to_activity(client):
     assert second["title"] == "Second"
 
 
+def test_title_sort_folds_accents_and_non_english_case(client):
+    for title in ("Zebra", "école", "Alpha", "Éclair", "ångström"):
+        _add(client, title)
+    listed = client.get("/api/library", params={"sort": "title", "limit": 10})
+    assert listed.status_code == 200, listed.text
+    assert [item["title"] for item in listed.json()["items"]] == [
+        "Alpha",
+        "ångström",
+        "Éclair",
+        "école",
+        "Zebra",
+    ]
+
+
 def test_title_sort_accepts_any_case(client):
     _add(client, "Alpha")
     _add(client, "zeta")
@@ -144,3 +158,33 @@ def test_progress_survives_a_reload(client):
     assert again["progress_unit"] == "page"
     card = client.get("/api/library").json()["items"][0]
     assert card["progress_label"] == "p. 120"
+
+
+def test_membership_pages_filter_count_and_materialize_only_the_requested_window(
+    client, monkeypatch
+):
+    from apps.media.backend.services import records
+
+    for title in ("Delta", "Alpha", "Charlie", "Bravo", "Echo"):
+        _add(client, title)
+    rendered: list[str] = []
+    original = records.library_cards
+
+    def cards(db, entries):
+        rendered.extend(entry.catalog.title for entry in entries)
+        return original(db, entries)
+
+    monkeypatch.setattr(records, "library_cards", cards)
+    page = client.get("/api/library", params={"sort": "title", "offset": 2, "limit": 2}).json()
+    assert page["total"] == 5
+    assert page["has_more"] is True
+    assert [item["title"] for item in page["items"]] == ["Charlie", "Delta"]
+    assert rendered == ["Charlie", "Delta"]
+    last = client.get("/api/library", params={"sort": "title", "offset": 4, "limit": 2}).json()
+    assert [item["title"] for item in last["items"]] == ["Echo"]
+    assert last["has_more"] is False
+    filtered = client.get("/api/library", params={"q": "l", "limit": 1}).json()
+    assert filtered["total"] == 3
+    assert len(filtered["items"]) == 1
+    assert client.get("/api/library", params={"offset": -1}).status_code == 422
+    assert client.get("/api/library", params={"limit": 101}).status_code == 422

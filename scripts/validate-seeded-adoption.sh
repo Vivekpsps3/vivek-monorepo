@@ -142,6 +142,10 @@ fi
 mkdir -p "$work/web/finance" "$work/web/portfolio"
 printf '<!doctype html><title>finance</title>\n' > "$work/web/finance/index.html"
 printf '<!doctype html><title>portfolio</title>\n' > "$work/web/portfolio/index.html"
+for page in index.csr.html home/index.html work/index.html about/index.html secrets/index.html; do
+  mkdir -p "$(dirname "$work/web/finance/$page")"
+  printf '<!doctype html><title>rehearsal</title>\n' > "$work/web/finance/$page"
+done
 chmod 777 "$work"
 
 stop_seed() {
@@ -184,6 +188,10 @@ seed_database() {
   local db="$2"
   local session="$3"
   echo "Starting app from $(git -C "$tree" rev-parse --short HEAD)"
+  local entrypoint=(apps.server.main:app)
+  if grep -q '^def production_app(' "$tree/apps/server/main.py"; then
+    entrypoint=(apps.server.main:production_app --factory)
+  fi
   pushd "$tree" >/dev/null
   PYTHONPATH="$tree" \
     SITE_DATABASE_URL="sqlite:///$db" \
@@ -193,7 +201,7 @@ seed_database() {
     AUTH_SIGNUP_MODE=open \
     AUTH_IP_RATE_LIMIT_PER_MIN=100000 \
     RATE_LIMIT_PER_MIN=100000 \
-    "$py" -m uvicorn apps.server.main:app --host 127.0.0.1 --port "$seed_port" --no-access-log \
+    "$py" -m uvicorn "${entrypoint[@]}" --host 127.0.0.1 --port "$seed_port" --no-access-log \
     >"$work/uvicorn.log" 2>&1 &
   seed_pid=$!
   popd >/dev/null
@@ -292,6 +300,7 @@ print(json.dumps(names))
 '
   "$py" - "$mode" "$before_json" "$out_dir/migrated.db" "$session" "$out_dir/premigrate.json" "$mode_report" <<'PY'
 import json, sqlite3, sys
+from scripts.migration_preservation import verify
 mode, before_path, migrated, session_path, premigrate_path, report_path = sys.argv[1:]
 before = json.load(open(before_path))
 db = sqlite3.connect(f"file:{migrated}?mode=ro", uri=True)
@@ -303,6 +312,7 @@ integrity = db.execute("PRAGMA integrity_check").fetchone()[0]
 fk = [list(row) for row in db.execute("PRAGMA foreign_key_check")]
 revision = db.execute("SELECT version_num FROM site_alembic_version").fetchone()[0]
 premigrate = json.load(open(premigrate_path))
+preservation = verify(before["original_values"], db)
 if integrity != "ok" or fk:
     raise SystemExit(json.dumps({"integrity": integrity, "fk": fk, "revision": revision}))
 if mode == "adopt":
@@ -312,18 +322,11 @@ if mode == "adopt":
         compared = {key: value for key, value in counts.items() if key != "site_alembic_version"}
         if compared != before["counts"]:
             raise SystemExit("row counts changed\n" + json.dumps({"before": before["counts"], "after": compared}, indent=2))
-    else:
-        for name, value in before["counts"].items():
-            if counts.get(name) != value:
-                raise SystemExit(f"{name} changed from {value} to {counts.get(name)}")
     if revision != expected or counts.get("site_alembic_version") != 1:
         raise SystemExit(json.dumps({"revision": revision, "expected": expected, "counts": counts}))
     if not premigrate:
         raise SystemExit("migrate did not write a premigrate backup")
 else:
-    for name, value in before["counts"].items():
-        if counts.get(name) != value:
-            raise SystemExit(f"{name} changed from {value} to {counts.get(name)}")
     if revision != before["expected_head"] or counts.get("site_alembic_version") != 1:
         raise SystemExit(json.dumps({"revision": revision, "expected": before["expected_head"]}))
     action = before["plan"]["action"]
@@ -342,6 +345,7 @@ report.update({
     "mode": mode,
     "counts_before": before["counts"],
     "counts_after": counts,
+    "preservation": preservation,
     "integrity_after": integrity,
     "foreign_key_check_after": fk,
     "site_alembic_version": revision,
@@ -349,7 +353,7 @@ report.update({
     "session_username": session["username"],
 })
 json.dump(report, open(report_path, "w"), indent=2)
-print(f"{mode}: row counts held and revision is {revision}")
+print(f"{mode}: original values preserved and revision is {revision}")
 PY
   if [[ "$mode" == "upgrade" || "$mode" == "adopt" ]]; then
     echo "Checking the migrated database matches this branch's models"
@@ -427,7 +431,10 @@ PY
   fi
   "$py" - "$dir/plan.db" "$dir/plan.out" "$dir/before.json" "$sha_before" "$sha_after" "$LEGACY_UNADOPTED_SHA" <<'PY'
 import json, sqlite3, sys
+from scripts.migration_preservation import snapshot
+from apps.media.backend.services.membership import is_search_cache_key
 path, plan_path, out, sha_before, sha_after, source = sys.argv[1:]
+will_prune = "DELETE FROM provider_cache" in open(plan_path).read()
 db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
 tables = [row[0] for row in db.execute(
     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
@@ -444,6 +451,7 @@ report = {
     "triggers_and_views": [list(row) for row in db.execute(
         "SELECT type, name FROM sqlite_master WHERE type IN ('trigger','view') ORDER BY 1, 2"
     )],
+    "original_values": snapshot(db, prune_cache_keys=[row[0] for row in db.execute("SELECT cache_key FROM provider_cache") if will_prune and is_search_cache_key(row[0])]),
     "counts": counts,
     "total_rows": sum(counts.values()),
     "sha256_before_plan": sha_before,
@@ -630,9 +638,16 @@ env.update({
     "SITE_PORTFOLIO_ROOT": str(web_portfolio),
     "SESSION_COOKIE_SECURE": "0",
 })
+for page in ("index.csr.html", "home/index.html", "work/index.html", "about/index.html", "secrets/index.html"):
+    target = web_finance / page
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("<!doctype html><title>rehearsal</title>\n")
+entrypoint = ["apps.server.main:app"]
+if "def production_app(" in (Path(worktree) / "apps/server/main.py").read_text():
+    entrypoint = ["apps.server.main:production_app", "--factory"]
 log = open(root / "uvicorn-previous.log", "w")
 process = subprocess.Popen(
-    [sys.executable, "-m", "uvicorn", "apps.server.main:app", "--host", "127.0.0.1", "--port", "8093"],
+    [sys.executable, "-m", "uvicorn", *entrypoint, "--host", "127.0.0.1", "--port", "8093"],
     cwd=worktree, env=env, stdout=log, stderr=subprocess.STDOUT,
 )
 try:
@@ -714,7 +729,10 @@ from pathlib import Path
 from alembic.script import ScriptDirectory
 from apps.server.migrations import current_revision, head_revision, make_config
 
+from scripts.migration_preservation import snapshot
+from apps.media.backend.services.membership import is_search_cache_key
 path, plan_path, out, sha_before, sha_after, source, main_head = sys.argv[1:]
+will_prune = "DELETE FROM provider_cache" in open(plan_path).read()
 path = Path(path)
 db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
 tables = [row[0] for row in db.execute(
@@ -777,6 +795,7 @@ report = {
     "triggers_and_views": [list(row) for row in db.execute(
         "SELECT type, name FROM sqlite_master WHERE type IN ('trigger','view') ORDER BY 1, 2"
     )],
+    "original_values": snapshot(db, prune_cache_keys=[row[0] for row in db.execute("SELECT cache_key FROM provider_cache") if will_prune and is_search_cache_key(row[0])]),
     "counts": counts,
     "total_rows": sum(counts.values()),
     "sha256_before_plan": sha_before,

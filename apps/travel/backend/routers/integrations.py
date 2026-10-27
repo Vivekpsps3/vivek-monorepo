@@ -28,7 +28,10 @@ def _last4(value: str | None) -> str | None:
 
 
 @router.get("/settings")
-def read_settings(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+def read_settings(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     key, source = flightaware_key(db, principal.id)
     person = principal
     return {
@@ -51,7 +54,7 @@ def read_settings(db: Session = Depends(get_db), principal: Principal = Depends(
 @router.put("/settings/flightaware")
 def save_flightaware(
     body: FlightAwareKeyIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     text = body.api_key.strip()
@@ -71,7 +74,8 @@ def save_flightaware(
 
 @router.delete("/settings/flightaware", status_code=204)
 def clear_flightaware(
-    db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     row = db.get(Setting, settings_key(principal.id, "flightaware_api_key"))
     if row is not None:
@@ -81,7 +85,7 @@ def clear_flightaware(
 @router.post("/flights/lookup")
 def lookup_flight(
     body: FlightLookupIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
     lookup=Depends(get_flight_lookup),
 ):
@@ -111,7 +115,7 @@ def lookup_flight(
 @router.get("/places/search")
 def search_places(
     q: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
     fetch=Depends(get_geocoder),
 ):

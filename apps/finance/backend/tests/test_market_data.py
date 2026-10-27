@@ -4,13 +4,13 @@ from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 import pytest
-
-from apps.finance.backend.models import Base, MarketResearchCache, TickerQuote
-from apps.finance.backend.services.market_data import MarketDataService
-from apps.finance.backend.schemas_market import MarketPriceResponse, MarketResearchResponse
-from apps.finance.backend.routers import market as market_router
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+from apps.finance.backend.models import Base, MarketResearchCache, TickerQuote
+from apps.finance.backend.routers import market as market_router
+from apps.finance.backend.schemas_market import MarketPriceResponse, MarketResearchResponse
+from apps.finance.backend.services.market_data import MarketDataService
 
 
 @pytest.fixture

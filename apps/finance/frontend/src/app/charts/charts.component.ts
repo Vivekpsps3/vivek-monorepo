@@ -27,7 +27,7 @@ import {
   chartAccentColor,
   chartSliceBorder,
 } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { MoneyPipe } from '@vivek/ui';
 type ChartConstructor = new (
   item: ChartItem,
   config: unknown
@@ -227,7 +227,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     const row = this.monthlyRows[index];
     if (!row) return;
     const view = datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all';
-    void this.router.navigate(['/spending'], {
+    void this.router.navigate(['/finance/spending'], {
       queryParams: { t: 'activity', v: view, month: row.month },
     });
   }
@@ -241,7 +241,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cdr.markForCheck();
       return;
     }
-    void this.router.navigate(['/spending'], {
+    void this.router.navigate(['/finance/spending'], {
       queryParams: { t: 'activity', v: 'spending', month: 'all', category: row.label },
     });
   }

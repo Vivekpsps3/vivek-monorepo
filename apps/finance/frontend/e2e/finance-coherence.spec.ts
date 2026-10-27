@@ -384,7 +384,6 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
   expect(JSON.stringify(activityMessages)).not.toContain('CROSS TAB PRIVATE DESCRIPTION');
   expect(vault.mutations.every(change => !JSON.stringify(change.body).includes('CROSS TAB PRIVATE DESCRIPTION'))).toBe(true);
 
-  await page.locator('.account-actions > summary').click();
   await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
   await expect(page).toHaveURL(/\/vault\/unlock$/);
   await expect(second).toHaveURL(/\/vault\/unlock$/);
@@ -399,7 +398,6 @@ test('signing out in one tab also ends the other synthetic session', async ({ pa
   const second = await page.context().newPage();
   await vault.open('/', page);
   await vault.open('/', second);
-  await page.locator('.account-actions > summary').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(second).toHaveURL(/\/login$/);
@@ -586,12 +584,8 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '/tmp/finance-ux-home-mobile.png', fullPage: true });
 
-  await page.locator('.account-actions > summary').click();
-  await page.getByRole('button', { name: 'Dark', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveClass(/on/);
-  const accountMenu = page.locator('.account-actions');
-  await page.locator('.account-actions > summary').click();
-  await expect(accountMenu).not.toHaveAttribute('open', '');
+  await page.getByRole('combobox', { name: 'Color theme' }).selectOption('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect.poll(() => page.locator('app-charts ui-card .ui-card').first().evaluate(card => getComputedStyle(card).backgroundColor))
     .toBe('rgb(30, 28, 25)');
   await expect.poll(nontransparentChartPixels).toBeGreaterThan(1000);
@@ -674,7 +668,7 @@ test('a release notice uses production build metadata and preserves an open tran
   await editor.getByLabel('Category', { exact: true }).fill('Food');
   await editor.getByLabel('Amount', { exact: true }).fill('18.25');
   await editor.getByLabel('Description (optional)', { exact: true }).fill('Draft survives notice');
-  await notice.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await editor.getByRole('button', { name: 'Dismiss update notice', exact: true }).click();
 
   await expect(notice).toBeHidden();
   await expect(editor).toBeVisible();

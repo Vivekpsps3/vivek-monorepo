@@ -73,7 +73,7 @@
             @for (row of monthSummary.categories; track row.label) {
               <tr>
                 <td>
-                  <a [routerLink]="['/spending']" [queryParams]="{ t: 'activity', v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
+                  <a [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
                 </td>
                 <td>{{ row.value | money }}</td>
                 <td>{{ formatShare(row.pct) }}</td>
@@ -91,7 +91,7 @@
         <ol class="top-list">
           @for (row of monthSummary.topPurchases; track row.id) {
             <li>
-              <a class="top-purchase-link" [routerLink]="['/spending']" [queryParams]="transactionActivityQuery(row.id)">
+              <a class="top-purchase-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(row.id)">
                 <span class="top-row">
                   <span class="top-desc">{{ row.description }}</span>
                   <span class="top-amt">{{ row.amount | money }}</span>
@@ -147,7 +147,7 @@
     <ui-card>
       <div class="selected-header">
         <h3>{{ selectedDate }}</h3>
-        <a class="calendar-cta" [routerLink]="['/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction</a>
+        <a class="calendar-cta" [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction</a>
       </div>
       @if (selectedTransactions.length || selectedPlans.length || selectedIncomeOccurrences.length) {
         <p class="day-net">
@@ -167,7 +167,7 @@
           </div>
         }
         @for (tx of selectedTransactions; track tx.id) {
-          <a class="tx-item tx-item-link" [routerLink]="['/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.category || 'transaction') + ' from ' + tx.date">
+          <a class="tx-item tx-item-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.category || 'transaction') + ' from ' + tx.date">
             <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ tx.kind || tx.type }}</ui-badge>
             <span class="category">{{ tx.category }}</span>
             <span class="amount" [class.positive]="transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0">
@@ -178,7 +178,7 @@
           </a>
         }
         @for (item of selectedPlans; track item.name + item.date + item.amount) {
-          <a class="tx-item tx-item-link" [routerLink]="['/recurring']" [queryParams]="{ t: 'spend' }" [attr.aria-label]="'Edit repeating ' + item.name">
+          <a class="tx-item tx-item-link" [routerLink]="['/finance/recurring']" [queryParams]="{ t: 'spend' }" [attr.aria-label]="'Edit repeating ' + item.name">
             <ui-badge variant="default">Repeats</ui-badge>
             <span class="category">{{ item.category }}</span>
             <span class="amount">−{{ item.amount | money }}</span>

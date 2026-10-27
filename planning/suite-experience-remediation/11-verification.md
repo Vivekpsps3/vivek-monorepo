@@ -1,5 +1,7 @@
 # Verification, exploratory audit, and evidence
 
+Current implementation evidence is [final verification](evidence/final-verification.md), with the [requirement acceptance map](evidence/requirement-acceptance.md). The planning-only results below are historical. Approved runtime retirement and all local gates are complete; PR delivery is recorded in STATUS.md.
+
 ## Checks completed for this planning change
 
 The change adds planning documentation and a planning index link, not product code. On 2026-10-25:
@@ -14,7 +16,7 @@ The change adds planning documentation and a planning index link, not product co
 | Plan link / requirement / task consistency and `git diff --check` | Passed: all relative plan links, R01–R34 sequence, 34 work-package IDs/dependencies, 68 distinct issue IDs, whitespace including untracked files | Content consistency check, not application behavior validation |
 | Full Python app/coverage/lint/typecheck, Angular/Karma, Playwright, production build/image | Not run for docs-only change; app dependencies absent | Must run during implementation before PR; no claim of product fixes verified |
 
-Checkout has no `.venv`, Finance/site `node_modules`, or Python `httpx`, FastAPI, SQLAlchemy, pytest, or Playwright dependencies. A browser cache directory alone is not a configured app test environment. Provision pinned dependencies when implementation starts; do not treat this as a reason to skip future gates. Public web fetch returned no extractable page content, so it is not a visual review of the live website.
+At the original planning audit, the checkout had no `.venv`, Finance/site `node_modules`, or Python `httpx`, FastAPI, SQLAlchemy, pytest, or Playwright dependencies. A browser cache directory alone is not a configured app test environment. Provision pinned dependencies when implementation starts; do not treat this as a reason to skip future gates. Public web fetch returned no extractable page content, so it is not a visual review of the live website.
 
 Executed module baseline:
 

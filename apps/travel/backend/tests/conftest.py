@@ -46,22 +46,24 @@ class _TravelClient:
 def client(tmp_path, monkeypatch):
     monkeypatch.delenv("FLIGHTAWARE_API_KEY", raising=False)
     monkeypatch.delenv("TRAVEL_ACCESS_TOKEN", raising=False)
+    (tmp_path / "index.csr.html").write_text(
+        '<app-root></app-root><script type="module" src="/main.js"></script>'
+    )
+    (tmp_path / "index.html").write_text("<h1>Public</h1>")
     url = f"sqlite:///{tmp_path / 'travel.db'}"
     from apps.server.auth import Principal
-    from apps.server.database import install, open_database
+    from apps.server.database import open_database
     from apps.server.main import Dependencies, Settings, create_app
     from apps.travel.backend.deps import get_geocoder
     from apps.travel.backend.models import Base as TravelBase
 
     database = open_database(url)
-    install(database)
     TravelBase.metadata.create_all(database.engine)
     application = create_app(
         Settings(
             database_url=url,
             release="test",
             web_root=tmp_path,
-            portfolio_root=tmp_path,
             openapi=False,
         ),
         Dependencies(

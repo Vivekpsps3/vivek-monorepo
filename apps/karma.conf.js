@@ -4,6 +4,12 @@ const { createRequire } = require('module');
 // Karma coverage gate. Thresholds sit about 1 point below the measured totals.
 // Karma only instruments files the specs load, so these are not whole-app coverage.
 const coverageGates = {
+  web: {
+    statements: 60,
+    branches: 52,
+    functions: 56,
+    lines: 62,
+  },
   'finance-app': {
     statements: 60,
     branches: 52,
@@ -20,7 +26,7 @@ const coverageGates = {
 
 module.exports = function (config) {
   const projectDir = process.cwd();
-  const projectName = require(path.join(projectDir, 'package.json')).name;
+  const projectName = process.env.SUITE_TEST_PROJECT;
   const gate = coverageGates[projectName];
   if (!gate) {
     throw new Error(`No Karma coverage gate for ${projectName} (${projectDir})`);
@@ -45,7 +51,7 @@ module.exports = function (config) {
       suppressAll: true,
     },
     coverageReporter: {
-      dir: path.join(projectDir, 'coverage', projectName),
+      dir: path.join(projectDir, ({ 'finance-app': 'apps/finance/frontend', 'personal-website': 'apps/site', web: 'apps/web' })[projectName], 'coverage', projectName),
       subdir: '.',
       reporters: [{ type: 'text-summary' }, { type: 'json-summary' }],
       check: {

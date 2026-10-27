@@ -24,13 +24,12 @@ from fastapi.testclient import TestClient
 
 import apps.finance.backend.main as finance_main
 from apps.finance.backend import database as finance_db
-from apps.finance.backend.auth import create_user
-from apps.finance.backend.models import UserRole, UserSession
-from apps.server.database import install, open_database
+from apps.server.database import open_database
+from apps.server.identity.models import UserRole, UserSession
+from apps.server.identity.session import create_user
 from apps.server.main import Dependencies, Settings, create_app
 
 _database = open_database("sqlite:///:memory:")
-install(_database)
 finance_db.publish(_database)
 finance_db.init_database()
 
@@ -40,7 +39,6 @@ _app = create_app(
         database_url=_database.url,
         release="test",
         web_root=Path("/app/web/finance"),
-        portfolio_root=Path("/app/web/portfolio"),
         openapi=not _disabled,
     ),
     Dependencies(database=_database, check_schema=False, check_frontend=False),
@@ -58,7 +56,7 @@ TEST_PASSWORD = "correct-horse-battery-staple"
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limits():
-    from apps.finance.backend.rate_limit import clear_limits
+    from apps.server.rate_limit import clear_limits
 
     clear_limits()
     yield

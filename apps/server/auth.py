@@ -1,6 +1,6 @@
 """One principal for every domain route.
 
-Finance still owns the user row, the challenge, and the session cookie.
+The server identity package owns users, challenges and the existing session cookie.
 Domains ask this dependency for the signed-in person instead of keeping a
 second principal type or calling Finance over HTTP.
 """
@@ -23,9 +23,9 @@ class Principal:
 
 
 def require_principal(
-    request: Request, response: Response, db: Session = Depends(get_db)
+    request: Request, response: Response, db: Session = Depends(get_db, scope="function")
 ) -> Principal:
-    from apps.finance.backend.auth import get_current_user
+    from apps.server.identity.session import get_current_user
 
     user = get_current_user(request, response, db)
     username = user.username if isinstance(user.username, str) else None

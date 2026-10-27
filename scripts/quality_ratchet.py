@@ -110,6 +110,7 @@ def render(counts: Counter[tuple[str, str]]) -> str:
 
 def parse_baseline(text: str, label: str) -> Counter[tuple[str, str]]:
     counts: Counter[tuple[str, str]] = Counter()
+    source_moves = json.loads((ROOT / "quality/source-moves.json").read_text())
     for line_number, raw in enumerate(text.splitlines(), 1):
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -118,7 +119,7 @@ def parse_baseline(text: str, label: str) -> Counter[tuple[str, str]]:
         if len(parts) != 3:
             raise SystemExit(f"{label}:{line_number}: expected path, code, count")
         path_text, code, count_text = parts
-        counts[(path_text, code)] = int(count_text)
+        counts[(source_moves.get(path_text, path_text), code)] += int(count_text)
     return counts
 
 
@@ -198,20 +199,24 @@ def parse_eslint_report(payload: list[dict[str, object]]) -> list[tuple[str, str
 
 
 def eslint_findings(prefix: str, cwd: Path, targets: list[str]) -> list[tuple[str, str]]:
+    scoped = [str((cwd / target).relative_to(ROOT)) for target in targets]
+    if prefix == "apps/finance/frontend" and cwd == ROOT / "apps/finance/frontend":
+        scoped += ["apps/web/src", "apps/travel/frontend/src", "apps/media/frontend/src"]
+    patterns = [
+        pattern for target in scoped for pattern in (f"{target}/**/*.ts", f"{target}/**/*.html")
+    ]
     completed = run(
         [
-            "npm",
-            "exec",
-            "--prefix",
-            str(ROOT / prefix),
-            "--",
-            "eslint",
+            str(ROOT / "node_modules/.bin/eslint"),
+            "--config",
+            str(ROOT / "eslint.config.js"),
             "--format",
             "json",
             "--report-unused-disable-directives",
-            *targets,
+            "--no-error-on-unmatched-pattern",
+            *patterns,
         ],
-        cwd,
+        ROOT,
     )
     if completed.returncode not in (0, 1):
         sys.stderr.write(completed.stdout)

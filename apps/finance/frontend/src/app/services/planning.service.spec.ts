@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { PlanningService } from './planning.service';
 import { MC_TOOL_ID } from '../models/planning.model';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { MoneyPipe } from '@vivek/ui';
 import { formatStoredMoney } from '../shared/stored-money';
 
 describe('PlanningService', () => {

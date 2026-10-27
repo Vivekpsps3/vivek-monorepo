@@ -2,7 +2,7 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { TestBed } from '@angular/core/testing';
 import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
-import { SILENT_ERROR_TOAST } from '../core/http-error.interceptor';
+import { SILENT_ERROR_TOAST } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { VaultService } from './vault.service';
 

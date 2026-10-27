@@ -22,7 +22,7 @@ from apps.travel.backend.services.budget import (
     rollup,
 )
 from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
-from apps.travel.backend.services.money import fmt_days, fmt_money, store_days, stored_days
+from apps.travel.backend.services.money import fmt_days, fmt_money, store_days
 from apps.travel.backend.services.pto import (
     counted_pto_dates,
     load_usages,
@@ -243,59 +243,59 @@ def _movement(row: Transport, day: date) -> str | None:
 
 def budget_for(trip: Trip) -> dict:
     lines: list[BudgetInput] = []
-    for row in trip.transports:
-        if row.cost_cents is None:
+    for transport in trip.transports:
+        if transport.cost_cents is None:
             continue
         lines.append(
             BudgetInput(
                 "transport",
-                row.id,
-                category_for_transport(row.role, row.mode),
-                _budget_label(row),
-                row.cost_cents,
-                row.currency,
-                bool(row.paid),
+                transport.id,
+                category_for_transport(transport.role, transport.mode),
+                _budget_label(transport),
+                transport.cost_cents,
+                transport.currency,
+                bool(transport.paid),
             )
         )
-    for row in trip.plans:
-        if row.cost_cents is None:
+    for plan in trip.plans:
+        if plan.cost_cents is None:
             continue
-        label = row.title if not row.place_name else f"{row.title} · {row.place_name}"
+        label = plan.title if not plan.place_name else f"{plan.title} · {plan.place_name}"
         lines.append(
             BudgetInput(
                 "plan",
-                row.id,
-                category_for_plan(row.kind),
+                plan.id,
+                category_for_plan(plan.kind),
                 label,
-                row.cost_cents,
-                row.currency,
-                bool(row.paid),
+                plan.cost_cents,
+                plan.currency,
+                bool(plan.paid),
             )
         )
-    for row in trip.parking:
-        if row.cost_cents is None:
+    for parking in trip.parking:
+        if parking.cost_cents is None:
             continue
         lines.append(
             BudgetInput(
                 "parking",
-                row.id,
+                parking.id,
                 "parking",
-                row.place_name or "Parking",
-                row.cost_cents,
-                row.currency,
-                bool(row.paid),
+                parking.place_name or "Parking",
+                parking.cost_cents,
+                parking.currency,
+                bool(parking.paid),
             )
         )
-    for row in trip.budget_lines:
+    for extra_cost in trip.budget_lines:
         lines.append(
             BudgetInput(
                 "manual",
-                row.id,
-                row.category,
-                row.label,
-                row.amount_cents,
-                row.currency,
-                bool(row.paid),
+                extra_cost.id,
+                extra_cost.category,
+                extra_cost.label,
+                extra_cost.amount_cents,
+                extra_cost.currency,
+                bool(extra_cost.paid),
             )
         )
     rolled = rollup(lines)
@@ -414,7 +414,7 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
         "notes": trip.notes,
         "counts_as_pto": bool(trip.counts_as_pto),
         "pto_mode": trip.pto_mode,
-        "pto_days": store_days(stored_days(trip.pto_days)) if trip.pto_days else None,
+        "pto_days": trip.pto_days if trip.pto_days is not None else None,
         "pto_days_effective": fmt_days(effective),
         "pto_dates": pto_dates_payload(trip),
         "nights": nights_away(trip.start_date, trip.end_date),
@@ -626,7 +626,7 @@ def build_summary(db, today: date | None = None, *, user_id: int) -> dict:
             "phase": card["phase"],
             "days_until": card["days_until"],
             "next_action": _next_action(card["phase"], card["days_until"]),
-            "href": f"/travel/#/trips/{card['id']}",
+            "href": f"/travel/trips/{card['id']}",
         },
     }
 

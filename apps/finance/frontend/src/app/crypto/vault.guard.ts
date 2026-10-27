@@ -1,8 +1,8 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { from, map, of, switchMap } from 'rxjs';
-import { authNavigation } from '../auth/after-auth';
-import { AuthService } from '../auth/auth.service';
+import { authNavigation } from '@vivek/ui';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { VaultService } from './vault.service';
 
 /**
@@ -11,7 +11,7 @@ import { VaultService } from './vault.service';
  * - vault locked -> /vault/unlock
  */
 export const vaultGuard: CanActivateFn = () => {
-  const auth = inject(AuthService);
+  const auth = inject(SESSION_CONTEXT);
   const vault = inject(VaultService);
   const router = inject(Router);
 
@@ -23,8 +23,8 @@ export const vaultGuard: CanActivateFn = () => {
       }
       return from(vault.refreshStatus()).pipe(
         map(status => {
-          if (!status.exists) return router.createUrlTree(['/vault/setup']);
-          if (!vault.isUnlocked) return router.createUrlTree(['/vault/unlock']);
+          if (!status.exists) return router.createUrlTree(['/finance/vault/setup']);
+          if (!vault.isUnlocked) return router.createUrlTree(['/finance/vault/unlock']);
           return true;
         })
       );

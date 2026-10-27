@@ -1,4 +1,11 @@
 export { UiButtonComponent, type UiButtonVariant, type UiButtonSize } from './ui-button/ui-button.component';
+export { SESSION_CONTEXT, type SessionPort } from './session-context';
+export { UPDATE_NOTICE, type UpdateNotice } from './update-notice';
+export { httpErrorInterceptor, silentErrorToast, SILENT_ERROR_TOAST } from './http-error.interceptor';
+export { AppDatePipe, AppDateRangePipe } from './app-date.pipe';
+export { MoneyPipe, MoneyAriaPipe } from './money.pipe';
+export { ThemeService, type Theme } from './theme.service';
+export { SuiteHubLinkComponent } from './suite-hub-link.component';
 export { UiCardComponent } from './ui-card/ui-card.component';
 export { UiInputComponent } from './ui-input/ui-input.component';
 export { UiPageHeaderComponent } from './ui-page-header/ui-page-header.component';
@@ -52,3 +59,6 @@ export {
   type ThemeChoice,
   type UiTheme,
 } from './theme-preference';
+
+export { authGuard, adminGuard } from './auth.guard';
+export { authNavigation, safeNextPathFrom, safeNextPath, authPath, loginHref, afterAuthUrl, continueAfterAuth } from './after-auth';

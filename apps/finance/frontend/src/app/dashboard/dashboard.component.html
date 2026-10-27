@@ -1,7 +1,7 @@
 <div class="page dashboard">
   @if (!isLoading && !error && netWorth) {
     <nav class="home-overview" aria-label="Home overview">
-      <a routerLink="/have" class="home-tile home-tile--balance">
+      <a routerLink="/finance/have" class="home-tile home-tile--balance">
         <span class="home-tile__topline">What you have <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money">{{ have | money }}</span>
 
@@ -28,7 +28,7 @@
         }
       </a>
 
-      <a routerLink="/spending" class="home-tile home-tile--activity">
+      <a routerLink="/finance/spending" class="home-tile home-tile--activity">
         <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
         <span class="home-split">
@@ -74,12 +74,12 @@
           <p>Add the parts you track, in any order.</p>
         </div>
         <nav class="starter-links" aria-label="Finance setup">
-          <a routerLink="/have" [queryParams]="{ t: 'assets' }"><ui-icon name="wallet" size="sm" />Add assets and debts<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/have" [queryParams]="{ t: 'holdings' }"><ui-icon name="portfolio" size="sm" />Add holdings<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/spending" [queryParams]="{ t: 'imports' }"><ui-icon name="upload" size="sm" />Import bank CSVs<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/recurring" [queryParams]="{ t: 'pay' }"><ui-icon name="building" size="sm" />Add jobs and pay<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/recurring" [queryParams]="{ t: 'spend' }"><ui-icon name="calendar" size="sm" />Add bills and subscriptions<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/planning"><ui-icon name="trending" size="sm" />Build a plan<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }"><ui-icon name="wallet" size="sm" />Add assets and debts<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }"><ui-icon name="portfolio" size="sm" />Add holdings<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/spending" [queryParams]="{ t: 'imports' }"><ui-icon name="upload" size="sm" />Import bank CSVs<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/recurring" [queryParams]="{ t: 'pay' }"><ui-icon name="building" size="sm" />Add jobs and pay<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }"><ui-icon name="calendar" size="sm" />Add bills and subscriptions<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/planning"><ui-icon name="trending" size="sm" />Build a plan<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
         </nav>
       </section>
     }

@@ -30,5 +30,5 @@ export const routes: Routes = [
     title: 'Encryption demo · Vivek Panchagnula',
     data: { description: 'An interactive browser-only demonstration of ECDH key agreement and authenticated AES-GCM encryption.' },
   },
-  { path: '', redirectTo: '/home', pathMatch: 'full' },
+  { path: '', component: HomeComponent, pathMatch: 'full', title: 'Vivek Panchagnula · Software, infrastructure, and AI', data: { description: 'Software, infrastructure, and AI by Vivek Panchagnula.' } },
 ];

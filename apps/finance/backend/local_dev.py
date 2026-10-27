@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from apps.finance.backend.models import User, UserRole
+from apps.server.identity.models import User, UserRole
 
 LOCAL_DEV_USERNAME = "local-dev"
 LOCAL_DEV_EMAIL = "local-dev@localhost"
@@ -112,7 +112,7 @@ def is_local_dev_identity(user: User) -> bool:
 
 
 def ensure_local_dev_user(db: Session) -> User:
-    from apps.finance.backend.auth import create_user
+    from apps.server.identity.session import create_user
 
     existing = db.query(User).filter(User.email == LOCAL_DEV_EMAIL).one_or_none()
     if existing:
@@ -171,7 +171,7 @@ def open_local_dev_session(db: Session, request: Request, response: Response) ->
     Mutations still need the CSRF cookie from an earlier GET, so the normal
     double-submit check stays in place.
     """
-    from apps.finance.backend.auth import create_session
+    from apps.server.identity.session import create_session
 
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         raise HTTPException(status_code=401, detail="Login required")

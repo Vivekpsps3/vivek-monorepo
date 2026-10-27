@@ -54,14 +54,17 @@ def _payload(db: Session, user_id: int, today: date | None = None) -> dict:
 
 
 @router.get("/pto")
-def read_pto(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+def read_pto(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     return _payload(db, principal.id)
 
 
 @router.put("/pto/policy")
 def save_policy(
     body: PtoPolicyIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     row = _policy_row(db, principal.id)
@@ -85,7 +88,7 @@ def save_policy(
 @router.post("/pto/entries", status_code=201)
 def create_entry(
     body: PtoEntryIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     days = (
@@ -110,7 +113,9 @@ def create_entry(
 
 @router.delete("/pto/entries/{entry_id}", status_code=204)
 def delete_entry(
-    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     row = db.get(PtoEntry, entry_id)
     if row is None or row.user_id != principal.id:
@@ -127,7 +132,7 @@ def preview(
     start: date,
     end: date,
     days: Decimal | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     policy = policy_from_row(_policy_row(db, principal.id))

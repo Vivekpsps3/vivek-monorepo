@@ -11,10 +11,11 @@ import { SubscriptionsComponent } from '../subscriptions/subscriptions.component
 import { FinanceService } from '../services/finance.service';
 import { UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
 import { FixedExpense, Subscription } from '../models/transaction.model';
-import { countableCents, dollarsFromCountedCents, needsFixing } from '@vivek/browser';
+import { dollarsFromCountedCents } from '@vivek/browser';
+import { countableCents, needsFixing } from '../utils/validators';
 import { UiBadgeComponent } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { MoneyPipe } from '@vivek/ui';
+import { AppDatePipe } from '@vivek/ui';
 
 export interface CommitmentRow {
   id: number;
@@ -258,7 +259,7 @@ export class RecurringHubComponent implements OnInit {
         params.keys.forEach(key => { const value = params.get(key); if (value !== null) queryParams[key] = value; });
         queryParams['t'] = 'pay';
         queryParams['history'] = '1';
-        void this.router.navigate(['/recurring'], { queryParams, replaceUrl: true });
+        void this.router.navigate(['/finance/recurring'], { queryParams, replaceUrl: true });
         return;
       }
       this.tab = requested === 'spend' || requested === 'bills' || requested === 'subs' ? 'spend' : 'pay';

@@ -1,14 +1,14 @@
-import os
 import json
 import math
+import os
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from apps.finance.backend.logging_config import get_logger
 from apps.finance.backend.models import MarketResearchCache, TickerQuote

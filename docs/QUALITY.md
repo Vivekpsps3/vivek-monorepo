@@ -1,11 +1,11 @@
 # Quality gates
 
-`make test` runs the fast checks, the four Python coverage gates, and both Karma suites. Lint and type checking are separate so a formatting or type failure is not hidden inside the test log.
+`make test` runs the fast checks, the four Python coverage gates, and all three Karma suites. Lint and type checking are separate so a formatting or type failure is not hidden inside the test log.
 
 ```bash
 make lint          # Ruff format check, Ruff, ESLint, and inline suppressions
 make typecheck     # mypy and tsc --noEmit
-make e2e           # production finance bundle at /finance/, then Playwright
+make e2e           # root production bundle, then Finance Playwright
 make lint-baseline # rewrite quality/*.txt after a finding count shrinks
 make coverage-pin  # rewrite quality/coverage.txt from a fresh measurement
 ```
@@ -20,18 +20,7 @@ Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requireme
 
 ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts a `# noqa` comment (any case, including `# ruff: noqa` and `# flake8: noqa`). The `#` is required, so the word `noqa` inside a string is not a suppression. It also counts `# type: ignore`, any `# mypy:` inline option (including `ignore-errors` and `disable-error-code`), `eslint-disable`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `# pragma: no cover`, and `istanbul` / `c8` / `v8` `ignore` in `apps/`, `scripts/`, and `packages/`. `apps/site/flask` is skipped, same as the other Python gates. Alembic `versions/` directories are skipped by that path, not because the directory is named `versions`.
 
-Current baselines:
-
-| Tool | Findings left |
-| --- | ---: |
-| Ruff | 165 |
-| mypy | 384 |
-| ESLint, finance | 481 |
-| ESLint, site | 9 |
-| ESLint, packages | 0 |
-| Inline suppressions | 0 |
-
-Counting warnings did not move the ESLint totals: the current findings are all errors. `transactions.component.spec.ts` stays at 19 `@typescript-eslint/no-explicit-any`. The two route-action fixtures from the spending flatten are typed `ImportReceipt`s. The return-path specs in `after-auth.spec.ts` stub the router with `jasmine.SpyObj<Router>`, so that file no longer adds an `any`.
+Current working baselines after source-path remapping are Ruff 101, mypy 87, Finance/web ESLint 474, public ESLint 9, packages ESLint 0 and suppressions 0. `quality/source-moves.json` maps relocated identity files so the base-branch comparison follows the same debt. Updating a path must not increase an allowance. Exact records live in `quality/*.txt`.
 
 The leftover Ruff findings are import order, pyupgrade, and simplify rules, plus `RUF012` on test doubles. The leftover mypy findings are mostly SQLAlchemy `Column` inference. The leftover ESLint findings are `no-explicit-any`, `prefer-inject`, and a handful of template rules. New code still has to stay inside those counts.
 
@@ -56,9 +45,9 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 ## TypeScript
 
-Both Angular apps already compile with `strict`. `make typecheck` runs `tsc --noEmit` for each app (application and spec configs) and for `packages/tsconfig.json` (`packages/browser`, `packages/auth`, `packages/ui`). `noUncheckedIndexedAccess` is not enabled.
+All feature code and the root Angular application compile with `strict`. `make typecheck` runs `tsc --noEmit` for each app (application and spec configs) and for `packages/tsconfig.json` (`packages/browser`, `packages/auth`, `packages/ui`). `noUncheckedIndexedAccess` is not enabled.
 
-ESLint 9 with `angular-eslint` and `typescript-eslint` covers both apps. The packages config lives in `packages/eslint.config.js` because ESLint 9 will not lint files outside the config directory. It loads the finance app's installed plugins. `packages/` has no findings. `no-undef` is off for TypeScript files. Unused names that start with `_` are allowed.
+ESLint 9 with `angular-eslint` and `typescript-eslint` uses the root `eslint.config.js` and root-installed plugins for all apps and packages. `packages/` has no findings. `no-undef` is off for TypeScript files. Unused names that start with `_` are allowed.
 
 Prettier is not configured. The tree has no formatter today, and formatting both apps would be a review of its own. Adopt it in a follow-up, in one commit, and add that commit to `.git-blame-ignore-revs`.
 
@@ -84,10 +73,10 @@ Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json
 
 ## Playwright
 
-`make e2e` builds the finance app with `--base-href /finance/`, writes the release manifest, and serves `dist/finance-app/browser` at `http://127.0.0.1:4173/finance/`. That is the same prefix the production image uses, so a broken base href fails this job. `SuiteLocationStrategy` keeps `/auth` and `/hub` outside the prefix, and `scripts/serve-spa.mjs` serves the shell for those paths. Extensionless routes fall back to `index.html`. A missing `.js` or `.css` file is a 404, and a bad percent-escape is a 400.
+`make e2e` builds the single root app at `dist/web/browser`, writes its release manifest, then runs Finance Playwright through the real server at port 4173. Travel and Media use the same `tests/e2e/server.py` harness with isolated fixture databases and ports. All three keep retries at zero. Root `/auth` and `/hub`, canonical domain paths, old aliases, missing assets and public/private CSP transitions use production routing.
 
-`syntheticVault` unlocks to `/hub` and then opens the requested route. `/login` is not treated as a successful unlock. Legacy links that rewrite the query pass the final URL (`/spending?t=imports` becomes `/spending?t=activity&receipts=1`). Navigation waits for that URL and for the route heading, because `pushState` updates the address before Angular has routed. The receipt-undo spec waits for the Undo button. The imports route already opens the disclosure, and clicking the summary toggles it shut.
+Run Travel with `npx playwright test --config apps/travel/e2e/playwright.config.js`, and Media with `npx playwright test --config apps/media/e2e/playwright.config.ts`. `npm ci` runs once at the root. Existing Finance/site `npm test --prefix` commands are forwarding wrappers. Root/shared UI Karma is `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI`. Screenshots are discovered by default and outputs are isolated under `test-results/{finance,travel,media}`. Set `CHROME_BIN` for Karma or `PLAYWRIGHT_CHROMIUM_EXECUTABLE` for an existing Chromium installation.
 
-`npm run e2e` in `apps/finance/frontend` still uses `ng serve` at `/`. The container route check stays `make docker-build && make test-suite-routes` (`python -m apps.server.checks`).
+The production browser check is `SITE_TEST_URL=http://127.0.0.1:PORT node scripts/test-site-browser.mjs` against an initially empty disposable release database. It verifies public content/network isolation, local crypto, real account creation, private SPA transitions, map DOM, allowed images and blocked script/HTML sinks. Tiles/images use deterministic interception. `make docker-build test-suite-routes` and `bash scripts/validate-seeded-adoption.sh` validate the actual immutable image and historical/current entrypoints. These gates supplement the unit/browser suites.
 
 Traces and screenshots are kept on failure (`trace: retain-on-failure`, retries stay 0). CI uploads `test-results` and `playwright-report` when the job fails. Playwright's browser download is cached on the `@playwright/test` version and shared by the finance e2e job, the media e2e job, and the image job. Finance and the image install operating-system dependencies on a cache hit. Media installs Chromium only: the GitHub-hosted image already has the shared libraries, and `--with-deps` was spending about 16 minutes downloading fonts.

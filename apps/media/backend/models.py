@@ -17,8 +17,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from apps.media.backend.services.title_sort import title_sort_key
 
 
 def utc_now() -> datetime:
@@ -36,6 +40,9 @@ class CatalogItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
+    title_sort: Mapped[str] = mapped_column(
+        String(300), nullable=False, default="", server_default=text("''")
+    )
     creator: Mapped[str | None] = mapped_column(String(300))
     year: Mapped[int | None] = mapped_column(Integer)
     overview: Mapped[str | None] = mapped_column(Text)
@@ -57,6 +64,12 @@ class CatalogItem(Base):
     entries: Mapped[list["UserEntry"]] = relationship(back_populates="catalog")
     episodes: Mapped[list["Episode"]] = relationship(cascade="all, delete-orphan")
     releases: Mapped[list["Release"]] = relationship(cascade="all, delete-orphan")
+
+
+@event.listens_for(CatalogItem, "before_insert")
+@event.listens_for(CatalogItem, "before_update")
+def _sync_title_sort(_mapper, _connection, target: CatalogItem) -> None:
+    target.title_sort = title_sort_key(target.title or "")
 
 
 class UserEntry(Base):
@@ -84,6 +97,7 @@ class UserEntry(Base):
     portrait_source_url: Mapped[str | None] = mapped_column(Text)
     portrait_source_id: Mapped[str | None] = mapped_column(String(120))
     portrait_crop: Mapped[str | None] = mapped_column(String(120))
+    portrait_attribution: Mapped[str | None] = mapped_column(Text)
     # Artist relationship. Null on every non-artist entry. 0 is unfollowed.
     followed: Mapped[bool | None] = mapped_column(Boolean)
     follow_provenance: Mapped[str | None] = mapped_column(String(40))
@@ -169,6 +183,24 @@ class EpisodeProgress(Base):
     )
     watched: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     watched_on: Mapped[date | None] = mapped_column(Date)
+    operation_token: Mapped[str | None] = mapped_column(String(36))
+
+
+class ProgressOperation(Base):
+    """Undo scope for one atomic catch-up command; personal edits clear the token."""
+
+    __tablename__ = "progress_operations"
+
+    token: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    entry_id: Mapped[int] = mapped_column(
+        ForeignKey("user_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    changed_ids: Mapped[str] = mapped_column(Text, nullable=False)
+    undone: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class MusicAlbum(Base):

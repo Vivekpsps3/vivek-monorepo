@@ -1,4 +1,4 @@
-import { FieldIssue } from '@vivek/browser';
+import { FieldIssue } from '../utils/validators';
 
 /** Inline dialog save failure. The draft stays open and this alert receives focus. */
 export function dialogSaveAlert(): string {

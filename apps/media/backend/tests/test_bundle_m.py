@@ -33,14 +33,31 @@ def test_album_year_must_be_between_1000_and_3000(client: TestClient):
     assert kept.status_code == 200
 
 
-def test_library_continue_rides_the_one_library_response(client: TestClient):
+def test_library_pages_omit_continuation_but_now_summary_keeps_next_episodes(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", "2026-10-27")
     created = client.post("/api/library", json={"kind": "book", "title": "Dune", "status": "want"})
     assert created.status_code == 200
-    payload = client.get("/api/library").json()
-    assert "items" in payload
-    assert "continue" in payload
+    series = client.post(
+        "/api/library", json={"kind": "tv", "title": "A series", "status": "in_progress"}
+    ).json()
+    episode = client.post(
+        f"/api/entries/{series['id']}/episodes",
+        json={
+            "season_number": 1,
+            "episode_number": 1,
+            "title": "Pick up here",
+            "air_date": "2026-10-01",
+        },
+    )
+    assert episode.status_code == 200
+    payload = client.get("/api/library", params={"kind": "book"}).json()
+    assert "continue" not in payload
     assert payload["items"][0]["title"] == "Dune"
     assert "progress_value" in payload["items"][0]
+    continuation = client.get("/api/summary").json()["next_episodes"]
+    assert len(continuation) == 1
+    assert continuation[0]["entry_id"] == series["id"]
+    assert continuation[0]["title"] == "Pick up here"
 
 
 def test_search_marks_the_saved_entry_id(client, monkeypatch):
@@ -247,7 +264,7 @@ def test_library_does_not_rebuild_the_full_summary(client, monkeypatch):
     listed = client.get("/api/library")
     assert listed.status_code == 200
     assert listed.json()["items"][0]["title"] == "Dune"
-    assert listed.json()["continue"] == []
+    assert "continue" not in listed.json()
 
 
 def test_public_tmdb_page_pairs_each_title_with_its_poster():

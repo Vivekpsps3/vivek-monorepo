@@ -101,6 +101,7 @@ def test_tmdb_movie_detail_prefers_the_official_api(monkeypatch):
 
     with _http(handler) as http:
         row = tmdb_movie_detail(http, "movie:27205")
+        assert row is not None
     assert row["title"] == "Inception"
     assert row["source_id"] == "movie:27205"
     assert row["provenance"]["coverage"] == "official"
@@ -122,6 +123,7 @@ def test_tmdb_movie_detail_without_a_key_reads_the_public_page(monkeypatch):
     </html>
     """
     parsed = parse_tmdb_public_detail(page, "27205")
+    assert parsed is not None
     assert parsed["title"] == "Inception"
     assert parsed["year"] == 2010
     assert parsed["releases"][0]["precision"] == "year"
@@ -138,6 +140,7 @@ def test_tmdb_movie_detail_without_a_key_reads_the_public_page(monkeypatch):
 
     with _http(handler) as http:
         row = tmdb_movie_detail(http, "movie:27205")
+        assert row is not None
     assert row["title"] == "Inception"
     assert row["source_id"] == "movie:27205"
     assert row["provenance"]["coverage"] == "extraction"
@@ -169,6 +172,7 @@ def test_tmdb_series_detail_needs_a_key_and_keeps_lifecycle(monkeypatch):
 
     with _http(handler) as http:
         row = tmdb_tv_detail(http, "tv:1396")
+        assert row is not None
     assert row["creator"] == "AMC"
     assert row["extra"]["lifecycle"] == "Ended"
     assert row["extra"]["episode_count"] == 62
@@ -213,6 +217,7 @@ def test_tvmaze_detail_includes_lifecycle_and_episodes(monkeypatch):
 
     with _http(handler) as http:
         row = tvmaze_detail(http, "169")
+        assert row is not None
     assert row["extra"]["lifecycle"] == "Ended"
     assert row["episodes"][0]["title"] == "Pilot"
     assert row["episodes"][0]["overview"] == "A teacher."
@@ -230,6 +235,7 @@ def test_tvmaze_detail_includes_lifecycle_and_episodes(monkeypatch):
     )
     with _http(broken) as http:
         partial = tvmaze_detail(http, "169")
+        assert partial is not None
     assert partial["title"] == "Breaking Bad"
     assert partial["episodes"] == []
     with _http(lambda _request: pytest.fail("bad id")) as http:
@@ -257,8 +263,11 @@ def test_openlibrary_detail_does_not_invent_a_day():
 
     with _http(handler) as http:
         work = openlibrary_detail(http, "OL1W")
+        assert work is not None
         vague = openlibrary_detail(http, "OL2W")
+        assert vague is not None
         edition = openlibrary_detail(http, "OL3M")
+        assert edition is not None
         missing = openlibrary_detail(http, "not-a-key")
     assert work["extra"]["record"] == "work"
     assert work["year"] == 1965
@@ -298,6 +307,7 @@ def test_game_detail_names_platforms_and_skips_metacritic(monkeypatch):
 
     with _http(rawg) as http:
         row = rawg_detail(http, "1")
+        assert row is not None
     assert row["extra"]["platforms"] == ["PC"]
     assert row["external_ratings"][0]["scale"] == "0–5"
     assert row["provenance"]["coverage"] == "official"
@@ -327,6 +337,7 @@ def test_game_detail_names_platforms_and_skips_metacritic(monkeypatch):
 
     with _http(steam) as http:
         game = steam_detail(http, "1145360")
+        assert game is not None
     assert game["external_ratings"] == []
     assert game["extra"]["platforms"] == ["Windows"]
     assert game["releases"][0]["released_on"] == "2020-09-17"
@@ -356,6 +367,7 @@ def test_itunes_detail_looks_up_the_track_id():
 
     with _http(handler) as http:
         row = itunes_detail(http, "413416")
+        assert row is not None
     assert row["title"] == "Inception"
     assert row["creator"] == "Christopher Nolan"
     assert row["provenance"]["provider"] == "itunes"
@@ -401,8 +413,11 @@ def test_musicbrainz_detail_keeps_release_and_recording_ids():
 
     with _http(handler) as http:
         artist = musicbrainz_artist_detail(http, "f4fdbb4c-e4b7-47a0-b83b-d91bbfcfa387")
+        assert artist is not None
         album = musicbrainz_album_detail(http, "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe")
+        assert album is not None
         track = musicbrainz_track_detail(http, "11111111-1111-1111-1111-111111111111")
+        assert track is not None
         skipped = musicbrainz_album_detail(http, "not-an-mbid")
     assert artist["releases"] == []
     assert artist["year"] == 1993
@@ -449,6 +464,7 @@ def test_lookup_dispatches_one_detail_path_per_kind(monkeypatch):
     ]
     for source, kind, source_id, name in pairs:
         row = live_lookup(source, kind, source_id)
+        assert row is not None
         assert row["source"] == name
     assert [item[0] for item in seen] == [item[3] for item in pairs]
     assert live_lookup("steam", "book", "4") is None
@@ -571,7 +587,7 @@ def test_a_mismatched_detail_does_not_become_canonical(client, monkeypatch):
 
 
 def test_later_detail_fills_blanks_without_erasing_a_written_overview(client, monkeypatch):
-    state = {"detail": None}
+    state: dict = {"detail": None}
 
     def lookup(*_args, **_kwargs):
         return state["detail"]

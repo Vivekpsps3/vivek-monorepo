@@ -95,9 +95,18 @@ def next_episodes(db: Session, user_id: int, entries: list[UserEntry] | None = N
             "in_progress",
             "want",
             "anticipating",
+            "completed",
         }:
             continue
         state = episode_state(db, user_id, entry.catalog)
+        if entry.status == "completed":
+            from apps.media.backend.services.metadata import lifecycle
+
+            if (
+                lifecycle(db, entry.catalog_id)["state"] != "ongoing"
+                or state["next_episode"] is None
+            ):
+                continue
         chosen = state["next_episode"] or (
             state["upcoming_episodes"][0] if state["upcoming_episodes"] else None
         )
@@ -115,6 +124,9 @@ def next_episodes(db: Session, user_id: int, entries: list[UserEntry] | None = N
                 "title": chosen.get("title"),
                 "air_date": chosen.get("air_date"),
                 "state": "next" if aired else "upcoming",
+                "lifecycle": lifecycle(db, entry.catalog_id)
+                if entry.status == "completed"
+                else None,
             }
         )
     return found[:4]

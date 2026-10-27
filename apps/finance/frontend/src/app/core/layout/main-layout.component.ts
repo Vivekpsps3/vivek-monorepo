@@ -1,17 +1,16 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ApiHealthService } from '../../services/api-health.service';
-import { AuthUser } from '../../auth/auth.models';
-import { AuthService } from '../../auth/auth.service';
+import { AuthUser } from '@vivek/auth';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { Subject, filter, takeUntil } from 'rxjs';
 import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiIconName } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceService } from '../../services/finance.service';
-import { Theme, ThemeService } from '../../services/theme.service';
+import { Theme, ThemeService } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
-import { SuiteHubLinkComponent } from './suite-hub-link.component';
 
 export interface NavItem {
   path: string;
@@ -32,7 +31,7 @@ interface NavGroup {
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, UiDialogComponent, SuiteHubLinkComponent],
+  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, UiDialogComponent],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,7 +39,7 @@ interface NavGroup {
 export class MainLayoutComponent implements OnInit, OnDestroy {
   private health = inject(ApiHealthService);
   private cdr = inject(ChangeDetectorRef);
-  private auth = inject(AuthService);
+  private auth = inject(SESSION_CONTEXT);
   private router = inject(Router);
   private confirm = inject(ConfirmService);
   private finance = inject(FinanceService);
@@ -69,14 +68,14 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       label: 'Home',
       shortLabel: 'Home',
       icon: 'dashboard',
-      items: [{ path: '/', label: 'Home', shortLabel: 'Home', icon: 'dashboard', exact: true }],
+      items: [{ path: '/finance/', label: 'Home', shortLabel: 'Home', icon: 'dashboard', exact: true }],
     },
     {
       label: 'What you have',
       shortLabel: 'Have',
       icon: 'scale',
       items: [
-        { path: '/have', label: 'What you have', shortLabel: 'Have', icon: 'scale', exact: false },
+        { path: '/finance/have', label: 'What you have', shortLabel: 'Have', icon: 'scale', exact: false },
       ],
     },
     {
@@ -84,7 +83,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       shortLabel: 'Spend',
       icon: 'transactions',
       items: [
-        { path: '/spending', label: 'Spending', shortLabel: 'Spend', icon: 'transactions', exact: false },
+        { path: '/finance/spending', label: 'Spending', shortLabel: 'Spend', icon: 'transactions', exact: false },
       ],
     },
     {
@@ -92,7 +91,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       shortLabel: 'Repeat',
       icon: 'wallet',
       items: [
-        { path: '/recurring', label: 'Recurring', shortLabel: 'Repeat', icon: 'wallet', exact: false },
+        { path: '/finance/recurring', label: 'Recurring', shortLabel: 'Repeat', icon: 'wallet', exact: false },
       ],
     },
     {
@@ -100,7 +99,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       shortLabel: 'Plan',
       icon: 'trending',
       items: [
-        { path: '/planning', label: 'Planning', shortLabel: 'Plan', icon: 'trending', exact: false },
+        { path: '/finance/planning', label: 'Planning', shortLabel: 'Plan', icon: 'trending', exact: false },
       ],
     },
   ];
@@ -185,17 +184,17 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   isActiveItem(item: NavItem): boolean {
     const url = this.router.url.split('?')[0].split('#')[0];
-    if (item.path === '/have') {
-      return url === '/have' || url === '/balance-sheet' || url === '/portfolio';
+    if (item.path === '/finance/have') {
+      return url === '/finance/have' || url === '/finance/balance-sheet' || url === '/finance/portfolio';
     }
-    if (item.path === '/spending') {
-      return url === '/spending' || url === '/transactions' || url === '/calendar';
+    if (item.path === '/finance/spending') {
+      return url === '/finance/spending' || url === '/finance/transactions' || url === '/finance/calendar';
     }
-    if (item.path === '/recurring') {
-      return url === '/recurring' || url === '/income' || url === '/fixed-expenses' || url === '/subscriptions';
+    if (item.path === '/finance/recurring') {
+      return url === '/finance/recurring' || url === '/finance/income' || url === '/finance/fixed-expenses' || url === '/finance/subscriptions';
     }
-    if (item.path === '/planning') {
-      return url === '/planning' || url === '/investment-insights' || url === '/stock-lab';
+    if (item.path === '/finance/planning') {
+      return url === '/finance/planning' || url === '/finance/investment-insights' || url === '/finance/stock-lab';
     }
     return item.exact ? url === item.path : url === item.path || url.startsWith(`${item.path}/`);
   }
@@ -209,7 +208,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.marketRefresh.endSession();
     this.finance.clearSessionState();
     this.vault.lock();
-    void this.router.navigateByUrl('/vault/unlock');
+    void this.router.navigateByUrl('/finance/vault/unlock');
   }
 
   logout(): void {
@@ -244,7 +243,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       next: () => {
         this.isResettingData = false;
         this.toast.success('Your data is clear.');
-        this.router.navigate(['/']);
+        this.router.navigate(['/finance/']);
         this.cdr.markForCheck();
       },
       error: () => {

@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
-
-import { balancePhrase, daysText, nightsAwayText, nightsText, parkingChipParts, spanText } from "../modules/labels.mjs";
-import { fieldForMessage, messageFrom } from "../modules/messages.mjs";
-import { errorPanel, routeProblem, skeletonFor } from "../modules/states.mjs";
-import { balanceError, formError } from "../modules/validate.mjs";
+import { balancePhrase, formatDays, daysText, nightsAwayText, nightsText, parkingChipParts, spanText } from "../../../frontend/src/labels.mjs";
+import { fieldForMessage, messageFrom } from "../../../frontend/src/messages.mjs";
+import { balanceError, formError } from "../../../frontend/src/validate.mjs";
 
 test("network and server failures use the travel sentences", () => {
   assert.equal(messageFrom(null, 0), "Can't reach Travel. Check your connection.");
@@ -71,36 +68,11 @@ test("trip, plan, note, and key forms reuse the server sentences", () => {
   assert.equal(formError("stay", { city: "Lisbon" }), null);
 });
 
-test("route errors are a heading panel and not an alert", () => {
-  const missing = routeProblem({ name: "trip" }, { status: 404, message: "That trip is not here." });
-  const html = errorPanel(missing);
-  assert.equal(missing.title, "Trip not found");
-  assert.match(html, /<h1 tabindex="-1" data-error-title>Trip not found<\/h1>/);
-  assert.equal(html.includes("role=\"alert\""), false);
-  assert.match(html, /Back to Upcoming/);
-  assert.equal(html.includes("Try again"), false);
-
-  const home = errorPanel(routeProblem({ name: "home" }, { status: 500, message: "Something went wrong on our side." }));
-  assert.match(home, /Couldn&#39;t load your trips/);
-  assert.match(home, /Try again/);
-
-  const lost = errorPanel(routeProblem({ name: "not-found" }));
-  assert.match(lost, /Page not found/);
-  assert.match(lost, /Calendar/);
-});
-
-test("a route is marked busy before its request returns", () => {
-  const router = readFileSync(new URL("../modules/router.mjs", import.meta.url), "utf8");
-  assert.match(router, /root\.setAttribute\("aria-busy", "true"\)/);
-  assert.match(router, /data-seq/);
-});
-
-test("each route has a skeleton that marks itself hidden from assistive tech", () => {
-  for (const name of ["home", "calendar", "trip", "pto", "settings"]) {
-    const html = skeletonFor(name);
-    assert.match(html, /aria-hidden="true"/);
-    assert.match(html, /class="skeleton/);
-  }
-  assert.match(skeletonFor("home"), /skeleton-metric/);
-  assert.match(skeletonFor("trip"), /skeleton-map/);
+test("client day rounding matches half away from zero", () => {
+  assert.equal(formatDays("-0.125"), "-0.13");
+  assert.equal(formatDays("1.005"), "1.01");
+  assert.equal(formatDays("-0.001"), "0");
+  assert.equal(formatDays("1.239"), "1.24");
+  assert.equal(balancePhrase("-0.001"), "0 days");
+  assert.equal(balancePhrase("-0.125"), "0.13 days over");
 });

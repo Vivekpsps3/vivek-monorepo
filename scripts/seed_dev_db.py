@@ -16,13 +16,13 @@ import argparse
 import base64
 import json
 import os
-from datetime import date, timedelta
 import signal
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import httpx
@@ -275,6 +275,9 @@ def seed_media(client: httpx.Client, user_index: int, count: int) -> None:
             "rating": 7 if number % 3 == 0 else None,
             "releases": [{"released_on": "2019-06-01", "precision": "day", "status": "released"}],
         }
+        # Omission selects the supported artist default on historical and current APIs.
+        if kind == "artist":
+            body.pop("status")
         created = require(client.post("/media/api/library", json=body), "create media")
         entry_id = created["id"]
         finished = date(2024, 6, 1) + timedelta(days=number)
@@ -442,20 +445,12 @@ def ensure_dev(args: argparse.Namespace) -> None:
         raise SystemExit(
             f"{path} already has users. Remove it before running make db-seed-dev again."
         )
-    finance = REPO / "apps" / "finance" / "frontend" / "dist" / "finance-app" / "browser"
-    portfolio = REPO / "apps" / "site" / "dist" / "personal-website" / "browser"
-    if not (finance / "index.html").is_file():
-        finance = REPO / ".local" / "web" / "finance"
-        finance.mkdir(parents=True, exist_ok=True)
-        (finance / "index.html").write_text("<!doctype html><title>finance</title>\n")
-    if not (portfolio / "index.html").is_file():
-        portfolio = REPO / ".local" / "web" / "portfolio"
-        portfolio.mkdir(parents=True, exist_ok=True)
-        (portfolio / "index.html").write_text("<!doctype html><title>portfolio</title>\n")
+    web = REPO / "dist" / "web" / "browser"
+    if not (web / "index.csr.html").is_file():
+        raise SystemExit("Run make build-frontends before seeding the development database.")
     env.update(
         {
-            "SITE_WEB_ROOT": str(finance),
-            "SITE_PORTFOLIO_ROOT": str(portfolio),
+            "SITE_WEB_ROOT": str(web),
             "SESSION_COOKIE_SECURE": "0",
             "AUTH_SIGNUP_MODE": "open",
             "AUTH_IP_RATE_LIMIT_PER_MIN": "100000",
@@ -472,7 +467,8 @@ def ensure_dev(args: argparse.Namespace) -> None:
             sys.executable,
             "-m",
             "uvicorn",
-            "apps.server.main:app",
+            "apps.server.main:production_app",
+            "--factory",
             "--host",
             "127.0.0.1",
             "--port",

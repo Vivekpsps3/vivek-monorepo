@@ -30,8 +30,8 @@ OWNER_TABLES = {
 
 def metadata():
     from apps.finance.backend.models import Base as Finance
-    from apps.travel.backend.models import Base as Travel
     from apps.media.backend.models import Base as Media
+    from apps.travel.backend.models import Base as Travel
 
     result = MetaData()
     for source in (Finance.metadata, Travel.metadata, Media.metadata):
@@ -62,6 +62,7 @@ def assert_ready(connection):
     head. A database behind head is not upgraded here.
     """
     from sqlalchemy import text
+
     from apps.server.migrations import head_revision
 
     row = connection.execute(text("SELECT version FROM site_schema WHERE id=1")).scalar_one()

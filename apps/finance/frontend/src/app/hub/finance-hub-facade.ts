@@ -4,7 +4,6 @@ import { Observable, combineLatest, firstValueFrom, take, takeUntil, timeout } f
 import { VaultService } from '../crypto/vault.service';
 import { FinanceService } from '../services/finance.service';
 import { buildFinanceHubSnapshot, FinanceHubSnapshot } from './finance-hub-snapshot';
-import { HUB_SUMMARY_DEADLINE_MS } from './hub-load';
 
 export type FinanceHubResult =
   | { status: 'locked' }
@@ -33,7 +32,7 @@ function abort$(signal: AbortSignal): Observable<void> {
 export async function loadFinanceHubSnapshot(
   injector: Injector,
   signal: AbortSignal,
-  deadlineMs = HUB_SUMMARY_DEADLINE_MS,
+  deadlineMs = 5_000,
 ): Promise<FinanceHubResult> {
   if (signal.aborted) return { status: 'cancelled' };
   const vault = injector.get(VaultService);

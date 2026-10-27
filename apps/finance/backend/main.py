@@ -1,6 +1,7 @@
 """Finance names the site process and tests share.
 
-The site factory assigns app and engine. Importing this module does not open a database.
+Historical Finance fixtures publish app and engine here. Production composition uses
+apps.server.main and never publishes ambient app/database state. Import opens nothing.
 """
 
 from typing import cast

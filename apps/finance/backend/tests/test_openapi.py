@@ -2,18 +2,17 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from apps.server.database import current
+from apps.server.database import open_database
 from apps.server.main import Dependencies, Settings, create_app
 
 
 def _app(*, openapi: bool):
-    database = current()
+    database = open_database("sqlite:///:memory:")
     return create_app(
         Settings(
             database_url=database.url,
             release="test",
             web_root=Path("/app/web/finance"),
-            portfolio_root=Path("/app/web/portfolio"),
             openapi=openapi,
         ),
         Dependencies(database=database, check_schema=False, check_frontend=False),

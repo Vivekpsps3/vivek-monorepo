@@ -11,7 +11,7 @@
   padding: var(--space-3) max(var(--space-6), env(safe-area-inset-right)) var(--space-2)
     max(var(--space-6), env(safe-area-inset-left));
   position: sticky;
-  top: 0;
+  top: var(--suite-header-height, 4.5rem);
   z-index: 10;
 }
 
@@ -475,8 +475,8 @@
   :host {
     display: flex;
     flex-direction: column;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: calc(100dvh - var(--suite-header-height, 4rem));
+    max-height: calc(100dvh - var(--suite-header-height, 4rem));
   }
 
   .navbar {
@@ -626,3 +626,5 @@
     justify-content: center;
   }
 }
+
+.finance-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}

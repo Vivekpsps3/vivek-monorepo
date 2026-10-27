@@ -1,0 +1,247 @@
+[
+  {
+    "score": 1.1883309,
+    "show": {
+      "id": 64992,
+      "url": "https://www.tvmaze.com/shows/64992/the-gentlemen",
+      "name": "The Gentlemen",
+      "type": "Scripted",
+      "language": "English",
+      "genres": [
+        "Comedy",
+        "Action",
+        "Crime"
+      ],
+      "status": "Running",
+      "runtime": null,
+      "averageRuntime": 53,
+      "premiered": "2024-03-07",
+      "ended": null,
+      "officialSite": "https://www.netflix.com/title/81437051",
+      "schedule": {
+        "time": "",
+        "days": []
+      },
+      "rating": {
+        "average": 7.7
+      },
+      "weight": 100,
+      "network": null,
+      "webChannel": {
+        "id": 1,
+        "name": "Netflix",
+        "country": null,
+        "officialSite": "https://www.netflix.com/"
+      },
+      "dvdCountry": null,
+      "externals": {
+        "tvrage": null,
+        "thetvdb": 426845,
+        "imdb": "tt13210838"
+      },
+      "image": {
+        "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/641/1603070.jpg",
+        "original": "https://static.tvmaze.com/uploads/images/original_untouched/641/1603070.jpg"
+      },
+      "summary": "<p>When aristocratic Eddie inherits the family estate, he discovers that it's home to an enormous weed empire \u2014 and its proprietors aren't going anywhere.</p>",
+      "updated": 1789854126,
+      "_links": {
+        "self": {
+          "href": "https://api.tvmaze.com/shows/64992"
+        },
+        "previousepisode": {
+          "href": "https://api.tvmaze.com/episodes/3695373",
+          "name": "Bring Me the Head"
+        }
+      }
+    }
+  },
+  {
+    "score": 0.8899846,
+    "show": {
+      "id": 1720,
+      "url": "https://www.tvmaze.com/shows/1720/the-league-of-gentlemen",
+      "name": "The League of Gentlemen",
+      "type": "Scripted",
+      "language": "English",
+      "genres": [
+        "Comedy"
+      ],
+      "status": "Ended",
+      "runtime": null,
+      "averageRuntime": 30,
+      "premiered": "1999-01-11",
+      "ended": "2017-12-20",
+      "officialSite": "http://www.bbc.co.uk/programmes/b006t8d1",
+      "schedule": {
+        "time": "22:00",
+        "days": [
+          "Monday",
+          "Tuesday",
+          "Wednesday"
+        ]
+      },
+      "rating": {
+        "average": 8
+      },
+      "weight": 89,
+      "network": {
+        "id": 37,
+        "name": "BBC Two",
+        "country": {
+          "name": "United Kingdom",
+          "code": "GB",
+          "timezone": "Europe/London"
+        },
+        "officialSite": "https://www.bbc.co.uk/bbctwo"
+      },
+      "webChannel": null,
+      "dvdCountry": null,
+      "externals": {
+        "tvrage": 5918,
+        "thetvdb": 72492,
+        "imdb": "tt0184135"
+      },
+      "image": {
+        "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/9/24073.jpg",
+        "original": "https://static.tvmaze.com/uploads/images/original_untouched/9/24073.jpg"
+      },
+      "summary": "<p>Dark, surreal comedy about the strange inhabitants of the small town of Royston Vasey.</p>",
+      "updated": 1786323121,
+      "_links": {
+        "self": {
+          "href": "https://api.tvmaze.com/shows/1720"
+        },
+        "previousepisode": {
+          "href": "https://api.tvmaze.com/episodes/1362790",
+          "name": "Episode Three: Royston Vasey Mon Amour"
+        }
+      }
+    }
+  },
+  {
+    "score": 0.7541046,
+    "show": {
+      "id": 18632,
+      "url": "https://www.tvmaze.com/shows/18632/the-gentlemen-of-wolgyesu-tailor-shop",
+      "name": "The Gentlemen of Wolgyesu Tailor Shop",
+      "type": "Scripted",
+      "language": "Korean",
+      "genres": [
+        "Drama",
+        "Comedy",
+        "Family"
+      ],
+      "status": "Ended",
+      "runtime": 65,
+      "averageRuntime": 65,
+      "premiered": "2016-08-27",
+      "ended": "2017-02-26",
+      "officialSite": "http://www.kbs.co.kr/drama/gentle/index.html",
+      "schedule": {
+        "time": "19:55",
+        "days": [
+          "Saturday",
+          "Sunday"
+        ]
+      },
+      "rating": {
+        "average": null
+      },
+      "weight": 79,
+      "network": {
+        "id": 128,
+        "name": "KBS2",
+        "country": {
+          "name": "Korea, Republic of",
+          "code": "KR",
+          "timezone": "Asia/Seoul"
+        },
+        "officialSite": null
+      },
+      "webChannel": null,
+      "dvdCountry": null,
+      "externals": {
+        "tvrage": null,
+        "thetvdb": 315770,
+        "imdb": "tt5987762"
+      },
+      "image": {
+        "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/71/179788.jpg",
+        "original": "https://static.tvmaze.com/uploads/images/original_untouched/71/179788.jpg"
+      },
+      "summary": "<p><b>The Gentlemen of Wolgyesu Tailor Shop</b> talks about men's love, success and family. Suits have always been the symbol for men and their class. What the characters from the drama have in common is that they all work for Wolgyesu Tailor Shop. They share their friendship as well as love at their workplace.</p>",
+      "updated": 1768138067,
+      "_links": {
+        "self": {
+          "href": "https://api.tvmaze.com/shows/18632"
+        },
+        "previousepisode": {
+          "href": "https://api.tvmaze.com/episodes/1045558",
+          "name": "Episode 54"
+        }
+      }
+    }
+  },
+  {
+    "score": 0.35234237,
+    "show": {
+      "id": 9891,
+      "url": "https://www.tvmaze.com/shows/9891/the-elegant-gentlemans-guide-to-knife-fighting",
+      "name": "The Elegant Gentleman's Guide to Knife Fighting",
+      "type": "Scripted",
+      "language": "English",
+      "genres": [
+        "Comedy"
+      ],
+      "status": "Ended",
+      "runtime": 30,
+      "averageRuntime": 30,
+      "premiered": "2013-04-03",
+      "ended": "2013-05-08",
+      "officialSite": null,
+      "schedule": {
+        "time": "21:00",
+        "days": [
+          "Wednesday"
+        ]
+      },
+      "rating": {
+        "average": null
+      },
+      "weight": 60,
+      "network": {
+        "id": 114,
+        "name": "ABC",
+        "country": {
+          "name": "Australia",
+          "code": "AU",
+          "timezone": "Australia/Sydney"
+        },
+        "officialSite": "https://www.abc.net.au/"
+      },
+      "webChannel": null,
+      "dvdCountry": null,
+      "externals": {
+        "tvrage": null,
+        "thetvdb": 268365,
+        "imdb": "tt2700678"
+      },
+      "image": {
+        "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/34/85111.jpg",
+        "original": "https://static.tvmaze.com/uploads/images/original_untouched/34/85111.jpg"
+      },
+      "summary": "<p>A surreal stroll into the creative minds of some of Australia's most exciting and newest comedy writers and directors, <b>The Elegant Gentleman's Guide to Knife Fighting</b> aspires to take sketch comedy in a different direction. With longer-form scenes, less traditional material, and a surprising cast, it will be at times random, often ridiculous and occasionally surreal.</p>",
+      "updated": 1704793372,
+      "_links": {
+        "self": {
+          "href": "https://api.tvmaze.com/shows/9891"
+        },
+        "previousepisode": {
+          "href": "https://api.tvmaze.com/episodes/525849",
+          "name": "Episode 6"
+        }
+      }
+    }
+  }
+]

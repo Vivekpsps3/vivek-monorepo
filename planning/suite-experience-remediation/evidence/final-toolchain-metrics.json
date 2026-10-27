@@ -1,0 +1,37 @@
+{
+  "baseline_locks": {
+    "apps/finance/frontend/package-lock.json": {
+      "packages": 1196,
+      "lock_bytes": 510712
+    },
+    "apps/site/package-lock.json": {
+      "packages": 1189,
+      "lock_bytes": 508213
+    },
+    "apps/travel/e2e/package-lock.json": {
+      "packages": 7,
+      "lock_bytes": 2432
+    }
+  },
+  "current_lock": {
+    "path": "package-lock.json",
+    "packages": 1201,
+    "lock_bytes": 631615
+  },
+  "mechanisms": {
+    "frontend_installs_before": 3,
+    "frontend_installs_after": 1,
+    "active_web_bootstraps_after": 1,
+    "active_router_after": "Angular",
+    "active_server_factory_after": "apps.server.main:create_app",
+    "shared_identity_after": "apps/server/identity",
+    "supported_database_after": "one unified SQLite file"
+  },
+  "bundle": {
+    "initial_raw_kb": 529.93,
+    "estimated_transfer_kb": 140.33,
+    "public_prerenders": 5,
+    "build_seconds": 5.499
+  },
+  "limits": "Package graph counts before sum separate lock installations and include duplicates; no install-time or old-bundle speedup is claimed without a comparable measured baseline. Source moves and required new features are reported separately."
+}

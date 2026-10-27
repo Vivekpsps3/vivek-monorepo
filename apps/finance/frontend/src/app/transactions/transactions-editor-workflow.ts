@@ -4,7 +4,8 @@ import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ToastService, successCopy } from '@vivek/ui';
 import { Transaction, TransactionCreate } from '../models/transaction.model';
-import { todayIsoDate, toDollars, validateMoney, validateTransaction, type FieldIssue } from '@vivek/browser';
+import { todayIsoDate, toDollars } from '@vivek/browser';
+import { validateMoney, validateTransaction, type FieldIssue } from '../utils/validators';
 import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary } from '../shared/form-validation';
 
 @Injectable()

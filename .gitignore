@@ -42,6 +42,11 @@ backups/
 *~
 
 # --- Node / frontend ---
+node_modules/
+.angular/
+coverage/
+playwright-report/
+test-results/
 apps/**/node_modules/
 apps/**/dist/
 apps/**/.angular/

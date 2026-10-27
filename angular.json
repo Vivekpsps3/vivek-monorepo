@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "newProjectRoot": "apps",
+  "projects": {
+    "web": {
+      "projectType": "application",
+      "root": "apps/web",
+      "sourceRoot": "apps/web/src",
+      "prefix": "suite",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:application",
+          "options": {
+            "outputPath": "dist/web",
+            "index": "apps/web/src/index.html",
+            "browser": "apps/web/src/main.ts",
+            "server": "apps/web/src/main.server.ts",
+            "outputMode": "static",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "apps/web/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/site/public"
+              },
+              {
+                "glob": "**/*",
+                "input": "apps/finance/frontend/public",
+                "output": "finance"
+              },
+              {
+                "glob": "**/*",
+                "input": "apps/travel/frontend/vendor",
+                "output": "vendor"
+              }
+            ],
+            "styles": [
+              "apps/web/src/styles.css"
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": false
+                },
+                "fonts": false
+              },
+              "outputHashing": "all",
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "650kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "40kB",
+                  "maximumError": "50kB"
+                }
+              ]
+            },
+            "development": {
+              "optimization": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "buildTarget": "web:build:development",
+            "proxyConfig": "apps/web/proxy.conf.cjs"
+          }
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
+            "tsConfig": "apps/web/tsconfig.spec.json",
+            "karmaConfig": "apps/karma.conf.js",
+            "codeCoverage": true,
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/finance/frontend/public"
+              }
+            ],
+            "styles": [
+              "apps/web/src/styles.css"
+            ],
+            "scripts": [],
+            "include": [
+              "**/*.spec.ts",
+              "../../../packages/ui/src/**/*.spec.ts"
+            ]
+          }
+        }
+      }
+    },
+    "finance-app": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "apps/finance/frontend",
+      "sourceRoot": "apps/finance/frontend/src",
+      "prefix": "app",
+      "architect": {
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
+            "tsConfig": "apps/finance/frontend/tsconfig.spec.json",
+            "karmaConfig": "apps/karma.conf.js",
+            "codeCoverage": true,
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/finance/frontend/public"
+              }
+            ],
+            "styles": [
+              "apps/web/src/styles.css"
+            ],
+            "scripts": []
+          }
+        }
+      }
+    },
+    "personal-website": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "apps/site",
+      "sourceRoot": "apps/site/src",
+      "prefix": "app",
+      "architect": {
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
+            "tsConfig": "apps/site/tsconfig.spec.json",
+            "karmaConfig": "apps/karma.conf.js",
+            "codeCoverage": true,
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/site/public"
+              }
+            ],
+            "styles": [
+              "apps/site/src/styles.css"
+            ],
+            "scripts": []
+          }
+        }
+      }
+    }
+  },
+  "cli": {
+    "analytics": false
+  }
+}

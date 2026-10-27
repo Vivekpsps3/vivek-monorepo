@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-27",
+  "scope": "ARC-05: Media library page reads only",
+  "fixture": {
+    "artists": 12,
+    "series": 12,
+    "books": 120,
+    "music": "Public album/song links, duplicate relation types, selective personal membership and a second user's saves",
+    "episodes": "Missing, watched, unwatched, unknown-date, future-only and specials-only metadata; second-user progress",
+    "database": "Disposable local SQLite; no live provider requests"
+  },
+  "measurements": [
+    {
+      "request": {"sort": "title", "limit": 24},
+      "before": {"selects": 319, "response_bytes": 10455, "elapsed_ms": 87.79},
+      "after": {"selects": 5, "response_bytes": 9756, "elapsed_ms": 52.47}
+    },
+    {
+      "request": {"kind": "book", "sort": "title", "limit": 24},
+      "before": {"selects": 197, "response_bytes": 7864, "elapsed_ms": 63.06},
+      "after": {"selects": 2, "response_bytes": 7165, "elapsed_ms": 42.73}
+    },
+    {
+      "request": {"kind": "book", "offset": 120, "limit": 24},
+      "after": {"selects": 2, "response_bytes": 65, "elapsed_ms": 4.69}
+    }
+  ],
+  "timing_limit": "Single local samples, with other checks running. Timings are diagnostic, not a latency benchmark or SLO. SQL counts are regression assertions.",
+  "reproduce": ".venv/bin/python -m pytest -q -s apps/media/backend/tests/test_library_queries.py",
+  "logs": {
+    "before": "/tmp/suite-library-before.log",
+    "after": "/tmp/suite-library-after.log"
+  },
+  "remaining_parent_work": "Other ARC-05 hot paths, full response/build measurements and release acceptance remain open."
+}

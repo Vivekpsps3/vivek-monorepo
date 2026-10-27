@@ -47,39 +47,13 @@ def test_lastfm_portrait_is_kept_when_it_is_the_only_image():
     assert image_from_relations([{"type": "image", "url": {"resource": direct}}]) == direct
 
 
-def test_library_fills_a_saved_artist_that_had_no_image(client, monkeypatch):
-    monkeypatch.setattr(
-        "apps.media.backend.services.providers.wikidata_artist_images",
-        lambda _http, ids: {ids[0].lower(): PORTRAIT},
-    )
-    created = client.post(
-        "/api/library/from-provider",
-        json={
-            "source": "musicbrainz",
-            "source_id": ARIANA,
-            "kind": "artist",
-            "title": "Ariana Grande",
-        },
-    )
-    assert created.status_code == 200
-    assert created.json()["artwork_url"] is None
-    listed = client.get("/api/library", params={"kind": "artist"})
-    assert listed.status_code == 200
-    assert listed.json()["items"][0]["artwork_url"] == PORTRAIT
-    assert listed.json()["items"][0]["title"] == "Ariana Grande"
+def test_saved_library_and_detail_do_not_fill_missing_portraits(client, monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Ordinary reads must be database-only")
 
-
-def test_opening_an_artist_uses_musicbrainz_when_wikidata_has_no_image(client, monkeypatch):
-    monkeypatch.setattr(
-        "apps.media.backend.services.providers.wikidata_artist_images",
-        lambda _http, _ids: {},
-    )
-    direct = "https://lastfm.freetls.fastly.net/i/u/770x0/abc.jpg"
-    monkeypatch.setattr(
-        "apps.media.backend.services.providers.musicbrainz_artist_image",
-        lambda _http, artist_id: direct if artist_id.lower() == ARIANA else None,
-    )
-    created = client.post(
+    monkeypatch.setattr("apps.media.backend.services.providers.wikidata_artist_images", forbidden)
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_image", forbidden)
+    saved = client.post(
         "/api/library/from-provider",
         json={
             "source": "musicbrainz",
@@ -88,38 +62,5 @@ def test_opening_an_artist_uses_musicbrainz_when_wikidata_has_no_image(client, m
             "title": "Ariana Grande",
         },
     ).json()
-    listed = client.get("/api/library", params={"kind": "artist"}).json()
-    assert listed["items"][0]["artwork_url"] is None
-    detail = client.get(f"/api/entries/{created['id']}")
-    assert detail.status_code == 200
-    assert detail.json()["artwork_url"] == direct
-
-
-def test_search_attaches_an_artist_portrait(client, monkeypatch):
-    monkeypatch.setattr(
-        "apps.media.backend.services.providers.musicbrainz_search",
-        lambda *_args, **_kwargs: [
-            {
-                "source": "musicbrainz",
-                "source_id": ARIANA,
-                "kind": "artist",
-                "title": "Ariana Grande",
-                "creator": "Person",
-                "year": 1993,
-                "overview": None,
-                "artwork_url": None,
-                "genres": [],
-                "external_ratings": [],
-                "extra": {},
-                "releases": [],
-                "episodes": [],
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        "apps.media.backend.services.providers.wikidata_artist_images",
-        lambda _http, ids: {ids[0].lower(): PORTRAIT},
-    )
-    found = client.get("/api/search", params={"q": "ariana", "kind": "artist"})
-    assert found.status_code == 200
-    assert found.json()["results"][0]["artwork_url"] == PORTRAIT
+    assert client.get("/api/library").json()["items"][0]["artwork_url"] is None
+    assert client.get(f"/api/entries/{saved['id']}").json()["artwork_url"] is None

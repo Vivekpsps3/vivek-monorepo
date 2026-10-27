@@ -1,0 +1,17 @@
+{
+  "before_revision": "73de49c",
+  "environment": "Same installed root dependencies via temporary symlinks, isolated historical source, warm cache; no install-time comparison. Runs overlap other test work, so timings are descriptive, not a benchmark claim.",
+  "before": {
+    "finance/frontend": {
+      "seconds": 3.967,
+      "exit_code": 0,
+      "log": "/tmp/suite-before-finance-build.log"
+    },
+    "site": {
+      "seconds": 3.383,
+      "exit_code": 0,
+      "log": "/tmp/suite-before-site-build.log"
+    }
+  },
+  "after_root_build_seconds": 5.499
+}

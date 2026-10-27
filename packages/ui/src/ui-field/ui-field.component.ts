@@ -57,6 +57,7 @@ export class UiFieldComponent {
         else control.removeAttribute('aria-describedby');
       }
       if (this.required()) control.setAttribute('aria-required', 'true');
+      else control.removeAttribute('aria-required');
     });
   }
 

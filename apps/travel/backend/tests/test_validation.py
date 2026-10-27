@@ -112,9 +112,13 @@ def test_trip_patch_uses_create_limits_for_optional_fields(client):
     assert cleared.json()["origin_label"] is None
 
 
-def test_fmt_days_reads_the_decimals_setting(monkeypatch):
-    monkeypatch.setattr("apps.travel.backend.services.money.pto_day_decimals", lambda: 3)
-    assert fmt_days(Decimal("1.2345")) == "1.235"
+def test_fmt_days_has_no_frontend_file_dependency(monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise AssertionError("Backend formatting must not read frontend files")
+
+    monkeypatch.setattr("pathlib.Path.read_text", unavailable)
+    assert fmt_days(Decimal("1.2345")) == "1.23"
+    assert fmt_days(Decimal("1.2345"), places=3) == "1.235"
     assert store_days(Decimal("1.6667")) == "1.6667"
 
 

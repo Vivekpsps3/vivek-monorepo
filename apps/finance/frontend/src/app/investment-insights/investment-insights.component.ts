@@ -31,7 +31,7 @@ import {
   chartLegendBottom,
   chartSuccessColor,
 } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { MoneyPipe } from '@vivek/ui';
 
 interface PeriodRow {
   label: string;

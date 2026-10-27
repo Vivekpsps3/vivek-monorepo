@@ -2,14 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { VaultService } from '../crypto/vault.service';
 import { UiButtonComponent, UiCardComponent, UiInputComponent, UiPageHeaderComponent } from '@vivek/ui';
-import { SuiteHubLinkComponent } from '../core/layout/suite-hub-link.component';
 
 @Component({
   selector: 'app-vault-setup',
   standalone: true,
-  imports: [UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiInputComponent, SuiteHubLinkComponent],
+  imports: [UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiInputComponent],
   template: `
-    <app-suite-hub />
+
     <div class="page vault-page">
       <ui-page-header [title]="'Create your vault'" />
       <ui-card [title]="'Vault passphrase'">
@@ -62,7 +61,7 @@ export class VaultSetupComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     const status = await this.vault.refreshStatus();
     if (status.exists) {
-      await this.router.navigateByUrl('/vault/unlock');
+      await this.router.navigateByUrl('/finance/vault/unlock');
     }
   }
 
@@ -84,7 +83,7 @@ export class VaultSetupComponent implements OnInit {
     this.busy = true;
     try {
       await this.vault.setup(this.passphrase);
-      await this.router.navigateByUrl('/');
+      await this.router.navigateByUrl('/finance/');
     } catch (e: any) {
       this.error = e?.error?.detail || e?.message || 'Vault setup failed';
     } finally {

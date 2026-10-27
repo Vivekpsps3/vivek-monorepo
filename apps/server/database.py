@@ -1,7 +1,7 @@
 """One SQLite engine and session lifecycle for every domain.
 
 Importing this module does not open a database or create a file. The site
-factory calls open_database, then install. Domain routes share get_db.
+factory calls open_database and stores it on app.state. Domain routes share get_db.
 
 autoflush is off: Finance flushes explicitly so an unrelated SELECT cannot
 write a pending auth row. expire_on_commit is off: callers read attributes
@@ -15,12 +15,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from fastapi import Request
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
-
-_current: Database | None = None
 
 
 @dataclass(frozen=True)
@@ -78,26 +77,18 @@ def open_database(url: str) -> Database:
     return Database(url=url, engine=engine, sessionmaker=factory)
 
 
-def install(database: Database) -> None:
-    global _current
-    _current = database
-
-
-def current() -> Database:
-    if _current is None:
-        raise RuntimeError("Database is not open")
-    return _current
-
-
 def release_for_provider_io(db: Session) -> None:
     """Commit the open unit of work so provider IO does not hold a write."""
     if db.in_transaction():
         db.commit()
 
 
-def get_db():
-    """One unit of work: commit on success, roll back on failure, then close."""
-    db = current().sessionmaker()
+def get_db(request: Request):
+    """One unit of work: commit before response delivery, roll back on failure, then close.
+
+    Consumers use Depends(get_db, scope="function") so a success never reaches
+    the caller before commit (including commit-time constraint errors)."""
+    db = request.app.state.database.sessionmaker()
     try:
         yield db
         db.commit()

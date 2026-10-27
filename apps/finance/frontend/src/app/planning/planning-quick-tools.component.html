@@ -88,7 +88,7 @@
             <option [value]="liability.id">{{ liability.name }} · {{ formatActual(liability.balance_owed) }} · as of {{ liability.as_of_date | appDate }}</option>
           }
         </select>
-        <a routerLink="/have" [queryParams]="{ t: 'assets' }">Open saved liabilities</a>
+        <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }">Open saved liabilities</a>
       </label>
       <label class="mc-field">
         <span>Debt name</span>

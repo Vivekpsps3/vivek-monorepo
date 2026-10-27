@@ -17,11 +17,13 @@ function bytes(value: unknown): Uint8Array {
 export class EcdhService {
   private sender: CryptoKey | null = null;
   private receiver: CryptoKey | null = null;
-  private readonly ready: Promise<void>;
+  private ready?: Promise<void>;
 
-  constructor() {
-    this.ready = this.initialize();
-    void this.ready.catch(() => undefined);
+  whenReady(): Promise<void> {
+    return this.ready ??= this.initialize().catch(error => {
+      this.ready = undefined;
+      throw error;
+    });
   }
 
   private async initialize(): Promise<void> {
@@ -35,14 +37,14 @@ export class EcdhService {
   }
 
   async encryptMessage(plaintext: string): Promise<{ iv: number[]; ciphertext: number[]; tag: number[] }> {
-    await this.ready;
+    await this.whenReady();
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, this.sender!, new TextEncoder().encode(plaintext)));
     return { iv: Array.from(iv), ciphertext: Array.from(encrypted.slice(0, -16)), tag: Array.from(encrypted.slice(-16)) };
   }
 
   async decryptMessage(payload: unknown): Promise<string> {
-    await this.ready;
+    await this.whenReady();
     if (!payload || typeof payload !== 'object') throw new Error('Invalid encrypted message');
     const data = payload as Record<string, unknown>;
     const iv = bytes(data['iv']);
@@ -53,8 +55,6 @@ export class EcdhService {
     const result = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: toArrayBuffer(iv) }, this.receiver!, toArrayBuffer(combined));
     return new TextDecoder().decode(result);
   }
-
-  whenReady(): Promise<void> { return this.ready; }
 
   isKeyExchangeComplete(): boolean { return this.sender !== null && this.receiver !== null; }
 }

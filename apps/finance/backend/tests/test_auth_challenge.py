@@ -3,19 +3,20 @@ import os
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from fastapi.testclient import TestClient
-from sqlalchemy import delete
+import base64
+
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-import base64
+from fastapi.testclient import TestClient
+from sqlalchemy import delete
 
-from conftest import authenticated_client
 from apps.finance.backend.kdf_policy import LEGACY_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.main import Base, app, engine, market_data
-from apps.finance.backend.models import UserRole
-from apps.finance.backend.rate_limit import clear_limits
-from apps.finance.backend.services.auth_decoy import AUTH_WRAP_BYTES
+from apps.finance.backend.tests.conftest import authenticated_client
+from apps.server.identity.auth_decoy import AUTH_WRAP_BYTES
+from apps.server.identity.models import UserRole
+from apps.server.rate_limit import clear_limits
 
 
 def setup_function():
@@ -278,8 +279,8 @@ def test_passwordless_lookup_is_not_limited_per_account(monkeypatch):
 
 def test_migration_session_cannot_access_normal_authenticated_routes():
     client = TestClient(app)
-    from apps.finance.backend.auth import create_user
     from apps.finance.backend.database import SessionLocal
+    from apps.server.identity.session import create_user
 
     db = SessionLocal()
     try:
@@ -300,8 +301,8 @@ def test_migration_session_cannot_access_normal_authenticated_routes():
 
 def test_passwordless_enroll_rejects_email_as_username_and_creates_vault():
     client = TestClient(app)
-    from apps.finance.backend.auth import create_user
     from apps.finance.backend.database import SessionLocal
+    from apps.server.identity.session import create_user
 
     db = SessionLocal()
     try:
@@ -491,9 +492,10 @@ def test_challenge_login_rejects_replay():
 
 def _enroll_legacy_user(private_key):
     """Insert an already-enrolled account the way production stored 310k wraps."""
-    from apps.finance.backend.auth import utc_now_naive
     from apps.finance.backend.database import SessionLocal
-    from apps.finance.backend.models import User, UserVault
+    from apps.finance.backend.models import UserVault
+    from apps.server.identity.models import User
+    from apps.server.identity.session import utc_now_naive
 
     public_key_b64 = base64.b64encode(
         private_key.public_key().public_bytes(
@@ -907,7 +909,7 @@ def test_spoofed_forwarded_for_does_not_split_the_ip_bucket(monkeypatch):
 def test_client_key_buckets_ipv6_by_prefix_and_ignores_forwarded_for():
     from starlette.requests import Request
 
-    from apps.finance.backend.rate_limit import _client_key
+    from apps.server.rate_limit import _client_key
 
     def request_from(host: str, forwarded: str | None = None) -> Request:
         headers = []
@@ -947,7 +949,7 @@ def test_new_rate_limit_bucket_opens_even_in_the_first_minute(monkeypatch):
     The default window is ``float('-inf')``. A default of 0 would leave
     ``window_start`` at 0 while ``time.monotonic()`` is 30.
     """
-    from apps.finance.backend import rate_limit
+    import apps.server.rate_limit as rate_limit
 
     monkeypatch.setattr(rate_limit.time, "monotonic", lambda: 30.0)
     clear_limits()
@@ -957,7 +959,7 @@ def test_new_rate_limit_bucket_opens_even_in_the_first_minute(monkeypatch):
 
 
 def test_rate_limit_table_evicts_the_oldest_key():
-    from apps.finance.backend import rate_limit
+    import apps.server.rate_limit as rate_limit
 
     clear_limits()
     for index in range(rate_limit._MAX_BUCKETS):
@@ -973,7 +975,7 @@ def test_rate_limit_table_evicts_the_oldest_key():
 def test_decoy_secret_file_survives_restart_and_a_short_file_is_replaced(
     tmp_path, monkeypatch, caplog
 ):
-    from apps.finance.backend.services.auth_decoy import (
+    from apps.server.identity.auth_decoy import (
         decoy_passwordless_material,
         reset_decoy_state,
     )
@@ -981,35 +983,32 @@ def test_decoy_secret_file_survives_restart_and_a_short_file_is_replaced(
     monkeypatch.delenv("AUTH_DECOY_SECRET", raising=False)
     database = tmp_path / "site.db"
     database.write_bytes(b"")
-    monkeypatch.setattr(
-        "apps.finance.backend.database.SQLALCHEMY_DATABASE_URL",
-        f"sqlite:///{database}",
-    )
+    database_url = f"sqlite:///{database}"
     reset_decoy_state()
-    first = decoy_passwordless_material("ghost.user")
+    first = decoy_passwordless_material("ghost.user", database_url)
     secret = tmp_path / "auth-decoy-secret"
     assert secret.stat().st_size >= 32
     assert secret.stat().st_mode & 0o777 == 0o600
     reset_decoy_state()
-    assert decoy_passwordless_material("ghost.user") == first
+    assert decoy_passwordless_material("ghost.user", database_url) == first
 
     secret.write_bytes(b"short")
     reset_decoy_state()
     with caplog.at_level(logging.ERROR, logger="finance.auth"):
-        regenerated = decoy_passwordless_material("ghost.user")
+        regenerated = decoy_passwordless_material("ghost.user", database_url)
     assert "regenerating" in caplog.text
     assert regenerated != first
     assert secret.stat().st_size >= 32
     assert not list(tmp_path.glob(".auth-decoy-secret.*"))
     reset_decoy_state()
-    assert decoy_passwordless_material("ghost.user") == regenerated
+    assert decoy_passwordless_material("ghost.user", database_url) == regenerated
     reset_decoy_state()
 
 
 def test_unreadable_decoy_secret_is_left_in_place(tmp_path, monkeypatch, caplog):
     from pathlib import Path
 
-    from apps.finance.backend.services.auth_decoy import (
+    from apps.server.identity.auth_decoy import (
         decoy_passwordless_material,
         reset_decoy_state,
     )
@@ -1020,10 +1019,7 @@ def test_unreadable_decoy_secret_is_left_in_place(tmp_path, monkeypatch, caplog)
     secret = tmp_path / "auth-decoy-secret"
     original = b"k" * 32
     secret.write_bytes(original)
-    monkeypatch.setattr(
-        "apps.finance.backend.database.SQLALCHEMY_DATABASE_URL",
-        f"sqlite:///{database}",
-    )
+    database_url = f"sqlite:///{database}"
     original_read = Path.read_bytes
 
     def deny(self, *args, **kwargs):
@@ -1034,7 +1030,7 @@ def test_unreadable_decoy_secret_is_left_in_place(tmp_path, monkeypatch, caplog)
     monkeypatch.setattr(Path, "read_bytes", deny)
     reset_decoy_state()
     with caplog.at_level(logging.ERROR, logger="finance.auth"):
-        decoy_passwordless_material("ghost.user")
+        decoy_passwordless_material("ghost.user", database_url)
     assert "cannot be read" in caplog.text
     assert "process-local" in caplog.text
     assert original_read(secret) == original

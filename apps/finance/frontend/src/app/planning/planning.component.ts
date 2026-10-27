@@ -63,7 +63,7 @@ import {
   normalizePlanningAssumptions,
   restorePlanningProfilePayload,
 } from './planning-assumptions.util';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { AppDatePipe } from '@vivek/ui';
 
 @Component({
   selector: 'app-planning',

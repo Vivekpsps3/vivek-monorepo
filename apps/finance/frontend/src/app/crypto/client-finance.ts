@@ -18,7 +18,8 @@ import {
   jobCompensationBetween,
   paydayDatesBetween,
 } from '../utils/job-compensation.util';
-import { countableCents, dollarsFromCountedCents, fromDollars, roundHalfAwayFromZero, todayIsoDate, type Cents } from '@vivek/browser';
+import { dollarsFromCountedCents, fromDollars, roundHalfAwayFromZero, todayIsoDate, type Cents } from '@vivek/browser';
+import { countableCents } from '../utils/validators';
 
 /**
  * Decision pending Vivek.

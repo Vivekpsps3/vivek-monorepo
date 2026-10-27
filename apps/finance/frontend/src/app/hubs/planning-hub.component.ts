@@ -52,7 +52,7 @@ export class PlanningHubComponent implements OnInit {
         params.keys.forEach(key => { const value = params.get(key); if (value !== null) queryParams[key] = value; });
         queryParams['t'] = 'pay';
         queryParams['history'] = '1';
-        void this.router.navigate(['/recurring'], { queryParams, replaceUrl: true });
+        void this.router.navigate(['/finance/recurring'], { queryParams, replaceUrl: true });
         return;
       }
       this.tab = requested === 'growth' || requested === 'stocks' ? requested : 'path';

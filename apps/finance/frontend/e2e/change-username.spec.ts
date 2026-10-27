@@ -40,7 +40,7 @@ async function createAccount(page: Page, username: string): Promise<void> {
 async function openAccount(page: Page): Promise<void> {
   const dialog = page.getByRole('dialog', { name: 'Account settings' });
   if (!(await dialog.isVisible())) {
-    await page.getByRole('button', { name: 'Account', exact: true }).click();
+    await page.getByRole('link', { name: /^Account/ }).click();
   }
   await expect(dialog).toBeVisible();
 }
@@ -58,6 +58,15 @@ async function expectPassphraseCleared(page: Page): Promise<void> {
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   expect(overflow).toBe(false);
+}
+
+async function signOut(page: Page): Promise<void> {
+  const dialog = page.getByRole('dialog', {name: 'Account settings'});
+  if (await dialog.isVisible()) {
+    await dialog.getByRole('button', {name: 'Done', exact: true}).click();
+    await expect(dialog).toBeHidden();
+  }
+  await page.getByRole('banner').getByRole('button', {name: 'Sign out', exact: true}).click();
 }
 
 async function signIn(page: Page, username: string): Promise<void> {
@@ -82,14 +91,16 @@ test('renamed username shows in the hub, then signs in, and the old username doe
   await createAccount(page, current);
   await expectNoHorizontalOverflow(page);
 
-  const challengeResponse = page.waitForResponse(
-    response => response.url().includes('/api/auth/passwordless/challenge') && response.request().method() === 'POST',
-  );
+  let issued: Record<string, string> = {};
+  await page.route('**/api/auth/passwordless/challenge', async route => {
+    const response = await route.fetch();
+    issued = await response.json();
+    await route.fulfill({ response });
+  });
   const patchRequest = page.waitForRequest(
     request => request.url().includes('/api/account/username') && request.method() === 'PATCH',
   );
   await saveUsername(page, 'Rename.Done', PASSPHRASE);
-  const issued = await (await challengeResponse).json();
   const patch = await patchRequest;
   const body = patch.postDataJSON();
   expect(patch.headers()['x-csrf-token']).toBeTruthy();
@@ -106,7 +117,7 @@ test('renamed username shows in the hub, then signs in, and the old username doe
   await expectPassphraseCleared(page);
 
   await openAccount(page);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signOut(page);
   await page.waitForURL(/\/auth\/login/);
   await page.getByLabel('Username', { exact: true }).fill(next);
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
@@ -115,7 +126,7 @@ test('renamed username shows in the hub, then signs in, and the old username doe
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
   await openAccount(page);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signOut(page);
   await page.waitForURL(/\/auth\/login/);
   await page.getByLabel('Username', { exact: true }).fill(current);
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
@@ -157,7 +168,7 @@ test('a legacy email username signs in and changes through the hub', async ({ pa
   expect(adopted.status, adopted.body).toBe(200);
 
   await openAccount(page);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signOut(page);
   await page.waitForURL(/\/auth\/login/);
   await signIn(page, legacy);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -167,13 +178,13 @@ test('a legacy email username signs in and changes through the hub', async ({ pa
   await expectPassphraseCleared(page);
 
   await openAccount(page);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signOut(page);
   await page.waitForURL(/\/auth\/login/);
   await signIn(page, next);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
   await openAccount(page);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signOut(page);
   await page.waitForURL(/\/auth\/login/);
   await page.getByLabel('Username', { exact: true }).fill(legacy);
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASSPHRASE);
@@ -217,7 +228,7 @@ test('a wrong passphrase shows the 401 error and clears the passphrase', async (
   await expect(error).toHaveText('That passphrase is wrong.');
   await expect(error).toHaveAttribute('data-status', '401');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page).toHaveURL(/\/hub$/);
+  expect(new URL(page.url()).pathname).toBe('/hub');
   await expectPassphraseCleared(page);
   await expectNoHorizontalOverflow(page);
 });
@@ -226,7 +237,7 @@ test('a taken username shows the 409 error and clears the passphrase', async ({ 
   await page.setViewportSize({ width: 1280, height: 800 });
   await createAccount(page, 'rename.owner');
   await openAccount(page);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signOut(page);
   await page.waitForURL(/\/auth\/login/);
   await createAccount(page, 'rename.other');
 

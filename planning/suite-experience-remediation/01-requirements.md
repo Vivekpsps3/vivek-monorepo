@@ -39,15 +39,17 @@ The owner's wording is normalized here without dropping subtle distinctions. Tas
 | R33 | Deliver atomically and iteratively in one refactor PR. | PR-01, DB-01, DB-02, DOC-01 | One PR/image release with small tested internal commits, ordered migrations and honest deploy/rollback semantics. |
 | R34 | Tie all previous issues and architecture cleanup into one massive detailed plan. | PR-01, QA-01, DOC-01 | Single linked folder, requirement/issue/task/evidence traceability; earlier product issues remain in acceptance. |
 
+Current acceptance evidence: [R01–R34 map](evidence/requirement-acceptance.md) and [final verification](evidence/final-verification.md). Runtime-removal and release dependencies remain open.
+
 ## Explicit subchecks for the combined final requirement
 
-- [ ] R22a: A caught-up button marks only aired episodes as watched and supports undo.
-- [ ] R22b: A show with future seasons remains followed/active and returns to needs-watching when a new episode airs.
-- [ ] R22c: Ongoing, ended, and unknown are distinct from Watching, Watched, and Caught up.
-- [ ] R22d: Hub, Finance, Travel, and Media each receive a full route/state UI audit, not just a new stylesheet.
-- [ ] R22e: The design direction is modern, fluid, and glass-like while remaining readable and responsive.
-- [ ] R22f: Additional issues discovered during source and browser exploration receive severity, evidence, and tasks.
-- [ ] R22g: Work is divided into independently reviewable checklists suitable for parallel agents.
+- [x] R22a: A caught-up button marks only aired episodes as watched and supports undo.
+- [x] R22b: A show with future seasons remains followed/active and returns to needs-watching when a new episode airs.
+- [x] R22c: Ongoing, ended, and unknown are distinct from Watching, Watched, and Caught up.
+- [x] R22d: Hub, Finance, Travel, and Media each receive a full route/state UI audit, not just a new stylesheet.
+- [x] R22e: The design direction is modern, fluid, and glass-like while remaining readable and responsive.
+- [x] R22f: Additional issues discovered during source and browser exploration receive severity, evidence, and tasks.
+- [x] R22g: Work is divided into reviewable checklists; the owner selected one agent, superseding parallel execution and independent-agent review.
 
 ## Product interpretations to carry forward
 

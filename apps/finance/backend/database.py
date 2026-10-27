@@ -37,7 +37,7 @@ def init_database() -> None:
 
     from apps.finance.backend.legacy_schema_guard import assert_safe_to_remove_legacy_schema
 
-    if engine is None:  # pragma: no cover
+    if engine is None:
         raise RuntimeError("Database is not open")
     # Check before create_all or any historical upgrade can change the source DB.
     with engine.connect() as connection:

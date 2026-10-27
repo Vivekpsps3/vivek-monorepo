@@ -8,7 +8,7 @@ import { JobIncome } from '../models/transaction.model';
 import { compensationByEmployer, EmployerCompensation, isValidIsoDate } from '../utils/job-compensation.util';
 import { todayIsoDate } from '@vivek/browser';
 import { UiCardComponent, UiDataTableComponent, UiEmptyStateComponent } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { MoneyPipe } from '@vivek/ui';
 
 @Component({
   selector: 'app-compensation-report',

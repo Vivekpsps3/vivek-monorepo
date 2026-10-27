@@ -1,13 +1,4 @@
-import {
-  excludedAmountNote,
-  needsFixing,
-  sumCountableDollars,
-  validateAsset,
-  validateMoney,
-  validateSubscription,
-  validateTransaction,
-  validateUnitPrice,
-} from '@vivek/browser';
+import { excludedAmountNote, needsFixing, sumCountableDollars, validateAsset, validateMoney, validateSubscription, validateTransaction, validateUnitPrice } from './validators';
 
 describe('finance field validators', () => {
   it('rejects a negative subscription inline and excludes it from totals', () => {

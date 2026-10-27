@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
-
-import { barName, dayLinkName, monthMatrix, weekdayHeads } from "../modules/calendar-model.mjs";
+import { barName, dayLinkName, monthMatrix, weekdayHeads } from "../../../frontend/src/calendar-model.mjs";
 import {
   changeCity,
   clearRange,
@@ -16,8 +14,8 @@ import {
   saveState,
   segments,
   summaryText,
-} from "../modules/composer-model.mjs";
-import { blankRange } from "../modules/composer-model.mjs";
+} from "../../../frontend/src/composer-model.mjs";
+import { blankRange } from "../../../frontend/src/composer-model.mjs";
 
 test("tap then tap selects a range and a backwards tap swaps the ends", () => {
   let model = blankRange();
@@ -139,40 +137,4 @@ test("calendar day names include plans and the bar name includes the range", () 
   const weeks = monthMatrix(2026, 10, 0);
   assert.equal(weeks[0][0].getDay(), 0);
   assert.equal(weekdayHeads()[0].title, "Sunday");
-});
-
-test("the composer grid and the pto cadence are in the page source", () => {
-  const composer = readFileSync(new URL("../modules/views/composer.mjs", import.meta.url), "utf8");
-  const pto = readFileSync(new URL("../modules/views/pto.mjs", import.meta.url), "utf8");
-  const trip = readFileSync(new URL("../modules/views/trip.mjs", import.meta.url), "utf8");
-  const calendar = readFileSync(new URL("../modules/views/calendar.mjs", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
-  assert.match(composer, /role="grid"/);
-  assert.match(composer, /role="columnheader"/);
-  assert.match(composer, /aria-label="Previous month"/);
-  assert.match(composer, /Counts as PTO/);
-  assert.match(composer, /aria-disabled/);
-  assert.match(composer, /input\.name = "city";\s*model\.cityError = true;\s*applyFieldError\(root, "city", "Name the city\."\)/);
-  assert.match(composer, /Destination city/);
-  assert.match(composer, /Change city on/);
-  assert.match(composer, /Add destination/);
-  assert.match(composer, /Rename trip/);
-  assert.match(composer, /data-range="start"/);
-  assert.match(composer, /data-range="end"/);
-  assert.match(composer, /if \(saving\) return/);
-  assert.equal(composer.includes("Split…"), false);
-  assert.equal(composer.includes("touch-action:none"), false);
-  const router = readFileSync(new URL("../modules/router.mjs", import.meta.url), "utf8");
-  assert.match(router, /destroyComposer\(\)/);
-  assert.match(pto, /role="radiogroup"/);
-  assert.match(pto, /Set up PTO/);
-  assert.match(pto, /aria-hidden="true"/);
-  assert.match(trip, /Show \$\{esc\(point.label\)\} on map/);
-  assert.match(trip, /City: \$\{point.label\}/);
-  assert.match(trip, /Map tiles couldn't load/);
-  assert.match(calendar, />Today<\/a>/);
-  assert.match(calendar, /aria-current="date"/);
-  assert.match(calendar, /cal-strip/);
-  assert.match(css, /\.composer-grid \[role="row"\]/);
-  assert.match(css, /\.composer-grid \{ touch-action: pan-y; \}/);
 });

@@ -1,53 +1,28 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { translateLegacyLocation } from '../apps/web/src/app/platform/legacy-routes.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-function read(relative) {
-  return fs.readFileSync(path.join(root, relative), 'utf8');
-}
-
-function routeTables(dir) {
-  const found = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) found.push(...routeTables(full));
-    else if (/routes/i.test(entry.name) && entry.name.endsWith('.ts')) {
-      found.push(path.relative(root, full));
-    }
-  }
-  return found;
-}
-
-test('public home is composed by the one client route table', () => {
-  assert.equal(fs.existsSync(path.join(root, 'apps/web')), false);
-  assert.equal(fs.existsSync(path.join(root, 'apps/site/src/app/app.routes.server.ts')), false);
-  assert.deepEqual(routeTables(path.join(root, 'apps/site/src')), ['apps/site/src/app/app.routes.ts']);
-
-  const main = read('apps/site/src/main.ts');
-  assert.equal(main.match(/bootstrapApplication\(/g).length, 1);
-  assert.match(main, /bootstrapApplication\(AppComponent, appConfig\)/);
-
-  const config = read('apps/site/src/app/app.config.ts');
-  assert.match(config, /from '\.\/app\.routes'/);
-  assert.equal(config.match(/provideRouter\(/g).length, 1);
-
-  const routes = read('apps/site/src/app/app.routes.ts');
-  assert.match(routes, /HomeComponent/);
-  assert.match(routes, /path: 'home',\s*component: HomeComponent/);
-  assert.equal(read('apps/site/src/app/app.component.html').match(/<router-outlet\s*\/>/g).length, 1);
+test('old trip bookmarks retain the selected trip and editor query', () => {
+  assert.equal(translateLegacyLocation('https://suite.test/travel/#/trips/42?edit=transport'), '/travel/trips/42?edit=transport');
 });
 
-test('travel renders from the module entry, not a second bootstrap', () => {
-  assert.equal(fs.existsSync(path.join(root, 'apps/travel/backend/static/app.js')), false);
-  const html = read('apps/travel/backend/static/index.html');
-  const scripts = [...html.matchAll(/<script type="module" src="([^"]+)"><\/script>/g)].map(match => match[1]);
-  assert.deepEqual(scripts, ['__TRAVEL_ROOT__/static/modules/app.mjs']);
-  const app = read('apps/travel/backend/static/modules/app.mjs');
-  assert.equal(app.match(/\bboot\(\)/g).length, 2);
-  assert.match(app, /import \{ render, paint \} from "\.\/router\.mjs"/);
-  assert.match(app, /\nboot\(\);\n$/);
+test('old Media search bookmarks retain query, filters, and outer parameters', () => {
+  assert.equal(translateLegacyLocation('https://suite.test/media/?from=hub#/search?q=The+Gentlemen&kind=tv'), '/media/search?q=The+Gentlemen&kind=tv&from=hub');
+  assert.equal(translateLegacyLocation('https://suite.test/hub/media/#/library'), '/media/library');
+});
+
+test('inner query parameters take precedence without losing distinct outer values', () => {
+  assert.equal(translateLegacyLocation('/travel/?start=old&view=map#/trips/new?start=2026-11-02'), '/travel/trips/new?start=2026-11-02&view=map');
+});
+
+test('canonical paths and ordinary page anchors remain unchanged', () => {
+  assert.equal(translateLegacyLocation('/finance/have?t=holdings'), null);
+  assert.equal(translateLegacyLocation('/travel/trips/42#notes'), null);
+  assert.equal(translateLegacyLocation('/about#experience'), null);
+});
+
+test('hash translation cannot escape a domain or accept encoded separators', () => {
+  for (const href of ['/travel/#//attacker.test', '/media/#/../finance/have', '/travel/#/%2f%2fattacker.test', '/finance/#/..\\evil']) {
+    assert.equal(translateLegacyLocation(href), null, href);
+  }
 });

@@ -32,7 +32,7 @@ import { RouterLink } from '@angular/router';
             <div class="work-entry__copy">
               <h3>Multi-region operations infrastructure</h3>
               <p>Led a multi-region Kubernetes migration supporting production users and global operations.</p>
-              <a routerLink="/work" fragment="multi-region" aria-label="Read about multi-region operations infrastructure">Explore <span aria-hidden="true">→</span></a>
+              <a routerLink="/work" fragment="multi-region" aria-label="Explore multi-region operations infrastructure">Explore <span aria-hidden="true">→</span></a>
             </div>
           </article>
           <article class="work-entry">
@@ -42,7 +42,7 @@ import { RouterLink } from '@angular/router';
             <div class="work-entry__copy">
               <h3>Code review and operations support</h3>
               <p>Built AI code review and operator-reviewed triage tools.</p>
-              <a routerLink="/work" fragment="ai-tools" aria-label="Read about AI tools">Explore <span aria-hidden="true">→</span></a>
+              <a routerLink="/work" fragment="ai-tools" aria-label="Explore AI tools">Explore <span aria-hidden="true">→</span></a>
             </div>
           </article>
           <article class="work-entry">
@@ -53,7 +53,7 @@ import { RouterLink } from '@angular/router';
             <div class="work-entry__copy">
               <h3>Iterative retrieval and analytics</h3>
               <p>Built retrieval and analytics over 1M+ internal records; later adopted in production.</p>
-              <a routerLink="/work" fragment="exxonmobil" aria-label="Read about ExxonMobil work">Explore <span aria-hidden="true">→</span></a>
+              <a routerLink="/work" fragment="exxonmobil" aria-label="Explore ExxonMobil work">Explore <span aria-hidden="true">→</span></a>
             </div>
           </article>
         </div>

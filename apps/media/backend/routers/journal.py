@@ -4,10 +4,10 @@ from sqlalchemy.orm import Session
 
 from apps.media.backend.database import get_db
 from apps.media.backend.models import Episode, Experience
-from apps.media.backend.services import providers, records
+from apps.media.backend.services import metadata, portraits, progress, providers, records
 from apps.media.backend.services.calendar import build_calendar
 from apps.media.backend.services.providers import UA
-from apps.media.backend.services.summary import build_summary, next_episodes
+from apps.media.backend.services.summary import build_summary
 from apps.media.backend.services.validate import clean_text
 from apps.server.auth import Principal, require_principal
 from apps.server.database import release_for_provider_io
@@ -21,7 +21,10 @@ def me(principal: Principal = Depends(require_principal)):
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+def summary(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     return build_summary(db, principal.id)
 
 
@@ -29,7 +32,17 @@ def summary(db: Session = Depends(get_db), principal: Principal = Depends(requir
 def calendar(
     month: str | None = None,
     tz: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    return build_calendar(db, principal.id, month, tz=tz)
+
+
+@router.post("/calendar/refresh")
+def refresh_calendar(
+    month: str | None = None,
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     user_id = principal.id
@@ -38,7 +51,7 @@ def calendar(
         headers={"User-Agent": UA, "Accept": "application/sparql-results+json, application/json"},
     )
     try:
-        return build_calendar(db, user_id, month, http, tz)
+        return build_calendar(db, user_id, month, http, tz, refresh=True)
     finally:
         http.close()
 
@@ -49,25 +62,32 @@ def library(
     status: str | None = None,
     q: str | None = None,
     sort: str = "activity",
-    db: Session = Depends(get_db),
+    offset: int = Query(0, ge=0, le=100000),
+    limit: int = Query(50, ge=1, le=100),
+    favorite: bool = False,
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     sort = sort.strip().lower()
     if sort not in {"added", "rating", "activity", "release", "title"}:
         sort = "activity"
     user_id = principal.id
-    rows = records.list_library(db, user_id, kind, status, q, sort)
-    records.apply_artist_portraits(db, rows)
-    # The Continue rail is the only summary slice the library paints.
-    # Chip and sort changes must not rebuild upcoming, reviews, and counts.
+    rows, total = records.list_library(db, user_id, kind, status, q, sort, offset, limit, favorite)
+    # Continuation is served by /summary for Now; filters only need this page.
     return {
-        "items": [records.library_card(db, row) for row in rows],
-        "continue": next_episodes(db, user_id),
+        "items": records.library_cards(db, rows),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(rows) < total,
     }
 
 
 @router.get("/movies")
-def movies(db: Session = Depends(get_db), principal: Principal = Depends(require_principal)):
+def movies(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
     http = httpx.Client(
         timeout=12.0,
         headers={"User-Agent": UA, "Accept": "text/html,application/json"},
@@ -84,7 +104,9 @@ def movies(db: Session = Depends(get_db), principal: Principal = Depends(require
 
 @router.post("/library")
 def create_manual(
-    body: dict, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     entry = records.create_manual(db, principal.id, body)
     return records.detail(db, entry)
@@ -92,7 +114,9 @@ def create_manual(
 
 @router.post("/library/from-provider")
 def create_from_provider(
-    body: dict, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     entry, already = records.create_from_provider(db, principal.id, body)
     payload = records.detail(db, entry)
@@ -102,10 +126,11 @@ def create_from_provider(
 
 @router.get("/entries/{entry_id}")
 def read_entry(
-    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
-    records.apply_artist_portraits(db, [entry], deep=True)
     return records.detail(db, entry)
 
 
@@ -128,7 +153,7 @@ def discography(
     group_offset: int = Query(0, ge=0, le=10000),
     release_offset: int = Query(0, ge=0, le=10000),
     release: str = "studio",
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     """One page of public releases. Nothing here is saved."""
@@ -215,7 +240,7 @@ def discography(
 def save_discography_item(
     entry_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     """Save one discovered album or song. Does not save the rest of the page."""
@@ -230,7 +255,7 @@ def save_discography_item(
 def patch_entry(
     entry_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -238,9 +263,94 @@ def patch_entry(
     return records.detail(db, entry)
 
 
+@router.get("/entries/{entry_id}/portraits")
+def portrait_search(
+    entry_id: int,
+    q: str,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    return {"results": portraits.search(db, entry, q)}
+
+
+@router.put("/entries/{entry_id}/portrait")
+def portrait_select(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    portraits.select(db, entry, body)
+    return records.detail(db, entry)
+
+
+@router.delete("/entries/{entry_id}/portrait")
+def portrait_reset(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    portraits.reset(db, entry)
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/refresh")
+def refresh_metadata(
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    metadata.refresh(db, entry)
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/link-metadata")
+def link_metadata(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    if entry.catalog.source != "manual":
+        raise HTTPException(422, "This item already has a provider identity.")
+    metadata.refresh(db, entry, body)
+    return records.detail(db, entry)
+
+
+@router.post("/entries/{entry_id}/caught-up")
+def catch_up(
+    entry_id: int,
+    body: dict,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    operation = progress.catch_up(db, entry, body)
+    return {**records.detail(db, entry), "operation": operation}
+
+
+@router.post("/entries/{entry_id}/caught-up/{token}/undo")
+def undo_catch_up(
+    entry_id: int,
+    token: str,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    entry = records.owned_entry(db, principal.id, entry_id)
+    result = progress.undo(db, entry, token)
+    return {**records.detail(db, entry), "undo": result}
+
+
 @router.delete("/entries/{entry_id}")
 def delete_entry(
-    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
     db.query(Experience).filter(
@@ -276,7 +386,7 @@ def delete_entry(
 def add_album(
     entry_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -293,7 +403,7 @@ def add_track(
     entry_id: int,
     album_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -310,7 +420,7 @@ def rate_album(
     entry_id: int,
     album_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -327,7 +437,7 @@ def rate_track(
     entry_id: int,
     track_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -343,7 +453,7 @@ def rate_track(
 def save_season(
     entry_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -359,7 +469,7 @@ def save_season(
 def add_episode(
     entry_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -374,7 +484,7 @@ def watched(
     entry_id: int,
     episode_id: int,
     body: dict,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -384,13 +494,17 @@ def watched(
     watched_on = (
         records.parse_date(body.get("watched_on"), "Watched on") if body.get("watched_on") else None
     )
-    records.mark_watched(db, principal.id, episode, bool(body.get("watched", True)), watched_on)
+    records.mark_watched(
+        db, principal.id, episode, records.watched_flag(body.get("watched", True)), watched_on
+    )
     return records.detail(db, entry)
 
 
 @router.post("/entries/{entry_id}/episodes/next")
 def next_episode(
-    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
     state = records.mark_next(db, principal.id, entry)
@@ -401,7 +515,9 @@ def next_episode(
 
 @router.get("/entries/{entry_id}/web")
 def entry_web(
-    entry_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    entry_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     """Collaborators for an artist, or sequels and spin-offs for a movie."""
     entry = records.owned_entry(db, principal.id, entry_id)
@@ -445,19 +561,27 @@ def entry_web(
 def search(
     q: str = Query(""),
     kind: str | None = None,
-    db: Session = Depends(get_db),
+    offset: int = Query(0, ge=0, le=10000),
+    limit: int = Query(20, ge=1, le=50),
+    retry: bool = False,
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     query = clean_text(q, 120, "Search", required=True)
     if len(query) < 2:
         raise HTTPException(status_code=422, detail="Type at least two letters.")
     user_id = principal.id
-    payload = providers.search(db, query, kind)
-    providers.attach_artist_portraits(db, payload["results"])
+    kind = None if kind in (None, "", "all") else kind
+    if kind is not None and kind not in records.KINDS:
+        raise HTTPException(status_code=422, detail="This media type is not supported.")
+    payload = providers.search(db, query, kind, offset=offset, limit=limit, retry_errors=retry)
     saved = records.saved_source_ids(db, user_id)
+    artwork = records.saved_artist_artwork(db, user_id)
     for result in payload["results"]:
         key = (result.get("source"), result.get("source_id"))
         result["already_saved"] = key in saved
         if key in saved:
             result["saved_id"] = saved[key]
+            if result.get("kind") == "artist" and key in artwork:
+                result["artwork_url"] = artwork[key]
     return payload

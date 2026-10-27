@@ -407,7 +407,7 @@ def test_movie_search_reads_the_public_page_without_a_key(client, monkeypatch):
     assert saved["catalog"]["title"] == "Inception"
 
 
-def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client, monkeypatch):
+def test_scrape_mode_preserves_distinct_source_identities_with_the_same_title(client, monkeypatch):
     monkeypatch.setenv("MEDIA_SCRAPE_MODE", "1")
     monkeypatch.setenv("TMDB_API_KEY", "test-key")
 
@@ -469,14 +469,17 @@ def test_scrape_mode_reads_public_catalogs_and_keeps_tmdb_when_both_match(client
     monkeypatch.setattr("apps.media.backend.services.providers.tmdb_search", tmdb)
     monkeypatch.setattr("apps.media.backend.services.providers.itunes_search", itunes)
     found = client.get("/api/search", params={"q": "inception", "kind": "movie"}).json()
-    assert [item["source"] for item in found["results"]] == ["tmdb", "itunes"]
-    assert found["results"][0]["provenance"]["coverage"] == "official"
-    assert found["results"][1]["provenance"]["provider"] == "itunes"
-    assert found["results"][1]["title"] == "Inception: The App"
+    assert {(item["source"], item["source_id"]) for item in found["results"]} == {
+        ("tmdb", "movie:27205"),
+        ("itunes", "413416"),
+        ("itunes", "99"),
+    }
+    app = next(item for item in found["results"] if item["source_id"] == "99")
+    assert all(item["provenance"]["coverage"] == "official" for item in found["results"])
+    assert app["provenance"]["provider"] == "itunes"
+    assert app["title"] == "Inception: The App"
     assert found["providers"]["itunes"] == "ok"
-    saved = client.post(
-        "/api/library/from-provider", json={**found["results"][1], "status": "want"}
-    ).json()
+    saved = client.post("/api/library/from-provider", json={**app, "status": "want"}).json()
     assert saved["catalog"]["source"] == "itunes"
     assert saved["catalog"]["title"] == "Inception: The App"
 
@@ -621,12 +624,10 @@ def test_steam_search_keeps_title_and_capsule():
     assert len(rows) == 1
 
 
-def test_home_page_and_tokens_render_without_private_rows(client):
-    html = client.get("/").text
-    assert "Media" in html
-    assert "media-theme" in html
-    assert 'href="#/calendar"' in html
-    assert client.get("/tokens.css").status_code == 200
-    assert "controls.css" in html
-    assert client.get("/controls.css").status_code == 200
-    assert client.get("/favicon.svg").status_code == 200
+def test_home_page_loads_one_suite_bundle_without_private_rows(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "<app-root ngCspNonce=" in response.text
+    assert 'src="/main.js"' in response.text
+    assert "media-theme" not in response.text
+    assert client.get("/api/library").json()["items"] == []

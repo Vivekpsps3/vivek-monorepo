@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEEK_STARTS_ON, artworkUrl, chooseReview, coverImage, dayLabel, defaultStatus, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, libraryStatusForKind, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, statusOptions, weekDayLabels, whenLabel } from "../modules/format.mjs";
+import { WEEK_STARTS_ON, weekStartsOn, artworkUrl, chooseReview, coverImage, dayLabel, defaultStatus, draftKey, emptyState, escapeHtml, failedNoteAfterReload, genericStatusOptions, libraryStatusForKind, monthCells, monthLabel, normalizeLibraryQuery, progressPreview, progressUnits, ratingText, releaseLabel, routeErrorCopy, safeUrl, seasonLabel, shiftMonth, statusLabel, statusOptions, weekDayLabels, whenLabel } from "../../../frontend/src/format.mjs";
 
 test("escapes review text and rejects unsafe artwork urls", () => {
   assert.equal(escapeHtml(`<script>"&'</script>`), "&lt;script&gt;&quot;&amp;&#39;&lt;/script&gt;");
@@ -160,4 +160,22 @@ test("empty state escapes its copy and route errors are one panel", () => {
   assert.equal(routeErrorCopy("calendar", { status: 500, message: "Nope." }).title, "Couldn't load the calendar");
   assert.equal(routeErrorCopy("discography", { status: 500, message: "Nope." }).title, "Couldn't load this discography");
   assert.equal(routeErrorCopy("home", { status: 500, message: "Nope." }).links[0].label, "Open library");
+});
+
+test("Media calendar follows the shared week setting", () => {
+  const previous = globalThis.localStorage;
+  const memory = new Map();
+  globalThis.localStorage = { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value) };
+  try {
+    assert.equal(weekStartsOn(), 0);
+    localStorage.setItem("suite-week-start", "1");
+    assert.equal(weekStartsOn(), 1);
+    assert.equal(weekDayLabels()[0], "Mon");
+    assert.equal(monthCells("2026-10")[3], "2026-10-01");
+    localStorage.setItem("suite-week-start", "0");
+    assert.equal(weekStartsOn(), 0);
+  } finally {
+    if (previous === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previous;
+  }
 });

@@ -15,7 +15,7 @@ import {
   evidenceKindLabel,
   stockLabEvidenceCards,
 } from '../utils/evidence-labels.util';
-import { AppDatePipe } from '../shared/pipes/app-date.pipe';
+import { AppDatePipe } from '@vivek/ui';
 import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 
 @Component({

@@ -2,8 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
-import { authNavigation } from '../auth/after-auth';
-import { AuthService } from '../auth/auth.service';
+import { authNavigation } from '@vivek/ui';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { VaultService } from '../crypto/vault.service';
 import { MarketPriceQuote } from '../models/transaction.model';
@@ -62,7 +62,7 @@ const QUOTE_TIMEOUT_MS = 12_000;
 
 @Injectable({ providedIn: 'root' })
 export class MarketRefreshCoordinatorService implements OnDestroy {
-  private readonly auth = inject(AuthService);
+  private readonly auth = inject(SESSION_CONTEXT);
   private readonly finance = inject(FinanceService);
   private readonly vault = inject(VaultService);
   private readonly router = inject(Router);
@@ -394,7 +394,7 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
       this.auth.clearLocalSession();
       authNavigation.goToLogin(false);
     } else {
-      await this.router.navigateByUrl('/vault/unlock');
+      await this.router.navigateByUrl('/finance/vault/unlock');
     }
   }
 }

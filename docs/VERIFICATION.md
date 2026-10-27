@@ -1,63 +1,28 @@
-# Verification tiers
+# Verification
 
-> Current unified development/deployment commands are in [Operations](OPERATIONS.md).
-> Standalone app commands below are historical domain references.
+Run the affected checks locally before opening a PR. CI is the second run. The suite refactor affects every domain, so the full matrix applies.
 
-Named quality gates for local development and CI (TEST-001).
+| Concern | Local command |
+| --- | --- |
+| Docs, boundaries and scripts | `make test-fast` |
+| Python formatting/lint/types | `make lint-python typecheck-python` |
+| Web lint/types | `make lint-web typecheck-web` |
+| Four backend coverage gates | `make test-backend` |
+| Finance, public and root/shared Karma | `make test-frontend` |
+| All unit/pure-module checks above | `make test` |
+| Production bundle and Finance browser | `make e2e` |
+| All browser projects including cross-app/a11y | `make build-frontends` then `npm run e2e` |
+| One domain's browser checks | `npx playwright test --project=finance`, `--project=travel`, or `--project=media` |
+| Root/public acceptance | `npx playwright test --project=suite` |
+| Release manifest | `node --test scripts/test-release-manifest.mjs` |
+| Built image and assembled routes | `make docker-build test-suite-routes` |
+| Migration/data preservation | `bash scripts/validate-seeded-adoption.sh` |
+| Production browser policy | `SITE_TEST_URL=http://127.0.0.1:PORT node scripts/test-site-browser.mjs` against an empty disposable image database |
 
-| Tier | Command | Covers | Owner |
-|------|---------|--------|-------|
-| **fast** | `make test-fast` | Doc paths (OPS-002) and shared-package/app import boundaries | docs/packages |
-| **finance** | `make test-finance` | Balance sheet, planning non-mutation, client-finance, migrations matrix | finance |
-| **security** | `make test-security` | Vault/openapi/auth + client-finance and evidence-labels specs | privacy |
-| **full** | `make test-full` | Finance, Travel and Media (Python and static-module Node tests), and site backend tests; both Angular unit suites and builds; release-manifest fixtures; Docker Compose build and suite-route integration | release |
+Domain wrapper configs remain for CI and existing commands; every one uses `tests/e2e/config.ts` and `tests/e2e/server.py`. Retries stay zero. Screenshots are always discovered. Use `CHROME_BIN` for Karma and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` for an installed Chromium if automatic discovery cannot find it.
 
-## Migration matrix (BE-002)
+[Quality](QUALITY.md) owns floors/ratchets and coverage limitations. Do not omit moved identity source files from Finance's original logical coverage set. Replace obsolete source-string/widget assertions only after recording their behavior replacement; fewer discovered tests do not prove parity.
 
-Supported DB generations and fixtures: [LIFECYCLE.md](./LIFECYCLE.md). The
-historical holdings-only upgrade fixture intentionally stops at the previous
-head `b7c9d2e4f601`. `test_legacy_schema_guard.py` proves that empty legacy
-tables are dropped while encrypted records and vault wraps remain, populated
-plaintext tables/password-only users block before changes, and restart/fresh
-initialization do not recreate retired tables.
-Historical passwordless migration fixtures remain covered.
+[Lifecycle](LIFECYCLE.md) records historical Finance database generations. [Migrations](MIGRATIONS.md) and [Operations](OPERATIONS.md) own production upgrades, premigration backups and restore. The seeded rehearsal covers pinned unadopted history, forward upgrades, unchanged original values, explicit backfill provenance, schema drift, foreign keys and authenticated smoke. `BATCH_PROOF=1` also verifies batch-recreation child preservation and old-image compatibility behavior. Run it only with its disposable data/volumes.
 
-## Backup and restore (OPS-001)
-
-1. Backup: `./scripts/backup-db.sh` (also used on deploy).
-2. Integrity: `./scripts/verify-backup.sh data/backups/finance.db.<timestamp>.bak`
-3. Restore drill (staging): stop stack → copy backup over data file → start → `curl` health → record date in ops notes.
-4. Details: [BACKUP.md](./BACKUP.md), [DEPLOY.md](./DEPLOY.md).
-
-## Privacy gate for local intelligence (SEC-001)
-
-See [SECURITY_MODEL.md](./SECURITY_MODEL.md) § Local intelligence privacy gate.
-No local signal/detector code currently ships; any future client-side analytics
-must stay network-zero and non-mutating. `test-security` covers the
-client-finance (`client-finance.spec.ts`) and evidence-labels
-(`evidence-labels.util.spec.ts`) specs.
-
-## Planning / Stock Lab evidence (INNO-003)
-
-Shared fact / inference / scenario cards in `apps/finance/frontend/src/app/utils/evidence-labels.util.ts`.
-Speculative surfaces must not mutate holdings or net worth; Stock Lab discloses tickers only.
-
-## CI mapping
-
-`.github/workflows/ci.yml` runs separate Finance, Travel, Media, and site
-backend pytest jobs; Travel and Media static-module Node tests; the fast
-documentation/package boundary gate; Finance and site browser tests and
-development builds; and a Docker build followed by the suite-route integration
-check. Local `make test-full` covers those app test suites and builds plus
-`test-fast` and Finance release-manifest fixtures.
-
-The optional `make test-release-cache` exercises production Nginx cache headers
-and release rollover in a real Chromium context. It requires Docker, the
-Finance frontend npm dependencies, and Playwright Chromium, so it is not part
-of the default full tier or CI.
-
-Install the full local test dependencies with `make install`. It creates
-separate `.venv` environments for Finance, Travel, Media, and the site Flask
-backend, and installs npm dependencies for both Angular apps. The focused setup
-commands are `make travel-install`, `make media-install`, and `make site-install`;
-their test targets require those environments to exist.
+Finance invariants remain part of unit and browser acceptance: browser-owned encryption, ciphertext-only server storage, wrong-user isolation, lossless/resumable imports, edited-row-safe undo, net worth from balance-sheet facts, and speculative planning that never mutates actual records. See [Security](SECURITY_MODEL.md), [Data model](DATA_MODEL.md), and [Frontend](FRONTEND.md).

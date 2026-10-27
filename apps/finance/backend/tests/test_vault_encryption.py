@@ -6,8 +6,8 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 import pytest
 from sqlalchemy import delete
 
-from conftest import authenticated_client
 from apps.finance.backend.main import Base, app, engine
+from apps.finance.backend.tests.conftest import authenticated_client
 
 
 @pytest.fixture(autouse=True)

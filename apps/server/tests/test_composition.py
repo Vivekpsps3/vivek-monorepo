@@ -7,7 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -40,7 +40,7 @@ assert not hasattr(travel, "init_db")
 assert not hasattr(travel, "bind_database")
 assert not hasattr(media, "init_db")
 assert not hasattr(media, "bind_database")
-assert site.app is None
+assert not hasattr(site, "app")
 assert pathlib.Path(sys.argv[1]).iterdir() or True
 files = [path.name for path in pathlib.Path(sys.argv[1]).iterdir()]
 assert files == [], files
@@ -62,7 +62,7 @@ def test_domain_factories_are_gone():
     assert not hasattr(travel_deps, "Principal")
     assert not hasattr(travel_deps, "fetch_principal")
     with pytest.raises(ModuleNotFoundError):
-        import apps.media.backend.deps  # noqa: F401
+        __import__("apps.media.backend.deps")
 
 
 def test_database_url_rejects_relative_and_missing_files(tmp_path, monkeypatch):
@@ -78,16 +78,16 @@ def test_database_url_rejects_relative_and_missing_files(tmp_path, monkeypatch):
 
 
 def test_get_db_commits_and_rolls_back():
-    from apps.server.database import install
-
     database = open_database("sqlite:///:memory:")
-    install(database)
+    application = FastAPI()
+    application.state.database = database
+    request = Request({"type": "http", "app": application})
     session = database.sessionmaker()
     session.execute(text("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)"))
     session.commit()
     session.close()
 
-    saved = get_db()
+    saved = get_db(request)
     db = next(saved)
     db.execute(text("INSERT INTO notes (body) VALUES ('ok')"))
     with pytest.raises(StopIteration):
@@ -96,7 +96,7 @@ def test_get_db_commits_and_rolls_back():
     assert check.execute(text("SELECT body FROM notes")).scalar_one() == "ok"
     check.close()
 
-    failed = get_db()
+    failed = get_db(request)
     db = next(failed)
     db.execute(text("INSERT INTO notes (body) VALUES ('no')"))
     with pytest.raises(RuntimeError, match="boom"):
@@ -110,13 +110,11 @@ def _app(tmp_path, *, principal=None, openapi=False):
     from apps.finance.backend.database import publish
     from apps.finance.backend.models import Base as FinanceBase
     from apps.media.backend.models import Base as MediaBase
-    from apps.server.database import install
     from apps.server.main import Dependencies, Settings, create_app
     from apps.travel.backend.models import Base as TravelBase
 
     url = f"sqlite:///{tmp_path / 'site.db'}"
     database = open_database(url)
-    install(database)
     publish(database)
     FinanceBase.metadata.create_all(database.engine)
     TravelBase.metadata.create_all(database.engine)
@@ -126,7 +124,6 @@ def _app(tmp_path, *, principal=None, openapi=False):
             database_url=url,
             release="test",
             web_root=tmp_path / "finance",
-            portfolio_root=tmp_path / "portfolio",
             openapi=openapi,
         ),
         Dependencies(
@@ -140,8 +137,8 @@ def _app(tmp_path, *, principal=None, openapi=False):
 
 
 def _user(database, user_id, token, csrf, *, expired=False, revoked=False, active=True):
-    from apps.finance.backend.auth import _hash_secret, utc_now_naive
-    from apps.finance.backend.models import User, UserRole, UserSession
+    from apps.server.identity.models import User, UserRole, UserSession
+    from apps.server.identity.session import _hash_secret, utc_now_naive
 
     now = utc_now_naive()
     db = database.sessionmaker()
@@ -167,6 +164,31 @@ def _user(database, user_id, token, csrf, *, expired=False, revoked=False, activ
     )
     db.commit()
     db.close()
+
+
+def test_factories_keep_database_sessions_scoped_to_their_own_app(tmp_path):
+    from apps.server.auth import Principal
+
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first, _ = _app(first_dir, principal=Principal(1, "first", "First"))
+    second, _ = _app(second_dir, principal=Principal(1, "second", "Second"))
+    with TestClient(first) as first_client, TestClient(second) as second_client:
+        created = first_client.post(
+            "/travel/api/trips",
+            json={
+                "title": "Only first",
+                "start_date": "2026-11-02",
+                "end_date": "2026-11-06",
+                "stays": [],
+                "transports": [],
+            },
+        )
+        assert created.status_code == 201, created.text
+        assert first_client.get("/travel/api/trips/1").json()["title"] == "Only first"
+        assert second_client.get("/travel/api/trips/1").status_code == 404
 
 
 def _paths(application):
@@ -205,7 +227,7 @@ def test_middleware_is_registered_once_and_routes_are_explicit(tmp_path):
 
 
 def test_health_auth_gate_and_validation(tmp_path, monkeypatch):
-    from apps.finance.backend.rate_limit import clear_limits
+    from apps.server.rate_limit import clear_limits
 
     application, _database = _app(tmp_path)
     monkeypatch.setenv("API_KEY", "secret")
@@ -346,20 +368,21 @@ def test_startup_checks_schema_frontend_and_static_files(tmp_path):
     database = tmp_path / "site.db"
     migrate(database)
     web = tmp_path / "finance"
-    portfolio = tmp_path / "portfolio"
     web.mkdir()
-    portfolio.mkdir()
-    (web / "index.html").write_text("<html>finance</html>", encoding="utf-8")
-    (portfolio / "index.html").write_text("<html>portfolio</html>", encoding="utf-8")
+    (web / "index.csr.html").write_text(
+        '<app-root>finance</app-root><script src="/main.js"></script>', encoding="utf-8"
+    )
+    (web / "index.html").write_text("<h1>Public home</h1>", encoding="utf-8")
+    for route in ("home", "work", "about", "secrets"):
+        (web / route).mkdir()
+        (web / route / "index.html").write_text(f"<h1>{route}</h1>", encoding="utf-8")
     (web / "app-abcdefgh.js").write_text("console.log(1)", encoding="utf-8")
-    (portfolio / "home").mkdir()
     url = f"sqlite:///{database}"
     application = create_app(
         Settings(
             database_url=url,
             release="rel",
             web_root=web,
-            portfolio_root=portfolio,
             openapi=False,
         ),
         Dependencies(check_schema=True, check_frontend=True),
@@ -372,29 +395,36 @@ def test_startup_checks_schema_frontend_and_static_files(tmp_path):
         page = client.get("/finance/")
         assert page.status_code == 200
         assert "finance" in page.text
-        asset = client.get("/finance/app-abcdefgh.js")
+        asset = client.get("/app-abcdefgh.js")
         assert "immutable" in asset.headers["cache-control"]
         missing = client.get("/finance/assets/missing.js")
         assert missing.status_code == 404
         assert client.get("/").status_code == 200
         assert client.get("/home").status_code == 200
         assert client.get("/nope").status_code == 404
+        blog = client.get("/blog", follow_redirects=False)
+        assert blog.status_code == 308 and blog.headers["location"] == "/home"
         assert client.get("/finance", follow_redirects=False).status_code == 308
         assert client.get("/api", follow_redirects=False).status_code == 308
         moved = client.get("/finance/api/health", follow_redirects=False)
         assert moved.status_code == 308
         assert moved.headers["location"] == "/api/health"
-        assert client.get("/auth", follow_redirects=False).status_code == 302
+        assert client.get("/auth", follow_redirects=False).status_code == 308
         assert client.get("/auth/enroll", follow_redirects=False).headers["location"] == (
             "/auth/signup"
         )
         assert client.get("/finance/login", follow_redirects=False).headers["location"] == (
             "/auth/login"
         )
-        assert client.get("/hub/media", follow_redirects=False).status_code == 302
+        assert client.get("/hub/media", follow_redirects=False).status_code == 308
         screen = client.get("/media/library", follow_redirects=False)
-        assert screen.status_code == 302
-        assert screen.headers["location"] == "/media/#/library"
+        assert screen.status_code == 200
+        assert "<app-root" in screen.text
+        assert client.get("/travel/trips/42").status_code == 200
+        assert client.get("/media/api/missing").status_code == 404
+        assert client.get("/travel/no-such-page").status_code == 404
+        assert client.get("/finance/no-such-page").status_code == 404
+        assert "Public home" in client.get("/").text
 
 
 def test_missing_frontend_refuses_startup(tmp_path):
@@ -404,17 +434,91 @@ def test_missing_frontend_refuses_startup(tmp_path):
     database = tmp_path / "site.db"
     migrate(database)
     web = tmp_path / "finance"
-    portfolio = tmp_path / "portfolio"
     web.mkdir()
-    portfolio.mkdir()
     application = create_app(
         Settings(
             database_url=f"sqlite:///{database}",
             release="rel",
             web_root=web,
-            portfolio_root=portfolio,
         ),
         Dependencies(check_schema=True, check_frontend=True),
     )
     with pytest.raises(RuntimeError, match="frontend"), TestClient(application):
         pass
+
+
+def test_unknown_login_decoys_use_the_app_database_and_survive_restart(tmp_path, monkeypatch):
+    from apps.server.identity.auth_decoy import reset_decoy_state
+
+    monkeypatch.delenv("AUTH_DECOY_SECRET", raising=False)
+    reset_decoy_state()
+    directories = [tmp_path / "first", tmp_path / "second"]
+    for directory in directories:
+        directory.mkdir()
+    apps = [_app(directory)[0] for directory in directories]
+    with TestClient(apps[0]) as first, TestClient(apps[1]) as second:
+        body = {"username": "ghost.user"}
+        one = first.post("/api/auth/passwordless/lookup", json=body)
+        two = second.post("/api/auth/passwordless/lookup", json=body)
+        assert one.status_code == two.status_code == 200
+        assert one.json() != two.json()
+        assert all((directory / "auth-decoy-secret").is_file() for directory in directories)
+        reset_decoy_state()
+        assert first.post("/api/auth/passwordless/lookup", json=body).json() == one.json()
+        assert second.post("/api/auth/passwordless/lookup", json=body).json() == two.json()
+    reset_decoy_state()
+
+
+def test_mutation_is_committed_before_the_success_response_starts(tmp_path):
+    from apps.server.auth import Principal
+
+    application, database = _app(tmp_path, principal=Principal(1, "tester", "Tester"))
+    committed_at_response = []
+
+    async def observed(scope, receive, send):
+        async def inspect_response(message):
+            if message["type"] == "http.response.start" and message["status"] == 201:
+                with database.engine.connect() as connection:
+                    committed_at_response.append(
+                        connection.execute(text("SELECT count(*) FROM trips")).scalar_one()
+                    )
+            await send(message)
+
+        await application(scope, receive, inspect_response)
+
+    with TestClient(observed) as client:
+        response = client.post(
+            "/travel/api/trips",
+            json={
+                "title": "Immediately readable",
+                "start_date": "2026-12-01",
+                "end_date": "2026-12-02",
+            },
+        )
+        assert response.status_code == 201, response.text
+    assert committed_at_response == [1]
+
+
+def test_commit_failure_returns_error_instead_of_success(tmp_path):
+    from sqlalchemy import event
+
+    from apps.server.auth import Principal
+
+    application, database = _app(tmp_path, principal=Principal(1, "tester", "Tester"))
+
+    def reject_commit(_session):
+        raise RuntimeError("synthetic commit failure")
+
+    event.listen(database.sessionmaker, "before_commit", reject_commit)
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/travel/api/trips",
+            json={
+                "title": "Must not succeed",
+                "start_date": "2026-12-01",
+                "end_date": "2026-12-02",
+            },
+        )
+        assert response.status_code == 500
+    with database.engine.connect() as connection:
+        assert connection.execute(text("SELECT count(*) FROM trips")).scalar_one() == 0

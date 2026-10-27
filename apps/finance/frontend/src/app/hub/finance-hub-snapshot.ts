@@ -1,7 +1,20 @@
 import { Asset, Holding, Liability, NetWorth } from '../models/transaction.model';
 import { computeNetWorth } from '../crypto/client-finance';
 import { quoteFreshness } from '../utils/portfolio.util';
-import type { PortfolioAccount, PositionHighlight } from './hub-summary';
+export interface PortfolioAccount {
+  label: string;
+  value: number;
+  fidelity: boolean;
+  positions: number;
+}
+
+export interface PositionHighlight {
+  symbol: string;
+  value: number;
+  account: string;
+}
+
+
 
 export interface FinanceHubSnapshot {
   netWorth: NetWorth;

@@ -25,6 +25,13 @@ case "$suite" in
   *) echo "unknown suite: $suite" >&2; exit 2 ;;
 esac
 
+# Identity moved out of Finance without changing the tests or the measured
+# behavior. Keep those same source files in its original 83.28% gate.
+coverage_args=(--cov="$cov")
+if [[ "$suite" == finance ]]; then
+  coverage_args+=(--cov=apps/server/identity --cov=apps.server.api_key --cov=apps.server.rate_limit)
+fi
+
 read_field() {
   awk -v suite="$suite" -v field="$1" '
     $0 ~ /^#/ || NF == 0 { next }
@@ -39,7 +46,7 @@ report=$(mktemp)
 trap 'rm -f "$report"' EXIT
 set +e
 "$py" -m pytest -q "$tests" \
-  --cov="$cov" \
+  "${coverage_args[@]}" \
   --cov-report=term \
   --cov-fail-under="$floor" | tee "$report"
 status=${PIPESTATUS[0]}

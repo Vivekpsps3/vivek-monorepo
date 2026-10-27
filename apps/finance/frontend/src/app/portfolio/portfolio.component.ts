@@ -21,7 +21,8 @@ import {
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ConfirmService } from '@vivek/ui';
-import { downloadCsv, formatDate, formatMoney, fromDollars, plural, todayIsoDate, unitPriceToNumber, validateHolding, validateUnitPrice, type FieldIssue } from '@vivek/browser';
+import { downloadCsv, formatDate, formatMoney, fromDollars, plural, todayIsoDate } from '@vivek/browser';
+import { unitPriceToNumber, validateHolding, validateUnitPrice, type FieldIssue } from '../utils/validators';
 import { failureCopy, successCopy } from '@vivek/ui';
 import { dialogSaveAlert, focusDialogAlert, focusFirstInvalid } from '../shared/form-validation';
 import {
@@ -50,7 +51,7 @@ import {
   UiDataTableComponent,
   UiDialogComponent,
 } from '@vivek/ui';
-import { MoneyPipe } from '../shared/pipes/money.pipe';
+import { MoneyPipe } from '@vivek/ui';
 import { PluralPipe } from '../shared/pipes/plural.pipe';
 
 @Component({

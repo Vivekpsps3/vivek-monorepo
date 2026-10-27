@@ -6,7 +6,6 @@ from pathlib import Path
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import make_url
 
-
 LEGACY_FINANCE_TABLES = (
     "transactions",
     "bank_accounts",

@@ -1,11 +1,11 @@
 """Trips and everything that belongs to one trip."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
 from apps.travel.backend.database import get_db
-from apps.travel.backend.deps import get_geocoder
 from apps.travel.backend.models import (
     BudgetLine,
     Note,
@@ -29,7 +29,6 @@ from apps.travel.backend.schemas import (
 )
 from apps.travel.backend.services.assemble import build_trip, load_trip, pto_context
 from apps.travel.backend.services.dates import ensure_stay_inside
-from apps.travel.backend.services.places import pin_trip
 from apps.travel.backend.services.pto import sync_trip_pto
 from apps.travel.backend.services.records import (
     apply_budget_line,
@@ -52,13 +51,10 @@ def _trip_or_404(db: Session, trip_id: int, user_id: int) -> Trip:
     return trip
 
 
-def _detail(db: Session, trip_id: int, user_id: int, fetch=None) -> dict:
+def _detail(db: Session, trip_id: int, user_id: int) -> dict:
     trip = load_trip(db, trip_id, user_id)
     if trip is None:
         raise HTTPException(status_code=404, detail="That trip is not here.")
-    if fetch is not None:
-        pin_trip(db, trip, fetch)
-        db.flush()
     _row, policy, usages = pto_context(db, user_id)
     return build_trip(trip, policy, usages)
 
@@ -89,22 +85,26 @@ def _check_stay_link(db: Session, trip_id: int, stay_id: int | None) -> None:
 @router.get("/trips/{trip_id}")
 def read_trip(
     trip_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
-    return _detail(db, trip_id, principal.id, fetch)
+    return _detail(db, trip_id, principal.id)
 
 
 @router.post("/trips", status_code=201)
 def create_trip(
     body: TripCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
+    key = body.client_request_id
+    if key:
+        previous = db.query(Trip).filter_by(user_id=principal.id, client_request_id=key).first()
+        if previous is not None:
+            return _detail(db, previous.id, principal.id)
     trip = Trip(
         user_id=principal.id,
+        client_request_id=key,
         title=body.title,
         start_date=body.start_date,
         end_date=body.end_date,
@@ -115,26 +115,45 @@ def create_trip(
         pto_days=pto_override(body.pto_days),
     )
     db.add(trip)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        previous = (
+            db.query(Trip).filter_by(user_id=principal.id, client_request_id=key).first()
+            if key
+            else None
+        )
+        if previous is None:
+            raise
+        return _detail(db, previous.id, principal.id)
     for index, stay in enumerate(body.stays):
         _check_stay(trip, stay)
         row = Stay(trip_id=trip.id, sort_order=index)
         apply_stay(row, stay)
         db.add(row)
     for index, transport in enumerate(body.transports):
-        row = Transport(trip_id=trip.id, sort_order=index)
-        apply_transport(row, transport)
-        db.add(row)
-    sync_trip_pto(db, trip)
+        transport_row = Transport(trip_id=trip.id, sort_order=index)
+        apply_transport(transport_row, transport)
+        db.add(transport_row)
+    try:
+        choices = (
+            {item.on_date: item.amount for item in body.pto_dates}
+            if body.pto_dates is not None
+            else None
+        )
+        sync_trip_pto(db, trip, choices)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.flush()
-    return _detail(db, trip.id, principal.id, fetch)
+    return _detail(db, trip.id, principal.id)
 
 
 @router.patch("/trips/{trip_id}")
 def update_trip(
     trip_id: int,
     body: TripPatch,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
@@ -176,7 +195,9 @@ def update_trip(
 
 @router.delete("/trips/{trip_id}", status_code=204)
 def delete_trip(
-    trip_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    trip_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
     db.delete(trip)
@@ -186,9 +207,8 @@ def delete_trip(
 def create_stay(
     trip_id: int,
     body: StayIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
     _check_stay(trip, body)
@@ -198,16 +218,15 @@ def create_stay(
     db.add(row)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id, principal.id, fetch)
+    return _detail(db, trip.id, principal.id)
 
 
 @router.patch("/stays/{stay_id}")
 def update_stay(
     stay_id: int,
     body: StayIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
     row = db.get(Stay, stay_id)
     if row is None:
@@ -217,12 +236,14 @@ def update_stay(
     apply_stay(row, body)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id, principal.id, fetch)
+    return _detail(db, trip.id, principal.id)
 
 
 @router.delete("/stays/{stay_id}", status_code=204)
 def delete_stay(
-    stay_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    stay_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     row = db.get(Stay, stay_id)
     if row is None:
@@ -236,7 +257,7 @@ def delete_stay(
 def create_transport(
     trip_id: int,
     body: TransportIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
@@ -253,7 +274,7 @@ def create_transport(
 def update_transport(
     transport_id: int,
     body: TransportIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     row = db.get(Transport, transport_id)
@@ -269,7 +290,7 @@ def update_transport(
 @router.delete("/transports/{transport_id}", status_code=204)
 def delete_transport(
     transport_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     row = db.get(Transport, transport_id)
@@ -285,9 +306,8 @@ def delete_transport(
 def create_plan(
     trip_id: int,
     body: PlanIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
     _check_stay_link(db, trip.id, body.stay_id)
@@ -297,16 +317,15 @@ def create_plan(
     db.add(row)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id, principal.id, fetch)
+    return _detail(db, trip.id, principal.id)
 
 
 @router.patch("/plans/{plan_id}")
 def update_plan(
     plan_id: int,
     body: PlanIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
     row = db.get(PlanItem, plan_id)
     if row is None:
@@ -316,12 +335,14 @@ def update_plan(
     apply_plan(row, body)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id, principal.id, fetch)
+    return _detail(db, trip.id, principal.id)
 
 
 @router.delete("/plans/{plan_id}", status_code=204)
 def delete_plan(
-    plan_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    plan_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     row = db.get(PlanItem, plan_id)
     if row is None:
@@ -335,9 +356,8 @@ def delete_plan(
 def create_parking(
     trip_id: int,
     body: ParkingIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
     _check_transport_link(db, trip.id, body.transport_id)
@@ -346,16 +366,15 @@ def create_parking(
     db.add(row)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id, principal.id, fetch)
+    return _detail(db, trip.id, principal.id)
 
 
 @router.patch("/parking/{parking_id}")
 def update_parking(
     parking_id: int,
     body: ParkingIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
-    fetch=Depends(get_geocoder),
 ):
     row = db.get(Parking, parking_id)
     if row is None:
@@ -365,13 +384,13 @@ def update_parking(
     apply_parking(row, body)
     touch(trip)
     db.flush()
-    return _detail(db, trip.id, principal.id, fetch)
+    return _detail(db, trip.id, principal.id)
 
 
 @router.delete("/parking/{parking_id}", status_code=204)
 def delete_parking(
     parking_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     row = db.get(Parking, parking_id)
@@ -386,7 +405,7 @@ def delete_parking(
 def create_note(
     trip_id: int,
     body: NoteIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
@@ -398,7 +417,9 @@ def create_note(
 
 @router.delete("/notes/{note_id}", status_code=204)
 def delete_note(
-    note_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    note_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     row = db.get(Note, note_id)
     if row is None:
@@ -412,7 +433,7 @@ def delete_note(
 def create_reminder(
     trip_id: int,
     body: ReminderIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
@@ -428,7 +449,7 @@ def create_reminder(
 def update_reminder(
     reminder_id: int,
     body: ReminderIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     row = db.get(Reminder, reminder_id)
@@ -444,7 +465,7 @@ def update_reminder(
 @router.delete("/reminders/{reminder_id}", status_code=204)
 def delete_reminder(
     reminder_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     row = db.get(Reminder, reminder_id)
@@ -459,7 +480,7 @@ def delete_reminder(
 def create_budget_line(
     trip_id: int,
     body: BudgetLineIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     trip = _trip_or_404(db, trip_id, principal.id)
@@ -478,7 +499,7 @@ def create_budget_line(
 def update_budget_line(
     line_id: int,
     body: BudgetLineIn,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     row = db.get(BudgetLine, line_id)
@@ -496,7 +517,9 @@ def update_budget_line(
 
 @router.delete("/budget-lines/{line_id}", status_code=204)
 def delete_budget_line(
-    line_id: int, db: Session = Depends(get_db), principal: Principal = Depends(require_principal)
+    line_id: int,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
 ):
     row = db.get(BudgetLine, line_id)
     if row is None:

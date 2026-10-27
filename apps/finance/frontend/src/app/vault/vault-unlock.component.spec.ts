@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { AuthService } from '../auth/auth.service';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
 import { VaultUnlockComponent } from './vault-unlock.component';
 
@@ -17,7 +17,7 @@ describe('VaultUnlockComponent', () => {
     TestBed.configureTestingModule({
       imports: [VaultUnlockComponent],
       providers: [
-        { provide: AuthService, useValue: auth },
+        { provide: SESSION_CONTEXT, useValue: auth },
         { provide: VaultService, useValue: vault },
         provideRouter([]),
       ],
@@ -31,11 +31,10 @@ describe('VaultUnlockComponent', () => {
     fixture.componentInstance.passphrase = 'correct horse battery staple';
     await fixture.componentInstance.unlock();
 
-    expect(fixture.nativeElement.querySelector('a.suite-hub')?.getAttribute('href')).toBe('/hub');
     expect(fixture.nativeElement.querySelector('.nav-tab, .mobile-tab')).toBeNull();
     expect(vault.unlock).toHaveBeenCalledWith('correct horse battery staple');
     expect(vault.upgradeKdfIfNeeded).toHaveBeenCalledWith('correct horse battery staple');
-    expect(router.navigateByUrl).toHaveBeenCalled();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/finance/embed');
     expect(fixture.componentInstance.busy).toBeFalse();
   });
 
@@ -50,7 +49,7 @@ describe('VaultUnlockComponent', () => {
     TestBed.configureTestingModule({
       imports: [VaultUnlockComponent],
       providers: [
-        { provide: AuthService, useValue: auth },
+        { provide: SESSION_CONTEXT, useValue: auth },
         { provide: VaultService, useValue: vault },
         provideRouter([]),
       ],

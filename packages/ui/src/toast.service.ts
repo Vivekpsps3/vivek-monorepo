@@ -36,12 +36,16 @@ export class ToastService {
   show(message: string, kind: ToastKind = 'success', undo?: () => void, action?: ToastAction): void {
     const resolved = action ?? (undo ? { label: 'Undo', run: undo } : undefined);
     const toast: ToastPayload = { id: this.nextId++, message, kind, action: resolved, undo };
-    const next = [...this.toastsSubject.value, toast].slice(-TOAST_LIMIT);
+    const next = [...this.toastsSubject.value, toast];
+    while (next.length > TOAST_LIMIT) {
+      const transient = next.findIndex(item => !this.persists(item));
+      next.splice(transient < 0 ? 0 : transient, 1);
+    }
     const dropped = this.toastsSubject.value.filter(item => !next.some(kept => kept.id === item.id));
     dropped.forEach(item => this.clearTimer(item.id));
     this.toastsSubject.next(next);
-    this.newestSubject.next(toast);
-    this.schedule(toast);
+    this.newestSubject.next(next.at(-1) ?? null);
+    if (next.includes(toast)) this.schedule(toast);
   }
 
   success(message: string, undo?: () => void): void {
