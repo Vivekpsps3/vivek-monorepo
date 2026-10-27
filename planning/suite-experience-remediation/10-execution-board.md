@@ -12,7 +12,7 @@ Every implementation handoff includes task/issue/requirement IDs, changed files,
 
 ## Master checklist
 
-The final vetting checkpoint records **33 of 34 rows done**. All 177 browser cases and the complete local gates pass; exact results and remaining dependencies are in [final verification](evidence/final-verification.md). DEL-ALL, UX-02 and QA-01 are done after the approved retirement and passing final checks. PR-01 remains open only until the single PR is created. The original unchecked wave lists below are replaced by the current disposition table; no independent-agent review is claimed.
+The final vetting checkpoint records **34 of 34 rows done**. All 177 browser cases and the complete local gates pass; exact results and remaining dependencies are in [final verification](evidence/final-verification.md). DEL-ALL, UX-02 and QA-01 are done after the approved retirement and passing final checks. PR-01 is done: [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) is open after all local gates passed. The original unchecked wave lists below are replaced by the current disposition table; no independent-agent review is claimed.
 
 | Done | Task | Owner lane | Dependencies | Concrete deliverable / acceptance |
 | --- | --- | --- | --- | --- |
@@ -49,7 +49,7 @@ The final vetting checkpoint records **33 of 34 rows done**. All 177 browser cas
 | [x] | UX-02 | Design + app owners | Domain screens, WEB-01, FIN-01 | Final fluid glass integration, responsive/a11y/cascade cleanup, screenshot review. |
 | [x] | DOC-01 | Toolchain/docs | Final architecture | README/AGENTS/CI/Makefile/docs updated to one supported workflow; command-equivalence proof. |
 | [x] | QA-01 | Independent QA | Every integrated slice | Exploratory discovery, final full gates, image/browser/migration validation and acceptance evidence. |
-| [ ] | PR-01 | Integrator | All tasks local-green + QA-01 | Open one coherent refactor PR only after local gates pass; attach source/deletion/perf/UX evidence. |
+| [x] | PR-01 | Integrator | All tasks local-green + QA-01 | Open one coherent refactor PR only after local gates pass; attach source/deletion/perf/UX evidence. |
 
 ## Integration-wave disposition
 
@@ -59,7 +59,7 @@ The final vetting checkpoint records **33 of 34 rows done**. All 177 browser cas
 | 1: One spine | Done for the active runtime: root workspace/router/server composition, shared identity, locked-vault navigation and supported docs. Legacy unserved static files remain pending approval. |
 | 2: Domain vertical slices | Done: Travel, Media, Finance and public stories pass integrated browser/coverage checks. New final-audit defects have regression proof in the issue register. |
 | 3: Deletion and visual acceptance | Done: approved removal/model-test relocations, reference audit, final rendered routes/CSS, 177-case browser matrix and all affected gates pass. |
-| 4: Release candidate and PR | Ready for the single PR: deletion/final QA and all local checks pass; open the PR with the final evidence. No deployment is authorized. |
+| 4: Release candidate and PR | Done: [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) contains the integrated implementation and evidence after all local checks passed. No merge or deployment performed. |
 
 ## Original parallel ownership guide (historical)
 

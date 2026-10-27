@@ -1,6 +1,6 @@
 # Final implementation vetting — 2026-10-27
 
-The implementation and approved runtime retirement are complete in the working tree on `suite-experience-remediation`. All 66 proposed legacy files and two unused packaging symlinks are absent; useful models and meaningful regressions remain in app-owned frontends and the canonical suites. The owner’s explicit approval resolved the previous deletion block. Final affected browser verification passed all 177 cases without skips or retries; the single PR is the remaining delivery step. No production deployment is authorized or performed.
+The implementation and approved runtime retirement are complete in the working tree on `suite-experience-remediation`. All 66 proposed legacy files and two unused packaging symlinks are absent; useful models and meaningful regressions remain in app-owned frontends and the canonical suites. The owner’s explicit approval resolved the previous deletion block. Final affected browser verification passed all 177 cases without skips or retries; the integrated change is open as [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22). No production deployment is authorized or performed.
 
 ## Fixes found during the final audit
 
@@ -49,7 +49,7 @@ The browser matrices include 390/768/1280 light/dark captures, with additional 3
 
 ## Delivery checkpoint
 
-All approved removal paths are absent, all model imports resolve without the retired packaging mirrors, and the full local Python/Karma/Node/lint/type/build/image/migration gates pass. Applied migration history, meaningful URL compatibility, encryption and unchanged quality floors remain. The final 177-case browser rerun passed. The resulting single PR is recorded in STATUS.md.
+All approved removal paths are absent, all model imports resolve without the retired packaging mirrors, and the full local Python/Karma/Node/lint/type/build/image/migration gates pass. Applied migration history, meaningful URL compatibility, encryption and unchanged quality floors remain. The final 177-case browser rerun passed. [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) is open; all 34 task rows are closed. CI is the second run, and no merge or deployment was performed.
 
 The first post-retirement browser matrix exposed two test/environment failures without changing product assertions: the portrait regression had matched a saved-child heading before the destination page loaded, and Docker network changes aborted the new Finance tab’s initial JavaScript downloads with `ERR_NETWORK_CHANGED`. The portrait test now waits for the actual level-one album heading and passes twenty repetitions. The full matrix is rerun after Docker work finishes, with no retries enabled and no fixture error suppressed. The failed trace/log remains at `/tmp/suite-retirement-browser-before-readiness.log`.
 

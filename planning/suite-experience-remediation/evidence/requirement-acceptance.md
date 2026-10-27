@@ -42,5 +42,5 @@ The current evidence is [final verification](final-verification.md). The owner a
 | R30 | Root ownership/feature ports and deleted Finance bootstraps/auth relocations implemented; approved runtime removal completed |
 | R31 | Recorded regression-first transaction and portrait reproductions, vertical fixes and local gates; independent pairing superseded by owner's single-agent instruction |
 | R32 | Original parallel-capable board remains reviewable; execution uses the owner's later single-agent choice and claims no independent agent review |
-| R33 | One integration branch and one final PR; the one PR follows all passing local gates and the completed deletion ledger. Deployment is not performed |
+| R33 | One integration branch and one final PR; [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) is open after all passing local gates and the completed deletion ledger. Deployment is not performed |
 | R34 | One linked requirement/issue/task/evidence folder, with current status and explicit remaining closure work |

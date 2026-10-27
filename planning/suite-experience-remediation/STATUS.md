@@ -2,14 +2,14 @@
 
 ## Final release candidate — 2026-10-27
 
-**33 of 34 tasks are done; the single PR is ready to open.** Approved legacy runtime retirement, visual acceptance and final QA have passed. This checkpoint supersedes historical percentage estimates and pending-approval notes below. The [final verification](evidence/final-verification.md), [requirement acceptance map](evidence/requirement-acceptance.md) and [master board](10-execution-board.md) are authoritative.
+**All 34 of 34 tasks are done.** The integrated change is open as [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22). Approved legacy runtime retirement, visual acceptance and final QA have passed. This checkpoint supersedes historical percentage estimates and pending-approval notes below. The [final verification](evidence/final-verification.md), [requirement acceptance map](evidence/requirement-acceptance.md) and [master board](10-execution-board.md) are authoritative.
 
 | Remaining task | Status / acceptance |
 | --- | --- |
 | DEL-ALL | done — owner approved the removal; all 66 proposed files and two obsolete packaging symlinks are absent. Useful models, field-safe Undo payloads and retained tests are app-owned. [Actual removal](evidence/actual-runtime-removal.json), [static mapping](evidence/static-test-migration.json), [browser mapping](evidence/browser-test-migration.json). |
 | UX-02 | done — final 390/768/1280 light/dark captures, 320/1440 shell/axe cases, forced colors, reduced motion/transparency, zoom, map, optional forms, row Undo and draft recovery pass. Representative post-cleanup screenshots and the live dark header were inspected. |
 | QA-01 | done — `make test lint typecheck`, production build, root `npx playwright test` (177 passed, no skips/retries), image checks/browser probe, seeded adoption/upgrade with batch proof, dependency audits, ratchet-base checks and doc/CI validation pass. No gate was lowered. |
-| PR-01 | ready — commit and open the one integrated PR after the passing local checks; record its URL here. No deployment authorized or performed. |
+| PR-01 | done — [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) opened after all local checks passed. The integration branch is committed and pushed. CI is the second verification run; no merge or deployment was performed. |
 
 The final cleanup exposed a hidden backend dependency on the retired JavaScript rounding file. The backend now owns its two-decimal display default, with full stored precision and explicit overrides preserved; the regression forbids frontend file reads. The first browser run’s two failures were diagnosed: a portrait test matched an album-card heading too early, and a Docker network change interrupted a Finance tab’s initial bundle requests. The portrait test now waits for the actual page heading and passed 20 repetitions; the full matrix rerun after Docker work passed all 177 tests without retries. The earlier commit-timing, database idempotency, identity-decoy, public-root, Media scroll/generation and Travel draft/Undo fixes remain green.
 
@@ -17,7 +17,7 @@ Final gates: Finance **116 / 84.52%**, Travel **74 / 85.10%**, Media **138 / 79.
 
 Source: **103,220 → 95,953 lines (−7,267)** under the declared suffix method, including tests/vendor code, with moves and gross retirement reported separately. Installs/locks: **3 → 1**. Root build: **529.93 kB initial / 140.33 kB estimated transfer**, five public prerenders, 5.499-second descriptive sample. Mixed-library SELECTs: **319 → 5**. No exhaustive defect-free, live-provider-uptime or independent-agent review claim is made. Browser/map fixtures are deterministic.
 
-Branch: `suite-experience-remediation`; pre-refactor source snapshot `73de49c`. Final logs use `/tmp/suite-retirement-*`; portable metrics, migration proof and reconciliations are checked into the evidence folder. Original pre-removal uncommitted inputs remain preserved in `/tmp/suite-runtime-before-removal.tar.gz` and its SHA-256 manifest.
+Branch: `suite-experience-remediation`; implementation commit `2dc877e`; pre-refactor source snapshot `73de49c`. Final logs use `/tmp/suite-retirement-*`; portable metrics, migration proof and reconciliations are checked into the evidence folder. Original pre-removal uncommitted inputs remain preserved in `/tmp/suite-runtime-before-removal.tar.gz` and its SHA-256 manifest.
 
 ## Historical checkpoints
 
