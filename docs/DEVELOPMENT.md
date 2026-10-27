@@ -1,6 +1,6 @@
 # Development
 
-Use Python 3.12, Node 24, npm and GNU Make. Run commands from the repository root. One Python environment, root npm lock, Angular workspace and FastAPI process serve the entire suite.
+Use Python 3.12, Node 24, npm and GNU Make. Run commands from the repository root. One Python environment, root npm lock, Angular workspace and FastAPI process serve the entire suite. Production constraints live in `apps/server/requirements.in`, production pins/hashes in its `requirements.lock`, and test tools in the root `requirements-dev.in` / `requirements-dev.txt`.
 
 ```sh
 make install
@@ -44,7 +44,7 @@ bash scripts/validate-seeded-adoption.sh
 
 `make test` runs all four Python coverage gates, Finance/public/root Karma, pure domain/shared Node tests and fast checks. Browser suites use one production server harness at `tests/e2e/server.py`, with temporary databases and deterministic provider fixtures. Screenshots run at 390/768/1280 in both themes. Outputs are isolated by domain under `test-results/`. Set `CHROME_BIN` for Karma and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` for Playwright when using an existing Chromium installation. Existing `npm test --prefix apps/finance/frontend` and `--prefix apps/site` commands forward to the root suites; they need no separate installation.
 
-Coverage floors and the command-equivalence contract are in [Quality](QUALITY.md). Run every applicable local gate before opening the one integrated PR. CI repeats those checks.
+Coverage floors and the command-equivalence contract are in [Quality](QUALITY.md). Run every applicable local gate before opening a PR. CI repeats those checks.
 
 ## Schema and configuration
 

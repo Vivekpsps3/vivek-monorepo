@@ -12,10 +12,10 @@ ports, mounts, limits, health checks, backup schedule, and monitoring helper.
 The root Dockerfile builds one root Angular UI and the modular FastAPI service. Its pinned
 base images and hashed Python lock make builds reproducible.
 
-Production currently has no configured API secrets and needs no host environment
-file or application directory. Deployment and backup scripts default to
-`--env-file /dev/null`, avoiding implicit dotenv discovery. If integrations need
-secrets later, set `SITE_ENV_FILE` to an explicit private file outside Git (mode
+No provider secrets, host environment file or application directory are required
+by the default configuration. Deployment and backup scripts default to
+`--env-file /dev/null`, avoiding implicit dotenv discovery. To configure optional integration
+secrets, set `SITE_ENV_FILE` to an explicit private file outside Git (mode
 600, parent directory mode 700). An explicit missing file fails deployment.
 Do not bake secrets into Compose, the Dockerfile, or images.
 
@@ -27,10 +27,10 @@ The shared nginx-edge and its Let's Encrypt certificates remain existing host in
 
 1. Deploy the app.
 2. `curl -sI https://vivekpanchagnula.com/media/` and confirm there is exactly one `Content-Security-Policy` header (not Report-Only) and that it includes `*.archive.org`.
-3. On nginx-edge, `nginx -t && nginx -s reload`.
+3. Update the host-managed vhost from the reviewed `ops/nginx/site.conf`, then on nginx-edge run `nginx -t && nginx -s reload`.
 4. `curl -sI https://vivekpanchagnula.com/media/` again and confirm `Content-Security-Policy-Report-Only` and `X-Frame-Options: SAMEORIGIN` are gone.
 
-Until step 3, the edge still adds the previous report-only policy and `X-Frame-Options: SAMEORIGIN` beside the app headers. The report-only policy does not block. Modern browsers apply `frame-ancestors` rather than `X-Frame-Options` when both are present.
+If the host still uses the older vhost, it may add a report-only policy and `X-Frame-Options: SAMEORIGIN` beside the app headers. Verify the actual response before and after installing the reviewed configuration; merging application code does not update nginx-edge.
 
 The existing self-hosted runner and its Docker privilege are retained by explicit
 user preference. It remains capable of modifying host resources and reading site

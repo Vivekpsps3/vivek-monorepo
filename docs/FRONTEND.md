@@ -14,11 +14,11 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 
 | Path | Component |
 |------|-----------|
-| `/embed` | Chrome-less net worth card for the ops iframe — auth + vault, outside shell |
-| `/login` | Auth (username + vault-passphrase challenge login; legacy password migration only) — outside shell |
-| `/vault/setup` | Create encrypted finance vault — auth only, outside shell |
-| `/vault/unlock` | Unlock encrypted finance vault — auth only, outside shell |
-| `/` | Home — three numbers: what you have, this month, what repeats |
+| `/embed` | Compact net-worth card — auth + vault; framing is blocked by the document policy |
+| `/auth/login`, `/auth/signup` | Root shared sign-in and invitation enrollment |
+| `/vault/setup` | Create encrypted finance vault — auth only, outside Finance local navigation |
+| `/vault/unlock` | Unlock encrypted finance vault — auth only, outside Finance local navigation |
+| `/` | Finance Home: net worth and current-month cashflow, with source/holdings detail |
 | `/have` | Assets, debts, and holdings (`?t=holdings`) |
 | `/spending` | Activity (default; `?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?t=imports`); old Review links and legacy `?t=pay` / `?t=spend` links open Activity |
 | `/recurring` | Jobs & pay or bills & subscriptions (`?t=pay`, `?t=spend`) |
@@ -30,7 +30,7 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
-The table above lists Finance paths relative to `/finance`; Hub/admin and shared sign-in are root routes. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control plus account/theme actions visible; Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
+Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control plus account/theme actions visible; Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
 
 ## Design tokens
 
@@ -116,7 +116,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Recurring cashflow pages
 
-- `/income`, `/fixed-expenses`, `/subscriptions` manage encrypted recurring rows via `FinanceService`.
+- `/finance/recurring?t=pay` and `?t=spend` manage encrypted job, bill and subscription rows via `FinanceService`. Older `/finance/income`, `/finance/fixed-expenses` and `/finance/subscriptions` paths redirect there.
 - These do **not** change net worth. They feed cashflow summary and can influence planning spending inputs. Jobs & pay is the owner for optional payday cadence and its first payday anchor; no paycheck dates are inferred if that schedule is absent. Salary-entry frequency remains separate from paycheck cadence, and annual bonus/equity/other estimates remain undated. Dated payments are additional; clear the annual estimate if it represents the same payout.
 - Prefer the dedicated pages over inventing parallel recurring models on the transactions table.
 

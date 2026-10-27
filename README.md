@@ -27,7 +27,7 @@ the production image; `make test-suite-routes` checks the assembled release.
 [Architecture](docs/ARCHITECTURE.md), [data model](docs/DATA_MODEL.md), and
 [security model](docs/SECURITY_MODEL.md) describe domain behavior.
 
-The historical standalone Flask backend and per-domain Docker definitions are
-not deployed. Production promotes the exact image tested by CI. A temporary deployment checkout
+The root `compose.yml` and Dockerfile are the supported deployment. Production
+promotes the exact image tested by CI. A temporary deployment checkout
 supplies the versioned Compose definition and is removed after the job. Application
 code runs from the image; no permanent source checkout is needed on the host.

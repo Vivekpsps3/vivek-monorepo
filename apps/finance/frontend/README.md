@@ -1,16 +1,17 @@
-# Finance Tracker Frontend
+# Finance frontend
 
-Angular 21 standalone app for the encrypted client-side finance store.
+Finance is a lazy feature of the root Angular application in `apps/web`. It owns encrypted records, vault behavior, imports and financial calculations under `src/app`, with routes mounted at `/finance/`. Shared account/session behavior belongs to the root web platform.
 
-Run one command at a time from the repo root:
+Run commands from the repository root:
 
-```bash
-make frontend
-(cd apps/finance/frontend && npx ng build --configuration development)
-(cd apps/finance/frontend && npm test -- --watch=false --browsers=ChromeHeadless)
-(cd apps/finance/frontend && npm run e2e)
+```sh
+make install
+make build-frontends
+make dev
+npm run test:finance -- --watch=false --browsers=ChromeHeadlessCI
+npx playwright test --project=finance
 ```
 
-Routes, shared UI conventions, and vault-era behavior are documented in
-[../../../docs/FRONTEND.md](../../../docs/FRONTEND.md). General setup is in
-[../../../README.md](../../../README.md).
+Use `npm start` alongside the API for frontend development. The root build writes `dist/web/browser`. The local `package.json` only forwards the existing `npm test --prefix apps/finance/frontend` command; it has no separate dependency installation or build.
+
+See [Development](../../../docs/DEVELOPMENT.md), [Frontend conventions](../../../docs/FRONTEND.md), and [Security](../../../docs/SECURITY_MODEL.md).

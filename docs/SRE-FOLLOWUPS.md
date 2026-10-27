@@ -20,9 +20,9 @@ application authorization and a single private data mount are the boundaries.
 - [ ] **Define availability/RTO and run replacement-host and reboot exercises.**
   One host, disk, router, ISP and Docker daemon remain shared failure domains.
   No HA or independent power/network path was introduced.
-- [x] **Enforce CSP.** The application sends an enforced per-app policy (finance
-  is the strictest), Trusted Types on the finance shell, and a `/csp-report`
-  sink. Map tiles and provider artwork hosts are allowlisted, including the
+- [x] **Enforce CSP.** The application sends enforced public/private document policies,
+  Trusted Types throughout the private Angular app, and a `/csp-report` sink.
+  Map tiles and provider artwork hosts are allowlisted, including the
   archive.org hosts that Open Library and Cover Art Archive redirect through.
   Every document uses `frame-ancestors 'none'`: `/embed` is a compact route,
   and nothing in this repo frames it. Path prefixes are still not an origin
@@ -79,7 +79,7 @@ application authorization and a single private data mount are the boundaries.
 | 46–48 origin / cookies / lifecycle | Shared-origin risk documented, SameSite=lax, common auth, cross-user tests and unified account deletion. |
 | 49–51 DNS and startup ordering | Removed backend DNS and service-start dependency chains. Host reboot exercise remains TODO. |
 | 52–53 health and recovery | DB/schema/frontend preflight, exact release readiness, local probes; running-unhealthy recovery is manual to avoid another privileged helper. |
-| 54–58 routing and request policy | One edge route, app-owned paths, compatibility redirects, correct 404s/cache policy, request/time budgets and enforced per-app CSP. Finance origin separation still needs DNS and the edge proxy. |
+| 54–58 routing and request policy | One edge route, app-owned paths, compatibility redirects, correct 404s/cache policy, request/time budgets and enforced public/private document CSP. Finance origin separation still needs DNS and the edge proxy. |
 | 59–66 monitoring and logs | Metrics/probes/rules, request IDs/timing, bounded Docker logs, all-app diagnostics. External monitor and notification delivery deferred. |
 | 67–70 schema / SQLite | Explicit consolidated schema, site Alembic revisions, foreign keys, WAL, busy timeout, local filesystem requirement. Load exercises remain a TODO. |
 | 71–72 external providers | Existing timeout/budget behavior retained; quotas, total deadlines and stress exercises remain TODOs. |

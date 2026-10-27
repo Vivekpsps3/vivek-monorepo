@@ -4,8 +4,6 @@
 line-length = 100
 target-version = "py312"
 extend-exclude = [
-  # Historical Flask chat backend. It is not deployed and not part of CI.
-  "apps/site/flask",
   # Applied migrations. Reformatting them only adds blame noise.
   "**/alembic/versions",
 ]
@@ -39,7 +37,6 @@ show_error_codes = true
 pretty = false
 files = ["apps", "scripts"]
 exclude = [
-  "apps/site/flask/",
   "alembic/versions/",
 ]
 
@@ -48,7 +45,6 @@ branch = false
 omit = [
   "*/tests/*",
   "*/alembic/*",
-  "apps/site/flask/*",
 ]
 
 [tool.coverage.report]

@@ -1,42 +1,18 @@
-# Personal site
+# Public site feature
 
-This is the Angular site for Vivek Panchagnula's public portfolio.
+The portfolio is a lazy feature of the root Angular application in `apps/web`. It shares the root installation, build and router with the private workspace. Public content is prerendered at `/`, `/home`, `/work`, `/about` and `/secrets` into `dist/web/browser`.
 
-## Run and build
+Run `make install`, `make build-frontends` and `make dev` from the repository root. Use `npm start` alongside the API for frontend editing at http://127.0.0.1:4200. Run public unit tests with `npm run test:site -- --watch=false --browsers=ChromeHeadlessCI`; `npm test --prefix apps/site` forwards to that suite.
 
-From `apps/site`, install dependencies and start the local server:
+The `/secrets` demo uses ECDH and AES-GCM locally in the browser. It has no chat server and does not access Finance data.
 
-```bash
-npm install
-npm start
-```
+Content ownership:
 
-The development site runs at `http://localhost:4200/`.
-The dev server disables dependency prebundling because the workspace's Angular path aliases otherwise load a duplicate Angular runtime and render a blank page. This setting affects local development only.
+- `src/app/app.routes.ts`: public route titles and descriptions.
+- `src/app/app.component.*`: public layout and navigation.
+- `src/app/components/`: Home, Work, About and local encryption demo.
+- `src/app/services/ecdh.service.ts`: browser key exchange and encryption.
+- `src/styles.css`: public feature styles over the shared UI tokens.
+- `apps/web/routes.json`: server route manifest, including `/blog` → `/home` compatibility.
 
-Build the site with:
-
-```bash
-npx ng build --configuration development
-```
-
-The build writes to `dist/personal-website`.
-
-## Encryption demo
-
-`/secrets` demonstrates ECDH and AES-GCM in the browser. Messages and keys stay
-on this page. The demo has no chat server and does not access Finance data.
-Public navigation is Home, Work, and About, with one Workspace link to `/hub`.
-Page titles stay on the routes in `src/app/app.routes.ts`.
-
-## Content ownership
-
-- `src/app/app.routes.ts` owns routes, page titles, and route descriptions.
-- `src/app/app.component.html` owns the shared navigation, theme controls, and skip link.
-- `src/app/components/home/` owns the homepage introduction and selected-work previews.
-- `src/app/components/work/` owns the employment stories and selected projects.
-- `src/app/components/about/` owns education, employment history, and skills.
-- `src/app/components/secrets/` owns the `/secrets` encryption demo UI; `src/app/services/ecdh.service.ts` owns its browser-side key exchange and prompt encryption.
-- `src/styles.css` and `src/app/app.component.css` own site-specific layout and responsive rules. They use shared design tokens from `packages/ui/kit.css`.
-
-`/blog` redirects to `/home` to preserve old links. Keep that redirect if the retired blog route changes again.
+See [Development](../../docs/DEVELOPMENT.md), [Frontend conventions](../../docs/FRONTEND.md), and [Verification](../../docs/VERIFICATION.md).

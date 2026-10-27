@@ -18,7 +18,7 @@ Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requireme
 
 `update` refuses a higher count unless `--allow-increase` is passed. On a pull request, CI compares each committed baseline with the same file on the base branch (`check-base`) and fails if this branch allows more than the base. The tool list comes from `quality_ratchet.py list`, so a new `TOOLS` key is covered without editing the workflow. `check-tools` fails when a key that exists on the base ref was renamed or removed here. The base ref is passed in the environment, and the job does not fetch with `--depth=1`, so blame and merge-base still see full history. A missing baseline is an error when that tool is already in `TOOLS` on the base. It is a `::warning::` when this script, or that tool, is new there. The workflow listens for `labeled` and `unlabeled` as well as the default pull-request events, and the allowance step writes whether the `ratchet-increase` label is present. That label sets `RATCHET_ALLOW_INCREASE` and is the reviewed way to accept a higher allowance. Do not add file-wide suppressions to quiet a noisy rule.
 
-ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts a `# noqa` comment (any case, including `# ruff: noqa` and `# flake8: noqa`). The `#` is required, so the word `noqa` inside a string is not a suppression. It also counts `# type: ignore`, any `# mypy:` inline option (including `ignore-errors` and `disable-error-code`), `eslint-disable`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `# pragma: no cover`, and `istanbul` / `c8` / `v8` `ignore` in `apps/`, `scripts/`, and `packages/`. `apps/site/flask` is skipped, same as the other Python gates. Alembic `versions/` directories are skipped by that path, not because the directory is named `versions`.
+ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts a `# noqa` comment (any case, including `# ruff: noqa` and `# flake8: noqa`). The `#` is required, so the word `noqa` inside a string is not a suppression. It also counts `# type: ignore`, any `# mypy:` inline option (including `ignore-errors` and `disable-error-code`), `eslint-disable`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `# pragma: no cover`, and `istanbul` / `c8` / `v8` `ignore` in `apps/`, `scripts/`, and `packages/`. Alembic `versions/` directories are skipped by that path, not because the directory is named `versions`.
 
 Current working baselines after source-path remapping are Ruff 101, mypy 87, Finance/web ESLint 474, public ESLint 9, packages ESLint 0 and suppressions 0. `quality/source-moves.json` maps relocated identity files so the base-branch comparison follows the same debt. Updating a path must not increase an allowance. Exact records live in `quality/*.txt`.
 
@@ -31,9 +31,9 @@ Ruff lints and formats `apps/` and `scripts/` at line length 100. Selected rules
 - `E501`, because the formatter owns wrapping.
 - `B008`, because FastAPI uses `Depends` and `Query` in argument defaults.
 - `RUF001` and `RUF002`, because titles and prose use en dashes.
-- `E402` in `apps/finance/backend/alembic/env.py` and `apps/server/alembic/env.py`, because those files insert the repo root on `sys.path` before importing models. The server file is the one PR #5 adds; the ignore is already in place.
+- `E402` in `apps/finance/backend/alembic/env.py` and `apps/server/alembic/env.py`, because those files insert the repo root on `sys.path` before importing models.
 
-`apps/site/flask` is the old chat backend. It is not deployed and not in CI, so Ruff, mypy, coverage, and the suppression scan skip it. Applied Alembic revisions are also skipped by the formatter.
+Applied Alembic revisions are excluded from formatting and coverage to preserve historical source. Other application source remains inside the Python and suppression gates.
 
 mypy runs on Python 3.12 with `check_untyped_defs` and `ignore_missing_imports`. `disallow_untyped_defs` is off; turning it on would be a new baseline, not a cleanup.
 
@@ -55,21 +55,24 @@ Prettier is not configured. The tree has no formatter today, and formatting both
 
 `scripts/coverage-gate.sh` runs pytest with `pytest-cov` at `precision = 2`, so `--cov-fail-under` decides on the displayed total. Tests and Alembic are omitted. `quality/coverage.txt` stores the measured total and a floor about 1 percentage point below it. The gate fails when coverage drops under the floor. A gain does not fail; the job prints a `::notice::` with a suggested floor, and `make coverage-pin` rewrites the file from a fresh measurement. Each CI job appends the table to the GitHub step summary. The summary step exits cleanly when a job failed before writing `coverage/`.
 
-| Suite | Statements | Missed | Measured | Floor |
-| --- | ---: | ---: | ---: | ---: |
-| Finance | 2265 | 354 | 84.37% | 83.28% |
-| Travel | 2092 | 389 | 81.41% | 80.41% |
-| Media | 2377 | 675 | 71.60% | 70.60% |
-| Server | 1264 | 482 | 61.87% | 61.53% |
+The recorded measurements in `quality/coverage.txt` are the baseline from the last pin, not a claim about the latest run. Current per-run totals are emitted by the gates and attached to CI. The fail-under floors are:
 
-Server coverage rose once migrations, schema, redirects, and the security-header middleware gained tests. Auth, checks, database, main, and monitor are still untested, and the floor still counts those modules. Omitting them would make the gate look healthier than the package is. The server fail-under floor is 61.53%. This branch measures 61.87% (1264 statements, 482 missed); the schema-diff failure now names the table and column, and those lines are tested. Finance's floor stays 83.28%. Its measured total is stable at 84.37% (354 missed): `tests/conftest.py` shifts the rate-limit clock so the two `rate_limit.py` statements that depend on host uptime always run, and it clears limiter env vars before each test.
+| Suite | Floor |
+| --- | ---: |
+| Finance, including relocated identity code | 83.28% |
+| Travel | 80.41% |
+| Media | 70.60% |
+| Server | 61.53% |
 
-Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json`. `scripts/karma-coverage-summary.mjs` appends the totals to the GitHub step summary. Karma only instruments files the specs actually load, so these totals are not whole-app coverage. Measured totals are finance 61.46 / 53.32 / 57.12 / 63.53 and site 62.72 / 48.48 / 56 / 64. Thresholds sit about 1 point below those totals:
+The merged refactor's measurements and command results are preserved in [its final verification](../planning/suite-experience-remediation/evidence/final-verification.md). Server composition, database ownership, identity and request-commit behavior now have explicit tests; coverage still includes untested lines rather than omitting modules to inflate the result.
+
+Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json`. `scripts/karma-coverage-summary.mjs` appends totals to the GitHub step summary. Karma instruments only the files loaded by the selected specs, so its totals are not whole-app coverage. `apps/karma.conf.js` owns these unchanged thresholds:
 
 | App | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | Finance | 60 | 52 | 56 | 62 |
-| Site | 61 | 47 | 55 | 63 |
+| Public site | 61 | 47 | 55 | 63 |
+| Root/shared web | 60 | 52 | 56 | 62 |
 
 ## Playwright
 

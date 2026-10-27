@@ -1,39 +1,7 @@
-# Personal operating system brief
+# Product planning and implementation records
 
-The current owner-requested execution plan is the
-[suite experience and top-down refactor plan](suite-experience-remediation/README.md).
-It combines the full UI/backend issue inventory with one coherent product
-architecture, an explicit deletion ledger, and a dependency-ordered swarm
-checklist for one refactor PR. It is a plan, not a record of completed repairs.
+The [suite experience refactor](suite-experience-remediation/README.md) was completed and merged in [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) on 2026-10-27. Its requirements, deletion ledger and acceptance evidence are retained as a completed project record. [Status](suite-experience-remediation/STATUS.md) records the merge; there is no remaining implementation or approval queue in that plan.
 
-[`personal-operating-system.md`](./personal-operating-system.md) is the original
-product brief, retained for context. It describes a broad ecosystem and media
-journal vision; it is not a current implementation checklist. Current behavior
-and verification are recorded in the canonical docs below.
+[`personal-operating-system.md`](personal-operating-system.md) is the original product brief. It provides historical context, not current commands or a release checklist. Finance, Travel and Media retain app-owned data and behavior inside one web application, one FastAPI service and one SQLite database. Finance records remain browser-encrypted.
 
-The repository has implemented the main product areas described there:
-
-- Finance, Travel, Media, and the public site are separate apps. The authenticated
-  Hub provides app summaries; Media has its own database and authenticated,
-  private user records. See [architecture](../docs/ARCHITECTURE.md),
-  [project overview](../README.md), and [Media behavior](../docs/MEDIA.md).
-- Media supports manual entry, public metadata search, personal ratings and one
-  overall review, optional separate experiences, progress, episode tracking,
-  and release awareness. See [Media behavior](../docs/MEDIA.md).
-- The Finance user-journey work has an execution record for streams A–E and
-  their reported verification in the [Finance UX audit](../docs/FINANCE_UX_AUDIT.md).
-
-Some boundaries remain explicit product or provider limits: Finance uses CSV
-imports today, with SimpleFIN documented as a future direction; Media provider
-coverage uses keyless catalogs for movies, series, and games, and a TMDB or
-RAWG key when one is set. `MEDIA_SCRAPE_MODE` only adds iTunes movie results.
-It does not use Rotten Tomatoes, Metacritic, Spotify, or IGDB. Manual TV titles
-do not get a TVMaze episode lookup. See [architecture](../docs/ARCHITECTURE.md)
-and [Media behavior](../docs/MEDIA.md).
-
-The brief asks for broad browser-driven end-to-end coverage across every app and
-journey. Current verification docs describe backend and frontend suites,
-Media's Python and static-module tests, and an optional real-browser Finance
-release-cache check; they do not record that full cross-app browser acceptance
-run. See [verification tiers](../docs/VERIFICATION.md). Treat that as unverified
-acceptance coverage, not evidence of a specific product defect.
+Use the maintained [Architecture](../docs/ARCHITECTURE.md), [Development](../docs/DEVELOPMENT.md), [Verification](../docs/VERIFICATION.md), [Finance frontend](../docs/FRONTEND.md), [Travel](../docs/TRAVEL.md) and [Media](../docs/MEDIA.md) docs for current behavior and commands. Future operational decisions remain in [SRE follow-ups](../docs/SRE-FOLLOWUPS.md).

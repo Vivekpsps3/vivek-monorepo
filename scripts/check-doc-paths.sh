@@ -7,19 +7,29 @@ cd "$root"
 
 python3 - <<'PY'
 from pathlib import Path
+import os
 import re
 
 root = Path(".").resolve()
 fail = 0
 link_re = re.compile(r"\]\(([^)]+)\)")
 
-scan_roots = [root / "docs", root / "AGENTS.md", root / "README.md"]
+scan_roots = [
+    root / "docs", root / "planning", root / "apps", root / "packages",
+    root / "AGENTS.md", root / "README.md",
+]
+skip_dirs = {
+    ".git", "node_modules", ".angular", ".venv", "venv", "dist", "coverage",
+    "playwright-report", "test-results", "__pycache__",
+}
 files: list[Path] = []
 for p in scan_roots:
     if p.is_file():
         files.append(p)
     elif p.is_dir():
-        files.extend(p.rglob("*.md"))
+        for directory, dirnames, filenames in os.walk(p):
+            dirnames[:] = [name for name in dirnames if name not in skip_dirs]
+            files.extend(Path(directory) / name for name in filenames if name.endswith(".md"))
 
 for path in files:
     text = path.read_text(encoding="utf-8", errors="replace")

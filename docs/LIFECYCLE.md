@@ -2,7 +2,7 @@
 
 Canonical ownership for API routers, schema modules, and schema authorities.
 Alembic history is retained. The active schema is server-blind; empty legacy
-plaintext Finance tables are retired at head `e0f6a2b3c4d5` after a preflight
+plaintext Finance tables were retired by historical Finance revision `e0f6a2b3c4d5` after a preflight
 guard confirms they contain no rows and no password-only users remain.
 
 ## Lifecycle labels
@@ -17,11 +17,11 @@ guard confirms they contain no rows and no password-only users remain.
 
 | Surface | Module | Lifecycle | Owner |
 |---------|--------|-----------|-------|
-| Health | `routers/health.py` | active | ops |
+| Health | `apps/finance/backend/routers/health.py` | active | ops |
 | Auth / admin users | `apps/server/identity/routes.py` | active | auth |
-| Password → passwordless enroll | identity migration route | migration-only; legacy accounts require previous release because current startup preflight blocks password-only users | auth |
-| Vault ciphertext API | `routers/vault.py` | active | vault |
-| Market quotes / research | `routers/market.py` | active | market |
+| Historical password enrollment | Previous release only | retired here; startup preflight blocks password-only users | auth |
+| Vault ciphertext API | `apps/finance/backend/routers/vault.py` | active | vault |
+| Market quotes / research | `apps/finance/backend/routers/market.py` | active | market |
 | Plaintext Finance migration API | — | retired | — |
 
 Plaintext finance HTTP (transactions, assets, holdings, imports, planning, cashflow) is unmounted.
@@ -31,8 +31,8 @@ Plaintext finance HTTP (transactions, assets, holdings, imports, planning, cashf
 | Module | Lifecycle | Notes |
 |--------|-----------|-------|
 | `apps/server/identity/schemas.py` | active | Passwordless + admin invitation contracts |
-| `schemas_vault.py` | active | Ciphertext records, indexes, sync |
-| `schemas_market.py` | active | Quotes and research (ticker disclosure intentional) |
+| `apps/finance/backend/schemas_vault.py` | active | Ciphertext records, indexes, sync |
+| `apps/finance/backend/schemas_market.py` | active | Quotes and research (ticker disclosure intentional) |
 
 ## Schema authorities
 
@@ -75,7 +75,9 @@ Named generations have fixture coverage in `apps/finance/backend/tests/test_migr
 | `clean-current` | Empty legacy tables and passwordless users; cleanup removes old tables and restart does not recreate them | `test_cleanup_preserves_ciphertext_and_keys_and_stays_clean_on_restart`; `test_fresh_file_startup_creates_only_current_schema` |
 
 The previous migration head `b7c9d2e4f601` remains available for historical
-fixture setup; current head is `e0f6a2b3c4d5`.
+fixture setup; that historical Finance chain ends at `e0f6a2b3c4d5`. The active
+site chain is `apps/server/alembic`; inspect its head with the unified migration
+tools in [Migrations](MIGRATIONS.md).
 
 Vault schema-v1 → schema-v2 ciphertext replacement remains browser-owned. The
 server-side plaintext Finance migration path has been removed; the final
