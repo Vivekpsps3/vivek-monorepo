@@ -5,7 +5,7 @@ One Angular 21 web application, one explicit FastAPI application factory, one id
 ## Active API surface
 
 - Active browser finance storage uses `/api/vault/*`: the backend stores encrypted key wraps, ciphertext, sync revisions, and optional blind indexes.
-- Active non-finance plaintext surfaces are auth/admin account management, health, and public market quote/research cache.
+- Active plaintext surfaces include shared identity/admin, health, public market metadata, and user-authorized Travel and Media records. Domain authorization keeps personal data scoped to its owner.
 - Plaintext finance HTTP is gone. Full surface ownership: [LIFECYCLE.md](./LIFECYCLE.md).
 
 ## Data planes (do not mix)

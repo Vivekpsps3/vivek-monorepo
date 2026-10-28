@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ApiHealthService } from '../../services/api-health.service';
 import { AuthUser } from '@vivek/auth';
@@ -8,7 +8,7 @@ import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent,
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
 import { FinanceService } from '../../services/finance.service';
-import { Theme, ThemeService } from '@vivek/ui';
+import { UserMenuContent } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
 
@@ -45,17 +45,16 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private finance = inject(FinanceService);
   private toast = inject(ToastService);
   private vault = inject(VaultService);
-  private themeService = inject(ThemeService);
+  private userMenu = inject(UserMenuContent);
+  @ViewChild('userMenuActions', { static: true }) private userMenuActions!: TemplateRef<unknown>;
   private marketRefresh = inject(MarketRefreshCoordinatorService);
   private destroy$ = new Subject<void>();
   private routePath = '';
   private routeEnterTimer?: ReturnType<typeof setTimeout>;
-  private guideOpener: HTMLElement | null = null;
   routeEntering = false;
 
   apiOffline = false;
   apiRetrying = false;
-  theme: Theme = this.themeService.current;
   user: AuthUser | null = null;
   isResettingData = false;
   showTutorial = false;
@@ -105,13 +104,10 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   ];
 
   ngOnInit() {
+    this.userMenu.template.set(this.userMenuActions);
     this.auth.user$.pipe(takeUntil(this.destroy$)).subscribe(user => {
       this.user = user;
       this.syncMarketSession();
-      this.cdr.markForCheck();
-    });
-    this.themeService.choice$.pipe(takeUntil(this.destroy$)).subscribe(theme => {
-      this.theme = theme;
       this.cdr.markForCheck();
     });
     this.vault.unlocked$.pipe(takeUntil(this.destroy$)).subscribe(() => this.syncMarketSession());
@@ -140,6 +136,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.userMenu.template() === this.userMenuActions) this.userMenu.template.set(null);
     if (this.routeEnterTimer) clearTimeout(this.routeEnterTimer);
     this.destroy$.next();
     this.destroy$.complete();
@@ -199,10 +196,6 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     return item.exact ? url === item.path : url === item.path || url.startsWith(`${item.path}/`);
   }
 
-  setTheme(theme: Theme): void {
-    this.themeService.set(theme);
-  }
-
   lockVault(): void {
     this.marketRefresh.broadcastLock();
     this.marketRefresh.endSession();
@@ -254,18 +247,14 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     });
   }
 
-  openTutorial(event: MouseEvent): void {
-    this.guideOpener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  openTutorial(): void {
     this.showTutorial = true;
     this.cdr.markForCheck();
   }
 
-  closeTutorial(restoreFocus = true): void {
-    const opener = this.guideOpener;
-    this.guideOpener = null;
+  closeTutorial(): void {
     this.showTutorial = false;
     this.cdr.markForCheck();
-    if (restoreFocus) setTimeout(() => opener?.focus());
   }
 
   refreshApiStatus(): void {

@@ -1,3 +1,4 @@
+import { chooseColorTheme } from '../../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 
 import { expect, type Page, test } from '@playwright/test';
@@ -67,7 +68,7 @@ async function thawCharts(page: Page) {
 }
 
 async function chooseTheme(page: Page, vault: Awaited<ReturnType<typeof syntheticVault>>, theme: 'light' | 'dark') {
-  await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+  await chooseColorTheme(page, theme);
   await vault.reload();
   await expectNoStrayToast(page);
   await assertTheme(page, theme);

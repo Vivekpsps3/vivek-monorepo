@@ -48,15 +48,35 @@ describe('Shared private shell', () => {
     const { fixture } = await render();
     expect(fixture.nativeElement.querySelectorAll('a.suite-hub').length).toBe(1);
     expect(fixture.nativeElement.querySelector('a.suite-hub').getAttribute('href')).toBe('/hub');
+    expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();
+    const trigger = fixture.nativeElement.querySelector('.user-menu-toggle') as HTMLButtonElement;
+    expect(trigger.textContent?.trim()).toBe('Ada');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    trigger.click();
+    fixture.detectChanges();
     expect(fixture.nativeElement.querySelectorAll('a[href="/account"]').length).toBe(1);
-    expect(fixture.nativeElement.querySelectorAll('select[aria-label="Color theme"]').length).toBe(1);
+    expect(fixture.nativeElement.querySelectorAll('select#suite-theme').length).toBe(1);
     expect(fixture.nativeElement.querySelector('a[href="/hub/admin"]')).toBeNull();
   });
   it('shows administration only for an administrator and signs out through the suite session', async () => {
     const { fixture, session } = await render(true);
+    fixture.nativeElement.querySelector('.user-menu-toggle').click();
+    fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('a[href="/hub/admin"]')).not.toBeNull();
-    fixture.nativeElement.querySelector('button').click();
+    fixture.nativeElement.querySelector('#user-dropdown button').click();
     expect(session.logout).toHaveBeenCalledTimes(1);
+  });
+  it('closes the dropdown and restores the name button on Escape', async () => {
+    const { fixture } = await render();
+    const button = fixture.nativeElement.querySelector('.user-menu-toggle') as HTMLButtonElement;
+    button.click();
+    fixture.detectChanges();
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    fixture.nativeElement.querySelector('#user-dropdown a').dispatchEvent(escape);
+    fixture.detectChanges();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(fixture.nativeElement.querySelector('#user-dropdown')).toBeNull();
+    expect(document.activeElement).toBe(button);
   });
   it('keeps app identity tied to the root route', async () => {
     const { fixture } = await render();

@@ -1,16 +1,17 @@
+import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { addItem, resetMedia } from './media-test';
 
 const dir = process.env.SCREENSHOT_DIR || 'test-results/artifacts/media-ux';
 test.use({ reducedMotion: 'reduce' });
-for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark']) {
+for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as const) {
   test('Media empty, populated, photo, progress and error scenes at ' + width + ' ' + theme, async ({ page, request }) => {
     test.setTimeout(120_000);
     await resetMedia(request);
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/media/library');
-    await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+    await chooseColorTheme(page, theme);
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const shot = async (name: string) => {

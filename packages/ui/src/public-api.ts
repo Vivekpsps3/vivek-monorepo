@@ -62,3 +62,5 @@ export {
 
 export { authGuard, adminGuard } from './auth.guard';
 export { authNavigation, safeNextPathFrom, safeNextPath, authPath, loginHref, afterAuthUrl, continueAfterAuth } from './after-auth';
+
+export { UserMenuContent } from './user-menu-content';

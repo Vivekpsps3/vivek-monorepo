@@ -1,3 +1,4 @@
+import { openUserMenu } from '../../../tests/e2e/user-menu.mjs';
 import { expect, test } from '@playwright/test';
 
 const policy = { balance_days: '10', balance_as_of: '2026-01-01', accrual_amount: '1', accrual_unit: 'day', accrual_cadence: 'monthly', hours_per_day: '8' };
@@ -159,7 +160,8 @@ test('a late key save and personal-key removal preserve a newer typed key', asyn
   await travelNav(page).getByRole('link', { name: 'Trips', exact: true }).click();
   await page.getByRole('button', { name: 'Leave settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeVisible();
-  await travelNav(page).getByRole('link', { name: 'Settings', exact: true }).click();
+  const menu = await openUserMenu(page);
+  await menu.getByRole('link', { name: 'Travel settings', exact: true }).click();
   await expect(key).toHaveValue('');
 });
 

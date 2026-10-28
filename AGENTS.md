@@ -16,7 +16,7 @@ From the repo root, these are the commands CI runs. Run every one that touches t
 - `npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI` — Finance Karma
 - `npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI` — public site Karma
 - `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` — root shell/shared UI Karma
-- `make e2e` — Finance Playwright, after the production Finance bundle
+- `make e2e` — Finance Playwright, after the root production bundle
 - `npx playwright test --config apps/media/e2e/playwright.config.ts` — Media Playwright
 - `npx playwright test` in `apps/travel/e2e` — Travel Playwright
 

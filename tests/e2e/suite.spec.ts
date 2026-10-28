@@ -1,3 +1,4 @@
+import { chooseColorTheme } from './user-menu.mjs';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -17,10 +18,10 @@ test('public pages prerender meaningful HTML and never request private APIs', as
   expect((await request.get('/unknown-page')).status()).toBe(404);
 });
 
-for (const width of [320, 1440]) for (const theme of ['light', 'dark']) test(`the persistent shell works at ${width}px ${theme} with a locked Finance vault`, async ({ page }) => {
+for (const width of [320, 1440]) for (const theme of ['light', 'dark'] as const) test(`the persistent shell works at ${width}px ${theme} with a locked Finance vault`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
   await page.goto('/hub');
-  await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+  await chooseColorTheme(page, theme);
   for (const route of ['/travel', '/travel/trips/new', '/travel/pto', '/travel/settings', '/media/library', '/media/search', '/media/add', '/media/calendar', '/hub']) {
     await page.goto(route);
     await expect(page.getByRole('link', { name: 'Hub', exact: true })).toHaveCount(1);

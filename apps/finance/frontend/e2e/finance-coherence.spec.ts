@@ -1,3 +1,4 @@
+import { chooseColorTheme, openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { createHash } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { field, syntheticVault } from './synthetic-vault';
@@ -384,6 +385,7 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
   expect(JSON.stringify(activityMessages)).not.toContain('CROSS TAB PRIVATE DESCRIPTION');
   expect(vault.mutations.every(change => !JSON.stringify(change.body).includes('CROSS TAB PRIVATE DESCRIPTION'))).toBe(true);
 
+  await openUserMenu(page);
   await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
   await expect(page).toHaveURL(/\/vault\/unlock$/);
   await expect(second).toHaveURL(/\/vault\/unlock$/);
@@ -398,6 +400,7 @@ test('signing out in one tab also ends the other synthetic session', async ({ pa
   const second = await page.context().newPage();
   await vault.open('/', page);
   await vault.open('/', second);
+  await openUserMenu(page);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(second).toHaveURL(/\/login$/);
@@ -584,7 +587,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '/tmp/finance-ux-home-mobile.png', fullPage: true });
 
-  await page.getByRole('combobox', { name: 'Color theme' }).selectOption('dark');
+  await chooseColorTheme(page, 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect.poll(() => page.locator('app-charts ui-card .ui-card').first().evaluate(card => getComputedStyle(card).backgroundColor))
     .toBe('rgb(30, 28, 25)');

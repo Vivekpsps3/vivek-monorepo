@@ -1,3 +1,4 @@
+import { openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { expect, type Page, test } from '@playwright/test';
 
 const PASSPHRASE = 'hub-username-e2e-passphrase';
@@ -40,7 +41,8 @@ async function createAccount(page: Page, username: string): Promise<void> {
 async function openAccount(page: Page): Promise<void> {
   const dialog = page.getByRole('dialog', { name: 'Account settings' });
   if (!(await dialog.isVisible())) {
-    await page.getByRole('link', { name: /^Account/ }).click();
+    const menu = await openUserMenu(page);
+    await menu.getByRole('link', { name: 'Account settings', exact: true }).click();
   }
   await expect(dialog).toBeVisible();
 }
@@ -66,6 +68,7 @@ async function signOut(page: Page): Promise<void> {
     await dialog.getByRole('button', {name: 'Done', exact: true}).click();
     await expect(dialog).toBeHidden();
   }
+  await openUserMenu(page);
   await page.getByRole('banner').getByRole('button', {name: 'Sign out', exact: true}).click();
 }
 

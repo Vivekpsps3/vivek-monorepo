@@ -14,11 +14,11 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 
 | Path | Component |
 |------|-----------|
-| `/embed` | Chrome-less net worth card for the ops iframe — auth + vault, outside shell |
-| `/login` | Auth (username + vault-passphrase challenge login; legacy password migration only) — outside shell |
-| `/vault/setup` | Create encrypted finance vault — auth only, outside shell |
-| `/vault/unlock` | Unlock encrypted finance vault — auth only, outside shell |
-| `/` | Home — three numbers: what you have, this month, what repeats |
+| `/embed` | Compact net-worth card — auth + vault; framing is blocked by the document policy |
+| `/auth/login`, `/auth/signup` | Root shared sign-in and invitation enrollment |
+| `/vault/setup` | Create encrypted finance vault — auth only, outside Finance local navigation |
+| `/vault/unlock` | Unlock encrypted finance vault — auth only, outside Finance local navigation |
+| `/` | Finance Home: net worth and current-month cashflow, with source/holdings detail |
 | `/have` | Assets, debts, and holdings (`?t=holdings`) |
 | `/spending` | Activity (default; `?t=activity&v=all|spending|income`), Calendar (`?t=calendar`), and Imports (`?t=imports`); old Review links and legacy `?t=pay` / `?t=spend` links open Activity |
 | `/recurring` | Jobs & pay or bills & subscriptions (`?t=pay`, `?t=spend`) |
@@ -30,7 +30,11 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
-The table above lists Finance paths relative to `/finance`; Hub/admin and shared sign-in are root routes. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control plus account/theme actions visible; Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
+Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control and a username button visible. Its dropdown holds account settings, admin stats when authorized, theme selection and sign-out. Travel settings also live there on Travel routes. Finance contributes its guide, vault lock and confirmed clear-data actions while its unlocked layout is active; those actions are removed when that layout is destroyed. Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
+
+## Browser icons
+
+The public portfolio uses a V monogram in `apps/site/public/favicon.svg`; the private workspace uses the four-pane mark in `apps/web/public/workspace-icon.svg`. Each has a 16/32/48/64px ICO fallback and a 180px PNG touch icon. The root shell starts with the workspace mark; public prerenders and completed public-route navigation select the personal mark. Icon URLs carry a revision so browser favicon caches refresh when the artwork changes. Keep the SVG sources crisp at 16px when revising them, and regenerate their bitmap siblings together.
 
 ## Design tokens
 
@@ -52,7 +56,7 @@ Charts: shared palette and Chart.js options live in `@vivek/ui` (`packages/ui/sr
 **Appearance:** light is the default token set (warm paper `#F6F3EE`, warm-white
 cards `#FFFCF8`, ink `#1C1916`, deep teal `#0F6E6A`). Dark is warm ink
 (`#141311` canvas, `#1E1C19` cards, soft teal `#8FD0C8`) on
-`[data-theme="dark"]`. First visit follows the OS. The persistent header offers System / Light / Dark. Choice is stored in `suite-theme`, with legacy app keys read during migration.
+`[data-theme="dark"]`. First visit follows the OS. The username dropdown offers System / Light / Dark. Choice is stored in `suite-theme`, with legacy app keys read during migration.
 Controls use the shared 8–20px radii; status and date shapes retain familiar forms.
 Reduced transparency and increased contrast media queries are honored.
 Typography prefers the system stack (no remote font fetch). Locale money and
@@ -97,7 +101,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 ## Privacy and migration
 
 - Vault finance records are schema-v2 authenticated-record ciphertext. After login, the browser can locally decrypt existing schema-v1 ciphertext records and rewrite them as schema-v2. The former plaintext-row copy flow is retired; Alembic cleanup runs only after startup confirms legacy tables are empty and no password-only accounts remain.
-- Manual/imported Portfolio prices stay local. After authenticated vault unlock, the browser automatically refreshes deduplicated holding and configured employer tickers with bounded concurrency. The shell does not show a ticker countdown. A quiet mark means prices are updating. The account menu discloses that ticker symbols are sent to the market service. Failures stay on screen with retry. Explicit retry, typed lookup, and Stock Lab research also send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
+- Manual/imported Portfolio prices stay local. After authenticated vault unlock, the browser automatically refreshes deduplicated holding and configured employer tickers with bounded concurrency. The shell does not show a ticker countdown. The Finance guide explains that ticker symbols are sent to the market service. Failures stay on screen with retry. Explicit retry, typed lookup, and Stock Lab research also send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
 - Login unwraps a browser-held signing key with the vault passphrase and signs a single-use challenge. Admins issue invitations but cannot reset a user's vault passphrase or recover encrypted data.
 
 ## Home behavior
@@ -116,7 +120,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 
 ## Recurring cashflow pages
 
-- `/income`, `/fixed-expenses`, `/subscriptions` manage encrypted recurring rows via `FinanceService`.
+- `/finance/recurring?t=pay` and `?t=spend` manage encrypted job, bill and subscription rows via `FinanceService`. Older `/finance/income`, `/finance/fixed-expenses` and `/finance/subscriptions` paths redirect there.
 - These do **not** change net worth. They feed cashflow summary and can influence planning spending inputs. Jobs & pay is the owner for optional payday cadence and its first payday anchor; no paycheck dates are inferred if that schedule is absent. Salary-entry frequency remains separate from paycheck cadence, and annual bonus/equity/other estimates remain undated. Dated payments are additional; clear the annual estimate if it represents the same payout.
 - Prefer the dedicated pages over inventing parallel recurring models on the transactions table.
 

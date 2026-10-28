@@ -2,7 +2,7 @@
 
 Travel's domain code stays in `apps/travel`, with Angular presentation in `frontend` and FastAPI routers/services in `backend`. The root site serves `/travel/`; API routes retain `/travel/api`. Identity, CSRF and the request database session come from the server platform in-process. Trip costs never write Finance records or alter net worth.
 
-Use the root workflow in [Development](DEVELOPMENT.md). There is one service and one SQLite database; there is no standalone Travel deployment. Sign-in is `/auth/login`, and the persistent Hub control returns to `/hub`.
+Use the root workflow in [Development](DEVELOPMENT.md). There is one service and one SQLite database; there is no standalone Travel deployment. Sign-in is `/auth/login`, and the persistent Hub control returns to `/hub`. Open the username dropdown for Travel settings, account settings, theme and sign-out.
 
 ## Trips and forms
 

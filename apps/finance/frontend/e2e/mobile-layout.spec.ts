@@ -1,3 +1,4 @@
+import { openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { expect, Page, test } from '@playwright/test';
 import { syntheticVault } from './synthetic-vault';
 
@@ -98,6 +99,7 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   expect(scrolled.after).toBeGreaterThan(scrolled.before);
 
   await page.locator('.mobile-tab', { hasText: 'Home' }).click();
+  await openUserMenu(page);
   await page.getByRole('button', { name: 'Guide' }).click();
   const tutorial = page.locator('.tutorial-panel');
   await expect(tutorial).toBeVisible();

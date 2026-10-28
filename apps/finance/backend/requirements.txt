@@ -1,4 +1,0 @@
-# Dev/test install: production deps plus test tools.
--r requirements-prod.txt
-pytest>=8.3.0,<9.0.0
-httpx>=0.28.0,<0.29.0

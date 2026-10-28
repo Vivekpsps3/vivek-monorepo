@@ -23,6 +23,10 @@
             "assets": [
               {
                 "glob": "**/*",
+                "input": "apps/web/public"
+              },
+              {
+                "glob": "**/*",
                 "input": "apps/site/public"
               },
               {

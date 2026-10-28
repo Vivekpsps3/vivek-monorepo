@@ -269,12 +269,7 @@ def suppression_markers(line: str) -> list[str]:
 
 
 def excluded_dir(relative_dir: str) -> bool:
-    """Trees the other Python gates already skip, plus Alembic revision dirs.
-
-    A directory that is merely named ``versions`` is still scanned.
-    """
-    if relative_dir == "apps/site/flask" or relative_dir.startswith("apps/site/flask/"):
-        return True
+    """Skip applied Alembic revisions; scan other source trees, including versions."""
     return _ALEMBIC_VERSIONS.fullmatch(relative_dir) is not None
 
 

@@ -1,6 +1,6 @@
 # Requirement acceptance map
 
-The current evidence is [final verification](final-verification.md). The owner approved runtime retirement, which is now implemented. Final verification and the single PR are recorded in STATUS.md. Paths in this table are repository-relative acceptance suites.
+The current evidence is [final verification](final-verification.md). The owner approved runtime retirement, which is now implemented. Final verification and merge status are recorded in [STATUS.md](../STATUS.md). Paths in this table are repository-relative acceptance suites.
 
 | Requirement | Acceptance evidence / disposition |
 | --- | --- |
@@ -42,5 +42,5 @@ The current evidence is [final verification](final-verification.md). The owner a
 | R30 | Root ownership/feature ports and deleted Finance bootstraps/auth relocations implemented; approved runtime removal completed |
 | R31 | Recorded regression-first transaction and portrait reproductions, vertical fixes and local gates; independent pairing superseded by owner's single-agent instruction |
 | R32 | Original parallel-capable board remains reviewable; execution uses the owner's later single-agent choice and claims no independent agent review |
-| R33 | One integration branch and one final PR; [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) is open after all passing local gates and the completed deletion ledger. Deployment is not performed |
-| R34 | One linked requirement/issue/task/evidence folder, with current status and explicit remaining closure work |
+| R33 | One integration branch and one final PR; [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) was merged on 2026-10-27 after all passing local gates and the completed deletion ledger. Deployment state belongs to the operations workflow |
+| R34 | One linked requirement/issue/task/evidence folder, with merged completion status and preserved evidence |

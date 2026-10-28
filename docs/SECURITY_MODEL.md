@@ -237,8 +237,11 @@ browser does not consult DNS to decide which cookies to send. What matters is
 not setting a parent `Domain`, and using `__Host-` names so a parent-domain
 cookie cannot be set at all.
 
-Travel and Media authenticate with the finance session. `apps/server/auth.py`
-reads `finance_session`, and both browsers send `finance_csrf`. If those apps
+All private features authenticate through the root identity session.
+`apps/server/identity/session.py` validates the legacy-named `finance_session`
+cookie; `apps/server/auth.py` exposes the domain principal dependency, and the
+shared browser HTTP client sends the `finance_csrf` value as `X-CSRF-Token`
+on writes. If Travel and Media
 stay on the apex while the cookie becomes host-only on `finance.`, their login
 stops. The cutover has to give them an apex session of their own before the
 finance cookies move. That session must not be the vault session. Moving

@@ -1,10 +1,10 @@
-# Delete / combine / keep ledger
+# Completed deletion ledger
 
 Every deletion must identify its consumers, move any required behavior, pass the replacement checks, and remove old imports/docs/build references in the same integration slice. Retired source is recoverable in git; do not move whole dead systems into an “archive” directory in the live build. Data and applied migration history are different from obsolete application code.
 
-## Current checkpoint — 2026-10-27
+## Completion record — merged PR #22
 
-The owner explicitly approved retirement of the 66 listed files and completion of all remaining tasks. The [actual removal record](evidence/actual-runtime-removal.json) confirms every proposed path is absent, useful pure models/tests moved to app-owned frontends, and two unused shared-browser packaging symlinks are removed. A byte-identical `/tmp` backup preserves the original uncommitted inputs. This resolves the earlier approval block.
+The owner explicitly approved retirement of the 66 listed files and completion of all remaining tasks. The [actual removal record](evidence/actual-runtime-removal.json) confirms every proposed path is absent, useful pure models/tests moved to app-owned frontends, and two unused shared-browser packaging symlinks are removed. The removal was backed by a byte-identical local snapshot of the original inputs; the accepted implementation is preserved in Git. No removal approval remains pending.
 
 The root lock/build/bootstrap, backend identity/session/database lifecycle, Finance-only validator ownership, root proxy, docs/CI and actual six-user seed use one supported workflow. Coverage exposed and fixed the backend’s hidden JavaScript rounding-file dependency. [All 113 static assertion dispositions](evidence/static-test-migration.json) and [69 original browser-story dispositions](evidence/browser-test-migration.json) identify their retained or native replacements. Applied migration history, useful URL aliases, provider distinctions, encryption, operational backup/adoption tooling and unchanged coverage floors remain.
 

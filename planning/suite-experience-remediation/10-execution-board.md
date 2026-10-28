@@ -1,18 +1,8 @@
-# Single-PR execution board
+# Completed task board
 
-The owner selected one agent on 2026-10-26. Keep the task/dependency and gate requirements; parallel lanes and independent agent review are superseded for this run. Automated verification is recorded separately, and no independent agent review is claimed.
+All **34 of 34 tasks** were completed and merged in [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) on 2026-10-27. Local gates passed before the PR opened, and all ten PR checks succeeded. [Final verification](evidence/final-verification.md) and [requirement acceptance](evidence/requirement-acceptance.md) provide the evidence. The owner selected one agent; lane names below record the original responsibility areas, not independent-agent review.
 
-Live status is [STATUS.md](STATUS.md). A task is done only when that file says `done` and names the command the verifier re-ran. The checkboxes below are a mirror, updated only with that evidence. All product tasks start unchecked. The plan itself is complete when linked documents and evidence are verified; that does not mean the refactor has been implemented. Use one integration branch and one final PR. The original parallel ownership guide below remains planning context; this run uses one agent.
-
-## Work-item status and handoff
-
-Use `unclaimed → investigating → contract-ready → implementing → local-green → integrated → verified`. A task is Done only after acceptance evidence and integration, not when code is written. Record blocker, next action and owner when pending. The original plan called for independent paired review; the owner’s later single-agent instruction supersedes that execution choice. Automated acceptance is evidence, not independent review.
-
-Every implementation handoff includes task/issue/requirement IDs, changed files, deletions, contract or migration change, tests actually run, result/log paths, screenshots if relevant, known limits, next dependent task, and reviewer. Existing user-owned changes must remain intact.
-
-## Master checklist
-
-The final vetting checkpoint records **34 of 34 rows done**. All 177 browser cases and the complete local gates pass; exact results and remaining dependencies are in [final verification](evidence/final-verification.md). DEL-ALL, UX-02 and QA-01 are done after the approved retirement and passing final checks. PR-01 is done: [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) is open after all local gates passed. The original unchecked wave lists below are replaced by the current disposition table; no independent-agent review is claimed.
+The retired runtime removal was approved and executed. No pending approval, pause or additional integration wave remains. Current development and PR requirements live in [AGENTS.md](../../AGENTS.md) and [Quality](../../docs/QUALITY.md).
 
 | Done | Task | Owner lane | Dependencies | Concrete deliverable / acceptance |
 | --- | --- | --- | --- | --- |
@@ -48,39 +38,5 @@ The final vetting checkpoint records **34 of 34 rows done**. All 177 browser cas
 | [x] | DEL-ALL | Integration + owners | Each replacement slice | [Deletion ledger](15-deletion-ledger.md) closed; no unowned temporary runtimes/compatibility frameworks. |
 | [x] | UX-02 | Design + app owners | Domain screens, WEB-01, FIN-01 | Final fluid glass integration, responsive/a11y/cascade cleanup, screenshot review. |
 | [x] | DOC-01 | Toolchain/docs | Final architecture | README/AGENTS/CI/Makefile/docs updated to one supported workflow; command-equivalence proof. |
-| [x] | QA-01 | Independent QA | Every integrated slice | Exploratory discovery, final full gates, image/browser/migration validation and acceptance evidence. |
+| [x] | QA-01 | Integration/QA | Every integrated slice | Exploratory discovery, final full gates, image/browser/migration validation and acceptance evidence. |
 | [x] | PR-01 | Integrator | All tasks local-green + QA-01 | Open one coherent refactor PR only after local gates pass; attach source/deletion/perf/UX evidence. |
-
-## Integration-wave disposition
-
-| Wave | Current disposition |
-| --- | --- |
-| 0: Characterize and prove target | Done: route/test/source baseline, domain contracts and production-policy root proof recorded in the evidence folder. |
-| 1: One spine | Done for the active runtime: root workspace/router/server composition, shared identity, locked-vault navigation and supported docs. Legacy unserved static files remain pending approval. |
-| 2: Domain vertical slices | Done: Travel, Media, Finance and public stories pass integrated browser/coverage checks. New final-audit defects have regression proof in the issue register. |
-| 3: Deletion and visual acceptance | Done: approved removal/model-test relocations, reference audit, final rendered routes/CSS, 177-case browser matrix and all affected gates pass. |
-| 4: Release candidate and PR | Done: [PR #22](https://github.com/Vivekpsps3/vivek-monorepo/pull/22) contains the integrated implementation and evidence after all local checks passed. No merge or deployment performed. |
-
-## Original parallel ownership guide (historical)
-
-| Exclusive integration surface | Owner | Other-agent rule |
-| --- | --- | --- |
-| Root npm lock/workspace, Dockerfile, CI, Makefile, shared TS/lint config | Toolchain integrator | Submit manifest/config requirements; do not regenerate locks concurrently. |
-| `apps/web` route manifest/platform/layout, shared UI tokens | Shell integrator | Features export routes/data; no parallel root route or token edits. |
-| Server factory/auth/database/security headers | Backend platform owner | Domains propose explicit API/dependency changes; paired review for headers/session. |
-| Unified Alembic chain/schema checks | Migration owner | Own all revisions and data reconciliation; agents provide isolated backfill logic and fixtures. |
-| Current Media giant UI/provider/record modules | Media integrator | Extract task modules first or serialize edits; different features still share files today. |
-| Finance vault/import computations | Finance owner | Shared shell changes use public facade; never rewrite crypto from another lane. |
-
-Four-slot execution example: one integrator plus Travel, Media and platform/toolchain implementers; reviewer roles rotate at checkpoints. With more capacity, split independent provider/QA/public tasks only after shared-file dependencies are settled. More agents must not mean more competing architecture or lockfile writers.
-
-## XP loop for every bug and slice
-
-1. Write the smallest concrete acceptance example and a meaningful failing regression for a real bug.
-2. Implement the minimum end-to-end behavior. Characterize existing critical invariants separately from defects.
-3. Run relevant tests and review the actual screen/API result.
-4. Refactor duplicate/obsolete mechanisms exposed by the slice; delete the replaced path.
-5. Review correctness, simplicity and preservation; integrate while green. The owner selected one agent for this run, so independent review is not claimed.
-6. Update this board, issue register, command map and discovery ledger before starting the next slice.
-
-Do not fake pair programming by two agents independently generating overlapping code. The reviewer challenges design, coverage, deletion and observed behavior. Short internal increments satisfy XP feedback despite the owner's single-PR release constraint.

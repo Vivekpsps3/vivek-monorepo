@@ -1,47 +1,20 @@
 # Travel
 
-Personal trip planner. A trip is the span from the day you leave through the day you come back.
+Travel owns trip planning, PTO, optional transport/flight lookup, maps, notes and budgets. Its Angular feature lives under `frontend` at `/travel/`; its routers and services live under `backend` at `/travel/api/`.
 
-This app does not use the finance database, vault, or net-worth math. Trip budgets and PTO stay here. Sign-in is the finance session: the same `finance_session` cookie that Finance sets.
+The root FastAPI service supplies the shared session and unified SQLite database. Development state is `.local/data/site.db`; production state and backups follow the root operations workflow. Finance's encrypted records and vault remain separate from Travel behavior. Travel works while the Finance vault is locked.
 
-## Run
+Run from the repository root:
 
-Supported host, with Finance:
-
-```bash
-docker compose up --build
+```sh
+make install
+make build-frontends
+make dev
+./scripts/coverage-gate.sh travel
+node --test apps/travel/backend/static/tests/*.test.mjs
+npx playwright test --project=travel
 ```
 
-Open `/finance/` and `/travel/` on that origin. The finance API stays at `/api/`, including `/api/health`.
+The `backend/static/tests` directory is retained for pure-model test discovery; it is not a served frontend. Flight lookup uses an optional server-side `FLIGHTAWARE_API_KEY` or a personal key saved in Settings. Manual entry remains available without it.
 
-Direct process, without the shared cookie:
-
-```bash
-make travel-install
-make travel-dev
-```
-
-That listens on `0.0.0.0:8090` at `/`. Its sign-in link points at `/auth/login` on that same port, which this process does not serve. Do not port-forward it to the public internet.
-
-Set `FLIGHTAWARE_API_KEY` or save a key in Settings for flight lookup. Without a key, type the flight yourself.
-
-SQLite file: `apps/travel/backend/travel.db` in dev, `data/travel.db` in Docker. Copy `data/travel.db` yourself when you back up; `scripts/backup-db.sh` covers `finance.db`.
-
-## What it stores
-
-- One trip from departure through return, with more than one city when you add them
-- Outbound and inbound flights, plus drives, trains, and other rides
-- Optional FlightAware AeroAPI lookup (flight number and date only)
-- Day plans such as restaurants, with an OpenStreetMap pin when you search an address
-- Parking: necessary or not, booked or not, and whether you are parking, dropped off, or picked up
-- Budget by outbound flight, inbound flight, and the other costs on the trip
-- Notes and reminders
-- PTO balance, accrual rate, days a trip will use, and a projection for the morning you leave and the leftover after
-
-PTO accrual is an even daily estimate from the rate you enter. It is not a payroll calendar.
-
-## Tests
-
-```bash
-make travel-test
-```
+See [Travel behavior](../../docs/TRAVEL.md), [Development](../../docs/DEVELOPMENT.md), [Backups](../../docs/BACKUP.md), and [Quality gates](../../docs/QUALITY.md).

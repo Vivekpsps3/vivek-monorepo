@@ -9,4 +9,4 @@ The application renders attribution and zoom buttons as Angular templates.
 No Trusted Types policy, sanitization bypass, or HTML-string renderer is added.
 The map smoke test must exercise tiles, zero coordinates, markers, popup labels,
 keyboard zoom, attribution, failed tiles, retry, and route teardown under the real
-suite Content Security Policy. The obsolete distribution is removed at cutover.
+suite Content Security Policy. The retired backend vendor distribution was removed in the merged suite refactor; this frontend-owned adaptation is the supported copy.

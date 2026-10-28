@@ -1,4 +1,4 @@
-"""Enforced per-app Content-Security-Policy and companion browser headers.
+"""Enforced public/private document CSP and companion browser headers.
 
 HTML shells are rewritten per request with a nonce. Travel and Media stay on
 this origin, so the policies reduce how an XSS payload can execute; they do
