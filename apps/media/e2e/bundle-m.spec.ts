@@ -1,3 +1,4 @@
+import { chooseColorTheme, openUserMenu } from '../../../tests/e2e/user-menu.mjs';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { addItem, openItem, resetMedia, savedItem } from './media-test';
@@ -36,7 +37,8 @@ test('search distinguishes unavailable, unconfigured and available source covera
   await expect(page.locator('.source-details')).toContainText('Steam coverage remains available');
   await expect(page.locator('.source-details')).toContainText('needs valid credentials');
   await expect(page.getByRole('heading', { name: 'Available sources returned no matches' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Account', exact: false })).toBeVisible();
+  await openUserMenu(page);
+  await expect(page.getByRole('link', { name: 'Account settings', exact: true })).toBeVisible();
 });
 
 test('library pages and favorites filter count only matching memberships and survive Back', async ({ page, request }) => {
@@ -184,12 +186,12 @@ test('the main Media screens pass accessibility in both themes at phone and desk
   test.setTimeout(180_000);
   const artist = await addItem(request, { kind: 'artist', title: 'A very long synthetic artist name that must wrap', status: 'following' });
   const routes = ['/media', '/media/library', '/media/search', '/media/calendar', '/media/add', '/media/item/' + artist.id];
-  for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
+  for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height: 900 });
     for (const route of routes) {
       await page.goto(route);
       await expect(page.locator('main h1')).toBeVisible();
-      await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+      await chooseColorTheme(page, theme);
       await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(246, 241, 234)' : 'rgb(28, 25, 22)');
       await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       const result = await new AxeBuilder({ page }).analyze();

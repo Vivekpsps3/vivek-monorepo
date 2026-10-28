@@ -1,3 +1,4 @@
+import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
@@ -11,7 +12,7 @@ for (const width of widths) for (const theme of themes) {
     await request.post('/e2e/reset');
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     await page.goto('/travel');
-    await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+    await chooseColorTheme(page, theme);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     const shot = async name => {

@@ -14,11 +14,6 @@
         </a>
       }
     </div>
-    <div class="finance-actions">
-      <ui-button variant="secondary" size="sm" (clicked)="openTutorial($event)">Guide</ui-button>
-      <ui-button variant="ghost" size="sm" (clicked)="lockVault()">Lock vault</ui-button>
-      <ui-button variant="ghost" size="sm" [disabled]="isResettingData" (clicked)="clearMyData()">Clear Finance data</ui-button>
-    </div>
   </div>
 </nav>
 
@@ -91,28 +86,28 @@
       <span class="tutorial-step__number">1</span>
       <h3>What you have</h3>
       <p>Enter current balances and positions. Holdings have their own list.</p>
-      <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }" (click)="closeTutorial(false)">Add assets and debts</a>
-      <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }" (click)="closeTutorial(false)">Add holdings</a>
+      <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }" (click)="closeTutorial()">Add assets and debts</a>
+      <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }" (click)="closeTutorial()">Add holdings</a>
     </article>
     <article class="tutorial-step">
       <span class="tutorial-step__number">2</span>
       <h3>Spending</h3>
       <p>Import CSVs or view and edit card activity. Transactions do not change net worth.</p>
-      <a routerLink="/finance/spending" [queryParams]="{ t: 'imports' }" (click)="closeTutorial(false)">Import bank CSVs</a>
-      <a routerLink="/finance/spending" [queryParams]="{ t: 'activity' }" (click)="closeTutorial(false)">Open Activity</a>
+      <a routerLink="/finance/spending" [queryParams]="{ t: 'imports' }" (click)="closeTutorial()">Import bank CSVs</a>
+      <a routerLink="/finance/spending" [queryParams]="{ t: 'activity' }" (click)="closeTutorial()">Open Activity</a>
     </article>
     <article class="tutorial-step">
       <span class="tutorial-step__number">3</span>
       <h3>Recurring</h3>
       <p>Keep job income separate from scheduled bills and subscriptions.</p>
-      <a routerLink="/finance/recurring" [queryParams]="{ t: 'pay' }" (click)="closeTutorial(false)">Add jobs and pay</a>
-      <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }" (click)="closeTutorial(false)">Add bills and subscriptions</a>
+      <a routerLink="/finance/recurring" [queryParams]="{ t: 'pay' }" (click)="closeTutorial()">Add jobs and pay</a>
+      <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }" (click)="closeTutorial()">Add bills and subscriptions</a>
     </article>
     <article class="tutorial-step">
       <span class="tutorial-step__number">4</span>
       <h3>Planning</h3>
       <p>Try what-if numbers. This does not change real balances.</p>
-      <a routerLink="/finance/planning" (click)="closeTutorial(false)">Open Planning</a>
+      <a routerLink="/finance/planning" (click)="closeTutorial()">Open Planning</a>
     </article>
   </div>
 
@@ -122,3 +117,11 @@
     <span>Do not enter the same cash twice</span>
   </div>
 </ui-dialog>
+
+<ng-template #userMenuActions>
+  <div class="finance-user-actions">
+    <button class="btn btn-ghost" type="button" (click)="openTutorial()">Guide</button>
+    <button class="btn btn-ghost" type="button" (click)="lockVault()">Lock vault</button>
+    <button class="btn btn-ghost danger" type="button" [disabled]="isResettingData" (click)="clearMyData()">Clear Finance data</button>
+  </div>
+</ng-template>

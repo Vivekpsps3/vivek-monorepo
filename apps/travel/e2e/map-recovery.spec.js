@@ -1,3 +1,4 @@
+import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -49,7 +50,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     await page.route(tileUrl, route => unavailable
       ? route.abort('failed') : route.fulfill({ contentType: 'image/png', body: tile }));
     await page.goto('/travel/trips/' + trip.id + '?private=never-send-to-tiles');
-    await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+    await chooseColorTheme(page, theme);
     await page.getByRole('button', { name: 'Show map', exact: true }).click();
     const map = mapRegion(page);
     await expect(map.getByRole('button', { name: 'Retry map' })).toBeVisible();
@@ -90,7 +91,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     await expect.poll(zooms).toEqual([12]);
     await map.locator('.map-canvas').focus();
     await page.keyboard.press('+');
-    await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+    await chooseColorTheme(page, theme);
     await expect.poll(zooms).toEqual([13]);
     const oldCanvas = await map.locator('.map-canvas').elementHandle();
     for (let visit = 0; visit < 3; visit++) {
@@ -144,7 +145,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
       return route.fulfill({ json: { results: searches === 3 ? [] : [{ label: 'Springfield, USA', lat: 39.78, lng: -89.64 }, { label: 'Springfield, Australia', lat: -27.65, lng: 152.91 }] } });
     });
     await page.goto('/travel/trips/' + trip.id);
-    await page.getByRole('combobox', { name: 'Color theme' }).selectOption(theme);
+    await chooseColorTheme(page, theme);
     await page.getByRole('button', { name: 'Show map', exact: true }).click();
     await expect(mapRegion(page).getByText('Location has not been chosen.', { exact: true })).toBeVisible();
     await expect(mapRegion(page).locator('.leaflet-interactive')).toHaveCount(0);

@@ -30,7 +30,7 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 | `/investment-insights`, `/stock-lab` | Redirect to `/planning`, opening Growth or Stocks respectively |
 | `/charts` | Redirects to `/` |
 
-Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control plus account/theme actions visible; Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
+Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control and a username button visible. Its dropdown holds account settings, admin stats when authorized, theme selection and sign-out. Travel settings also live there on Travel routes. Finance contributes its guide, vault lock and confirmed clear-data actions while its unlocked layout is active; those actions are removed when that layout is destroyed. Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
 
 ## Design tokens
 
@@ -52,7 +52,7 @@ Charts: shared palette and Chart.js options live in `@vivek/ui` (`packages/ui/sr
 **Appearance:** light is the default token set (warm paper `#F6F3EE`, warm-white
 cards `#FFFCF8`, ink `#1C1916`, deep teal `#0F6E6A`). Dark is warm ink
 (`#141311` canvas, `#1E1C19` cards, soft teal `#8FD0C8`) on
-`[data-theme="dark"]`. First visit follows the OS. The persistent header offers System / Light / Dark. Choice is stored in `suite-theme`, with legacy app keys read during migration.
+`[data-theme="dark"]`. First visit follows the OS. The username dropdown offers System / Light / Dark. Choice is stored in `suite-theme`, with legacy app keys read during migration.
 Controls use the shared 8–20px radii; status and date shapes retain familiar forms.
 Reduced transparency and increased contrast media queries are honored.
 Typography prefers the system stack (no remote font fetch). Locale money and
@@ -97,7 +97,7 @@ Use **OnPush** on new components; feature pages must call `markForCheck()` after
 ## Privacy and migration
 
 - Vault finance records are schema-v2 authenticated-record ciphertext. After login, the browser can locally decrypt existing schema-v1 ciphertext records and rewrite them as schema-v2. The former plaintext-row copy flow is retired; Alembic cleanup runs only after startup confirms legacy tables are empty and no password-only accounts remain.
-- Manual/imported Portfolio prices stay local. After authenticated vault unlock, the browser automatically refreshes deduplicated holding and configured employer tickers with bounded concurrency. The shell does not show a ticker countdown. A quiet mark means prices are updating. The account menu discloses that ticker symbols are sent to the market service. Failures stay on screen with retry. Explicit retry, typed lookup, and Stock Lab research also send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
+- Manual/imported Portfolio prices stay local. After authenticated vault unlock, the browser automatically refreshes deduplicated holding and configured employer tickers with bounded concurrency. The shell does not show a ticker countdown. The Finance guide explains that ticker symbols are sent to the market service. Failures stay on screen with retry. Explicit retry, typed lookup, and Stock Lab research also send ticker symbols to the market-data backend/yfinance; no shares, employee purchase amounts, employer titles, account details, or scenario inputs are sent.
 - Login unwraps a browser-held signing key with the vault passphrase and signs a single-use challenge. Admins issue invitations but cannot reset a user's vault passphrase or recover encrypted data.
 
 ## Home behavior
