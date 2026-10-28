@@ -32,6 +32,10 @@ One Angular 21 application under `apps/web`, composing public and app-owned lazy
 
 Finance paths above are relative to `/finance`; `/auth/*` and `/hub/admin` are root routes. Public `/` is the portfolio. The root `<base href="/">` and Angular router own all navigation. `PrivateLayoutComponent` keeps one Hub control and a username button visible. Its dropdown holds account settings, admin stats when authorized, theme selection and sign-out. Travel settings also live there on Travel routes. Finance contributes its guide, vault lock and confirmed clear-data actions while its unlocked layout is active; those actions are removed when that layout is destroyed. Finance's `MainLayoutComponent` provides local navigation only. The root dev proxy is `apps/web/proxy.conf.cjs`; all APIs use the same FastAPI process. Hash bookmarks translate once at startup into known canonical routes. Unknown assets and unknown page paths return 404 rather than an arbitrary shell.
 
+## Browser icons
+
+The public portfolio uses a V monogram in `apps/site/public/favicon.svg`; the private workspace uses the four-pane mark in `apps/web/public/workspace-icon.svg`. Each has a 16/32/48/64px ICO fallback and a 180px PNG touch icon. The root shell starts with the workspace mark; public prerenders and completed public-route navigation select the personal mark. Icon URLs carry a revision so browser favicon caches refresh when the artwork changes. Keep the SVG sources crisp at 16px when revising them, and regenerate their bitmap siblings together.
+
 ## Design tokens
 
 Source of truth: `packages/ui/tokens.css`.
