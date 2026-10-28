@@ -12,6 +12,7 @@ describe('Suite session isolation', () => {
   let service: SessionService;
   let http: HttpTestingController;
   beforeEach(() => {
+    localStorage.removeItem('suite-session-ended');
     TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
     service = TestBed.inject(SessionService);
     http = TestBed.inject(HttpTestingController);
@@ -19,10 +20,10 @@ describe('Suite session isolation', () => {
     localStorage.setItem('finance-dek', 'fixture-key');
   });
   afterEach(() => {
-    http.verify();
     document.cookie = 'finance_csrf=; Max-Age=0';
     localStorage.removeItem('finance-dek');
     localStorage.removeItem('suite-session-ended');
+    http.verify();
   });
   it('shares one probe and preserves an unlocked browser key on a valid reload', () => {
     const first: Array<SessionUser | null> = [];
@@ -69,15 +70,21 @@ describe('Suite session isolation', () => {
     expect(localStorage.getItem('finance-dek')).toBeNull();
     expect(cleared).toBe(1);
   });
-  it('accepts sign-out from another tab without rebroadcasting it', () => {
-    const navigate = spyOn(authNavigation, 'assignPath');
-    service.acceptUser(person(1));
-    window.dispatchEvent(new StorageEvent('storage', { key: 'suite-session-ended', newValue: 'other-tab' }));
-    expect(service.currentUser).toBeNull();
-    expect(localStorage.getItem('finance-dek')).toBeNull();
-    expect(localStorage.getItem('suite-session-ended')).toBeNull();
-    expect(navigate).toHaveBeenCalledWith('/auth/login');
-  });
+  for (const previousMarker of [null, 'previous-sign-out']) {
+    const storageState = previousMarker ? 'an existing marker' : 'empty storage';
+    it(`accepts sign-out from another tab without rebroadcasting it with ${storageState}`, () => {
+      if (previousMarker) localStorage.setItem('suite-session-ended', previousMarker);
+      const writes = spyOn(Storage.prototype, 'setItem').and.callThrough();
+      const navigate = spyOn(authNavigation, 'assignPath');
+      service.acceptUser(person(1));
+      window.dispatchEvent(new StorageEvent('storage', { key: 'suite-session-ended', newValue: 'other-tab' }));
+      expect(service.currentUser).toBeNull();
+      expect(localStorage.getItem('finance-dek')).toBeNull();
+      expect(localStorage.getItem('suite-session-ended')).toBe(previousMarker);
+      expect(writes).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledOnceWith('/auth/login');
+    });
+  }
   it('clears local state even when the sign-out request fails', () => {
     const navigate = spyOn(authNavigation, 'assignPath');
     service.acceptUser(person(1));

@@ -25,6 +25,7 @@ describe('AuthService passwordless login', () => {
   const api = environment.apiUrl;
 
   beforeEach(() => {
+    localStorage.removeItem('suite-session-ended');
     vault = jasmine.createSpyObj<VaultService>('VaultService', [
       'loadPublicStatus',
       'loadAuthWrap',
@@ -54,6 +55,7 @@ describe('AuthService passwordless login', () => {
   afterEach(() => {
     environment.localDevAuth = false;
     document.cookie = 'finance_csrf=; Max-Age=0';
+    localStorage.removeItem('suite-session-ended');
     http.verify();
   });
 
