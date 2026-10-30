@@ -9,7 +9,10 @@
 .ui-page-header__row {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  /* Keep the art and title together. Actions pin to the end on their own.
+     space-between treated a hidden actions slot as the second item and
+     pushed the title to the far edge. */
+  justify-content: flex-start;
   gap: var(--space-4);
   flex-wrap: wrap;
   width: 100%;
@@ -52,6 +55,7 @@
 
 .ui-page-header__text {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-1);
