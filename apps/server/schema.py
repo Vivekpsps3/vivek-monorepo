@@ -25,16 +25,20 @@ OWNER_TABLES = {
     "episode_progress",
     "album_ratings",
     "track_ratings",
+    "habits",
+    "habit_checkins",
+    "habit_cadences",
 }
 
 
 def metadata():
     from apps.finance.backend.models import Base as Finance
     from apps.media.backend.models import Base as Media
+    from apps.server.town.models import TownBase
     from apps.travel.backend.models import Base as Travel
 
     result = MetaData()
-    for source in (Finance.metadata, Travel.metadata, Media.metadata):
+    for source in (Finance.metadata, Travel.metadata, Media.metadata, TownBase.metadata):
         for table in source.sorted_tables:
             if table.name in result.tables:
                 raise RuntimeError(f"Duplicate domain table: {table.name}")
