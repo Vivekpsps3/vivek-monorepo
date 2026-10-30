@@ -11,9 +11,11 @@ from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from apps.server.database import get_db
+from apps.server.errors import APIError
 from apps.server.identity.models import User
 from apps.server.identity.session import audit_event, get_current_user, utc_now_naive
 
@@ -98,7 +100,7 @@ async def update_birthday(
     raw = await request.body()
     try:
         parsed: object = json.loads(raw) if raw else None
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         _reject(MSG_FULL_DATE)
     birthday, show_age = _parse_body(parsed, server_today())
     current_user.birthday = birthday
@@ -111,6 +113,12 @@ async def update_birthday(
         target_user_id=current_user.id,
         detail=None,
     )
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        # The driver error string includes the UPDATE parameters. Drop that
+        # chain so the shared handler cannot write the birthday to the log.
+        db.rollback()
+        raise APIError(500, "internal", "Internal server error") from None
     db.refresh(current_user)
     return _view(current_user)

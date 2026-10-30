@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 
 from apps.server.identity.birthday import (
     MSG_FULL_DATE,
@@ -278,7 +280,8 @@ def test_patch_rejects_malformed_json(tmp_path: Path, monkeypatch: pytest.Monkey
     raw = b'{"birthday": "1919-08-26"'
     array = b'["1919-08-26"]'
     with TestClient(application) as client:
-        for content in (b"", raw, array, b"null", b'"1919-08-26"'):
+        invalid_utf8 = b'{"birthday":"1919-08-26"\xff}'
+        for content in (b"", raw, array, b"null", b'"1919-08-26"', invalid_utf8):
             rejected = _call(
                 client,
                 "patch",
@@ -428,3 +431,42 @@ def test_birthday_stays_out_of_me_logs_admin_and_errors(
         assert SECRET not in row.event_type
     finally:
         db.close()
+
+
+def test_commit_failure_does_not_log_or_return_the_birthday(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+
+    def locked(self: Session) -> None:
+        raise OperationalError(
+            f"UPDATE users SET birthday='{SECRET}'",
+            {"birthday": SECRET},
+            Exception(f"database is locked: {SECRET}"),
+        )
+
+    monkeypatch.setattr(Session, "commit", locked)
+    with TestClient(application) as client:
+        failed = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": SECRET, "show_age": True},
+        )
+    assert failed.status_code == 500
+    body = failed.json()
+    assert body["code"] == "internal"
+    assert body["message"] == "Internal server error"
+    assert body["detail"] == "Internal server error"
+    assert SECRET not in failed.text
+    assert SECRET not in caplog.text
+    for record in caplog.records:
+        assert SECRET not in record.getMessage()
+        if record.exc_info and record.exc_info[1] is not None:
+            assert SECRET not in str(record.exc_info[1])
+            cause = getattr(record.exc_info[1], "__cause__", None)
+            assert cause is None or SECRET not in str(cause)
