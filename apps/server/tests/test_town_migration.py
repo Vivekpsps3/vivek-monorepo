@@ -6,10 +6,14 @@ from pathlib import Path
 
 import pytest
 from alembic import command
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from apps.server.database import open_database
+from apps.server.identity.admin import delete_user_account
+from apps.server.identity.models import User, UserRole
 from apps.server.migrations import current_revision, make_config, sqlite_url
 from apps.server.schema import OWNER_TABLES, metadata
 
@@ -237,6 +241,111 @@ def test_checkin_requires_a_habit_when_foreign_keys_are_on(tmp_path: Path) -> No
                 "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
                 "VALUES (999, 1, '2026-10-01', '2026-10-01T00:00:00+00:00')"
             )
+
+
+def _town_row_count(db: Session, table: str, user_id: int) -> int:
+    return int(
+        db.execute(
+            text(f'SELECT COUNT(*) FROM "{table}" WHERE user_id = :owner'),
+            {"owner": user_id},
+        ).scalar_one()
+    )
+
+
+def _insert_account_habit(db: Session, user_id: int) -> int:
+    db.execute(
+        text(
+            "INSERT INTO habits (user_id, name, slot, building_style, per_week, created_on, "
+            "created_at, archived_at, archived_on, name_key) "
+            "VALUES (:user_id, 'Morning', 0, 'forge', 7, '2026-01-01', "
+            "'2026-01-01T00:00:00+00:00', NULL, NULL, 'morning')"
+        ),
+        {"user_id": user_id},
+    )
+    habit_id = int(db.execute(text("SELECT last_insert_rowid()")).scalar_one())
+    db.execute(
+        text(
+            "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
+            "VALUES (:habit_id, :user_id, '2026-10-01', '2026-10-01T00:00:00+00:00')"
+        ),
+        {"habit_id": habit_id, "user_id": user_id},
+    )
+    db.execute(
+        text(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (:habit_id, :user_id, 7, '2026-10-01', '2026-10-01T00:00:00+00:00')"
+        ),
+        {"habit_id": habit_id, "user_id": user_id},
+    )
+    return habit_id
+
+
+def test_delete_user_account_removes_town_rows_for_that_user_only(tmp_path: Path) -> None:
+    database = _upgrade(tmp_path)
+    opened = open_database(f"sqlite:///{database}")
+    db = opened.sessionmaker()
+    try:
+        kept = User(
+            email="kept@example.invalid",
+            display_name="Kept",
+            role=UserRole.user,
+            username="kept",
+            is_active=True,
+            must_change_password=False,
+        )
+        deleted = User(
+            email="deleted@example.invalid",
+            display_name="Deleted",
+            role=UserRole.user,
+            username="deleted",
+            is_active=True,
+            must_change_password=False,
+        )
+        db.add_all([kept, deleted])
+        db.commit()
+        kept_habit = _insert_account_habit(db, kept.id)
+        deleted_habit = _insert_account_habit(db, deleted.id)
+        db.commit()
+
+        delete_user_account(db, deleted, actor_user_id=kept.id)
+        db.commit()
+
+        for table in ("habit_checkins", "habit_cadences", "habits"):
+            assert _town_row_count(db, table, deleted.id) == 0
+            assert _town_row_count(db, table, kept.id) == 1
+        assert db.get(User, deleted.id) is None
+        assert db.get(User, kept.id) is not None
+        assert (
+            db.execute(
+                text("SELECT id FROM habits WHERE user_id = :owner"),
+                {"owner": kept.id},
+            ).scalar_one()
+            == kept_habit
+        )
+        assert (
+            db.execute(
+                text("SELECT habit_id FROM habit_checkins WHERE user_id = :owner"),
+                {"owner": kept.id},
+            ).scalar_one()
+            == kept_habit
+        )
+        assert (
+            db.execute(
+                text("SELECT habit_id FROM habit_cadences WHERE user_id = :owner"),
+                {"owner": kept.id},
+            ).scalar_one()
+            == kept_habit
+        )
+        assert (
+            db.execute(
+                text("SELECT id FROM habits WHERE id = :habit_id"),
+                {"habit_id": deleted_habit},
+            ).first()
+            is None
+        )
+    finally:
+        db.close()
+        opened.engine.dispose()
 
 
 def test_owner_tables_and_metadata_include_town() -> None:
