@@ -1,12 +1,12 @@
 .travel-workspace {
   color: var(--text);
-  min-height: calc(100dvh - 4.5rem);
+  min-height: calc(100dvh - var(--header-h));
 }
 .travel-workspace .feature-nav {
   display: flex;
   gap: 0.4rem;
   overflow: auto;
-  padding: 0.65rem max(1rem, calc((100vw - 1160px) / 2));
+  padding: var(--space-2) var(--gutter);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
@@ -27,9 +27,9 @@
   font-weight: 600;
 }
 .travel-page {
-  max-width: 1160px;
+  max-width: var(--content-max);
   margin: auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: var(--space-8) var(--gutter) var(--space-16);
 }
 .travel-page h1 {
   margin: 0.25rem 0 0.65rem;

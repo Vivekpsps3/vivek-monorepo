@@ -1,0 +1,216 @@
+:host {
+  display: block;
+}
+
+.suite-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--border);
+  background: var(--card-bg);
+  padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right));
+}
+
+.suite-header__inner {
+  min-height: var(--header-h);
+  max-width: var(--content-max);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.suite-header__end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  min-width: 0;
+}
+
+.suite-health {
+  flex: 0 0 auto;
+}
+
+.suite-account {
+  position: relative;
+  min-width: 0;
+  max-width: min(18rem, 42vw);
+}
+
+.user-menu-toggle {
+  display: block;
+  width: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.user-dropdown,
+.app-switcher__menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-lg);
+  animation: suite-menu-in var(--motion-base) var(--ease-emphasized);
+}
+
+.user-dropdown {
+  right: 0;
+  width: min(18rem, calc(100vw - var(--gutter) * 2));
+  max-height: calc(100dvh - var(--header-h) - var(--space-8));
+  overflow-y: auto;
+  padding: var(--space-2);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.user-menu-item {
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  min-height: 44px;
+  color: var(--text);
+  white-space: normal;
+}
+
+.user-menu-theme {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.user-menu-theme select {
+  width: 100%;
+  margin: 0;
+  min-height: 44px;
+}
+
+.user-menu-feature {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-1);
+}
+
+#workspace-content {
+  min-width: 0;
+  outline: none;
+}
+
+.app-switcher__bar {
+  display: flex;
+  align-items: stretch;
+}
+
+.app-switcher__bar a,
+.app-switcher__menu a {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-switcher__bar a.is-current {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.app-switcher__compact {
+  display: none;
+  position: relative;
+}
+
+.app-switcher__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+.app-switcher__menu {
+  left: 0;
+  min-width: 12rem;
+  max-width: calc(100vw - var(--gutter) * 2);
+  padding: var(--space-2);
+  display: grid;
+}
+
+.app-switcher__menu a {
+  border-bottom: 0;
+  border-radius: var(--radius-md);
+}
+
+.app-switcher__menu a.is-current {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .suite-header {
+    background: color-mix(in srgb, var(--card-bg) 94%, transparent);
+    backdrop-filter: blur(18px) saturate(1.2);
+  }
+}
+
+@keyframes suite-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .suite-header__inner {
+    gap: var(--space-2);
+  }
+
+  .app-switcher__bar {
+    display: none;
+  }
+
+  .app-switcher__compact {
+    display: block;
+  }
+
+  .user-menu-toggle {
+    padding-inline: var(--space-2);
+    font-size: var(--text-sm);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-dropdown,
+  .app-switcher__menu {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .suite-header {
+    backdrop-filter: none;
+    background: var(--card-bg);
+  }
+}

@@ -162,13 +162,18 @@
 
 .skip-link {
   position: absolute;
-  left: -9999px;
+  left: var(--gutter);
   top: var(--space-2);
+  transform: translateY(-150%);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   background: var(--accent);
   color: var(--on-accent);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   z-index: 3000;
+  text-decoration: none;
 }
 
 .visually-hidden {
@@ -184,7 +189,7 @@
 }
 
 .skip-link:focus {
-  left: var(--space-4);
+  transform: none;
 }
 
 .page {

@@ -8,6 +8,8 @@ export type UiIconName =
   | 'calendar'
   | 'chevron-left'
   | 'chevron-right'
+  | 'chevron-down'
+  | 'grid'
   | 'plus'
   | 'upload'
   | 'wallet'
@@ -31,6 +33,8 @@ const PATHS: Record<UiIconName, string> = {
     'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   'chevron-left': 'M15 18l-6-6 6-6',
   'chevron-right': 'M9 18l6-6-6-6',
+  'chevron-down': 'M6 9l6 6 6-6',
+  grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   plus: 'M12 5v14M5 12h14',
   upload: 'M12 3v12M8 7l4-4 4 4M4 21h16',
   wallet: 'M19 7H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 14h.01',

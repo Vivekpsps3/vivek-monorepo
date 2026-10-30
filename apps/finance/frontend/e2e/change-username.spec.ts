@@ -40,10 +40,7 @@ async function createAccount(page: Page, username: string): Promise<void> {
 
 async function openAccount(page: Page): Promise<void> {
   const dialog = page.getByRole('dialog', { name: 'Account settings' });
-  if (!(await dialog.isVisible())) {
-    const menu = await openUserMenu(page);
-    await menu.getByRole('link', { name: 'Account settings', exact: true }).click();
-  }
+  if (!(await dialog.isVisible())) await page.goto('/hub?settings=account');
   await expect(dialog).toBeVisible();
 }
 

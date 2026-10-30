@@ -604,8 +604,9 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
   await vault.open('/');
   const desktopNav = page.locator('.nav-tabs');
   await expect(desktopNav.getByRole('link')).toHaveCount(5);
-  await expect(page.locator('a.suite-hub')).toHaveAttribute('href', '/hub');
-  await expect(page.locator('a.suite-hub')).toBeVisible();
+  const hub = page.getByRole('navigation', { name: 'Apps' }).getByRole('link', { name: 'Hub', exact: true });
+  await expect(hub).toHaveAttribute('href', '/hub');
+  await expect(hub).toBeVisible();
 
   for (const width of [320, 390]) {
     if (width > 320) await vault.open('/');
@@ -630,7 +631,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     expect(layout.document).toBeLessThanOrEqual(layout.viewport + 1);
     expect(layout.nav.scrollWidth).toBeLessThanOrEqual(layout.nav.width + 1);
     expect(layout.links).toHaveLength(5);
-    await expect(page.locator('a.suite-hub')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Finance', exact: true })).toBeVisible();
     for (const link of layout.links) {
       expect(link.left).toBeGreaterThanOrEqual(layout.nav.left - 1);
       expect(link.right).toBeLessThanOrEqual(layout.nav.right + 1);
