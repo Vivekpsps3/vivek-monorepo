@@ -108,17 +108,19 @@
         <p>{{ entry.catalog.overview }}</p>
       </details>
     }
-    <ui-card role="status" [hidden]="!recovery()">
-      <p>
-        Unsaved changes from an earlier version of this item are available. The
-        saved item changed since that draft.
-      </p>
-      <ui-button variant="ghost" (click)="restoreDraft()"
-        >Restore earlier draft</ui-button
-      ><ui-button variant="ghost" (click)="discardRecovery()">
-        Discard earlier draft
-      </ui-button>
-    </ui-card>
+    @if (recovery()) {
+      <ui-card role="status">
+        <p>
+          Unsaved changes from an earlier version of this item are available.
+          The saved item changed since that draft.
+        </p>
+        <ui-button variant="ghost" (click)="restoreDraft()"
+          >Restore earlier draft</ui-button
+        ><ui-button variant="ghost" (click)="discardRecovery()">
+          Discard earlier draft
+        </ui-button>
+      </ui-card>
+    }
     <ui-card
       ><form class="media-editor" (ngSubmit)="save()">
         <h2>Your {{ entry.kind === "artist" ? "artist" : "experience" }}</h2>
@@ -265,20 +267,18 @@
         </div>
         @for (season of show.seasons; track season.season_number) {
           <details class="season">
-            <summary>
-              {{
+            <summary
+              >{{
                 season.season_number === 0
                   ? "Specials"
                   : "Season " + season.season_number
               }}
-              · {{ season.episode_count }} episodes
-              @if (season.watched) {
+              · {{ season.episode_count }} episodes@if (season.watched) {
                 · Watched
-              }
-              @if (season.manual) {
+              }@if (season.manual) {
                 · Manual completion
-              }
-            </summary>
+              }</summary
+            >
             <ui-field label="Season rating (optional)"
               ><input
                 uiFieldControl

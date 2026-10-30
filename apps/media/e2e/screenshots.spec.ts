@@ -100,7 +100,7 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     await shot('search-partial');
     await page.goto('/media/library?sort=title');
     await page.getByRole('checkbox', { name: 'Favorites only' }).check();
-    await expect(page.getByRole('heading', { name: 'No saved items match these filters' })).toBeVisible();
+    await expect(page.getByText('No saved items match these filters', { exact: true })).toBeVisible();
     await shot('library-filter-empty');
     expect(errors).toEqual([]);
   });

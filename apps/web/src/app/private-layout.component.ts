@@ -36,6 +36,8 @@ export class PrivateLayoutComponent {
   private readonly router = inject(Router);
   private readonly change = inject(ChangeDetectorRef);
   private lastFocusedPath = '';
+  /** Drops a heading-focus retry when a newer navigation starts. */
+  private focusAttempt = 0;
 
   constructor() {
     const destroy = inject(DestroyRef);
@@ -51,18 +53,54 @@ export class PrivateLayoutComponent {
       const path = event.urlAfterRedirects.split(/[?#]/)[0];
       if (path === this.lastFocusedPath) return;
       this.lastFocusedPath = path;
-      queueMicrotask(() => {
-        if (document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return;
-        const heading = document.querySelector<HTMLElement>('#workspace-content main h1');
-        if (heading) {
+      this.focusArrivedHeading(path);
+    });
+  }
+
+  /**
+   * Move focus to the new page heading. A confirm dialog often closes in the
+   * same turn and restores focus to its trigger, so one microtask is too early:
+   * the dialog is still open (and the page is inert) or its close runs afterwards.
+   * Wait for that close, focus the heading, confirm once, then stop. A longer
+   * loop steals focus from the next keyboard or menu action.
+   */
+  private focusArrivedHeading(path: string): void {
+    const attempt = ++this.focusAttempt;
+    const started = performance.now();
+    let confirm = false;
+    const tick = (): void => {
+      if (attempt !== this.focusAttempt || path !== this.lastFocusedPath) return;
+      if (this.menuOpen() || this.switcherOpen()) return;
+      const dialogOpen = !!document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]');
+      const heading = document.querySelector<HTMLElement>('#workspace-content main h1');
+      const active = document.activeElement;
+      const editing = active instanceof HTMLElement
+        && !!active.closest('input, textarea, select, [contenteditable="true"]');
+      if (editing) return;
+      if (!dialogOpen && heading) {
+        if (active !== heading) {
+          confirm = false;
           heading.tabIndex = -1;
           heading.focus({ preventScroll: true });
+          setTimeout(tick, 0);
           return;
         }
+        if (!confirm) {
+          confirm = true;
+          setTimeout(tick, 0);
+        }
+        return;
+      }
+      if (performance.now() - started < 400) {
+        setTimeout(tick, 16);
+        return;
+      }
+      if (!dialogOpen) {
         document.getElementById('workspace-content')?.focus({ preventScroll: true });
         if (isDevMode()) console.warn(`No main h1 to focus after navigation to ${path}`);
-      });
-    });
+      }
+    };
+    queueMicrotask(tick);
   }
 
   toggleMenu(): void {

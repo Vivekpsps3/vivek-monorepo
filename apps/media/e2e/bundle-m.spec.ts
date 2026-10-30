@@ -36,7 +36,7 @@ test('search distinguishes unavailable, unconfigured and available source covera
   await page.getByText('Source coverage · all types', { exact: true }).click();
   await expect(page.locator('.source-details')).toContainText('Steam coverage remains available');
   await expect(page.locator('.source-details')).toContainText('needs valid credentials');
-  await expect(page.getByRole('heading', { name: 'Available sources returned no matches' })).toBeVisible();
+  await expect(page.getByText('Available sources returned no matches', { exact: true })).toBeVisible();
   await openUserMenu(page);
   await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
 });

@@ -1,6 +1,7 @@
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { ptoChoice } from './dates.mjs';
 import AxeBuilder from '@axe-core/playwright';
 
 const tile = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
@@ -103,7 +104,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
       await expect(map.getByRole('status')).toContainText('Map ready');
     }
     expect(await oldCanvas.evaluate(node => node.isConnected)).toBe(false);
-    await page.getByRole('navigation', { name: 'Travel', exact: true }).getByRole('link', { name: 'Trips', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Travel sections', exact: true }).getByRole('link', { name: 'Trips', exact: true }).click();
     await expect(page.locator('.leaflet-container')).toHaveCount(0);
     await page.getByRole('heading', { name: 'Map recovery trip', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Show map', exact: true })).toBeVisible();
@@ -250,7 +251,7 @@ test('missing map module reload protects unsaved PTO and works after the module 
   await expect(mapRegion(page).getByRole('status')).toContainText('The map could not start');
   await expect(mapRegion(page).getByRole('link', { name: 'Open map', exact: false })).toBeVisible();
   await page.getByText('PTO · 3 days', { exact: true }).click();
-  const pto = page.locator('label').filter({ hasText: '2026-11-01' }).getByRole('combobox');
+  const pto = ptoChoice(page, '2026-11-01');
   await pto.selectOption({ label: 'PTO' });
   const warning = page.waitForEvent('dialog');
   const reload = mapRegion(page).getByRole('button', { name: 'Reload map page' }).click();

@@ -27,7 +27,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     path: 'travel',
     label: 'Travel',
-    loadComponent: () => import('../../../../travel/frontend/src/settings.component').then(m => m.SettingsComponent),
+    loadComponent: () => import('../../../../travel/frontend/src/public-api').then(m => m.loadTravelSettings()),
     data: { embedded: true },
     canDeactivate: [leaveTravelSettings],
   },

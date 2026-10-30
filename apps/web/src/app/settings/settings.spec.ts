@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { ThemeService } from '@vivek/ui';
-import { VaultService } from '../../../../finance/frontend/src/app/crypto/vault.service';
+import { VaultService } from '../../../../finance/frontend/src/testing';
 import { PrivateLayoutComponent } from '../private-layout.component';
 import { routes } from '../routes';
 import { SessionService } from '../platform/session.service';

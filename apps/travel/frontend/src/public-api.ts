@@ -51,3 +51,7 @@ export const routes: Routes = [
     ],
   },
 ];
+
+export function loadTravelSettings() {
+  return import("./settings.component").then((m) => m.SettingsComponent);
+}

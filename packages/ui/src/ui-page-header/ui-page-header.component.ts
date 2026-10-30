@@ -18,6 +18,7 @@ export class UiPageHeaderComponent {
   backLink = input<string | undefined>(undefined);
   /** Keeps an existing programmatic focus target, such as the library heading. */
   titleId = input<string | undefined>(undefined);
-  titleTabIndex = input<number | undefined>(undefined);
+  /** Stays -1 unless a caller sets one, so the next render does not clear navigation focus. */
+  titleTabIndex = input(-1);
   embedded = input(false);
 }

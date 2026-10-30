@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { ptoChoice } from './dates.mjs';
 
 async function trip(request, extra = {}) {
   const response = await request.post('/travel/api/trips', { data: {
@@ -16,7 +17,7 @@ test.beforeEach(async ({ page, request }) => {
 
 test('phone navigation stays visible, fits the viewport and offers every Travel section', async ({ page }) => {
   await page.goto('/travel');
-  const nav = page.getByRole('navigation', { name: 'Travel', exact: true });
+  const nav = page.getByRole('navigation', { name: 'Travel sections', exact: true });
   await expect(nav).toBeVisible();
   for (const link of await nav.getByRole('link').all()) {
     const box = await link.boundingBox();
@@ -183,8 +184,8 @@ test('legacy aggregate PTO stays recorded until a confirmed dated allocation and
   await page.goto('/travel/trips/' + created.id);
   await page.getByText('PTO · 1.5 days', { exact: true }).click();
   await expect(page.locator('.pto-dates select')).toHaveCount(7);
-  await page.locator('label').filter({ hasText: '2026-10-26' }).getByRole('combobox').selectOption({ label: 'PTO' });
-  await page.getByRole('navigation', { name: 'Travel', exact: true }).getByRole('link', { name: 'PTO', exact: true }).click();
+  await ptoChoice(page, '2026-10-26').selectOption({ label: 'PTO' });
+  await page.getByRole('navigation', { name: 'Travel sections', exact: true }).getByRole('link', { name: 'PTO', exact: true }).click();
   await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(page.locator('.pto-dates select').nth(2).locator('option:checked')).toHaveText('PTO');
   expect((await (await request.get('/travel/api/trips/' + created.id)).json()).pto_days_effective).toBe('1.5');
