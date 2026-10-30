@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
 from apps.finance.backend.models import EncryptedRecord, EncryptedRecordIndex, UserVault, utc_now
 
+# Any future DEK rotation must re-encrypt every collection here, including health_stats and health_prs (Town Health).
 ALLOWED_COLLECTIONS = frozenset(
     {
         "transactions",
@@ -24,6 +25,8 @@ ALLOWED_COLLECTIONS = frozenset(
         "subscriptions",
         "planning_profiles",
         "stock_lab_scenarios",
+        "health_stats",
+        "health_prs",
     }
 )
 
