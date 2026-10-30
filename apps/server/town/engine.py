@@ -10,10 +10,16 @@ from datetime import date, timedelta
 from typing import Literal
 
 from apps.server.errors import APIError
-from apps.server.town.constants import DAILY_CAP, HABIT_NAME_MAX, LOT_UNLOCK_LV, XP
+from apps.server.town.constants import (
+    DAILY_CAP,
+    HABIT_NAME_MAX,
+    LOT_UNLOCK_LV,
+    SLOT_DEFAULT_STYLE,
+    XP,
+)
 
 CadenceKind = Literal["daily", "weekly"]
-CadenceAction = Literal["insert", "update"]
+CadenceAction = Literal["insert", "update", "delete"]
 CadenceRow = tuple[date, int]
 
 
@@ -118,13 +124,20 @@ def plan_cadence_change(
     cadences: Iterable[CadenceRow],
     new_per_week: int,
 ) -> CadenceChange | None:
-    """Return the next-Monday upsert, or None when that value is already in effect."""
+    """Return the next-Monday write, or None when that Monday already has this value.
+
+    Setting per_week back to the value in effect this week deletes the pending
+    Monday row instead of leaving a row that only repeats the current cadence.
+    """
     cadence_kind(new_per_week)
     rows = tuple(cadences)
     effective = next_monday_after(today)
+    has_monday = any(start == effective for start, _ in rows)
+    if new_per_week == cadence_on(today, per_week, rows) and has_monday:
+        return CadenceChange(effective, new_per_week, "delete")
     if new_per_week == cadence_on(effective, per_week, rows):
         return None
-    action: CadenceAction = "update" if any(start == effective for start, _ in rows) else "insert"
+    action: CadenceAction = "update" if has_monday else "insert"
     return CadenceChange(effective, new_per_week, action)
 
 
@@ -165,6 +178,7 @@ _WHITESPACE = re.compile(r"\s+")
 NAME_CHARACTERS_ERROR = "Use letters, numbers and punctuation only."
 NAME_LENGTH_ERROR = "Use 1 to 40 characters."
 _VALIDATION_MESSAGE = "Check the highlighted fields."
+_BUILDING_STYLES = frozenset(SLOT_DEFAULT_STYLE)
 
 
 @dataclass(frozen=True)
@@ -211,6 +225,20 @@ def name_validation_error(result: NameValidation) -> APIError:
         _VALIDATION_MESSAGE,
         field_errors=name_field_errors(result),
     )
+
+
+def require_slot(slot: int) -> int:
+    """Accept a lot index from LOT_UNLOCK_LV. Reject anything else."""
+    if isinstance(slot, bool) or slot not in range(len(LOT_UNLOCK_LV)):
+        raise ValueError("slot must be one of the town lots")
+    return slot
+
+
+def require_building_style(style: str) -> str:
+    """Accept a style named by SLOT_DEFAULT_STYLE. Reject anything else."""
+    if style not in _BUILDING_STYLES:
+        raise ValueError("building_style must be one of the town styles")
+    return style
 
 
 def validate_name(raw: str) -> NameValidation:

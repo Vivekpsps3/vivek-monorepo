@@ -35,6 +35,8 @@ from apps.server.town.engine import (
     lots,
     next_monday_after,
     plan_cadence_change,
+    require_building_style,
+    require_slot,
     stage,
 )
 
@@ -348,3 +350,33 @@ def test_archive_week_dst_and_before_creation():
     assert empty.last7 == ("none",) * 7
     tied = ((date(2026, 10, 19), 3), (date(2026, 10, 19), 5))
     assert cadence_on(date(2026, 10, 19), 7, tied) == 5
+
+
+def test_reverting_to_this_weeks_per_week_deletes_the_pending_row():
+    today = date(2026, 10, 15)
+    monday = date(2026, 10, 19)
+    rows = ((date(2026, 10, 5), 3), (monday, 5))
+    change = plan_cadence_change(today, 7, rows, 3)
+    assert change == _change(monday, 3, "delete")
+    assert change is not None
+    remaining = tuple(row for row in rows if row[0] != change.effective_from)
+    described = describe_cadence(today, 7, remaining)
+    assert described.pending is None
+    assert (described.per_week, described.kind) == (3, "weekly")
+
+
+def test_per_week_slot_and_building_style_stay_inside_the_constants():
+    for value in range(1, 8):
+        cadence_kind(value)
+    for bad in (0, 8):
+        with pytest.raises(ValueError, match="per_week"):
+            cadence_kind(bad)
+    for slot in range(len(LOT_UNLOCK_LV)):
+        assert require_slot(slot) == slot
+    for bad in (-1, 6, 9, True):
+        with pytest.raises(ValueError, match="slot"):
+            require_slot(bad)
+    for style in dict.fromkeys(SLOT_DEFAULT_STYLE):
+        assert require_building_style(style) == style
+    with pytest.raises(ValueError, match="building_style"):
+        require_building_style("castle")

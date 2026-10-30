@@ -417,6 +417,32 @@ def test_make_name_key_rejects_casefold_longer_than_40() -> None:
     assert caught.value.message == "Use 1 to 40 characters."
 
 
+def test_deleting_a_habit_that_still_has_a_cadence_row_is_refused(tmp_path: Path) -> None:
+    database = _upgrade(tmp_path)
+    with sqlite3.connect(database) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        _insert_user(db)
+        habit_id = _insert_habit(db, slot=0, name="Morning", name_key="morning")
+        db.execute(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (?, 1, 3, '2026-10-05', '2026-10-01T00:00:00+00:00')",
+            (habit_id,),
+        )
+        on_delete = {
+            row[3]: row[6] for row in db.execute("PRAGMA foreign_key_list(habit_cadences)")
+        }
+        assert on_delete["habit_id"] != "CASCADE"
+        with pytest.raises(sqlite3.IntegrityError):
+            db.execute("DELETE FROM habits WHERE id = ?", (habit_id,))
+        assert db.execute("SELECT COUNT(*) FROM habits WHERE id = ?", (habit_id,)).fetchone() == (
+            1,
+        )
+        assert db.execute(
+            "SELECT COUNT(*) FROM habit_cadences WHERE habit_id = ?",
+            (habit_id,),
+        ).fetchone() == (1,)
+
+
 def test_owner_tables_and_metadata_include_town() -> None:
     assert {"habits", "habit_checkins", "habit_cadences"} <= OWNER_TABLES
     tables = metadata().tables
