@@ -186,28 +186,36 @@ def test_partial_unique_indexes_keep_one_active_row(tmp_path: Path) -> None:
     database = _upgrade(tmp_path)
     with sqlite3.connect(database) as db:
         db.execute("PRAGMA foreign_keys=ON")
-        _insert_user(db)
-        _insert_habit(db, slot=0, name="Morning", name_key="morning")
+        first = _insert_user(db)
+        _insert_habit(db, slot=0, name="Morning", name_key="morning", user_id=first)
         with pytest.raises(sqlite3.IntegrityError):
-            _insert_habit(db, slot=0, name="Dawn", name_key="dawn")
+            _insert_habit(db, slot=0, name="Dawn", name_key="dawn", user_id=first)
         _insert_habit(
             db,
             slot=0,
             name="Old morning",
             name_key="old morning",
             archived_at="2026-02-01T00:00:00+00:00",
+            user_id=first,
         )
-        _insert_habit(db, slot=1, name="Walk", name_key="walk")
+        _insert_habit(db, slot=1, name="Walk", name_key="walk", user_id=first)
         with pytest.raises(sqlite3.IntegrityError):
-            _insert_habit(db, slot=2, name="Walk again", name_key="walk")
+            _insert_habit(db, slot=2, name="Walk again", name_key="walk", user_id=first)
         _insert_habit(
             db,
             slot=3,
             name="Walk archived",
             name_key="walk",
             archived_at="2026-02-01T00:00:00+00:00",
+            user_id=first,
         )
-        assert db.execute("SELECT COUNT(*) FROM habits").fetchone() == (4,)
+        second = _insert_user(db, email="other@example.invalid", display_name="Other")
+        _insert_habit(db, slot=0, name="Morning", name_key="morning", user_id=second)
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_habit(db, slot=0, name="Dawn", name_key="dawn", user_id=second)
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_habit(db, slot=1, name="Morning again", name_key="morning", user_id=second)
+        assert db.execute("SELECT COUNT(*) FROM habits").fetchone() == (5,)
 
 
 def test_checkin_and_cadence_uniqueness(tmp_path: Path) -> None:
