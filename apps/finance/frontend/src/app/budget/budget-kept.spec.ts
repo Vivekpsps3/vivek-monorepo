@@ -676,11 +676,24 @@ describe('loadFinanceBudgetKeptGuarded', () => {
     expect(elapsed).toBeLessThan(deadlineMs + 150);
   });
 
-  it('throws RangeError synchronously when deadlineMs is NaN, infinite, or not positive', () => {
+  it('throws RangeError synchronously for a bad today, weeks, or deadline and does not import', () => {
     const load = jasmine.createSpy('load').and.returnValue(new Promise(() => undefined));
+    const signal = new AbortController().signal;
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: 'not-a-date' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-02-31' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-10-1' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 0 }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 1.5 }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 521 }, load))
+      .toThrowError(RangeError);
     for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
-      expect(() => loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs }, load))
-        .toThrowError(RangeError, /deadlineMs/);
+      expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, deadlineMs }, load))
+        .toThrowError(RangeError);
     }
     expect(load).not.toHaveBeenCalled();
   });

@@ -6,6 +6,22 @@ import type { BudgetKeptResult } from './budget-kept';
  * Finance cannot import that module. Same default as loadFinanceBudgetKept.
  */
 const BUDGET_KEPT_IMPORT_DEADLINE_MS = 8_000;
+const BUDGET_KEPT_MIN_WEEKS = 1;
+const BUDGET_KEPT_MAX_WEEKS = 520;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Same caller bugs as the core, checked here so the chunk is not loaded first. */
+function requireBudgetKeptWindow(today: string, weeks: number): void {
+  if (!Number.isInteger(weeks) || weeks < BUDGET_KEPT_MIN_WEEKS || weeks > BUDGET_KEPT_MAX_WEEKS) {
+    throw new RangeError(`weeks must be an integer from ${BUDGET_KEPT_MIN_WEEKS} to ${BUDGET_KEPT_MAX_WEEKS}`);
+  }
+  if (!ISO_DATE.test(today)) throw new RangeError('today must be a valid YYYY-MM-DD');
+  const [year, month, day] = today.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new RangeError('today must be a valid YYYY-MM-DD');
+  }
+}
 
 function requireDeadlineMs(deadlineMs: number | undefined, fallback: number): number {
   const value = deadlineMs ?? fallback;
@@ -93,7 +109,7 @@ async function runBudgetKeptImport(
  * Loads the budget-kept chunk and runs it under one deadline.
  * Abort is cancelled. A missed deadline, a rejected import (including
  * RangeError), or a budget used up by the import is unavailable.
- * A bad deadline throws before the timer. RangeError from the loaded module still propagates.
+ * A bad today, weeks, or deadline throws before the import. RangeError from the loaded module still propagates.
  * `load` is the chunk importer; tests pass a fake.
  */
 export function loadFinanceBudgetKeptGuarded(
@@ -108,6 +124,7 @@ export function loadFinanceBudgetKeptGuarded(
   load: () => Promise<BudgetKeptModule> = defaultLoad,
 ): Promise<BudgetKeptResult> {
   if (signal.aborted) return Promise.resolve({ status: 'cancelled' });
+  requireBudgetKeptWindow(opts.today, opts.weeks);
   const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_IMPORT_DEADLINE_MS);
   return runBudgetKeptImport(injector, signal, opts, deadlineMs, load);
 }
