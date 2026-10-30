@@ -108,9 +108,17 @@
   select:focus-visible,
   textarea:focus-visible,
   button:focus-visible,
-  a:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
+  a:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible,
+  [role="button"]:focus-visible,
+  label:has(> input:focus-visible) {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  summary {
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -248,8 +256,8 @@ h2:focus,
 h1:focus-visible,
 h2:focus-visible,
 .ui-page-header__title:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 3px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-sm);
 }
 

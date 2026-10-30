@@ -40,6 +40,12 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow-sm);
 }
 
+.ui-field__control:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: var(--shadow-sm);
+}
+
 .ui-field__control:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -51,7 +57,7 @@
 }
 
 .ui-field__control--with-action {
-  padding-right: 4.75rem;
+  padding-right: 5rem;
 }
 
 .ui-field__password-toggle {
@@ -60,7 +66,7 @@
   right: var(--space-2);
   transform: translateY(-50%);
   min-width: 3.5rem;
-  min-height: 30px;
+  min-height: var(--control-h-sm);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -71,11 +77,22 @@
   cursor: pointer;
 }
 
-.ui-field__password-toggle:hover:not(:disabled),
+.ui-field__password-toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
 .ui-field__password-toggle:focus-visible {
   color: var(--text);
   background: var(--surface-hover);
-  outline: none;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+@media (max-width: 640px) {
+  .ui-field__password-toggle {
+    min-height: var(--control-h);
+  }
 }
 
 .ui-field__password-toggle:disabled {
