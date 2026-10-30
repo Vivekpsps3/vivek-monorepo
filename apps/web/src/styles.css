@@ -127,6 +127,26 @@
     flex-direction: row;
     align-items: center;
   }
+
+  /* 44px hit targets at a phone width. :where keeps this weaker than component rules.
+     Inline text links inside paragraphs stay at their text size. */
+  :where(#workspace-content) a {
+    display: inline-block;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-height: 44px;
+  }
+
+  :where(#workspace-content) p a {
+    display: inline;
+    max-width: none;
+    min-height: 0;
+  }
+
+  :where(#workspace-content) :where(button, summary, [role="button"]) {
+    box-sizing: border-box;
+    min-height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

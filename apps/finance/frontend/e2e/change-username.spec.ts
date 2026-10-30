@@ -247,17 +247,6 @@ test('an expired session opens sign-in with the session-ended toast', async ({ p
       body: JSON.stringify({ detail: 'Login required' }),
     });
   });
-  await page.route('**/api/auth/me', async route => {
-    if (route.request().method() !== 'GET') {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({
-      status: 401,
-      contentType: 'application/json',
-      body: JSON.stringify({ detail: 'Login required' }),
-    });
-  });
   await saveUsername(page, 'rename.expired2', PASSPHRASE);
   await page.waitForURL(/\/auth\/login/, { timeout: 60_000 });
   await expect(page.locator('.toast-copy')).toHaveText('Your session ended. Sign in again.', { timeout: 30_000 });
