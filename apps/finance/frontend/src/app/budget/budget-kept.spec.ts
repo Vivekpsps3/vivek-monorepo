@@ -150,6 +150,21 @@ describe('budget kept pure core', () => {
     expect(weeks[1]).toEqual(week('2026-10-12', 70.01, false));
   });
 
+  it('returns null kept when cents conversion fails', () => {
+    const tiny = budgetKeptWeeks([
+      tx({ id: 1, date: '2026-10-06', amount: 1, kind: 'purchase' }),
+    ], 1e-6, ['2026-10-05']);
+    expect(tiny[0].spend).toBe(1);
+    expect(tiny[0].kept).toBeNull();
+    const amount = 999_999_999_999.99;
+    const huge = budgetKeptWeeks([
+      tx({ id: 1, date: '2026-10-06', amount, kind: 'purchase' }),
+      tx({ id: 2, date: '2026-10-07', amount, kind: 'purchase' }),
+    ], PLAN, ['2026-10-05']);
+    expect(huge[0].spend).not.toBeNull();
+    expect(huge[0].kept).toBeNull();
+  });
+
   it('lowers spend by a refund and ignores transfers, payments, credits, and excluded rows', () => {
     const weeks = budgetKeptWeeks([
       tx({ id: 1, date: '2026-10-06', amount: 90, kind: 'purchase' }),
@@ -434,6 +449,29 @@ describe('loadFinanceBudgetKept', () => {
     expect(await ask(injector)).toEqual({ status: 'expired' });
   });
 
+  it('returns unavailable for 403, 404, and 429, and for a plain 401 object', async () => {
+    for (const status of [403, 404, 429]) {
+      const { injector } = unlock({
+        getTransactions: () => Promise.reject(new HttpErrorResponse({ status })),
+      });
+      expect(await ask(injector)).toEqual({ status: 'unavailable' });
+    }
+    const plain = unlock({
+      getTransactions: () => Promise.reject({ status: 401 }),
+    });
+    expect(await ask(plain.injector)).toEqual({ status: 'unavailable' });
+  });
+
+  it('returns locked when the vault locks during the read and the plan is valid', async () => {
+    const { injector, getTransactions } = unlock({
+      profiles: [manual],
+      txs: [tx({ id: 1, date: '2026-09-01', amount: 10, kind: 'purchase' })],
+      lockDuringTransactions: true,
+    });
+    expect(await ask(injector)).toEqual({ status: 'locked' });
+    expect(getTransactions).toHaveBeenCalled();
+  });
+
   it('returns unavailable when the vault read fails', async () => {
     const failed = unlock({
       listProfiles: () => throwError(() => new HttpErrorResponse({ status: 503 })),
@@ -481,6 +519,15 @@ describe('loadFinanceBudgetKept', () => {
     expect(() => ask(injector, { weeks: 521 })).toThrowError(RangeError, /weeks/);
     expect(() => ask(injector, { today: '2026-02-31' })).toThrowError(RangeError, /today/);
     expect(() => ask(injector, { today: 'not-a-date' })).toThrowError(RangeError, /today/);
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('throws RangeError when today is not a YYYY-MM-DD string', () => {
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    for (const today of ['2026-10-1', '2026-1-14', '2026-10-14 ', ' 2026-10-14']) {
+      expect(() => ask(injector, { today })).toThrowError(RangeError, /today/);
+    }
     expect(load).not.toHaveBeenCalled();
   });
 

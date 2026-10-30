@@ -160,10 +160,10 @@ export function firstTransactionDate(txs: Transaction[]): string | null {
   return first;
 }
 
-function keptForSpend(spend: number, weeklyPlan: number): boolean {
+function keptForSpend(spend: number, weeklyPlan: number): boolean | null {
   const spendCents = fromDollars(spend);
   const planCents = fromDollars(weeklyPlan);
-  if (spendCents == null || planCents == null) return false;
+  if (spendCents == null || planCents == null) return null;
   return spendCents <= planCents;
 }
 
