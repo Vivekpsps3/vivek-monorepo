@@ -576,6 +576,9 @@ def build_home(db, today: date | None = None, *, user_id: int) -> dict:
     upcoming = [item for item in details if item["phase"] == "upcoming"]
     past = [item for item in details if item["phase"] == "past"]
     past.sort(key=lambda item: item["end_date"], reverse=True)
+    for item in in_progress + upcoming:
+        item["days_until"] = _days_until(item["start_date"], today)
+        item["next_action"] = _next_action(item["phase"], item["days_until"])
     attention = []
     for item in in_progress + upcoming:
         attention.extend(attention_for(item))
