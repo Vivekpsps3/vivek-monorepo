@@ -17,6 +17,7 @@ from apps.travel.backend.models import (
 from apps.travel.backend.services.budget import (
     CATEGORY_LABELS,
     BudgetInput,
+    bucket_for_category,
     category_for_plan,
     category_for_transport,
     rollup,
@@ -315,6 +316,22 @@ def budget_for(trip: Trip) -> dict:
                     }
                     for item in bucket["categories"]
                 ],
+                "total_cents": bucket["total_cents"],
+                "paid_cents": bucket["paid_cents"],
+                "unpaid_cents": bucket["unpaid_cents"],
+                "buckets": [
+                    {
+                        "bucket": item["bucket"],
+                        "label": item["label"],
+                        "total_cents": item["total_cents"],
+                        "paid_cents": item["paid_cents"],
+                        "unpaid_cents": item["unpaid_cents"],
+                        "total": fmt_money(item["total_cents"]),
+                        "paid": fmt_money(item["paid_cents"]),
+                        "unpaid": fmt_money(item["unpaid_cents"]),
+                    }
+                    for item in bucket["buckets"]
+                ],
             }
         )
     rendered_lines = [
@@ -327,6 +344,8 @@ def budget_for(trip: Trip) -> dict:
             "amount": fmt_money(line.amount_cents),
             "currency": line.currency,
             "paid": line.paid,
+            "amount_cents": line.amount_cents,
+            "bucket": bucket_for_category(line.category),
         }
         for line in rolled["lines"]
     ]
@@ -340,6 +359,7 @@ def budget_for(trip: Trip) -> dict:
             "currency": row.currency,
             "paid": bool(row.paid),
             "notes": row.notes,
+            "amount_cents": row.amount_cents,
         }
         for row in trip.budget_lines
     ]
