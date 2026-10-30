@@ -150,6 +150,7 @@ def test_baseline_database_is_stamped_then_upgraded(tmp_path):
             "site_media_membership_v1",
             "site_media_progress_v1",
             "site_catalog_title_sort_v1",
+            "site_trip_create_attempt_v1",
         }
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     assert model_diff(database) == []
