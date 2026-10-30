@@ -47,12 +47,21 @@ export function normalizeWeek(api: ApiWeek): WeekInput {
       lit: !!trip || items.length > 0 || habitDay,
     });
   }
-  const habits: HabitInput[] = (api.habits || []).filter((h) => h.days.length > 0)
+  const habits: HabitInput[] = (api.habits || [])
     .map((h) => ({
       id: h.habit_id,
       style: h.style,
+      days: h.days.filter((day) => {
+        const index = dayIndex(week, day);
+        return index >= 0 && index < 7;
+      }),
+    }))
+    .filter((h) => h.days.length > 0)
+    .map((h) => ({
+      id: h.id,
+      style: h.style,
       n: h.days.length,
-      first: Math.min(...h.days.map((x) => dayIndex(week, x))),
+      first: Math.min(...h.days.map((day) => dayIndex(week, day))),
     }))
     .sort((a, b) => a.id - b.id);
   return { v: WORLDGEN_VERSION, week, days, habits };

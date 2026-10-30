@@ -17,6 +17,22 @@ describe('normalize', () => {
     expect(placeKey(precomposed)).toBe('place|reykjavík');
   });
 
+  it('keeps habit days inside the target week', () => {
+    const input = normalizeWeek({
+      week: '2026-10-26',
+      trips: [],
+      finished: [],
+      concepts: [],
+      habits: [
+        { habit_id: 4, style: 'cottage', days: ['2026-10-20', '2026-10-28', '2026-11-02'] },
+        { habit_id: 9, style: 'forge', days: ['2026-10-19', '2026-11-02'] },
+      ],
+    });
+    expect(dayIndex('2026-10-26', '2026-10-20')).toBe(-6);
+    expect(input.habits).toEqual([{ id: 4, style: 'cottage', n: 1, first: 2 }]);
+    expect(input.days.map((day) => day.lit)).toEqual([false, false, true, false, false, false, false]);
+  });
+
   it('maps latitude thresholds and a missing place', () => {
     const at = (lat_e2: number): ApiTrip => ({
       id: 1, start: '2026-10-26', end: '2026-10-26', place: { label: 'X', lat_e2 },
