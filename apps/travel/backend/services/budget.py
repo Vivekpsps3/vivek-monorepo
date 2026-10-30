@@ -1,7 +1,8 @@
 """Trip budget rollup.
 
 Costs typed on a flight, drive, plan, parking row, or extra budget line are
-each counted once. Currencies are never added together.
+each counted once. Currencies are never added together. The same lines also
+roll up into Transport, Stays and plans, Parking, and Other costs.
 """
 
 from dataclasses import dataclass
@@ -20,6 +21,32 @@ CATEGORY_LABELS = {
 }
 
 CATEGORY_ORDER = list(CATEGORY_LABELS)
+
+BUCKET_LABELS = {
+    "transport": "Transport",
+    "stays_plans": "Stays and plans",
+    "parking": "Parking",
+    "other": "Other costs",
+}
+
+BUCKET_ORDER = list(BUCKET_LABELS)
+
+BUCKET_FOR_CATEGORY = {
+    "outbound_flight": "transport",
+    "inbound_flight": "transport",
+    "connection_flight": "transport",
+    "drive": "transport",
+    "transport": "transport",
+    "lodging": "stays_plans",
+    "food": "stays_plans",
+    "activity": "stays_plans",
+    "parking": "parking",
+    "other": "other",
+}
+
+
+def bucket_for_category(category: str) -> str:
+    return BUCKET_FOR_CATEGORY.get(category, "other")
 
 
 def category_for_transport(role: str, mode: str) -> str:
@@ -55,7 +82,13 @@ def rollup(lines: list[BudgetInput]) -> dict:
     for line in lines:
         bucket = by_currency.setdefault(
             line.currency,
-            {"currency": line.currency, "total_cents": 0, "paid_cents": 0, "categories": {}},
+            {
+                "currency": line.currency,
+                "total_cents": 0,
+                "paid_cents": 0,
+                "categories": {},
+                "buckets": {},
+            },
         )
         bucket["total_cents"] += line.amount_cents
         if line.paid:
@@ -63,6 +96,11 @@ def rollup(lines: list[BudgetInput]) -> dict:
         bucket["categories"][line.category] = (
             bucket["categories"].get(line.category, 0) + line.amount_cents
         )
+        key = bucket_for_category(line.category)
+        cost_bucket = bucket["buckets"].setdefault(key, {"total_cents": 0, "paid_cents": 0})
+        cost_bucket["total_cents"] += line.amount_cents
+        if line.paid:
+            cost_bucket["paid_cents"] += line.amount_cents
         rendered.append(line)
 
     currencies = []
@@ -80,6 +118,20 @@ def rollup(lines: list[BudgetInput]) -> dict:
                     "amount_cents": cents,
                 }
             )
+        buckets = []
+        for key in BUCKET_ORDER:
+            cost_bucket = bucket["buckets"].get(key)
+            if cost_bucket is None:
+                continue
+            buckets.append(
+                {
+                    "bucket": key,
+                    "label": BUCKET_LABELS[key],
+                    "total_cents": cost_bucket["total_cents"],
+                    "paid_cents": cost_bucket["paid_cents"],
+                    "unpaid_cents": cost_bucket["total_cents"] - cost_bucket["paid_cents"],
+                }
+            )
         currencies.append(
             {
                 "currency": currency,
@@ -87,6 +139,7 @@ def rollup(lines: list[BudgetInput]) -> dict:
                 "paid_cents": bucket["paid_cents"],
                 "unpaid_cents": bucket["total_cents"] - bucket["paid_cents"],
                 "categories": categories,
+                "buckets": buckets,
             }
         )
     return {"currencies": currencies, "lines": rendered}
