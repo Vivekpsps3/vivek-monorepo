@@ -1,10 +1,17 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from apps.media.backend.database import get_db
 from apps.media.backend.models import Episode, Experience
-from apps.media.backend.services import metadata, portraits, progress, providers, records
+from apps.media.backend.services import (
+    episode_next,
+    metadata,
+    portraits,
+    progress,
+    providers,
+    records,
+)
 from apps.media.backend.services.calendar import build_calendar
 from apps.media.backend.services.providers import UA
 from apps.media.backend.services.summary import build_summary
@@ -510,13 +517,20 @@ def watched(
 @router.post("/entries/{entry_id}/episodes/next")
 def next_episode(
     entry_id: int,
+    body: dict | None = Body(default=None),
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
-    state = records.mark_next(db, principal.id, entry)
+    expected = None
+    if isinstance(body, dict) and body.get("expected_episode_id") is not None:
+        expected = body["expected_episode_id"]
+        if isinstance(expected, bool) or not isinstance(expected, int):
+            raise HTTPException(status_code=422, detail="Expected episode must be a number.")
+    state, marked = episode_next.mark_next_checked(db, principal.id, entry, expected)
     payload = records.detail(db, entry)
     payload["show"] = state
+    payload["marked"] = marked
     return payload
 
 
