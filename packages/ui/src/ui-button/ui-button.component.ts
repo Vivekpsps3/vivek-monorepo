@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 export type UiButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export type UiButtonSize = 'sm' | 'md';
@@ -6,6 +7,7 @@ export type UiButtonSize = 'sm' | 'md';
 @Component({
   selector: 'ui-button',
   standalone: true,
+  imports: [RouterLink],
   templateUrl: './ui-button.component.html',
   styleUrl: './ui-button.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,6 +25,11 @@ export class UiButtonComponent {
   type = input<'button' | 'submit' | 'reset'>('button');
   ariaLabel = input<string | undefined>(undefined);
   tooltip = input<string | undefined>(undefined);
+  /** In-app path. Renders a link instead of a button. */
+  href = input<string | undefined>(undefined);
+  /** Visible text when `href` is set. Content projection stays on the button. */
+  label = input<string | undefined>(undefined);
+  queryParams = input<Record<string, string> | undefined>(undefined);
 
   clicked = output<MouseEvent>();
 

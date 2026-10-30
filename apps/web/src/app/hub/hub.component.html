@@ -28,31 +28,27 @@
           </div>
           <a class="open-link" routerLink="/travel/">Open Travel</a>
         </div>
-        @if (travelState === 'loading') {
-          <p class="figure-note" role="status">Checking trips…</p>
-        } @else if (travelState === 'expired') {
-          <p class="figure-note" role="status">Session expired for Travel. Retry or sign in again.</p>
-          <a class="open-link" href="/auth/login?next=%2Fhub">Sign in</a>
-        } @else if (travelState === 'unavailable') {
-          <p class="figure-note">Travel is not available from here right now.</p>
-        } @else if (!trip) {
-          <p class="quiet-title">Nothing on the calendar</p>
-          <a class="open-link" routerLink="/travel/trips/new">Plan a trip</a>
-        } @else {
-          <p class="when">{{ tripWhen(trip) }}</p>
-          <p class="quiet-title">{{ tripPlace(trip) }}</p>
-          @if (trip.destination && trip.title !== trip.destination) {
-            <p class="figure-note">{{ trip.title }}</p>
+        <ui-state
+          [state]="travelState"
+          thing="trips"
+          emptyTitle="No trips yet"
+          emptyMessage="Planning a trip puts it on this card."
+          emptyAction="Plan a trip"
+          emptyLink="/travel/trips/new"
+          emptyIcon="calendar"
+          [pending]="travelPending"
+          [updatedAt]="travelUpdatedAt"
+          (retry)="retryTravel()">
+          @if (trip) {
+            <p class="when">{{ tripWhen(trip) }}</p>
+            <p class="quiet-title">{{ tripPlace(trip) }}</p>
+            @if (trip.destination && trip.title !== trip.destination) {
+              <p class="figure-note">{{ trip.title }}</p>
+            }
+            <p class="figure-note">{{ formatDay(trip.start_date) }} – {{ formatDay(trip.end_date) }}</p>
+            <a class="open-link" [routerLink]="trip.href || '/travel/'">{{ trip.next_action }}</a>
           }
-          <p class="figure-note">{{ formatDay(trip.start_date) }} – {{ formatDay(trip.end_date) }}</p>
-          <a class="open-link" [routerLink]="trip.href || '/travel/'">{{ trip.next_action }}</a>
-          @if (travelState === 'stale') {
-            <p class="figure-note">Showing the last trip snapshot.</p>
-          }
-        }
-        @if (travelState === 'unavailable' || travelState === 'expired' || travelState === 'stale' || travelPending) {
-          <button type="button" class="open-link" (click)="retryTravel()" [disabled]="travelPending">{{ travelPending ? 'Retrying…' : 'Retry' }}</button>
-        }
+        </ui-state>
       </section>
 
       <section class="side-panel" aria-labelledby="media-heading" [attr.aria-busy]="mediaState === 'loading' || mediaPending">
@@ -63,17 +59,18 @@
           </div>
           <a class="open-link" routerLink="/media/">Open Media</a>
         </div>
-        @if (mediaState === 'loading') {
-          <p class="figure-note" role="status">Checking your journal…</p>
-        } @else if (mediaState === 'expired') {
-          <p class="figure-note" role="status">Session expired for Media. Retry or sign in again.</p>
-          <a class="open-link" href="/auth/login?next=%2Fhub">Sign in</a>
-        } @else if (mediaState === 'unavailable') {
-          <p class="figure-note">Media is not available from here right now.</p>
-        } @else if (!media || mediaState === 'empty') {
-          <p class="quiet-title">Nothing in progress</p>
-          <a class="open-link" routerLink="/media/search">Add something</a>
-        } @else {
+        <ui-state
+          [state]="mediaState"
+          thing="what's in progress"
+          emptyTitle="Nothing in progress"
+          emptyMessage="Add something to keep track of it here."
+          emptyAction="Add something"
+          emptyLink="/media/search"
+          emptyIcon="document"
+          [pending]="mediaPending"
+          [updatedAt]="mediaUpdatedAt"
+          (retry)="retryMedia()">
+          @if (media && mediaState !== 'empty') {
           @if (media.currently.length) {
             <ul class="rows">
               @for (item of media.currently.slice(0, 3); track item.id) {
@@ -105,13 +102,8 @@
               }
             </ul>
           }
-          @if (mediaState === 'stale') {
-            <p class="figure-note">Showing the last media snapshot.</p>
-          }
         }
-        @if (mediaState === 'unavailable' || mediaState === 'expired' || mediaState === 'stale' || mediaPending) {
-          <button type="button" class="open-link" (click)="retryMedia()" [disabled]="mediaPending">{{ mediaPending ? 'Retrying…' : 'Retry' }}</button>
-        }
+        </ui-state>
       </section>
 
       <section class="side-panel finance-bar" aria-labelledby="finance-heading" [attr.aria-busy]="financeState === 'loading' || financePending">
@@ -122,28 +114,23 @@
           </div>
           <a class="open-link" routerLink="/finance/">Open Finance</a>
         </div>
-        @if (financeState === 'locked') {
-          <p class="quiet-title">Vault locked</p>
-          <p class="figure-note">Balances stay encrypted in this browser.</p>
-          <a class="open-link" routerLink="/finance/vault/unlock" [queryParams]="{ next: '/hub' }">Unlock</a>
-        } @else if (financeState === 'loading') {
-          <p class="figure-note" role="status">{{ financePending ? 'Retrying…' : 'Reading this browser’s vault…' }}</p>
-        } @else if (financeState === 'expired') {
-          <p class="figure-note" role="status">Session expired for Finance. Retry or sign in again.</p>
-          <a class="open-link" href="/auth/login?next=%2Fhub">Sign in</a>
-        } @else if (financeState === 'unavailable') {
-          <p class="figure-note">Finance could not be read.</p>
-        } @else if (netWorth) {
+        <ui-state
+          [state]="financeState"
+          thing="net worth"
+          detail="net worth"
+          emptyTitle="No accounts yet"
+          emptyMessage="Add an account to see net worth here."
+          emptyAction="Add an account"
+          emptyLink="/finance/"
+          emptyIcon="wallet"
+          [pending]="financePending"
+          [updatedAt]="financeUpdatedAt"
+          (retry)="retryFinance()">
+          @if (netWorth) {
           <p class="quiet-title">{{ netWorth.total | money }}</p>
-          @if (financeState === 'stale') {
-            <p class="figure-note">Showing the last snapshot on this browser.</p>
-          }
           @if (freshness) {
             <p class="figure-note">{{ freshness }}</p>
           }
-        }
-        @if (financeState === 'unavailable' || financeState === 'expired' || financeState === 'stale' || financePending) {
-          <button type="button" class="open-link" (click)="retryFinance()" [disabled]="financePending">{{ financePending ? 'Retrying…' : 'Retry' }}</button>
         }
         @if ((financeState === 'ready' || financeState === 'stale') && netWorth) {
         <details class="finance-more">
@@ -186,6 +173,7 @@
           }
         </details>
         }
+        </ui-state>
       </section>
     </div>
 

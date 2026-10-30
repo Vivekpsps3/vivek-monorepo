@@ -4,6 +4,10 @@
   max-width: 100%;
 }
 
+a.ui-btn {
+  text-decoration: none;
+}
+
 .ui-btn {
   display: inline-flex;
   align-items: center;

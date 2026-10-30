@@ -173,10 +173,11 @@ describe('HubComponent', () => {
     await paint();
 
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Travel is not available from here right now.');
+    expect(text).toContain("Couldn't load trips.");
     expect(text).toContain('The Wire');
     expect(text).toContain('Series');
-    expect(text).toContain('Vault locked');
+    expect(text).toContain('Finance is locked. Unlock to see net worth.');
+    expect(text).not.toMatch(/\$\d/);
     expect(text).toContain('Open Travel');
     expect(text).toContain('Open Media');
     expect(text).toContain('Open Finance');
@@ -186,7 +187,7 @@ describe('HubComponent', () => {
 
     fixture.nativeElement.querySelector('section[aria-labelledby="travel-heading"] button').click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Retrying…');
+    expect(fixture.nativeElement.querySelector('section[aria-labelledby="travel-heading"]')?.getAttribute('aria-busy')).toBe('true');
     takeCall('/travel/').resolve(json(200, { next_trip: trip('Lisbon') }));
     await paint();
     expect(fixture.nativeElement.textContent).toContain('Lisbon');
@@ -200,7 +201,7 @@ describe('HubComponent', () => {
     takeCall('/media/').resolve(json(200, mediaBody()));
     await paint();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Session expired for Travel');
+    expect(text).toContain('Your session ended. Sign in again to see trips.');
     expect(text).toContain('The Wire');
     expect(auth.logout).not.toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('[role="menu"]')).toBeNull();
@@ -218,7 +219,7 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(503, {}));
     await paint();
     expect(fixture.nativeElement.textContent).toContain('Lisbon');
-    expect(fixture.nativeElement.textContent).toContain('Showing the last trip snapshot.');
+    expect(fixture.nativeElement.textContent).toContain('Updated');
 
     users.next(null);
     await paint();
@@ -257,8 +258,8 @@ describe('HubComponent', () => {
     await paint();
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Lisbon');
-    expect(text).toContain('Media is not available from here right now.');
-    expect(text).toContain('Finance could not be read.');
+    expect(text).toContain("Couldn't load what's in progress.");
+    expect(text).toContain("Couldn't load net worth.");
     expect(vaultReads).toBeGreaterThan(0);
     expect(financeCalls).toBe(1);
     expect(auth.logout).not.toHaveBeenCalled();
@@ -275,10 +276,38 @@ describe('HubComponent', () => {
     takeCall('/media/').resolve(json(200, mediaBody()));
     await paint();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Nothing on the calendar');
+    expect(text).toContain('No trips yet');
     expect(text).toContain('The Wire');
     expect(text).toMatch(/\$475/);
-    expect(text).not.toContain('Vault locked');
+    expect(text).not.toContain('Finance is locked');
+  });
+
+  it('shows an empty finance card instead of $0.00 when the vault has no records', async () => {
+    localStorage.setItem(DEK_STORE, 'present');
+    vaultUnlocked = true;
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    await paint();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('No accounts yet');
+    expect(text).toContain('Add an account');
+    expect(text).not.toContain('$0.00');
+    expect(text).not.toContain('Finance is locked');
+  });
+
+  it('keeps a zero-balance account out of the empty state', async () => {
+    localStorage.setItem(DEK_STORE, 'present');
+    vaultUnlocked = true;
+    assets$.next([{ id: 1, name: 'Cash', category: 'cash', current_value: 0, as_of_date: '2026-10-15' } as Asset]);
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    await paint();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).not.toContain('No accounts yet');
+    expect(text).toMatch(/\$0/);
+    expect(text).not.toContain('Finance is locked');
   });
 
   it('labels trips and dates and clears summaries on sign-out', async () => {

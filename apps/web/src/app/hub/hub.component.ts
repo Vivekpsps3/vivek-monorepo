@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, Inje
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { UiDialogComponent } from '@vivek/ui';
+import { UiDialogComponent, UiStateComponent } from '@vivek/ui';
 import { todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
 import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
@@ -65,6 +65,7 @@ interface FinanceView {
     positions: PositionHighlight[];
     freshness: string;
     cashOverlap: boolean;
+    counts?: { accounts: number; holdings: number; debts: number };
   };
 }
 
@@ -77,6 +78,7 @@ interface FinanceView {
     FormsModule,
     RouterLink,
     UiDialogComponent,
+    UiStateComponent,
     UsernameChangeComponent,
   ],
   templateUrl: './hub.component.html',
@@ -98,8 +100,9 @@ export class HubComponent implements OnInit {
   admin = false;
   readonly today = new Date();
 
-  financeState: HubCardState | 'locked' = 'locked';
+  financeState: HubCardState = 'locked';
   netWorth: NetWorth | null = null;
+  financeUpdatedAt: number | null = null;
   accounts: PortfolioAccount[] = [];
   positions: PositionHighlight[] = [];
   freshness = '';
@@ -109,9 +112,11 @@ export class HubComponent implements OnInit {
   travelState: HubCardState = 'loading';
   trip: TravelTrip | null = null;
   travelPending = false;
+  travelUpdatedAt: number | null = null;
   mediaState: HubCardState = 'loading';
   media: MediaSummary | null = null;
   mediaPending = false;
+  mediaUpdatedAt: number | null = null;
 
   private generation = 0;
   private userId: number | null | undefined = undefined;
@@ -299,6 +304,7 @@ export class HubComponent implements OnInit {
         trip => trip == null,
       );
       if (!settled) return;
+      if (settled.state === 'ready' || settled.state === 'empty') this.travelUpdatedAt = Date.now();
       this.travelState = settled.state;
       this.trip = settled.data;
     } finally {
@@ -319,6 +325,7 @@ export class HubComponent implements OnInit {
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(this.media, result, mediaIsEmpty);
       if (!settled) return;
+      if (settled.state === 'ready' || settled.state === 'empty') this.mediaUpdatedAt = Date.now();
       this.mediaState = settled.state;
       this.media = settled.data;
     } finally {
@@ -357,11 +364,19 @@ export class HubComponent implements OnInit {
   private applyFinance(result: FinanceView): void {
     if (result.status === 'cancelled') return;
     if (result.status === 'ready' && result.snapshot) {
+      const counts = result.snapshot.counts;
+      if (counts != null && counts.accounts + counts.holdings + counts.debts === 0) {
+        this.clearFinanceNumbers();
+        this.financeUpdatedAt = Date.now();
+        this.financeState = 'empty';
+        return;
+      }
       this.netWorth = result.snapshot.netWorth;
       this.accounts = result.snapshot.accounts;
       this.positions = result.snapshot.positions;
       this.freshness = result.snapshot.freshness;
       this.cashOverlap = result.snapshot.cashOverlap;
+      this.financeUpdatedAt = Date.now();
       this.financeState = 'ready';
       return;
     }

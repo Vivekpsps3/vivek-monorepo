@@ -1,3 +1,6 @@
+@if (href(); as link) {
+  <a [class]="hostClass()" [routerLink]="link" [queryParams]="queryParams()">{{ label() }}</a>
+} @else {
 <button
   [type]="type()"
   [disabled]="disabled()"
@@ -11,3 +14,4 @@
   (click)="onClick($event)">
   <ng-content />
 </button>
+}
