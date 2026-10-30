@@ -9,7 +9,16 @@ import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { SESSION_CONTEXT, ConfirmService, UiDialogComponent } from "@vivek/ui";
+import {
+  SESSION_CONTEXT,
+  ConfirmService,
+  UiDialogComponent,
+  UiButtonComponent,
+  UiCardComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 import {
   addDays,
   blankRange,
@@ -31,185 +40,213 @@ import { Trip, travelError } from "./travel.models";
     RouterLink,
     UiDialogComponent,
     TransportEditorComponent,
+    UiButtonComponent,
+    UiCardComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiPageHeaderComponent,
   ],
   template: `<main class="page travel-page">
-    <a routerLink="/travel">← Trips</a>
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Something to look forward to</p>
-        <h1>Plan a trip</h1>
-        <p class="muted">
-          Start with dates and a destination. Everything else can wait.
-        </p>
-      </div>
-    </header>
-    <form class="surface travel-form" (ngSubmit)="save()" #form="ngForm">
-      <div class="form-row">
-        <label
-          >Departure date <span aria-hidden="true">*</span
-          ><input
-            required
-            type="date"
-            name="start"
-            [(ngModel)]="start"
-            (change)="range()" /></label
-        ><label
-          >Return date <span aria-hidden="true">*</span
-          ><input
-            required
-            type="date"
-            name="end"
-            [(ngModel)]="end"
-            [min]="start"
-            (change)="range()"
-        /></label>
-      </div>
-      <p role="status">{{ summary(model().start, model().end) }}</p>
-      @for (segment of parts(); track segment.key; let index = $index) {
-        <section class="destination-segment">
-          <label [for]="'city-' + index"
-            >{{ index === 0 ? "Destination city" : "Next destination city" }}
-            <span aria-hidden="true">*</span></label
-          ><input
-            [id]="'city-' + index"
-            [name]="'city-' + index"
-            required
-            maxlength="200"
-            [ngModel]="model().cities[segment.key] || ''"
-            (ngModelChange)="city(segment.key, $event)"
-            autocomplete="address-level2"
-          />
-          <p class="muted">
-            {{ segment.arrive }} – {{ segment.leave }}
-            @if (index > 0) {
-              · First day here: {{ segment.arrive }}
-            }
-          </p>
-          @if (index > 0) {
-            <button
-              type="button"
-              class="btn btn-sm"
-              (click)="remove(segment.key)"
-            >
-              Remove destination change
-            </button>
-          }
-        </section>
-      }
-      @if (model().start && model().end && model().start < model().end) {
-        <details>
-          <summary>Add destination</summary>
-          <p class="muted">Choose the first day at your next destination.</p>
-          <label
-            >Change city on date<input
+    <ui-page-header
+      backLabel="← Trips"
+      backLink="/travel"
+      eyebrow="Something to look forward to"
+      title="Plan a trip"
+      subtitle="Start with dates and a destination. Everything else can wait."
+    />
+    <ui-card
+      ><form class="travel-form" (ngSubmit)="save()" #form="ngForm">
+        <div class="form-row">
+          <ui-field label="Departure date" [required]="true"
+            ><input
+              uiFieldControl
+              required
               type="date"
-              name="changeDate"
-              [(ngModel)]="changeDate"
-              [min]="next(model().start, 1)"
-              [max]="model().end" /></label
-          ><button
-            class="btn"
-            type="button"
-            [disabled]="
-              !changeDate ||
-              changeDate <= model().start ||
-              changeDate > model().end
-            "
-            (click)="split()"
-          >
-            Add destination
-          </button>
-        </details>
-      }
-      <p>
-        <strong>Trip: {{ name() || "Your next trip" }}</strong>
-      </p>
-      <details>
-        <summary>Rename trip</summary>
-        <label
-          >Trip name <span class="muted">(optional)</span
-          ><input
-            name="title"
-            maxlength="200"
-            [ngModel]="model().tripName"
-            (ngModelChange)="rename($event)"
-            [placeholder]="name()"
-        /></label>
-      </details>
-      <details>
-        <summary>Time off</summary>
-        <label class="check-label"
-          ><input
-            type="checkbox"
-            name="pto"
-            [ngModel]="model().pto"
-            (ngModelChange)="pto($event)"
-          />Count selected dates as PTO</label
-        >
-        <p class="muted">
-          Weekdays start as one day. Weekends start as Not PTO. Turning PTO off
-          keeps your choices.
-        </p>
-        <div class="button-row">
-          <button type="button" class="btn btn-sm" (click)="weekdays()">
-            Select weekdays</button
-          ><button type="button" class="btn btn-sm" (click)="clearPto()">
-            Clear PTO
-          </button>
+              name="start"
+              [(ngModel)]="start"
+              (change)="range()" /></ui-field
+          ><ui-field label="Return date" [required]="true"
+            ><input
+              uiFieldControl
+              required
+              type="date"
+              name="end"
+              [(ngModel)]="end"
+              [min]="start"
+              (change)="range()"
+          /></ui-field>
         </div>
-        <div class="pto-dates">
-          @for (day of dates(); track day) {
-            <label
-              >{{ day
-              }}<select
-                [name]="'pto-' + day"
-                [ngModel]="charges[day]"
-                (ngModelChange)="charges[day] = +$event"
-              >
-                <option [ngValue]="0">Not PTO</option>
-                <option [ngValue]="0.5">Half day</option>
-                <option [ngValue]="1">PTO</option>
-              </select></label
+        <p role="status">{{ summary(model().start, model().end) }}</p>
+        @for (segment of parts(); track segment.key; let index = $index) {
+          <section class="destination-segment">
+            <ui-field
+              [label]="
+                index === 0 ? 'Destination city' : 'Next destination city'
+              "
+              [required]="true"
             >
-          }
-        </div>
-        <p>{{ total() }} PTO days selected.</p>
-      </details>
-      @if (transports.length) {
-        <section>
-          <h2>Transport</h2>
-          @for (transport of transports; track $index) {
-            <p>
-              {{ transport["mode"] }} · {{ transport["depart_place"] }} →
-              {{ transport["arrive_place"] }}
-              <button
-                type="button"
-                class="btn btn-sm"
-                (click)="transports.splice($index, 1)"
-              >
-                Remove draft transport
-              </button>
+              <input
+                uiFieldControl
+                [id]="'city-' + index"
+                [name]="'city-' + index"
+                required
+                maxlength="200"
+                [ngModel]="model().cities[segment.key] || ''"
+                (ngModelChange)="city(segment.key, $event)"
+                autocomplete="address-level2"
+              />
+            </ui-field>
+            <p class="muted">
+              {{ segment.arrive }} – {{ segment.leave }}
+              @if (index > 0) {
+                · First day here: {{ segment.arrive }}
+              }
             </p>
-          }
-        </section>
-      }
-      <button type="button" class="btn btn-sm" (click)="transportOpen = true">
-        Add transport
-      </button>
-      @if (error()) {
-        <p role="alert" class="local-error">{{ error() }}</p>
-      }
-      <div class="button-row">
-        <button
-          class="btn btn-primary"
-          [disabled]="
-            saving() || !form.valid || (!!start && !!end && end < start)
-          "
+            @if (index > 0) {
+              <ui-button
+                variant="ghost"
+                size="sm"
+                type="button"
+                (click)="remove(segment.key)"
+              >
+                Remove destination change
+              </ui-button>
+            }
+          </section>
+        }
+        @if (model().start && model().end && model().start < model().end) {
+          <details>
+            <summary>Add destination</summary>
+            <p class="muted">Choose the first day at your next destination.</p>
+            <ui-field label="Change city on date"
+              ><input
+                uiFieldControl
+                type="date"
+                name="changeDate"
+                [(ngModel)]="changeDate"
+                [min]="next(model().start, 1)"
+                [max]="model().end" /></ui-field
+            ><ui-button
+              variant="ghost"
+              type="button"
+              [disabled]="
+                !changeDate ||
+                changeDate <= model().start ||
+                changeDate > model().end
+              "
+              (click)="split()"
+            >
+              Add destination
+            </ui-button>
+          </details>
+        }
+        <p>
+          <strong>Trip: {{ name() || "Your next trip" }}</strong>
+        </p>
+        <details>
+          <summary>Rename trip</summary>
+          <ui-field label="Trip name (optional)"
+            ><input
+              uiFieldControl
+              name="title"
+              maxlength="200"
+              [ngModel]="model().tripName"
+              (ngModelChange)="rename($event)"
+              [placeholder]="name()"
+          /></ui-field>
+        </details>
+        <details>
+          <summary>Time off</summary>
+          <label class="check-label"
+            ><input
+              type="checkbox"
+              name="pto"
+              [ngModel]="model().pto"
+              (ngModelChange)="pto($event)"
+            />Count selected dates as PTO</label
+          >
+          <p class="muted">
+            Weekdays start as one day. Weekends start as Not PTO. Turning PTO
+            off keeps your choices.
+          </p>
+          <div class="button-row">
+            <ui-button
+              variant="ghost"
+              size="sm"
+              type="button"
+              (click)="weekdays()"
+            >
+              Select weekdays</ui-button
+            ><ui-button
+              variant="ghost"
+              size="sm"
+              type="button"
+              (click)="clearPto()"
+            >
+              Clear PTO
+            </ui-button>
+          </div>
+          <div class="pto-dates">
+            @for (day of dates(); track day) {
+              <ui-field [label]="day"
+                ><select
+                  uiFieldControl
+                  [name]="'pto-' + day"
+                  [ngModel]="charges[day]"
+                  (ngModelChange)="charges[day] = +$event"
+                >
+                  <option [ngValue]="0">Not PTO</option>
+                  <option [ngValue]="0.5">Half day</option>
+                  <option [ngValue]="1">PTO</option>
+                </select></ui-field
+              >
+            }
+          </div>
+          <p>{{ total() }} PTO days selected.</p>
+        </details>
+        @if (transports.length) {
+          <section>
+            <h2>Transport</h2>
+            @for (transport of transports; track $index) {
+              <p>
+                {{ transport["mode"] }} · {{ transport["depart_place"] }} →
+                {{ transport["arrive_place"] }}
+                <ui-button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  (click)="transports.splice($index, 1)"
+                >
+                  Remove draft transport
+                </ui-button>
+              </p>
+            }
+          </section>
+        }
+        <ui-button
+          variant="ghost"
+          size="sm"
+          type="button"
+          (click)="transportOpen = true"
         >
-          {{ saving() ? "Saving trip…" : "Save trip" }}</button
-        ><a routerLink="/travel">Cancel</a>
-      </div>
-    </form>
+          Add transport
+        </ui-button>
+        @if (error()) {
+          <p role="alert" class="local-error">{{ error() }}</p>
+        }
+        <div class="button-row">
+          <ui-button
+            variant="primary"
+            type="submit"
+            [disabled]="
+              saving() || !form.valid || (!!start && !!end && end < start)
+            "
+          >
+            {{ saving() ? "Saving trip…" : "Save trip" }}</ui-button
+          ><a routerLink="/travel">Cancel</a>
+        </div>
+      </form></ui-card
+    >
     <ui-dialog
       [open]="transportOpen"
       labelledBy="new-transport-title"

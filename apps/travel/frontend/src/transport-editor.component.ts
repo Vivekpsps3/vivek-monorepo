@@ -26,18 +26,31 @@ import {
   useSchedule,
 } from "./flight-model.mjs";
 import { travelError } from "./travel.models";
+import {
+  UiButtonComponent,
+  UiCardComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+} from "@vivek/ui";
 @Component({
   selector: "travel-transport-editor",
   standalone: true,
-  imports: [FormsModule],
+  imports: [
+    FormsModule,
+    UiButtonComponent,
+    UiCardComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+  ],
   template: `<form class="travel-form" #form="ngForm" (ngSubmit)="save()">
     <h2>{{ initial ? "Edit transport" : "Add transport" }}</h2>
     <p class="muted">
       Choose a mode. Schedule and booking details are optional.
     </p>
     <div class="form-row">
-      <label
-        >Mode<select
+      <ui-field label="Mode" [required]="true"
+        ><select
+          uiFieldControl
           required
           name="mode"
           [(ngModel)]="values['mode']"
@@ -50,50 +63,52 @@ import { travelError } from "./travel.models";
           <option value="bus">Bus</option>
           <option value="ferry">Ferry</option>
           <option value="other">Other</option>
-        </select></label
-      ><label
-        >Leg<select name="role" [(ngModel)]="values['role']">
+        </select></ui-field
+      ><ui-field label="Leg"
+        ><select uiFieldControl name="role" [(ngModel)]="values['role']">
           <option value="outbound">Outbound</option>
           <option value="inbound">Return</option>
           <option value="connection">Connection</option>
           <option value="local">Local</option>
-        </select></label
+        </select></ui-field
       >
     </div>
     @if (values["mode"] === "flight") {
       <div class="form-row">
-        <label
-          >Flight number<input
+        <ui-field label="Flight number"
+          ><input
+            uiFieldControl
             name="number"
             [(ngModel)]="values['number']"
             (ngModelChange)="invalidate()"
-            placeholder="UA 837" /></label
-        ><label
-          >Departure date<input
+            placeholder="UA 837" /></ui-field
+        ><ui-field label="Departure date"
+          ><input
+            uiFieldControl
             type="date"
             name="flightDate"
             [(ngModel)]="flightDate"
             (ngModelChange)="invalidate()"
-        /></label>
+        /></ui-field>
       </div>
       @if (looking()) {
         <p role="status">Finding the flight schedule…</p>
       }
       @if (problem()) {
         <p class="local-error" role="status">{{ problem() }}</p>
-        <button type="button" class="btn" (click)="lookup()">
+        <ui-button variant="ghost" type="button" (click)="lookup()">
           Retry flight schedule
-        </button>
+        </ui-button>
       }
       @for (candidate of candidates(); track $index) {
-        <button class="btn" type="button" (click)="choose(candidate)">
+        <ui-button variant="ghost" type="button" (click)="choose(candidate)">
           {{ candidate.ident_iata || candidate.ident }} ·
           {{ candidate.origin_iata }} → {{ candidate.destination_iata }} ·
           {{ clock(candidate.scheduled_out, candidate.origin_timezone) }}
-        </button>
+        </ui-button>
       }
       @if (selected(); as flight) {
-        <section class="surface flight-preview">
+        <ui-card class="flight-preview">
           <h3>Flight schedule</h3>
           <p>{{ flight.origin_iata }} → {{ flight.destination_iata }}</p>
           <p>
@@ -105,42 +120,46 @@ import { travelError } from "./travel.models";
             {{ clock(flight.scheduled_in, flight.destination_timezone) }}
           </p>
           <p>{{ arrivalNote(flight) }} · {{ flight.status }}</p>
-          <button class="btn" type="button" (click)="useFlight()">
+          <ui-button variant="ghost" type="button" (click)="useFlight()">
             Use flight schedule
-          </button>
-        </section>
+          </ui-button>
+        </ui-card>
       }
-      <button class="btn" type="button" (click)="manual()">
+      <ui-button variant="ghost" type="button" (click)="manual()">
         Edit times manually
-      </button>
+      </ui-button>
     }
     <div class="form-row">
-      <label
-        >From<input
+      <ui-field label="From"
+        ><input
+          uiFieldControl
           name="from"
           [(ngModel)]="values['depart_place']"
-          (ngModelChange)="lock('depart_place')" /></label
-      ><label
-        >To<input
+          (ngModelChange)="lock('depart_place')" /></ui-field
+      ><ui-field label="To"
+        ><input
+          uiFieldControl
           name="to"
           [(ngModel)]="values['arrive_place']"
           (ngModelChange)="lock('arrive_place')"
-      /></label>
+      /></ui-field>
     </div>
     <div class="form-row">
-      <label
-        >Departure local date and time<input
+      <ui-field label="Departure local date and time"
+        ><input
+          uiFieldControl
           type="datetime-local"
           name="depart"
           [(ngModel)]="values['depart_at']"
-          (ngModelChange)="lock('depart_at')" /></label
-      ><label
-        >Arrival local date and time<input
+          (ngModelChange)="lock('depart_at')" /></ui-field
+      ><ui-field label="Arrival local date and time"
+        ><input
+          uiFieldControl
           type="datetime-local"
           name="arrive"
           [(ngModel)]="values['arrive_at']"
           (ngModelChange)="lock('arrive_at')"
-      /></label>
+      /></ui-field>
     </div>
     @if (overrides.length) {
       <p class="muted">Edited by you. New lookups preserve your times.</p>
@@ -148,41 +167,47 @@ import { travelError } from "./travel.models";
     <details>
       <summary>Booking and optional details</summary>
       <div class="form-row">
-        <label
-          >Carrier<input
+        <ui-field label="Carrier"
+          ><input
+            uiFieldControl
             name="carrier"
             [(ngModel)]="values['carrier']"
-            (ngModelChange)="lock('carrier')" /></label
-        ><label
-          >Status<select name="status" [(ngModel)]="values['status']">
+            (ngModelChange)="lock('carrier')" /></ui-field
+        ><ui-field label="Status"
+          ><select uiFieldControl name="status" [(ngModel)]="values['status']">
             <option value="planned">Planning</option>
             <option value="booked">Booked</option>
             <option value="completed">Done</option>
             <option value="cancelled">Cancelled</option>
-          </select></label
+          </select></ui-field
         >
       </div>
       <div class="form-row">
-        <label
-          >Confirmation<input
+        <ui-field label="Confirmation"
+          ><input
+            uiFieldControl
             name="confirmation"
-            [(ngModel)]="values['confirmation']" /></label
-        ><label>Seat<input name="seat" [(ngModel)]="values['seat']" /></label>
+            [(ngModel)]="values['confirmation']" /></ui-field
+        ><ui-field label="Seat"
+          ><input uiFieldControl name="seat" [(ngModel)]="values['seat']"
+        /></ui-field>
       </div>
       <div class="form-row">
-        <label
-          >Cost<input
+        <ui-field label="Cost"
+          ><input
+            uiFieldControl
             type="number"
             min="0"
             step="0.01"
             name="cost"
-            [(ngModel)]="values['cost']" /></label
-        ><label
-          >Currency<input
+            [(ngModel)]="values['cost']" /></ui-field
+        ><ui-field label="Currency"
+          ><input
+            uiFieldControl
             name="currency"
             maxlength="3"
             [(ngModel)]="values['currency']"
-        /></label>
+        /></ui-field>
       </div>
       <label class="check-label"
         ><input
@@ -190,19 +215,27 @@ import { travelError } from "./travel.models";
           name="paid"
           [(ngModel)]="values['paid']"
         />Paid</label
-      ><label
-        >Notes<textarea name="notes" [(ngModel)]="values['notes']"></textarea>
-      </label>
+      ><ui-field label="Notes">
+        <textarea
+          uiFieldControl
+          name="notes"
+          [(ngModel)]="values['notes']"
+        ></textarea>
+      </ui-field>
     </details>
     @if (saveError) {
       <p class="local-error" role="alert">{{ saveError }}</p>
     }
     <div class="button-row">
-      <button class="btn btn-primary" [disabled]="saving || !form.valid">
-        {{ saving ? "Saving…" : "Save transport" }}</button
-      ><button type="button" class="btn" (click)="cancelled.emit()">
+      <ui-button
+        variant="primary"
+        type="submit"
+        [disabled]="saving || !form.valid"
+      >
+        {{ saving ? "Saving…" : "Save transport" }}</ui-button
+      ><ui-button variant="ghost" type="button" (click)="cancelled.emit()">
         Cancel
-      </button>
+      </ui-button>
     </div>
   </form>`,
 })

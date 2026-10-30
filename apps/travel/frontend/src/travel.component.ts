@@ -3,29 +3,47 @@ import { HttpClient } from "@angular/common/http";
 import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { Home, Trip, travelError } from "./travel.models";
+import {
+  UiButtonComponent,
+  UiCardComponent,
+  UiPageHeaderComponent,
+  UiEmptyStateComponent,
+  UiBadgeComponent,
+} from "@vivek/ui";
 @Component({
   standalone: true,
-  imports: [RouterLink],
+  imports: [
+    RouterLink,
+    UiButtonComponent,
+    UiCardComponent,
+    UiPageHeaderComponent,
+    UiEmptyStateComponent,
+    UiBadgeComponent,
+  ],
   template: `<main class="page travel-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Your time away</p>
-        <h1>Trips</h1>
-        <p class="muted">A little space for where you're going next.</p>
-      </div>
-      <a class="btn btn-primary" routerLink="/travel/trips/new">New trip</a>
-    </header>
+    <ui-page-header
+      eyebrow="Your time away"
+      title="Trips"
+      subtitle="A little space for where you're going next."
+    >
+      <ui-button
+        uiPageActions
+        variant="primary"
+        href="/travel/trips/new"
+        label="New trip"
+      />
+    </ui-page-header>
     @if (error()) {
       <p class="local-error" role="alert">{{ error() }}</p>
-      <button class="btn" (click)="load()">Retry trips</button>
+      <ui-button variant="ghost" (click)="load()">Retry trips</ui-button>
     }
     @if (data(); as home) {
       @if (home.pto.configured) {
-        <p class="surface">
+        <ui-card>
           PTO balance today:
           <strong>{{ home.pto.balance_today }} days</strong> ·
           <a routerLink="/travel/pto">View forecast</a>
-        </p>
+        </ui-card>
       }
       @if (home.attention.length) {
         <section>
@@ -46,19 +64,19 @@ import { Home, Trip, travelError } from "./travel.models";
             <h2>{{ group.title }}</h2>
             <div class="trip-grid">
               @for (trip of group.trips; track trip.id) {
-                <a
-                  class="trip-card surface"
-                  [routerLink]="['/travel/trips', trip.id]"
-                  ><p class="eyebrow">{{ trip.status }}</p>
-                  <h3>{{ trip.title }}</h3>
-                  <p>{{ trip.start_date }} – {{ trip.end_date }}</p>
-                  <p class="muted">
-                    {{ trip.cities.join(" → ") }} ·
-                    {{ trip.pto_days_effective }} PTO days
-                  </p>
-                  @if (trip.pto.conflicts.length) {
-                    <p>PTO overlaps</p>
-                  }
+                <a class="trip-card" [routerLink]="['/travel/trips', trip.id]">
+                  <ui-card>
+                    <ui-badge>{{ trip.status }}</ui-badge>
+                    <h3>{{ trip.title }}</h3>
+                    <p>{{ trip.start_date }} – {{ trip.end_date }}</p>
+                    <p class="muted">
+                      {{ trip.cities.join(" → ") }} ·
+                      {{ trip.pto_days_effective }} PTO days
+                    </p>
+                    @if (trip.pto.conflicts.length) {
+                      <p>PTO overlaps</p>
+                    }
+                  </ui-card>
                 </a>
               }
             </div>
@@ -66,26 +84,28 @@ import { Home, Trip, travelError } from "./travel.models";
         }
       }
       @if (!home.in_progress.length && !home.upcoming.length) {
-        <section class="empty-state">
-          <h2>Your next trip starts with a date</h2>
-          <p>
-            Add a destination and dates. Flights, bookings, and plans can
-            follow.
-          </p>
-          <a class="btn" routerLink="/travel/trips/new">Plan a trip</a>
-        </section>
+        <ui-empty-state
+          title="Your next trip starts with a date"
+          message="Add a destination and dates. Flights, bookings, and plans can follow."
+        >
+          <ui-button
+            variant="ghost"
+            href="/travel/trips/new"
+            label="Plan a trip"
+          />
+        </ui-empty-state>
       }
       @if (home.past.length) {
         <details>
           <summary>Past trips ({{ home.past.length }})</summary>
           <div class="trip-grid">
             @for (trip of home.past; track trip.id) {
-              <a
-                class="trip-card surface"
-                [routerLink]="['/travel/trips', trip.id]"
-                ><h3>{{ trip.title }}</h3>
-                <p>{{ trip.start_date }} – {{ trip.end_date }}</p></a
-              >
+              <a class="trip-card" [routerLink]="['/travel/trips', trip.id]">
+                <ui-card>
+                  <h3>{{ trip.title }}</h3>
+                  <p>{{ trip.start_date }} – {{ trip.end_date }}</p>
+                </ui-card>
+              </a>
             }
           </div>
         </details>

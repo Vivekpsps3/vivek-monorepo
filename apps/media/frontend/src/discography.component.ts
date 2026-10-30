@@ -1,9 +1,16 @@
 import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute, RouterLink } from "@angular/router";
+import { ActivatedRoute } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { errorCopy } from "./media.models";
+import {
+  UiButtonComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiCardComponent,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 interface Track {
   source_id: string;
   title: string;
@@ -22,26 +29,37 @@ interface Discography {
 }
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [
+    FormsModule,
+    UiButtonComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiCardComponent,
+    UiPageHeaderComponent,
+  ],
   template: `<main class="page media-page">
-    <a [routerLink]="['/media/item', id]">← Artist</a>
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Explore, then choose</p>
-        <h1>Browse discography</h1>
-        <p class="muted">Browsing does not save albums or songs.</p>
-      </div>
-      <label
-        >Release type<select [(ngModel)]="release" (ngModelChange)="load(true)">
+    <ui-page-header
+      backLabel="← Artist"
+      [backLink]="'/media/item/' + id"
+      eyebrow="Explore, then choose"
+      title="Browse discography"
+      subtitle="Browsing does not save albums or songs."
+    >
+      <ui-field uiPageActions label="Release type"
+        ><select
+          uiFieldControl
+          [(ngModel)]="release"
+          (ngModelChange)="load(true)"
+        >
           @for (type of types; track type) {
             <option [value]="type">{{ type }}</option>
           }
-        </select></label
+        </select></ui-field
       >
-    </header>
+    </ui-page-header>
     @if (error()) {
       <p role="alert" class="local-error">{{ error() }}</p>
-      <button class="btn" (click)="load()">Retry discography</button>
+      <ui-button variant="ghost" (click)="load()">Retry discography</ui-button>
     }
     @if (loading()) {
       <p role="status">Loading releases…</p>
@@ -53,24 +71,26 @@ interface Discography {
         </p>
       }
       @for (album of discography.albums; track album.source_id) {
-        <section class="surface">
+        <ui-card>
           <div class="episode-row">
             <div>
               <h2>{{ album.title }}</h2>
               <p>{{ album.year }}</p>
             </div>
             @if (album.saved) {
-              <a class="btn" [routerLink]="['/media/item', album.saved_id]"
-                >Open saved album</a
-              >
+              <ui-button
+                variant="ghost"
+                [href]="'/media/item/' + album.saved_id"
+                label="Open saved album"
+              />
             } @else {
-              <button
-                class="btn"
+              <ui-button
+                variant="ghost"
                 [disabled]="busy()"
                 (click)="save(album, null)"
               >
                 Add album
-              </button>
+              </ui-button>
             }
           </div>
           <details>
@@ -79,31 +99,33 @@ interface Discography {
               <div class="episode-row">
                 <span>{{ track.title }}</span>
                 @if (track.saved) {
-                  <a class="btn" [routerLink]="['/media/item', track.saved_id]"
-                    >Open saved song</a
-                  >
+                  <ui-button
+                    variant="ghost"
+                    [href]="'/media/item/' + track.saved_id"
+                    label="Open saved song"
+                  />
                 } @else {
-                  <button
-                    class="btn"
+                  <ui-button
+                    variant="ghost"
                     [disabled]="busy()"
                     (click)="save(album, track)"
                   >
                     Add song
-                  </button>
+                  </ui-button>
                 }
               </div>
             }
           </details>
-        </section>
+        </ui-card>
       } @empty {
         @if (!loading()) {
           <p>No releases found for this filter. Try another release type.</p>
         }
       }
       @if (discography.partial) {
-        <button class="btn" [disabled]="loading()" (click)="more()">
+        <ui-button variant="ghost" [disabled]="loading()" (click)="more()">
           Next releases
-        </button>
+        </ui-button>
       }
     }
   </main>`,

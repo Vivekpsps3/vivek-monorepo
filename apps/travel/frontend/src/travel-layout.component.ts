@@ -1,19 +1,18 @@
 import { Component } from "@angular/core";
-import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
+import { RouterOutlet } from "@angular/router";
+import { UiSectionNavComponent, type UiSectionNavItem } from "@vivek/ui";
 @Component({
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterOutlet, UiSectionNavComponent],
   template: `<div class="travel-workspace">
-    <nav class="feature-nav" aria-label="Travel">
-      <a
-        routerLink="/travel"
-        routerLinkActive="active"
-        [routerLinkActiveOptions]="{ exact: true }"
-        >Trips</a
-      ><a routerLink="/travel/calendar" routerLinkActive="active">Calendar</a
-      ><a routerLink="/travel/pto" routerLinkActive="active">PTO</a>
-    </nav>
+    <ui-section-nav label="Travel sections" [items]="sections" />
     <router-outlet />
   </div>`,
 })
-export class TravelLayoutComponent {}
+export class TravelLayoutComponent {
+  readonly sections: UiSectionNavItem[] = [
+    { label: "Trips", link: "/travel", exact: true },
+    { label: "Calendar", link: "/travel/calendar" },
+    { label: "PTO", link: "/travel/pto" },
+  ];
+}

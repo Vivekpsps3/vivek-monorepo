@@ -10,34 +10,36 @@ import {
   inject,
 } from "@angular/core";
 import type { CircleMarker, Map as LeafletMap, TileLayer } from "leaflet";
+import { UiButtonComponent } from "@vivek/ui";
 export interface TravelPlace {
   label: string;
   lat: number | null;
   lng: number | null;
 }
 @Component({
+  imports: [UiButtonComponent],
   selector: "travel-map",
   standalone: true,
   template: `<section aria-label="Trip map">
     <div class="map-toolbar">
       <h2>Places</h2>
       @if (map) {
-        <button
-          class="btn"
+        <ui-button
+          variant="ghost"
           type="button"
-          aria-label="Zoom in"
+          ariaLabel="Zoom in"
           (click)="map.zoomIn()"
         >
           +
-        </button>
-        <button
-          class="btn"
+        </ui-button>
+        <ui-button
+          variant="ghost"
           type="button"
-          aria-label="Zoom out"
+          ariaLabel="Zoom out"
           (click)="map.zoomOut()"
         >
           −
-        </button>
+        </ui-button>
       }
     </div>
     <div
@@ -48,11 +50,13 @@ export interface TravelPlace {
     ></div>
     <p role="status">{{ status }}</p>
     @if (initializationFailed) {
-      <button class="btn" type="button" (click)="reload()">
+      <ui-button variant="ghost" type="button" (click)="reload()">
         Reload map page
-      </button>
+      </ui-button>
     } @else if (failed) {
-      <button class="btn" type="button" (click)="retry()">Retry map</button>
+      <ui-button variant="ghost" type="button" (click)="retry()"
+        >Retry map</ui-button
+      >
     }
     <p class="map-attribution">
       Map data ©
@@ -69,9 +73,9 @@ export interface TravelPlace {
         <li>
           <span>{{ place.label }}</span>
           @if (valid(place)) {
-            <button class="btn" type="button" (click)="show($index)">
+            <ui-button variant="ghost" type="button" (click)="show($index)">
               Show on map
-            </button>
+            </ui-button>
             <a
               [href]="external(place)"
               target="_blank"

@@ -19,6 +19,13 @@ import {
 } from "rxjs";
 import { MediaCardComponent } from "./media-card.component";
 import {
+  UiButtonComponent,
+  UiEmptyStateComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
+import {
   errorCopy,
   kinds,
   LibraryResponse,
@@ -27,38 +34,56 @@ import {
 } from "./media.models";
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink, MediaCardComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    MediaCardComponent,
+    UiButtonComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiPageHeaderComponent,
+    UiEmptyStateComponent,
+  ],
   template: `<main class="page media-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Your collection</p>
-        <h1 id="library-heading" tabindex="-1">Library</h1>
-        <p class="muted">
-          Only what you saved. Every story, sound, and favorite.
-        </p>
-      </div>
-      <a class="btn btn-primary" routerLink="/media/search"
-        >Find something new</a
-      >
-    </header>
+    <ui-page-header
+      eyebrow="Your collection"
+      title="Library"
+      titleId="library-heading"
+      [titleTabIndex]="-1"
+      subtitle="Only what you saved. Every story, sound, and favorite."
+    >
+      <ui-button
+        uiPageActions
+        variant="primary"
+        href="/media/search"
+        label="Find something new"
+      />
+    </ui-page-header>
     <form class="media-filters" (ngSubmit)="filter()">
-      <label
-        >In your library<input
+      <ui-field label="In your library"
+        ><input
+          uiFieldControl
           name="q"
           [(ngModel)]="q"
           type="search"
           placeholder="Filter titles or creators"
-      /></label>
-      <label
-        >Type<select name="kind" [(ngModel)]="kind" (ngModelChange)="filter()">
+      /></ui-field>
+      <ui-field label="Type"
+        ><select
+          uiFieldControl
+          name="kind"
+          [(ngModel)]="kind"
+          (ngModelChange)="filter()"
+        >
           <option value="">All types</option>
           @for (k of kinds; track k.value) {
             <option [value]="k.value">{{ k.label }}</option>
           }
-        </select></label
+        </select></ui-field
       >
-      <label
-        >State<select
+      <ui-field label="State"
+        ><select
+          uiFieldControl
           name="status"
           [(ngModel)]="status"
           (ngModelChange)="filter()"
@@ -67,16 +92,21 @@ import {
           @for (s of states; track s) {
             <option [value]="s">{{ s.replace("_", " ") }}</option>
           }
-        </select></label
+        </select></ui-field
       >
-      <label
-        >Sort<select name="sort" [(ngModel)]="sort" (ngModelChange)="filter()">
+      <ui-field label="Sort"
+        ><select
+          uiFieldControl
+          name="sort"
+          [(ngModel)]="sort"
+          (ngModelChange)="filter()"
+        >
           <option value="activity">Recent activity</option>
           <option value="title">Title</option>
           <option value="added">Recently added</option>
           <option value="rating">Rating</option>
           <option value="release">Release</option>
-        </select></label
+        </select></ui-field
       ><label class="check-label"
         ><input
           type="checkbox"
@@ -84,12 +114,12 @@ import {
           [(ngModel)]="favorite"
           (ngModelChange)="filter()"
         />Favorites only</label
-      ><button class="btn" type="submit">Apply</button>
+      ><ui-button variant="ghost" type="submit">Apply</ui-button>
     </form>
     @if (error()) {
       <div class="local-error" role="alert">
         {{ error() }}
-        <button class="btn" (click)="retry()">Retry library</button>
+        <ui-button variant="ghost" (click)="retry()">Retry library</ui-button>
       </div>
     }
     @if (loading()) {
@@ -104,15 +134,16 @@ import {
           <section>
             <media-card [item]="item" />
             @if (item.kind === "artist") {
-              <button
-                class="btn btn-sm"
-                [attr.aria-expanded]="expanded() === item.id"
-                [attr.aria-controls]="'saved-' + item.id"
+              <ui-button
+                variant="ghost"
+                size="sm"
+                [ariaExpanded]="expanded() === item.id"
+                [ariaControls]="'saved-' + item.id"
                 (click)="expand(item)"
               >
                 {{ expanded() === item.id ? "Hide" : "Show" }} saved albums and
                 songs ({{ item.saved_count || 0 }})
-              </button>
+              </ui-button>
               @if (expanded() === item.id) {
                 <div [id]="'saved-' + item.id" class="saved-children">
                   @if (childrenLoading()) {
@@ -120,9 +151,9 @@ import {
                   }
                   @if (childrenError()) {
                     <p role="alert">{{ childrenError() }}</p>
-                    <button class="btn" (click)="expand(item, true)">
+                    <ui-button variant="ghost" (click)="expand(item, true)">
                       Retry saved music
-                    </button>
+                    </ui-button>
                   }
                   @for (child of children(); track child.id) {
                     <media-card [item]="child" />
@@ -139,44 +170,45 @@ import {
             }
           </section>
         } @empty {
-          <section class="empty-state">
-            <h2>
-              {{
-                q || kind || status || favorite
-                  ? "No saved items match these filters"
-                  : "Your next favorite starts here"
-              }}
-            </h2>
-            <p>
-              {{
-                q || kind || status || favorite
-                  ? "Try clearing a filter."
-                  : "Search for a title, follow an artist, or add something of your own."
-              }}
-            </p>
-            <a class="btn" routerLink="/media/search">Search Media</a>
-          </section>
+          <ui-empty-state
+            [title]="
+              q || kind || status || favorite
+                ? 'No saved items match these filters'
+                : 'Your next favorite starts here'
+            "
+            [message]="
+              q || kind || status || favorite
+                ? 'Try clearing a filter.'
+                : 'Search for a title, follow an artist, or add something of your own.'
+            "
+          >
+            <ui-button
+              variant="ghost"
+              href="/media/search"
+              label="Search Media"
+            />
+          </ui-empty-state>
         }
       </div>
       <nav class="button-row" aria-label="Library pages">
-        <button
-          class="btn"
+        <ui-button
+          variant="ghost"
           [disabled]="!offset || loading()"
           (click)="page(-1)"
         >
-          Previous items</button
+          Previous items</ui-button
         ><span
           >{{ library.total ? library.offset + 1 : 0 }}–{{
             library.offset + library.items.length
           }}
           of {{ library.total }}</span
-        ><button
-          class="btn"
+        ><ui-button
+          variant="ghost"
           [disabled]="!library.has_more || loading()"
           (click)="page(1)"
         >
           Next items
-        </button>
+        </ui-button>
       </nav>
     }
   </main>`,

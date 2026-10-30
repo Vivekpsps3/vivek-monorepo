@@ -9,72 +9,97 @@ import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { SESSION_CONTEXT, ConfirmService } from "@vivek/ui";
+import {
+  SESSION_CONTEXT,
+  ConfirmService,
+  UiButtonComponent,
+  UiCardComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 import { Detail, Kind, kinds, errorCopy } from "./media.models";
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [
+    FormsModule,
+    RouterLink,
+    UiButtonComponent,
+    UiCardComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiPageHeaderComponent,
+  ],
   template: `<main class="page media-page">
-    <a routerLink="/media/search">← Search</a>
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Make room for a favorite</p>
-        <h1>Add manually</h1>
-        <p class="muted">
-          Title and type are required. Add the rest when you're ready.
-        </p>
-      </div>
-    </header>
-    <form class="surface media-form" #form="ngForm" (ngSubmit)="save()">
-      <label
-        >Title <span aria-hidden="true">*</span
-        ><input required name="title" maxlength="300" [(ngModel)]="title"
-      /></label>
-      <label
-        >Type <span aria-hidden="true">*</span
-        ><select required name="kind" [(ngModel)]="kind">
-          @for (k of kinds; track k.value) {
-            <option [value]="k.value">{{ k.label }}</option>
-          }
-        </select></label
-      >
-      <details>
-        <summary>Optional details</summary>
-        <label
-          >Creator<input
-            name="creator"
+    <ui-page-header
+      backLabel="← Search"
+      backLink="/media/search"
+      eyebrow="Make room for a favorite"
+      title="Add manually"
+      subtitle="Title and type are required. Add the rest when you're ready."
+    />
+    <ui-card
+      ><form class="media-form" #form="ngForm" (ngSubmit)="save()">
+        <ui-field label="Title" [required]="true"
+          ><input
+            uiFieldControl
+            required
+            name="title"
             maxlength="300"
-            [(ngModel)]="creator" /></label
-        ><label
-          >Release year<input
-            type="number"
-            min="1000"
-            max="3000"
-            name="year"
-            [(ngModel)]="year" /></label
-        ><label
-          >Note<textarea
-            name="review"
-            maxlength="20000"
-            [(ngModel)]="review"
-          ></textarea>
-        </label>
-      </details>
-      @if (error()) {
-        <p class="local-error" role="alert">{{ error() }}</p>
-      }
-      <div class="button-row">
-        <button class="btn btn-primary" [disabled]="!form.valid || busy()">
-          {{
-            busy()
-              ? "Adding…"
-              : kind === "artist"
-                ? "Follow artist"
-                : "Add to library"
-          }}</button
-        ><a routerLink="/media/library">Cancel</a>
-      </div>
-    </form>
+            [(ngModel)]="title"
+        /></ui-field>
+        <ui-field label="Type" [required]="true"
+          ><select uiFieldControl required name="kind" [(ngModel)]="kind">
+            @for (k of kinds; track k.value) {
+              <option [value]="k.value">{{ k.label }}</option>
+            }
+          </select></ui-field
+        >
+        <details>
+          <summary>Optional details</summary>
+          <ui-field label="Creator"
+            ><input
+              uiFieldControl
+              name="creator"
+              maxlength="300"
+              [(ngModel)]="creator" /></ui-field
+          ><ui-field label="Release year"
+            ><input
+              uiFieldControl
+              type="number"
+              min="1000"
+              max="3000"
+              name="year"
+              [(ngModel)]="year" /></ui-field
+          ><ui-field label="Note">
+            <textarea
+              uiFieldControl
+              name="review"
+              maxlength="20000"
+              [(ngModel)]="review"
+            ></textarea>
+          </ui-field>
+        </details>
+        @if (error()) {
+          <p class="local-error" role="alert">{{ error() }}</p>
+        }
+        <div class="button-row">
+          <ui-button
+            variant="primary"
+            type="submit"
+            [disabled]="!form.valid || busy()"
+          >
+            {{
+              busy()
+                ? "Adding…"
+                : kind === "artist"
+                  ? "Follow artist"
+                  : "Add to library"
+            }}</ui-button
+          ><a routerLink="/media/library">Cancel</a>
+        </div>
+      </form></ui-card
+    >
   </main>`,
 })
 export class AddComponent {

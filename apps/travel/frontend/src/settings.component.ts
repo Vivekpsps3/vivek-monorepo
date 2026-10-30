@@ -8,7 +8,15 @@ import {
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { SESSION_CONTEXT, ConfirmService } from "@vivek/ui";
+import {
+  SESSION_CONTEXT,
+  ConfirmService,
+  UiButtonComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiCardComponent,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 import { travelError } from "./travel.models";
 interface Settings {
   flightaware: {
@@ -19,15 +27,17 @@ interface Settings {
 }
 @Component({
   standalone: true,
-  imports: [FormsModule],
+  imports: [
+    FormsModule,
+    UiButtonComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiCardComponent,
+    UiPageHeaderComponent,
+  ],
   template: `<main class="page travel-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Travel preferences</p>
-        <h1>Settings</h1>
-      </div>
-    </header>
-    <section class="surface">
+    <ui-page-header eyebrow="Travel preferences" title="Settings" />
+    <ui-card>
       <h2>Flight schedules</h2>
       <p class="muted">
         FlightAware AeroAPI can fill airport-local schedules near departure.
@@ -45,24 +55,29 @@ interface Settings {
         </p>
       }
       <form class="travel-form" (ngSubmit)="save()">
-        <label
-          >New FlightAware API key<input
+        <ui-field label="New FlightAware API key"
+          ><input
+            uiFieldControl
             type="password"
             name="key"
             [(ngModel)]="key"
             autocomplete="new-password"
-        /></label>
+        /></ui-field>
         <div class="button-row">
-          <button class="btn btn-primary" [disabled]="saving() || !key.trim()">
-            Save key</button
-          ><button
-            class="btn"
+          <ui-button
+            variant="primary"
+            type="submit"
+            [disabled]="saving() || !key.trim()"
+          >
+            Save key</ui-button
+          ><ui-button
+            variant="ghost"
             type="button"
             [disabled]="saving() || !data()?.flightaware?.configured"
             (click)="clear()"
           >
             Remove personal key
-          </button>
+          </ui-button>
         </div>
       </form>
       @if (error()) {
@@ -71,15 +86,15 @@ interface Settings {
       @if (message()) {
         <p role="status">{{ message() }}</p>
       }
-    </section>
-    <section class="surface">
+    </ui-card>
+    <ui-card>
       <h2>Maps</h2>
       <p>
         OpenStreetMap tiles and explicit Nominatim location search. Choose each
         city location from its trip page.
       </p>
       <p class="muted">Map data © OpenStreetMap contributors.</p>
-    </section>
+    </ui-card>
   </main>`,
 })
 export class SettingsComponent {

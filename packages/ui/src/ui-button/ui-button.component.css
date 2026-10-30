@@ -107,6 +107,17 @@ a.ui-btn {
   background: var(--danger-hover);
 }
 
+.ui-btn--danger-ghost {
+  width: auto;
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.ui-btn--danger-ghost:hover:not(:disabled) {
+  background: var(--danger-soft-bg);
+}
+
 .ui-btn[aria-busy="true"]::before {
   content: "";
   width: 0.8em;
@@ -117,8 +128,14 @@ a.ui-btn {
   animation: ui-btn-spin 0.8s linear infinite;
 }
 
-@keyframes ui-btn-spin { to { transform: rotate(360deg); } }
+@keyframes ui-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .ui-btn[aria-busy="true"]::before { animation: none; }
+  .ui-btn[aria-busy="true"]::before {
+    animation: none;
+  }
 }

@@ -11,6 +11,13 @@ import {
   of,
 } from "rxjs";
 import { errorCopy } from "./media.models";
+import {
+  UiButtonComponent,
+  UiCardComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 interface Event {
   title: string;
   detail: string;
@@ -34,35 +41,40 @@ interface Calendar {
 }
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [
+    FormsModule,
+    RouterLink,
+    UiButtonComponent,
+    UiCardComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiPageHeaderComponent,
+  ],
   template: `<main class="page media-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">On the horizon</p>
-        <h1>Media calendar</h1>
-        <p class="muted">
-          Known episode dates and anticipated releases. Opening this page uses
-          saved metadata.
-        </p>
-        <button class="btn" [disabled]="refreshing()" (click)="refresh()">
-          {{
-            refreshing() ? "Refreshing releases…" : "Refresh release metadata"
-          }}
-        </button>
-      </div>
-      <form (ngSubmit)="change()">
-        <label
-          >Month<input
+    <ui-page-header
+      eyebrow="On the horizon"
+      title="Media calendar"
+      subtitle="Known episode dates and anticipated releases. Opening this page uses saved metadata."
+    >
+      <ui-button variant="ghost" [disabled]="refreshing()" (click)="refresh()">
+        {{ refreshing() ? "Refreshing releases…" : "Refresh release metadata" }}
+      </ui-button>
+      <form uiPageActions (ngSubmit)="change()">
+        <ui-field label="Month"
+          ><input
+            uiFieldControl
             type="month"
             name="month"
             [(ngModel)]="month"
             (ngModelChange)="change()"
-        /></label>
+        /></ui-field>
       </form>
-    </header>
+    </ui-page-header>
     @if (error()) {
       <p role="alert" class="local-error">{{ error() }}</p>
-      <button class="btn" (click)="reload.next(0)">Retry calendar</button>
+      <ui-button variant="ghost" (click)="reload.next(0)"
+        >Retry calendar</ui-button
+      >
     }
     @if (data(); as calendar) {
       <p class="muted">Today in your timezone: {{ calendar.today }}</p>
@@ -73,8 +85,7 @@ interface Calendar {
         </p>
       }
       @for (day of calendar.days; track day.date) {
-        <section
-          class="surface"
+        <ui-card
           [attr.aria-current]="day.date === calendar.today ? 'date' : null"
         >
           <h2>{{ day.date }}</h2>
@@ -99,13 +110,13 @@ interface Calendar {
               </div>
             </article>
           }
-        </section>
+        </ui-card>
       } @empty {
         <p class="muted">No dated releases this month.</p>
       }
       @for (band of bands(calendar); track band.title) {
         @if (band.events.length) {
-          <section class="surface">
+          <ui-card>
             <h2>{{ band.title }}</h2>
             <p class="muted">These dates have not been announced precisely.</p>
             @for (event of band.events; track $index) {
@@ -120,7 +131,7 @@ interface Calendar {
                 · {{ event.release_on || "Date unknown" }}
               </p>
             }
-          </section>
+          </ui-card>
         }
       }
     }

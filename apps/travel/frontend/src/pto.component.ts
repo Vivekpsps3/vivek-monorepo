@@ -9,7 +9,15 @@ import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { SESSION_CONTEXT, ConfirmService } from "@vivek/ui";
+import {
+  SESSION_CONTEXT,
+  ConfirmService,
+  UiButtonComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiCardComponent,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 import { Subscription } from "rxjs";
 import { travelError } from "./travel.models";
 interface Policy {
@@ -47,26 +55,30 @@ interface Pto {
 }
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [
+    FormsModule,
+    RouterLink,
+    UiButtonComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiCardComponent,
+    UiPageHeaderComponent,
+  ],
   template: `<main class="page travel-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Room to take a break</p>
-        <h1>Time off</h1>
-        <p class="muted">
-          Balance and trip forecasts use your selected PTO dates.
-        </p>
-      </div>
-    </header>
+    <ui-page-header
+      eyebrow="Room to take a break"
+      title="Time off"
+      subtitle="Balance and trip forecasts use your selected PTO dates."
+    />
     @if (error()) {
       <p class="local-error" role="alert">{{ error() }}</p>
-      <button class="btn" (click)="load()">Retry PTO</button>
+      <ui-button variant="ghost" (click)="load()">Retry PTO</ui-button>
     }
     @if (message()) {
       <p role="status" class="save-status">{{ message() }}</p>
     }
     @if (data(); as pto) {
-      <section class="surface">
+      <ui-card>
         <h2>
           {{
             pto.policy.configured ? "Balance today" : "Set a starting balance"
@@ -94,49 +106,54 @@ interface Pto {
             (ngSubmit)="savePolicy()"
           >
             <div class="form-row">
-              <label
-                >Known balance (days) <span aria-hidden="true">*</span
+              <ui-field label="Known balance (days)" [required]="true"
                 ><input
+                  uiFieldControl
                   required
                   type="number"
                   step="0.01"
                   min="-366"
                   max="366"
                   name="balance"
-                  [(ngModel)]="policy.balance_days" /></label
-              ><label
-                >Balance date <span aria-hidden="true">*</span
+                  [(ngModel)]="policy.balance_days" /></ui-field
+              ><ui-field label="Balance date" [required]="true"
                 ><input
+                  uiFieldControl
                   required
                   type="date"
                   name="asof"
                   [(ngModel)]="policy.balance_as_of"
-              /></label>
+              /></ui-field>
             </div>
             <p class="muted">
               This balance includes leave taken on the balance date. Later
               selected dates deduct individually.
             </p>
             <div class="form-row">
-              <label
-                >Accrual amount <span aria-hidden="true">*</span
+              <ui-field label="Accrual amount" [required]="true"
                 ><input
+                  uiFieldControl
                   required
                   type="number"
                   step="0.01"
                   min="0"
                   name="amount"
-                  [(ngModel)]="policy.accrual_amount" /></label
-              ><label
-                >Unit<select name="unit" [(ngModel)]="policy.accrual_unit">
+                  [(ngModel)]="policy.accrual_amount" /></ui-field
+              ><ui-field label="Unit"
+                ><select
+                  uiFieldControl
+                  name="unit"
+                  [(ngModel)]="policy.accrual_unit"
+                >
                   <option value="day">Days</option>
                   <option value="hour">Hours</option>
-                </select></label
+                </select></ui-field
               >
             </div>
             <div class="form-row">
-              <label
-                >Accrual cadence<select
+              <ui-field label="Accrual cadence"
+                ><select
+                  uiFieldControl
                   name="cadence"
                   [(ngModel)]="policy.accrual_cadence"
                 >
@@ -145,9 +162,10 @@ interface Pto {
                   <option value="semimonthly">Twice a month</option>
                   <option value="monthly">Monthly</option>
                   <option value="yearly">Yearly</option>
-                </select></label
-              ><label
-                >Hours per day<input
+                </select></ui-field
+              ><ui-field label="Hours per day" [required]="true"
+                ><input
+                  uiFieldControl
                   type="number"
                   required
                   min="0.01"
@@ -155,26 +173,28 @@ interface Pto {
                   step="0.01"
                   name="hours"
                   [(ngModel)]="policy.hours_per_day"
-              /></label>
+              /></ui-field>
             </div>
-            <label
-              >Balance cap (optional)<input
+            <ui-field label="Balance cap (optional)"
+              ><input
+                uiFieldControl
                 type="number"
                 min="0.01"
                 max="366"
                 step="0.01"
                 name="cap"
-                [(ngModel)]="policy.annual_cap_days" /></label
-            ><button
-              class="btn btn-primary"
+                [(ngModel)]="policy.annual_cap_days" /></ui-field
+            ><ui-button
+              variant="primary"
+              type="submit"
               [disabled]="saving() || !policyForm.valid"
             >
               Save PTO policy
-            </button>
+            </ui-button>
           </form>
         </details>
-      </section>
-      <section class="surface">
+      </ui-card>
+      <ui-card>
         <h2>Planned time away</h2>
         @for (entry of pto.entries; track entry.id) {
           <article class="trip-row">
@@ -194,9 +214,9 @@ interface Pto {
               </p>
             </div>
             @if (!entry.trip_id) {
-              <button class="btn btn-sm" (click)="remove(entry.id)">
+              <ui-button variant="ghost" size="sm" (click)="remove(entry.id)">
                 Remove leave
-              </button>
+              </ui-button>
             }
           </article>
         } @empty {
@@ -204,40 +224,47 @@ interface Pto {
             No planned leave. Trips add their selected PTO dates here.
           </p>
         }
-      </section>
-      <section class="surface">
+      </ui-card>
+      <ui-card>
         <h2>What if I take time off?</h2>
         <form class="travel-form" #previewForm="ngForm" (ngSubmit)="preview()">
           <div class="form-row">
-            <label
-              >Start date<input
+            <ui-field label="Start date" [required]="true"
+              ><input
+                uiFieldControl
                 required
                 type="date"
                 name="start"
-                [(ngModel)]="leave.start_date" /></label
-            ><label
-              >End date<input
+                [(ngModel)]="leave.start_date" /></ui-field
+            ><ui-field label="End date" [required]="true"
+              ><input
+                uiFieldControl
                 required
                 type="date"
                 name="end"
                 [min]="leave.start_date"
                 [(ngModel)]="leave.end_date"
-            /></label>
+            /></ui-field>
           </div>
           <details>
             <summary>Optional day total</summary>
-            <label
-              >Days (blank uses weekdays)<input
+            <ui-field label="Days (blank uses weekdays)"
+              ><input
+                uiFieldControl
                 type="number"
                 name="days"
                 min="0"
                 step="0.5"
                 [(ngModel)]="leave.days"
-            /></label>
+            /></ui-field>
           </details>
-          <button class="btn" [disabled]="!previewForm.valid || saving()">
+          <ui-button
+            variant="ghost"
+            type="submit"
+            [disabled]="!previewForm.valid || saving()"
+          >
             Preview balance
-          </button>
+          </ui-button>
         </form>
         @if (forecast(); as projection) {
           <p class="save-status">
@@ -255,25 +282,27 @@ interface Pto {
             #leaveForm="ngForm"
             (ngSubmit)="saveLeave()"
           >
-            <label
-              >Leave label <span aria-hidden="true">*</span
+            <ui-field label="Leave label" [required]="true"
               ><input
+                uiFieldControl
                 required
                 name="label"
                 [(ngModel)]="leave.label"
                 maxlength="200"
-            /></label>
+            /></ui-field>
             <p class="muted">
               Uses the dates above and counts weekdays unless a day total is
               entered.
             </p>
-            <label
-              >Notes (optional)<textarea
+            <ui-field label="Notes (optional)">
+              <textarea
+                uiFieldControl
                 name="notes"
                 [(ngModel)]="leave.notes"
-              ></textarea></label
-            ><button
-              class="btn btn-primary"
+              ></textarea></ui-field
+            ><ui-button
+              variant="primary"
+              type="submit"
               [disabled]="
                 !leaveForm.valid ||
                 !leave.start_date ||
@@ -282,10 +311,10 @@ interface Pto {
               "
             >
               Save leave
-            </button>
+            </ui-button>
           </form>
         </details>
-      </section>
+      </ui-card>
     }
   </main>`,
 })

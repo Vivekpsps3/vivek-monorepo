@@ -11,7 +11,17 @@ import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { SESSION_CONTEXT, ConfirmService, UiDialogComponent } from "@vivek/ui";
+import {
+  SESSION_CONTEXT,
+  ConfirmService,
+  UiBadgeComponent,
+  UiButtonComponent,
+  UiCardComponent,
+  UiDialogComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 import {
   Detail,
   Episode,
@@ -23,7 +33,18 @@ import {
 import { MediaCardComponent } from "./media-card.component";
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink, UiDialogComponent, MediaCardComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    UiBadgeComponent,
+    UiButtonComponent,
+    UiCardComponent,
+    UiDialogComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiPageHeaderComponent,
+    MediaCardComponent,
+  ],
   templateUrl: "./detail.component.html",
 })
 export class DetailComponent {

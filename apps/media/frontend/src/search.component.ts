@@ -1,9 +1,17 @@
 import { Component, inject, signal, DestroyRef } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { catchError, of, switchMap, tap, Subject, debounceTime } from "rxjs";
+import {
+  UiBadgeComponent,
+  UiButtonComponent,
+  UiEmptyStateComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiPageHeaderComponent,
+} from "@vivek/ui";
 import {
   kinds,
   errorCopy,
@@ -13,41 +21,58 @@ import {
 } from "./media.models";
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [
+    FormsModule,
+    UiButtonComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiPageHeaderComponent,
+    UiEmptyStateComponent,
+    UiBadgeComponent,
+  ],
   template: `<main class="page media-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">A little discovery</p>
-        <h1>Search Media</h1>
-        <p class="muted">Find a title or artist. Choose the work you mean.</p>
-      </div>
-      <a class="btn" routerLink="/media/add" [queryParams]="{ title: q }"
-        >Add manually</a
-      >
-    </header>
+    <ui-page-header
+      eyebrow="A little discovery"
+      title="Search Media"
+      subtitle="Find a title or artist. Choose the work you mean."
+    >
+      <ui-button
+        uiPageActions
+        variant="ghost"
+        href="/media/add"
+        [queryParams]="{ title: q }"
+        label="Add manually"
+      />
+    </ui-page-header>
     <form class="media-filters" (ngSubmit)="search()">
-      <label
-        >Title or artist<input
+      <ui-field label="Title or artist"
+        ><input
+          uiFieldControl
           type="search"
           name="query"
           [(ngModel)]="q"
           (ngModelChange)="typed.next()"
           placeholder="Try The Gentlemen"
-          autocomplete="off" /></label
-      ><label
-        >Type<select name="kind" [(ngModel)]="kind" (ngModelChange)="search()">
+          autocomplete="off" /></ui-field
+      ><ui-field label="Type"
+        ><select
+          uiFieldControl
+          name="kind"
+          [(ngModel)]="kind"
+          (ngModelChange)="search()"
+        >
           <option value="all">All types</option>
           @for (k of kinds; track k.value) {
             <option [value]="k.value">{{ k.label }}</option>
           }
-        </select></label
-      ><button
-        class="btn btn-primary"
+        </select></ui-field
+      ><ui-button
+        variant="primary"
         type="submit"
         [disabled]="q.trim().length < 2"
       >
         Search
-      </button>
+      </ui-button>
     </form>
     @if (loading()) {
       <p role="status">Searching sources…</p>
@@ -55,7 +80,9 @@ import {
     @if (error()) {
       <div class="local-error" role="alert">
         {{ error() }}
-        <button class="btn" (click)="search(true)">Retry search</button>
+        <ui-button variant="ghost" (click)="search(true)"
+          >Retry search</ui-button
+        >
       </div>
     }
     @if (result(); as response) {
@@ -63,9 +90,9 @@ import {
         <div class="local-error" role="status">
           <strong>Search is incomplete.</strong> Some sources could not finish.
           Available matches are still shown.
-          <button class="btn" (click)="search(true)">
+          <ui-button variant="ghost" (click)="search(true)">
             Retry unavailable sources
-          </button>
+          </ui-button>
         </div>
       }
       <details class="source-details">
@@ -112,12 +139,12 @@ import {
               }
             </div>
             <div class="media-card-copy">
-              <p class="eyebrow">
+              <ui-badge>
                 {{ item.kind === "tv" ? "Series" : item.kind }}
                 @if (item.year) {
                   · {{ item.year }}
                 }
-              </p>
+              </ui-badge>
               <h2>{{ item.title }}</h2>
               <p class="muted">
                 {{ item.creator }} · {{ item.source }} #{{ item.source_id }}
@@ -126,13 +153,16 @@ import {
                 <p>{{ item.extra?.lifecycle }}</p>
               }
               @if (item.already_saved) {
-                <a class="btn" [routerLink]="['/media/item', item.saved_id]"
-                  >Open saved
-                  {{ item.kind === "artist" ? "artist" : "item" }}</a
-                >
+                <ui-button
+                  variant="ghost"
+                  [href]="'/media/item/' + item.saved_id"
+                  [label]="
+                    'Open saved ' + (item.kind === 'artist' ? 'artist' : 'item')
+                  "
+                />
               } @else {
-                <button
-                  class="btn"
+                <ui-button
+                  variant="ghost"
                   [disabled]="saving() === item.source + item.source_id"
                   (click)="save(item)"
                 >
@@ -143,7 +173,7 @@ import {
                         ? "Follow artist"
                         : "Add to library"
                   }}
-                </button>
+                </ui-button>
               }
               @if (saveErrors()[item.source + item.source_id]) {
                 <p role="alert">
@@ -154,45 +184,42 @@ import {
           </article>
         } @empty {
           @if (!loading()) {
-            <section class="empty-state">
-              <h2>
-                {{
-                  response.partial
-                    ? "Available sources returned no matches"
-                    : "No matching titles"
-                }}
-              </h2>
-              <p>
-                {{
-                  response.partial
-                    ? "Retry the unavailable sources or add this title manually."
-                    : "Try another spelling, a broader title, or another type."
-                }}
-              </p>
-              <a
-                class="btn"
-                routerLink="/media/add"
+            <ui-empty-state
+              [title]="
+                response.partial
+                  ? 'Available sources returned no matches'
+                  : 'No matching titles'
+              "
+              [message]="
+                response.partial
+                  ? 'Retry the unavailable sources or add this title manually.'
+                  : 'Try another spelling, a broader title, or another type.'
+              "
+            >
+              <ui-button
+                variant="ghost"
+                href="/media/add"
                 [queryParams]="{ title: q }"
-                >Add manually</a
-              >
-            </section>
+                label="Add manually"
+              />
+            </ui-empty-state>
           }
         }
       </div>
       <div class="pagination">
         @if (response.offset > 0) {
-          <button class="btn" (click)="page(-20)">Previous</button>
+          <ui-button variant="ghost" (click)="page(-20)">Previous</ui-button>
         }
         @if (response.has_more) {
-          <button class="btn" (click)="page(20)">More results</button>
+          <ui-button variant="ghost" (click)="page(20)">More results</ui-button>
         }
       </div>
     }
     @if (!q.trim()) {
-      <section class="empty-state">
-        <h2>What are you curious about?</h2>
-        <p>Search movies, series, books, games, artists, albums, and songs.</p>
-      </section>
+      <ui-empty-state
+        title="What are you curious about?"
+        message="Search movies, series, books, games, artists, albums, and songs."
+      />
     }
   </main>`,
 })

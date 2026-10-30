@@ -5,6 +5,14 @@ import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { Subject, catchError, of, startWith, switchMap, EMPTY } from "rxjs";
 import { travelError } from "./travel.models";
+import {
+  UiButtonComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiCardComponent,
+  UiPageHeaderComponent,
+  UiEmptyStateComponent,
+} from "@vivek/ui";
 
 interface Calendar {
   trips: {
@@ -41,30 +49,36 @@ function monthEnd(month: string): string {
 
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [
+    FormsModule,
+    RouterLink,
+    UiButtonComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiCardComponent,
+    UiPageHeaderComponent,
+    UiEmptyStateComponent,
+  ],
   template: `<main class="page travel-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">See your time away</p>
-        <h1>Travel calendar</h1>
-      </div>
-      <label
-        >Month<input
+    <ui-page-header eyebrow="See your time away" title="Travel calendar">
+      <ui-field uiPageActions label="Month"
+        ><input
+          uiFieldControl
           type="month"
           name="month"
           [ngModel]="month"
           (ngModelChange)="onMonth($event)"
-      /></label>
-    </header>
+      /></ui-field>
+    </ui-page-header>
     @if (error()) {
       <p class="local-error" role="alert">{{ error() }}</p>
-      <button class="btn" type="button" (click)="retry()">
+      <ui-button variant="ghost" type="button" (click)="retry()">
         Retry calendar
-      </button>
+      </ui-button>
     }
     @if (data(); as calendar) {
       @for (trip of calendar.trips; track trip.id) {
-        <article class="surface">
+        <ui-card>
           <h2>
             <a [routerLink]="['/travel/trips', trip.id]">{{ trip.title }}</a>
           </h2>
@@ -83,13 +97,18 @@ function monthEnd(month: string): string {
               </p>
             }
           }
-        </article>
+        </ui-card>
       } @empty {
-        <section class="empty-state">
-          <h2>No trips this month</h2>
-          <p>Choose another month or plan a new trip.</p>
-          <a class="btn" routerLink="/travel/trips/new">New trip</a>
-        </section>
+        <ui-empty-state
+          title="No trips this month"
+          message="Choose another month or plan a new trip."
+        >
+          <ui-button
+            variant="ghost"
+            href="/travel/trips/new"
+            label="New trip"
+          />
+        </ui-empty-state>
       }
     }
   </main>`,

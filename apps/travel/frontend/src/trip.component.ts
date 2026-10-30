@@ -16,7 +16,13 @@ import {
   SESSION_CONTEXT,
   ConfirmService,
   ToastService,
+  UiBadgeComponent,
+  UiButtonComponent,
+  UiCardComponent,
   UiDialogComponent,
+  UiFieldComponent,
+  UiFieldControlDirective,
+  UiPageHeaderComponent,
 } from "@vivek/ui";
 import { MapComponent, TravelPlace } from "./map.component";
 import { TransportEditorComponent } from "./transport-editor.component";
@@ -26,7 +32,13 @@ import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
   imports: [
     FormsModule,
     RouterLink,
+    UiBadgeComponent,
+    UiButtonComponent,
+    UiCardComponent,
     UiDialogComponent,
+    UiFieldComponent,
+    UiFieldControlDirective,
+    UiPageHeaderComponent,
     MapComponent,
     TransportEditorComponent,
   ],

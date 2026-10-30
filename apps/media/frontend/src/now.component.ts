@@ -4,6 +4,12 @@ import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { MediaCardComponent } from "./media-card.component";
 import { MediaCard, NextEpisode, errorCopy } from "./media.models";
+import {
+  UiButtonComponent,
+  UiCardComponent,
+  UiPageHeaderComponent,
+  UiEmptyStateComponent,
+} from "@vivek/ui";
 interface Summary {
   currently: MediaCard[];
   next_episodes: NextEpisode[];
@@ -25,25 +31,34 @@ interface Summary {
 }
 @Component({
   standalone: true,
-  imports: [RouterLink, MediaCardComponent],
+  imports: [
+    RouterLink,
+    MediaCardComponent,
+    UiButtonComponent,
+    UiCardComponent,
+    UiPageHeaderComponent,
+    UiEmptyStateComponent,
+  ],
   template: `<main class="page media-page">
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">Your media, at your pace</p>
-        <h1>Now</h1>
-        <p class="muted">Pick up where you left off.</p>
-      </div>
-      <a class="btn btn-primary" routerLink="/media/search"
-        >Find something new</a
-      >
-    </header>
+    <ui-page-header
+      eyebrow="Your media, at your pace"
+      title="Now"
+      subtitle="Pick up where you left off."
+    >
+      <ui-button
+        uiPageActions
+        variant="primary"
+        href="/media/search"
+        label="Find something new"
+      />
+    </ui-page-header>
     @if (error()) {
       <p class="local-error" role="alert">{{ error() }}</p>
-      <button class="btn" (click)="load()">Retry Now</button>
+      <ui-button variant="ghost" (click)="load()">Retry Now</ui-button>
     }
     @if (data(); as summary) {
       @if (summary.next_episodes.length) {
-        <section class="surface">
+        <ui-card>
           <h2>Next episodes</h2>
           @for (episode of summary.next_episodes; track episode.episode_id) {
             <article class="episode-row">
@@ -59,12 +74,14 @@ interface Summary {
                   }
                 </p>
               </div>
-              <a class="btn" [routerLink]="['/media/item', episode.entry_id]"
-                >Open series</a
-              >
+              <ui-button
+                variant="ghost"
+                [href]="'/media/item/' + episode.entry_id"
+                label="Open series"
+              />
             </article>
           }
-        </section>
+        </ui-card>
       }
       <section>
         <h2>In progress</h2>
@@ -80,7 +97,7 @@ interface Summary {
         </div>
       </section>
       @if (summary.upcoming.length) {
-        <section class="surface">
+        <ui-card>
           <h2>Looking forward to</h2>
           @for (item of summary.upcoming; track item.id) {
             <p>
@@ -88,10 +105,10 @@ interface Summary {
               {{ item.release_on || "Date unknown" }}
             </p>
           }
-        </section>
+        </ui-card>
       }
       @if (summary.recent_reviews.length) {
-        <section class="surface">
+        <ui-card>
           <h2>Recent notes</h2>
           @for (review of summary.recent_reviews; track review.id) {
             <article>
@@ -103,14 +120,19 @@ interface Summary {
               <p>{{ review.review_excerpt }}</p>
             </article>
           }
-        </section>
+        </ui-card>
       }
       @if (!summary.counts.library) {
-        <section class="empty-state">
-          <h2>A place for your favorites</h2>
-          <p>Add a book, film, album, or anything you'd like to return to.</p>
-          <a class="btn" routerLink="/media/search">Start your library</a>
-        </section>
+        <ui-empty-state
+          title="A place for your favorites"
+          message="Add a book, film, album, or anything you'd like to return to."
+        >
+          <ui-button
+            variant="ghost"
+            href="/media/search"
+            label="Start your library"
+          />
+        </ui-empty-state>
       }
     } @else {
       @if (!error()) {

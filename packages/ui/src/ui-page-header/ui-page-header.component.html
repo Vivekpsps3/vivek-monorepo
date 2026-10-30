@@ -1,13 +1,35 @@
 <header class="ui-page-header" [class.ui-page-header--embed]="embedded()">
-  <div class="ui-page-header__text">
-    @if (!embedded()) {
-      <h1 class="ui-page-header__title">{{ title() }}</h1>
-    }
-    @if (!embedded() && subtitle()) {
-      <p class="ui-page-header__subtitle">{{ subtitle() }}</p>
-    }
-  </div>
-  <div class="ui-page-header__actions">
-    <ng-content select="[uiPageActions]" />
+  @if (!embedded() && backLabel() && backLink()) {
+    <a class="ui-page-header__back" [routerLink]="backLink()">{{
+      backLabel()
+    }}</a>
+  }
+  <div class="ui-page-header__row">
+    <div class="ui-page-header__art">
+      <ng-content select="[uiPageArt]" />
+    </div>
+    <div class="ui-page-header__text">
+      @if (!embedded() && eyebrow()) {
+        <p class="ui-page-header__eyebrow">{{ eyebrow() }}</p>
+      }
+      @if (!embedded()) {
+        <h1
+          class="ui-page-header__title"
+          [attr.id]="titleId() ?? null"
+          [attr.tabindex]="titleTabIndex() ?? null"
+        >
+          {{ title() }}
+        </h1>
+      }
+      @if (!embedded() && subtitle()) {
+        <p class="ui-page-header__subtitle">{{ subtitle() }}</p>
+      }
+      <div class="ui-page-header__extra">
+        <ng-content />
+      </div>
+    </div>
+    <div class="ui-page-header__actions">
+      <ng-content select="[uiPageActions]" />
+    </div>
   </div>
 </header>

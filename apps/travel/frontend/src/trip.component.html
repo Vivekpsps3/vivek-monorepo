@@ -1,33 +1,39 @@
 <main class="page travel-page">
-  <a routerLink="/travel">← Trips</a>
+  @if (!data()) {
+    <a class="ui-page-header__back" routerLink="/travel">← Trips</a>
+  }
   @if (error() && !editor) {
     <div class="local-error" role="alert">
-      {{ error() }} <button class="btn" (click)="load()">Retry trip</button>
+      {{ error() }}
+      <ui-button variant="ghost" (click)="load()">Retry trip</ui-button>
     </div>
   }
   @if (message()) {
     <p class="save-status" role="status">{{ message() }}</p>
   }
   @if (data(); as trip) {
-    <header class="page-heading">
-      <div>
-        <p class="eyebrow">{{ trip.status }} · {{ trip.phase }}</p>
-        <h1>{{ trip.title }}</h1>
-        <p>
-          {{ trip.start_date }} – {{ trip.end_date }} ·
-          {{
-            trip.nights === 0
-              ? "same day"
-              : trip.nights === 1
-                ? "1 night"
-                : trip.nights + " nights"
-          }}
-          · {{ trip.pto_days_effective }} PTO days
-        </p>
-        <p class="muted">{{ trip.cities.join(" → ") }}</p>
-      </div>
-      <button class="btn" (click)="open('trip')">Edit trip</button>
-    </header>
+    <ui-page-header
+      backLabel="← Trips"
+      backLink="/travel"
+      [eyebrow]="trip.status + ' · ' + trip.phase"
+      [title]="trip.title"
+    >
+      <p>
+        {{ trip.start_date }} – {{ trip.end_date }} ·
+        {{
+          trip.nights === 0
+            ? "same day"
+            : trip.nights === 1
+              ? "1 night"
+              : trip.nights + " nights"
+        }}
+        · {{ trip.pto_days_effective }} PTO days
+      </p>
+      <p class="muted">{{ trip.cities.join(" → ") }}</p>
+      <ui-button uiPageActions variant="ghost" (click)="open('trip')"
+        >Edit trip</ui-button
+      >
+    </ui-page-header>
     @for (conflict of trip.pto.conflicts; track conflict.on_date) {
       <p class="local-error">
         {{ conflict.on_date }} counts {{ conflict.amount }} PTO days across
@@ -35,27 +41,31 @@
       </p>
     }
     <div class="button-row">
-      <button class="btn btn-primary" (click)="open('transport')">
-        Add transport</button
-      ><button
-        class="btn"
+      <ui-button variant="primary" (click)="open('transport')">
+        Add transport</ui-button
+      ><ui-button
+        variant="ghost"
         (click)="selectedDay = trip.start_date; open('activity')"
       >
         Add activity
-      </button>
+      </ui-button>
       <details class="add-menu">
         <summary>Add more</summary>
         <div class="button-row">
-          <button class="btn" (click)="open('destination')">
-            Add destination</button
-          ><button class="btn" (click)="open('parking')">Add parking</button
-          ><button class="btn" (click)="open('note')">Add note</button
-          ><button class="btn" (click)="open('reminder')">Add reminder</button
-          ><button class="btn" (click)="open('budget')">Add cost</button>
+          <ui-button variant="ghost" (click)="open('destination')">
+            Add destination</ui-button
+          ><ui-button variant="ghost" (click)="open('parking')"
+            >Add parking</ui-button
+          ><ui-button variant="ghost" (click)="open('note')">Add note</ui-button
+          ><ui-button variant="ghost" (click)="open('reminder')"
+            >Add reminder</ui-button
+          ><ui-button variant="ghost" (click)="open('budget')"
+            >Add cost</ui-button
+          >
         </div>
       </details>
     </div>
-    <section class="surface">
+    <ui-card>
       <h2>Destinations</h2>
       @for (stay of trip.stays; track stay.id) {
         <article class="trip-row">
@@ -70,16 +80,21 @@
             }
           </div>
           <div class="button-row">
-            <button class="btn btn-sm" (click)="chooseLocation(stay)">
-              Choose location</button
-            ><button class="btn btn-sm" (click)="open('destination', stay)">
-              Edit destination</button
-            ><button
-              class="btn btn-sm"
+            <ui-button variant="ghost" size="sm" (click)="chooseLocation(stay)">
+              Choose location</ui-button
+            ><ui-button
+              variant="ghost"
+              size="sm"
+              (click)="open('destination', stay)"
+            >
+              Edit destination</ui-button
+            ><ui-button
+              variant="ghost"
+              size="sm"
               (click)="remove('/stays/' + stay.id, 'destination')"
             >
               Remove
-            </button>
+            </ui-button>
           </div>
         </article>
       } @empty {
@@ -87,27 +102,25 @@
           No destinations saved. Add one when you know where you're staying.
         </p>
       }
-      <button
-        class="btn"
+      <ui-button
+        variant="ghost"
         (click)="mapOpen = !mapOpen"
-        [attr.aria-expanded]="mapOpen"
-        aria-controls="trip-map"
+        [ariaExpanded]="mapOpen"
+        ariaControls="trip-map"
       >
         {{ mapOpen ? "Hide map" : "Show map" }}
-      </button>
+      </ui-button>
       @if (mapOpen) {
         <div id="trip-map"><travel-map [places]="mapPlaces()" /></div>
       }
-    </section>
+    </ui-card>
     @if (trip.transports.length) {
-      <section class="surface">
+      <ui-card>
         <h2>Transport</h2>
         @for (transport of trip.transports; track transport.id) {
           <article class="trip-row">
             <div>
-              <p class="eyebrow">
-                {{ transport.role }} · {{ transport.status }}
-              </p>
+              <ui-badge>{{ transport.role }} · {{ transport.status }}</ui-badge>
               <h3>{{ transport.label }}</h3>
               <p>{{ transport.depart_place }} → {{ transport.arrive_place }}</p>
               <p>
@@ -126,34 +139,40 @@
               }
             </div>
             <div class="button-row">
-              <button class="btn btn-sm" (click)="open('transport', transport)">
-                Edit transport</button
-              ><button
-                class="btn btn-sm"
+              <ui-button
+                variant="ghost"
+                size="sm"
+                (click)="open('transport', transport)"
+              >
+                Edit transport</ui-button
+              ><ui-button
+                variant="ghost"
+                size="sm"
                 (click)="remove('/transports/' + transport.id, 'transport')"
               >
                 Remove
-              </button>
+              </ui-button>
             </div>
           </article>
         }
-      </section>
+      </ui-card>
     }
-    <section class="surface">
+    <ui-card>
       <h2>Itinerary</h2>
       <p class="muted">Choose a date to add a plan. Empty days stay open.</p>
       <div class="date-strip" aria-label="Trip dates">
         @for (day of trip.days; track day.on_date) {
-          <button
-            class="btn btn-sm"
-            [attr.aria-pressed]="selectedDay === day.on_date"
+          <ui-button
+            variant="ghost"
+            size="sm"
+            [pressed]="selectedDay === day.on_date"
             (click)="selectedDay = day.on_date"
           >
             {{ day.on_date.slice(5) }}
             @if (day.items.length) {
               · {{ day.items.length }} plans
             }
-          </button>
+          </ui-button>
         }
       </div>
       @for (day of trip.days; track day.on_date) {
@@ -175,25 +194,31 @@
                   }
                 </div>
                 <div class="button-row">
-                  <button class="btn btn-sm" (click)="open('activity', plan)">
-                    Edit activity</button
-                  ><button
-                    class="btn btn-sm"
+                  <ui-button
+                    variant="ghost"
+                    size="sm"
+                    (click)="open('activity', plan)"
+                  >
+                    Edit activity</ui-button
+                  ><ui-button
+                    variant="ghost"
+                    size="sm"
                     (click)="remove('/plans/' + plan.id, 'activity')"
                   >
                     Remove
-                  </button>
+                  </ui-button>
                 </div>
               </article>
             } @empty {
               <p class="muted">A free day. Add something when you're ready.</p>
             }
-            <button
-              class="btn btn-sm"
+            <ui-button
+              variant="ghost"
+              size="sm"
               (click)="selectedDay = day.on_date; open('activity')"
             >
               Add activity on {{ day.on_date }}
-            </button>
+            </ui-button>
           </section>
         }
       }
@@ -210,15 +235,19 @@
           @for (plan of trip.outside_plans; track plan.id) {
             <p>
               {{ plan.on_date }} · {{ plan.title }}
-              <button class="btn btn-sm" (click)="open('activity', plan)">
+              <ui-button
+                variant="ghost"
+                size="sm"
+                (click)="open('activity', plan)"
+              >
                 Edit activity
-              </button>
+              </ui-button>
             </p>
           }
         </details>
       }
-    </section>
-    <section class="surface">
+    </ui-card>
+    <ui-card>
       <details>
         <summary>PTO · {{ trip.pto_days_effective }} days</summary>
         @if (trip.pto_mode === "legacy") {
@@ -235,22 +264,24 @@
           Weekends default to Not PTO. Turning PTO off keeps these selections.
         </p>
         <div class="button-row">
-          <button class="btn btn-sm" (click)="weekdays()">
-            Select weekdays</button
-          ><button class="btn btn-sm" (click)="clearPto()">Clear PTO</button>
+          <ui-button variant="ghost" size="sm" (click)="weekdays()">
+            Select weekdays</ui-button
+          ><ui-button variant="ghost" size="sm" (click)="clearPto()"
+            >Clear PTO</ui-button
+          >
         </div>
         <div class="pto-dates">
           @for (day of trip.days; track day.on_date) {
-            <label
-              >{{ day.on_date
-              }}<select
+            <ui-field [label]="day.on_date"
+              ><select
+                uiFieldControl
                 [ngModel]="charges[day.on_date]"
                 (ngModelChange)="charges[day.on_date] = +$event"
               >
                 <option [ngValue]="0">Not PTO</option>
                 <option [ngValue]="0.5">Half day</option>
                 <option [ngValue]="1">PTO</option>
-              </select></label
+              </select></ui-field
             >
           }
         </div>
@@ -265,13 +296,13 @@
             forecasts.
           </p>
         }
-        <button class="btn" [disabled]="saving()" (click)="savePto()">
+        <ui-button variant="ghost" [disabled]="saving()" (click)="savePto()">
           Save PTO dates
-        </button>
+        </ui-button>
       </details>
-    </section>
+    </ui-card>
     @if (trip.parking.length) {
-      <section class="surface">
+      <ui-card>
         <h2>Parking</h2>
         @for (parking of trip.parking; track parking.id) {
           <article class="trip-row">
@@ -284,20 +315,25 @@
               </p>
               <p>{{ parking.notes }}</p>
             </div>
-            <button class="btn btn-sm" (click)="open('parking', parking)">
-              Edit parking</button
-            ><button
-              class="btn btn-sm"
+            <ui-button
+              variant="ghost"
+              size="sm"
+              (click)="open('parking', parking)"
+            >
+              Edit parking</ui-button
+            ><ui-button
+              variant="ghost"
+              size="sm"
               (click)="remove('/parking/' + parking.id, 'parking')"
             >
               Remove parking
-            </button>
+            </ui-button>
           </article>
         }
-      </section>
+      </ui-card>
     }
     @if (trip.note_entries.length || trip.notes) {
-      <section class="surface">
+      <ui-card>
         <h2>Notes</h2>
         @if (trip.notes) {
           <p>{{ trip.notes }}</p>
@@ -308,18 +344,19 @@
               <p>{{ note.body }}</p>
               <p class="muted">{{ note.on_date }}</p>
             </div>
-            <button
-              class="btn btn-sm"
+            <ui-button
+              variant="ghost"
+              size="sm"
               (click)="remove('/notes/' + note.id, 'note')"
             >
               Remove note
-            </button>
+            </ui-button>
           </article>
         }
-      </section>
+      </ui-card>
     }
     @if (trip.reminders.length) {
-      <section class="surface">
+      <ui-card>
         <h2>Reminders</h2>
         @for (reminder of trip.reminders; track reminder.id) {
           <article class="trip-row">
@@ -333,21 +370,26 @@
               </p>
             </div>
             <div class="button-row">
-              <button class="btn btn-sm" (click)="reminderDone(reminder)">
-                {{ reminder.done ? "Mark open" : "Mark done" }}</button
-              ><button
-                class="btn btn-sm"
+              <ui-button
+                variant="ghost"
+                size="sm"
+                (click)="reminderDone(reminder)"
+              >
+                {{ reminder.done ? "Mark open" : "Mark done" }}</ui-button
+              ><ui-button
+                variant="ghost"
+                size="sm"
                 (click)="remove('/reminders/' + reminder.id, 'reminder')"
               >
                 Remove
-              </button>
+              </ui-button>
             </div>
           </article>
         }
-      </section>
+      </ui-card>
     }
     @if (trip.budget.currencies.length || trip.budget.manual.length) {
-      <section class="surface">
+      <ui-card>
         <h2>Trip costs</h2>
         @for (total of trip.budget.currencies; track total.currency) {
           <p>
@@ -363,19 +405,28 @@
               @if (line.paid) {
                 · Paid
               }</span
-            ><button class="btn btn-sm" (click)="open('budget', line)">
-              Edit cost</button
-            ><button
-              class="btn btn-sm"
+            ><ui-button
+              variant="ghost"
+              size="sm"
+              (click)="open('budget', line)"
+            >
+              Edit cost</ui-button
+            ><ui-button
+              variant="ghost"
+              size="sm"
               (click)="remove('/budget-lines/' + line.id, 'cost')"
             >
               Remove cost
-            </button>
+            </ui-button>
           </article>
         }
-      </section>
+      </ui-card>
     }
-    <button class="btn btn-danger" (click)="deleteTrip()">Delete trip</button>
+    <div class="danger-zone">
+      <ui-button variant="danger-ghost" (click)="deleteTrip()"
+        >Delete trip</ui-button
+      >
+    </div>
     <ui-dialog
       [open]="!!editor"
       labelledBy="travel-editor-title"
@@ -403,104 +454,116 @@
       } @else {
         @if (editor === "trip") {
           <form class="travel-form" #editForm="ngForm" (ngSubmit)="saveMeta()">
-            <label
-              >Trip name<input
+            <ui-field label="Trip name" [required]="true"
+              ><input
+                uiFieldControl
                 required
                 name="title"
                 [(ngModel)]="meta.title"
                 maxlength="200"
-            /></label>
+            /></ui-field>
             <div class="form-row">
-              <label
-                >Departure date<input
+              <ui-field label="Departure date" [required]="true"
+                ><input
+                  uiFieldControl
                   required
                   type="date"
                   name="start"
-                  [(ngModel)]="meta.start_date" /></label
-              ><label
-                >Return date<input
+                  [(ngModel)]="meta.start_date" /></ui-field
+              ><ui-field label="Return date" [required]="true"
+                ><input
+                  uiFieldControl
                   required
                   type="date"
                   name="end"
                   [(ngModel)]="meta.end_date"
                   [min]="meta.start_date"
-              /></label>
+              /></ui-field>
             </div>
-            <label
-              >Status<select name="status" [(ngModel)]="meta.status">
+            <ui-field label="Status"
+              ><select uiFieldControl name="status" [(ngModel)]="meta.status">
                 <option value="planning">Planning</option>
                 <option value="booked">Booked</option>
                 <option value="done">Done</option>
-              </select></label
-            ><button
-              class="btn btn-primary"
+              </select></ui-field
+            ><ui-button
+              variant="primary"
+              type="submit"
               [disabled]="saving() || !editForm.valid"
             >
               Save trip
-            </button>
+            </ui-button>
           </form>
         }
         @if (editor === "activity") {
           <form class="travel-form" #activity="ngForm" (ngSubmit)="savePlan()">
-            <label
-              >Activity title <span aria-hidden="true">*</span
+            <ui-field label="Activity title" [required]="true"
               ><input
+                uiFieldControl
                 required
                 name="title"
                 maxlength="200"
-                [(ngModel)]="plan.title" /></label
-            ><label
-              >Date <span aria-hidden="true">*</span
+                [(ngModel)]="plan.title" /></ui-field
+            ><ui-field label="Date" [required]="true"
               ><input
+                uiFieldControl
                 required
                 type="date"
                 name="date"
                 [(ngModel)]="plan.on_date"
-            /></label>
+            /></ui-field>
             <details>
               <summary>Optional details</summary>
               <div class="form-row">
-                <label
-                  >Start time<input
+                <ui-field label="Start time"
+                  ><input
+                    uiFieldControl
                     type="time"
                     name="start_time"
-                    [(ngModel)]="plan.start_time" /></label
-                ><label
-                  >End time<input
+                    [(ngModel)]="plan.start_time" /></ui-field
+                ><ui-field label="End time"
+                  ><input
+                    uiFieldControl
                     type="time"
                     name="end_time"
                     [(ngModel)]="plan.end_time"
-                /></label>
+                /></ui-field>
               </div>
-              <label
-                >Type<select name="kind" [(ngModel)]="plan.kind">
+              <ui-field label="Type"
+                ><select uiFieldControl name="kind" [(ngModel)]="plan.kind">
                   <option value="activity">Activity</option>
                   <option value="restaurant">Restaurant</option>
                   <option value="lodging">Lodging</option>
                   <option value="transit">Transit</option>
                   <option value="other">Other</option>
-                </select></label
-              ><label
-                >Place<input
+                </select></ui-field
+              ><ui-field label="Place"
+                ><input
+                  uiFieldControl
                   name="place_name"
-                  [(ngModel)]="plan.place_name" /></label
-              ><label
-                >Address<input name="address" [(ngModel)]="plan.address"
-              /></label>
+                  [(ngModel)]="plan.place_name" /></ui-field
+              ><ui-field label="Address"
+                ><input
+                  uiFieldControl
+                  name="address"
+                  [(ngModel)]="plan.address"
+              /></ui-field>
               <div class="form-row">
-                <label
-                  >Cost<input
+                <ui-field label="Cost"
+                  ><input
+                    uiFieldControl
                     type="number"
                     step="0.01"
                     min="0"
                     name="cost"
-                    [(ngModel)]="plan.cost" /></label
-                ><label
-                  >Currency<input
+                    [(ngModel)]="plan.cost" /></ui-field
+                ><ui-field label="Currency"
+                  ><input
+                    uiFieldControl
                     maxlength="3"
                     name="currency"
                     [(ngModel)]="plan.currency"
-                /></label>
+                /></ui-field>
               </div>
               <label class="check-label"
                 ><input
@@ -508,19 +571,21 @@
                   name="paid"
                   [(ngModel)]="plan.paid"
                 />Paid</label
-              ><label
-                >Notes<textarea
+              ><ui-field label="Notes">
+                <textarea
+                  uiFieldControl
                   name="notes"
                   [(ngModel)]="plan.notes"
                 ></textarea>
-              </label>
+              </ui-field>
             </details>
-            <button
-              class="btn btn-primary"
+            <ui-button
+              variant="primary"
+              type="submit"
               [disabled]="saving() || !activity.valid"
             >
               Save activity
-            </button>
+            </ui-button>
           </form>
         }
         @if (editor === "destination") {
@@ -529,74 +594,82 @@
             #destination="ngForm"
             (ngSubmit)="saveStay()"
           >
-            <label
-              >Destination city <span aria-hidden="true">*</span
+            <ui-field label="Destination city" [required]="true"
               ><input
+                uiFieldControl
                 required
                 name="city"
                 maxlength="200"
                 [(ngModel)]="stay.city"
-            /></label>
+            /></ui-field>
             <div class="form-row">
-              <label
-                >First day<input
+              <ui-field label="First day" [required]="true"
+                ><input
+                  uiFieldControl
                   type="date"
                   required
                   name="arrive"
                   [(ngModel)]="stay.arrive_on"
                   [min]="trip.start_date"
-                  [max]="trip.end_date" /></label
-              ><label
-                >Last day<input
+                  [max]="trip.end_date" /></ui-field
+              ><ui-field label="Last day" [required]="true"
+                ><input
+                  uiFieldControl
                   type="date"
                   required
                   name="leave"
                   [(ngModel)]="stay.leave_on"
                   [min]="stay.arrive_on"
                   [max]="trip.end_date"
-              /></label>
+              /></ui-field>
             </div>
             <details>
               <summary>Optional lodging details</summary>
-              <label
-                >Lodging name<input
+              <ui-field label="Lodging name"
+                ><input
+                  uiFieldControl
                   name="lodging"
-                  [(ngModel)]="stay.lodging_name" /></label
-              ><label
-                >Lodging address<input
+                  [(ngModel)]="stay.lodging_name" /></ui-field
+              ><ui-field label="Lodging address"
+                ><input
+                  uiFieldControl
                   name="address"
-                  [(ngModel)]="stay.lodging_address" /></label
-              ><label
-                >Notes<textarea
+                  [(ngModel)]="stay.lodging_address" /></ui-field
+              ><ui-field label="Notes">
+                <textarea
+                  uiFieldControl
                   name="notes"
                   [(ngModel)]="stay.notes"
                 ></textarea>
-              </label>
+              </ui-field>
             </details>
-            <button
-              class="btn btn-primary"
+            <ui-button
+              variant="primary"
+              type="submit"
               [disabled]="saving() || !destination.valid"
             >
               Save destination
-            </button>
+            </ui-button>
           </form>
         }
         @if (editor === "location") {
           <form #locationForm="ngForm" (ngSubmit)="findPlaces()">
-            <label
-              >Place search<input
+            <ui-field label="Place search" [required]="true"
+              ><input
+                uiFieldControl
                 required
                 [(ngModel)]="placeQuery"
                 (ngModelChange)="placeSearchChanged()"
                 name="query"
                 minlength="2"
-                maxlength="200" /></label
-            ><button
-              class="btn"
+                maxlength="200" /></ui-field
+            ><ui-button
+              variant="ghost"
+              type="submit"
               [disabled]="finding() || saving() || !locationForm.valid"
             >
               Find places
-            </button>
+            </ui-button>
           </form>
           @if (finding()) {
             <p role="status">Finding locations…</p>
@@ -605,13 +678,14 @@
             <p role="alert" class="local-error">{{ placeError() }}</p>
           }
           @for (place of places(); track $index) {
-            <button
-              class="btn place-choice"
+            <ui-button
+              variant="ghost"
+              class="place-choice"
               [disabled]="saving() || finding()"
               (click)="selectPlace(place)"
             >
               {{ place.label }}
-            </button>
+            </ui-button>
           } @empty {
             @if (!finding() && !placeError()) {
               <p class="muted" role="status">
@@ -630,27 +704,32 @@
             #noteForm="ngForm"
             (ngSubmit)="mutate(endpoint('/notes'), note)"
           >
-            <label
-              >Note <span aria-hidden="true">*</span
-              ><textarea
+            <ui-field label="Note" [required]="true">
+              <textarea
+                uiFieldControl
                 required
                 name="body"
                 [(ngModel)]="note.body"
                 maxlength="8000"
               ></textarea>
-            </label>
+            </ui-field>
             <details>
               <summary>Optional date</summary>
-              <label
-                >Date<input type="date" name="date" [(ngModel)]="note.on_date"
-              /></label>
+              <ui-field label="Date"
+                ><input
+                  uiFieldControl
+                  type="date"
+                  name="date"
+                  [(ngModel)]="note.on_date"
+              /></ui-field>
             </details>
-            <button
-              class="btn btn-primary"
+            <ui-button
+              variant="primary"
+              type="submit"
               [disabled]="saving() || !noteForm.valid"
             >
               Save note
-            </button>
+            </ui-button>
           </form>
         }
         @if (editor === "reminder") {
@@ -659,53 +738,59 @@
             #reminderForm="ngForm"
             (ngSubmit)="mutate(endpoint('/reminders'), reminder)"
           >
-            <label
-              >Reminder <span aria-hidden="true">*</span
+            <ui-field label="Reminder" [required]="true"
               ><input
+                uiFieldControl
                 required
                 name="title"
                 [(ngModel)]="reminder.title"
                 maxlength="200"
-            /></label>
+            /></ui-field>
             <details>
               <summary>Optional details</summary>
-              <label
-                >Due at<input
+              <ui-field label="Due at"
+                ><input
+                  uiFieldControl
                   type="datetime-local"
                   name="due"
-                  [(ngModel)]="reminder.due_at" /></label
-              ><label
-                >Notes<textarea
+                  [(ngModel)]="reminder.due_at" /></ui-field
+              ><ui-field label="Notes">
+                <textarea
+                  uiFieldControl
                   name="notes"
                   [(ngModel)]="reminder.notes"
                 ></textarea>
-              </label>
+              </ui-field>
             </details>
-            <button
-              class="btn btn-primary"
+            <ui-button
+              variant="primary"
+              type="submit"
               [disabled]="saving() || !reminderForm.valid"
             >
               Save reminder
-            </button>
+            </ui-button>
           </form>
         }
         @if (editor === "parking") {
           <form class="travel-form" (ngSubmit)="saveParking()">
-            <label
-              >Parking place<input
+            <ui-field label="Parking place"
+              ><input
+                uiFieldControl
                 name="place_name"
-                [(ngModel)]="parking.place_name" /></label
-            ><label
-              >Is parking needed?<select
+                [(ngModel)]="parking.place_name" /></ui-field
+            ><ui-field label="Is parking needed?"
+              ><select
+                uiFieldControl
                 name="necessary"
                 [(ngModel)]="parking.necessary"
               >
                 <option value="unknown">Not sure yet</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
-              </select></label
-            ><label
-              >Arrangement<select
+              </select></ui-field
+            ><ui-field label="Arrangement"
+              ><select
+                uiFieldControl
                 name="arrangement"
                 [(ngModel)]="parking.arrangement"
               >
@@ -716,7 +801,7 @@
                 <option value="pickup">Pickup</option>
                 <option value="rideshare">Rideshare</option>
                 <option value="none">None</option>
-              </select></label
+              </select></ui-field
             ><label class="check-label"
               ><input
                 type="checkbox"
@@ -726,112 +811,124 @@
             >
             <details>
               <summary>Optional details</summary>
-              <label
-                >Address<input
+              <ui-field label="Address"
+                ><input
+                  uiFieldControl
                   name="address"
-                  [(ngModel)]="parking.address" /></label
-              ><label
-                >Confirmation<input
+                  [(ngModel)]="parking.address" /></ui-field
+              ><ui-field label="Confirmation"
+                ><input
+                  uiFieldControl
                   name="confirmation"
                   [(ngModel)]="parking.confirmation"
-              /></label>
+              /></ui-field>
               <div class="form-row">
-                <label
-                  >Cost<input
+                <ui-field label="Cost"
+                  ><input
+                    uiFieldControl
                     type="number"
                     min="0"
                     step="0.01"
                     name="cost"
-                    [(ngModel)]="parking.cost" /></label
-                ><label
-                  >Currency<input
+                    [(ngModel)]="parking.cost" /></ui-field
+                ><ui-field label="Currency"
+                  ><input
+                    uiFieldControl
                     name="currency"
                     maxlength="3"
                     [(ngModel)]="parking.currency"
-                /></label>
+                /></ui-field>
               </div>
-              <label
-                >Notes<textarea
+              <ui-field label="Notes">
+                <textarea
+                  uiFieldControl
                   name="notes"
                   [(ngModel)]="parking.notes"
                 ></textarea>
-              </label>
+              </ui-field>
             </details>
-            <button class="btn btn-primary" [disabled]="saving()">
+            <ui-button variant="primary" type="submit" [disabled]="saving()">
               Save parking
-            </button>
+            </ui-button>
           </form>
         }
         @if (editor === "budget") {
           <form class="travel-form" #cost="ngForm" (ngSubmit)="saveBudget()">
-            <label
-              >Cost label <span aria-hidden="true">*</span
+            <ui-field label="Cost label" [required]="true"
               ><input
+                uiFieldControl
                 required
                 name="label"
                 [(ngModel)]="budget.label"
                 maxlength="200"
-            /></label>
+            /></ui-field>
             <div class="form-row">
-              <label
-                >Amount <span aria-hidden="true">*</span
+              <ui-field label="Amount" [required]="true"
                 ><input
+                  uiFieldControl
                   type="number"
                   required
                   min="0"
                   step="0.01"
                   name="amount"
-                  [(ngModel)]="budget.amount" /></label
-              ><label
-                >Currency<input
+                  [(ngModel)]="budget.amount" /></ui-field
+              ><ui-field label="Currency" [required]="true"
+                ><input
+                  uiFieldControl
                   name="currency"
                   required
                   maxlength="3"
                   [(ngModel)]="budget.currency"
-              /></label>
+              /></ui-field>
             </div>
             <details>
               <summary>Optional details</summary>
-              <label
-                >Category<select name="category" [(ngModel)]="budget.category">
+              <ui-field label="Category"
+                ><select
+                  uiFieldControl
+                  name="category"
+                  [(ngModel)]="budget.category"
+                >
                   <option value="other">Other</option>
                   <option value="food">Food</option>
                   <option value="lodging">Lodging</option>
                   <option value="activity">Activity</option>
                   <option value="transport">Transport</option>
-                </select></label
+                </select></ui-field
               ><label class="check-label"
                 ><input
                   type="checkbox"
                   name="paid"
                   [(ngModel)]="budget.paid"
                 />Paid</label
-              ><label
-                >Notes<textarea
+              ><ui-field label="Notes">
+                <textarea
+                  uiFieldControl
                   name="notes"
                   [(ngModel)]="budget.notes"
                 ></textarea>
-              </label>
+              </ui-field>
             </details>
-            <button
-              class="btn btn-primary"
+            <ui-button
+              variant="primary"
+              type="submit"
               [disabled]="saving() || !cost.valid"
             >
               Save cost
-            </button>
+            </ui-button>
           </form>
         }
         @if (error()) {
           <p role="alert" class="local-error">{{ error() }}</p>
         }
-        <button
+        <ui-button
+          variant="ghost"
           type="button"
-          class="btn"
           [disabled]="saving()"
           (click)="close()"
         >
           Cancel
-        </button>
+        </ui-button>
       }
     </ui-dialog>
   }

@@ -1,10 +1,11 @@
 import { Component, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { UiBadgeComponent } from "@vivek/ui";
 import { MediaCard, statusLabel } from "./media.models";
 @Component({
   selector: "media-card",
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, UiBadgeComponent],
   template: `<article class="media-card">
     <a
       class="media-art"
@@ -24,7 +25,7 @@ import { MediaCard, statusLabel } from "./media.models";
       }
     </a>
     <div class="media-card-copy">
-      <p class="eyebrow">
+      <ui-badge>
         {{
           item().kind === "tv"
             ? "Series"
@@ -35,7 +36,7 @@ import { MediaCard, statusLabel } from "./media.models";
         @if (item().year) {
           · {{ item().year }}
         }
-      </p>
+      </ui-badge>
       <h2>
         <a [routerLink]="['/media/item', item().id]">{{ item().title }}</a>
       </h2>
@@ -44,7 +45,7 @@ import { MediaCard, statusLabel } from "./media.models";
       }
       <p>
         @if (item().favorite) {
-          <span class="badge">Favorite</span>
+          <ui-badge>Favorite</ui-badge>
         }
         {{ status(item().status) }}
         @if (item().rating !== null) {

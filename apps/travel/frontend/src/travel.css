@@ -81,7 +81,7 @@
   text-decoration: none;
   margin: 0.5rem 0;
 }
-.travel-page .trip-card:hover {
+.travel-page .trip-card:hover .ui-card {
   border-color: var(--accent);
 }
 .travel-page .travel-form {
@@ -154,7 +154,8 @@
   gap: 0.5rem;
   padding: 0.5rem 0;
 }
-.travel-page .date-strip .btn {
+.travel-page .date-strip .btn,
+.travel-page .date-strip ui-button {
   flex-shrink: 0;
 }
 .travel-page .date-strip [aria-pressed="true"] {
@@ -176,6 +177,10 @@
   margin: 0.75rem 0;
   text-align: left;
   width: 100%;
+}
+.travel-page .place-choice .ui-btn {
+  width: 100%;
+  justify-content: flex-start;
 }
 .travel-page .balance-number {
   font-size: 2rem;

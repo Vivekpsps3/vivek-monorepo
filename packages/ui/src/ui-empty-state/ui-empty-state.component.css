@@ -1,3 +1,7 @@
+:host {
+  display: block;
+}
+
 .ui-empty {
   text-align: center;
   padding: var(--space-8) var(--space-4);
