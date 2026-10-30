@@ -93,10 +93,19 @@ describe('budget kept pure core', () => {
     expect(resolveAnnualPlan([], inputs(4800, 100))).toBeNull();
   });
 
-  it('treats a legacy profile with no spending_mode as manual', () => {
+  it('treats a missing or null spending_mode as manual', () => {
     const legacy = profile({ id: 1, updated_at: at, annual: 1800 });
     expect(legacy.payload.spending_mode).toBeUndefined();
     expect(resolveAnnualPlan([legacy], inputs(9999, 9999))).toEqual({ annualPlan: 1800, mode: 'manual' });
+    const explicitNull = profile({ id: 2, updated_at: at, annual: 1800 });
+    explicitNull.payload.spending_mode = null as unknown as ProfilePayload['spending_mode'];
+    expect(resolveAnnualPlan([explicitNull], inputs(9999, 9999))).toEqual({ annualPlan: 1800, mode: 'manual' });
+  });
+
+  it('does not resolve an unrecognized spending_mode to a plan', () => {
+    const row = profile({ id: 1, updated_at: at, annual: PLAN, mode: 'manual' });
+    row.payload.spending_mode = 'seasonal' as ProfilePayload['spending_mode'];
+    expect(resolveAnnualPlan([row], inputs(1, 1))).toBeNull();
   });
 
   it('breaks an updated_at tie by the highest profile id', () => {
@@ -285,12 +294,14 @@ describe('loadFinanceBudgetKept', () => {
   });
 
   it('returns cancelled without importing crypto when the signal is already aborted', async () => {
-    localStorage.setItem(DEK_STORE, 'synthetic-budget-kept');
+    localStorage.removeItem(DEK_STORE);
     const load = spyOn(budgetKeptCryptoImports, 'load');
     const ctrl = new AbortController();
     ctrl.abort();
-    const result = await ask({ get: () => { throw new Error('unread'); } } as unknown as Injector, { signal: ctrl.signal });
-    expect(result).toEqual({ status: 'cancelled' });
+    const unread = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    expect(await ask(unread, { signal: ctrl.signal })).toEqual({ status: 'cancelled' });
+    localStorage.setItem(DEK_STORE, 'synthetic-budget-kept');
+    expect(await ask(unread, { signal: ctrl.signal })).toEqual({ status: 'cancelled' });
     expect(load).not.toHaveBeenCalled();
   });
 
@@ -436,6 +447,80 @@ describe('loadFinanceBudgetKept', () => {
     expect(load).toHaveBeenCalled();
     expect(listProfiles).not.toHaveBeenCalled();
     expect(getTransactions).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable for an unrecognized spending_mode and ranks that below locked', async () => {
+    localStorage.removeItem(DEK_STORE);
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const get = jasmine.createSpy('get');
+    expect(await ask({ get } as unknown as Injector)).toEqual({ status: 'locked' });
+    expect(load).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+
+    const newer = profile({ id: 2, updated_at: '2026-08-01T00:00:00.000Z', annual: PLAN, mode: 'manual' });
+    newer.payload.spending_mode = 'seasonal' as ProfilePayload['spending_mode'];
+    const older = profile({ id: 1, updated_at: '2026-01-01T00:00:00.000Z', mode: 'manual', annual: PLAN });
+    const purchase = [tx({ id: 1, date: '2026-09-01', amount: 10, kind: 'purchase' })];
+    expect(await ask(unlock({ profiles: [older, newer], txs: [] }).injector)).toEqual({ status: 'unavailable' });
+    expect(await ask(unlock({ profiles: [older, newer], txs: purchase }).injector)).toEqual({ status: 'unavailable' });
+  });
+
+  it('throws RangeError when today or weeks is outside the allowed window', async () => {
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    await expectAsync(ask(injector, { weeks: 0 })).toBeRejectedWithError(RangeError, /weeks/);
+    await expectAsync(ask(injector, { weeks: -1 })).toBeRejectedWithError(RangeError, /weeks/);
+    await expectAsync(ask(injector, { weeks: 1.5 })).toBeRejectedWithError(RangeError, /weeks/);
+    await expectAsync(ask(injector, { weeks: 521 })).toBeRejectedWithError(RangeError, /weeks/);
+    await expectAsync(ask(injector, { today: '2026-02-31' })).toBeRejectedWithError(RangeError, /today/);
+    await expectAsync(ask(injector, { today: 'not-a-date' })).toBeRejectedWithError(RangeError, /today/);
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('accepts the upper bound of 520 completed weeks', async () => {
+    const { injector } = unlock({
+      profiles: [manual],
+      txs: [tx({ id: 1, date: '2026-01-05', amount: 1, kind: 'purchase' })],
+    });
+    const result = await ask(injector, { weeks: 520 });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.weeks.length).toBe(520);
+    expect(result.weeks[result.weeks.length - 1].weekStart).toBe('2026-10-05');
+  });
+
+  it('returns expired instead of no_plan when the vault read is a 401', async () => {
+    const { injector } = unlock({
+      profiles: [],
+      txs: [],
+      getTransactions: () => Promise.reject(new HttpErrorResponse({ status: 401 })),
+    });
+    expect(await ask(injector)).toEqual({ status: 'expired' });
+  });
+
+  it('returns cancelled when the signal aborts during vault initialization', async () => {
+    let markStarted!: () => void;
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const { injector } = unlock({
+      profiles: [manual],
+      whenReady: () => {
+        markStarted();
+        return new Promise(() => undefined);
+      },
+    });
+    const ctrl = new AbortController();
+    const pending = ask(injector, { signal: ctrl.signal, deadlineMs: 5000 });
+    await started;
+    ctrl.abort();
+    expect(await pending).toEqual({ status: 'cancelled' });
+  });
+
+  it('returns unavailable when vault initialization passes the deadline', async () => {
+    const { injector } = unlock({
+      profiles: [manual],
+      whenReady: () => new Promise(() => undefined),
+    });
+    expect(await ask(injector, { deadlineMs: 30 })).toEqual({ status: 'unavailable' });
   });
 
   it('loads the vault, planning, and encrypted store through the lazy import', async () => {

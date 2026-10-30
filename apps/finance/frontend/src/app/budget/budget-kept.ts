@@ -85,32 +85,60 @@ function laterProfile(candidate: PlanningProfile, current: PlanningProfile): boo
   return candidate.id > current.id;
 }
 
-function planForPayload(payload: ProfilePayload, inputs: PlanInputs): { annualPlan: number; mode: SpendingPlanMode } | null {
-  const mode: string | undefined = payload.spending_mode;
+type PlanDecision =
+  | { status: 'plan'; annualPlan: number; mode: SpendingPlanMode }
+  | { status: 'no_plan' }
+  | { status: 'unavailable' };
+
+/** Missing or null is legacy manual. Any other string is unrecognized and is not guessed. */
+function spendingModeOf(payload: ProfilePayload): SpendingPlanMode | 'unrecognized' {
+  const mode = payload.spending_mode as unknown;
+  if (mode == null) return 'manual';
+  if (mode === 'manual' || mode === 'components' || mode === 'recurring') return mode;
+  return 'unrecognized';
+}
+
+function amountForMode(payload: ProfilePayload, mode: SpendingPlanMode, inputs: PlanInputs): number | null | undefined {
   switch (mode) {
-    case undefined:
     case 'manual':
-      return positivePlan(payload.annual_spending, 'manual');
+      return payload.annual_spending;
     case 'components':
-      return positivePlan(componentSum(payload), 'components');
+      return componentSum(payload);
     case 'recurring':
-      return positivePlan(inputs.recurring_annual_spending ?? inputs.implied_annual_spending, 'recurring');
-    default:
-      return null;
+      return inputs.recurring_annual_spending ?? inputs.implied_annual_spending;
   }
 }
 
-/** Latest updated_at, then highest id. Missing mode is manual. Null, non-finite, or <= 0 is not a plan. */
-export function resolveAnnualPlan(
-  profiles: PlanningProfile[],
-  inputs: PlanInputs,
-): { annualPlan: number; mode: SpendingPlanMode } | null {
+function decidePayload(payload: ProfilePayload, inputs: PlanInputs): PlanDecision {
+  const mode = spendingModeOf(payload);
+  if (mode === 'unrecognized') return { status: 'unavailable' };
+  const plan = positivePlan(amountForMode(payload, mode, inputs), mode);
+  if (!plan) return { status: 'no_plan' };
+  return { status: 'plan', annualPlan: plan.annualPlan, mode: plan.mode };
+}
+
+function latestProfile(profiles: PlanningProfile[]): PlanningProfile | null {
   let latest: PlanningProfile | null = null;
   for (const profile of profiles) {
     if (!latest || laterProfile(profile, latest)) latest = profile;
   }
-  if (!latest?.payload) return null;
-  return planForPayload(latest.payload, inputs);
+  return latest;
+}
+
+function decideLatestPlan(profiles: PlanningProfile[], inputs: PlanInputs): PlanDecision {
+  const latest = latestProfile(profiles);
+  if (!latest?.payload) return { status: 'no_plan' };
+  return decidePayload(latest.payload, inputs);
+}
+
+/** Latest updated_at, then highest id. Missing or null mode is manual. A non-positive number is null. */
+export function resolveAnnualPlan(
+  profiles: PlanningProfile[],
+  inputs: PlanInputs,
+): { annualPlan: number; mode: SpendingPlanMode } | null {
+  const decision = decideLatestPlan(profiles, inputs);
+  if (decision.status !== 'plan') return null;
+  return { annualPlan: decision.annualPlan, mode: decision.mode };
 }
 
 /** Minimum YYYY-MM-DD over every record, including excluded, transfer, and payment rows. */
@@ -212,14 +240,20 @@ function injectService<T>(injector: Injector, token: object): T {
   return injector.get(token as never);
 }
 
-function completedWeekStarts(today: string, weeks: number, includeCurrentWeek: boolean): string[] | null {
-  if (!Number.isInteger(weeks) || weeks < 0) return null;
+const BUDGET_KEPT_MIN_WEEKS = 1;
+const BUDGET_KEPT_MAX_WEEKS = 520;
+
+/** Caller bugs. `today` is a real YYYY-MM-DD. `weeks` is an integer from 1 to 520. */
+function completedWeekStarts(today: string, weeks: number, includeCurrentWeek: boolean): string[] {
+  if (!Number.isInteger(weeks) || weeks < BUDGET_KEPT_MIN_WEEKS || weeks > BUDGET_KEPT_MAX_WEEKS) {
+    throw new RangeError(`weeks must be an integer from ${BUDGET_KEPT_MIN_WEEKS} to ${BUDGET_KEPT_MAX_WEEKS}`);
+  }
   const current = isoMonday(today);
-  if (!current) return null;
+  if (!current) throw new RangeError('today must be a valid YYYY-MM-DD');
   const starts: string[] = [];
   for (let ago = weeks; ago >= 1; ago -= 1) {
     const start = shiftIsoDate(current, -7 * ago);
-    if (!start) return null;
+    if (!start) throw new RangeError('today must be a valid YYYY-MM-DD');
     starts.push(start);
   }
   if (includeCurrentWeek) starts.push(current);
@@ -230,19 +264,17 @@ function assembleBudgetKept(
   profiles: PlanningProfile[],
   inputs: PlanInputs,
   txs: Transaction[],
-  opts: { today: string; weeks: number; includeCurrentWeek?: boolean },
+  weekStarts: string[],
 ): BudgetKeptResult {
-  const plan = resolveAnnualPlan(profiles, inputs);
-  if (!plan) return { status: 'no_plan' };
+  const decision = decideLatestPlan(profiles, inputs);
+  if (decision.status !== 'plan') return { status: decision.status };
   if (txs.length === 0) return { status: 'no_data' };
-  const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
-  if (!weekStarts) return { status: 'unavailable' };
   return {
     status: 'ready',
-    annualPlan: plan.annualPlan,
-    weeklyPlan: weeklyPlanFor(plan.annualPlan),
-    mode: plan.mode,
-    weeks: budgetKeptWeeks(txs, plan.annualPlan, weekStarts),
+    annualPlan: decision.annualPlan,
+    weeklyPlan: weeklyPlanFor(decision.annualPlan),
+    mode: decision.mode,
+    weeks: budgetKeptWeeks(txs, decision.annualPlan, weekStarts),
   };
 }
 
@@ -265,6 +297,25 @@ async function openBudgetKeptVault(
   }
 }
 
+async function readBudgetKept(
+  injector: Injector,
+  signal: AbortSignal,
+  weekStarts: string[],
+): Promise<BudgetKeptResult> {
+  const opened = await openBudgetKeptVault(injector, signal);
+  if (opened.status !== 'open') return opened;
+  const [profiles, inputs, txs] = await firstValueFrom(
+    combineLatest([
+      opened.planning.listProfiles(),
+      opened.planning.getInputs(),
+      defer(() => from(opened.store.getTransactions())),
+    ]).pipe(takeUntil(abort$(signal))),
+  );
+  if (signal.aborted) return { status: 'cancelled' };
+  if (!opened.vault.isUnlocked) return { status: 'locked' };
+  return assembleBudgetKept(profiles, inputs, txs, weekStarts);
+}
+
 /** Lazy, like loadFinanceHubSnapshot. Locked before any vault or network read. */
 export async function loadFinanceBudgetKept(
   injector: Injector,
@@ -277,21 +328,17 @@ export async function loadFinanceBudgetKept(
   },
 ): Promise<BudgetKeptResult> {
   if (signal.aborted) return { status: 'cancelled' };
-  if (!financeVaultPresent()) return { status: 'locked' };
-  const opened = await openBudgetKeptVault(injector, signal);
-  if (opened.status !== 'open') return opened;
   try {
-    const [profiles, inputs, txs] = await firstValueFrom(
-      combineLatest([
-        opened.planning.listProfiles(),
-        opened.planning.getInputs(),
-        defer(() => from(opened.store.getTransactions())),
-      ]).pipe(takeUntil(abort$(signal)), timeout(opts.deadlineMs ?? BUDGET_KEPT_DEFAULT_DEADLINE_MS)),
+    const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
+    if (!financeVaultPresent()) return { status: 'locked' };
+    return await firstValueFrom(
+      defer(() => from(readBudgetKept(injector, signal, weekStarts))).pipe(
+        takeUntil(abort$(signal)),
+        timeout(opts.deadlineMs ?? BUDGET_KEPT_DEFAULT_DEADLINE_MS),
+      ),
     );
-    if (signal.aborted) return { status: 'cancelled' };
-    if (!opened.vault.isUnlocked) return { status: 'locked' };
-    return assembleBudgetKept(profiles, inputs, txs, opts);
   } catch (err) {
+    if (err instanceof RangeError) throw err;
     return mapLoadError(signal, err);
   }
 }
