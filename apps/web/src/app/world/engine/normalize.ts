@@ -11,13 +11,16 @@ export const addDays = (d: string, n: number): string =>
 export const dayIndex = (weekStart: string, d: string): number =>
   Math.round((toMs(d) - toMs(weekStart)) / 86400000);
 
+export const placeKey = (label: string): string =>
+  'place|' + label.normalize('NFC').trim().toLowerCase();
+
 export function biomeFor(trip: ApiTrip): Biome {
   const p = trip.place;
   if (p && p.lat_e2 !== null && p.lat_e2 !== undefined) {
     const a = Math.abs(p.lat_e2);
     return a >= 5500 ? 'snow' : a >= 3500 ? 'forest' : a >= 1500 ? 'desert' : 'jungle';
   }
-  const key = p && p.label ? 'place|' + p.label.normalize('NFC').trim().toLowerCase() : 'trip|' + trip.id;
+  const key = p && p.label ? placeKey(p.label) : 'trip|' + trip.id;
   return TRIP_BIOMES[Number(fnv1a64(key) % 4n)];
 }
 
