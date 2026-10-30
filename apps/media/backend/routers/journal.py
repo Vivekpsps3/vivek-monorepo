@@ -65,14 +65,20 @@ def library(
     offset: int = Query(0, ge=0, le=100000),
     limit: int = Query(50, ge=1, le=100),
     favorite: bool = False,
+    tags: list[str] = Query(default=[]),
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
+    from apps.media.backend.services.tag_filter import available_tags, parse_tag_params
+
     sort = sort.strip().lower()
     if sort not in {"added", "rating", "activity", "release", "title"}:
         sort = "activity"
     user_id = principal.id
-    rows, total = records.list_library(db, user_id, kind, status, q, sort, offset, limit, favorite)
+    selected = parse_tag_params(tags)
+    rows, total = records.list_library(
+        db, user_id, kind, status, q, sort, offset, limit, favorite, tags=selected or None
+    )
     # Continuation is served by /summary for Now; filters only need this page.
     return {
         "items": records.library_cards(db, rows),
@@ -80,6 +86,7 @@ def library(
         "offset": offset,
         "limit": limit,
         "has_more": offset + len(rows) < total,
+        "available_tags": available_tags(db, user_id),
     }
 
 
