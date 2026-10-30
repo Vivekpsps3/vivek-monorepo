@@ -54,7 +54,7 @@ class Habit(TownBase):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_on: Mapped[date | None] = mapped_column(Date, nullable=True)
-    # casefold(name). Uniqueness is the partial index, among active rows only.
+    # make_name_key(name). Uniqueness is the partial index, among active rows only.
     name_key: Mapped[str] = mapped_column(String(40), nullable=False)
 
 
@@ -84,3 +84,11 @@ class HabitCadence(TownBase):
     per_week: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+def make_name_key(name: str) -> str:
+    """Casefold `name`, then keep the first 40 characters.
+
+    casefold can lengthen a string, so the cut happens after folding.
+    """
+    return name.casefold()[:40]
