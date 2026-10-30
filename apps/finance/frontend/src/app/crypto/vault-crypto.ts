@@ -215,9 +215,7 @@ function signIndex(key: CryptoKey, value: string): Promise<string> {
   return crypto.subtle.sign('HMAC', key, toArrayBuffer(textEncoder.encode(value))).then(sig => bufToB64(sig));
 }
 export function hmacBlindIndex(dek: CryptoKey, value: string): Promise<string> {
-  const legacy = requireAttached(dek).legacyBlindKey;
-  if (!legacy) throw new Error('Legacy blind index is unavailable');
-  return signIndex(legacy, value);
+  return signIndex(requireAttached(dek).blindKey, value);
 }
 export function legacyDekBlindIndex(dek: CryptoKey, value: string): Promise<string> {
   const legacy = requireAttached(dek).legacyBlindKey;

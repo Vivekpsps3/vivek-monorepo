@@ -7,6 +7,7 @@ import {
   hmacBlindIndex,
   importVaultKeys,
   indexedDbHoldsDek,
+  legacyDekBlindIndex,
   randomBytes,
   randomClientId,
   recordAad,
@@ -61,6 +62,18 @@ describe('vault-crypto', () => {
     expect(financeVaultPresent()).toBeFalse();
     expect(await indexedDbHoldsDek()).toBeFalse();
     expect(await restoreDekLocal()).toBeNull();
+  });
+
+  it('derives an HKDF blind-index subkey that differs from the DEK', async () => {
+    const { dek, blindKey } = await importVaultKeys(new Uint8Array(32).fill(9));
+    const next = await hmacBlindIndex(dek, 'dedupe:abc');
+    expect(next).not.toBe(await legacyDekBlindIndex(dek, 'dedupe:abc'));
+    expect(next.length).toBeGreaterThan(10);
+    expect(blindKey.extractable).toBeFalse();
+    expect(dek.extractable).toBeFalse();
+    await expectAsync(crypto.subtle.exportKey('raw', blindKey)).toBeRejected();
+    await expectAsync(crypto.subtle.exportKey('raw', dek)).toBeRejected();
+    expect(await hmacBlindIndex(dek, 'dedupe:abc')).toBe(next);
   });
 
   it('treats a stored value with an invalid AES key length as an unusable DEK', async () => {
