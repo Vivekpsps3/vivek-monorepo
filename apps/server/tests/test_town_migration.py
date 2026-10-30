@@ -6,12 +6,18 @@ from pathlib import Path
 
 import pytest
 from alembic import command
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from apps.server.database import open_database
+from apps.server.identity.admin import delete_user_account
+from apps.server.identity.models import User, UserRole
+from apps.server.migrate import check_integrity
 from apps.server.migrations import current_revision, make_config, sqlite_url
 from apps.server.schema import OWNER_TABLES, metadata
+from apps.server.town.models import make_name_key
 
 PREVIOUS = "site_trip_create_attempt_v1"
 REVISION = "site_town_v1"
@@ -55,11 +61,19 @@ def _index_names(db: sqlite3.Connection, table: str) -> set[str]:
     return {row[1] for row in db.execute(f'PRAGMA index_list("{table}")')}
 
 
-def _insert_user(db: sqlite3.Connection) -> None:
-    db.execute(
+def _insert_user(
+    db: sqlite3.Connection,
+    *,
+    email: str = "town@example.invalid",
+    display_name: str = "Town",
+) -> int:
+    cursor = db.execute(
         "INSERT INTO users (email, display_name, role, is_active, must_change_password, created_at, updated_at) "
-        "VALUES ('town@example.invalid', 'Town', 'user', 1, 0, '2026-01-01', '2026-01-01')"
+        "VALUES (?, ?, 'user', 1, 0, '2026-01-01', '2026-01-01')",
+        (email, display_name),
     )
+    assert cursor.lastrowid is not None
+    return int(cursor.lastrowid)
 
 
 def _insert_habit(
@@ -69,12 +83,13 @@ def _insert_habit(
     name: str,
     name_key: str,
     archived_at: str | None = None,
+    user_id: int = 1,
 ) -> int:
     cursor = db.execute(
         "INSERT INTO habits (user_id, name, slot, building_style, per_week, created_on, created_at, "
         "archived_at, archived_on, name_key) "
-        "VALUES (1, ?, ?, 'forge', 7, '2026-01-01', '2026-01-01T00:00:00+00:00', ?, NULL, ?)",
-        (name, slot, archived_at, name_key),
+        "VALUES (?, ?, ?, 'forge', 7, '2026-01-01', '2026-01-01T00:00:00+00:00', ?, NULL, ?)",
+        (user_id, name, slot, archived_at, name_key),
     )
     assert cursor.lastrowid is not None
     return int(cursor.lastrowid)
@@ -172,28 +187,36 @@ def test_partial_unique_indexes_keep_one_active_row(tmp_path: Path) -> None:
     database = _upgrade(tmp_path)
     with sqlite3.connect(database) as db:
         db.execute("PRAGMA foreign_keys=ON")
-        _insert_user(db)
-        _insert_habit(db, slot=0, name="Morning", name_key="morning")
+        first = _insert_user(db)
+        _insert_habit(db, slot=0, name="Morning", name_key="morning", user_id=first)
         with pytest.raises(sqlite3.IntegrityError):
-            _insert_habit(db, slot=0, name="Dawn", name_key="dawn")
+            _insert_habit(db, slot=0, name="Dawn", name_key="dawn", user_id=first)
         _insert_habit(
             db,
             slot=0,
             name="Old morning",
             name_key="old morning",
             archived_at="2026-02-01T00:00:00+00:00",
+            user_id=first,
         )
-        _insert_habit(db, slot=1, name="Walk", name_key="walk")
+        _insert_habit(db, slot=1, name="Walk", name_key="walk", user_id=first)
         with pytest.raises(sqlite3.IntegrityError):
-            _insert_habit(db, slot=2, name="Walk again", name_key="walk")
+            _insert_habit(db, slot=2, name="Walk again", name_key="walk", user_id=first)
         _insert_habit(
             db,
             slot=3,
             name="Walk archived",
             name_key="walk",
             archived_at="2026-02-01T00:00:00+00:00",
+            user_id=first,
         )
-        assert db.execute("SELECT COUNT(*) FROM habits").fetchone() == (4,)
+        second = _insert_user(db, email="other@example.invalid", display_name="Other")
+        _insert_habit(db, slot=0, name="Morning", name_key="morning", user_id=second)
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_habit(db, slot=0, name="Dawn", name_key="dawn", user_id=second)
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_habit(db, slot=1, name="Morning again", name_key="morning", user_id=second)
+        assert db.execute("SELECT COUNT(*) FROM habits").fetchone() == (5,)
 
 
 def test_checkin_and_cadence_uniqueness(tmp_path: Path) -> None:
@@ -226,6 +249,44 @@ def test_checkin_and_cadence_uniqueness(tmp_path: Path) -> None:
             )
 
 
+def test_check_integrity_flags_habit_owner_mismatch(tmp_path: Path) -> None:
+    database = _upgrade(tmp_path)
+    with sqlite3.connect(database) as db:
+        check_integrity(db)
+        db.execute("PRAGMA foreign_keys=ON")
+        owner = _insert_user(db)
+        other = _insert_user(db, email="other@example.invalid", display_name="Other")
+        habit_id = _insert_habit(db, slot=0, name="Morning", name_key="morning", user_id=owner)
+        db.execute(
+            "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
+            "VALUES (?, ?, '2026-10-01', '2026-10-01T00:00:00+00:00')",
+            (habit_id, owner),
+        )
+        db.execute(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (?, ?, 7, '2026-10-01', '2026-10-01T00:00:00+00:00')",
+            (habit_id, owner),
+        )
+        check_integrity(db)
+        db.execute(
+            "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
+            "VALUES (?, ?, '2026-10-02', '2026-10-02T00:00:00+00:00')",
+            (habit_id, other),
+        )
+        with pytest.raises(RuntimeError, match="Ownership mismatch in habit_checkins"):
+            check_integrity(db)
+        db.execute("DELETE FROM habit_checkins WHERE user_id = ?", (other,))
+        db.execute(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (?, ?, 3, '2026-10-08', '2026-10-08T00:00:00+00:00')",
+            (habit_id, other),
+        )
+        with pytest.raises(RuntimeError, match="Ownership mismatch in habit_cadences"):
+            check_integrity(db)
+        db.execute("DELETE FROM habit_cadences WHERE user_id = ?", (other,))
+        check_integrity(db)
+
+
 def test_checkin_requires_a_habit_when_foreign_keys_are_on(tmp_path: Path) -> None:
     database = _upgrade(tmp_path)
     with sqlite3.connect(database) as db:
@@ -237,6 +298,119 @@ def test_checkin_requires_a_habit_when_foreign_keys_are_on(tmp_path: Path) -> No
                 "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
                 "VALUES (999, 1, '2026-10-01', '2026-10-01T00:00:00+00:00')"
             )
+
+
+def _town_row_count(db: Session, table: str, user_id: int) -> int:
+    return int(
+        db.execute(
+            text(f'SELECT COUNT(*) FROM "{table}" WHERE user_id = :owner'),
+            {"owner": user_id},
+        ).scalar_one()
+    )
+
+
+def _insert_account_habit(db: Session, user_id: int) -> int:
+    db.execute(
+        text(
+            "INSERT INTO habits (user_id, name, slot, building_style, per_week, created_on, "
+            "created_at, archived_at, archived_on, name_key) "
+            "VALUES (:user_id, 'Morning', 0, 'forge', 7, '2026-01-01', "
+            "'2026-01-01T00:00:00+00:00', NULL, NULL, 'morning')"
+        ),
+        {"user_id": user_id},
+    )
+    habit_id = int(db.execute(text("SELECT last_insert_rowid()")).scalar_one())
+    db.execute(
+        text(
+            "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
+            "VALUES (:habit_id, :user_id, '2026-10-01', '2026-10-01T00:00:00+00:00')"
+        ),
+        {"habit_id": habit_id, "user_id": user_id},
+    )
+    db.execute(
+        text(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (:habit_id, :user_id, 7, '2026-10-01', '2026-10-01T00:00:00+00:00')"
+        ),
+        {"habit_id": habit_id, "user_id": user_id},
+    )
+    return habit_id
+
+
+def test_delete_user_account_removes_town_rows_for_that_user_only(tmp_path: Path) -> None:
+    database = _upgrade(tmp_path)
+    opened = open_database(f"sqlite:///{database}")
+    db = opened.sessionmaker()
+    try:
+        kept = User(
+            email="kept@example.invalid",
+            display_name="Kept",
+            role=UserRole.user,
+            username="kept",
+            is_active=True,
+            must_change_password=False,
+        )
+        deleted = User(
+            email="deleted@example.invalid",
+            display_name="Deleted",
+            role=UserRole.user,
+            username="deleted",
+            is_active=True,
+            must_change_password=False,
+        )
+        db.add_all([kept, deleted])
+        db.commit()
+        kept_habit = _insert_account_habit(db, kept.id)
+        deleted_habit = _insert_account_habit(db, deleted.id)
+        db.commit()
+
+        delete_user_account(db, deleted, actor_user_id=kept.id)
+        db.commit()
+
+        for table in ("habit_checkins", "habit_cadences", "habits"):
+            assert _town_row_count(db, table, deleted.id) == 0
+            assert _town_row_count(db, table, kept.id) == 1
+        assert db.get(User, deleted.id) is None
+        assert db.get(User, kept.id) is not None
+        assert (
+            db.execute(
+                text("SELECT id FROM habits WHERE user_id = :owner"),
+                {"owner": kept.id},
+            ).scalar_one()
+            == kept_habit
+        )
+        assert (
+            db.execute(
+                text("SELECT habit_id FROM habit_checkins WHERE user_id = :owner"),
+                {"owner": kept.id},
+            ).scalar_one()
+            == kept_habit
+        )
+        assert (
+            db.execute(
+                text("SELECT habit_id FROM habit_cadences WHERE user_id = :owner"),
+                {"owner": kept.id},
+            ).scalar_one()
+            == kept_habit
+        )
+        assert (
+            db.execute(
+                text("SELECT id FROM habits WHERE id = :habit_id"),
+                {"habit_id": deleted_habit},
+            ).first()
+            is None
+        )
+    finally:
+        db.close()
+        opened.engine.dispose()
+
+
+def test_make_name_key_truncates_after_casefold() -> None:
+    folded = ("ß" * 40).casefold()
+    key = make_name_key("ß" * 40)
+    assert len(key) == 40
+    assert key == folded[:40]
+    assert make_name_key("Morning") == "morning"
 
 
 def test_owner_tables_and_metadata_include_town() -> None:

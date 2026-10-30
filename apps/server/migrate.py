@@ -43,6 +43,12 @@ def check_integrity(connection):
             f"SELECT 1 FROM {table} c JOIN user_entries e ON e.id=c.entry_id WHERE c.user_id != e.user_id LIMIT 1"
         ).fetchone():
             raise RuntimeError(f"Ownership mismatch in {table}")
+    # A habit child carries its own user_id. It must match the habit's owner.
+    for table in ("habit_checkins", "habit_cadences"):
+        if connection.execute(
+            f"SELECT 1 FROM {table} c JOIN habits h ON h.id=c.habit_id WHERE c.user_id != h.user_id LIMIT 1"
+        ).fetchone():
+            raise RuntimeError(f"Ownership mismatch in {table}")
     for (key,) in connection.execute("SELECT key FROM settings"):
         if key.startswith("user:"):
             try:
