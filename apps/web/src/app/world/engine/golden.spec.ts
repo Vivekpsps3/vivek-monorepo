@@ -52,11 +52,16 @@ describe('worldgen golden', () => {
     expect(twice).toBe(once);
   });
 
-  it('ignores finished and habit array order', () => {
-    const shuffled = structuredClone(V.G2_full);
+  it('ignores finished, habit, concept, and trip array order', () => {
+    const base = structuredClone(V.G2_full);
+    base.concepts.push({ id: 3, on: '2026-10-28' });
+    expect(base.concepts.map((concept) => concept.on)).toEqual(['2026-10-28', '2026-10-28']);
+    const shuffled = structuredClone(base);
     shuffled.finished.reverse();
     shuffled.habits.reverse();
-    const original = chunkHash(generateChunk(s1, normalizeWeek(V.G2_full)));
+    shuffled.concepts.reverse();
+    shuffled.trips.reverse();
+    const original = chunkHash(generateChunk(s1, normalizeWeek(base)));
     expect(chunkHash(generateChunk(s1, normalizeWeek(shuffled)))).toBe(original);
   });
 
