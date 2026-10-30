@@ -35,6 +35,14 @@ type PlanInputs = Pick<PlanningInputsPreview, 'recurring_annual_spending' | 'imp
 /** Matches HUB_SUMMARY_DEADLINE_MS in apps/web/src/app/hub/hub-load.ts. Finance cannot import that module. */
 const BUDGET_KEPT_DEFAULT_DEADLINE_MS = 8_000;
 
+function requireDeadlineMs(deadlineMs: number | undefined, fallback: number): number {
+  const value = deadlineMs ?? fallback;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError('deadlineMs must be a finite number greater than 0');
+  }
+  return value;
+}
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function weeklyPlanFor(annualPlan: number): number {
@@ -322,14 +330,14 @@ async function loadBudgetKeptBody(
   injector: Injector,
   signal: AbortSignal,
   weekStarts: string[],
-  deadlineMs: number | undefined,
+  deadlineMs: number,
 ): Promise<BudgetKeptResult> {
   try {
     if (!financeVaultPresent()) return { status: 'locked' };
     return await firstValueFrom(
       defer(() => from(readBudgetKept(injector, signal, weekStarts))).pipe(
         takeUntil(abort$(signal)),
-        timeout(deadlineMs ?? BUDGET_KEPT_DEFAULT_DEADLINE_MS),
+        timeout(deadlineMs),
       ),
     );
   } catch (err) {
@@ -350,5 +358,6 @@ export function loadFinanceBudgetKept(
 ): Promise<BudgetKeptResult> {
   if (signal.aborted) return Promise.resolve({ status: 'cancelled' });
   const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
-  return loadBudgetKeptBody(injector, signal, weekStarts, opts.deadlineMs);
+  const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_DEFAULT_DEADLINE_MS);
+  return loadBudgetKeptBody(injector, signal, weekStarts, deadlineMs);
 }

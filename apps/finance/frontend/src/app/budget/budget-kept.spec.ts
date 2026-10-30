@@ -484,6 +484,15 @@ describe('loadFinanceBudgetKept', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
+  it('throws RangeError synchronously when deadlineMs is NaN, infinite, or not positive', () => {
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
+      expect(() => ask(injector, { deadlineMs })).toThrowError(RangeError, /deadlineMs/);
+    }
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('returns unavailable when listProfiles or getTransactions throws RangeError', async () => {
     const profiles = unlock({
       listProfiles: () => throwError(() => new RangeError('profiles')),
@@ -620,10 +629,24 @@ describe('loadFinanceBudgetKeptGuarded', () => {
     expect(elapsed).toBeLessThan(deadlineMs + 150);
   });
 
+  it('throws RangeError synchronously when deadlineMs is NaN, infinite, or not positive', () => {
+    const load = jasmine.createSpy('load').and.returnValue(new Promise(() => undefined));
+    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
+      expect(() => loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs }, load))
+        .toThrowError(RangeError, /deadlineMs/);
+    }
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('returns unavailable without calling the module when the import uses the whole deadline', async () => {
     const read = jasmine.createSpy('loadFinanceBudgetKept').and.resolveTo({ status: 'ready' });
     const load = () => Promise.resolve({ loadFinanceBudgetKept: read });
-    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs: 0 }, load))
+    let ticks = 0;
+    spyOn(performance, 'now').and.callFake(() => {
+      ticks += 1;
+      return ticks * 1_000;
+    });
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs: 50 }, load))
       .toEqual({ status: 'unavailable' });
     expect(read).not.toHaveBeenCalled();
   });

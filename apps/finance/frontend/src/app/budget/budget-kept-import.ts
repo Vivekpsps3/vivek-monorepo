@@ -7,6 +7,14 @@ import type { BudgetKeptResult } from './budget-kept';
  */
 const BUDGET_KEPT_IMPORT_DEADLINE_MS = 8_000;
 
+function requireDeadlineMs(deadlineMs: number | undefined, fallback: number): number {
+  const value = deadlineMs ?? fallback;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError('deadlineMs must be a finite number greater than 0');
+  }
+  return value;
+}
+
 interface BudgetKeptModule {
   loadFinanceBudgetKept(
     injector: Injector,
@@ -56,26 +64,17 @@ function withSignalAndDeadline<T>(work: Promise<T>, signal: AbortSignal, deadlin
   });
 }
 
-/**
- * Loads the budget-kept chunk and runs it under one deadline.
- * Abort is cancelled. A missed deadline, a rejected import (including
- * RangeError), or a budget used up by the import is unavailable.
- * RangeError from the loaded module still propagates.
- * `load` is the chunk importer; tests pass a fake.
- */
-export async function loadFinanceBudgetKeptGuarded(
+async function runBudgetKeptImport(
   injector: Injector,
   signal: AbortSignal,
   opts: {
     today: string;
     weeks: number;
     includeCurrentWeek?: boolean;
-    deadlineMs?: number;
   },
-  load: () => Promise<BudgetKeptModule> = defaultLoad,
+  deadlineMs: number,
+  load: () => Promise<BudgetKeptModule>,
 ): Promise<BudgetKeptResult> {
-  if (signal.aborted) return { status: 'cancelled' };
-  const deadlineMs = opts.deadlineMs ?? BUDGET_KEPT_IMPORT_DEADLINE_MS;
   const started = performance.now();
   let loaded: BudgetKeptModule;
   try {
@@ -88,4 +87,27 @@ export async function loadFinanceBudgetKeptGuarded(
   const remaining = deadlineMs - (performance.now() - started);
   if (remaining <= 0) return { status: 'unavailable' };
   return loaded.loadFinanceBudgetKept(injector, signal, { ...opts, deadlineMs: remaining });
+}
+
+/**
+ * Loads the budget-kept chunk and runs it under one deadline.
+ * Abort is cancelled. A missed deadline, a rejected import (including
+ * RangeError), or a budget used up by the import is unavailable.
+ * A bad deadline throws before the timer. RangeError from the loaded module still propagates.
+ * `load` is the chunk importer; tests pass a fake.
+ */
+export function loadFinanceBudgetKeptGuarded(
+  injector: Injector,
+  signal: AbortSignal,
+  opts: {
+    today: string;
+    weeks: number;
+    includeCurrentWeek?: boolean;
+    deadlineMs?: number;
+  },
+  load: () => Promise<BudgetKeptModule> = defaultLoad,
+): Promise<BudgetKeptResult> {
+  if (signal.aborted) return Promise.resolve({ status: 'cancelled' });
+  const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_IMPORT_DEADLINE_MS);
+  return runBudgetKeptImport(injector, signal, opts, deadlineMs, load);
 }
