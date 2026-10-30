@@ -114,9 +114,9 @@ export function dayActivities(channels: DayChannels): number {
 
 /**
  * Highest positive amount wins.
- * Equal positive amounts resolve in `DOMINANCE_ORDER`.
+ * Callers pass the capped, weighted parts from `scoreParts` (a trip counts 2).
+ * Equal positive amounts resolve in `DOMINANCE_ORDER`: Travel, then Town, then Media, then Finance.
  * Zero and negative amounts do not compete, so an empty day has no dominant app.
- * The caller chooses the amounts (score parts or raw counts).
  */
 export function dominantApp(amounts: AppAmounts): PixelApp | null {
   let best: PixelApp | null = null;
@@ -336,7 +336,7 @@ function dayNumber(iso: string): number {
 }
 
 function formatDayNumber(dayIndex: number): string {
-  let shifted = dayIndex + MS_EPOCH_DAY_OFFSET;
+  const shifted = dayIndex + MS_EPOCH_DAY_OFFSET;
   const era = Math.trunc((shifted >= 0 ? shifted : shifted - (DAYS_PER_ERA - 1)) / DAYS_PER_ERA);
   const dayOfEra = shifted - era * DAYS_PER_ERA;
   const yearOfEra = Math.trunc(

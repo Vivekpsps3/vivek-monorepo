@@ -250,6 +250,30 @@ describe('pixels dominant app', () => {
     expect(dominantApp({ travel: -2, town: 0, media: -1, finance: 0 })).toBeNull();
     expect(dominantApp({ travel: -1, town: 0, media: 0, finance: 2 })).toBe('finance');
   });
+
+  it('lets one trip (2) beat one town check-in', () => {
+    const parts = scoreParts(day(1, 0, 1, null));
+    expect(parts).toEqual({ travel: 2, town: 1, media: 0, finance: 0 });
+    expect(dominantApp(parts)).toBe('travel');
+  });
+
+  it('gives a tie at 2 between a trip and two town check-ins to Travel', () => {
+    const parts = scoreParts(day(2, 0, 1, null));
+    expect(parts).toEqual({ travel: 2, town: 2, media: 0, finance: 0 });
+    expect(dominantApp(parts)).toBe('travel');
+  });
+
+  it('gives town capped at 3 the win over media at 3', () => {
+    const parts = scoreParts(day(10, 10, 0, null));
+    expect(parts).toEqual({ travel: 0, town: 3, media: 3, finance: 0 });
+    expect(dominantApp(parts)).toBe('town');
+  });
+
+  it('gives media the win when finance ties it at 1', () => {
+    const parts = scoreParts(day(0, 1, 0, 1));
+    expect(parts).toEqual({ travel: 0, town: 0, media: 1, finance: 1 });
+    expect(dominantApp(parts)).toBe('media');
+  });
 });
 
 describe('pixels life geometry', () => {
