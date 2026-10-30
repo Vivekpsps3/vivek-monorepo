@@ -82,6 +82,7 @@ lint-web:
 	$(PYTHON) scripts/quality_ratchet.py check eslint-finance
 	$(PYTHON) scripts/quality_ratchet.py check eslint-site
 	$(PYTHON) scripts/quality_ratchet.py check eslint-packages
+	$(PYTHON) scripts/quality_ratchet.py check eslint-world-engine
 
 typecheck: typecheck-python typecheck-web
 
@@ -108,6 +109,7 @@ lint-baseline:
 	 $(PYTHON) scripts/quality_ratchet.py update eslint-finance && \
 	 $(PYTHON) scripts/quality_ratchet.py update eslint-site && \
 	 $(PYTHON) scripts/quality_ratchet.py update eslint-packages && \
+	 $(PYTHON) scripts/quality_ratchet.py update eslint-world-engine && \
 	 $(PYTHON) scripts/quality_ratchet.py update suppressions
 
 coverage-pin:
