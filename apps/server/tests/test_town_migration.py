@@ -17,6 +17,7 @@ from apps.server.identity.models import User, UserRole
 from apps.server.migrate import check_integrity
 from apps.server.migrations import current_revision, make_config, sqlite_url
 from apps.server.schema import OWNER_TABLES, metadata
+from apps.server.town.models import make_name_key
 
 PREVIOUS = "site_trip_create_attempt_v1"
 REVISION = "site_town_v1"
@@ -402,6 +403,14 @@ def test_delete_user_account_removes_town_rows_for_that_user_only(tmp_path: Path
     finally:
         db.close()
         opened.engine.dispose()
+
+
+def test_make_name_key_truncates_after_casefold() -> None:
+    folded = ("ß" * 40).casefold()
+    key = make_name_key("ß" * 40)
+    assert len(key) == 40
+    assert key == folded[:40]
+    assert make_name_key("Morning") == "morning"
 
 
 def test_owner_tables_and_metadata_include_town() -> None:
