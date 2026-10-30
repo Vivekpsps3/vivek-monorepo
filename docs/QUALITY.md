@@ -37,7 +37,7 @@ Applied Alembic revisions are excluded from formatting and coverage to preserve 
 
 mypy runs on Python 3.12 with `check_untyped_defs` and `ignore_missing_imports`. `disallow_untyped_defs` is off; turning it on would be a new baseline, not a cleanup.
 
-The formatting-only commits listed in `.git-blame-ignore-revs` are `0fcae8021f783f836160bcd8f6a86ad1a98eacbe`, `2c41a00fecfabaefd4acab7229f613f7951a1d2a` (the auth-hardening reformat after merging main), and `0ccfa2cb0696d2c6c278fa21093cdeb3828fb9de` (the reformat after merging the schema, media, and CSP work). Later formatting commits are appended. CI checks that every listed SHA is still an ancestor of `HEAD`, which holds when main is merged in rather than rebased. Do not drop a SHA that is still an ancestor.
+The formatting-only commits listed in `.git-blame-ignore-revs` are `0fcae8021f783f836160bcd8f6a86ad1a98eacbe`, `2c41a00fecfabaefd4acab7229f613f7951a1d2a` (the auth-hardening reformat after merging main), `0ccfa2cb0696d2c6c278fa21093cdeb3828fb9de` (the reformat after merging the schema, media, and CSP work), and `116903ebc22c48c17947200c0e19e4d5f3f56e68` (the Travel and Media Prettier reformat). Later formatting commits are appended. CI checks that every listed SHA is still an ancestor of `HEAD`, which holds when main is merged in rather than rebased. Do not drop a SHA that is still an ancestor.
 
 ```bash
 git config blame.ignoreRevsFile .git-blame-ignore-revs
@@ -49,7 +49,7 @@ All feature code and the root Angular application compile with `strict`. `make t
 
 ESLint 9 with `angular-eslint` and `typescript-eslint` uses the root `eslint.config.js` and root-installed plugins for all apps and packages. `packages/` has no findings. `no-undef` is off for TypeScript files. Unused names that start with `_` are allowed.
 
-Prettier is not configured. The tree has no formatter today, and formatting both apps would be a review of its own. Adopt it in a follow-up, in one commit, and add that commit to `.git-blame-ignore-revs`.
+Prettier is not a project formatter. Travel and Media templates and CSS were formatted once in `116903ebc22c48c17947200c0e19e4d5f3f56e68`, which is listed in `.git-blame-ignore-revs`. The rest of the tree is unchanged.
 
 ## Coverage
 
