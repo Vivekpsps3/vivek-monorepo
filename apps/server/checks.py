@@ -167,7 +167,14 @@ def main():
             response = client.delete("/api/admin/users/2")
             assert response.status_code == 200, response.text
             with engine.connect() as connection:
-                for table in ("trips", "user_entries", "user_sessions"):
+                for table in (
+                    "trips",
+                    "user_entries",
+                    "user_sessions",
+                    "habit_checkins",
+                    "habit_cadences",
+                    "habits",
+                ):
                     assert (
                         connection.execute(
                             text(f"SELECT count(*) FROM {table} WHERE user_id=2")
