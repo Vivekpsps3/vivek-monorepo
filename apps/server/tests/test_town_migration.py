@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from apps.server.database import open_database
 from apps.server.identity.admin import delete_user_account
 from apps.server.identity.models import User, UserRole
+from apps.server.migrate import check_integrity
 from apps.server.migrations import current_revision, make_config, sqlite_url
 from apps.server.schema import OWNER_TABLES, metadata
 
@@ -59,11 +60,19 @@ def _index_names(db: sqlite3.Connection, table: str) -> set[str]:
     return {row[1] for row in db.execute(f'PRAGMA index_list("{table}")')}
 
 
-def _insert_user(db: sqlite3.Connection) -> None:
-    db.execute(
+def _insert_user(
+    db: sqlite3.Connection,
+    *,
+    email: str = "town@example.invalid",
+    display_name: str = "Town",
+) -> int:
+    cursor = db.execute(
         "INSERT INTO users (email, display_name, role, is_active, must_change_password, created_at, updated_at) "
-        "VALUES ('town@example.invalid', 'Town', 'user', 1, 0, '2026-01-01', '2026-01-01')"
+        "VALUES (?, ?, 'user', 1, 0, '2026-01-01', '2026-01-01')",
+        (email, display_name),
     )
+    assert cursor.lastrowid is not None
+    return int(cursor.lastrowid)
 
 
 def _insert_habit(
@@ -73,12 +82,13 @@ def _insert_habit(
     name: str,
     name_key: str,
     archived_at: str | None = None,
+    user_id: int = 1,
 ) -> int:
     cursor = db.execute(
         "INSERT INTO habits (user_id, name, slot, building_style, per_week, created_on, created_at, "
         "archived_at, archived_on, name_key) "
-        "VALUES (1, ?, ?, 'forge', 7, '2026-01-01', '2026-01-01T00:00:00+00:00', ?, NULL, ?)",
-        (name, slot, archived_at, name_key),
+        "VALUES (?, ?, ?, 'forge', 7, '2026-01-01', '2026-01-01T00:00:00+00:00', ?, NULL, ?)",
+        (user_id, name, slot, archived_at, name_key),
     )
     assert cursor.lastrowid is not None
     return int(cursor.lastrowid)
@@ -228,6 +238,44 @@ def test_checkin_and_cadence_uniqueness(tmp_path: Path) -> None:
                 "VALUES (?, 1, 3, '2026-10-05', '2026-10-02T00:00:00+00:00')",
                 (habit_id,),
             )
+
+
+def test_check_integrity_flags_habit_owner_mismatch(tmp_path: Path) -> None:
+    database = _upgrade(tmp_path)
+    with sqlite3.connect(database) as db:
+        check_integrity(db)
+        db.execute("PRAGMA foreign_keys=ON")
+        owner = _insert_user(db)
+        other = _insert_user(db, email="other@example.invalid", display_name="Other")
+        habit_id = _insert_habit(db, slot=0, name="Morning", name_key="morning", user_id=owner)
+        db.execute(
+            "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
+            "VALUES (?, ?, '2026-10-01', '2026-10-01T00:00:00+00:00')",
+            (habit_id, owner),
+        )
+        db.execute(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (?, ?, 7, '2026-10-01', '2026-10-01T00:00:00+00:00')",
+            (habit_id, owner),
+        )
+        check_integrity(db)
+        db.execute(
+            "INSERT INTO habit_checkins (habit_id, user_id, day, created_at) "
+            "VALUES (?, ?, '2026-10-02', '2026-10-02T00:00:00+00:00')",
+            (habit_id, other),
+        )
+        with pytest.raises(RuntimeError, match="Ownership mismatch in habit_checkins"):
+            check_integrity(db)
+        db.execute("DELETE FROM habit_checkins WHERE user_id = ?", (other,))
+        db.execute(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (?, ?, 3, '2026-10-08', '2026-10-08T00:00:00+00:00')",
+            (habit_id, other),
+        )
+        with pytest.raises(RuntimeError, match="Ownership mismatch in habit_cadences"):
+            check_integrity(db)
+        db.execute("DELETE FROM habit_cadences WHERE user_id = ?", (other,))
+        check_integrity(db)
 
 
 def test_checkin_requires_a_habit_when_foreign_keys_are_on(tmp_path: Path) -> None:
