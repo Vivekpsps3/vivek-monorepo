@@ -144,6 +144,9 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
     if "site_schema" in inspect(db.connection()).get_table_names():
         # Unified ownership contract; delete personal rows, retain public catalogs.
         for table in (
+            "habit_checkins",
+            "habit_cadences",
+            "habits",
             "album_ratings",
             "track_ratings",
             "season_progress",
