@@ -1,6 +1,6 @@
 """Pure Town engine: constants, levels, lots, cadence, caps, and streaks."""
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -22,9 +22,12 @@ from apps.server.town.constants import (
 from apps.server.town.engine import (
     CadenceAction,
     CadenceChange,
+    Streak,
+    WeekProgress,
     cadence_kind,
     cadence_on,
     describe_cadence,
+    evaluate_streak,
     habit_xp,
     inn_day,
     level,
@@ -38,42 +41,23 @@ from apps.server.town.engine import (
 
 
 def test_section_2_constants():
-    assert TOWN_NAME == "Terraria-on-Sea"
-    assert CONSTANTS_VERSION == 1
-    assert XP["manual"] == 10
-    assert XP["mediaEpisode"] == 5
-    assert XP["mediaFinished"] == 10
-    assert XP["travelReminder"] == 5
-    assert XP["tripDone"] == 30
-    assert XP["streak7"] == 10
-    assert tuple(XP) == (
-        "manual",
-        "mediaEpisode",
-        "mediaFinished",
-        "travelReminder",
-        "tripDone",
-        "streak7",
-    )
-    assert DAILY_CAP["library"] == 10
-    assert DAILY_CAP["inn"] == 15
+    assert TOWN_NAME == "Terraria-on-Sea" and CONSTANTS_VERSION == 1
+    assert dict(XP) == {
+        "manual": 10,
+        "mediaEpisode": 5,
+        "mediaFinished": 10,
+        "travelReminder": 5,
+        "tripDone": 30,
+        "streak7": 10,
+    }
+    assert dict(DAILY_CAP) == {"library": 10, "inn": 15}
     assert BUILDING_LV == (0, 50, 150, 400, 1000)
     assert TOWN_LV == (0, 100, 250, 500, 900, 1400, 2000, 2800, 3800, 5000)
-    assert LOT_UNLOCK_LV == (1, 1, 3, 5, 7, 9)
-    assert TREASURY_WEEKS == (0, 1, 2, 4, 8)
+    assert LOT_UNLOCK_LV == (1, 1, 3, 5, 7, 9) and TREASURY_WEEKS == (0, 1, 2, 4, 8)
     assert set(MEDIA_FINISHED_KINDS) == {"movie", "tv", "book", "game"}
-    assert HABIT_NAME_MAX == 40
-    assert HABIT_TOTAL_MAX == 200
-    assert CHECKIN_WINDOW == (-1, +1)
-    assert SLOT_DEFAULT_STYLE == (
-        "forge",
-        "garden",
-        "cottage",
-        "cottage",
-        "cottage",
-        "cottage",
-    )
-    assert isinstance(BUILDING_LV, tuple)
-    assert isinstance(MEDIA_FINISHED_KINDS, frozenset)
+    assert isinstance(MEDIA_FINISHED_KINDS, frozenset) and isinstance(BUILDING_LV, tuple)
+    assert (HABIT_NAME_MAX, HABIT_TOTAL_MAX, CHECKIN_WINDOW) == (40, 200, (-1, +1))
+    assert SLOT_DEFAULT_STYLE == ("forge", "garden", "cottage", "cottage", "cottage", "cottage")
 
 
 def _boundaries(table: tuple[int, ...]) -> list[tuple[int, int, int, int | None]]:
@@ -202,3 +186,154 @@ def test_daily_caps_at_the_boundaries():
     assert habit_xp(9, 1) == 100
     assert library_day(3, 0) == min(DAILY_CAP["library"], XP["mediaEpisode"] * 3)
     assert inn_day(4, 1) == min(DAILY_CAP["inn"], XP["travelReminder"] * 4) + XP["tripDone"]
+
+
+def _on(*iso: str) -> list[date]:
+    parts: list[str] = []
+    for item in iso:
+        parts.extend(item.split())
+    return [date.fromisoformat(part) for part in parts]
+
+
+def _span(start: str, end: str) -> list[date]:
+    first = date.fromisoformat(start)
+    last = date.fromisoformat(end)
+    return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
+
+
+def _habit(
+    created: str,
+    today: str,
+    checkins: list[date],
+    per_week: int = 7,
+    cadences: tuple[tuple[date, int], ...] = (),
+    archived: str | None = None,
+) -> Streak:
+    return evaluate_streak(
+        date.fromisoformat(created),
+        date.fromisoformat(today),
+        checkins,
+        per_week,
+        cadences,
+        None if archived is None else date.fromisoformat(archived),
+    )
+
+
+# Example C pins week counts only. W40 Wed 30 Sep; W41 Mon/Wed/Fri;
+# W42 Mon/Wed/Fri/Sun so streak7 lands on the 3rd check-in (Fri 16); W43 Mon.
+_C = _on(
+    "2026-09-30 2026-10-05 2026-10-07 2026-10-09 2026-10-12 "
+    "2026-10-14 2026-10-16 2026-10-18 2026-10-19"
+)
+
+
+def test_worked_examples_a_b_and_c():
+    days_a = "2026-10-05 2026-10-06 2026-10-07 2026-10-08 2026-10-10 2026-10-11 2026-10-12"
+    example_a = _habit("2026-10-05", "2026-10-15", _on(days_a))
+    assert example_a.unit == "days" and example_a.current == 0 and example_a.best == 7
+    assert example_a.best_days == 7 and example_a.best_weeks == 0 and example_a.week is None
+    assert (example_a.rest_day_available, example_a.rest_used_on) == (False, date(2026, 10, 13))
+    assert example_a.streak7_days == (date(2026, 10, 12),)
+    assert example_a.last7 == ("rest", "done", "done", "done", "rest", "miss", "pending")
+    assert habit_xp(7, example_a.streak7_count) == 80
+    assert level_progress(80, BUILDING_LV) == (2, 50, 150) and stage(2) == 2
+
+    example_b = _habit("2026-10-19", "2026-10-22", _on("2026-10-19", "2026-10-20", "2026-10-21"))
+    assert (example_b.current, example_b.best, example_b.rest_day_available) == (3, 3, True)
+    assert (
+        example_b.rest_used_on is None and example_b.week is None and example_b.streak7_count == 0
+    )
+    assert example_b.last7 == ("none", "none", "none", "done", "done", "done", "pending")
+    assert habit_xp(3, 0) == 30 and level_progress(30, BUILDING_LV) == (1, 0, 50)
+
+    example_c = _habit("2026-09-30", "2026-10-22", _C, per_week=3)
+    assert example_c.unit == "weeks" and example_c.current == 2 and example_c.best == 2
+    assert example_c.best_weeks == 2 and example_c.best_days == 0
+    assert example_c.rest_day_available is None and example_c.rest_used_on is None
+    assert example_c.week == WeekProgress(1, 3)
+    assert example_c.streak7_days == (date(2026, 10, 16),)
+    assert example_c.last7 == ("done", "off", "done", "done", "off", "off", "off")
+    assert habit_xp(9, example_c.streak7_count) == 100
+    assert level_progress(100, BUILDING_LV) == (2, 50, 150)
+    later = _habit("2026-09-30", "2026-10-26", _C, per_week=3)
+    assert (later.current, later.best, later.week) == (0, 2, WeekProgress(0, 3))
+
+
+def test_rest_day_edges_bridge_reset_pending_and_backfill():
+    bridged = _habit(
+        "2026-10-05", "2026-10-14", _span("2026-10-05", "2026-10-10") + _on("2026-10-13")
+    )
+    assert (bridged.current, bridged.best, bridged.rest_used_on) == (7, 7, date(2026, 10, 12))
+    assert bridged.rest_day_available is False
+    assert bridged.streak7_days == (date(2026, 10, 13),)
+    assert bridged.last7 == ("done", "done", "done", "rest", "rest", "done", "pending")
+
+    reset = _habit("2026-10-12", "2026-10-15", _on("2026-10-12"))
+    assert (reset.current, reset.best, reset.rest_used_on) == (0, 1, date(2026, 10, 13))
+    assert reset.last7 == ("none", "none", "none", "done", "rest", "miss", "pending")
+    pending = _habit("2026-10-12", "2026-10-14", _on("2026-10-12"))
+    assert pending.current == 1 and pending.last7[-1] == "pending"
+    early = _habit("2026-10-12", "2026-10-15", _on("2026-10-14"))
+    assert early.rest_used_on is None and early.rest_day_available is True and early.current == 1
+    assert early.last7[-4:] == ("miss", "miss", "done", "pending")
+
+    assert _habit("2026-10-12", "2026-10-12", _on("2026-10-12")).last7[-1] == "done"
+    backfill = _habit("2026-10-12", "2026-10-15", _on("2026-10-12", "2026-10-13"))
+    assert (backfill.current, backfill.rest_used_on) == (2, date(2026, 10, 14))
+    outside = _on("2026-10-11", "2026-10-12", "2026-10-13")
+    assert _habit("2026-10-12", "2026-10-12", outside).current == 1
+
+
+def test_cadence_changes_reset_kind_and_keep_a_weekly_run():
+    pending = ((date(2026, 10, 19), 3),)
+    current = _habit(
+        "2026-10-05", "2026-10-15", _span("2026-10-05", "2026-10-14"), cadences=pending
+    )
+    assert (current.unit, current.current, current.week) == ("days", 10, None)
+    assert cadence_on(date(2026, 10, 15), 7, pending) == 7
+    assert cadence_on(date(2026, 10, 19), 7, pending) == 3
+
+    switched = _habit(
+        "2026-10-05", "2026-10-22", _span("2026-10-05", "2026-10-18"), cadences=pending
+    )
+    assert switched.unit == "weeks" and switched.current == 0 and switched.best == 0
+    assert switched.best_days == 14
+    assert switched.best_weeks == 0 and switched.rest_day_available is None
+    assert switched.rest_used_on is None and switched.week == WeekProgress(0, 3)
+    assert switched.streak7_days == (date(2026, 10, 11), date(2026, 10, 18))
+
+    kept = _habit("2026-09-30", "2026-10-22", _C, per_week=3, cadences=((date(2026, 10, 19), 4),))
+    assert (kept.current, kept.best_weeks, kept.week) == (2, 2, WeekProgress(1, 4))
+    met = _C + _on("2026-10-20", "2026-10-21", "2026-10-22")
+    continued = _habit(
+        "2026-09-30", "2026-10-22", met, per_week=3, cadences=((date(2026, 10, 19), 4),)
+    )
+    assert continued.current == 3 and continued.week == WeekProgress(4, 4)
+    assert continued.streak7_days == (date(2026, 10, 16), date(2026, 10, 22))
+    assert continued.last7[-1] == "done"
+
+    back = _on("2026-10-05", "2026-10-12", "2026-10-19", "2026-10-20")
+    daily = _habit(
+        "2026-10-05", "2026-10-20", back, per_week=1, cadences=((date(2026, 10, 19), 7),)
+    )
+    assert (daily.unit, daily.current, daily.best_days, daily.best_weeks) == ("days", 2, 2, 2)
+    assert daily.week is None and daily.rest_day_available is True
+    assert daily.streak7_days == (date(2026, 10, 12),)
+
+
+def test_archive_week_dst_and_before_creation():
+    checks = _on("2026-09-28", "2026-09-30", "2026-10-02", "2026-10-05", "2026-10-07", "2026-10-09")
+    archived = _habit("2026-09-28", "2026-10-20", checks, per_week=3, archived="2026-10-14")
+    assert (archived.unit, archived.current, archived.best_weeks) == ("weeks", 2, 2)
+    assert archived.week == WeekProgress(0, 3) and archived.rest_day_available is None
+    assert archived.last7[0] == "off" and "done" not in archived.last7
+
+    fallback = _habit("2026-10-30", "2026-11-02", _on("2026-10-30", "2026-10-31", "2026-11-01"))
+    assert (fallback.current, fallback.best) == (3, 3)
+    assert fallback.last7 == ("none", "none", "none", "done", "done", "done", "pending")
+
+    empty = _habit("2026-10-16", "2026-10-15", [])
+    assert (empty.current, empty.best, empty.rest_day_available) == (0, 0, True)
+    assert empty.last7 == ("none",) * 7
+    tied = ((date(2026, 10, 19), 3), (date(2026, 10, 19), 5))
+    assert cadence_on(date(2026, 10, 19), 7, tied) == 5

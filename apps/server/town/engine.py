@@ -1,7 +1,4 @@
-"""Pure Town math: levels, lots, cadence, streaks, caps, and habit names.
-
-Callers pass `today`. This module does not read the clock, the database, or the network.
-"""
+"""Pure Town math. Callers pass today; nothing here reads the clock or the database."""
 
 from __future__ import annotations
 
@@ -19,16 +16,12 @@ CadenceRow = tuple[date, int]
 
 @dataclass(frozen=True)
 class PendingCadence:
-    """A cadence row that has not taken effect yet."""
-
     per_week: int
     effective_from: date
 
 
 @dataclass(frozen=True)
 class Cadence:
-    """Cadence in effect on a day, plus any pending change."""
-
     per_week: int
     kind: CadenceKind
     pending: PendingCadence | None
@@ -36,8 +29,6 @@ class Cadence:
 
 @dataclass(frozen=True)
 class CadenceChange:
-    """The habit_cadences upsert to write, if the planned value is a real change."""
-
     effective_from: date
     per_week: int
     action: CadenceAction
@@ -165,3 +156,181 @@ def inn_day(reminders: int, trips_done: int) -> int:
     """Return one local day's Inn XP: min(cap, 5×reminders) + 30×trips."""
     capped = min(DAILY_CAP["inn"], XP["travelReminder"] * reminders)
     return capped + XP["tripDone"] * trips_done
+
+
+Last7Value = Literal["done", "rest", "miss", "pending", "none", "off"]
+_WeekKey = tuple[int, int]
+
+
+@dataclass(frozen=True)
+class WeekProgress:
+    done: int
+    target: int
+
+
+@dataclass(frozen=True)
+class Streak:
+    unit: Literal["days", "weeks"]
+    current: int
+    best: int
+    best_days: int
+    best_weeks: int
+    rest_day_available: bool | None
+    rest_used_on: date | None
+    week: WeekProgress | None
+    streak7_count: int
+    streak7_days: tuple[date, ...]
+    last7: tuple[Last7Value, ...]
+
+
+def evaluate_streak(
+    created_on: date,
+    today: date,
+    checkins: Iterable[date],
+    per_week: int,
+    cadences: Iterable[CadenceRow] = (),
+    archived_on: date | None = None,
+) -> Streak:
+    """Evaluate one habit from created_on through min(today, archived_on)."""
+    rows = tuple(cadences)
+    checked = frozenset(checkins)
+    end = today if archived_on is None else min(today, archived_on)
+    labels: dict[date, Last7Value] = {}
+    streak7: list[date] = []
+    rests: dict[_WeekKey, date] = {}
+    best_days = 0
+    best_weeks = 0
+    unit: Literal["days", "weeks"] = "days"
+    current = 0
+    open_week: WeekProgress | None = None
+
+    def daily(day: date, streak: int) -> int:
+        nonlocal best_days
+        if day in checked:
+            streak += 1
+            labels[day] = "done"
+            if streak % 7 == 0:
+                streak7.append(day)
+        elif day == today:
+            labels[day] = "pending"  # pending does not spend the week's rest
+        elif streak > 0 and (key := _iso_week(day)) not in rests:
+            labels[day] = "rest"
+            rests[key] = day
+        else:
+            labels[day] = "miss"
+            streak = 0
+        best_days = max(best_days, streak)
+        return streak
+
+    def weekly(seg_start: date, seg_end: date) -> int:
+        nonlocal best_weeks, open_week
+        streak = 0
+        monday = _monday(seg_start)
+        creation = _monday(created_on)
+        archive = _monday(archived_on) if archived_on is not None and archived_on <= today else None
+        current_week = _monday(today) if end == today else None
+        while monday <= _monday(seg_end):
+            days = [
+                monday + timedelta(days=offset)
+                for offset in range(7)
+                if seg_start <= monday + timedelta(days=offset) <= seg_end
+            ]
+            for day in days:
+                labels[day] = "done" if day in checked else "off"
+            done = sum(day in checked for day in days)
+            born_here = seg_start <= created_on <= seg_end and monday == creation
+            anchor = created_on if born_here else monday if monday >= seg_start else seg_start
+            target = cadence_on(anchor, per_week, rows)
+            protects = born_here or monday == current_week
+            if archive is not None and archived_on is not None:
+                protects = protects or (monday == archive and seg_start <= archived_on <= seg_end)
+            if done >= target:
+                streak += 1
+                if streak >= 2:
+                    hit = sorted(day for day in days if day in checked)
+                    streak7.append(hit[target - 1])
+            elif not protects:
+                streak = 0
+            best_weeks = max(best_weeks, streak)
+            if seg_start <= end <= seg_end and monday == _monday(end):
+                open_week = WeekProgress(done, target)
+            monday += timedelta(days=7)
+        return streak
+
+    if end >= created_on:
+        for kind, seg_start, seg_end in _kind_segments(created_on, end, per_week, rows):
+            if kind == "daily":
+                streak = 0
+                for day in _dates(seg_start, seg_end):
+                    streak = daily(day, streak)
+                unit, current = "days", streak
+            else:
+                unit, current = "weeks", weekly(seg_start, seg_end)
+    elif cadence_kind(cadence_on(today, per_week, rows)) == "weekly":
+        unit = "weeks"
+
+    if unit == "days":
+        week = None
+        rest_available: bool | None = _iso_week(today) not in rests
+        rest_on = rests.get(_iso_week(today))
+        best = best_days
+    else:
+        anchor = end if end >= created_on else today
+        week = open_week or WeekProgress(0, cadence_on(anchor, per_week, rows))
+        rest_available = None
+        rest_on = None
+        best = best_weeks
+    last7: list[Last7Value] = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        last7.append("none" if day < created_on else labels.get(day, "off"))
+    return Streak(
+        unit,
+        current,
+        best,
+        best_days,
+        best_weeks,
+        rest_available,
+        rest_on,
+        week,
+        len(streak7),
+        tuple(streak7),
+        tuple(last7),
+    )
+
+
+def _iso_week(day: date) -> _WeekKey:
+    calendar = day.isocalendar()
+    return calendar.year, calendar.week
+
+
+def _monday(day: date) -> date:
+    return day - timedelta(days=day.weekday())
+
+
+def _dates(start: date, end: date) -> Iterable[date]:
+    day = start
+    while day <= end:
+        yield day
+        day += timedelta(days=1)
+
+
+def _kind_segments(
+    start: date, end: date, per_week: int, rows: tuple[CadenceRow, ...]
+) -> list[tuple[CadenceKind, date, date]]:
+    segments: list[tuple[CadenceKind, date, date]] = []
+    current: CadenceKind | None = None
+    seg_start = previous = start
+    for day in _dates(start, end):
+        kind = cadence_kind(cadence_on(day, per_week, rows))
+        if current is None:
+            current = kind
+            seg_start = day
+        elif kind != current:
+            segments.append((current, seg_start, previous))
+            current = kind
+            seg_start = day
+        previous = day
+    if current is not None:
+        segments.append((current, seg_start, end))
+    return segments
