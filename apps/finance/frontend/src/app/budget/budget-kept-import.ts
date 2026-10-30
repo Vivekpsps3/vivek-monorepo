@@ -20,7 +20,7 @@ interface BudgetKeptModule {
   ): Promise<BudgetKeptResult>;
 }
 
-/** The chunk missed its deadline. Distinct from a rejected import. */
+/** The chunk missed the shared deadline. The caller maps this to unavailable. */
 class BudgetKeptImportDeadlineError extends Error {
   constructor() {
     super('budget-kept import missed its deadline');
@@ -57,9 +57,9 @@ function withSignalAndDeadline<T>(work: Promise<T>, signal: AbortSignal, deadlin
 }
 
 /**
- * Loads the budget-kept chunk under the caller's abort signal and deadline, then
- * runs it. An aborted signal is cancelled, a missed deadline is expired, and a
- * rejected import is unavailable. RangeError still propagates.
+ * Loads the budget-kept chunk and runs it under one deadline.
+ * Abort is cancelled. A missed deadline, a rejected import, or a budget
+ * used up by the import is unavailable. RangeError still propagates.
  * `load` is the chunk importer; tests pass a fake.
  */
 export async function loadFinanceBudgetKeptGuarded(
@@ -74,14 +74,18 @@ export async function loadFinanceBudgetKeptGuarded(
   load: () => Promise<BudgetKeptModule> = defaultLoad,
 ): Promise<BudgetKeptResult> {
   if (signal.aborted) return { status: 'cancelled' };
+  const deadlineMs = opts.deadlineMs ?? BUDGET_KEPT_IMPORT_DEADLINE_MS;
+  const started = performance.now();
   let loaded: BudgetKeptModule;
   try {
-    loaded = await withSignalAndDeadline(load(), signal, opts.deadlineMs ?? BUDGET_KEPT_IMPORT_DEADLINE_MS);
+    loaded = await withSignalAndDeadline(load(), signal, deadlineMs);
   } catch (err) {
     if (err instanceof RangeError) throw err;
     if (signal.aborted) return { status: 'cancelled' };
-    if (err instanceof BudgetKeptImportDeadlineError) return { status: 'expired' };
+    // BudgetKeptImportDeadlineError and a rejected chunk are both unavailable. expired is only a 401.
     return { status: 'unavailable' };
   }
-  return loaded.loadFinanceBudgetKept(injector, signal, opts);
+  const remaining = deadlineMs - (performance.now() - started);
+  if (remaining <= 0) return { status: 'unavailable' };
+  return loaded.loadFinanceBudgetKept(injector, signal, { ...opts, deadlineMs: remaining });
 }

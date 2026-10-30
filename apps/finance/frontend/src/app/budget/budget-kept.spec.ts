@@ -580,10 +580,40 @@ describe('loadFinanceBudgetKeptGuarded', () => {
     expect(await pending).toEqual({ status: 'cancelled' });
   });
 
-  it('returns expired when the import passes the deadline', async () => {
+  it('returns unavailable when the import passes the deadline', async () => {
     const load = jasmine.createSpy('load').and.returnValue(hangingImport());
     expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs: 30 }, load))
-      .toEqual({ status: 'expired' });
+      .toEqual({ status: 'unavailable' });
+  });
+
+  it('returns unavailable within one deadline when the import uses most of the budget and the read exceeds the rest', async () => {
+    const deadlineMs = 400;
+    const importMs = 250;
+    let seen: number | undefined;
+    const started = performance.now();
+    const load = () => new Promise<{ loadFinanceBudgetKept: (injector: Injector, signal: AbortSignal, callOpts: { deadlineMs?: number }) => Promise<BudgetKeptResult> }>(resolve => {
+      setTimeout(() => resolve({
+        loadFinanceBudgetKept: (_injector, _signal, callOpts) => new Promise(settle => {
+          seen = callOpts.deadlineMs;
+          setTimeout(() => settle({ status: 'unavailable' }), callOpts.deadlineMs);
+        }),
+      }), importMs);
+    });
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs }, load))
+      .toEqual({ status: 'unavailable' });
+    const elapsed = performance.now() - started;
+    expect(seen).toBeGreaterThan(0);
+    expect(seen).toBeLessThan(deadlineMs);
+    expect(elapsed).toBeGreaterThan(importMs);
+    expect(elapsed).toBeLessThan(deadlineMs + 150);
+  });
+
+  it('returns unavailable without calling the module when the import uses the whole deadline', async () => {
+    const read = jasmine.createSpy('loadFinanceBudgetKept').and.resolveTo({ status: 'ready' });
+    const load = () => Promise.resolve({ loadFinanceBudgetKept: read });
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs: 0 }, load))
+      .toEqual({ status: 'unavailable' });
+    expect(read).not.toHaveBeenCalled();
   });
 
   it('returns unavailable when the import fails', async () => {
