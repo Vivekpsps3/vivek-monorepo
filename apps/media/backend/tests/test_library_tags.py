@@ -145,12 +145,25 @@ def test_tags_filter_escaped_comma_tag(client):
     _add(client, "Joined", ["rock,roll"])
     _add(client, "Split", ["rock", "roll"])
     _add(client, "Reversed", ["roll", "rock"])
+    # The tag value itself contains quote-comma-quote. JSON stores the quotes escaped.
+    escaped = 'a","b'
+    _add(client, "Escaped", [escaped])
+    _add(client, "AB", ["a", "b"])
+    _add(client, "BA", ["b", "a"])
     payload = _library(client, {"tags": "rock,roll", "sort": "title"})
     assert _titles(payload) == ["Joined"]
     assert payload["total"] == 1
+    by_a = _library(client, {"tags": "a", "sort": "title"})
+    assert _titles(by_a) == ["AB", "BA"]
+    by_b = _library(client, {"tags": "b", "sort": "title"})
+    assert _titles(by_b) == ["AB", "BA"]
+    quoted = _library(client, {"tags": escaped, "sort": "title"})
+    assert _titles(quoted) == ["Escaped"]
+    assert quoted["total"] == 1
     with client.app.state.database.sessionmaker() as db:
-        stored = db.query(UserEntry.tags).filter(UserEntry.tags.isnot(None)).all()
-    assert any(row[0] == '["rock,roll"]' for row in stored)
+        stored = {row[0] for row in db.query(UserEntry.tags).filter(UserEntry.tags.isnot(None))}
+    assert '["rock,roll"]' in stored
+    assert '["a\\",\\"b"]' in stored
 
 
 def test_tags_filter_non_ascii_exact(client):
