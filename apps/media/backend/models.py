@@ -109,6 +109,7 @@ class UserEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+    completed_on: Mapped[date | None] = mapped_column(Date)
 
     catalog: Mapped[CatalogItem] = relationship(back_populates="entries")
     experiences: Mapped[list["Experience"]] = relationship(
