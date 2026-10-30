@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, model, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, input, model, signal } from '@angular/core';
 
 let uiInputIdSeq = 0;
 
@@ -36,6 +36,12 @@ export class UiInputComponent {
     if (this.type() !== 'password' || !this.showPasswordToggle()) return this.type();
     return this.passwordVisible() ? 'text' : 'password';
   });
+
+  @ViewChild('control') private control?: ElementRef<HTMLInputElement>;
+
+  focus(): void {
+    this.control?.nativeElement.focus();
+  }
 
   togglePasswordVisibility(): void {
     if (this.disabled()) return;

@@ -31,6 +31,7 @@ import {
   segments,
   summaryText,
 } from "./composer-model.mjs";
+import { showDay, showRange } from "./display";
 import { TransportEditorComponent } from "./transport-editor.component";
 import { Trip, travelError } from "./travel.models";
 @Component({
@@ -97,9 +98,9 @@ import { Trip, travelError } from "./travel.models";
               />
             </ui-field>
             <p class="muted">
-              {{ segment.arrive }} – {{ segment.leave }}
+              {{ showRange(segment.arrive, segment.leave) }}
               @if (index > 0) {
-                · First day here: {{ segment.arrive }}
+                · First day here: {{ showDay(segment.arrive) }}
               }
             </p>
             @if (index > 0) {
@@ -276,6 +277,8 @@ export class NewTripComponent {
   readonly parts = () => segments(this.model());
   readonly name = () => defaultTripName(this.model());
   readonly summary = summaryText;
+  readonly showDay = showDay;
+  readonly showRange = showRange;
   readonly next = addDays;
   private readonly startDate = signal("");
   private readonly endDate = signal("");

@@ -53,6 +53,14 @@ export class UiSectionNavComponent implements AfterViewInit {
     this.updateFades();
   }
 
+  @HostListener('focusin', ['$event'])
+  onFocusIn(event: FocusEvent): void {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !this.host.nativeElement.contains(target)) return;
+    target.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    this.updateFades();
+  }
+
   private revealSoon(): void {
     if (typeof document === 'undefined') return;
     window.clearTimeout(this.revealTimer);

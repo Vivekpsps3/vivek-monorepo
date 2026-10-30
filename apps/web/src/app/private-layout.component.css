@@ -8,13 +8,15 @@
   z-index: 40;
   border-bottom: 1px solid var(--border);
   background: var(--card-bg);
-  padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right));
 }
 
 .suite-header__inner {
+  box-sizing: border-box;
+  width: 100%;
   min-height: var(--header-h);
   max-width: var(--content-max);
   margin-inline: auto;
+  padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right));
   display: flex;
   align-items: center;
   gap: var(--space-4);

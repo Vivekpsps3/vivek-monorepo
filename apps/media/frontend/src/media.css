@@ -26,10 +26,13 @@
   color: var(--text);
   font-weight: 600;
 }
-.media-page {
+.page.media-page {
+  box-sizing: border-box;
+  width: min(100%, var(--content-max));
   max-width: var(--content-max);
-  margin: auto;
-  padding: var(--space-8) var(--gutter) var(--space-16);
+  margin-inline: auto;
+  padding: var(--space-8) max(var(--gutter), env(safe-area-inset-right)) var(--space-16)
+    max(var(--gutter), env(safe-area-inset-left));
 }
 .media-page h1 {
   margin: 0.25rem 0 0.65rem;
@@ -259,8 +262,9 @@
   margin: 1rem 0;
 }
 @media (max-width: 640px) {
-  .media-page {
-    padding: 1.25rem 1rem 3rem;
+  .page.media-page {
+    padding: 1.25rem max(var(--gutter), env(safe-area-inset-right)) 3rem
+      max(var(--gutter), env(safe-area-inset-left));
   }
   .media-page .page-heading {
     align-items: start;

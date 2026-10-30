@@ -183,7 +183,7 @@ import {
             "
           >
             <ui-button
-              variant="ghost"
+              variant="primary"
               href="/media/search"
               label="Search Media"
             />

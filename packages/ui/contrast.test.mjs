@@ -66,7 +66,7 @@ test('section 1.3 tertiary and warning text clears 4.5 and borders clear 3', () 
       assert.ok(contrast(token('--text-tertiary'), token(surface)) >= 4.5, `${theme} tertiary / ${surface}`);
       assert.ok(contrast(token('--warning'), token(surface)) >= 4.5, `${theme} warning / ${surface}`);
     }
-    for (const surface of ['--bg', '--surface-2', '--card-bg']) {
+    for (const surface of ['--bg', '--surface-2', '--card-bg', '--surface-hover']) {
       assert.ok(contrast(token('--border-control'), token(surface)) >= 3, `${theme} border / ${surface}`);
     }
     assert.ok(contrast(token('--danger'), token('--card-bg')) >= 4.5, `${theme} danger-soft-text / card`);

@@ -4,6 +4,10 @@
   max-width: 100%;
 }
 
+:host([hidden]) {
+  display: none;
+}
+
 a.ui-btn {
   text-decoration: none;
 }

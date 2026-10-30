@@ -26,10 +26,13 @@
   color: var(--text);
   font-weight: 600;
 }
-.travel-page {
+.page.travel-page {
+  box-sizing: border-box;
+  width: min(100%, var(--content-max));
   max-width: var(--content-max);
-  margin: auto;
-  padding: var(--space-8) var(--gutter) var(--space-16);
+  margin-inline: auto;
+  padding: var(--space-8) max(var(--gutter), env(safe-area-inset-right)) var(--space-16)
+    max(var(--gutter), env(safe-area-inset-left));
 }
 .travel-page h1 {
   margin: 0.25rem 0 0.65rem;
@@ -152,11 +155,15 @@
   display: flex;
   overflow-x: auto;
   gap: 0.5rem;
-  padding: 0.5rem 0;
+  padding-block: 0.5rem;
+  padding-inline: calc(2 * (var(--focus-ring-width) + var(--focus-ring-offset)));
+  scroll-padding-inline: calc(2 * (var(--focus-ring-width) + var(--focus-ring-offset)));
 }
 .travel-page .date-strip .btn,
-.travel-page .date-strip ui-button {
+.travel-page .date-strip ui-button,
+.travel-page .date-strip .ui-btn {
   flex-shrink: 0;
+  scroll-margin-inline: calc(2 * (var(--focus-ring-width) + var(--focus-ring-offset)));
 }
 .travel-page .date-strip [aria-pressed="true"] {
   border-color: var(--accent);
@@ -191,8 +198,9 @@
   color: var(--text-secondary);
 }
 @media (max-width: 640px) {
-  .travel-page {
-    padding: 1.25rem 1rem 3rem;
+  .page.travel-page {
+    padding: 1.25rem max(var(--gutter), env(safe-area-inset-right)) 3rem
+      max(var(--gutter), env(safe-area-inset-left));
   }
   .travel-page .page-heading {
     align-items: start;
@@ -212,7 +220,8 @@
     width: 100%;
   }
 }
-.travel-page--embedded {
+.page.travel-page.travel-page--embedded {
+  width: auto;
   max-width: none;
   margin: 0;
   padding: 0;

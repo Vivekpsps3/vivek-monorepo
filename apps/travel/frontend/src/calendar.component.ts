@@ -107,7 +107,7 @@ function monthEnd(month: string): string {
           message="Choose another month or plan a new trip."
         >
           <ui-button
-            variant="ghost"
+            variant="primary"
             href="/travel/trips/new"
             label="New trip"
           />

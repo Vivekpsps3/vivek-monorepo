@@ -162,7 +162,7 @@
     <ui-card>
       <h2>Itinerary</h2>
       <p class="muted">Choose a date to add a plan. Empty days stay open.</p>
-      <div class="date-strip" aria-label="Trip dates">
+      <div class="date-strip" aria-label="Trip dates" (focusin)="revealChip($event)">
         @for (day of trip.days; track day.on_date) {
           <ui-button
             variant="ghost"
@@ -170,7 +170,7 @@
             [pressed]="selectedDay === day.on_date"
             (click)="selectedDay = day.on_date"
           >
-            {{ day.on_date.slice(5) }}
+            {{ showDay(day.on_date) }}
             @if (day.items.length) {
               · {{ day.items.length }} plans
             }

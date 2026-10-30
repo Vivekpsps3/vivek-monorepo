@@ -129,7 +129,7 @@ interface Summary {
           message="Add a book, film, album, or anything you'd like to return to."
         >
           <ui-button
-            variant="ghost"
+            variant="primary"
             href="/media/search"
             label="Start your library"
           />

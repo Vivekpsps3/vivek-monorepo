@@ -4,6 +4,7 @@
   }
   <div class="ui-field__control-wrap">
     <input
+      #control
       class="ui-field__control"
       [class.ui-field__control--with-action]="type() === 'password' && showPasswordToggle()"
       [id]="resolvedId()"

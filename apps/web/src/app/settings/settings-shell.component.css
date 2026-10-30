@@ -6,7 +6,8 @@
   box-sizing: border-box;
   width: min(100%, var(--content-max));
   margin: 0 auto;
-  padding: var(--space-8) var(--gutter) var(--space-16);
+  padding-block: var(--space-8) var(--space-16);
+  padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
   gap: var(--space-4);

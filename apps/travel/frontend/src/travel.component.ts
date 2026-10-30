@@ -90,7 +90,7 @@ import {
           message="Add a destination and dates. Flights, bookings, and plans can follow."
         >
           <ui-button
-            variant="ghost"
+            variant="primary"
             href="/travel/trips/new"
             label="Plan a trip"
           />

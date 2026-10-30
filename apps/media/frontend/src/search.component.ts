@@ -197,7 +197,7 @@ import {
               "
             >
               <ui-button
-                variant="ghost"
+                variant="primary"
                 href="/media/add"
                 [queryParams]="{ title: q }"
                 label="Add manually"

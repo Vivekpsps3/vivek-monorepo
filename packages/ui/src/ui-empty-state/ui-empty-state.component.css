@@ -2,6 +2,10 @@
   display: block;
 }
 
+:host([hidden]) {
+  display: none;
+}
+
 .ui-empty {
   text-align: center;
   padding: var(--space-8) var(--space-4);

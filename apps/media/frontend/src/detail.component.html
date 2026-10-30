@@ -56,7 +56,7 @@
           }}
           · {{ lifecycle.freshness }}
           @if (lifecycle.fetched_at) {
-            · Updated {{ lifecycle.fetched_at.slice(0, 10) }}
+            · Updated {{ showDay(lifecycle.fetched_at.slice(0, 10)) }}
           }
         </ui-badge>
       }

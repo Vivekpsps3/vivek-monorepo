@@ -102,6 +102,11 @@ export class TripComponent {
   editingId: number | null = null;
   mapOpen = false;
   selectedDay = "";
+
+  revealChip(event: Event): void {
+    const target = event.target;
+    if (target instanceof HTMLElement) target.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }
   transport: Record<string, unknown> | null = null;
   charges: Record<string, number> = {};
   ptoEnabled = true;

@@ -2,9 +2,15 @@
 <ui-card>
   <h2>Account settings</h2>
   <form class="account-name" (ngSubmit)="saveName()">
-    <ui-input label="Name" autocomplete="name" [required]="true" [(value)]="draftName" />
+    <ui-input
+      label="Name"
+      autocomplete="name"
+      [required]="true"
+      [invalid]="nameInvalid"
+      [describedBy]="nameError ? 'account-name-error' : undefined"
+      [(value)]="draftName" />
     @if (nameError) {
-      <p class="form-error" role="alert">{{ nameError }}</p>
+      <p id="account-name-error" class="form-error" role="alert" tabindex="-1" #nameAlert>{{ nameError }}</p>
     }
     <ui-button type="submit" [disabled]="savingName" [busy]="savingName">Save name</ui-button>
   </form>

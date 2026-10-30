@@ -4,6 +4,20 @@ import { catchError, switchMap, throwError } from 'rxjs';
 import { authNavigation, SESSION_CONTEXT } from '@vivek/ui';
 import { rememberSessionEnded } from './session-ended';
 
+/** Sign-in forms and the session check itself. A probe here would loop or hide a wrong passphrase. */
+function skipsSessionProbe(url: string): boolean {
+  return (
+    url.includes('/auth/login') ||
+    url.includes('/auth/passwordless') ||
+    url.includes('/auth/bootstrap') ||
+    url.includes('/auth/signup') ||
+    url.includes('/auth/invitations') ||
+    url.includes('/auth/me') ||
+    url.includes('/auth/logout') ||
+    url.includes('/health')
+  );
+}
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(SESSION_CONTEXT);
   const backend = inject(HttpBackend);
@@ -13,36 +27,28 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authReq = req.clone({ withCredentials: true, headers });
   return next(authReq).pipe(
     catchError((err: HttpErrorResponse) => {
-      const isAuthAttempt =
-        req.url.includes('/auth/login') ||
-        req.url.includes('/auth/passwordless') ||
-        req.url.includes('/auth/bootstrap') ||
-        req.url.includes('/auth/signup') ||
-        req.url.includes('/auth/invitations') ||
-        req.url.includes('/account/username') ||
-        req.url.includes('/health');
-      // Username change is the excluded call that runs while signed in. Sign-in
-      // 401s stay on the form: /auth/me is also 401 when nobody is signed in.
-      // HttpBackend skips interceptors, so this single GET is not retried or toasted.
-      if (err.status === 401 && req.url.includes('/account/username') && revision === auth.revision) {
-        return new HttpClient(backend).get('/api/auth/me', { withCredentials: true }).pipe(
-          catchError((probeErr: unknown) => {
-            const status = probeErr instanceof HttpErrorResponse ? probeErr.status : 0;
-            if (status === 401 && revision === auth.revision) {
-              rememberSessionEnded();
-              auth.clearLocalSession();
-              authNavigation.goToLogin();
-            }
-            return throwError(() => err);
-          }),
-          switchMap(() => throwError(() => err)),
-        );
-      }
-      if (err.status === 401 && !isAuthAttempt && revision === auth.revision) {
+      if (err.status !== 401 || revision !== auth.revision) return throwError(() => err);
+      // /auth/me is 401 when nobody is signed in. Logout already redirects. Neither gets the ended-session toast.
+      if (req.url.includes('/auth/me') || req.url.includes('/auth/logout')) {
         auth.clearLocalSession();
         authNavigation.goToLogin();
+        return throwError(() => err);
       }
-      return throwError(() => err);
+      if (skipsSessionProbe(req.url)) return throwError(() => err);
+      // One probe, bypassing this interceptor. A dead session signs in with the ended copy.
+      // A live session rethrows the original 401 so a wrong passphrase keeps its own copy.
+      return new HttpClient(backend).get('/api/auth/me', { withCredentials: true }).pipe(
+        catchError((probeErr: unknown) => {
+          const status = probeErr instanceof HttpErrorResponse ? probeErr.status : 0;
+          if (status === 401 && revision === auth.revision) {
+            rememberSessionEnded();
+            auth.clearLocalSession();
+            authNavigation.goToLogin();
+          }
+          return throwError(() => err);
+        }),
+        switchMap(() => throwError(() => err)),
+      );
     })
   );
 };

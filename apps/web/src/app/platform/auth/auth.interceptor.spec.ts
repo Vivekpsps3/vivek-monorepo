@@ -41,15 +41,47 @@ describe('authInterceptor', () => {
     expect(handle).not.toHaveBeenCalled();
   });
 
-  it('still clears the session for authenticated API 401 responses', async () => {
+  it('sends an authenticated 401 to sign-in with the ended-session copy when the probe is signed out', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['clearLocalSession'], { csrfToken: null });
+    const goToLogin = spyOn(authNavigation, 'goToLogin');
+    const handle = configure(auth, jasmine.createSpy('handle').and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 401, statusText: 'Unauthorized', url: '/api/auth/me' }))
+    ));
+
+    await expectAsync(firstValueFrom(runInterceptor('/api/vault/status'))).toBeRejected();
+    expect(handle).toHaveBeenCalledTimes(1);
+    const probe = handle.calls.mostRecent().args[0] as HttpRequest<unknown>;
+    expect(probe.method).toBe('GET');
+    expect(probe.url).toBe('/api/auth/me');
+    expect(auth.clearLocalSession).toHaveBeenCalled();
+    expect(goToLogin).toHaveBeenCalled();
+    expect(sessionStorage.getItem(SESSION_ENDED_COPY_KEY)).toBe(SESSION_ENDED_COPY);
+  });
+
+  it('keeps a wrong-passphrase 401 when the session probe is still signed in', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['clearLocalSession'], { csrfToken: null });
+    const goToLogin = spyOn(authNavigation, 'goToLogin');
+    const handle = configure(auth, jasmine.createSpy('handle').and.returnValue(
+      of(new HttpResponse({ status: 200, body: { user: { id: 1 } } }))
+    ));
+
+    await expectAsync(firstValueFrom(runInterceptor('/api/account/name'))).toBeRejected();
+    expect(handle).toHaveBeenCalledTimes(1);
+    expect(auth.clearLocalSession).not.toHaveBeenCalled();
+    expect(goToLogin).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(SESSION_ENDED_COPY_KEY)).toBeNull();
+  });
+
+  it('does not probe /auth/me itself and still clears that dead session check', async () => {
     const auth = jasmine.createSpyObj('AuthService', ['clearLocalSession'], { csrfToken: null });
     const goToLogin = spyOn(authNavigation, 'goToLogin');
     const handle = configure(auth);
 
-    await expectAsync(firstValueFrom(runInterceptor('/api/vault/status'))).toBeRejected();
+    await expectAsync(firstValueFrom(runInterceptor('/api/auth/me'))).toBeRejected();
+    expect(handle).not.toHaveBeenCalled();
     expect(auth.clearLocalSession).toHaveBeenCalled();
     expect(goToLogin).toHaveBeenCalled();
-    expect(handle).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(SESSION_ENDED_COPY_KEY)).toBeNull();
   });
 
   it('sends the CSRF header on username change and keeps the session when /auth/me is signed in', async () => {
