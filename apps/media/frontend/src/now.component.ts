@@ -2,6 +2,7 @@ import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { showDay } from "./display";
 import { MediaCardComponent } from "./media-card.component";
 import { MediaCard, NextEpisode, errorCopy } from "./media.models";
 import {
@@ -68,7 +69,7 @@ interface Summary {
                 >
                 <p>
                   S{{ episode.season }} E{{ episode.episode }} ·
-                  {{ episode.title }} · {{ episode.air_date }}
+                  {{ episode.title }} · {{ showDay(episode.air_date) }}
                   @if (episode.state === "upcoming") {
                     · Upcoming
                   }
@@ -102,7 +103,7 @@ interface Summary {
           @for (item of summary.upcoming; track item.id) {
             <p>
               <a [routerLink]="['/media/item', item.id]">{{ item.title }}</a> ·
-              {{ item.release_on || "Date unknown" }}
+              {{ showDay(item.release_on) || "Date unknown" }}
             </p>
           }
         </ui-card>
@@ -142,6 +143,7 @@ interface Summary {
   </main>`,
 })
 export class NowComponent {
+  readonly showDay = showDay;
   private readonly http = inject(HttpClient);
   private readonly destroy = inject(DestroyRef);
   readonly data = signal<Summary | null>(null);

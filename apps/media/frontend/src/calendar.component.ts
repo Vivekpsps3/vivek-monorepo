@@ -10,6 +10,7 @@ import {
   catchError,
   of,
 } from "rxjs";
+import { showDay } from "./display";
 import { errorCopy } from "./media.models";
 import {
   UiButtonComponent,
@@ -88,7 +89,7 @@ interface Calendar {
         <ui-card
           [attr.aria-current]="day.date === calendar.today ? 'date' : null"
         >
-          <h2>{{ day.date }}</h2>
+          <h2>{{ showDay(day.date) }}</h2>
           @for (event of day.events; track $index) {
             <article class="episode-row">
               <div>
@@ -128,7 +129,7 @@ interface Calendar {
                 } @else {
                   {{ event.title }}
                 }
-                · {{ event.release_on || "Date unknown" }}
+                · {{ showDay(event.release_on) || "Date unknown" }}
               </p>
             }
           </ui-card>
@@ -138,6 +139,7 @@ interface Calendar {
   </main>`,
 })
 export class CalendarComponent {
+  readonly showDay = showDay;
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

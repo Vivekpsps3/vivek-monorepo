@@ -43,13 +43,13 @@ describe('CompensationReportComponent', () => {
 
   it('shows a read-only employer estimate for the URL-selected date range', () => {
     expect(fixture.componentInstance.total).toBe(3500);
-    expect(fixture.nativeElement.textContent).toContain('$3,500.00');
+    expect(fixture.nativeElement.textContent.replaceAll('\u2060', '')).toContain('$3,500.00');
     expect(fixture.nativeElement.querySelector('app-income')).toBeNull();
     fixture.componentInstance.start = '2026-01-31';
     fixture.componentInstance.refresh();
     fixture.detectChanges();
     expect(fixture.componentInstance.total).toBe(500);
-    expect(fixture.nativeElement.textContent).toContain('$500.00');
+    expect(fixture.nativeElement.textContent.replaceAll('\u2060', '')).toContain('$500.00');
   });
 
   it('reads and validates year and custom range parameters from the route', () => {

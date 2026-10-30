@@ -172,7 +172,7 @@ describe('HubComponent', () => {
     takeCall('/media/').resolve(json(200, mediaBody()));
     await paint();
 
-    const text = fixture.nativeElement.textContent as string;
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain("Couldn't load trips.");
     expect(text).toContain('The Wire');
     expect(text).toContain('Series');
@@ -200,7 +200,7 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(401, { detail: 'expired' }));
     takeCall('/media/').resolve(json(200, mediaBody()));
     await paint();
-    const text = fixture.nativeElement.textContent as string;
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Your session ended. Sign in again to see trips.');
     expect(text).toContain('The Wire');
     expect(auth.logout).not.toHaveBeenCalled();
@@ -241,7 +241,7 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(200, { next_trip: trip('Kyoto') }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     await paint();
-    const text = fixture.nativeElement.textContent as string;
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Kyoto');
     expect(text).toContain('Bea');
     expect(text).not.toContain('Secret');
@@ -256,7 +256,7 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(200, { next_trip: trip('Lisbon') }));
     takeCall('/media/').resolve(json(503, {}));
     await paint();
-    const text = fixture.nativeElement.textContent as string;
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Lisbon');
     expect(text).toContain("Couldn't load what's in progress.");
     expect(text).toContain("Couldn't load net worth.");
@@ -275,7 +275,7 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, mediaBody()));
     await paint();
-    const text = fixture.nativeElement.textContent as string;
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('No trips yet');
     expect(text).toContain('The Wire');
     expect(text).toMatch(/\$475/);
@@ -289,7 +289,7 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     await paint();
-    const text = fixture.nativeElement.textContent as string;
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('No accounts yet');
     expect(text).toContain('Add an account');
     expect(text).not.toContain('$0.00');
@@ -304,7 +304,7 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     await paint();
-    const text = fixture.nativeElement.textContent as string;
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).not.toContain('No accounts yet');
     expect(text).toMatch(/\$0/);
     expect(text).not.toContain('Finance is locked');

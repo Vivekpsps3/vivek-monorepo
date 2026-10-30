@@ -30,6 +30,7 @@ import {
   errorCopy,
   statusLabel,
 } from "./media.models";
+import { showDay } from "./display";
 import { MediaCardComponent } from "./media-card.component";
 @Component({
   standalone: true,
@@ -48,6 +49,7 @@ import { MediaCardComponent } from "./media-card.component";
   templateUrl: "./detail.component.html",
 })
 export class DetailComponent {
+  readonly showDay = showDay;
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
   private get ownsSession(): boolean {

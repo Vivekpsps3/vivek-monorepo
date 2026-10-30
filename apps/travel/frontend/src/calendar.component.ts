@@ -4,6 +4,7 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { Subject, catchError, of, startWith, switchMap, EMPTY } from "rxjs";
+import { showDay, showDays, showRange } from "./display";
 import { travelError } from "./travel.models";
 import {
   UiButtonComponent,
@@ -83,16 +84,18 @@ function monthEnd(month: string): string {
             <a [routerLink]="['/travel/trips', trip.id]">{{ trip.title }}</a>
           </h2>
           <p>
-            {{ trip.start_date }} – {{ trip.end_date }} ·
+            {{ showRange(trip.start_date, trip.end_date) }} ·
             {{ trip.cities.join(" → ") }}
           </p>
           <p class="muted">
-            PTO dates in this month: {{ trip.pto_dates.join(", ") || "None" }}
+            PTO dates in this month:
+            {{ trip.pto_dates.length ? showDays(trip.pto_dates) : "None" }}
           </p>
           @for (plan of calendar.plans; track plan.id) {
             @if (plan.trip_id === trip.id) {
               <p>
-                {{ plan.on_date }} {{ plan.start_time }} · {{ plan.title }} ·
+                {{ showDay(plan.on_date) }} {{ plan.start_time }} ·
+                {{ plan.title }} ·
                 {{ plan.place_name }}
               </p>
             }
@@ -114,6 +117,9 @@ function monthEnd(month: string): string {
   </main>`,
 })
 export class CalendarComponent {
+  readonly showDay = showDay;
+  readonly showDays = showDays;
+  readonly showRange = showRange;
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

@@ -299,9 +299,9 @@
                       {{ episode.title || "Untitled episode" }}</strong
                     >
                     <p class="muted">
-                      {{ episode.air_date || "Air date unknown" }}
+                      {{ showDay(episode.air_date) || "Air date unknown" }}
                       @if (episode.watched_on) {
-                        · Watched {{ episode.watched_on }}
+                        · Watched {{ showDay(episode.watched_on) }}
                       }
                     </p>
                   </div>

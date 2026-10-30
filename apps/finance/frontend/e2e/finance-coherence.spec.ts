@@ -1,6 +1,7 @@
 import { chooseColorTheme, openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { createHash } from 'node:crypto';
 import { test, expect } from '@playwright/test';
+import { moneyText } from './money-text';
 import { field, syntheticVault } from './synthetic-vault';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -47,7 +48,7 @@ test('unlock refreshes each unique holding and former-employer ticker once, appl
   await expect.poll(() => vault.data('job_incomes')[0]?.stock_valuations?.some((row: any) => row.price_per_share === 125 && row.symbol === 'VOO'))
     .toBe(true);
   await expect(page.locator('.market-banner')).toHaveCount(0);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,275.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,275.00'));
 
   expect(vault.quoteRequestDetails).toEqual([{ symbol: 'VOO', refresh: true }]);
   expect(vault.data('holdings')).toHaveLength(2);
@@ -82,7 +83,7 @@ test('a partial quote failure retains saved prices and position facts while Home
   await expect.poll(() => vault.data('holdings').find(row => row.symbol === 'VOO')?.current_price).toBe(125);
   await expect(page.locator('.market-banner')).toContainText('AAPL');
   await expect(page.locator('.market-banner')).toContainText('Saved prices remain available');
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,125.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,125.00'));
 
   expect(vault.data('holdings').find(row => row.symbol === 'AAPL')).toMatchObject({
     shares: 2, purchase_price: 20, current_price: 50, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-11',
@@ -152,7 +153,7 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
 
   const report = page.locator('app-compensation-report');
   await expect(report).toContainText('Former employer');
-  await expect(report.getByRole('row').filter({ hasText: 'Former employer' })).toContainText('$5,000.00');
+  await expect(report.getByRole('row').filter({ hasText: 'Former employer' })).toContainText(moneyText('$5,000.00'));
   await expect(field(report, 'From')).toHaveValue('2024-01-01');
   await expect(field(report, 'Through')).toHaveValue('2024-12-31');
   await expect(report.getByRole('button', { name: /Edit|Add job/ })).toHaveCount(0);
@@ -238,7 +239,7 @@ test('cold direct Activity links retain their account selection after encrypted 
   const account = page.getByLabel('Account', { exact: true });
   await expect(account.locator('option[value="card-a"]')).toHaveCount(1);
   await expect(account).toHaveValue('card-a');
-  await expect(page.locator('.month-total--expense')).toContainText('$10.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$10.00'));
   await expect(page.getByRole('row').filter({ hasText: 'Coffee' })).toContainText('Daily card');
 });
 
@@ -267,26 +268,26 @@ test('Activity exact account filters keep full matching totals through paginatio
   await expect(page.getByLabel('Account', { exact: true })).toHaveValue('card-a');
   await expect(page.locator('#tx-category-filter')).toHaveValue('food');
   await expect(page.locator('#tx-merchant-filter')).toHaveValue('grocery');
-  await expect(page.locator('.month-total--expense')).toContainText('$110.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$110.00'));
   await expect(page.locator('.month-total--expense')).toContainText('110 purchases');
   const tableRows = page.getByRole('table', { name: 'Transactions history' }).getByRole('row');
   await expect(tableRows).toHaveCount(101);
   await expect(page.getByRole('button', { name: 'Load more', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Load more', exact: true }).click();
   await expect(tableRows).toHaveCount(111);
-  await expect(page.locator('.month-total--expense')).toContainText('$110.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$110.00'));
 
   await page.getByLabel('Account', { exact: true }).selectOption('card-b');
   await expect(page).toHaveURL(/account=card-b/);
-  await expect(page.locator('.month-total--expense')).toContainText('$50.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$50.00'));
   await expect(page.getByRole('table', { name: 'Transactions history' }).getByRole('row')).toHaveCount(11);
   await page.goBack();
   await expect(page).toHaveURL(/account=card-a/);
-  await expect(page.locator('.month-total--expense')).toContainText('$110.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$110.00'));
   await expect(page.getByRole('table', { name: 'Transactions history' }).getByRole('row')).toHaveCount(101);
   await page.goForward();
   await expect(page).toHaveURL(/account=card-b/);
-  await expect(page.locator('.month-total--expense')).toContainText('$50.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$50.00'));
 });
 
 test('saved planning defaults keep live facts live, while explicit starting-balance overrides survive reopen', async ({ page }) => {
@@ -304,8 +305,8 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   await vault.open('/planning?t=path&tool=simulation');
   await expectQuoteRequests(vault, ['VOO']);
   await expect.poll(() => vault.data('holdings')[0]?.current_price).toBe(125);
-  await expect(page.locator('.planning-facts-grid')).toContainText('$1,025');
-  await expect(page.locator('.planning-facts-grid')).toContainText('$1,200');
+  await expect(page.locator('.planning-facts-grid')).toContainText(moneyText('$1,025'));
+  await expect(page.locator('.planning-facts-grid')).toContainText(moneyText('$1,200'));
 
   await page.getByPlaceholder('e.g. Retirement baseline', { exact: true }).fill('Live baseline');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -326,7 +327,7 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   await expect(assetEditor).toBeHidden();
 
   await vault.open('/planning?t=path&tool=simulation');
-  await expect(page.locator('.planning-facts-grid')).toContainText('$1,125');
+  await expect(page.locator('.planning-facts-grid')).toContainText(moneyText('$1,125'));
   const loadProfile = page.locator('.mc-profiles-row select');
   await loadProfile.selectOption(String(profileId));
   await expect(page.getByLabel('Use ledger net worth at start', { exact: true })).toBeChecked();
@@ -344,7 +345,7 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
 
   await vault.open('/have?t=assets');
   await vault.open('/planning?t=path&tool=simulation');
-  await expect(page.locator('.planning-facts-grid')).toContainText('$1,125');
+  await expect(page.locator('.planning-facts-grid')).toContainText(moneyText('$1,125'));
   await page.locator('.mc-profiles-row select').selectOption(String(profileId));
   await expect(page.getByLabel('Use ledger net worth at start', { exact: true })).not.toBeChecked();
   await expect(startingNetWorth).toHaveValue('777');
@@ -371,7 +372,7 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
   await vault.open('/spending?t=activity', page);
   await vault.open('/spending?t=activity', second);
   const secondRow = second.getByRole('row').filter({ hasText: 'CROSS TAB PRIVATE DESCRIPTION' });
-  await expect(secondRow).toContainText('$10.00');
+  await expect(secondRow).toContainText(moneyText('$10.00'));
 
   const firstRow = page.getByRole('row').filter({ hasText: 'CROSS TAB PRIVATE DESCRIPTION' });
   await firstRow.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -379,7 +380,7 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
   await editor.getByLabel('Amount', { exact: true }).fill('99');
   await editor.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(editor).toBeHidden();
-  await expect(secondRow).toContainText('$99.00');
+  await expect(secondRow).toContainText(moneyText('$99.00'));
   const activityMessages = await page.evaluate(() => (window as any).__financeMessages as unknown[]);
   expect(activityMessages).toContainEqual({ version: 1, userId: 987, kind: 'invalidate', collections: ['transactions'] });
   expect(JSON.stringify(activityMessages)).not.toContain('CROSS TAB PRIVATE DESCRIPTION');
@@ -530,8 +531,8 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
   await dialog.getByRole('button', { name: /^Import 1 transaction/ }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => vault.data('import_batches')[0]?.status).toBe('complete');
-  await expect(activityTab.getByRole('row').filter({ hasText: 'COVERAGE PURCHASE' })).toContainText('$10.00');
-  await expect(homeMonth).toContainText('$10.00');
+  await expect(activityTab.getByRole('row').filter({ hasText: 'COVERAGE PURCHASE' })).toContainText(moneyText('$10.00'));
+  await expect(homeMonth).toContainText(moneyText('$10.00'));
   expect(vault.data('import_batches')[0].coverage[0]).toMatchObject({
     account_key: 'card', start_date: coverageStart, end_date: coverageEnd, confirmed: true,
   });
@@ -546,7 +547,7 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   await expect.poll(() => vault.data('import_batches')[0]?.status).toBe('withdrawn');
   await expect(activityTab.getByRole('row').filter({ hasText: 'COVERAGE PURCHASE' })).toHaveCount(0);
-  await expect(homeMonth).toContainText('$0.00');
+  await expect(homeMonth).toContainText(moneyText('$0.00'));
   expect(vault.data('transactions')).toHaveLength(0);
   expect(vault.data('bank_accounts')[0]).toMatchObject({ account_key: 'card', display_name: 'Daily card', confirmed: true });
 });
@@ -558,7 +559,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   });
   await vault.open('/');
   await expectQuoteRequests(vault, ['VOO']);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,125.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,125.00'));
   const holdingsCanvas = page.locator('canvas[aria-label="Portfolio allocation by symbol"]');
   const nontransparentChartPixels = () => holdingsCanvas.evaluate(node => {
     const canvas = node as HTMLCanvasElement;

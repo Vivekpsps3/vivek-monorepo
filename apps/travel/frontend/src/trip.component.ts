@@ -26,6 +26,7 @@ import {
 } from "@vivek/ui";
 import { MapComponent, TravelPlace } from "./map.component";
 import { TransportEditorComponent } from "./transport-editor.component";
+import { showDay, showMoney, showRange } from "./display";
 import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
 @Component({
   standalone: true,
@@ -45,6 +46,9 @@ import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
   templateUrl: "./trip.component.html",
 })
 export class TripComponent {
+  readonly showDay = showDay;
+  readonly showMoney = showMoney;
+  readonly showRange = showRange;
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
   private get ownsSession(): boolean {

@@ -205,10 +205,10 @@ describe('Jobs and pay editor regressions', () => {
         price_paid_per_share: 80, market_price_at_purchase: 100, sales: [],
       })],
     }), true);
-    const incomeText = fixture.nativeElement.textContent;
+    const incomeText = fixture.nativeElement.textContent.replaceAll('\u2060', '');
     expect(incomeText).toContain('employee contribution $800.00');
     expect(incomeText).toContain('purchase-date market price');
-    expect(fixture.nativeElement.querySelector('ui-card').textContent).toContain('$800.00');
+    expect(fixture.nativeElement.querySelector('ui-card').textContent.replaceAll('\u2060', '')).toContain('$800.00');
   });
 
   it('preserves a valid prior-trading-day quote when editing a future-start job', async () => {

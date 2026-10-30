@@ -19,6 +19,7 @@ import {
   UiPageHeaderComponent,
 } from "@vivek/ui";
 import { Subscription } from "rxjs";
+import { showDay, showRange } from "./display";
 import { travelError } from "./travel.models";
 interface Policy {
   configured: boolean;
@@ -94,8 +95,9 @@ interface Pto {
         }
         @for (conflict of pto.policy.conflicts; track conflict.on_date) {
           <p class="local-error">
-            {{ conflict.on_date }} has {{ conflict.amount }} days allocated
-            across {{ conflict.labels.join(", ") }}. Review overlapping leave.
+            {{ showDay(conflict.on_date) }} has {{ conflict.amount }} days
+            allocated across {{ conflict.labels.join(", ") }}. Review
+            overlapping leave.
           </p>
         }
         <details [open]="!pto.policy.configured">
@@ -209,7 +211,7 @@ interface Pto {
                 }
               </h3>
               <p>
-                {{ entry.start_date }} – {{ entry.end_date }} ·
+                {{ showRange(entry.start_date, entry.end_date) }} ·
                 {{ entry.days }} days
               </p>
             </div>
@@ -319,6 +321,8 @@ interface Pto {
   </main>`,
 })
 export class PtoComponent {
+  readonly showDay = showDay;
+  readonly showRange = showRange;
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
   private get ownsSession(): boolean {

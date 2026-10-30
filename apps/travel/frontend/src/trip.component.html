@@ -19,7 +19,7 @@
       [title]="trip.title"
     >
       <p>
-        {{ trip.start_date }} – {{ trip.end_date }} ·
+        {{ showRange(trip.start_date, trip.end_date) }} ·
         {{
           trip.nights === 0
             ? "same day"
@@ -36,8 +36,8 @@
     </ui-page-header>
     @for (conflict of trip.pto.conflicts; track conflict.on_date) {
       <p class="local-error">
-        {{ conflict.on_date }} counts {{ conflict.amount }} PTO days across
-        {{ conflict.labels.join(", ") }}.
+        {{ showDay(conflict.on_date) }} counts {{ conflict.amount }} PTO days
+        across {{ conflict.labels.join(", ") }}.
       </p>
     }
     <div class="button-row">
@@ -71,7 +71,7 @@
         <article class="trip-row">
           <div>
             <h3>{{ stay.city }}</h3>
-            <p>{{ stay.arrive_on }} – {{ stay.leave_on }}</p>
+            <p>{{ showRange(stay.arrive_on, stay.leave_on) }}</p>
             @if (stay.lodging_name) {
               <p>{{ stay.lodging_name }} · {{ stay.lodging_address }}</p>
             }
@@ -131,7 +131,9 @@
               </p>
               @if (transport.cost) {
                 <p class="muted">
-                  {{ transport.cost }} {{ transport.currency }}
+                  <span class="money">{{
+                    showMoney(transport.cost, transport.currency)
+                  }}</span>
                   @if (transport.paid) {
                     · Paid
                   }
@@ -178,7 +180,7 @@
       @for (day of trip.days; track day.on_date) {
         @if (day.items.length || selectedDay === day.on_date) {
           <section class="itinerary-day">
-            <h3>{{ day.on_date }} · {{ day.city }}</h3>
+            <h3>{{ showDay(day.on_date) }} · {{ day.city }}</h3>
             @for (plan of day.items; track plan.id) {
               <article class="trip-row">
                 <div>
@@ -186,7 +188,10 @@
                   <p class="muted">
                     {{ plan.place_name }}
                     @if (plan.cost) {
-                      · {{ plan.cost }} {{ plan.currency }}
+                      ·
+                      <span class="money">{{
+                        showMoney(plan.cost, plan.currency)
+                      }}</span>
                     }
                   </p>
                   @if (plan.notes) {
@@ -217,7 +222,7 @@
               size="sm"
               (click)="selectedDay = day.on_date; open('activity')"
             >
-              Add activity on {{ day.on_date }}
+              Add activity on {{ showDay(day.on_date) }}
             </ui-button>
           </section>
         }
@@ -234,7 +239,7 @@
           </summary>
           @for (plan of trip.outside_plans; track plan.id) {
             <p>
-              {{ plan.on_date }} · {{ plan.title }}
+              {{ showDay(plan.on_date) }} · {{ plan.title }}
               <ui-button
                 variant="ghost"
                 size="sm"
@@ -272,7 +277,7 @@
         </div>
         <div class="pto-dates">
           @for (day of trip.days; track day.on_date) {
-            <ui-field [label]="day.on_date"
+            <ui-field [label]="showDay(day.on_date)"
               ><select
                 uiFieldControl
                 [ngModel]="charges[day.on_date]"
@@ -310,8 +315,10 @@
               <h3>{{ parking.place_name || parking.arrangement }}</h3>
               <p>
                 {{ parking.booked ? "Booked" : "Not booked" }} ·
-                {{ parking.address }} · {{ parking.cost }}
-                {{ parking.currency }}
+                {{ parking.address }} ·
+                <span class="money">{{
+                  showMoney(parking.cost, parking.currency)
+                }}</span>
               </p>
               <p>{{ parking.notes }}</p>
             </div>
@@ -342,7 +349,7 @@
           <article class="trip-row">
             <div>
               <p>{{ note.body }}</p>
-              <p class="muted">{{ note.on_date }}</p>
+              <p class="muted">{{ showDay(note.on_date) }}</p>
             </div>
             <ui-button
               variant="ghost"
@@ -393,15 +400,27 @@
         <h2>Trip costs</h2>
         @for (total of trip.budget.currencies; track total.currency) {
           <p>
-            <strong>{{ total.currency }} {{ total.total }}</strong> · Paid
-            {{ total.paid }} · Unpaid {{ total.unpaid }}
+            <strong class="money">{{
+              showMoney(total.total, total.currency)
+            }}</strong>
+            · Paid
+            <span class="money">{{
+              showMoney(total.paid, total.currency)
+            }}</span>
+            · Unpaid
+            <span class="money">{{
+              showMoney(total.unpaid, total.currency)
+            }}</span>
           </p>
         }
         <p class="muted">Currencies are kept separate.</p>
         @for (line of trip.budget.manual; track line.id) {
           <article class="trip-row">
             <span
-              >{{ line.label }} · {{ line.amount }} {{ line.currency }}
+              >{{ line.label }} ·
+              <span class="money">{{
+                showMoney(line.amount, line.currency)
+              }}</span>
               @if (line.paid) {
                 · Paid
               }</span

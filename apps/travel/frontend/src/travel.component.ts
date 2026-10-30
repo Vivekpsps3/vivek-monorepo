@@ -2,6 +2,7 @@ import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { showRange } from "./display";
 import { Home, Trip, travelError } from "./travel.models";
 import {
   UiButtonComponent,
@@ -68,7 +69,7 @@ import {
                   <ui-card>
                     <ui-badge>{{ trip.status }}</ui-badge>
                     <h3>{{ trip.title }}</h3>
-                    <p>{{ trip.start_date }} – {{ trip.end_date }}</p>
+                    <p>{{ showRange(trip.start_date, trip.end_date) }}</p>
                     <p class="muted">
                       {{ trip.cities.join(" → ") }} ·
                       {{ trip.pto_days_effective }} PTO days
@@ -103,7 +104,7 @@ import {
               <a class="trip-card" [routerLink]="['/travel/trips', trip.id]">
                 <ui-card>
                   <h3>{{ trip.title }}</h3>
-                  <p>{{ trip.start_date }} – {{ trip.end_date }}</p>
+                  <p>{{ showRange(trip.start_date, trip.end_date) }}</p>
                 </ui-card>
               </a>
             }
@@ -118,6 +119,7 @@ import {
   </main>`,
 })
 export class TravelComponent {
+  readonly showRange = showRange;
   private readonly http = inject(HttpClient);
   private readonly destroy = inject(DestroyRef);
   readonly data = signal<Home | null>(null);

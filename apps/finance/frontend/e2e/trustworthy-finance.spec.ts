@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { test, expect } from '@playwright/test';
+import { moneyText } from './money-text';
 import { field, syntheticVault } from './synthetic-vault';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -102,15 +103,15 @@ test('recorded totals count refunds and exclude payments and unresolved credits 
   await expectQuoteRequests(vault, ['VOO']);
   await expectHoldingPrice(vault, 'VOO', 125);
   const activity = page.locator('.home-tile').filter({ hasText: 'This month' });
-  await expect(activity).toContainText('$200.00');
-  await expect(activity).toContainText('$75.00');
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,025.00');
+  await expect(activity).toContainText(moneyText('$200.00'));
+  await expect(activity).toContainText(moneyText('$75.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,025.00'));
   await vault.open('/spending?t=activity');
-  await expect(page.locator('.month-total--expense')).toContainText('$75.00');
-  await expect(page.locator('.month-total--income')).toContainText('$200.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$75.00'));
+  await expect(page.locator('.month-total--income')).toContainText(moneyText('$200.00'));
   await vault.open('/spending?t=calendar');
-  await expect(page.locator('.month-total--expense')).toContainText('$75.00');
-  await expect(page.locator('.month-totals')).toContainText('$200.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$75.00'));
+  await expect(page.locator('.month-totals')).toContainText(moneyText('$200.00'));
   expect(vault.data('holdings')[0].current_price).toBe(125);
   expect(vault.data('holdings')[0].quote_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(vault.data('holdings')[0].quote_date! <= today()).toBe(true);
@@ -136,12 +137,12 @@ test('Spending opens on Activity without review controls and Home has no review 
   await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Reviewed', exact: true })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: /review/i })).toHaveCount(0);
-  await expect(page.getByRole('row').filter({ hasText: 'Older card record' })).toContainText('$20.00');
+  await expect(page.getByRole('row').filter({ hasText: 'Older card record' })).toContainText(moneyText('$20.00'));
 
   await vault.open('/');
   await expect(page.locator('.review-queue-card')).toHaveCount(0);
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$900.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$900.00'));
   expect(vault.data('transactions')[0]).toMatchObject({ description: 'Older card record', amount: 20 });
 
   await vault.open('/planning');
@@ -167,7 +168,7 @@ test('Charts show one cashflow and do not change financial records', async ({ pa
   await vault.open('/');
   await expectQuoteRequests(vault, ['VOO']);
   await expectHoldingPrice(vault, 'VOO', 125);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,025.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,025.00'));
   const refreshedData = {
     assets: vault.data('assets'),
     liabilities: vault.data('liabilities'),
@@ -181,12 +182,12 @@ test('Charts show one cashflow and do not change financial records', async ({ pa
   const note = charts.locator('.chart-note');
   await expect(charts.getByRole('button', { name: 'Recorded', exact: true })).toHaveCount(0);
   await expect(charts.getByRole('button', { name: 'Scheduled', exact: true })).toHaveCount(0);
-  await expect(note).toContainText('Income $200.00');
-  await expect(note).toContainText('Spending $205.00');
+  await expect(note).toContainText(moneyText('Income $200.00'));
+  await expect(note).toContainText(moneyText('Spending $205.00'));
   await expect(note).toContainText('counted once');
   await charts.getByText('Data', { exact: true }).click();
   const currentMonthRow = charts.getByRole('table', { name: 'Monthly cashflow data table' }).getByRole('row').last();
-  await expect(currentMonthRow).toContainText('$205.00');
+  await expect(currentMonthRow).toContainText(moneyText('$205.00'));
   expect(vault.mutations).toHaveLength(mutationCount);
   expect(vault.quoteRequests).toHaveLength(quoteRequestCount);
   expect(vault.data('assets')).toEqual(refreshedData.assets);
@@ -214,12 +215,12 @@ test('Upcoming commitments are date sorted and show account, autopay and frequen
   await expect(rows.nth(1)).toContainText('Travel card');
   await expect(rows.nth(1)).toContainText('Not recorded');
   await expect(rows.nth(1)).toContainText('Annual');
-  await expect(rows.nth(1)).toContainText('$120.00');
+  await expect(rows.nth(1)).toContainText(moneyText('$120.00'));
   await expect(rows.nth(2)).toContainText('Internet bill');
   await expect(rows.nth(2)).toContainText('Everyday checking');
   await expect(rows.nth(2)).toContainText('Manual');
   await expect(rows.nth(2)).toContainText('Monthly');
-  await expect(rows.nth(2)).toContainText('$60.00');
+  await expect(rows.nth(2)).toContainText(moneyText('$60.00'));
 });
 
 test('Calendar keeps its selected date when opening Add transaction', async ({ page }) => {
@@ -243,9 +244,9 @@ test('summaries include transactions beyond 5,000 while visible rows remain pagi
   }));
   const vault = await syntheticVault(page, { transactions: rows });
   await vault.open('/');
-  await expect(page.locator('.home-tile').filter({ hasText: 'This month' })).toContainText('$5,101.00', { timeout: 30_000 });
+  await expect(page.locator('.home-tile').filter({ hasText: 'This month' })).toContainText(moneyText('$5,101.00'), { timeout: 30_000 });
   await vault.open('/spending?t=activity');
-  await expect(page.locator('.month-total--expense')).toContainText('$5,101.00', { timeout: 30_000 });
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$5,101.00'), { timeout: 30_000 });
   expect(await page.locator('tbody tr').count()).toBeLessThan(5_101);
 });
 
@@ -274,7 +275,7 @@ test('planning accepts only covered selected spending and persists its compositi
   await page.locator('details.spending-suggestion-details > summary').click({ position: { x: 8, y: 8 } });
   await page.getByLabel('Select account Daily card', { exact: true }).check();
   await page.getByLabel('Select category Food', { exact: true }).check();
-  await expect(page.locator('.spending-suggestion-result')).toContainText('$324');
+  await expect(page.locator('.spending-suggestion-result')).toContainText(moneyText('$324'));
   expect(vault.data('planning_profiles')).toHaveLength(0);
   await expect(field(page, 'Variable annual spending')).toHaveValue('0');
   vault.failWriteIn('planning_profiles');
@@ -284,7 +285,7 @@ test('planning accepts only covered selected spending and persists its compositi
   await expect(field(page, 'Variable annual spending')).toHaveValue('0');
   await page.getByRole('button', { name: 'Accept spending suggestion', exact: true }).click();
   await expect(field(page, 'Variable annual spending')).toHaveValue('324');
-  await expect(page.getByLabel('Composed annual spending', { exact: true })).toContainText('$1,044');
+  await expect(page.getByLabel('Composed annual spending', { exact: true })).toContainText(moneyText('$1,044'));
   const stored = vault.data('planning_profiles')[0];
   const payload = typeof stored.payload_json === 'string' ? JSON.parse(stored.payload_json) : stored.payload;
   expect(payload.spending_mode).toBe('components');
@@ -330,7 +331,7 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
     ),
   });
   await dialog.getByRole('button', { name: /Preview/ }).click();
-  await expect(dialog.getByRole('table', { name: 'Fidelity import preview' })).toContainText('$240');
+  await expect(dialog.getByRole('table', { name: 'Fidelity import preview' })).toContainText(moneyText('$240'));
   expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
   vault.failWriteIn('holdings');
   await dialog.getByRole('button', { name: 'Confirm Replace', exact: true }).click();
@@ -342,15 +343,15 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('link', { name: 'Home', exact: true }).first().click();
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,025.00');
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,025.00'));
   await vault.open('/have?t=holdings');
   await page.getByRole('button', { name: /Resume/ }).first().click();
-  await expect(page.locator('.summary-card')).toContainText('$340.00');
+  await expect(page.locator('.summary-card')).toContainText(moneyText('$340.00'));
   await expect(page.locator('app-portfolio')).toContainText(/unavailable|unknown/i);
   expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
   await page.getByRole('button', { name: 'Refresh all share prices', exact: true }).click();
   await expect.poll(() => vault.quoteRequests.slice(1).map(symbol => symbol.toUpperCase()).sort()).toEqual(['SPAXX', 'VOO']);
-  await expect(page.locator('.summary-card')).toContainText('$12,750.00');
+  await expect(page.locator('.summary-card')).toContainText(moneyText('$12,750.00'));
   expect(vault.data('assets')[0].current_value).toBe(1000);
   for (const holding of vault.data('holdings')) {
     expect(holding.quote_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);

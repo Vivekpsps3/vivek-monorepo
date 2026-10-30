@@ -1,5 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { formatDate, formatDateRange } from '@vivek/browser';
+import { formatDate, formatOpenEndedRange } from '@vivek/browser';
 
 @Pipe({ name: 'appDate', standalone: true })
 export class AppDatePipe implements PipeTransform {
@@ -14,6 +14,6 @@ export class AppDatePipe implements PipeTransform {
 @Pipe({ name: 'appDateRange', standalone: true })
 export class AppDateRangePipe implements PipeTransform {
   transform(start: string | null | undefined, end?: string | null): string {
-    return formatDateRange(start, end);
+    return formatOpenEndedRange(start, end);
   }
 }
