@@ -1,5 +1,9 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { Injector } from '@angular/core';
+import { Observable, combineLatest, defer, firstValueFrom, from, takeUntil, timeout } from 'rxjs';
 import { fromDollars } from '@vivek/browser';
 import { transactionEffects } from '../crypto/client-finance';
+import { financeVaultPresent } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
 import type { Transaction } from '../models/transaction.model';
 
@@ -28,6 +32,9 @@ export type BudgetKeptResult =
 type SpendingPlanMode = 'manual' | 'components' | 'recurring';
 type PlanInputs = Pick<PlanningInputsPreview, 'recurring_annual_spending' | 'implied_annual_spending'>;
 
+/** Matches HUB_SUMMARY_DEADLINE_MS in apps/web/src/app/hub/hub-load.ts. Finance cannot import that module. */
+const BUDGET_KEPT_DEFAULT_DEADLINE_MS = 8_000;
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function weeklyPlanFor(annualPlan: number): number {
@@ -40,6 +47,16 @@ function shiftIsoDate(iso: string, days: number): string | null {
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
   date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Monday of the ISO week that contains this calendar date. UTC so the host zone cannot move it. */
+function isoMonday(iso: string): string | null {
+  if (!ISO_DATE.test(iso)) return null;
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
   return date.toISOString().slice(0, 10);
 }
 
@@ -134,4 +151,147 @@ export function budgetKeptWeeks(
     }
     return { weekStart, spend, weeklyPlan, kept: keptForSpend(spend, weeklyPlan) };
   });
+}
+
+/**
+ * Vault, planning, and the encrypted store. Called only after financeVaultPresent()
+ * is true, so a locked caller never imports vault crypto. Specs spy on this object.
+ */
+export const budgetKeptCryptoImports = {
+  async load() {
+    const [vault, planning, store] = await Promise.all([
+      import('../crypto/vault.service'),
+      import('../services/planning.service'),
+      import('../crypto/encrypted-store.service'),
+    ]);
+    return {
+      VaultService: vault.VaultService,
+      PlanningService: planning.PlanningService,
+      EncryptedStoreService: store.EncryptedStoreService,
+    };
+  },
+};
+
+interface BudgetKeptVault {
+  whenReady(): Promise<void>;
+  readonly isUnlocked: boolean;
+}
+
+interface BudgetKeptPlanning {
+  listProfiles(): Observable<PlanningProfile[]>;
+  getInputs(): Observable<PlanInputs>;
+}
+
+interface BudgetKeptStore {
+  getTransactions(): Promise<Transaction[]>;
+}
+
+function abort$(signal: AbortSignal): Observable<void> {
+  return new Observable(subscriber => {
+    if (signal.aborted) {
+      subscriber.next();
+      subscriber.complete();
+      return;
+    }
+    const onAbort = () => {
+      subscriber.next();
+      subscriber.complete();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    return () => signal.removeEventListener('abort', onAbort);
+  });
+}
+
+function mapLoadError(signal: AbortSignal, err: unknown): BudgetKeptResult {
+  if (signal.aborted) return { status: 'cancelled' };
+  if (err instanceof HttpErrorResponse && err.status === 401) return { status: 'expired' };
+  return { status: 'unavailable' };
+}
+
+function injectService<T>(injector: Injector, token: object): T {
+  return injector.get(token as never);
+}
+
+function completedWeekStarts(today: string, weeks: number, includeCurrentWeek: boolean): string[] | null {
+  if (!Number.isInteger(weeks) || weeks < 0) return null;
+  const current = isoMonday(today);
+  if (!current) return null;
+  const starts: string[] = [];
+  for (let ago = weeks; ago >= 1; ago -= 1) {
+    const start = shiftIsoDate(current, -7 * ago);
+    if (!start) return null;
+    starts.push(start);
+  }
+  if (includeCurrentWeek) starts.push(current);
+  return starts;
+}
+
+function assembleBudgetKept(
+  profiles: PlanningProfile[],
+  inputs: PlanInputs,
+  txs: Transaction[],
+  opts: { today: string; weeks: number; includeCurrentWeek?: boolean },
+): BudgetKeptResult {
+  const plan = resolveAnnualPlan(profiles, inputs);
+  if (!plan) return { status: 'no_plan' };
+  if (txs.length === 0) return { status: 'no_data' };
+  const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
+  if (!weekStarts) return { status: 'unavailable' };
+  return {
+    status: 'ready',
+    annualPlan: plan.annualPlan,
+    weeklyPlan: weeklyPlanFor(plan.annualPlan),
+    mode: plan.mode,
+    weeks: budgetKeptWeeks(txs, plan.annualPlan, weekStarts),
+  };
+}
+
+async function openBudgetKeptVault(
+  injector: Injector,
+  signal: AbortSignal,
+): Promise<BudgetKeptResult | { status: 'open'; vault: BudgetKeptVault; planning: BudgetKeptPlanning; store: BudgetKeptStore }> {
+  try {
+    const deps = await budgetKeptCryptoImports.load();
+    if (signal.aborted) return { status: 'cancelled' };
+    const vault = injectService<BudgetKeptVault>(injector, deps.VaultService);
+    const planning = injectService<BudgetKeptPlanning>(injector, deps.PlanningService);
+    const store = injectService<BudgetKeptStore>(injector, deps.EncryptedStoreService);
+    await vault.whenReady();
+    if (signal.aborted) return { status: 'cancelled' };
+    if (!vault.isUnlocked) return { status: 'locked' };
+    return { status: 'open', vault, planning, store };
+  } catch (err) {
+    return mapLoadError(signal, err);
+  }
+}
+
+/** Lazy, like loadFinanceHubSnapshot. Locked before any vault or network read. */
+export async function loadFinanceBudgetKept(
+  injector: Injector,
+  signal: AbortSignal,
+  opts: {
+    today: string;
+    weeks: number;
+    includeCurrentWeek?: boolean;
+    deadlineMs?: number;
+  },
+): Promise<BudgetKeptResult> {
+  if (signal.aborted) return { status: 'cancelled' };
+  if (!financeVaultPresent()) return { status: 'locked' };
+  const opened = await openBudgetKeptVault(injector, signal);
+  if (opened.status !== 'open') return opened;
+  try {
+    const [profiles, inputs, txs] = await firstValueFrom(
+      combineLatest([
+        opened.planning.listProfiles(),
+        opened.planning.getInputs(),
+        defer(() => from(opened.store.getTransactions())),
+      ]).pipe(takeUntil(abort$(signal)), timeout(opts.deadlineMs ?? BUDGET_KEPT_DEFAULT_DEADLINE_MS)),
+    );
+    if (signal.aborted) return { status: 'cancelled' };
+    if (!opened.vault.isUnlocked) return { status: 'locked' };
+    return assembleBudgetKept(profiles, inputs, txs, opts);
+  } catch (err) {
+    return mapLoadError(signal, err);
+  }
 }

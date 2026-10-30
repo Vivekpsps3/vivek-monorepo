@@ -1,9 +1,16 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { Injector } from '@angular/core';
+import { Observable, of, throwError } from 'rxjs';
+import { DEK_STORE } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
 import type { Transaction } from '../models/transaction.model';
 import {
+  budgetKeptCryptoImports,
   budgetKeptWeeks,
   firstTransactionDate,
+  loadFinanceBudgetKept,
   resolveAnnualPlan,
+  type BudgetKeptResult,
   type BudgetKeptWeek,
 } from './budget-kept';
 
@@ -193,5 +200,248 @@ describe('budget kept pure core', () => {
       week('2026-09-21', null, null),
       week('2026-09-28', 0, true),
     ]);
+  });
+});
+
+describe('loadFinanceBudgetKept', () => {
+  const today = '2026-10-14';
+  const manual = profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: PLAN });
+  const planInputs = inputs(undefined, 0);
+
+  afterEach(() => localStorage.removeItem(DEK_STORE));
+
+  function unlock(options: {
+    profiles?: PlanningProfile[];
+    planInputs?: PlanInputs;
+    txs?: Transaction[];
+    listProfiles?: () => Observable<PlanningProfile[]>;
+    getInputs?: () => Observable<PlanInputs>;
+    getTransactions?: () => Promise<Transaction[]>;
+    isUnlocked?: boolean;
+    whenReady?: () => Promise<void>;
+  }) {
+    localStorage.setItem(DEK_STORE, 'synthetic-budget-kept');
+    class VaultToken {}
+    class PlanningToken {}
+    class StoreToken {}
+    const listProfiles = jasmine.createSpy('listProfiles').and.callFake(
+      options.listProfiles ?? (() => of(options.profiles ?? [])),
+    );
+    const getInputs = jasmine.createSpy('getInputs').and.callFake(
+      options.getInputs ?? (() => of(options.planInputs ?? planInputs)),
+    );
+    const getTransactions = jasmine.createSpy('getTransactions').and.callFake(
+      options.getTransactions ?? (() => Promise.resolve(options.txs ?? [])),
+    );
+    const vault = {
+      whenReady: options.whenReady ?? (() => Promise.resolve()),
+      isUnlocked: options.isUnlocked ?? true,
+    };
+    const modules = {
+      VaultService: VaultToken,
+      PlanningService: PlanningToken,
+      EncryptedStoreService: StoreToken,
+    } as unknown as Awaited<ReturnType<typeof budgetKeptCryptoImports.load>>;
+    const load = jasmine.isSpy(budgetKeptCryptoImports.load)
+      ? budgetKeptCryptoImports.load as jasmine.Spy
+      : spyOn(budgetKeptCryptoImports, 'load');
+    load.and.resolveTo(modules);
+    const get = jasmine.createSpy('get').and.callFake((token: unknown) => {
+      if (token === VaultToken) return vault;
+      if (token === PlanningToken) return { listProfiles, getInputs };
+      if (token === StoreToken) return { getTransactions };
+      throw new Error('unexpected token');
+    });
+    return {
+      injector: { get } as unknown as Injector,
+      listProfiles,
+      getInputs,
+      getTransactions,
+      load,
+      get,
+    };
+  }
+
+  function ask(
+    injector: Injector,
+    extra: { weeks?: number; includeCurrentWeek?: boolean; deadlineMs?: number; signal?: AbortSignal; today?: string } = {},
+  ): Promise<BudgetKeptResult> {
+    return loadFinanceBudgetKept(injector, extra.signal ?? new AbortController().signal, {
+      today: extra.today ?? today,
+      weeks: extra.weeks ?? 1,
+      includeCurrentWeek: extra.includeCurrentWeek,
+      deadlineMs: extra.deadlineMs ?? 1000,
+    });
+  }
+
+  it('returns locked and does not import crypto or call the vault when the key is absent', async () => {
+    localStorage.removeItem(DEK_STORE);
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const get = jasmine.createSpy('get').and.throwError('vault should not be read');
+    const result = await ask({ get } as unknown as Injector);
+    expect(result).toEqual({ status: 'locked' });
+    expect(load).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('returns cancelled without importing crypto when the signal is already aborted', async () => {
+    localStorage.setItem(DEK_STORE, 'synthetic-budget-kept');
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const ctrl = new AbortController();
+    ctrl.abort();
+    const result = await ask({ get: () => { throw new Error('unread'); } } as unknown as Injector, { signal: ctrl.signal });
+    expect(result).toEqual({ status: 'cancelled' });
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('returns no_plan when there is no profile and no transactions', async () => {
+    const { injector, getTransactions } = unlock({ profiles: [], txs: [] });
+    expect(await ask(injector)).toEqual({ status: 'no_plan' });
+    expect(getTransactions).toHaveBeenCalled();
+  });
+
+  it('returns no_plan for a plan of 0 or null even when transactions exist', async () => {
+    const purchase = [tx({ id: 1, date: '2026-09-01', amount: 10, kind: 'purchase' })];
+    const zero = unlock({ profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: 0 })], txs: purchase });
+    expect(await ask(zero.injector)).toEqual({ status: 'no_plan' });
+    const missing = unlock({ profiles: [profile({ id: 2, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: null })], txs: purchase });
+    expect(await ask(missing.injector)).toEqual({ status: 'no_plan' });
+  });
+
+  it('returns no_data when a plan exists and the vault has zero transactions', async () => {
+    const { injector } = unlock({ profiles: [manual], txs: [] });
+    expect(await ask(injector)).toEqual({ status: 'no_data' });
+  });
+
+  it('ranks locked above no_plan above no_data above ready', async () => {
+    localStorage.removeItem(DEK_STORE);
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const get = jasmine.createSpy('get');
+    expect(await ask({ get } as unknown as Injector)).toEqual({ status: 'locked' });
+    expect(load).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+
+    const purchase = [tx({ id: 1, date: '2026-09-01', amount: 4, kind: 'purchase' })];
+    expect(await ask(unlock({ profiles: [], txs: [] }).injector)).toEqual({ status: 'no_plan' });
+    expect(await ask(unlock({ profiles: [manual], txs: [] }).injector)).toEqual({ status: 'no_data' });
+    const ready = await ask(unlock({ profiles: [manual], txs: purchase }).injector, { weeks: 1 });
+    expect(ready.status).toBe('ready');
+    if (ready.status !== 'ready') return;
+    expect(ready.mode).toBe('manual');
+    expect(ready.weeks[0].weekStart).toBe('2026-10-05');
+  });
+
+  it('counts completed ISO weeks ending with the week before today', async () => {
+    const { injector } = unlock({
+      profiles: [manual],
+      txs: [tx({ id: 1, date: '2026-01-05', amount: 1, kind: 'purchase' })],
+    });
+    const october = await ask(injector, { today: '2026-10-14', weeks: 3 });
+    const sunday = await ask(injector, { today: '2027-01-03', weeks: 1 });
+    const nextYear = await ask(injector, { today: '2027-01-04', weeks: 1 });
+    expect(october.status).toBe('ready');
+    expect(sunday.status).toBe('ready');
+    expect(nextYear.status).toBe('ready');
+    if (october.status !== 'ready' || sunday.status !== 'ready' || nextYear.status !== 'ready') return;
+    expect(october.weeks.map(row => row.weekStart)).toEqual(['2026-09-21', '2026-09-28', '2026-10-05']);
+    expect(sunday.weeks.map(row => row.weekStart)).toEqual(['2026-12-21']);
+    expect(nextYear.weeks.map(row => row.weekStart)).toEqual(['2026-12-28']);
+    expect(isoWeekOfMonday('2026-12-28')).toBe(53);
+    expect(october.weeklyPlan).toBe(WEEKLY);
+    expect(Object.keys(october).sort()).toEqual(['annualPlan', 'mode', 'status', 'weeklyPlan', 'weeks']);
+    expect(Object.keys(october.weeks[0]).sort()).toEqual(['kept', 'spend', 'weekStart', 'weeklyPlan']);
+  });
+
+  it('appends the in-progress week when includeCurrentWeek is set', async () => {
+    const purchase = tx({ id: 1, date: '2026-10-14', amount: 12, kind: 'purchase' });
+    const older = tx({ id: 2, date: '2026-09-01', amount: 1, kind: 'purchase' });
+    const { injector } = unlock({ profiles: [manual], txs: [older, purchase] });
+    const closed = await ask(injector, { weeks: 1 });
+    const open = await ask(injector, { weeks: 1, includeCurrentWeek: true });
+    expect(closed.status).toBe('ready');
+    expect(open.status).toBe('ready');
+    if (closed.status !== 'ready' || open.status !== 'ready') return;
+    expect(closed.weeks).toEqual([week('2026-10-05', 0, true)]);
+    expect(open.weeks).toEqual([
+      week('2026-10-05', 0, true),
+      week('2026-10-12', 12, true),
+    ]);
+  });
+
+  it('returns ready with unknown completed weeks when the first transaction is in the current week', async () => {
+    const { injector } = unlock({
+      profiles: [manual],
+      txs: [tx({ id: 1, date: '2026-10-14', amount: 12, kind: 'purchase' })],
+    });
+    const result = await ask(injector, { weeks: 1 });
+    expect(result).toEqual({
+      status: 'ready',
+      annualPlan: PLAN,
+      weeklyPlan: WEEKLY,
+      mode: 'manual',
+      weeks: [week('2026-10-05', null, null)],
+    });
+  });
+
+  it('returns unavailable when the read passes the deadline', async () => {
+    const { injector } = unlock({
+      profiles: [manual],
+      getTransactions: () => new Promise(() => undefined),
+    });
+    expect(await ask(injector, { deadlineMs: 30 })).toEqual({ status: 'unavailable' });
+  });
+
+  it('returns cancelled when the signal aborts during the read', async () => {
+    let markStarted!: () => void;
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const { injector } = unlock({
+      profiles: [manual],
+      getTransactions: () => {
+        markStarted();
+        return new Promise(() => undefined);
+      },
+    });
+    const ctrl = new AbortController();
+    const pending = ask(injector, { signal: ctrl.signal, deadlineMs: 5000 });
+    await started;
+    ctrl.abort();
+    expect(await pending).toEqual({ status: 'cancelled' });
+  });
+
+  it('returns expired when the vault read is a 401', async () => {
+    const { injector } = unlock({
+      profiles: [manual],
+      getTransactions: () => Promise.reject(new HttpErrorResponse({ status: 401 })),
+    });
+    expect(await ask(injector)).toEqual({ status: 'expired' });
+  });
+
+  it('returns unavailable when the vault read fails', async () => {
+    const failed = unlock({
+      listProfiles: () => throwError(() => new HttpErrorResponse({ status: 503 })),
+    });
+    expect(await ask(failed.injector)).toEqual({ status: 'unavailable' });
+    const boot = unlock({ whenReady: () => Promise.reject(new Error('boot')) });
+    expect(await ask(boot.injector)).toEqual({ status: 'unavailable' });
+    expect(boot.listProfiles).not.toHaveBeenCalled();
+  });
+
+  it('returns locked without reading profiles when the saved key does not unlock', async () => {
+    const { injector, listProfiles, getTransactions, load } = unlock({
+      profiles: [manual],
+      txs: [tx({ id: 1, date: '2026-09-01', amount: 5, kind: 'purchase' })],
+      isUnlocked: false,
+    });
+    expect(await ask(injector)).toEqual({ status: 'locked' });
+    expect(load).toHaveBeenCalled();
+    expect(listProfiles).not.toHaveBeenCalled();
+    expect(getTransactions).not.toHaveBeenCalled();
+  });
+
+  it('loads the vault, planning, and encrypted store through the lazy import', async () => {
+    const deps = await budgetKeptCryptoImports.load();
+    expect(deps.VaultService.name).toBe('VaultService');
+    expect(deps.PlanningService.name).toBe('PlanningService');
+    expect(deps.EncryptedStoreService.name).toBe('EncryptedStoreService');
   });
 });
