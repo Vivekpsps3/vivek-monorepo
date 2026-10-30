@@ -318,8 +318,27 @@ async function readBudgetKept(
   return assembleBudgetKept(profiles, inputs, txs, weekStarts);
 }
 
+async function loadBudgetKeptBody(
+  injector: Injector,
+  signal: AbortSignal,
+  weekStarts: string[],
+  deadlineMs: number | undefined,
+): Promise<BudgetKeptResult> {
+  try {
+    if (!financeVaultPresent()) return { status: 'locked' };
+    return await firstValueFrom(
+      defer(() => from(readBudgetKept(injector, signal, weekStarts))).pipe(
+        takeUntil(abort$(signal)),
+        timeout(deadlineMs ?? BUDGET_KEPT_DEFAULT_DEADLINE_MS),
+      ),
+    );
+  } catch (err) {
+    return mapLoadError(signal, err);
+  }
+}
+
 /** Lazy, like loadFinanceHubSnapshot. Locked before any vault or network read. */
-export async function loadFinanceBudgetKept(
+export function loadFinanceBudgetKept(
   injector: Injector,
   signal: AbortSignal,
   opts: {
@@ -329,18 +348,7 @@ export async function loadFinanceBudgetKept(
     deadlineMs?: number;
   },
 ): Promise<BudgetKeptResult> {
-  if (signal.aborted) return { status: 'cancelled' };
-  try {
-    const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
-    if (!financeVaultPresent()) return { status: 'locked' };
-    return await firstValueFrom(
-      defer(() => from(readBudgetKept(injector, signal, weekStarts))).pipe(
-        takeUntil(abort$(signal)),
-        timeout(opts.deadlineMs ?? BUDGET_KEPT_DEFAULT_DEADLINE_MS),
-      ),
-    );
-  } catch (err) {
-    if (err instanceof RangeError) throw err;
-    return mapLoadError(signal, err);
-  }
+  if (signal.aborted) return Promise.resolve({ status: 'cancelled' });
+  const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
+  return loadBudgetKeptBody(injector, signal, weekStarts, opts.deadlineMs);
 }

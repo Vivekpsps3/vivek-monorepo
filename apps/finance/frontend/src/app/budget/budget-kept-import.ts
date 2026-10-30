@@ -58,8 +58,9 @@ function withSignalAndDeadline<T>(work: Promise<T>, signal: AbortSignal, deadlin
 
 /**
  * Loads the budget-kept chunk and runs it under one deadline.
- * Abort is cancelled. A missed deadline, a rejected import, or a budget
- * used up by the import is unavailable. RangeError still propagates.
+ * Abort is cancelled. A missed deadline, a rejected import (including
+ * RangeError), or a budget used up by the import is unavailable.
+ * RangeError from the loaded module still propagates.
  * `load` is the chunk importer; tests pass a fake.
  */
 export async function loadFinanceBudgetKeptGuarded(
@@ -79,10 +80,9 @@ export async function loadFinanceBudgetKeptGuarded(
   let loaded: BudgetKeptModule;
   try {
     loaded = await withSignalAndDeadline(load(), signal, deadlineMs);
-  } catch (err) {
-    if (err instanceof RangeError) throw err;
+  } catch {
     if (signal.aborted) return { status: 'cancelled' };
-    // BudgetKeptImportDeadlineError and a rejected chunk are both unavailable. expired is only a 401.
+    // A rejected chunk, including RangeError, is unavailable. expired is only a 401.
     return { status: 'unavailable' };
   }
   const remaining = deadlineMs - (performance.now() - started);

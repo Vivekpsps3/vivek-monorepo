@@ -472,16 +472,28 @@ describe('loadFinanceBudgetKept', () => {
     expect(await ask(unlock({ profiles: [older, newer], txs: purchase }).injector)).toEqual({ status: 'unavailable' });
   });
 
-  it('throws RangeError when today or weeks is outside the allowed window', async () => {
+  it('throws RangeError synchronously when today or weeks is outside the allowed window', () => {
     const load = spyOn(budgetKeptCryptoImports, 'load');
     const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
-    await expectAsync(ask(injector, { weeks: 0 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { weeks: -1 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { weeks: 1.5 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { weeks: 521 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { today: '2026-02-31' })).toBeRejectedWithError(RangeError, /today/);
-    await expectAsync(ask(injector, { today: 'not-a-date' })).toBeRejectedWithError(RangeError, /today/);
+    expect(() => ask(injector, { weeks: 0 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { weeks: -1 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { weeks: 1.5 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { weeks: 521 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { today: '2026-02-31' })).toThrowError(RangeError, /today/);
+    expect(() => ask(injector, { today: 'not-a-date' })).toThrowError(RangeError, /today/);
     expect(load).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable when listProfiles or getTransactions throws RangeError', async () => {
+    const profiles = unlock({
+      listProfiles: () => throwError(() => new RangeError('profiles')),
+    });
+    expect(await ask(profiles.injector)).toEqual({ status: 'unavailable' });
+    const transactions = unlock({
+      profiles: [manual],
+      getTransactions: () => Promise.reject(new RangeError('transactions')),
+    });
+    expect(await ask(transactions.injector)).toEqual({ status: 'unavailable' });
   });
 
   it('accepts the upper bound of 520 completed weeks', async () => {
@@ -618,6 +630,12 @@ describe('loadFinanceBudgetKeptGuarded', () => {
 
   it('returns unavailable when the import fails', async () => {
     const load = jasmine.createSpy('load').and.rejectWith(new Error('chunk failed'));
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
+      .toEqual({ status: 'unavailable' });
+  });
+
+  it('returns unavailable when the import throws RangeError', async () => {
+    const load = jasmine.createSpy('load').and.rejectWith(new RangeError('chunk'));
     expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
       .toEqual({ status: 'unavailable' });
   });
