@@ -1,53 +1,519 @@
 <main class="page media-page">
-<a routerLink="/media/library">← Library</a>
-@if(error()){<div class="local-error" role="alert">{{error()}} @if(!item()){<button class="btn" (click)="load(+(routeId()))">Retry item</button>}@else{<button class="btn" (click)="reloadSaved()">Reload saved item</button>}</div>}
-@if(loading()){<p role="status" class="surface">Loading saved item…</p>}
-@if(item();as entry){
-<header class="media-detail-heading"><div class="media-art hero-art">
-@if(entry.artwork_url && !broken()){<img [src]="entry.artwork_url" [alt]="entry.kind === 'artist' ? entry.title+' portrait' : ''" (error)="broken.set(true)" [style.object-position]="entry.portrait?.crop ? entry.portrait!.crop![0]+'% '+entry.portrait!.crop![1]+'%' : '50% 50%'">}@else{<span>{{entry.title.slice(0,2).toUpperCase()}}</span>}
-</div><div><p class="eyebrow">{{entry.kind === 'tv' ? 'Series' : entry.kind}} @if(entry.year){ · {{entry.year}}}</p><h1>{{entry.title}}</h1><p class="muted">{{entry.creator}}</p>
-@if(entry.lifecycle;as lifecycle){<p class="badge">{{lifecycle.state === 'unknown' ? 'Status unknown' : lifecycle.state}} · {{lifecycle.freshness}} @if(lifecycle.fetched_at){ · Updated {{lifecycle.fetched_at.slice(0,10)}} }</p>}
-<div class="button-row">@if(entry.catalog.source !== 'manual'){<button class="btn" [disabled]="busy()" (click)="action('/refresh')">Refresh metadata</button>}
-@if(entry.kind === 'artist'){<button class="btn" (click)="openPhotos()">Choose photo</button>@if(entry.portrait){<button class="btn" [disabled]="busy()" (click)="resetPhoto()">Reset photo</button>}}
-</div>
-@if(entry.portrait;as photo){<p class="muted photo-credit"><a [href]="photo.source_url" target="_blank" rel="noopener noreferrer">Photo source</a> · {{photo.creator}} · {{photo.license}}</p>}
-@if(entry.catalog.extra['metadata_pending']){<p class="muted">Metadata pending. Your saved item is ready to edit.</p>}</div></header>
-@if(message()){<p role="status" class="save-status">{{message()}}</p>}
-@if(entry.catalog.overview){<details class="overview"><summary>About this {{entry.kind === 'tv' ? 'series' : entry.kind}}</summary><p>{{entry.catalog.overview}}</p></details>}
-<section class="surface" role="status" [hidden]="!recovery()"><p>Unsaved changes from an earlier version of this item are available. The saved item changed since that draft.</p><button class="btn" (click)="restoreDraft()">Restore earlier draft</button><button class="btn" (click)="discardRecovery()">Discard earlier draft</button></section>
-<form class="media-editor surface" (ngSubmit)="save()">
-<h2>Your {{entry.kind === 'artist' ? 'artist' : 'experience'}}</h2>
-<div class="form-row"><label>{{entry.kind === 'artist' ? 'Relationship' : 'State'}}<select name="status" [(ngModel)]="status">
-@if(entry.kind === 'artist'){<option value="following">Following</option><option value="unfollowed">Unfollowed</option>}
-@else{<option value="want">Want to</option><option value="anticipating">Anticipating</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="paused">Paused</option><option value="dropped">Dropped</option>}
-</select></label>
-<label>Rating <span class="muted">(optional, 0–10)</span><input type="number" min="0" max="10" step="0.5" name="rating" [(ngModel)]="rating"></label></div>
-@if(entry.kind !== 'artist'){<div class="form-row"><label>Progress<input type="number" min="0" name="progress" [(ngModel)]="progress"></label><label>Unit<select name="unit" [(ngModel)]="unit"><option value="">No unit</option><option value="page">Pages</option><option value="percent">Percent</option><option value="episode">Episodes</option><option value="hour">Hours</option></select></label></div>}
-<label>Note <span class="muted">(optional)</span><textarea name="review" [(ngModel)]="review" rows="5" maxlength="20000" placeholder="What stayed with you?"></textarea></label>
-<div class="button-row"><label class="check-label"><input type="checkbox" name="favorite" [(ngModel)]="favorite"> Favorite</label>@if(entry.kind !== 'artist'){<label class="check-label"><input type="checkbox" name="anticipated" [(ngModel)]="anticipated"> Anticipated</label>}</div>
-<div class="button-row"><button class="btn btn-primary" type="submit" [disabled]="busy()">{{busy() ? 'Saving…' : 'Save changes'}}</button>@if(dirty){<span class="muted">Unsaved changes</span>}</div>
-</form>
-@if(entry.show;as show){
-<section class="surface"><h2>Episode progress</h2><p>{{show.watched_count}} / {{show.episode_count}} known episodes watched.</p>
-@if(show.metadata_incomplete){<p class="muted">Progress metadata is incomplete. Unknown air dates are excluded from bulk completion.</p>}
-@if(show.caught_up){<p class="save-status">Caught up · {{entry.lifecycle?.state === 'ended' || entry.lifecycle?.state === 'canceled' ? 'All known aired episodes watched' : 'Waiting for the next episode or season'}}</p>}
-@if(show.next_episode;as next){<p>Next: S{{next.season_number}} E{{next.episode_number}} · {{next.title}}</p>}
-<label class="check-label"><input type="checkbox" [(ngModel)]="includeSpecials"> Include aired specials</label>
-<p class="muted">Mark {{eligible()}} unwatched episodes through today's provider date. Future and undated episodes stay unchanged.</p>
-<div class="button-row"><button class="btn btn-primary" [disabled]="busy() || !eligible()" (click)="action('/caught-up',{include_specials:includeSpecials})">Mark caught up</button>@if(undoToken){<button class="btn" [disabled]="busy()" (click)="action('/caught-up/'+undoToken+'/undo')">Undo catch-up</button>}</div>
-@for(season of show.seasons;track season.season_number){<details class="season"><summary>{{season.season_number === 0 ? 'Specials' : 'Season '+season.season_number}} · {{season.episode_count}} episodes @if(season.watched){ · Watched}@if(season.manual){ · Manual completion}</summary>
-<label>Season rating (optional)<input type="number" min="0" max="10" step="0.5" [value]="season.rating ?? ''" #score (change)="seasonRate(season.season_number,score.value)"></label>
-@for(episode of show.episodes;track episode.id){@if(episode.season_number===season.season_number){<div class="episode-row"><div><strong>E{{episode.episode_number}} · {{episode.title || 'Untitled episode'}}</strong><p class="muted">{{episode.air_date || 'Air date unknown'}} @if(episode.watched_on){ · Watched {{episode.watched_on}}}</p></div><button class="btn" [disabled]="busy() || (!episode.released && !!episode.air_date && !episode.watched)" (click)="mark(episode)">{{episode.watched ? 'Unwatch' : 'Mark watched'}}</button></div>}}</details>}
-<details><summary>Add or correct an episode</summary><form class="media-form" (ngSubmit)="action('/episodes',episode)"><div class="form-row"><label>Season<input required type="number" min="0" name="season" [(ngModel)]="episode.season_number"></label><label>Episode<input required type="number" min="1" name="number" [(ngModel)]="episode.episode_number"></label></div><label>Title<input name="title" [(ngModel)]="episode.title"></label><label>Air date (optional)<input type="date" name="air_date" [(ngModel)]="episode.air_date"></label><button class="btn" [disabled]="busy()">Save episode</button></form></details>
-@if(entry.catalog.source === 'manual'){<details><summary>Link metadata</summary><p>Choose an exact show identity. Your notes and progress are preserved.</p><form (ngSubmit)="findLink()"><label>Series title<input name="linkQuery" [(ngModel)]="linkQuery" required></label><button class="btn" [disabled]="linking()">Find shows</button></form>@if(linkError()){<p role="alert">{{linkError()}}</p>}@for(hit of linkResults();track hit.source+hit.source_id){<article><h3>{{hit.title}} · {{hit.year}}</h3><p>{{hit.creator}} · {{hit.source}} #{{hit.source_id}}</p><button class="btn" (click)="link(hit)">Choose this show</button></article>}</details>}
-</section>}
-@if(entry.music;as music){<section class="surface"><h2>In your library</h2>@if(entry.kind==='artist'||entry.kind==='album'){<button class="btn" (click)="childTitle='';childYear=null;childOpen=true">{{entry.kind==='artist'?'Add album manually':'Add song manually'}}</button>}<div class="media-grid">@for(child of music.saved_children || [];track child.id){<media-card [item]="child"/>}@empty{<p>No saved albums or songs here yet.</p>}</div>@if(entry.kind === 'artist' && entry.catalog.source === 'musicbrainz'){<a class="btn" [routerLink]="['/media/item',entry.id,'discography']">Browse discography</a>}</section>}
-<button class="btn btn-danger" (click)="remove()">Remove from library</button>
-}
-<ui-dialog [open]="photoOpen" labelledBy="photo-title" (closed)="photoOpen=false"><h2 id="photo-title">Choose artist photo</h2><p>Photos from Wikimedia Commons. Your choice is private to you.</p><form (ngSubmit)="findPhotos()"><label>Photo search<input name="photoQuery" [(ngModel)]="photoQuery" required maxlength="200"></label><button class="btn" [disabled]="photoLoading()">Search photos</button></form>
-@if(photoLoading()){<p role="status">Loading photos…</p>}@if(photoError()){<p role="alert">{{photoError()}}</p><button class="btn" (click)="findPhotos()">Retry photos</button>}
-<div class="photo-grid">@for(photo of photos();track photo.source_id){<article><button class="photo-candidate" [disabled]="!photo.thumbnail" [attr.aria-pressed]="preview()?.source_id===photo.source_id" (click)="preview.set(photo)">@if(photo.thumbnail){<img [src]="photo.thumbnail" [alt]="photo.title" loading="lazy" (error)="photo.thumbnail=''">}@else{<span>Photo unavailable</span>}</button><p>{{photo.creator}} · {{photo.license}}</p><a [href]="photo.source_url" target="_blank" rel="noopener noreferrer">Source page</a></article>}@empty{@if(!photoLoading()&&!photoError()){<p>No photos found. Try a more specific name.</p>}}</div>
-@if(preview();as selected){<p>Selected: {{selected.title}}</p><button class="btn btn-primary" [disabled]="photoLoading()||!selected.thumbnail" (click)="selectPhoto()">Use this photo</button>}<button class="btn" (click)="photoOpen=false">Cancel</button></ui-dialog>
+  <a routerLink="/media/library">← Library</a>
+  @if (error()) {
+    <div class="local-error" role="alert">
+      {{ error() }}
+      @if (!item()) {
+        <button class="btn" (click)="load(+routeId())">Retry item</button>
+      } @else {
+        <button class="btn" (click)="reloadSaved()">Reload saved item</button>
+      }
+    </div>
+  }
+  @if (loading()) {
+    <p role="status" class="surface">Loading saved item…</p>
+  }
+  @if (item(); as entry) {
+    <header class="media-detail-heading">
+      <div class="media-art hero-art">
+        @if (entry.artwork_url && !broken()) {
+          <img
+            [src]="entry.artwork_url"
+            [alt]="entry.kind === 'artist' ? entry.title + ' portrait' : ''"
+            (error)="broken.set(true)"
+            [style.object-position]="
+              entry.portrait?.crop
+                ? entry.portrait!.crop![0] +
+                  '% ' +
+                  entry.portrait!.crop![1] +
+                  '%'
+                : '50% 50%'
+            "
+          />
+        } @else {
+          <span>{{ entry.title.slice(0, 2).toUpperCase() }}</span>
+        }
+      </div>
+      <div>
+        <p class="eyebrow">
+          {{ entry.kind === "tv" ? "Series" : entry.kind }}
+          @if (entry.year) {
+            · {{ entry.year }}
+          }
+        </p>
+        <h1>{{ entry.title }}</h1>
+        <p class="muted">{{ entry.creator }}</p>
+        @if (entry.lifecycle; as lifecycle) {
+          <p class="badge">
+            {{
+              lifecycle.state === "unknown" ? "Status unknown" : lifecycle.state
+            }}
+            · {{ lifecycle.freshness }}
+            @if (lifecycle.fetched_at) {
+              · Updated {{ lifecycle.fetched_at.slice(0, 10) }}
+            }
+          </p>
+        }
+        <div class="button-row">
+          @if (entry.catalog.source !== "manual") {
+            <button
+              class="btn"
+              [disabled]="busy()"
+              (click)="action('/refresh')"
+            >
+              Refresh metadata
+            </button>
+          }
+          @if (entry.kind === "artist") {
+            <button class="btn" (click)="openPhotos()">Choose photo</button>
+            @if (entry.portrait) {
+              <button class="btn" [disabled]="busy()" (click)="resetPhoto()">
+                Reset photo
+              </button>
+            }
+          }
+        </div>
+        @if (entry.portrait; as photo) {
+          <p class="muted photo-credit">
+            <a
+              [href]="photo.source_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Photo source</a
+            >
+            · {{ photo.creator }} · {{ photo.license }}
+          </p>
+        }
+        @if (entry.catalog.extra["metadata_pending"]) {
+          <p class="muted">
+            Metadata pending. Your saved item is ready to edit.
+          </p>
+        }
+      </div>
+    </header>
+    @if (message()) {
+      <p role="status" class="save-status">{{ message() }}</p>
+    }
+    @if (entry.catalog.overview) {
+      <details class="overview">
+        <summary>
+          About this {{ entry.kind === "tv" ? "series" : entry.kind }}
+        </summary>
+        <p>{{ entry.catalog.overview }}</p>
+      </details>
+    }
+    <section class="surface" role="status" [hidden]="!recovery()">
+      <p>
+        Unsaved changes from an earlier version of this item are available. The
+        saved item changed since that draft.
+      </p>
+      <button class="btn" (click)="restoreDraft()">Restore earlier draft</button
+      ><button class="btn" (click)="discardRecovery()">
+        Discard earlier draft
+      </button>
+    </section>
+    <form class="media-editor surface" (ngSubmit)="save()">
+      <h2>Your {{ entry.kind === "artist" ? "artist" : "experience" }}</h2>
+      <div class="form-row">
+        <label
+          >{{ entry.kind === "artist" ? "Relationship" : "State"
+          }}<select name="status" [(ngModel)]="status">
+            @if (entry.kind === "artist") {
+              <option value="following">Following</option>
+              <option value="unfollowed">Unfollowed</option>
+            } @else {
+              <option value="want">Want to</option>
+              <option value="anticipating">Anticipating</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+              <option value="paused">Paused</option>
+              <option value="dropped">Dropped</option>
+            }
+          </select></label
+        >
+        <label
+          >Rating <span class="muted">(optional, 0–10)</span
+          ><input
+            type="number"
+            min="0"
+            max="10"
+            step="0.5"
+            name="rating"
+            [(ngModel)]="rating"
+        /></label>
+      </div>
+      @if (entry.kind !== "artist") {
+        <div class="form-row">
+          <label
+            >Progress<input
+              type="number"
+              min="0"
+              name="progress"
+              [(ngModel)]="progress" /></label
+          ><label
+            >Unit<select name="unit" [(ngModel)]="unit">
+              <option value="">No unit</option>
+              <option value="page">Pages</option>
+              <option value="percent">Percent</option>
+              <option value="episode">Episodes</option>
+              <option value="hour">Hours</option>
+            </select></label
+          >
+        </div>
+      }
+      <label
+        >Note <span class="muted">(optional)</span
+        ><textarea
+          name="review"
+          [(ngModel)]="review"
+          rows="5"
+          maxlength="20000"
+          placeholder="What stayed with you?"
+        ></textarea>
+      </label>
+      <div class="button-row">
+        <label class="check-label"
+          ><input type="checkbox" name="favorite" [(ngModel)]="favorite" />
+          Favorite</label
+        >
+        @if (entry.kind !== "artist") {
+          <label class="check-label"
+            ><input
+              type="checkbox"
+              name="anticipated"
+              [(ngModel)]="anticipated"
+            />
+            Anticipated</label
+          >
+        }
+      </div>
+      <div class="button-row">
+        <button class="btn btn-primary" type="submit" [disabled]="busy()">
+          {{ busy() ? "Saving…" : "Save changes" }}
+        </button>
+        @if (dirty) {
+          <span class="muted">Unsaved changes</span>
+        }
+      </div>
+    </form>
+    @if (entry.show; as show) {
+      <section class="surface">
+        <h2>Episode progress</h2>
+        <p>
+          {{ show.watched_count }} / {{ show.episode_count }} known episodes
+          watched.
+        </p>
+        @if (show.metadata_incomplete) {
+          <p class="muted">
+            Progress metadata is incomplete. Unknown air dates are excluded from
+            bulk completion.
+          </p>
+        }
+        @if (show.caught_up) {
+          <p class="save-status">
+            Caught up ·
+            {{
+              entry.lifecycle?.state === "ended" ||
+              entry.lifecycle?.state === "canceled"
+                ? "All known aired episodes watched"
+                : "Waiting for the next episode or season"
+            }}
+          </p>
+        }
+        @if (show.next_episode; as next) {
+          <p>
+            Next: S{{ next.season_number }} E{{ next.episode_number }} ·
+            {{ next.title }}
+          </p>
+        }
+        <label class="check-label"
+          ><input type="checkbox" [(ngModel)]="includeSpecials" /> Include aired
+          specials</label
+        >
+        <p class="muted">
+          Mark {{ eligible() }} unwatched episodes through today's provider
+          date. Future and undated episodes stay unchanged.
+        </p>
+        <div class="button-row">
+          <button
+            class="btn btn-primary"
+            [disabled]="busy() || !eligible()"
+            (click)="
+              action('/caught-up', { include_specials: includeSpecials })
+            "
+          >
+            Mark caught up
+          </button>
+          @if (undoToken) {
+            <button
+              class="btn"
+              [disabled]="busy()"
+              (click)="action('/caught-up/' + undoToken + '/undo')"
+            >
+              Undo catch-up
+            </button>
+          }
+        </div>
+        @for (season of show.seasons; track season.season_number) {
+          <details class="season">
+            <summary>
+              {{
+                season.season_number === 0
+                  ? "Specials"
+                  : "Season " + season.season_number
+              }}
+              · {{ season.episode_count }} episodes
+              @if (season.watched) {
+                · Watched
+              }
+              @if (season.manual) {
+                · Manual completion
+              }
+            </summary>
+            <label
+              >Season rating (optional)<input
+                type="number"
+                min="0"
+                max="10"
+                step="0.5"
+                [value]="season.rating ?? ''"
+                #score
+                (change)="seasonRate(season.season_number, score.value)"
+            /></label>
+            @for (episode of show.episodes; track episode.id) {
+              @if (episode.season_number === season.season_number) {
+                <div class="episode-row">
+                  <div>
+                    <strong
+                      >E{{ episode.episode_number }} ·
+                      {{ episode.title || "Untitled episode" }}</strong
+                    >
+                    <p class="muted">
+                      {{ episode.air_date || "Air date unknown" }}
+                      @if (episode.watched_on) {
+                        · Watched {{ episode.watched_on }}
+                      }
+                    </p>
+                  </div>
+                  <button
+                    class="btn"
+                    [disabled]="
+                      busy() ||
+                      (!episode.released &&
+                        !!episode.air_date &&
+                        !episode.watched)
+                    "
+                    (click)="mark(episode)"
+                  >
+                    {{ episode.watched ? "Unwatch" : "Mark watched" }}
+                  </button>
+                </div>
+              }
+            }
+          </details>
+        }
+        <details>
+          <summary>Add or correct an episode</summary>
+          <form class="media-form" (ngSubmit)="action('/episodes', episode)">
+            <div class="form-row">
+              <label
+                >Season<input
+                  required
+                  type="number"
+                  min="0"
+                  name="season"
+                  [(ngModel)]="episode.season_number" /></label
+              ><label
+                >Episode<input
+                  required
+                  type="number"
+                  min="1"
+                  name="number"
+                  [(ngModel)]="episode.episode_number"
+              /></label>
+            </div>
+            <label
+              >Title<input name="title" [(ngModel)]="episode.title" /></label
+            ><label
+              >Air date (optional)<input
+                type="date"
+                name="air_date"
+                [(ngModel)]="episode.air_date" /></label
+            ><button class="btn" [disabled]="busy()">Save episode</button>
+          </form>
+        </details>
+        @if (entry.catalog.source === "manual") {
+          <details>
+            <summary>Link metadata</summary>
+            <p>
+              Choose an exact show identity. Your notes and progress are
+              preserved.
+            </p>
+            <form (ngSubmit)="findLink()">
+              <label
+                >Series title<input
+                  name="linkQuery"
+                  [(ngModel)]="linkQuery"
+                  required /></label
+              ><button class="btn" [disabled]="linking()">Find shows</button>
+            </form>
+            @if (linkError()) {
+              <p role="alert">{{ linkError() }}</p>
+            }
+            @for (hit of linkResults(); track hit.source + hit.source_id) {
+              <article>
+                <h3>{{ hit.title }} · {{ hit.year }}</h3>
+                <p>{{ hit.creator }} · {{ hit.source }} #{{ hit.source_id }}</p>
+                <button class="btn" (click)="link(hit)">
+                  Choose this show
+                </button>
+              </article>
+            }
+          </details>
+        }
+      </section>
+    }
+    @if (entry.music; as music) {
+      <section class="surface">
+        <h2>In your library</h2>
+        @if (entry.kind === "artist" || entry.kind === "album") {
+          <button
+            class="btn"
+            (click)="childTitle = ''; childYear = null; childOpen = true"
+          >
+            {{
+              entry.kind === "artist"
+                ? "Add album manually"
+                : "Add song manually"
+            }}
+          </button>
+        }
+        <div class="media-grid">
+          @for (child of music.saved_children || []; track child.id) {
+            <media-card [item]="child" />
+          } @empty {
+            <p>No saved albums or songs here yet.</p>
+          }
+        </div>
+        @if (
+          entry.kind === "artist" && entry.catalog.source === "musicbrainz"
+        ) {
+          <a class="btn" [routerLink]="['/media/item', entry.id, 'discography']"
+            >Browse discography</a
+          >
+        }
+      </section>
+    }
+    <button class="btn btn-danger" (click)="remove()">
+      Remove from library
+    </button>
+  }
+  <ui-dialog
+    [open]="photoOpen"
+    labelledBy="photo-title"
+    (closed)="photoOpen = false"
+    ><h2 id="photo-title">Choose artist photo</h2>
+    <p>Photos from Wikimedia Commons. Your choice is private to you.</p>
+    <form (ngSubmit)="findPhotos()">
+      <label
+        >Photo search<input
+          name="photoQuery"
+          [(ngModel)]="photoQuery"
+          required
+          maxlength="200" /></label
+      ><button class="btn" [disabled]="photoLoading()">Search photos</button>
+    </form>
+    @if (photoLoading()) {
+      <p role="status">Loading photos…</p>
+    }
+    @if (photoError()) {
+      <p role="alert">{{ photoError() }}</p>
+      <button class="btn" (click)="findPhotos()">Retry photos</button>
+    }
+    <div class="photo-grid">
+      @for (photo of photos(); track photo.source_id) {
+        <article>
+          <button
+            class="photo-candidate"
+            [disabled]="!photo.thumbnail"
+            [attr.aria-pressed]="preview()?.source_id === photo.source_id"
+            (click)="preview.set(photo)"
+          >
+            @if (photo.thumbnail) {
+              <img
+                [src]="photo.thumbnail"
+                [alt]="photo.title"
+                loading="lazy"
+                (error)="photo.thumbnail = ''"
+              />
+            } @else {
+              <span>Photo unavailable</span>
+            }
+          </button>
+          <p>{{ photo.creator }} · {{ photo.license }}</p>
+          <a [href]="photo.source_url" target="_blank" rel="noopener noreferrer"
+            >Source page</a
+          >
+        </article>
+      } @empty {
+        @if (!photoLoading() && !photoError()) {
+          <p>No photos found. Try a more specific name.</p>
+        }
+      }
+    </div>
+    @if (preview(); as selected) {
+      <p>Selected: {{ selected.title }}</p>
+      <button
+        class="btn btn-primary"
+        [disabled]="photoLoading() || !selected.thumbnail"
+        (click)="selectPhoto()"
+      >
+        Use this photo
+      </button>
+    }
+    <button class="btn" (click)="photoOpen = false">Cancel</button></ui-dialog
+  >
 </main>
 
-<ui-dialog [open]="childOpen" labelledBy="child-title" (closed)="childOpen=false"><h2 id="child-title">{{item()?.kind==='artist'?'Add album':'Add song'}}</h2><form class="media-form" #child="ngForm" (ngSubmit)="addChild()"><label>Title<input required name="title" maxlength="300" [(ngModel)]="childTitle"></label>@if(item()?.kind==='artist'){<label>Release year (optional)<input type="number" min="1000" max="3000" name="year" [(ngModel)]="childYear"></label>}@if(error()){<p role="alert">{{error()}}</p>}<div class="button-row"><button class="btn btn-primary" [disabled]="!child.valid||busy()">{{busy()?'Saving…':'Add to library'}}</button><button type="button" class="btn" [disabled]="busy()" (click)="childOpen=false">Cancel</button></div></form></ui-dialog>
+<ui-dialog
+  [open]="childOpen"
+  labelledBy="child-title"
+  (closed)="childOpen = false"
+  ><h2 id="child-title">
+    {{ item()?.kind === "artist" ? "Add album" : "Add song" }}
+  </h2>
+  <form class="media-form" #child="ngForm" (ngSubmit)="addChild()">
+    <label
+      >Title<input
+        required
+        name="title"
+        maxlength="300"
+        [(ngModel)]="childTitle"
+    /></label>
+    @if (item()?.kind === "artist") {
+      <label
+        >Release year (optional)<input
+          type="number"
+          min="1000"
+          max="3000"
+          name="year"
+          [(ngModel)]="childYear"
+      /></label>
+    }
+    @if (error()) {
+      <p role="alert">{{ error() }}</p>
+    }
+    <div class="button-row">
+      <button class="btn btn-primary" [disabled]="!child.valid || busy()">
+        {{ busy() ? "Saving…" : "Add to library" }}</button
+      ><button
+        type="button"
+        class="btn"
+        [disabled]="busy()"
+        (click)="childOpen = false"
+      >
+        Cancel
+      </button>
+    </div>
+  </form></ui-dialog
+>
