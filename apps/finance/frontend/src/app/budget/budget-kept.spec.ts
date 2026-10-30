@@ -4,6 +4,7 @@ import { Observable, of, throwError } from 'rxjs';
 import { DEK_STORE } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
 import type { Transaction } from '../models/transaction.model';
+import { loadFinanceBudgetKeptGuarded } from './budget-kept-import';
 import {
   budgetKeptCryptoImports,
   budgetKeptWeeks,
@@ -228,6 +229,7 @@ describe('loadFinanceBudgetKept', () => {
     getTransactions?: () => Promise<Transaction[]>;
     isUnlocked?: boolean;
     whenReady?: () => Promise<void>;
+    lockDuringTransactions?: boolean;
   }) {
     localStorage.setItem(DEK_STORE, 'synthetic-budget-kept');
     class VaultToken {}
@@ -239,12 +241,17 @@ describe('loadFinanceBudgetKept', () => {
     const getInputs = jasmine.createSpy('getInputs').and.callFake(
       options.getInputs ?? (() => of(options.planInputs ?? planInputs)),
     );
-    const getTransactions = jasmine.createSpy('getTransactions').and.callFake(
-      options.getTransactions ?? (() => Promise.resolve(options.txs ?? [])),
-    );
+    let unlocked = options.isUnlocked ?? true;
+    const getTransactions = jasmine.createSpy('getTransactions').and.callFake(() => {
+      if (options.lockDuringTransactions) unlocked = false;
+      const read = options.getTransactions ?? (() => Promise.resolve(options.txs ?? []));
+      return read();
+    });
     const vault = {
       whenReady: options.whenReady ?? (() => Promise.resolve()),
-      isUnlocked: options.isUnlocked ?? true,
+      get isUnlocked() {
+        return unlocked;
+      },
     };
     const modules = {
       VaultService: VaultToken,
@@ -528,5 +535,77 @@ describe('loadFinanceBudgetKept', () => {
     expect(deps.VaultService.name).toBe('VaultService');
     expect(deps.PlanningService.name).toBe('PlanningService');
     expect(deps.EncryptedStoreService.name).toBe('EncryptedStoreService');
+  });
+
+  it('returns unavailable when the vault locks during the read and the spending mode is unrecognized', async () => {
+    const newer = profile({ id: 2, updated_at: '2026-08-01T00:00:00.000Z', annual: PLAN, mode: 'manual' });
+    newer.payload.spending_mode = 'seasonal' as ProfilePayload['spending_mode'];
+    const { injector, getTransactions } = unlock({
+      profiles: [newer],
+      txs: [tx({ id: 1, date: '2026-09-01', amount: 10, kind: 'purchase' })],
+      lockDuringTransactions: true,
+    });
+    expect(await ask(injector)).toEqual({ status: 'unavailable' });
+    expect(getTransactions).toHaveBeenCalled();
+  });
+});
+
+describe('loadFinanceBudgetKeptGuarded', () => {
+  const opts = { today: '2026-10-14', weeks: 1, deadlineMs: 1000 };
+  const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+
+  function hangingImport(): Promise<never> {
+    return new Promise(() => undefined);
+  }
+
+  it('returns cancelled and does not import when the signal is already aborted', async () => {
+    const load = jasmine.createSpy('load').and.returnValue(hangingImport());
+    const ctrl = new AbortController();
+    ctrl.abort();
+    expect(await loadFinanceBudgetKeptGuarded(injector, ctrl.signal, opts, load)).toEqual({ status: 'cancelled' });
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('returns cancelled when the signal aborts during the import', async () => {
+    let markStarted!: () => void;
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const load = jasmine.createSpy('load').and.callFake(() => {
+      markStarted();
+      return hangingImport();
+    });
+    const ctrl = new AbortController();
+    const pending = loadFinanceBudgetKeptGuarded(injector, ctrl.signal, { ...opts, deadlineMs: 5000 }, load);
+    await started;
+    ctrl.abort();
+    expect(await pending).toEqual({ status: 'cancelled' });
+  });
+
+  it('returns expired when the import passes the deadline', async () => {
+    const load = jasmine.createSpy('load').and.returnValue(hangingImport());
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs: 30 }, load))
+      .toEqual({ status: 'expired' });
+  });
+
+  it('returns unavailable when the import fails', async () => {
+    const load = jasmine.createSpy('load').and.rejectWith(new Error('chunk failed'));
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
+      .toEqual({ status: 'unavailable' });
+  });
+
+  it('propagates RangeError from the loaded module', async () => {
+    const load = jasmine.createSpy('load').and.resolveTo({
+      loadFinanceBudgetKept: () => { throw new RangeError('weeks must be an integer from 1 to 520'); },
+    });
+    await expectAsync(loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
+      .toBeRejectedWithError(RangeError, /weeks/);
+  });
+
+  it('returns the loaded module result when the import succeeds', async () => {
+    const load = jasmine.createSpy('load').and.resolveTo({
+      loadFinanceBudgetKept: () => Promise.resolve({ status: 'no_plan' }),
+    });
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
+      .toEqual({ status: 'no_plan' });
+    expect(load).toHaveBeenCalled();
   });
 });

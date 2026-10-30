@@ -1,5 +1,6 @@
 import type { Injector } from '@angular/core';
 import type { Routes } from '@angular/router';
+import { loadFinanceBudgetKeptGuarded } from './app/budget/budget-kept-import';
 export { financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
 export type { NetWorth } from './app/models/transaction.model';
 export type { PortfolioAccount, PositionHighlight } from './app/hub/finance-hub-snapshot';
@@ -15,6 +16,6 @@ export async function loadFinanceBudgetKept(
   signal: AbortSignal,
   opts: { today: string; weeks: number; includeCurrentWeek?: boolean; deadlineMs?: number },
 ) {
-  return (await import('./app/budget/budget-kept')).loadFinanceBudgetKept(injector, signal, opts);
+  return loadFinanceBudgetKeptGuarded(injector, signal, opts);
 }
 export type { BudgetKeptWeek, BudgetKeptResult } from './app/budget/budget-kept';

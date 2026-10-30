@@ -312,6 +312,8 @@ async function readBudgetKept(
     ]).pipe(takeUntil(abort$(signal))),
   );
   if (signal.aborted) return { status: 'cancelled' };
+  // Unrecognized mode is unavailable, which beats a vault that locked during the read.
+  if (decideLatestPlan(profiles, inputs).status === 'unavailable') return { status: 'unavailable' };
   if (!opened.vault.isUnlocked) return { status: 'locked' };
   return assembleBudgetKept(profiles, inputs, txs, weekStarts);
 }
