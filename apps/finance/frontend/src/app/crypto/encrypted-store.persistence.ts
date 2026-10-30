@@ -18,6 +18,11 @@ export type EncryptedCollection =
 
 export type CollectionName = EncryptedCollection;
 
+export const FINANCE_FOREIGN_COLLECTIONS: ReadonlySet<string> = new Set([
+  'health_stats',
+  'health_prs',
+]);
+
 export interface EncryptedStoreChange {
   collection: EncryptedCollection;
   source: 'local' | 'remote';
@@ -233,6 +238,7 @@ export class EncryptedRecordPersistence {
     for (const key of Object.keys(this.bags)) this.bags[key] = new Map();
     const decoded: Array<{ row: any; data: any }> = [];
     for (const row of rows) {
+      if (FINANCE_FOREIGN_COLLECTIONS.has(row.collection)) continue;
       if (!this.bags[row.collection]) continue;
       const data = await this.vault.decryptPayload<any>(
         row.ciphertext_b64,
@@ -289,7 +295,9 @@ export class EncryptedRecordPersistence {
     const records = await firstValueFrom(this.vault.listRecords());
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     const decoded: T[] = [];
-    for (const record of records.filter(row => row.collection === collection)) {
+    for (const record of records.filter(
+      row => row.collection === collection && !FINANCE_FOREIGN_COLLECTIONS.has(row.collection),
+    )) {
       const data = await this.vault.decryptPayload<T>(
         record.ciphertext_b64,
         record.collection,
