@@ -1,0 +1,95 @@
+:host {
+  display: block;
+}
+
+.settings-shell {
+  box-sizing: border-box;
+  width: min(100%, var(--content-max));
+  margin: 0 auto;
+  padding: var(--space-8) var(--gutter) var(--space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  order: 1;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  order: 2;
+}
+
+.settings-shell.is-section .settings-nav {
+  display: none;
+}
+
+.settings-shell:not(.is-section) .settings-back {
+  display: none;
+}
+
+.settings-nav a,
+.settings-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.settings-nav a {
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.settings-nav a[aria-current='page'] {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.settings-shell h1 {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: var(--leading-tight);
+}
+
+@media (max-width: 640px) {
+  .settings-shell h1 {
+    font-size: var(--text-2xl);
+  }
+}
+
+@media (min-width: 1024px) {
+  .settings-shell {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    column-gap: var(--space-6);
+    align-items: start;
+  }
+
+  .settings-nav,
+  .settings-main {
+    order: 0;
+  }
+
+  .settings-nav {
+    width: 240px;
+  }
+
+  .settings-shell.is-section .settings-nav {
+    display: flex;
+  }
+
+  .settings-back {
+    display: none;
+  }
+}

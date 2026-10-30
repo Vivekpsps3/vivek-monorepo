@@ -1,20 +1,4 @@
 <div class="hub">
-  <ui-dialog [open]="settingsOpen" labelledBy="account-settings-title" (closed)="closeSettings()">
-    <div class="account-settings__panel" aria-label="Account settings">
-      <h2 id="account-settings-title">Account settings</h2>
-      <form class="account-settings__name" (ngSubmit)="saveName()">
-        <label>Name <input name="display-name" autocomplete="name" [value]="draftName" (input)="draftName = $any($event.target).value" required></label>
-        @if (nameError) {
-          <p class="form-error" role="alert">{{ nameError }}</p>
-        }
-        <button type="submit" [disabled]="savingName">Save name</button>
-      </form>
-      <h2 id="username-heading">Change username</h2>
-      <app-username-change />
-      <button type="button" class="btn" (click)="closeSettings()">Done</button>
-    </div>
-  </ui-dialog>
-
   <main id="hub-main">
     <p class="eyebrow">{{ headingToday | appDate:'heading' }}</p>
     <h1>{{ name }}</h1>

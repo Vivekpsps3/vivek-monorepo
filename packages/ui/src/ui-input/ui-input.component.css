@@ -11,6 +11,13 @@
   color: var(--text-secondary);
 }
 
+.ui-field__hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
 .ui-field__control {
   width: 100%;
   box-sizing: border-box;

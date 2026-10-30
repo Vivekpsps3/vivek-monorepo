@@ -212,3 +212,8 @@
     width: 100%;
   }
 }
+.travel-page--embedded {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}

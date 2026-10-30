@@ -3,8 +3,10 @@ import {
   DestroyRef,
   HostListener,
   inject,
+  input,
   signal,
 } from "@angular/core";
+import { NgTemplateOutlet } from "@angular/common";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
@@ -29,14 +31,15 @@ interface Settings {
   standalone: true,
   imports: [
     FormsModule,
+    NgTemplateOutlet,
     UiButtonComponent,
     UiFieldComponent,
     UiFieldControlDirective,
     UiCardComponent,
     UiPageHeaderComponent,
   ],
-  template: `<main class="page travel-page">
-    <ui-page-header eyebrow="Travel preferences" title="Settings" />
+  template: `<ng-template #settingsBody>
+    <ui-page-header eyebrow="Travel preferences" [title]="embedded() ? 'Travel' : 'Settings'" />
     <ui-card>
       <h2>Flight schedules</h2>
       <p class="muted">
@@ -95,9 +98,16 @@ interface Settings {
       </p>
       <p class="muted">Map data © OpenStreetMap contributors.</p>
     </ui-card>
-  </main>`,
+  </ng-template>
+  @if (embedded()) {
+    <div class="page travel-page travel-page--embedded"><ng-container *ngTemplateOutlet="settingsBody" /></div>
+  } @else {
+    <main class="page travel-page"><ng-container *ngTemplateOutlet="settingsBody" /></main>
+  }`,
 })
 export class SettingsComponent {
+  /** Suite settings supplies the page heading and padding. `/travel/settings` keeps its own. */
+  readonly embedded = input(false);
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
   private get ownsSession(): boolean {

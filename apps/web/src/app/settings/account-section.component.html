@@ -1,0 +1,13 @@
+<h1>Account</h1>
+<ui-card>
+  <h2>Account settings</h2>
+  <form class="account-name" (ngSubmit)="saveName()">
+    <ui-input label="Name" autocomplete="name" [required]="true" [(value)]="draftName" />
+    @if (nameError) {
+      <p class="form-error" role="alert">{{ nameError }}</p>
+    }
+    <ui-button type="submit" [disabled]="savingName" [busy]="savingName">Save name</ui-button>
+  </form>
+  <h2>Change username</h2>
+  <app-username-change />
+</ui-card>

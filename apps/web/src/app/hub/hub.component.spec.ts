@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, of, throwError } from 'rxjs';
 import { SessionService as AuthService } from '../platform/session.service';
 import { AuthUser } from '../platform/auth/auth.models';
@@ -153,16 +153,16 @@ describe('HubComponent', () => {
     localStorage.removeItem(DEK_STORE);
   });
 
-  it('opens account settings when the header changes the query on a mounted Hub', async () => {
+  it('sends the account query to settings', async () => {
     const query = new BehaviorSubject(convertToParamMap({}));
     TestBed.overrideProvider(ActivatedRoute, {useValue: {queryParamMap: query}});
+    const navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
     await render();
-    expect(fixture.componentInstance.settingsOpen).toBeFalse();
+    expect(navigate).not.toHaveBeenCalled();
     takeCall('/travel/').resolve(json(200, {next_trip: null}));
     takeCall('/media/').resolve(json(200, {currently: [], recent_reviews: [], upcoming: [], next_episodes: []}));
     query.next(convertToParamMap({settings: 'account'}));
-    await paint();
-    expect(fixture.nativeElement.querySelector('[role="dialog"]')?.textContent).toContain('Account settings');
+    expect(navigate).toHaveBeenCalledWith('/settings/account', { replaceUrl: true });
   });
 
   it('recovers one failed summary without loading the vault or signing out', async () => {
@@ -323,45 +323,20 @@ describe('HubComponent', () => {
     expect(component.mediaWhen({ id: 1, kind: 'book', title: 'Dune', when: 'unknown' })).toBe('No date');
     expect(component.mediaWhen({ id: 2, kind: 'movie', title: 'Later', when: 'upcoming', precision: 'day', release_on: '2026-12-02' })).toContain('2026');
     expect(component.kindLabel('album')).toBe('Album');
-    component.draftName = '   ';
-    await component.saveName();
-    expect(component.nameError).toBe('Enter a name.');
-    component.draftName = 'a'.repeat(161);
-    await component.saveName();
-    expect(component.nameError).toContain('160');
-    auth.updateDisplayName.and.rejectWith(new Error('offline'));
-    component.draftName = 'Ada Lovelace';
-    await component.saveName();
-    expect(component.nameError).toBe('offline');
-    auth.updateDisplayName.and.resolveTo(person(1, 'Ada Lovelace'));
-    await component.saveName();
-    expect(component.nameError).toBe('');
     users.next(null);
     expect(component.financeState).toBe('locked');
-    component.toggleSettings();
-    component.closeSettings();
-    expect(component.settingsOpen).toBeFalse();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     await paint();
   });
 
-  it('renders account settings as a dialog outside menu semantics', async () => {
-    const admin = person(1);
-    admin.role = 'admin';
-    users.next(admin);
+  it('keeps account settings off the hub', async () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     await paint();
-    expect(fixture.nativeElement.querySelector('[role="menu"]')).toBeNull();
-    fixture.componentInstance.toggleSettings();
-    fixture.detectChanges();
-    const dialog = fixture.nativeElement.querySelector('[role="dialog"]');
-    expect(dialog).not.toBeNull();
-    expect(dialog.textContent).toContain('Account settings');
-    expect(dialog.textContent).toContain('Change username');
-    expect(dialog.textContent).toContain('Save name');
-    expect(fixture.nativeElement.querySelector('[role="menu"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Save name');
+    expect(fixture.nativeElement.textContent).not.toContain('Change username');
   });
 });

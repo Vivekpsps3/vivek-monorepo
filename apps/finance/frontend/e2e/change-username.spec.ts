@@ -39,9 +39,9 @@ async function createAccount(page: Page, username: string): Promise<void> {
 }
 
 async function openAccount(page: Page): Promise<void> {
-  const dialog = page.getByRole('dialog', { name: 'Account settings' });
-  if (!(await dialog.isVisible())) await page.goto('/hub?settings=account');
-  await expect(dialog).toBeVisible();
+  await page.goto('/hub?settings=account');
+  await page.waitForURL(/\/settings\/account$/, { timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Account' })).toBeVisible();
 }
 
 async function expectPassphraseCleared(page: Page): Promise<void> {
@@ -83,6 +83,20 @@ async function saveUsername(page: Page, nextName: string, passphrase: string): P
   await page.getByLabel('Current passphrase', { exact: true }).fill(passphrase);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
 }
+
+test('old account URLs open settings account', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createAccount(page, 'rename.redirect');
+  await page.goto('/hub?settings=account');
+  await page.waitForURL(/\/settings\/account$/, { timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Account' })).toBeVisible();
+  await page.goto('/account');
+  await page.waitForURL(/\/settings\/account$/, { timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Account' })).toBeVisible();
+  await expect(page.getByLabel('New username', { exact: true })).toBeVisible();
+  const hint = page.getByText('3–64 characters: a–z, 0–9, . _ -');
+  await expect(hint).toBeVisible();
+});
 
 test('renamed username shows in the hub, then signs in, and the old username does not', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -262,7 +276,7 @@ test('a wrong passphrase shows the 401 error and clears the passphrase', async (
   await expect(error).toHaveText('That passphrase is wrong.');
   await expect(error).toHaveAttribute('data-status', '401');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  expect(new URL(page.url()).pathname).toBe('/hub');
+  expect(new URL(page.url()).pathname).toBe('/settings/account');
   await expectPassphraseCleared(page);
   await expectNoHorizontalOverflow(page);
 });

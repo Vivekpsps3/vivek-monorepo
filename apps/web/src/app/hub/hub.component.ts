@@ -1,9 +1,8 @@
 import type { PortfolioAccount, PositionHighlight } from '../../../../finance/frontend/src/public-api';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, Injector, OnInit, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { UiDialogComponent, UiStateComponent } from '@vivek/ui';
+import { UiStateComponent } from '@vivek/ui';
 import { todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
 import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
@@ -21,8 +20,6 @@ import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
-import { UsernameChangeComponent } from './username-change.component';
-
 interface TravelTrip {
   id: number;
   title: string;
@@ -75,11 +72,8 @@ interface FinanceView {
   imports: [
     AppDatePipe,
     MoneyPipe,
-    FormsModule,
     RouterLink,
-    UiDialogComponent,
     UiStateComponent,
-    UsernameChangeComponent,
   ],
   templateUrl: './hub.component.html',
   styleUrl: './hub.component.css',
@@ -92,12 +86,6 @@ export class HubComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   name = 'Your library of days';
-  username = '';
-  draftName = '';
-  settingsOpen = false;
-  savingName = false;
-  nameError = '';
-  admin = false;
   readonly today = new Date();
 
   financeState: HubCardState = 'locked';
@@ -130,16 +118,12 @@ export class HubComponent implements OnInit {
   ngOnInit(): void {
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.get('settings') === 'account') {
-        this.settingsOpen = true;
-        this.cdr.markForCheck();
+        void this.router.navigateByUrl('/settings/account', { replaceUrl: true });
       }
     });
     this.destroyRef.onDestroy(() => this.cancelSummaries());
     this.auth.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
       this.name = user?.display_name || user?.username || 'Your library of days';
-      this.username = user?.username || '';
-      if (!this.savingName) this.draftName = user?.display_name || '';
-      this.admin = user?.role === 'admin';
       const nextId = user?.id ?? null;
       if (this.userId !== undefined && this.userId !== nextId) {
         this.cancelSummaries();
@@ -160,45 +144,6 @@ export class HubComponent implements OnInit {
     void this.loadTravel();
     void this.loadMedia();
     void this.loadFinance();
-  }
-
-  toggleSettings(): void {
-    this.settingsOpen = !this.settingsOpen;
-    this.nameError = '';
-    this.cdr.markForCheck();
-  }
-
-  closeSettings(): void {
-    this.settingsOpen = false;
-    this.nameError = '';
-    this.cdr.markForCheck();
-    void this.router.navigate([], {relativeTo: this.route, queryParams: {settings: null}, queryParamsHandling: 'merge', replaceUrl: true});
-  }
-
-  async saveName(): Promise<void> {
-    if (this.savingName) return;
-    const name = this.draftName.trim().replace(/\s+/g, ' ');
-    if (!name) {
-      this.nameError = 'Enter a name.';
-      this.cdr.markForCheck();
-      return;
-    }
-    if (name.length > 160) {
-      this.nameError = 'Name must be 160 characters or fewer.';
-      this.cdr.markForCheck();
-      return;
-    }
-    this.savingName = true;
-    this.nameError = '';
-    this.cdr.markForCheck();
-    try {
-      await this.auth.updateDisplayName(name);
-    } catch (err) {
-      this.nameError = err instanceof Error ? err.message : 'The name could not be saved.';
-    } finally {
-      this.savingName = false;
-      this.cdr.markForCheck();
-    }
   }
 
   fidelityAccounts(): PortfolioAccount[] {
