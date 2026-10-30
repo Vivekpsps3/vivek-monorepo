@@ -22,7 +22,6 @@ from apps.server.town.constants import (
 from apps.server.town.engine import (
     CadenceAction,
     CadenceChange,
-    Streak,
     WeekProgress,
     cadence_kind,
     cadence_on,
@@ -154,14 +153,11 @@ def test_plan_cadence_change_midweek_insert_update_and_noop():
         monday, 5, "insert"
     )
     described = describe_cadence(today, 7, existing)
-    assert described.per_week == 7
-    assert described.kind == "daily"
+    assert (described.per_week, described.kind) == (7, "daily")
     assert described.pending is not None
-    assert described.pending.per_week == 3
-    assert described.pending.effective_from == monday
-    assert describe_cadence(monday, 7, existing).pending is None
-    assert describe_cadence(monday, 7, existing).per_week == 3
-    assert describe_cadence(monday, 7, existing).kind == "weekly"
+    assert (described.pending.per_week, described.pending.effective_from) == (3, monday)
+    on_monday = describe_cadence(monday, 7, existing)
+    assert on_monday.pending is None and (on_monday.per_week, on_monday.kind) == (3, "weekly")
 
 
 def _change(effective: date, per_week: int, action: CadenceAction) -> CadenceChange:
@@ -169,21 +165,17 @@ def _change(effective: date, per_week: int, action: CadenceAction) -> CadenceCha
 
 
 def test_daily_caps_at_the_boundaries():
-    assert library_day(0, 0) == 0
-    assert library_day(1, 0) == 5
-    assert library_day(2, 0) == 10
-    assert library_day(3, 0) == 10
-    assert library_day(0, 1) == 10
-    assert library_day(1, 1) == 10
-    assert inn_day(0, 0) == 0
-    assert inn_day(2, 0) == 10
-    assert inn_day(3, 0) == 15
-    assert inn_day(4, 0) == 15
-    assert inn_day(0, 1) == 30
-    assert inn_day(4, 1) == 45
-    assert inn_day(100, 2) == 75
-    assert habit_xp(7, 1) == 80
-    assert habit_xp(9, 1) == 100
+    library = [
+        library_day(episodes, finished)
+        for episodes, finished in ((0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1))
+    ]
+    assert library == [0, 5, 10, 10, 10, 10]
+    inn = [
+        inn_day(reminders, trips)
+        for reminders, trips in ((0, 0), (2, 0), (3, 0), (4, 0), (0, 1), (4, 1), (100, 2))
+    ]
+    assert inn == [0, 10, 15, 15, 30, 45, 75]
+    assert habit_xp(7, 1) == 80 and habit_xp(9, 1) == 100
     assert library_day(3, 0) == min(DAILY_CAP["library"], XP["mediaEpisode"] * 3)
     assert inn_day(4, 1) == min(DAILY_CAP["inn"], XP["travelReminder"] * 4) + XP["tripDone"]
 
@@ -201,62 +193,81 @@ def _span(start: str, end: str) -> list[date]:
     return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
 
 
-def _habit(
-    created: str,
-    today: str,
-    checkins: list[date],
-    per_week: int = 7,
-    cadences: tuple[tuple[date, int], ...] = (),
-    archived: str | None = None,
-) -> Streak:
-    return evaluate_streak(
-        date.fromisoformat(created),
-        date.fromisoformat(today),
-        checkins,
-        per_week,
-        cadences,
-        None if archived is None else date.fromisoformat(archived),
-    )
+def _habit(created, today, checkins, per_week=7, cadences=(), archived=None):
+    start, end = date.fromisoformat(created), date.fromisoformat(today)
+    if archived is not None:
+        archived = date.fromisoformat(archived)
+    return evaluate_streak(start, end, checkins, per_week, cadences, archived)
 
 
 # Example C pins week counts only. W40 Wed 30 Sep; W41 Mon/Wed/Fri;
 # W42 Mon/Wed/Fri/Sun so streak7 lands on the 3rd check-in (Fri 16); W43 Mon.
-_C = _on(
+_C_DAYS = (
     "2026-09-30 2026-10-05 2026-10-07 2026-10-09 2026-10-12 "
     "2026-10-14 2026-10-16 2026-10-18 2026-10-19"
 )
+_C = _on(_C_DAYS)
 
 
-def test_worked_examples_a_b_and_c():
-    days_a = "2026-10-05 2026-10-06 2026-10-07 2026-10-08 2026-10-10 2026-10-11 2026-10-12"
-    example_a = _habit("2026-10-05", "2026-10-15", _on(days_a))
-    assert example_a.unit == "days" and example_a.current == 0 and example_a.best == 7
-    assert example_a.best_days == 7 and example_a.best_weeks == 0 and example_a.week is None
-    assert (example_a.rest_day_available, example_a.rest_used_on) == (False, date(2026, 10, 13))
-    assert example_a.streak7_days == (date(2026, 10, 12),)
-    assert example_a.last7 == ("rest", "done", "done", "done", "rest", "miss", "pending")
-    assert habit_xp(7, example_a.streak7_count) == 80
-    assert level_progress(80, BUILDING_LV) == (2, 50, 150) and stage(2) == 2
-
-    example_b = _habit("2026-10-19", "2026-10-22", _on("2026-10-19", "2026-10-20", "2026-10-21"))
-    assert (example_b.current, example_b.best, example_b.rest_day_available) == (3, 3, True)
-    assert (
-        example_b.rest_used_on is None and example_b.week is None and example_b.streak7_count == 0
-    )
-    assert example_b.last7 == ("none", "none", "none", "done", "done", "done", "pending")
-    assert habit_xp(3, 0) == 30 and level_progress(30, BUILDING_LV) == (1, 0, 50)
-
-    example_c = _habit("2026-09-30", "2026-10-22", _C, per_week=3)
-    assert example_c.unit == "weeks" and example_c.current == 2 and example_c.best == 2
-    assert example_c.best_weeks == 2 and example_c.best_days == 0
-    assert example_c.rest_day_available is None and example_c.rest_used_on is None
-    assert example_c.week == WeekProgress(1, 3)
-    assert example_c.streak7_days == (date(2026, 10, 16),)
-    assert example_c.last7 == ("done", "off", "done", "done", "off", "off", "off")
-    assert habit_xp(9, example_c.streak7_count) == 100
-    assert level_progress(100, BUILDING_LV) == (2, 50, 150)
-    later = _habit("2026-09-30", "2026-10-26", _C, per_week=3)
-    assert (later.current, later.best, later.week) == (0, 2, WeekProgress(0, 3))
+@pytest.mark.parametrize(
+    ("created", "today", "days", "per_week", "stats", "rest", "streak7", "last7", "xp", "later"),
+    [
+        (
+            "2026-10-05",
+            "2026-10-15",
+            "2026-10-05 2026-10-06 2026-10-07 2026-10-08 2026-10-10 2026-10-11 2026-10-12",
+            7,
+            ("days", 0, 7, 7, 0, None),
+            (False, date(2026, 10, 13)),
+            (date(2026, 10, 12),),
+            ("rest", "done", "done", "done", "rest", "miss", "pending"),
+            (7, 80, (2, 50, 150), 2),
+            None,
+        ),
+        (
+            "2026-10-19",
+            "2026-10-22",
+            "2026-10-19 2026-10-20 2026-10-21",
+            7,
+            ("days", 3, 3, 3, 0, None),
+            (True, None),
+            (),
+            ("none", "none", "none", "done", "done", "done", "pending"),
+            (3, 30, (1, 0, 50), None),
+            None,
+        ),
+        (
+            "2026-09-30",
+            "2026-10-22",
+            _C_DAYS,
+            3,
+            ("weeks", 2, 2, 0, 2, (1, 3)),
+            (None, None),
+            (date(2026, 10, 16),),
+            ("done", "off", "done", "done", "off", "off", "off"),
+            (9, 100, (2, 50, 150), None),
+            ("2026-10-26", 0, 2, (0, 3)),
+        ),
+    ],
+    ids=("A", "B", "C"),
+)
+def test_worked_examples_a_b_and_c(
+    created, today, days, per_week, stats, rest, streak7, last7, xp, later
+):
+    got = _habit(created, today, _on(days), per_week=per_week)
+    assert (got.unit, got.current, got.best, got.best_days, got.best_weeks) == stats[:5]
+    assert got.week == (None if stats[5] is None else WeekProgress(*stats[5]))
+    assert (got.rest_day_available, got.rest_used_on) == rest
+    assert got.streak7_days == streak7 and got.last7 == last7
+    checks, points, progress, stage_n = xp
+    assert habit_xp(checks, got.streak7_count) == points
+    assert level_progress(points, BUILDING_LV) == progress
+    if stage_n is not None:
+        assert stage(stage_n) == stage_n
+    if later is not None:
+        when, current, best, week = later
+        got = _habit(created, when, _on(days), per_week=per_week)
+        assert (got.current, got.best, got.week) == (current, best, WeekProgress(*week))
 
 
 def test_rest_day_edges_bridge_reset_pending_and_backfill():

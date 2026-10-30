@@ -6,8 +6,7 @@ from apps.server.town.engine import NAME_CHARACTERS_ERROR, name_key, normalize_n
 
 
 def test_length_whitespace_nfc_casefold_and_emoji():
-    assert validate_name("a" * 40).ok
-    assert validate_name("  " + "a" * 40 + " ").ok
+    assert validate_name("a" * 40).ok and validate_name("  " + "a" * 40 + " ").ok
     long = validate_name("a" * 41)
     assert long.ok is False and long.error is None
     assert validate_name("").ok is False and validate_name("   ").name == ""
@@ -31,22 +30,11 @@ def test_length_whitespace_nfc_casefold_and_emoji():
 
 @pytest.mark.parametrize(
     "ch",
-    [
-        "\u0000",
-        "\u001f",  # C0 ends
-        "\u007f",  # DEL, category Cc
-        "\u0080",
-        "\u009f",  # C1 ends
-        "\u202a",
-        "\u202e",
-        "\u2066",
-        "\u2069",
-    ],
+    ("\u0000", "\u001f", "\u007f", "\u0080", "\u009f", "\u202a", "\u202e", "\u2066", "\u2069"),
 )
 def test_control_and_bidi_range_ends(ch: str):
     result = validate_name(f"Read{ch}pages")
-    assert result.ok is False
-    assert result.error == NAME_CHARACTERS_ERROR
+    assert result.ok is False and result.error == NAME_CHARACTERS_ERROR
 
 
 def test_neighbors_of_the_bidi_ranges_are_allowed():
