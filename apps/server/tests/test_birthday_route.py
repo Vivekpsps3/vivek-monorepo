@@ -1,0 +1,430 @@
+"""Owner-only birthday route: validation, CSRF, privacy, and audit."""
+
+import logging
+import re
+from datetime import date, timedelta
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from apps.server.identity.birthday import (
+    MSG_FULL_DATE,
+    MSG_FUTURE,
+    MSG_SHOW_AGE,
+    MSG_UNKNOWN,
+    MSG_YEAR,
+)
+from apps.server.identity.models import AuditEvent, User, UserRole, UserSession
+from apps.server.identity.session import _hash_secret, utc_now_naive
+from apps.server.tests.test_composition import _app
+
+
+def _call(client, method, url, token=None, csrf=None, **kwargs):
+    # The shared helper sets the cookie only. Writes also need the header.
+    client.cookies.clear()
+    headers = dict(kwargs.pop("headers", {}))
+    if token:
+        cookie = f"finance_session={token}"
+        if csrf:
+            cookie += f"; finance_csrf={csrf}"
+            headers["X-CSRF-Token"] = csrf
+        headers["Cookie"] = cookie
+    response = getattr(client, method)(url, headers=headers, **kwargs)
+    client.cookies.clear()
+    return response
+
+
+TODAY = date(2026, 10, 30)
+SECRET = "1919-08-26"
+_DATE_TEXT = re.compile(r"\d{4}.\d{2}.\d{2}|\d{8}")
+
+
+def _freeze_today(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("apps.server.identity.birthday.server_today", lambda: TODAY)
+
+
+def _user(
+    database,
+    user_id: int,
+    token: str,
+    csrf: str,
+    *,
+    role: UserRole = UserRole.user,
+) -> None:
+    now = utc_now_naive()
+    db = database.sessionmaker()
+    db.add(
+        User(
+            id=user_id,
+            email=f"user{user_id}@example.invalid",
+            display_name=f"User {user_id}",
+            username=f"user{user_id}",
+            role=role,
+            is_active=True,
+        )
+    )
+    db.flush()
+    db.add(
+        UserSession(
+            user_id=user_id,
+            token_hash=_hash_secret(token),
+            csrf_token_hash=_hash_secret(csrf),
+            expires_at=now + timedelta(hours=2),
+        )
+    )
+    db.commit()
+    db.close()
+
+
+def _open(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    _freeze_today(monkeypatch)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("FINANCE_API_KEY", raising=False)
+    monkeypatch.setenv("LOCAL_DEV_AUTH", "0")
+    return _app(tmp_path)
+
+
+def _echoes(body: object) -> list[str]:
+    found: list[str] = []
+    if isinstance(body, dict):
+        for key, value in body.items():
+            found.extend(_echoes(key))
+            found.extend(_echoes(value))
+    elif isinstance(body, list):
+        for item in body:
+            found.extend(_echoes(item))
+    elif isinstance(body, str):
+        found.extend(_DATE_TEXT.findall(body))
+    elif isinstance(body, int) and not isinstance(body, bool):
+        found.append(str(body))
+    return found
+
+
+def test_get_and_patch_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    saved = {"birthday": "1996-03-14", "show_age": True}
+    with TestClient(application) as client:
+        initial = _call(client, "get", "/api/account/birthday", "token-a")
+        assert initial.status_code == 200
+        assert initial.json() == {"birthday": None, "show_age": False}
+        assert "no-store" in initial.headers["cache-control"]
+        patched = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json=saved,
+        )
+        assert patched.status_code == 200
+        assert patched.json() == saved
+        again = _call(client, "get", "/api/account/birthday", "token-a")
+        assert again.json() == saved
+        edge = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": "1900-01-01", "show_age": False},
+        )
+        assert edge.status_code == 200
+        assert edge.json() == {"birthday": "1900-01-01", "show_age": False}
+        leap = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": "2000-02-29", "show_age": True},
+        )
+        assert leap.status_code == 200
+        latest = (TODAY + timedelta(days=1)).isoformat()
+        slack = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": latest, "show_age": False},
+        )
+        assert slack.status_code == 200
+        assert slack.json()["birthday"] == latest
+        today = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": TODAY.isoformat(), "show_age": True},
+        )
+        assert today.status_code == 200
+        cleared = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": None, "show_age": False},
+        )
+        assert cleared.status_code == 200
+        assert cleared.json() == {"birthday": None, "show_age": False}
+    db = database.sessionmaker()
+    try:
+        user = db.get(User, 1)
+        assert user is not None
+        assert user.birthday is None
+        assert user.pixels_show_age is False
+        audits = db.query(AuditEvent).filter(AuditEvent.event_type == "account.birthday_changed")
+        assert audits.count() == 6
+        assert all(row.detail is None for row in audits)
+        assert {row.actor_user_id for row in audits} == {1}
+        assert {row.target_user_id for row in audits} == {1}
+    finally:
+        db.close()
+
+
+def test_missing_session_is_401(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    application, _database = _open(tmp_path, monkeypatch)
+    with TestClient(application) as client:
+        got = client.get("/api/account/birthday")
+        assert got.status_code == 401
+        assert got.json()["detail"] == "Login required"
+        patched = client.patch(
+            "/api/account/birthday",
+            json={"birthday": SECRET, "show_age": True},
+        )
+        assert patched.status_code == 401
+        assert SECRET not in patched.text
+
+
+def test_patch_without_csrf_is_403(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    body = {"birthday": SECRET, "show_age": True}
+    with TestClient(application) as client:
+        missing = _call(client, "patch", "/api/account/birthday", "token-a", json=body)
+        assert missing.status_code == 403
+        assert missing.json()["detail"] == "Invalid CSRF token"
+        assert SECRET not in missing.text
+        wrong = _call(client, "patch", "/api/account/birthday", "token-a", "other", json=body)
+        assert wrong.status_code == 403
+        assert SECRET not in wrong.text
+        allowed = _call(client, "get", "/api/account/birthday", "token-a")
+        assert allowed.status_code == 200
+        assert allowed.json() == {"birthday": None, "show_age": False}
+    db = database.sessionmaker()
+    try:
+        assert (
+            db.query(AuditEvent).filter(AuditEvent.event_type == "account.birthday_changed").count()
+            == 0
+        )
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize(
+    ("body", "detail"),
+    [
+        ({"birthday": "1996-3-14", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "1996/03/14", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "03-14-1996", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "1996-03-14T00:00:00", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "19960314", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "1996-02-31", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "1996-13-01", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "1900-02-29", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": " 1996-03-14", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "1996-03-14 ", "show_age": False}, MSG_FULL_DATE),
+        ({"birthday": 19960314, "show_age": False}, MSG_FULL_DATE),
+        ({"show_age": False}, MSG_FULL_DATE),
+        ({"birthday": "1899-12-31", "show_age": False}, MSG_YEAR),
+        ({"birthday": "0900-01-01", "show_age": True}, MSG_YEAR),
+        ({"birthday": "2026-11-01", "show_age": False}, MSG_FUTURE),
+        ({"birthday": "1996-03-14", "show_age": 1}, MSG_SHOW_AGE),
+        ({"birthday": "1996-03-14", "show_age": 0}, MSG_SHOW_AGE),
+        ({"birthday": "1996-03-14", "show_age": "true"}, MSG_SHOW_AGE),
+        ({"birthday": "1996-03-14", "show_age": "false"}, MSG_SHOW_AGE),
+        ({"birthday": "1996-03-14", "show_age": None}, MSG_SHOW_AGE),
+        ({"birthday": None}, MSG_SHOW_AGE),
+        ({"birthday": None, "show_age": False, "extra": 1}, MSG_UNKNOWN),
+        ({"birthday": "1996-03-14", "show_age": True, "note": "1996-03-14"}, MSG_UNKNOWN),
+    ],
+)
+def test_patch_rejects_invalid_bodies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: object, detail: str
+) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    kept = {"birthday": "1980-05-05", "show_age": True}
+    with TestClient(application) as client:
+        saved = _call(client, "patch", "/api/account/birthday", "token-a", "csrf-a", json=kept)
+        assert saved.status_code == 200
+        rejected = _call(client, "patch", "/api/account/birthday", "token-a", "csrf-a", json=body)
+        assert rejected.status_code == 422
+        assert rejected.json() == {"detail": detail}
+        for token in _echoes(body):
+            assert token not in rejected.text
+        current = _call(client, "get", "/api/account/birthday", "token-a")
+        assert current.json() == kept
+
+
+def test_patch_rejects_malformed_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    raw = b'{"birthday": "1919-08-26"'
+    array = b'["1919-08-26"]'
+    with TestClient(application) as client:
+        for content in (b"", raw, array, b"null", b'"1919-08-26"'):
+            rejected = _call(
+                client,
+                "patch",
+                "/api/account/birthday",
+                "token-a",
+                "csrf-a",
+                content=content,
+                headers={"Content-Type": "application/json"},
+            )
+            assert rejected.status_code == 422
+            assert rejected.json() == {"detail": MSG_FULL_DATE}
+            assert SECRET not in rejected.text
+            assert "1919-08-26" not in rejected.text
+
+
+def test_cross_user_patch_does_not_change_the_other_account(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    _user(database, 2, "token-b", "csrf-b")
+    with TestClient(application) as client:
+        first = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": "1984-07-19", "show_age": True},
+        )
+        assert first.status_code == 200
+        second = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-b",
+            "csrf-b",
+            json={"birthday": "1972-11-02", "show_age": False},
+        )
+        assert second.status_code == 200
+        assert _call(client, "get", "/api/account/birthday", "token-a").json() == {
+            "birthday": "1984-07-19",
+            "show_age": True,
+        }
+        assert _call(client, "get", "/api/account/birthday", "token-b").json() == {
+            "birthday": "1972-11-02",
+            "show_age": False,
+        }
+        again = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-b",
+            "csrf-b",
+            json={"birthday": None, "show_age": True},
+        )
+        assert again.status_code == 200
+        assert _call(client, "get", "/api/account/birthday", "token-a").json()["birthday"] == (
+            "1984-07-19"
+        )
+    db = database.sessionmaker()
+    try:
+        owner = db.get(User, 1)
+        other = db.get(User, 2)
+        assert owner is not None and other is not None
+        assert owner.birthday == date(1984, 7, 19)
+        assert owner.pixels_show_age is True
+        assert other.birthday is None
+        assert other.pixels_show_age is True
+    finally:
+        db.close()
+
+
+def test_real_server_clock_accepts_a_past_date_and_rejects_a_far_future_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("FINANCE_API_KEY", raising=False)
+    monkeypatch.setenv("LOCAL_DEV_AUTH", "0")
+    application, database = _app(tmp_path)
+    _user(database, 1, "token-a", "csrf-a")
+    with TestClient(application) as client:
+        saved = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": "1990-01-01", "show_age": False},
+        )
+        assert saved.status_code == 200
+        assert saved.json() == {"birthday": "1990-01-01", "show_age": False}
+        rejected = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": "2999-01-01", "show_age": False},
+        )
+        assert rejected.status_code == 422
+        assert rejected.json() == {"detail": MSG_FUTURE}
+        assert "2999-01-01" not in rejected.text
+
+
+def test_birthday_stays_out_of_me_logs_admin_and_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    _user(database, 2, "token-admin", "csrf-admin", role=UserRole.admin)
+    body = {"birthday": SECRET, "show_age": False}
+    with TestClient(application) as client:
+        saved = _call(client, "patch", "/api/account/birthday", "token-a", "csrf-a", json=body)
+        assert saved.status_code == 200
+        assert saved.json()["birthday"] == SECRET
+        me = _call(client, "get", "/api/auth/me", "token-a")
+        assert me.status_code == 200
+        assert SECRET not in me.text
+        assert "birthday" not in me.json()["user"]
+        assert "show_age" not in me.json()["user"]
+        users = _call(client, "get", "/api/admin/users", "token-admin")
+        metrics = _call(client, "get", "/api/admin/metrics", "token-admin")
+        assert users.status_code == 200
+        assert metrics.status_code == 200
+        assert SECRET not in users.text
+        assert SECRET not in metrics.text
+        leaked = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": f"{SECRET}T00:00:00", "show_age": True},
+        )
+        assert leaked.status_code == 422
+        assert SECRET not in leaked.text
+    assert SECRET not in caplog.text
+    db = database.sessionmaker()
+    try:
+        rows = db.query(AuditEvent).filter(AuditEvent.event_type == "account.birthday_changed")
+        assert rows.count() == 1
+        row = rows.one()
+        assert row.detail is None
+        assert SECRET not in (row.detail or "")
+        assert SECRET not in row.event_type
+    finally:
+        db.close()
