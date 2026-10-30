@@ -1,14 +1,16 @@
 import enum
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -49,6 +51,10 @@ class User(Base):
     auth_wrapped_private_key_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
     auth_recovery_wrapped_private_key_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
     passwordless_enrolled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    birthday: Mapped[date | None] = mapped_column(Date)
+    pixels_show_age: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
 
 
 class AuthChallenge(Base):
