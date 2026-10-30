@@ -64,3 +64,37 @@ export { authGuard, adminGuard } from './auth.guard';
 export { authNavigation, safeNextPathFrom, safeNextPath, authPath, loginHref, afterAuthUrl, continueAfterAuth } from './after-auth';
 
 export { UserMenuContent } from './user-menu-content';
+
+export {
+  CHANNEL_CAP,
+  CHANNEL_WEIGHT,
+  DAY_LEVEL_THRESHOLDS,
+  DOMINANCE_ORDER,
+  LIFE_MIN_ROWS,
+  LIFE_WEEK_COUNT,
+  WEEK_LEVEL_THRESHOLDS,
+  activityCounts,
+  dayActivities,
+  dayLevel,
+  dayScore,
+  dominantApp,
+  lifeAge,
+  lifeRowCount,
+  lifeRowDayCount,
+  lifeRowStart,
+  lifeWeekDayCount,
+  lifeWeeks,
+  scoreParts,
+  sundayOnOrBefore,
+  sundayWeekDates,
+  weekLevel,
+  weekScore,
+  weekScoreFromDays,
+  weeksBySunday,
+  type AppAmounts,
+  type DatedChannels,
+  type DayChannels,
+  type LifeWeekSpan,
+  type PixelApp,
+  type SundayWeekScore,
+} from '../pixels/pixels-score';
