@@ -218,6 +218,40 @@ test('a CSRF mismatch shows the session-expired copy', async ({ page }) => {
   await expectPassphraseCleared(page);
 });
 
+test('an expired session opens sign-in with the session-ended toast', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await createAccount(page, 'rename.expired');
+  await page.route('**/api/account/username', async route => {
+    if (route.request().method() !== 'PATCH') {
+      await route.continue();
+      return;
+    }
+    await page.context().clearCookies({ name: 'finance_session' });
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Login required' }),
+    });
+  });
+  await page.route('**/api/auth/me', async route => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Login required' }),
+    });
+  });
+  await saveUsername(page, 'rename.expired2', PASSPHRASE);
+  await page.waitForURL(/\/auth\/login/, { timeout: 60_000 });
+  await expect(page.locator('.toast-copy')).toHaveText('Your session ended. Sign in again.', { timeout: 30_000 });
+  const stored = await page.evaluate(() =>
+    JSON.stringify(Object.entries(sessionStorage)) + JSON.stringify(Object.entries(localStorage)));
+  expect(stored).not.toContain(PASSPHRASE);
+});
+
 test('a wrong passphrase shows the 401 error and clears the passphrase', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await createAccount(page, 'rename.wrong');
