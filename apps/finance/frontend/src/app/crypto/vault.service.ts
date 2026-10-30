@@ -8,11 +8,12 @@ import {
   decryptJson,
   encryptJson,
   hmacBlindIndex,
-  persistDekLocal,
+  persistVaultKeys,
   recordAad,
-  restoreDekLocal,
+  restoreVaultKeys,
   rewrapDekWithPassphrase,
   unlockWithPassphrase,
+  type StoredVaultKeys,
 } from './vault-crypto';
 import { rewrapSigningKey, WrappedSigningKey } from '@vivek/auth';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
@@ -69,18 +70,24 @@ export class VaultService {
 
   private async hydrate(): Promise<void> {
     const epoch = this.epoch;
-    const dek = await restoreDekLocal();
-    if (!dek || epoch !== this.epoch) return;
-    this.dek = dek;
+    let stored: StoredVaultKeys | null = null;
+    try { stored = await restoreVaultKeys(); } catch { stored = null; }
+    if (!stored || epoch !== this.epoch) return;
+    this.dek = stored.dek;
     this.unlockedSubject.next(true);
   }
 
   private async hold(dek: CryptoKey): Promise<void> {
+    const epoch = this.epoch;
     this.dek = dek;
     this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
+    // The hub reads presence before it will load vault code. Store the key before unlock returns.
+    await persistVaultKeys({ dek, blind_index_version: 1, reindexed: [] });
+    if (epoch !== this.epoch) {
+      clearDekLocal();
+      return;
+    }
     this.unlockedSubject.next(true);
-    // The hub reads this key before it will load vault code. Store it before unlock returns.
-    await persistDekLocal(dek);
   }
 
   get isUnlocked(): boolean {
@@ -216,7 +223,13 @@ export class VaultService {
   }
 
   private rewrapVaultDek(passphrase: string): Promise<{ kdf_salt_b64: string; kdf_iterations: number; wrapped_dek_b64: string }> {
-    return rewrapDekWithPassphrase(this.requireDek(), passphrase, DEFAULT_PBKDF2_ITERATIONS);
+    const status = this.statusSubject.value;
+    if (!status?.kdf_salt_b64 || !status.kdf_iterations || !status.wrapped_dek_b64) throw new Error('Vault is locked');
+    return rewrapDekWithPassphrase(passphrase, {
+      kdf_salt_b64: status.kdf_salt_b64,
+      kdf_iterations: status.kdf_iterations,
+      wrapped_dek_b64: status.wrapped_dek_b64,
+    }, passphrase, DEFAULT_PBKDF2_ITERATIONS);
   }
 
   async unlock(passphrase: string): Promise<void> {
