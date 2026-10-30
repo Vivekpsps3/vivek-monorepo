@@ -127,9 +127,15 @@
 }
 
 .btn-sm {
-  min-height: 36px;
+  min-height: var(--control-h-sm);
   padding: var(--space-2) var(--space-4);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .btn-sm {
+    min-height: var(--control-h);
+  }
 }
 
 .btn-primary {

@@ -25,10 +25,11 @@
 
 .ui-page-header__title {
   margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: 600;
+  font-size: var(--text-display);
+  font-weight: 700;
+  line-height: 34px;
   color: var(--text);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .ui-page-header__subtitle {
@@ -56,7 +57,8 @@
   }
 
   .ui-page-header__title {
-    font-size: clamp(1.55rem, 8vw, var(--text-2xl));
+    font-size: var(--text-2xl);
+    line-height: 28px;
   }
 
   .ui-page-header__actions {

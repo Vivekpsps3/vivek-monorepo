@@ -154,10 +154,11 @@
 
 .ui-page-header__title {
   margin: 0 0 var(--space-1);
-  font-size: var(--text-2xl);
-  font-weight: 600;
+  font-size: var(--text-display);
+  font-weight: 700;
+  line-height: 34px;
   color: var(--text);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .ui-page-header__subtitle {
@@ -185,7 +186,8 @@
   }
 
   .ui-page-header__title {
-    font-size: clamp(1.55rem, 8vw, var(--text-2xl));
+    font-size: var(--text-2xl);
+    line-height: 28px;
   }
 
   .ui-page-header__actions {
@@ -203,7 +205,10 @@
   font-size: var(--text-sm);
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
   font-family: inherit;
   line-height: 1.25;
   box-shadow: none;
@@ -232,9 +237,9 @@
 }
 
 .ui-btn--sm {
-  min-height: 36px;
+  min-height: var(--control-h-sm);
   padding: var(--space-2) var(--space-4);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .ui-btn--primary {
@@ -273,4 +278,33 @@
 
 .ui-btn--danger:hover:not(:disabled) {
   background: var(--danger-hover);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.money {
+  white-space: nowrap;
+}
+
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]) {
+  min-height: 44px;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .btn-sm,
+  .ui-btn--sm {
+    min-height: var(--control-h);
+  }
+
+  .open-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
 }

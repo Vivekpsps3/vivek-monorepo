@@ -14,7 +14,10 @@
   font-size: var(--text-sm);
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
   font-family: inherit;
   line-height: 1.25;
   box-shadow: none;
@@ -51,9 +54,15 @@
 }
 
 .ui-btn--sm {
-  min-height: 36px;
+  min-height: var(--control-h-sm);
   padding: var(--space-2) var(--space-4);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .ui-btn--sm {
+    min-height: var(--control-h);
+  }
 }
 
 .ui-btn--primary {
