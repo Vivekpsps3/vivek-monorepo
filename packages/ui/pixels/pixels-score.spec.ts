@@ -185,6 +185,20 @@ describe('pixels Sunday weeks', () => {
     expect(weeks[1]?.dates[0]).toBe('2026-01-04');
   });
 
+  it('round-trips a year below 1000 through sundayOnOrBefore and parse', () => {
+    const start = sundayOnOrBefore('0999-06-15');
+    expect(start).toBe(utcSunday('0999-06-15'));
+    expect(start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(sundayOnOrBefore(start)).toBe(start);
+    expect(lifeRowStart('0999-06-15', 0)).toBe('0999-06-15');
+    expect(lifeRowStart('0996-02-29', 1)).toBe('0997-02-28');
+    const grouped = weeksBySunday([{ date: '0999-06-15', channels: day(1) }]);
+    expect(grouped[0]?.start).toBe(start);
+    for (const iso of grouped[0]?.dates ?? []) {
+      expect(sundayOnOrBefore(iso)).toBe(start);
+    }
+  });
+
   it('keeps the last entry when a date is repeated', () => {
     const weeks = weeksBySunday([
       { date: '2026-01-01', channels: day(1) },

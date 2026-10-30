@@ -313,9 +313,14 @@ function daysInMonth(year: number, month: number): number {
 }
 
 function formatIso(year: number, month: number, day: number): string {
-  const monthText = month < 10 ? `0${month}` : String(month);
-  const dayText = day < 10 ? `0${day}` : String(day);
-  return `${year}-${monthText}-${dayText}`;
+  // parseIso accepts 0000–9999. Years below 1000 must keep their leading zeros.
+  if (!Number.isInteger(year) || year < 0 || year > 9999) {
+    throw new RangeError(`Year must be 0000–9999, not ${year}`);
+  }
+  const yearText = String(year).padStart(4, '0');
+  const monthText = String(month).padStart(2, '0');
+  const dayText = String(day).padStart(2, '0');
+  return `${yearText}-${monthText}-${dayText}`;
 }
 
 /** Days since 1970-01-01. Howard Hinnant's civil algorithm; no clock and no time zone. */
