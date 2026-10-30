@@ -303,10 +303,8 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
 });
 
 test('navigation focus falls back when the route has no main heading', async ({ page }) => {
-  const warnings: string[] = [];
-  page.on('console', message => {
-    if (message.type() === 'warning') warnings.push(message.text());
-  });
+  // Spec §1.1 warns only in dev builds. CI serves the production bundle, where
+  // isDevMode() is false, so the check is the focus move itself.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/hub');
   await expect(page.locator('#workspace-content main h1')).toBeFocused();
@@ -314,7 +312,6 @@ test('navigation focus falls back when the route has no main heading', async ({ 
   await expect(page.getByRole('heading', { level: 1, name: 'Create your vault' })).toBeVisible();
   await expect(page.locator('#workspace-content main h1')).toHaveCount(0);
   await expect(page.locator('#workspace-content')).toBeFocused();
-  expect(warnings.join('\n')).toContain('No main h1 to focus after navigation to /finance/vault/setup');
 });
 
 test('a locked Finance card drops money, counts, and names loaded while unlocked', async ({ page }) => {
