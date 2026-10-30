@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from apps.server.database import open_database
+from apps.server.errors import APIError
 from apps.server.identity.admin import delete_user_account
 from apps.server.identity.models import User, UserRole
 from apps.server.migrate import check_integrity
@@ -405,12 +406,15 @@ def test_delete_user_account_removes_town_rows_for_that_user_only(tmp_path: Path
         opened.engine.dispose()
 
 
-def test_make_name_key_truncates_after_casefold() -> None:
-    folded = ("ß" * 40).casefold()
-    key = make_name_key("ß" * 40)
-    assert len(key) == 40
-    assert key == folded[:40]
+def test_make_name_key_rejects_casefold_longer_than_40() -> None:
+    assert make_name_key("ß" * 20) == "ss" * 20
+    assert len(make_name_key("ß" * 20)) == 40
     assert make_name_key("Morning") == "morning"
+    with pytest.raises(APIError) as caught:
+        make_name_key("ß" * 40)
+    assert caught.value.status_code == 422
+    assert caught.value.code == "name_too_long"
+    assert caught.value.message == "Use 1 to 40 characters."
 
 
 def test_owner_tables_and_metadata_include_town() -> None:
