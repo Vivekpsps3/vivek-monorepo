@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
 
-from apps.server.town.constants import DAILY_CAP, LOT_UNLOCK_LV, XP
+from apps.server.town.constants import DAILY_CAP, HABIT_NAME_MAX, LOT_UNLOCK_LV, XP
 
 CadenceKind = Literal["daily", "weekly"]
 CadenceAction = Literal["insert", "update"]
@@ -156,6 +158,46 @@ def inn_day(reminders: int, trips_done: int) -> int:
     """Return one local day's Inn XP: min(cap, 5×reminders) + 30×trips."""
     capped = min(DAILY_CAP["inn"], XP["travelReminder"] * reminders)
     return capped + XP["tripDone"] * trips_done
+
+
+_WHITESPACE = re.compile(r"\s+")
+NAME_CHARACTERS_ERROR = "Use letters, numbers and punctuation only."
+
+
+@dataclass(frozen=True)
+class NameValidation:
+    ok: bool
+    name: str
+    error: str | None
+
+
+def normalize_name(raw: str) -> str:
+    """NFC, strip, and collapse each internal whitespace run to one space."""
+    return _WHITESPACE.sub(" ", unicodedata.normalize("NFC", raw).strip())
+
+
+def name_key(name: str) -> str:
+    """Return the casefold uniqueness key. Callers pass the normalized name."""
+    return name.casefold()
+
+
+def validate_name(raw: str) -> NameValidation:
+    """Return ok, or the §8.4 character message. Length is 1..40 after normalization."""
+    nfc = unicodedata.normalize("NFC", raw)
+    # U+001F is both a C0 control and Unicode whitespace, so reject before collapsing.
+    if any(_forbidden(char) for char in nfc):
+        return NameValidation(False, nfc, NAME_CHARACTERS_ERROR)
+    name = _WHITESPACE.sub(" ", nfc.strip())
+    if not 1 <= len(name) <= HABIT_NAME_MAX:
+        return NameValidation(False, name, None)
+    return NameValidation(True, name, None)
+
+
+def _forbidden(char: str) -> bool:
+    code = ord(char)
+    if unicodedata.category(char) == "Cc":
+        return True
+    return 0x202A <= code <= 0x202E or 0x2066 <= code <= 0x2069
 
 
 Last7Value = Literal["done", "rest", "miss", "pending", "none", "off"]
