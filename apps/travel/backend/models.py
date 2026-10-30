@@ -219,6 +219,7 @@ class Reminder(Base):
     done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False, default="general")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Note(Base):
