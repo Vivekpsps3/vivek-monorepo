@@ -5,7 +5,7 @@ each counted once. Currencies are never added together. The same lines also
 roll up into Transport, Stays and plans, Parking, and Other costs.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 CATEGORY_LABELS = {
     "outbound_flight": "Outbound flight",
@@ -74,6 +74,8 @@ class BudgetInput:
     amount_cents: int
     currency: str
     paid: bool
+    # Filled by rollup. Callers leave it blank.
+    bucket: str = ""
 
 
 def rollup(lines: list[BudgetInput]) -> dict:
@@ -101,7 +103,7 @@ def rollup(lines: list[BudgetInput]) -> dict:
         cost_bucket["total_cents"] += line.amount_cents
         if line.paid:
             cost_bucket["paid_cents"] += line.amount_cents
-        rendered.append(line)
+        rendered.append(replace(line, bucket=key))
 
     currencies = []
     for currency in sorted(by_currency):

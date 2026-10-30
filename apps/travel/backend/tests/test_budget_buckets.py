@@ -47,7 +47,20 @@ def test_rollup_buckets_map_categories():
         _line("manual", index + 1, category, 100, paid=index % 2 == 0)
         for index, category in enumerate(CATEGORIES)
     ]
-    currency = rollup(lines)["currencies"][0]
+    rolled = rollup(lines)
+    currency = rolled["currencies"][0]
+    assert [line.bucket for line in rolled["lines"]] == [
+        "transport",
+        "transport",
+        "transport",
+        "transport",
+        "transport",
+        "stays_plans",
+        "stays_plans",
+        "stays_plans",
+        "parking",
+        "other",
+    ]
     buckets = {item["bucket"]: item for item in currency["buckets"]}
     assert [item["bucket"] for item in currency["buckets"]] == list(BUCKET_ORDER)
     assert buckets["transport"] == {
@@ -174,7 +187,9 @@ def test_manual_lodging_line_goes_to_stays_and_plans():
 
 
 def test_unknown_category_falls_back_to_other():
-    currency = rollup([_line("manual", 1, "souvenirs", 1500, label="Legacy mug")])["currencies"][0]
+    rolled = rollup([_line("manual", 1, "souvenirs", 1500, label="Legacy mug")])
+    currency = rolled["currencies"][0]
+    assert rolled["lines"][0].bucket == "other"
     assert currency["total_cents"] == 1500
     assert currency["categories"] == []
     assert currency["buckets"] == [
@@ -192,6 +207,7 @@ def test_zero_cost_line_still_emits_its_bucket():
     rolled = rollup([_line("parking", 1, "parking", 0, label="Lot")])
     currency = rolled["currencies"][0]
     assert len(rolled["lines"]) == 1
+    assert rolled["lines"][0].bucket == "parking"
     assert currency["total_cents"] == 0
     assert currency["categories"] == [
         {"category": "parking", "label": "Parking", "amount_cents": 0}

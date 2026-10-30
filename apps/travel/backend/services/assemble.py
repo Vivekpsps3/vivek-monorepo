@@ -17,7 +17,6 @@ from apps.travel.backend.models import (
 from apps.travel.backend.services.budget import (
     CATEGORY_LABELS,
     BudgetInput,
-    bucket_for_category,
     category_for_plan,
     category_for_transport,
     rollup,
@@ -345,7 +344,7 @@ def budget_for(trip: Trip) -> dict:
             "currency": line.currency,
             "paid": line.paid,
             "amount_cents": line.amount_cents,
-            "bucket": bucket_for_category(line.category),
+            "bucket": line.bucket,
         }
         for line in rolled["lines"]
     ]
