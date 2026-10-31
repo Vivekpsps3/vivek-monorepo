@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Injector, OnDestroy, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ApiHealthService } from '../../services/api-health.service';
 import { AuthUser } from '@vivek/auth';
@@ -11,6 +11,7 @@ import { FinanceService } from '../../services/finance.service';
 import { UserMenuContent } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
+import { lockFinance } from '../../../public-api';
 
 export interface NavItem {
   path: string;
@@ -48,6 +49,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private userMenu = inject(UserMenuContent);
   @ViewChild('userMenuActions', { static: true }) private userMenuActions!: TemplateRef<unknown>;
   private marketRefresh = inject(MarketRefreshCoordinatorService);
+  private readonly injector = inject(Injector);
   private destroy$ = new Subject<void>();
   private routePath = '';
   private routeEnterTimer?: ReturnType<typeof setTimeout>;
@@ -197,11 +199,9 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   }
 
   lockVault(): void {
-    this.marketRefresh.broadcastLock();
-    this.marketRefresh.endSession();
-    this.finance.clearSessionState();
-    this.vault.lock();
-    void this.router.navigateByUrl('/finance/vault/unlock');
+    void lockFinance(this.injector).then(() => {
+      void this.router.navigateByUrl('/finance/vault/unlock');
+    });
   }
 
   logout(): void {

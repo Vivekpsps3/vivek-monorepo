@@ -2,6 +2,7 @@ import type { Injector } from '@angular/core';
 import type { Routes } from '@angular/router';
 import { loadFinanceBudgetKeptGuarded } from './app/budget/budget-kept-import';
 export { financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
+export { lockFinance } from './app/crypto/lock-finance';
 export type { NetWorth } from './app/models/transaction.model';
 export type { PortfolioAccount, PositionHighlight } from './app/hub/finance-hub-snapshot';
 export async function loadFinanceRoutes(): Promise<Routes> { return (await import('./app/app.routes')).routes; }

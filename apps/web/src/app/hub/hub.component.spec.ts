@@ -1,12 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import { BehaviorSubject, from, of, throwError } from 'rxjs';
 import { SessionService as AuthService } from '../platform/session.service';
 import { AuthUser } from '../platform/auth/auth.models';
 import { DEK_STORE } from '../../../../finance/frontend/src/testing';
 import { VaultService } from '../../../../finance/frontend/src/testing';
 import { Asset, Holding, Liability } from '../../../../finance/frontend/src/testing';
 import { FinanceService } from '../../../../finance/frontend/src/testing';
+import { MarketRefreshCoordinatorService } from '../../../../finance/frontend/src/app/services/market-refresh-coordinator.service';
 import { ThemeService } from '@vivek/ui';
 import { HubComponent } from './hub.component';
 
@@ -55,7 +56,12 @@ interface PendingCall {
 describe('HubComponent', () => {
   let fixture: ComponentFixture<HubComponent>;
   let users: BehaviorSubject<AuthUser | null>;
-  let auth: { user$: BehaviorSubject<AuthUser | null>; logout: jasmine.Spy; updateDisplayName: jasmine.Spy };
+  let auth: {
+    user$: BehaviorSubject<AuthUser | null>;
+    readonly currentUser: AuthUser | null;
+    logout: jasmine.Spy;
+    updateDisplayName: jasmine.Spy;
+  };
   let vaultReads: number;
   let vaultUnlocked: boolean;
   let financeCalls: number;
@@ -64,6 +70,8 @@ describe('HubComponent', () => {
   let liabilities$: BehaviorSubject<Liability[]>;
   let holdings$: BehaviorSubject<Holding[]>;
   const pending: PendingCall[] = [];
+  let holdFinance: Promise<void> | null = null;
+  let releaseFinance: () => void = () => undefined;
 
   function json(status: number, body: unknown): Response {
     return {
@@ -100,8 +108,10 @@ describe('HubComponent', () => {
     financeError = null;
     localStorage.removeItem(DEK_STORE);
     users = new BehaviorSubject<AuthUser | null>(person(1));
+    holdFinance = null;
     auth = {
       user$: users,
+      get currentUser() { return users.value; },
       logout: jasmine.createSpy('logout'),
       updateDisplayName: jasmine.createSpy('updateDisplayName').and.resolveTo(person(1)),
     };
@@ -131,6 +141,7 @@ describe('HubComponent', () => {
               vaultReads += 1;
               return vaultUnlocked;
             },
+            lock: () => { vaultUnlocked = false; },
           },
         },
         {
@@ -138,12 +149,23 @@ describe('HubComponent', () => {
           useValue: {
             loadDashboard: () => {
               financeCalls += 1;
-              return financeError ? throwError(() => financeError) : of(null);
+              if (financeError) return throwError(() => financeError);
+              if (holdFinance) return from(holdFinance.then(() => null));
+              return of(null);
+            },
+            clearSessionState: () => {
+              assets$.next([]);
+              liabilities$.next([]);
+              holdings$.next([]);
             },
             assets$,
             liabilities$,
             holdings$,
           },
+        },
+        {
+          provide: MarketRefreshCoordinatorService,
+          useValue: { broadcastLock: () => undefined, endSession: () => undefined },
         },
       ],
     }).compileComponents();
@@ -328,6 +350,131 @@ describe('HubComponent', () => {
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
     await paint();
+  });
+
+  function postLock(userId: number, kind = 'lock'): BroadcastChannel {
+    const channel = new BroadcastChannel('finance-vault-sync-v1');
+    channel.postMessage({ version: 1, userId, kind });
+    return channel;
+  }
+
+  async function showHarbor(): Promise<void> {
+    localStorage.setItem(DEK_STORE, 'present');
+    vaultUnlocked = true;
+    assets$.next([{ id: 1, name: 'Harbor Checking', category: 'cash', current_value: 1500, as_of_date: '2026-10-01' } as Asset]);
+    holdings$.next([{
+      id: 10,
+      symbol: 'HBRX',
+      shares: 2,
+      current_price: 25,
+      account_display: 'Harbor Brokerage',
+      lifecycle_status: 'active',
+    } as Holding]);
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    await paint();
+  }
+
+  it('clears numbers when a later read finds the vault locked', async () => {
+    await showHarbor();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toMatch(/\$[\s]*\d/);
+    expect(text).toContain('HBRX');
+    vaultUnlocked = false;
+    fixture.componentInstance.retryFinance();
+    await paint();
+    const locked = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(locked).toContain('Finance is locked.');
+    expect(locked).not.toMatch(/\$[\s]*\d/);
+    expect(locked).not.toContain('HBRX');
+    expect(locked).not.toContain('Harbor');
+    expect(fixture.componentInstance.netWorth).toBeNull();
+    expect(fixture.componentInstance.accounts).toEqual([]);
+    expect(fixture.componentInstance.positions).toEqual([]);
+  });
+
+  it('clears a loaded card when another tab broadcasts a lock', async () => {
+    await showHarbor();
+    const user = fixture.componentInstance['auth'].currentUser;
+    expect(fixture.componentInstance['isRemoteLock']({ version: 1, userId: 1, kind: 'lock' }))
+      .withContext(`currentUser=${JSON.stringify(user)}`)
+      .toBeTrue();
+    const heard: unknown[] = [];
+    const ear = new BroadcastChannel('finance-vault-sync-v1');
+    ear.addEventListener('message', event => heard.push(event.data));
+    const channel = postLock(1);
+    for (let i = 0; i < 10 && fixture.componentInstance['financeGeneration'] === 0; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      fixture.detectChanges();
+    }
+    channel.close();
+    ear.close();
+    expect(heard).withContext('side channel').not.toEqual([]);
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Finance is locked.');
+    expect(text).not.toMatch(/\$[\s]*\d/);
+    expect(text).not.toContain('HBRX');
+    expect(text).not.toContain('Harbor');
+    expect(fixture.componentInstance['financeGeneration']).toBe(1);
+    const echo = postLock(1);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    echo.close();
+    expect(fixture.componentInstance['financeGeneration']).toBe(1);
+  });
+
+  it('keeps a loaded card when the lock broadcast is for someone else or is not a lock', async () => {
+    await showHarbor();
+    const other = postLock(2);
+    const invalidate = postLock(1, 'invalidate');
+    await paint();
+    other.close();
+    invalidate.close();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('HBRX');
+    expect(text).not.toContain('Finance is locked.');
+    expect(fixture.componentInstance['financeGeneration']).toBe(0);
+  });
+
+  it('clears a loaded card when finance-dek is removed in another tab', async () => {
+    await showHarbor();
+    window.dispatchEvent(new StorageEvent('storage', { key: DEK_STORE, newValue: null, oldValue: 'present' }));
+    fixture.detectChanges();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Finance is locked.');
+    expect(text).not.toMatch(/\$[\s]*\d/);
+    expect(text).not.toContain('Harbor');
+    expect(fixture.componentInstance['financeGeneration']).toBe(1);
+  });
+
+  it('drops an in-flight finance load that resolves after a lock', async () => {
+    localStorage.setItem(DEK_STORE, 'present');
+    vaultUnlocked = true;
+    holdFinance = new Promise<void>(resolve => { releaseFinance = resolve; });
+    assets$.next([{ id: 1, name: 'Harbor Checking', category: 'cash', current_value: 1500, as_of_date: '2026-10-01' } as Asset]);
+    holdings$.next([{
+      id: 10, symbol: 'HBRX', shares: 2, current_price: 25, account_display: 'Harbor Brokerage', lifecycle_status: 'active',
+    } as Holding]);
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    for (let i = 0; i < 20 && financeCalls === 0; i++) await new Promise(resolve => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    expect(financeCalls).toBeGreaterThan(0);
+    expect((fixture.nativeElement.textContent as string).replaceAll('\u2060', '')).not.toContain('HBRX');
+    const channel = postLock(1);
+    for (let i = 0; i < 10 && fixture.componentInstance['financeGeneration'] === 0; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    releaseFinance();
+    await paint();
+    channel.close();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Finance is locked.');
+    expect(text).not.toMatch(/\$[\s]*\d/);
+    expect(text).not.toContain('HBRX');
+    expect(text).not.toContain('Harbor');
+    expect(fixture.componentInstance['financeGeneration']).toBeGreaterThan(0);
   });
 
   it('keeps account settings off the hub', async () => {

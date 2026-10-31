@@ -122,6 +122,30 @@ describe('VaultService per-request silence', () => {
   });
 });
 
+describe('VaultService lock', () => {
+  afterEach(() => localStorage.removeItem('finance-dek'));
+
+  it('clears the stored key and the in-memory key independently of the unlocked flag', async () => {
+    localStorage.removeItem('finance-dek');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    const memoryKey = {} as CryptoKey;
+    service['dek'] = memoryKey;
+    service['unlockedSubject'].next(true);
+    localStorage.setItem('finance-dek', 'raw-key-bytes');
+    expect(service.isUnlocked).toBeTrue();
+
+    service.lock();
+
+    expect(service.isUnlocked).toBeFalse();
+    service['unlockedSubject'].next(true);
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(service['dek']).toBeNull();
+    expect(service['dek']).not.toBe(memoryKey);
+  });
+});
+
 describe('VaultService whenReady', () => {
   afterEach(() => localStorage.removeItem('finance-dek'));
 

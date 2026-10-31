@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, Injector, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { UiButtonComponent, UiCardComponent, UiStateComponent } from '@vivek/ui';
-import { openFinanceVault } from '../../../../finance/frontend/src/public-api';
+import { lockFinance, openFinanceVault } from '../../../../finance/frontend/src/public-api';
 
 @Component({
   selector: 'app-finance-section',
@@ -31,7 +31,7 @@ export class FinanceSectionComponent implements OnInit {
   }
 
   lock(): void {
-    this.vault?.lock();
+    void lockFinance(this.injector);
   }
 
   private apply(): void {

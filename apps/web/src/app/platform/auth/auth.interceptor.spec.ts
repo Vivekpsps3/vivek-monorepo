@@ -1,6 +1,6 @@
 import { HttpBackend, HttpErrorResponse, HttpRequest, HttpResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { firstValueFrom, of, throwError } from 'rxjs';
+import { firstValueFrom, of, Subject, throwError } from 'rxjs';
 import { authNavigation } from '@vivek/ui';
 import { authInterceptor } from './auth.interceptor';
 import { SESSION_ENDED_COPY, SESSION_ENDED_COPY_KEY } from './session-ended';
@@ -147,6 +147,33 @@ describe('authInterceptor', () => {
       )
     ))).toBeRejected();
 
+    expect(auth.clearLocalSession).not.toHaveBeenCalled();
+    expect(goToLogin).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(SESSION_ENDED_COPY_KEY)).toBeNull();
+  });
+
+  it('does not treat /api/auth/members as /auth/me and shares one session check', async () => {
+    let revision = 1;
+    const auth = {
+      csrfToken: null,
+      get revision() { return revision; },
+      clearLocalSession: jasmine.createSpy('clearLocalSession').and.callFake(() => { revision += 1; }),
+    };
+    const gate = new Subject<HttpResponse<unknown>>();
+    const goToLogin = spyOn(authNavigation, 'goToLogin');
+    const handle = configure(auth, jasmine.createSpy('handle').and.returnValue(gate));
+
+    const runs = [0, 1, 2].map(() => firstValueFrom(runInterceptor('/api/auth/members')));
+    expect(handle).toHaveBeenCalledTimes(1);
+    const probe = handle.calls.mostRecent().args[0] as HttpRequest<unknown>;
+    expect(probe.method).toBe('GET');
+    expect(probe.url).toBe('/api/auth/me');
+
+    gate.next(new HttpResponse({ status: 200, body: { user: { id: 1 } } }));
+    gate.complete();
+    await Promise.all(runs.map(run => run.then(() => Promise.reject(new Error('expected 401')), () => undefined)));
+
+    expect(handle).toHaveBeenCalledTimes(1);
     expect(auth.clearLocalSession).not.toHaveBeenCalled();
     expect(goToLogin).not.toHaveBeenCalled();
     expect(sessionStorage.getItem(SESSION_ENDED_COPY_KEY)).toBeNull();

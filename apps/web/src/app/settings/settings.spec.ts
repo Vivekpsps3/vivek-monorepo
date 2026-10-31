@@ -2,7 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { ThemeService } from '@vivek/ui';
-import { VaultService } from '../../../../finance/frontend/src/testing';
+import { FinanceService, VaultService } from '../../../../finance/frontend/src/testing';
+import { MarketRefreshCoordinatorService } from '../../../../finance/frontend/src/app/services/market-refresh-coordinator.service';
 import { PrivateLayoutComponent } from '../private-layout.component';
 import { routes } from '../routes';
 import { SessionService } from '../platform/session.service';
@@ -121,7 +122,12 @@ describe('FinanceSectionComponent', () => {
     };
     TestBed.configureTestingModule({
       imports: [FinanceSectionComponent],
-      providers: [provideRouter([]), { provide: VaultService, useValue: vault }],
+      providers: [
+        provideRouter([]),
+        { provide: VaultService, useValue: vault },
+        { provide: FinanceService, useValue: { clearSessionState: () => undefined } },
+        { provide: MarketRefreshCoordinatorService, useValue: { broadcastLock: () => undefined, endSession: () => undefined } },
+      ],
     });
     const fixture = TestBed.createComponent(FinanceSectionComponent);
     fixture.detectChanges();

@@ -5,7 +5,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
 import { todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
-import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
+import { DEK_STORE } from '../../../../finance/frontend/src/app/crypto/dek-store';
+import { financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
 import { AppDatePipe } from '@vivek/ui';
 import { MoneyPipe } from '@vivek/ui';
@@ -107,6 +108,7 @@ export class HubComponent implements OnInit {
   mediaUpdatedAt: number | null = null;
 
   private generation = 0;
+  private financeGeneration = 0;
   private userId: number | null | undefined = undefined;
   private travelCtrl: AbortController | null = null;
   private mediaCtrl: AbortController | null = null;
@@ -116,6 +118,7 @@ export class HubComponent implements OnInit {
   private readonly router = inject(Router);
 
   ngOnInit(): void {
+    this.watchVaultLock();
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.get('settings') === 'account') {
         void this.router.navigateByUrl('/settings/account', { replaceUrl: true });
@@ -279,13 +282,53 @@ export class HubComponent implements OnInit {
     }
   }
 
+  private watchVaultLock(): void {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === DEK_STORE && event.newValue === null) this.applyExternalLock();
+    };
+    window.addEventListener('storage', onStorage);
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel('finance-vault-sync-v1');
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        if (this.isRemoteLock(event.data)) this.applyExternalLock();
+      };
+    }
+    this.destroyRef.onDestroy(() => {
+      window.removeEventListener('storage', onStorage);
+      channel?.close();
+    });
+  }
+
+  private isRemoteLock(value: unknown): boolean {
+    const userId = this.auth.currentUser?.id;
+    if (userId == null || !value || typeof value !== 'object') return false;
+    const message = value as { version?: unknown; userId?: unknown; kind?: unknown };
+    return message.version === 1 && message.userId === userId && message.kind === 'lock';
+  }
+
+  private applyExternalLock(): void {
+    // lockFinance broadcasts, and this tab's channel hears that echo. The card is already clear.
+    if (this.financeGeneration > 0 && this.financeState === 'locked') return;
+    this.financeGeneration += 1;
+    this.financeCtrl?.abort();
+    this.clearFinanceNumbers();
+    this.financePending = false;
+    this.financeState = 'locked';
+    this.cdr.markForCheck();
+    void lockFinance(this.injector);
+  }
+
   private async loadFinance(): Promise<void> {
     const generation = this.generation;
+    const financeGeneration = this.financeGeneration;
     this.financeCtrl?.abort();
     const ctrl = new AbortController();
     this.financeCtrl = ctrl;
+    const dropped = () => generation !== this.generation || financeGeneration !== this.financeGeneration || ctrl.signal.aborted;
     try {
       if (!financeVaultPresent()) {
+        if (dropped()) return;
         this.clearFinanceNumbers();
         this.financeState = 'locked';
         return;
@@ -293,12 +336,12 @@ export class HubComponent implements OnInit {
       if (!this.netWorth) this.financeState = 'loading';
       this.cdr.markForCheck();
       const { loadFinanceHubSnapshot } = await import('../../../../finance/frontend/src/public-api');
-      if (generation !== this.generation || ctrl.signal.aborted) return;
+      if (dropped()) return;
       const result = await loadFinanceHubSnapshot(this.injector, ctrl.signal);
-      if (generation !== this.generation || ctrl.signal.aborted) return;
+      if (dropped()) return;
       this.applyFinance(result);
     } catch {
-      if (generation !== this.generation || ctrl.signal.aborted) return;
+      if (dropped()) return;
       this.applyFinance({ status: 'unavailable' });
     } finally {
       if (this.financeCtrl === ctrl) this.financePending = false;

@@ -373,6 +373,58 @@ test('a locked Finance card drops money, counts, and names loaded while unlocked
   });
 });
 
+test('a settings lock clears Finance and the Hub in other tabs within a second', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const vault = await syntheticVault(page, {
+    assets: [{ id: 1, name: 'Harbor Checking', category: 'cash', current_value: 1500, as_of_date: '2026-10-01' }],
+    holdings: [{
+      id: 10,
+      symbol: 'HBRX',
+      shares: 2,
+      purchase_price: 10,
+      purchase_date: '2026-01-01',
+      current_price: 25,
+      account_display: 'Harbor Brokerage',
+      lifecycle_status: 'active',
+      price_source: 'manual',
+    }],
+  });
+  const finance = await page.context().newPage();
+  const hub = await page.context().newPage();
+  await finance.setViewportSize({ width: 1280, height: 900 });
+  await hub.setViewportSize({ width: 1280, height: 900 });
+  await vault.open('/have?t=assets', finance);
+  await expect(finance.getByRole('cell', { name: 'Harbor Checking' })).toBeVisible();
+  await vault.open('/hub', hub);
+  const card = hub.locator('.finance-bar');
+  await expect.poll(async () => card.evaluate(el => el.textContent || '')).toMatch(/\$[\s\u2060]*\d/);
+  await card.locator('summary', { hasText: 'Breakdown' }).click();
+  await expect(card).toContainText('Harbor Brokerage');
+  await expect(card).toContainText('HBRX');
+  await vault.open('/hub', page);
+  const menu = await openUserMenu(page);
+  await menu.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Finance', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lock now' })).toBeVisible();
+  await finance.evaluate(() => { (window as Window & { __f6?: string }).__f6 = 'finance'; });
+  await hub.evaluate(() => { (window as Window & { __f6?: string }).__f6 = 'hub'; });
+  await page.getByRole('button', { name: 'Lock now' }).click();
+  await Promise.all([
+    expect(finance).toHaveURL(/\/finance\/vault\/unlock$/, { timeout: 1000 }),
+    expect(finance.getByText('Harbor Checking')).toHaveCount(0, { timeout: 1000 }),
+    expect(hub).toHaveURL(/\/hub$/, { timeout: 1000 }),
+    expect.poll(async () => {
+      const text = await card.evaluate(el => el.textContent || '');
+      return text.includes('Finance is locked. Unlock to see net worth.')
+        && !/\$[\s\u2060]*\d/.test(text)
+        && !text.includes('Harbor')
+        && !text.includes('HBRX');
+    }, { timeout: 1000 }).toBe(true),
+  ]);
+  expect(await finance.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('finance');
+  expect(await hub.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('hub');
+});
+
 test('an empty Finance vault shows the empty state instead of $0.00', async ({ page }) => {
   const vault = await syntheticVault(page, {});
   await vault.open('/hub');
