@@ -1,0 +1,16 @@
+<ng-template #contents>
+  <img class="town-sprite" [src]="view().src" alt="" width="96" height="96" decoding="async">
+  <span class="label name" [title]="view().name">{{ view().name }}</span>
+  @if (kind() === 'treasury' && vaultPresent()) {
+    <ui-skeleton variant="lines" [lines]="1" />
+  } @else { <span class="label sub-label">{{ view().label }}</span> }
+</ng-template>
+@if (kind() === 'treasury' && !vaultPresent()) {
+  <a class="tile" [href]="view().link"><ng-container [ngTemplateOutlet]="contents" /></a>
+} @else if (view().link) {
+  <a class="tile" [routerLink]="view().link"><ng-container [ngTemplateOutlet]="contents" /></a>
+} @else if (lot()?.state === 'locked') {
+  <div class="tile"><ng-container [ngTemplateOutlet]="contents" /></div>
+} @else {
+  <button class="tile" type="button" (click)="openHabit.emit()"><ng-container [ngTemplateOutlet]="contents" /></button>
+}

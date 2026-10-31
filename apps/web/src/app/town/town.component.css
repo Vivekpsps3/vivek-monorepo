@@ -1,0 +1,24 @@
+:host { display: block; box-sizing: border-box; max-width: 1200px; margin: auto; padding: 16px; }
+header { margin-bottom: 24px; }
+h1, h2 { margin-top: 0; }
+progress { width: 100%; accent-color: var(--accent); }
+.town-layout { display: grid; gap: 24px; align-items: start; }
+.scene { container-type: inline-size; border-radius: var(--radius-lg); padding: 12px; background: linear-gradient(#cfe6f2, #eaf3e4); }
+ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; list-style: none; padding: 0; margin: 0; }
+li { min-width: 0; }
+:host-context([data-theme="dark"]) .scene {
+  background: radial-gradient(circle at 8% 7%, #e7eef2 1px, transparent 1px), radial-gradient(circle at 23% 12%, #e7eef2 1px, transparent 1px),
+    radial-gradient(circle at 39% 5%, #e7eef2 1px, transparent 1px), radial-gradient(circle at 55% 18%, #e7eef2 1px, transparent 1px),
+    radial-gradient(circle at 71% 9%, #e7eef2 1px, transparent 1px), radial-gradient(circle at 91% 4%, #e7eef2 1px, transparent 1px),
+    radial-gradient(circle at 15% 29%, #e7eef2 1px, transparent 1px), radial-gradient(circle at 32% 35%, #e7eef2 1px, transparent 1px),
+    radial-gradient(circle at 48% 26%, #e7eef2 1px, transparent 1px), radial-gradient(circle at 64% 37%, #e7eef2 1px, transparent 1px),
+    radial-gradient(circle at 79% 31%, #e7eef2 1px, transparent 1px), radial-gradient(circle at 95% 23%, #e7eef2 1px, transparent 1px),
+    linear-gradient(#1b2a3a, #22303a 60%, #1f3322);
+}
+@media (min-width: 641px) { .scene { padding: 20px; } ul { gap: 12px; } }
+@media (min-width: 1024px) { .town-layout { grid-template-columns: minmax(0, 1fr) 360px; } }
+/* Three 104px (6.5rem) tiles plus gaps; scales with text zoom. */
+@container (width < calc(19.5rem + 16px)) { ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 641px) {
+  @container (width < calc(19.5rem + 24px)) { ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+}

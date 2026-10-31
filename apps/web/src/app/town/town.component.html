@@ -1,0 +1,25 @@
+@if (data(); as data) {
+  <header>
+    <h1>{{ data.town.name }}</h1>
+    @if (data.town.next_level_xp !== null) {
+      <p>Lv {{ data.town.level }} · {{ data.town.xp }} / {{ data.town.next_level_xp }} XP</p>
+      <progress [value]="data.town.xp - data.town.level_xp_start" [max]="data.town.next_level_xp - data.town.level_xp_start"
+        role="progressbar" [attr.aria-valuemin]="data.town.level_xp_start" [attr.aria-valuemax]="data.town.next_level_xp"
+        [attr.aria-valuenow]="data.town.xp" [attr.aria-valuetext]="'Level ' + data.town.level + ', ' + data.town.xp + ' of ' + data.town.next_level_xp + ' XP'"
+        aria-label="Town XP"></progress>
+    } @else { <p>Lv {{ data.town.level }} · Max</p> }
+  </header>
+  <div class="town-layout">
+    <div class="scene">
+      <ul aria-label="Town buildings">
+        <li><app-town-lot kind="library" [building]="data.buildings.library" /></li>
+        <li><app-town-lot kind="inn" [building]="data.buildings.inn" /></li>
+        <li><app-town-lot kind="treasury" [vaultPresent]="financeVaultPresent()" /></li>
+        @for (lot of data.lots; track lot.slot) {
+          <li><app-town-lot [lot]="lot" [habit]="habit(lot.habit_id)" (openHabit)="openHabitDialog(lot.slot, lot.habit_id)" /></li>
+        }
+      </ul>
+    </div>
+    <ui-card><h2>Today</h2></ui-card>
+  </div>
+}
