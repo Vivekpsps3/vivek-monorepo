@@ -1,21 +1,30 @@
 """Owner-only birthday route: validation, CSRF, privacy, and audit."""
 
 import logging
+import os
 import re
-from datetime import date, timedelta
+import time
+import traceback
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from apps.server.database import open_database
+from apps.server.errors import APIError
+from apps.server.identity import birthday as birthday_route
 from apps.server.identity.birthday import (
     MSG_FULL_DATE,
     MSG_FUTURE,
     MSG_SHOW_AGE,
     MSG_UNKNOWN,
     MSG_YEAR,
+    _commit,
 )
 from apps.server.identity.models import AuditEvent, User, UserRole, UserSession
 from apps.server.identity.session import _hash_secret, utc_now_naive
@@ -281,7 +290,18 @@ def test_patch_rejects_malformed_json(tmp_path: Path, monkeypatch: pytest.Monkey
     array = b'["1919-08-26"]'
     with TestClient(application) as client:
         invalid_utf8 = b'{"birthday":"1919-08-26"\xff}'
-        for content in (b"", raw, array, b"null", b'"1919-08-26"', invalid_utf8):
+        for content in (
+            b"",
+            raw,
+            array,
+            b"null",
+            b'"1919-08-26"',
+            b'"birthday"',
+            b"true",
+            b"1",
+            b"false",
+            invalid_utf8,
+        ):
             rejected = _call(
                 client,
                 "patch",
@@ -470,3 +490,256 @@ def test_commit_failure_does_not_log_or_return_the_birthday(
             assert SECRET not in str(record.exc_info[1])
             cause = getattr(record.exc_info[1], "__cause__", None)
             assert cause is None or SECRET not in str(cause)
+
+
+def _driver_error() -> OperationalError:
+    return OperationalError(
+        f"UPDATE users SET birthday='{SECRET}'",
+        {"birthday": SECRET},
+        Exception(f"database is locked: {SECRET}"),
+    )
+
+
+def _captured_logs(caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]) -> str:
+    parts = [caplog.text]
+    for record in caplog.records:
+        parts.append(record.getMessage())
+        if record.exc_text:
+            parts.append(record.exc_text)
+        if record.exc_info and record.exc_info[1] is not None:
+            parts.append("".join(traceback.format_exception(record.exc_info[1])))
+    captured = capsys.readouterr()
+    parts.append(captured.out)
+    parts.append(captured.err)
+    return "\n".join(parts)
+
+
+def _watch_logs(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG)
+    for name in ("sqlalchemy", "sqlalchemy.engine", "finance_api", "site"):
+        caplog.set_level(logging.DEBUG, logger=name)
+
+
+def test_commit_and_rollback_failure_does_not_leak_the_birthday(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _watch_logs(caplog)
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    calls = {"n": 0}
+    original = Session.rollback
+
+    def rollback(self: Session) -> None:
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise _driver_error()
+        original(self)
+
+    def commit(self: Session) -> None:
+        raise _driver_error()
+
+    monkeypatch.setattr(Session, "commit", commit)
+    monkeypatch.setattr(Session, "rollback", rollback)
+    with TestClient(application) as client:
+        failed = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            json={"birthday": SECRET, "show_age": True},
+        )
+    assert calls["n"] >= 1
+    assert failed.status_code == 500
+    assert failed.json()["code"] == "internal"
+    assert failed.json()["message"] == "Internal server error"
+    assert failed.json()["detail"] == "Internal server error"
+    assert SECRET not in failed.text
+    assert SECRET not in _captured_logs(caplog, capsys)
+
+
+def test_write_failure_raises_api_error_without_a_cause() -> None:
+    class Boom:
+        def commit(self) -> None:
+            raise _driver_error()
+
+        def rollback(self) -> None:
+            raise _driver_error()
+
+    with pytest.raises(APIError) as caught:
+        _commit(cast(Session, Boom()))
+    error = caught.value
+    assert error.__cause__ is None
+    assert error.__suppress_context__ is True
+    rendered = "".join(traceback.format_exception(error))
+    assert SECRET not in rendered
+    assert error.status_code == 500
+    assert error.message == "Internal server error"
+
+
+def test_engine_hides_bound_parameters(tmp_path: Path) -> None:
+    database = open_database(f"sqlite:///{tmp_path / 'hide.db'}")
+    assert database.engine.hide_parameters is True
+    db = database.sessionmaker()
+    try:
+        with pytest.raises(SQLAlchemyError) as caught:
+            db.execute(
+                text("SELECT * FROM missing WHERE birthday = :birthday"),
+                {"birthday": SECRET},
+            )
+    finally:
+        db.close()
+    assert SECRET not in str(caught.value)
+    assert "SQL parameters hidden" in str(caught.value)
+
+
+def test_server_today_follows_utc_when_the_local_date_differs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "America/Los_Angeles"
+    time.tzset()
+    try:
+        instant = datetime(2026, 10, 30, 2, 0, tzinfo=UTC)
+        assert instant.astimezone().date() == date(2026, 10, 29)
+
+        class _Clock:
+            @staticmethod
+            def now(tz: object = None) -> datetime:
+                return instant
+
+        monkeypatch.setattr(birthday_route, "datetime", _Clock)
+        assert birthday_route.server_today() == date(2026, 10, 30)
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("FINANCE_API_KEY", raising=False)
+        monkeypatch.setenv("LOCAL_DEV_AUTH", "0")
+        application, database = _app(tmp_path)
+        _user(database, 1, "token-a", "csrf-a")
+        with TestClient(application) as client:
+            allowed = _call(
+                client,
+                "patch",
+                "/api/account/birthday",
+                "token-a",
+                "csrf-a",
+                json={"birthday": "2026-10-31", "show_age": False},
+            )
+            assert allowed.status_code == 200
+            assert allowed.json()["birthday"] == "2026-10-31"
+            rejected = _call(
+                client,
+                "patch",
+                "/api/account/birthday",
+                "token-a",
+                "csrf-a",
+                json={"birthday": "2026-11-01", "show_age": False},
+            )
+            assert rejected.status_code == 422
+            assert rejected.json() == {"detail": MSG_FUTURE}
+    finally:
+        if previous is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
+
+
+def test_non_utf8_and_bom_bodies_are_422(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    valid = b'{"birthday":"1996-03-14","show_age":true}'
+    bodies = (
+        b"\xef\xbb\xbf" + valid,
+        valid.decode().encode("utf-16"),
+        valid.decode().encode("utf-16-be"),
+        valid.decode().encode("utf-32"),
+        valid.decode().encode("utf-32-le"),
+    )
+    with TestClient(application) as client:
+        for content in bodies:
+            rejected = _call(
+                client,
+                "patch",
+                "/api/account/birthday",
+                "token-a",
+                "csrf-a",
+                content=content,
+                headers={"Content-Type": "application/json"},
+            )
+            assert rejected.status_code == 422
+            assert rejected.json() == {"detail": MSG_FULL_DATE}
+            assert "1996-03-14" not in rejected.text
+        current = _call(client, "get", "/api/account/birthday", "token-a")
+        assert current.json()["birthday"] is None
+
+
+def test_bodies_over_4kb_are_413_before_parsing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    with TestClient(application) as client:
+        oversized = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            content=b"[" * 4097,
+            headers={"Content-Type": "application/json"},
+        )
+        assert oversized.status_code == 413
+        assert oversized.content == b""
+        declared = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            content=b"{}",
+            headers={"Content-Type": "application/json", "Content-Length": "4097"},
+        )
+        assert declared.status_code == 413
+        current = _call(client, "get", "/api/account/birthday", "token-a")
+        assert current.json() == {"birthday": None, "show_age": False}
+
+
+def test_parser_rejects_nested_and_huge_numbers_as_422(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _watch_logs(caplog)
+    monkeypatch.setattr(birthday_route, "_MAX_BODY_BYTES", 2_000_000)
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+    digits = b"9" * 4301
+    payloads = (
+        b"[" * 100000,
+        b'{"a":' * 50000,
+        b'{"birthday":' + digits + b',"show_age":true}',
+        b'{"birthday":"1996-03-14","show_age":' + digits + b"}",
+    )
+    with TestClient(application) as client:
+        for content in payloads:
+            rejected = _call(
+                client,
+                "patch",
+                "/api/account/birthday",
+                "token-a",
+                "csrf-a",
+                content=content,
+                headers={"Content-Type": "application/json"},
+            )
+            assert rejected.status_code == 422
+            assert rejected.json() == {"detail": MSG_FULL_DATE}
+            assert digits.decode() not in rejected.text
+            assert "1996-03-14" not in rejected.text
+    logged = _captured_logs(caplog, capsys)
+    assert "Traceback" not in logged
+    assert digits.decode() not in logged
+    assert SECRET not in logged
