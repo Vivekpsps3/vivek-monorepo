@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject } from 'rxjs';
-import { ThemeService } from '@vivek/ui';
+import { ThemeService, ToastService } from '@vivek/ui';
 import { FinanceService, VaultService } from '../../../../finance/frontend/src/testing';
 import { loadMarketRefreshCoordinatorService } from '../../../../finance/frontend/src/public-api';
 import { PrivateLayoutComponent } from '../private-layout.component';
@@ -40,6 +41,41 @@ describe('settings shell', () => {
       (link.textContent ?? '').trim());
     expect(labels).toEqual(['Account', 'Appearance', 'Travel', 'Finance', 'About']);
     expect(fixture.nativeElement.textContent).not.toContain('Profile');
+  });
+
+  async function openIndex(wide: boolean): Promise<string> {
+    TestBed.resetTestingModule();
+    const real = window.matchMedia.bind(window);
+    spyOn(window, 'matchMedia').and.callFake((query: string) => {
+      if (query === '(min-width: 1024px)') {
+        return { matches: wide, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false } as MediaQueryList;
+      }
+      return real(query);
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'settings', children: SETTINGS_ROUTES }]),
+        { provide: SessionService, useValue: { user$: new BehaviorSubject({ display_name: 'Ada' }), updateDisplayName: () => Promise.resolve({}) } },
+      ],
+    });
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigate').and.callThrough();
+    await RouterTestingHarness.create('/settings');
+    if (wide) {
+      expect(navigate).toHaveBeenCalledWith(['/settings/account'], { replaceUrl: true });
+      await navigate.calls.mostRecent().returnValue;
+    } else {
+      expect(navigate).not.toHaveBeenCalled();
+    }
+    return router.url;
+  }
+
+  it('replaces /settings with Account at 1024px', async () => {
+    expect(await openIndex(true)).toBe('/settings/account');
+  });
+
+  it('keeps the section list at 390px', async () => {
+    expect(await openIndex(false)).toBe('/settings');
   });
 });
 
@@ -82,10 +118,16 @@ describe('AccountSectionComponent', () => {
     component.draftName = 'Ada Lovelace';
     await component.saveName();
     expect(component.nameError).toBe('offline');
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'success');
     updateDisplayName.and.resolveTo({ display_name: 'Ada Lovelace' });
     await component.saveName();
     expect(component.nameError).toBe('');
     expect(updateDisplayName).toHaveBeenCalledWith('Ada Lovelace');
+    expect(toast.success).toHaveBeenCalledOnceWith('Saved');
+    updateDisplayName.and.rejectWith(new Error('offline'));
+    await component.saveName();
+    expect(toast.success).toHaveBeenCalledTimes(1);
   });
 });
 
