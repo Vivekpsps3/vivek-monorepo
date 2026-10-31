@@ -228,9 +228,9 @@ export class VaultService {
     return rewrapDekWithPassphrase(this.requireDek(), passphrase, DEFAULT_PBKDF2_ITERATIONS);
   }
 
-  async unlock(passphrase: string): Promise<boolean> {
+  async unlock(passphrase: string, forceRefresh = false): Promise<boolean> {
     const epoch = readLockEpoch();
-    const status = this.statusSubject.value ?? (await this.refreshStatus());
+    const status = !forceRefresh && this.statusSubject.value ? this.statusSubject.value : await this.refreshStatus();
     if (epoch !== readLockEpoch()) return false;
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');

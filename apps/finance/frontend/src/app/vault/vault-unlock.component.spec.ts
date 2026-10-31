@@ -1,6 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
-import { SESSION_CONTEXT } from '@vivek/ui';
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { provideRouter, Router, withDisabledInitialNavigation } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { BehaviorSubject, of, Subject } from 'rxjs';
+import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
+import { routes } from '../app.routes';
+import { apiUrl } from '../core/api-url';
+import { hasDek, readLockEpoch } from '../crypto/dek-holder';
+import { createVaultMaterial } from '../crypto/vault-crypto';
 import { VaultService } from '../crypto/vault.service';
 import { VaultUnlockComponent } from './vault-unlock.component';
 
@@ -87,5 +94,44 @@ describe('VaultUnlockComponent', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(fixture.componentInstance.error).toBe('Vault was locked, try again');
     expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+  });
+});
+
+describe('routed vault unlock', () => {
+  afterEach(() => { localStorage.removeItem('finance-dek'); TestBed.resetTestingModule(); });
+  it('discards an unlock when another tab broadcasts a lock', async () => {
+    const user = { id: 7, username: 'vivek', email: '', display_name: '', role: 'user' as const, is_active: true, must_change_password: false, created_at: '', updated_at: '' };
+    const auth: SessionPort = { user$: new BehaviorSubject(user), currentUser: user, csrfToken: null, revision: 0, cleared$: new Subject<void>(), isAdmin: () => false, loadSession: () => of(user), clearLocalSession: () => undefined, logout: () => undefined };
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [provideRouter(routes, withDisabledInitialNavigation()), { provide: SESSION_CONTEXT, useValue: auth }] });
+    const vault = TestBed.inject(VaultService);
+    await vault.whenReady();
+    const payload = (await createVaultMaterial('correct-horse-battery', 1000)).setupPayload;
+    const harness = await RouterTestingHarness.create();
+    const unlock = await harness.navigateByUrl('/vault/unlock', VaultUnlockComponent);
+    const http = TestBed.inject(HttpTestingController);
+    const started = Date.now();
+    let status = http.match(apiUrl('/vault/status'))[0];
+    while (!status && Date.now() - started < 5000) { await new Promise(resolve => setTimeout(resolve, 0)); status = http.match(apiUrl('/vault/status'))[0]; }
+    (status ?? http.expectOne(apiUrl('/vault/status'))).flush({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 });
+    await harness.fixture.whenStable();
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { open = () => resolve(); });
+    let parked = false;
+    const real = crypto.subtle.deriveKey.bind(crypto.subtle) as (...args: never[]) => Promise<unknown>;
+    spyOn(crypto.subtle, 'deriveKey').and.callFake(((...args: never[]) => real(...args).then(async result => { parked = true; await gate; return result; })) as never);
+    unlock.passphrase = 'correct-horse-battery';
+    const pending = unlock.unlock();
+    while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
+    const epoch = readLockEpoch();
+    const channel = new BroadcastChannel('finance-vault-sync-v1');
+    try {
+      channel.postMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'other-tab' });
+      const wait = Date.now();
+      while (readLockEpoch() === epoch && Date.now() - wait < 1000) await new Promise(resolve => setTimeout(resolve, 0));
+      open(); await Promise.race([pending, new Promise(resolve => setTimeout(resolve, 1000))]);
+      expect([readLockEpoch() - epoch, localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked, unlock.error]).toEqual([1, null, false, false, 'Vault was locked, try again']);
+    } finally { channel.close(); }
+    http.match(apiUrl('/vault/status')).forEach(request => request.flush({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 }));
+    http.verify();
   });
 });

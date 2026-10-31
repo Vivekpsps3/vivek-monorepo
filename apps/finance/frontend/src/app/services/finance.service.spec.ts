@@ -1,6 +1,9 @@
+import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { firstValueFrom, Subject } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { lockFinance, lockLoad } from '../crypto/lock-finance';
 import { FinanceService } from './finance.service';
 import { VaultService } from '../crypto/vault.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
@@ -119,23 +122,39 @@ describe('FinanceService', () => {
   it('does not deliver decrypted assets after a lock', async () => {
     const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
     let release: (rows: Asset[]) => void = () => undefined;
-    const pending = new Promise<Asset[]>(resolve => { release = resolve; });
-    encStore.getAssets.and.returnValue(pending);
+    encStore.getAssets.and.returnValue(new Promise<Asset[]>(resolve => { release = resolve; }));
     let token = 4;
     Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
     (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
     (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
     const seen: Asset[][] = [];
     let completed = false;
-    service.getAssets().subscribe({
-      next: rows => seen.push(rows),
-      complete: () => { completed = true; },
-    });
+    service.getAssets().subscribe({ next: rows => seen.push(rows), complete: () => { completed = true; } });
     service.clearSessionState();
     release([secret]);
     await Promise.resolve();
-    expect(seen).toEqual([]);
-    expect(completed).toBeTrue();
+    expect([seen, completed]).toEqual([[], true]);
+  });
+
+  it('does not deliver asset rows deferred across lockFinance', async () => {
+    const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
+    let release: (rows: Asset[]) => void = () => undefined;
+    const hang = () => encStore.getAssets.and.returnValue(new Promise<Asset[]>(resolve => { release = resolve; }));
+    const seen: Asset[][] = [];
+    let cleared = 0;
+    (encStore as unknown as { clear(): void }).clear = () => { cleared += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    spyOn(TestBed.inject(ToastService), 'error');
+    const real = lockLoad.modules;
+    try {
+      hang(); service.getAssets().subscribe(rows => seen.push(rows));
+      lockLoad.modules = (() => new Promise(() => undefined)) as typeof lockLoad.modules;
+      void lockFinance(TestBed.inject(Injector)); release([secret]); await Promise.resolve();
+      hang(); service.getAssets().subscribe(rows => seen.push(rows));
+      lockLoad.modules = (() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules;
+      await lockFinance(TestBed.inject(Injector)); release([secret]); await Promise.resolve();
+      expect([seen, cleared]).toEqual([[], 1]);
+    } finally { lockLoad.modules = real; }
   });
 
   it('continues refreshing valid collections when one member of a multi-collection snapshot goes stale', async () => {

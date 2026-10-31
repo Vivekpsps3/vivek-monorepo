@@ -46,27 +46,20 @@ describe('settings shell', () => {
   async function openIndex(wide: boolean): Promise<string> {
     TestBed.resetTestingModule();
     const real = window.matchMedia.bind(window);
-    spyOn(window, 'matchMedia').and.callFake((query: string) => {
-      if (query === '(min-width: 1024px)') {
-        return { matches: wide, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false } as MediaQueryList;
-      }
-      return real(query);
-    });
-    TestBed.configureTestingModule({
-      providers: [
-        provideRouter([{ path: 'settings', children: SETTINGS_ROUTES }]),
-        { provide: SessionService, useValue: { user$: new BehaviorSubject({ display_name: 'Ada' }), updateDisplayName: () => Promise.resolve({}) } },
-      ],
-    });
+    spyOn(window, 'matchMedia').and.callFake((query: string) => query === '(min-width: 1024px)'
+      ? { matches: wide, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false } as MediaQueryList
+      : real(query));
+    TestBed.configureTestingModule({ providers: [
+      provideRouter([{ path: 'settings', children: SETTINGS_ROUTES }]),
+      { provide: SessionService, useValue: { user$: new BehaviorSubject({ display_name: 'Ada' }), updateDisplayName: () => Promise.resolve({}) } },
+    ] });
     const router = TestBed.inject(Router);
     const navigate = spyOn(router, 'navigate').and.callThrough();
     await RouterTestingHarness.create('/settings');
     if (wide) {
       expect(navigate).toHaveBeenCalledWith(['/settings/account'], { replaceUrl: true });
       await navigate.calls.mostRecent().returnValue;
-    } else {
-      expect(navigate).not.toHaveBeenCalled();
-    }
+    } else expect(navigate).not.toHaveBeenCalled();
     return router.url;
   }
 

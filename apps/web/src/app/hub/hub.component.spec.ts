@@ -458,13 +458,10 @@ describe('HubComponent', () => {
   it('hides the finance breakdown while locked, loading, or expired', async () => {
     await showHarbor();
     expect(fixture.nativeElement.textContent).toContain('Breakdown');
-    const show = (state: 'locked' | 'loading' | 'expired'): void => {
+    for (const state of ['locked', 'loading', 'expired'] as const) {
       fixture.componentInstance.financeState = state;
       fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
       fixture.detectChanges();
-    };
-    for (const state of ['locked', 'loading', 'expired'] as const) {
-      show(state);
       expect(fixture.nativeElement.textContent).not.toContain('Breakdown');
     }
   });
@@ -473,9 +470,7 @@ describe('HubComponent', () => {
     await showHarbor();
     window.dispatchEvent(new StorageEvent('storage', { key: null }));
     fixture.detectChanges();
-    expect(fixture.componentInstance.financeState).toBe('locked');
-    expect(fixture.componentInstance.netWorth).toBeNull();
-    expect(fixture.nativeElement.textContent).not.toContain('Breakdown');
+    expect([fixture.componentInstance.financeState, fixture.componentInstance.netWorth, fixture.nativeElement.textContent.includes('Breakdown')]).toEqual(['locked', null, false]);
   });
 
   it('clears a loaded card on a sign-out broadcast', async () => {
@@ -486,9 +481,7 @@ describe('HubComponent', () => {
       fixture.detectChanges();
     }
     channel.close();
-    expect(fixture.componentInstance.financeState).toBe('locked');
-    expect(fixture.componentInstance.netWorth).toBeNull();
-    expect(fixture.nativeElement.textContent).not.toContain('Breakdown');
+    expect([fixture.componentInstance.financeState, fixture.componentInstance.netWorth, fixture.nativeElement.textContent.includes('Breakdown')]).toEqual(['locked', null, false]);
     await waitForVaultLock();
     expect(vaultLocks).toBe(1);
   });

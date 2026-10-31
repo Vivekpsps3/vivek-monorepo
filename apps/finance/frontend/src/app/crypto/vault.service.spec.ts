@@ -1,7 +1,9 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
-import { WrappedSigningKey } from '@vivek/auth';
+import { createSigningKey, WrappedSigningKey } from '@vivek/auth';
+import { AuthService } from '../../../../../web/src/app/platform/auth/auth.service';
+import { SessionService } from '../../../../../web/src/app/platform/session.service';
 import { apiUrl } from '../core/api-url';
 import { SESSION_CONTEXT, SILENT_ERROR_TOAST, type SessionPort } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
@@ -204,10 +206,7 @@ describe('VaultService unlock epoch', () => {
   async function discardDuringStatus(signOut: boolean): Promise<void> {
     localStorage.removeItem('finance-dek');
     const cleared$ = new Subject<void>();
-    TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [{ provide: SESSION_CONTEXT, useValue: { cleared$ } as unknown as SessionPort }],
-    });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [{ provide: SESSION_CONTEXT, useValue: { cleared$ } as unknown as SessionPort }] });
     const service = TestBed.inject(VaultService);
     await service.whenReady();
     const http = TestBed.inject(HttpTestingController);
@@ -215,21 +214,12 @@ describe('VaultService unlock epoch', () => {
     const pending = service.unlock(passphrase);
     let request: ReturnType<HttpTestingController['expectOne']> | undefined;
     for (let attempt = 0; attempt < 20 && !request; attempt += 1) {
-      const matches = http.match(apiUrl('/vault/status'));
-      request = matches[0];
+      request = http.match(apiUrl('/vault/status'))[0];
       if (!request) await new Promise(resolve => setTimeout(resolve, 0));
     }
-    if (!request) request = http.expectOne(apiUrl('/vault/status'));
-    if (signOut) cleared$.next();
-    else service.lock();
-    request.flush({
-      exists: true,
-      kdf_salt_b64: payload.kdf_salt_b64,
-      kdf_iterations: payload.kdf_iterations,
-      wrapped_dek_b64: payload.wrapped_dek_b64,
-    });
-    expect(await pending).toBeFalse();
-    expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
+    if (signOut) cleared$.next(); else service.lock();
+    (request ?? http.expectOne(apiUrl('/vault/status'))).flush({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 });
+    expect([await pending, localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([false, null, false, false]);
     http.verify();
   }
 
@@ -287,6 +277,32 @@ describe('VaultService unlock epoch', () => {
     open();
     await service.whenReady();
     expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
+  });
+
+  it('does not store a key when login locks during the status fetch', async () => {
+    const passphrase = 'correct horse battery staple';
+    const signing = await createSigningKey(passphrase, 1000);
+    const wraps = (await createVaultMaterial(passphrase, 1000)).setupPayload;
+    const user = { id: 4, email: 'v@pending.local', username: 'vivek', display_name: 'V', role: 'user', is_active: true, must_change_password: false, created_at: '2026-10-14T00:00:00', updated_at: '2026-10-14T00:00:00' };
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [AuthService, { provide: SESSION_CONTEXT, useExisting: SessionService }] });
+    const http = TestBed.inject(HttpTestingController);
+    const vault = TestBed.inject(VaultService);
+    await vault.whenReady();
+    const unlock = spyOn(vault, 'unlock').and.callThrough();
+    const pending = TestBed.inject(AuthService).loginWithVault('vivek', passphrase);
+    http.expectOne('/api/auth/passwordless/lookup').flush({ auth: signing.wrapped });
+    (await nextHttp(http, '/api/auth/passwordless/challenge')).flush({ challenge_id: 'c1', challenge: 'raw', message: 'vault-auth-v1\nhttp://localhost\nlogin' });
+    (await nextHttp(http, '/api/auth/passwordless/verify')).flush({ user });
+    const status = await nextHttp(http, apiUrl('/vault/status'));
+    TestBed.inject(SessionService).clearLocalSession();
+    status.flush({ exists: true, kdf_salt_b64: wraps.kdf_salt_b64, kdf_iterations: wraps.kdf_iterations, wrapped_dek_b64: wraps.wrapped_dek_b64 });
+    await pending;
+    expect(await unlock.calls.mostRecent().returnValue).toBeFalse();
+    expect([localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked]).toEqual([null, false, false]);
+    (await nextHttp(http, '/api/auth/passwordless/wraps')).flush({});
+    localStorage.removeItem('suite-session-ended');
+    http.verify();
   });
 });
 

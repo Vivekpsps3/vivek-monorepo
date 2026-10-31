@@ -25,6 +25,7 @@ import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
+import { readLockEpoch } from '../crypto/dek-holder';
 import { VaultService, type VaultWriteOptions } from '../crypto/vault.service';
 import {
   BankAccountRecord,
@@ -674,9 +675,10 @@ export class FinanceService {
 
   getAssets(): Observable<Asset[]> {
     const epoch = this.dataEpoch(['assets']);
+    const lock = readLockEpoch();
     return new Observable(subscriber => {
       void this.encStore.getAssets().then(rows => {
-        if (epoch !== this.dataEpoch(['assets'])) {
+        if (epoch !== this.dataEpoch(['assets']) || lock !== readLockEpoch()) {
           subscriber.complete();
           return;
         }

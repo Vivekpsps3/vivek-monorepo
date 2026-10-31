@@ -59,11 +59,11 @@ describe('lockFinance', () => {
   });
 
   it('broadcasts the lock, toasts, and stays locked when the import rejects', async () => {
-    TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [{ provide: SESSION_CONTEXT, useValue: { currentUser: { id: 7 } } as unknown as SessionPort }],
-    });
-    const injector = TestBed.inject(Injector);
+    const cleared = jasmine.createSpy('clearSessionState');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [
+      { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 7 } } as unknown as SessionPort },
+      { provide: FinanceService, useValue: { clearSessionState: cleared } },
+    ] });
     const vault = TestBed.inject(VaultService);
     await vault.whenReady();
     holdDek({} as CryptoKey);
@@ -71,15 +71,33 @@ describe('lockFinance', () => {
     localStorage.setItem('finance-dek', 'raw-key-bytes');
     const toast = TestBed.inject(ToastService);
     spyOn(toast, 'error');
-    const heard: unknown[] = [];
+    const unlocked: boolean[] = [];
+    vault.unlocked$.subscribe(value => unlocked.push(value));
     const other = new BroadcastChannel('finance-vault-sync-v1');
-    other.onmessage = event => heard.push(event.data);
+    const heard = new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('no lock broadcast')), 1000);
+      other.onmessage = (event: MessageEvent) => {
+        if ((event.data as { kind?: string } | null)?.kind === 'lock') { clearTimeout(timer); resolve(event.data); }
+      };
+    });
     lockLoad.modules = (() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules;
-    await expectAsync(lockFinance(injector)).toBeResolved();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    other.close();
-    expect([hasDek(), localStorage.getItem('finance-dek'), vault.isUnlocked]).toEqual([false, null, false]);
-    expect(toast.error).toHaveBeenCalled();
-    expect(heard).toContain(jasmine.objectContaining({ version: 1, userId: 7, kind: 'lock' }));
+    try {
+      await expectAsync(lockFinance(TestBed.inject(Injector))).toBeResolved();
+      expect(await heard).toEqual(jasmine.objectContaining({ version: 1, userId: 7, kind: 'lock' }));
+    } finally { other.close(); }
+    expect([hasDek(), localStorage.getItem('finance-dek'), vault.isUnlocked, unlocked.at(-1)]).toEqual([false, null, false, false]);
+    expect(toast.error).toHaveBeenCalledWith(jasmine.any(String), jasmine.objectContaining({ label: 'Try again' }));
+    expect(cleared).toHaveBeenCalled();
+  });
+
+  it('toasts and stays locked when BroadcastChannel throws', async () => {
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [{ provide: SESSION_CONTEXT, useValue: { currentUser: { id: 3 } } as unknown as SessionPort }] });
+    spyOn(TestBed.inject(ToastService), 'error');
+    const Real = globalThis.BroadcastChannel;
+    globalThis.BroadcastChannel = function BroadcastChannel() { throw new Error('down'); } as unknown as typeof BroadcastChannel;
+    try { await expectAsync(lockFinance(TestBed.inject(Injector))).toBeResolved(); }
+    finally { globalThis.BroadcastChannel = Real; }
+    expect(TestBed.inject(ToastService).error).toHaveBeenCalled();
+    expect(hasDek()).toBeFalse();
   });
 });

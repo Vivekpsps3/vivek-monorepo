@@ -6,11 +6,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 export interface UiSectionNavItem {
   label: string;
   shortLabel?: string;
-  /** Accessible name when the short label replaces the visible text. */
   ariaLabel?: string;
   link: string;
   exact?: boolean;
-  /** Extra URL prefixes that keep this section current. Non-exact, so a trip stays on Trips. */
   also?: readonly string[];
 }
 
