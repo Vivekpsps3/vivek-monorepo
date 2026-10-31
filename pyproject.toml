@@ -40,6 +40,11 @@ exclude = [
   "alembic/versions/",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "perf: benchmark excluded from coverage runs",
+]
+
 [tool.coverage.run]
 branch = false
 omit = [
