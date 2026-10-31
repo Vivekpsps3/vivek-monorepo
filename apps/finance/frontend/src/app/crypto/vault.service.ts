@@ -20,7 +20,7 @@ import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
 import { silentErrorToast } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { hasDek, holdDek, readDek, wipeDek } from './dek-holder';
+import { hasDek, holdDek, readDek, readLockEpoch, wipeDek } from './dek-holder';
 
 export interface VaultStatus {
   exists: boolean;
@@ -77,12 +77,12 @@ export class VaultService {
     this.unlockedSubject.next(true);
   }
 
-  private async hold(dek: CryptoKey): Promise<void> {
+  private async hold(dek: CryptoKey, epoch = readLockEpoch()): Promise<void> {
     this.dek = dek;
     this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
     this.unlockedSubject.next(true);
     // The hub reads this key before it will load vault code. Store it before unlock returns.
-    await persistDekLocal(dek);
+    await persistDekLocal(dek, () => epoch === readLockEpoch());
   }
 
   get isUnlocked(): boolean {
@@ -228,14 +228,15 @@ export class VaultService {
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');
     }
-    await this.hold(
-      await unlockWithPassphrase(
-        passphrase,
-        status.kdf_salt_b64,
-        status.kdf_iterations,
-        status.wrapped_dek_b64
-      )
+    const epoch = readLockEpoch();
+    const dek = await unlockWithPassphrase(
+      passphrase,
+      status.kdf_salt_b64,
+      status.kdf_iterations,
+      status.wrapped_dek_b64,
     );
+    if (epoch !== readLockEpoch()) return;
+    await this.hold(dek, epoch);
   }
 
   requireDek(): CryptoKey {

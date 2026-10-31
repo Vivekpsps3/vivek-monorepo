@@ -128,8 +128,12 @@ export async function decryptJson<T>(
   return JSON.parse(textDecoder.decode(plain)) as T;
 }
 
-export async function persistDekLocal(dek: CryptoKey): Promise<void> {
-  try { localStorage.setItem(DEK_STORE, bufToB64(await exportRawKey(dek))); } catch { /* private */ }
+export async function persistDekLocal(dek: CryptoKey, stillCurrent?: () => boolean): Promise<void> {
+  try {
+    const raw = bufToB64(await exportRawKey(dek));
+    if (stillCurrent && !stillCurrent()) return;
+    localStorage.setItem(DEK_STORE, raw);
+  } catch { /* private */ }
 }
 
 export async function restoreDekLocal(): Promise<CryptoKey | null> {

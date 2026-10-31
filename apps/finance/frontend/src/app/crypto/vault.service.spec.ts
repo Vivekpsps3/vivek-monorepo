@@ -5,6 +5,7 @@ import { apiUrl } from '../core/api-url';
 import { SILENT_ERROR_TOAST } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { hasDek, holdDek } from './dek-holder';
+import { createVaultMaterial } from './vault-crypto';
 import { VaultService } from './vault.service';
 
 describe('VaultService KDF upgrade', () => {
@@ -148,6 +149,38 @@ describe('VaultService lock', () => {
     service['unlockedSubject'].next(true);
     expect(hasDek()).toBeFalse();
   });
+});
+
+describe('VaultService unlock epoch', () => {
+  const passphrase = 'correct-horse-battery';
+  afterEach(() => { localStorage.removeItem('finance-dek'); TestBed.resetTestingModule(); });
+
+  async function lockDuring(name: 'deriveKey' | 'exportKey'): Promise<void> {
+    localStorage.removeItem('finance-dek');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    const payload = (await createVaultMaterial(passphrase, 1000)).setupPayload;
+    service.loadPublicStatus({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 });
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { open = () => resolve(); });
+    let parked = false;
+    const real = crypto.subtle[name].bind(crypto.subtle) as (...args: never[]) => Promise<unknown>;
+    spyOn(crypto.subtle, name).and.callFake(((...args: never[]) => real(...args).then(async result => {
+      parked = true;
+      await gate;
+      return result;
+    })) as never);
+    const pending = service.unlock(passphrase);
+    while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
+    service.lock();
+    open();
+    await pending;
+    expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
+  }
+
+  it('discards the key when a lock lands during derivation', () => lockDuring('deriveKey'));
+  it('discards the key when a lock lands before the finance-dek write', () => lockDuring('exportKey'));
 });
 
 describe('VaultService whenReady', () => {

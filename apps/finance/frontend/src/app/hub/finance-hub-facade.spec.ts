@@ -61,6 +61,8 @@ describe('finance hub facade', () => {
         holdings$: of([]),
       },
     ), new AbortController().signal, 5000);
+    for (let i = 0; i < 20 && !gate.observed; i += 1) await new Promise(resolve => setTimeout(resolve, 0));
+    expect(gate.observed).toBeTrue();
     unlocked = false;
     gate.next(null);
     gate.complete();
