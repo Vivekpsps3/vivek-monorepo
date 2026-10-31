@@ -63,6 +63,18 @@ class Dependencies:
     test_router: APIRouter | None = None
 
 
+def _prepare_included_matchers(application: FastAPI) -> None:
+    # FastAPI 0.159 analyzes included-route dependants on the first request
+    # that walks each router, then caches them. The media search timing test
+    # measures that first request; under coverage the analysis plus the
+    # parallel provider calls exceeds its limit. Later routes do not invalidate
+    # a matcher's cache unless that router's own routes change.
+    for route in application.router.routes:
+        prepare = getattr(route, "effective_candidates", None)
+        if callable(prepare):
+            prepare()
+
+
 def create_app(settings: Settings, dependencies: Dependencies | None = None) -> FastAPI:
     """One factory. Callers pass the engine and any pinned principal. Import builds nothing."""
     from apps.finance.backend.app import register_finance
@@ -321,6 +333,7 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     if dependencies.principal is not None:
         pinned = dependencies.principal
         application.dependency_overrides[require_principal] = lambda: pinned
+    _prepare_included_matchers(application)
     return application
 
 
