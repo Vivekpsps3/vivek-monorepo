@@ -25,7 +25,7 @@ test.describe('Town TH1 fixtures', () => {
       await expect(controls.nth(i)).toBeFocused();
       await page.keyboard.press('Tab');
     }
-    await expect(page.getByText("Other's habit", { exact: false })).toHaveCount(0);
+    expect(await page.content()).not.toContain("Other's habit");
     const treasury = scene.getByRole('link', { name: /Treasury/ });
     await expect(treasury).toHaveAttribute('href', '/finance/vault/unlock?next=%2Ftown');
     expect(await treasury.innerText()).not.toMatch(/\d/);
