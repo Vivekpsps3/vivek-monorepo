@@ -20,6 +20,7 @@ import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
 import { silentErrorToast } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { hasDek, holdDek, readDek, wipeDek } from './dek-holder';
 
 export interface VaultStatus {
   exists: boolean;
@@ -49,7 +50,8 @@ export interface EncryptedRecordDto {
 @Injectable({ providedIn: 'root' })
 export class VaultService {
   private epoch = 0;
-  private dek: CryptoKey | null = null;
+  private get dek(): CryptoKey | null { return readDek(); }
+  private set dek(next: CryptoKey | null) { holdDek(next); }
   private unlockedWrap: string | null = null;
   private statusSubject = new BehaviorSubject<VaultStatus | null>(null);
   private unlockedSubject = new BehaviorSubject<boolean>(false);
@@ -144,11 +146,13 @@ export class VaultService {
   }
 
   lock(): void {
-    this.epoch += 1;
-    this.dek = null;
+    const counting = this.unlockedSubject.value || hasDek();
+    wipeDek();
     this.unlockedWrap = null;
-    this.unlockedSubject.next(false);
     clearDekLocal();
+    if (!counting) return;
+    this.epoch += 1;
+    this.unlockedSubject.next(false);
   }
 
   async setup(passphrase: string): Promise<void> {

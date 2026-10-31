@@ -3,6 +3,7 @@ import type { Routes } from '@angular/router';
 import { loadFinanceBudgetKeptGuarded } from './app/budget/budget-kept-import';
 export { DEK_STORE, financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
 export { lockFinance } from './app/crypto/lock-finance';
+export { financeTabId } from './app/crypto/dek-holder';
 export async function loadMarketRefreshCoordinatorService() { return (await import('./app/services/market-refresh-coordinator.service')).MarketRefreshCoordinatorService; }
 export type { NetWorth } from './app/models/transaction.model';
 export type { PortfolioAccount, PositionHighlight } from './app/hub/finance-hub-snapshot';

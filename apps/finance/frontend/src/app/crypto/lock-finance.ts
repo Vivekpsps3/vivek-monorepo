@@ -1,15 +1,15 @@
 import type { Injector } from '@angular/core';
-
-/**
- * Same lock as Finance's Lock vault, without changing route.
- * Settings and the vault button both call this. Navigation stays with the caller.
- */
-export async function lockFinance(injector: Injector): Promise<void> {
-  const { VaultService } = await import('./vault.service');
-  const { FinanceService } = await import('../services/finance.service');
-  const { MarketRefreshCoordinatorService } = await import('../services/market-refresh-coordinator.service');
+import { wipeDek } from './dek-holder';
+export const lockLoad = { modules: () => Promise.all([
+  import('./vault.service'),
+  import('../services/finance.service'),
+  import('../services/market-refresh-coordinator.service'),
+] as const) };
+export async function lockFinance(injector: Injector, originTabId?: string): Promise<void> {
+  wipeDek();
+  const [{ VaultService }, { FinanceService }, { MarketRefreshCoordinatorService }] = await lockLoad.modules();
   const market = injector.get(MarketRefreshCoordinatorService);
-  market.broadcastLock();
+  market.broadcastLock(originTabId);
   market.endSession();
   injector.get(FinanceService).clearSessionState();
   injector.get(VaultService).lock();

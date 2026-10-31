@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
 import { todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
-import { DEK_STORE, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
+import { DEK_STORE, financeTabId, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
 import { AppDatePipe } from '@vivek/ui';
 import { MoneyPipe } from '@vivek/ui';
@@ -290,7 +290,7 @@ export class HubComponent implements OnInit {
     if (typeof BroadcastChannel !== 'undefined') {
       channel = new BroadcastChannel('finance-vault-sync-v1');
       channel.onmessage = (event: MessageEvent<unknown>) => {
-        if (this.isRemoteLock(event.data)) this.applyExternalLock();
+        if (this.isRemoteLock(event.data)) this.applyExternalLock((event.data as { tabId?: string }).tabId);
       };
     }
     this.destroyRef.onDestroy(() => {
@@ -302,11 +302,11 @@ export class HubComponent implements OnInit {
   private isRemoteLock(value: unknown): boolean {
     const userId = this.auth.currentUser?.id;
     if (userId == null || !value || typeof value !== 'object') return false;
-    const message = value as { version?: unknown; userId?: unknown; kind?: unknown };
-    return message.version === 1 && message.userId === userId && message.kind === 'lock';
+    const message = value as { version?: unknown; userId?: unknown; kind?: unknown; tabId?: unknown };
+    return message.version === 1 && message.userId === userId && message.kind === 'lock' && message.tabId !== financeTabId();
   }
 
-  private applyExternalLock(): void {
+  private applyExternalLock(originTabId?: string): void {
     // lockFinance broadcasts, and this tab's channel hears that echo. The card is already clear.
     if (this.financeGeneration > 0 && this.financeState === 'locked') return;
     this.financeGeneration += 1;
@@ -315,7 +315,7 @@ export class HubComponent implements OnInit {
     this.financePending = false;
     this.financeState = 'locked';
     this.cdr.markForCheck();
-    void lockFinance(this.injector);
+    void lockFinance(this.injector, originTabId);
   }
 
   private async loadFinance(): Promise<void> {

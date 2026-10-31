@@ -4,6 +4,7 @@ import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
 import { SILENT_ERROR_TOAST } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
+import { hasDek, holdDek } from './dek-holder';
 import { VaultService } from './vault.service';
 
 describe('VaultService KDF upgrade', () => {
@@ -130,19 +131,22 @@ describe('VaultService lock', () => {
     TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
     const service = TestBed.inject(VaultService);
     await service.whenReady();
-    const memoryKey = {} as CryptoKey;
-    service['dek'] = memoryKey;
+    holdDek({} as CryptoKey);
     service['unlockedSubject'].next(true);
     localStorage.setItem('finance-dek', 'raw-key-bytes');
     expect(service.isUnlocked).toBeTrue();
-
     service.lock();
-
     expect(service.isUnlocked).toBeFalse();
-    service['unlockedSubject'].next(true);
+    const seen: boolean[] = [];
+    const epoch = service['epoch'];
+    service.unlocked$.subscribe(value => seen.push(value));
+    localStorage.setItem('finance-dek', 'again');
+    service.lock();
+    expect(seen).toEqual([false]);
+    expect(service['epoch']).toBe(epoch);
     expect(localStorage.getItem('finance-dek')).toBeNull();
-    expect(service['dek']).toBeNull();
-    expect(service['dek']).not.toBe(memoryKey);
+    service['unlockedSubject'].next(true);
+    expect(hasDek()).toBeFalse();
   });
 });
 

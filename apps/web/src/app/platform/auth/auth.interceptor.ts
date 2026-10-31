@@ -4,17 +4,25 @@ import { Observable, catchError, finalize, shareReplay, switchMap, throwError } 
 import { authNavigation, SESSION_CONTEXT } from '@vivek/ui';
 import { rememberSessionEnded } from './session-ended';
 
-const AUTH_ME_PATHS = new Set(['/api/auth/me', '/auth/me']);
+const PATHS = {
+  me: new Set(['/api/auth/me', '/auth/me']),
+  out: new Set(['/api/auth/logout', '/auth/logout']),
+  health: new Set(['/health', '/api/health', '/travel/api/health', '/media/api/health']),
+};
 
-/** Pathname only, so `/api/auth/members` is not treated as the session check. */
-function isAuthMe(url: string): boolean {
+function matchesPath(url: string, paths: Set<string>): boolean {
   try {
-    const path = new URL(url, location.origin).pathname.replace(/\/+$/, '') || '/';
-    return AUTH_ME_PATHS.has(path);
+    const parsed = new URL(url, location.origin);
+    if (parsed.origin !== location.origin) return false;
+    return paths.has(parsed.pathname.replace(/\/+$/, '') || '/');
   } catch {
     return false;
   }
 }
+
+const isAuthMe = (url: string): boolean => matchesPath(url, PATHS.me);
+const isLogout = (url: string): boolean => matchesPath(url, PATHS.out);
+const isHealth = (url: string): boolean => matchesPath(url, PATHS.health);
 
 /** Sign-in forms and the session check itself. A probe here would loop or hide a wrong passphrase. */
 function skipsSessionProbe(url: string): boolean {
@@ -25,8 +33,8 @@ function skipsSessionProbe(url: string): boolean {
     url.includes('/auth/signup') ||
     url.includes('/auth/invitations') ||
     isAuthMe(url) ||
-    url.includes('/auth/logout') ||
-    url.includes('/health')
+    isLogout(url) ||
+    isHealth(url)
   );
 }
 
@@ -56,7 +64,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     catchError((err: HttpErrorResponse) => {
       if (err.status !== 401 || revision !== auth.revision) return throwError(() => err);
       // /auth/me is 401 when nobody is signed in. Logout already redirects. Neither gets the ended-session toast.
-      if (isAuthMe(req.url) || req.url.includes('/auth/logout')) {
+      if (isAuthMe(req.url) || isLogout(req.url)) {
         auth.clearLocalSession();
         authNavigation.goToLogin();
         return throwError(() => err);

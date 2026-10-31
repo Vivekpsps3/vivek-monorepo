@@ -3,11 +3,16 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
-import { lockFinance } from './lock-finance';
+import { hasDek, holdDek } from './dek-holder';
+import { lockFinance, lockLoad } from './lock-finance';
 import { VaultService } from './vault.service';
+const realLoad = lockLoad.modules;
 
 describe('lockFinance', () => {
-  afterEach(() => localStorage.removeItem('finance-dek'));
+  afterEach(() => {
+    localStorage.removeItem('finance-dek');
+    lockLoad.modules = realLoad;
+  });
 
   it('broadcasts, ends refresh, clears caches, then locks storage and memory', async () => {
     const order: string[] = [];
@@ -29,8 +34,7 @@ describe('lockFinance', () => {
     });
     const vault = TestBed.inject(VaultService);
     await vault.whenReady();
-    const memoryKey = {} as CryptoKey;
-    vault['dek'] = memoryKey;
+    holdDek({} as CryptoKey);
     vault['unlockedSubject'].next(true);
     localStorage.setItem('finance-dek', 'raw-key-bytes');
     const lock = VaultService.prototype.lock;
@@ -38,13 +42,24 @@ describe('lockFinance', () => {
       order.push('lock');
       lock.call(vault);
     });
-
     await lockFinance(TestBed.inject(Injector));
-
     expect(order).toEqual(['broadcast', 'end', 'caches', 'lock']);
     vault['unlockedSubject'].next(true);
     expect(localStorage.getItem('finance-dek')).toBeNull();
-    expect(vault['dek']).toBeNull();
-    expect(vault['dek']).not.toBe(memoryKey);
+    expect(hasDek()).toBeFalse();
+  });
+  it('wipes memory and storage when the import rejects or never resolves', async () => {
+    TestBed.configureTestingModule({});
+    const injector = TestBed.inject(Injector);
+    const run = async (load: typeof lockLoad.modules, wait: boolean) => {
+      holdDek({} as CryptoKey);
+      localStorage.setItem('finance-dek', 'raw-key-bytes');
+      lockLoad.modules = load;
+      const pending = lockFinance(injector);
+      if (wait) await expectAsync(pending).toBeRejected();
+      expect([hasDek(), localStorage.getItem('finance-dek')]).toEqual([false, null]);
+    };
+    await run((() => new Promise(() => undefined)) as typeof lockLoad.modules, false);
+    await run((() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules, true);
   });
 });

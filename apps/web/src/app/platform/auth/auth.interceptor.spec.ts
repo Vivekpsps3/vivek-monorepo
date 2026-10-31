@@ -178,4 +178,15 @@ describe('authInterceptor', () => {
     expect(goToLogin).not.toHaveBeenCalled();
     expect(sessionStorage.getItem(SESSION_ENDED_COPY_KEY)).toBeNull();
   });
+
+  it('does not treat a foreign origin or a substring path as /auth/me, /health, or /auth/logout', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['clearLocalSession'], { csrfToken: null });
+    const goToLogin = spyOn(authNavigation, 'goToLogin');
+    const handle = configure(auth, jasmine.createSpy('handle').and.returnValue(of(new HttpResponse({ status: 200, body: { user: { id: 1 } } }))));
+    const urls = ['https://evil.example/api/auth/me', 'https://evil.example/api/auth/logout', 'https://evil.example/api/health', '/api/auth/meow', '/api/auth/logout-extra', '/api/health-check'];
+    for (const url of urls) await expectAsync(firstValueFrom(runInterceptor(url))).toBeRejected();
+    expect(handle).toHaveBeenCalledTimes(urls.length);
+    expect(auth.clearLocalSession).not.toHaveBeenCalled();
+    expect(goToLogin).not.toHaveBeenCalled();
+  });
 });
