@@ -76,11 +76,16 @@ describe('VaultUnlockComponent', () => {
     TestBed.configureTestingModule({ imports: [VaultUnlockComponent], providers: [
       { provide: SESSION_CONTEXT, useValue: auth }, { provide: VaultService, useValue: vault }, provideRouter([]),
     ] });
-    const navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigateByUrl').and.resolveTo(true);
     const fixture = TestBed.createComponent(VaultUnlockComponent);
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.componentInstance.passphrase = 'correct horse battery staple';
     await fixture.componentInstance.unlock();
-    expect([vault.upgradeKdfIfNeeded.calls.any(), navigate.calls.any(), fixture.componentInstance.error, !!fixture.nativeElement.querySelector('form')]).toEqual([false, false, '', true]);
+    expect(vault.upgradeKdfIfNeeded).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.error).toBe('');
+    expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
   });
 });
