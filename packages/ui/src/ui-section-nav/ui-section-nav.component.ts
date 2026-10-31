@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, input } from '@angular/core';
-import { IsActiveMatchOptions, NavigationEnd, Router, RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -15,7 +15,7 @@ export interface UiSectionNavItem {
 @Component({
   selector: 'ui-section-nav',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, RouterLinkActive],
   templateUrl: './ui-section-nav.component.html',
   styleUrl: './ui-section-nav.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,6 +32,9 @@ export class UiSectionNavComponent implements AfterViewInit {
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
   private revealTimer = 0;
+  private readonly active = new Set<string>();
+  protected readonly subsetMatch = { paths: 'subset', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
+  protected readonly exactMatch = { paths: 'exact', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
 
   constructor() {
     this.router.events.pipe(
@@ -79,9 +82,13 @@ export class UiSectionNavComponent implements AfterViewInit {
   }
 
   protected current(item: UiSectionNavItem): boolean {
-    const ignored = { queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
-    if (this.router.isActive(item.link, { ...ignored, paths: item.exact ? 'exact' : 'subset' })) return true;
-    return (item.also ?? []).some(link => this.router.isActive(link, { ...ignored, paths: 'subset' } satisfies Partial<IsActiveMatchOptions>));
+    return this.active.has(item.link) || (item.also ?? []).some(link => this.active.has(link));
+  }
+
+  protected setActive(key: string, active: boolean): void {
+    if (active) this.active.add(key);
+    else this.active.delete(key);
+    this.cdr.markForCheck();
   }
 
   private updateFades(): void {

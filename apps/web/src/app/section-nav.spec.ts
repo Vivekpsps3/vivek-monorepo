@@ -31,6 +31,8 @@ describe('section nav', () => {
     const current = async (url: string) => {
       await router.navigateByUrl(url);
       fixture.detectChanges();
+      await new Promise<void>(resolve => queueMicrotask(() => resolve()));
+      fixture.detectChanges();
       const add = fixture.nativeElement.querySelector('a[href="/media/add"]') as HTMLAnchorElement | null;
       expect(add?.getAttribute('aria-label')).toBe('Add manually');
       expect(add?.querySelector('.ui-section-nav__short')?.textContent).toBe('Add');

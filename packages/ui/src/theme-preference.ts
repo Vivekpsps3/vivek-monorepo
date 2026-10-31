@@ -69,6 +69,16 @@ export function setThemePreference(theme: ThemeChoice, storageKey: string): void
   }
 }
 
+export function bindStoredTheme(storageKey: string, onChange: (choice: ThemeChoice) => void): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const listener = (event: StorageEvent) => {
+    if (event.key !== SUITE_THEME_KEY && event.key !== storageKey) return;
+    onChange(readThemeChoice(storageKey));
+  };
+  window.addEventListener('storage', listener);
+  return () => window.removeEventListener('storage', listener);
+}
+
 /** Re-applies the operating-system theme while the saved choice is System. */
 export function bindSystemTheme(storageKey: string, onChange: (resolved: UiTheme) => void): () => void {
   if (typeof matchMedia !== 'function') return () => undefined;
