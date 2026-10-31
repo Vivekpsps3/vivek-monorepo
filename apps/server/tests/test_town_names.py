@@ -70,15 +70,18 @@ def test_casefold_longer_than_40_is_rejected_and_not_truncated():
     assert eszett.value.status_code == 422
     assert eszett.value.code == "name_too_long"
     assert eszett.value.message == NAME_LENGTH_ERROR
+    assert eszett.value.field_errors == {"name": NAME_LENGTH_ERROR}
     dotted = ("a" * 39 + "\u0130").casefold()
     assert len(dotted) == 41 and dotted[-1] == "\u0307"
     with pytest.raises(APIError) as mark:
         name_key("a" * 39 + "\u0130")
     assert mark.value.code == "name_too_long"
     assert mark.value.message == NAME_LENGTH_ERROR
+    assert mark.value.field_errors == {"name": NAME_LENGTH_ERROR}
     with pytest.raises(APIError) as many:
         name_key("ß" * 40)
     assert many.value.code == "name_too_long"
+    assert many.value.field_errors == {"name": NAME_LENGTH_ERROR}
     assert name_key("ß" * 20) == "ss" * 20
     length = validate_name("a" * 41)
     assert length.ok is False and length.error is None
@@ -121,6 +124,47 @@ def test_length_failure_serializes_the_copy_not_null(tmp_path: Path):
     body = response.json()
     assert body["code"] == "validation_error"
     assert body["message"] == "Check the highlighted fields."
+    assert body["field_errors"] == {"name": "Use 1 to 40 characters."}
+    assert body["field_errors"]["name"] is not None
+    assert body["retry_after"] is None
+
+
+def test_name_too_long_sets_field_errors_name(tmp_path: Path):
+    with pytest.raises(APIError) as caught:
+        name_key("a" * 39 + "ß")
+    error = caught.value
+    assert error.status_code == 422
+    assert error.code == "name_too_long"
+    assert error.message == "Use 1 to 40 characters."
+    assert error.field_errors == {"name": "Use 1 to 40 characters."}
+    router = APIRouter()
+
+    @router.post("/town-name-too-long-probe")
+    def probe() -> None:
+        raise error
+
+    url = f"sqlite:///{tmp_path / 'site.db'}"
+    application = create_app(
+        Settings(
+            database_url=url,
+            release="test",
+            web_root=tmp_path / "web",
+            openapi=False,
+        ),
+        Dependencies(
+            database=open_database(url),
+            check_schema=False,
+            check_frontend=False,
+            test_router=router,
+        ),
+    )
+    with TestClient(application) as client:
+        response = client.post("/town-name-too-long-probe")
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "name_too_long"
+    assert body["message"] == "Use 1 to 40 characters."
+    assert body["detail"] == "Use 1 to 40 characters."
     assert body["field_errors"] == {"name": "Use 1 to 40 characters."}
     assert body["field_errors"]["name"] is not None
     assert body["retry_after"] is None

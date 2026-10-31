@@ -415,6 +415,7 @@ def test_make_name_key_rejects_casefold_longer_than_40() -> None:
     assert caught.value.status_code == 422
     assert caught.value.code == "name_too_long"
     assert caught.value.message == "Use 1 to 40 characters."
+    assert caught.value.field_errors == {"name": "Use 1 to 40 characters."}
 
 
 def test_deleting_a_habit_that_still_has_a_cadence_row_is_refused(tmp_path: Path) -> None:

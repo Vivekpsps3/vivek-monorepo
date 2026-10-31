@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Same function as engine.name_key. A folded key longer than 40 characters
-# raises APIError 422 name_too_long; it is not truncated.
+# raises APIError 422 name_too_long with field_errors.name set; it is not truncated.
 from apps.server.town.engine import name_key as make_name_key
 
 __all__ = ["Habit", "HabitCadence", "HabitCheckin", "TownBase", "make_name_key"]

@@ -91,12 +91,12 @@ def lots(town_level: int, occupied: Mapping[int, int]) -> tuple[dict[str, int | 
 
 
 def cadence_kind(per_week: int) -> CadenceKind:
-    """Return daily for 7 and weekly for 1..6."""
+    """Return daily for 7 and weekly for 1..6. Any other value is a validation error."""
     if per_week == 7:
         return "daily"
     if 1 <= per_week <= 6:
         return "weekly"
-    raise ValueError("per_week must be an integer from 1 to 7")
+    raise field_validation_error("per_week", PER_WEEK_ERROR)
 
 
 def cadence_on(day: date, per_week: int, cadences: Iterable[CadenceRow] = ()) -> int:
@@ -177,6 +177,9 @@ def inn_day(reminders: int, trips_done: int) -> int:
 _WHITESPACE = re.compile(r"\s+")
 NAME_CHARACTERS_ERROR = "Use letters, numbers and punctuation only."
 NAME_LENGTH_ERROR = "Use 1 to 40 characters."
+PER_WEEK_ERROR = "per_week must be an integer from 1 to 7"
+SLOT_ERROR = "slot must be one of the town lots"
+BUILDING_STYLE_ERROR = "building_style must be one of the town styles"
 _VALIDATION_MESSAGE = "Check the highlighted fields."
 _BUILDING_STYLES = frozenset(SLOT_DEFAULT_STYLE)
 
@@ -199,10 +202,16 @@ def name_key(name: str) -> str:
     casefold can lengthen a name, so the length check is on the folded key.
     A key longer than 40 characters is rejected. It is not truncated: truncation
     collided 39 a's plus ß with 39 a's plus s, and it can split a combining mark.
+    The failure is 422 name_too_long and field_errors.name is the length sentence.
     """
     key = name.casefold()
     if len(key) > HABIT_NAME_MAX:
-        raise APIError(422, "name_too_long", NAME_LENGTH_ERROR)
+        raise APIError(
+            422,
+            "name_too_long",
+            NAME_LENGTH_ERROR,
+            field_errors={"name": NAME_LENGTH_ERROR},
+        )
     return key
 
 
@@ -227,17 +236,27 @@ def name_validation_error(result: NameValidation) -> APIError:
     )
 
 
+def field_validation_error(field: str, detail: str) -> APIError:
+    """Return 422 validation_error with field_errors keyed by that one field."""
+    return APIError(
+        422,
+        "validation_error",
+        _VALIDATION_MESSAGE,
+        field_errors={field: detail},
+    )
+
+
 def require_slot(slot: int) -> int:
     """Accept a lot index from LOT_UNLOCK_LV. Reject anything else."""
     if isinstance(slot, bool) or slot not in range(len(LOT_UNLOCK_LV)):
-        raise ValueError("slot must be one of the town lots")
+        raise field_validation_error("slot", SLOT_ERROR)
     return slot
 
 
 def require_building_style(style: str) -> str:
     """Accept a style named by SLOT_DEFAULT_STYLE. Reject anything else."""
     if style not in _BUILDING_STYLES:
-        raise ValueError("building_style must be one of the town styles")
+        raise field_validation_error("building_style", BUILDING_STYLE_ERROR)
     return style
 
 
