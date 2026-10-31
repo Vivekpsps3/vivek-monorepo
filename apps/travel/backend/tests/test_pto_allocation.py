@@ -346,14 +346,14 @@ def test_backfill_preserves_totals_without_inventing_legacy_dates():
 
 def test_revision_backfill_downgrades_cleanly(tmp_path):
     script = ScriptDirectory.from_config(make_config("sqlite://"))
-    assert script.get_heads() == ["site_town_v1"]
+    assert script.get_heads() == ["site_user_birthday_v1"]
     assert (
         script.get_revision("site_catalog_title_sort_v1").down_revision == "site_media_progress_v1"
     )
     assert script.get_revision("site_media_progress_v1").down_revision == HEAD
     assert script.get_revision(REVISION).down_revision == PARENT
     assert script.get_revision(HEAD).down_revision == REVISION
-    assert head_revision() == "site_town_v1"
+    assert head_revision() == "site_user_birthday_v1"
 
     database = tmp_path / "site.db"
     url = sqlite_url(database)
@@ -395,7 +395,7 @@ def test_revision_backfill_downgrades_cleanly(tmp_path):
         db.commit()
 
     command.upgrade(cfg, "head")
-    assert current_revision(database) == "site_town_v1"
+    assert current_revision(database) == "site_user_birthday_v1"
     assert model_diff(database) == []
     with sqlite3.connect(database) as db:
         assert (

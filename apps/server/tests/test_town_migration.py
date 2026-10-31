@@ -52,7 +52,7 @@ def _upgrade(tmp_path: Path) -> Path:
     config = make_config(sqlite_url(database))
     command.upgrade(config, PREVIOUS)
     assert current_revision(database) == PREVIOUS
-    command.upgrade(config, "head")
+    command.upgrade(config, REVISION)
     assert current_revision(database) == REVISION
     return database
 
@@ -174,7 +174,7 @@ def test_downgrade_removes_town_schema_and_upgrade_again(tmp_path: Path) -> None
             "SELECT COUNT(*) FROM site_revision_compatibility WHERE revision = ?",
             (REVISION,),
         ).fetchone() == (0,)
-    command.upgrade(config, "head")
+    command.upgrade(config, REVISION)
     assert current_revision(database) == REVISION
     with sqlite3.connect(database) as db:
         assert set(TOWN_TABLES) <= {
@@ -339,6 +339,9 @@ def _insert_account_habit(db: Session, user_id: int) -> int:
 
 def test_delete_user_account_removes_town_rows_for_that_user_only(tmp_path: Path) -> None:
     database = _upgrade(tmp_path)
+    # The identity model includes later add-only user columns. Apply head so
+    # the ORM insert matches the table this process maps.
+    command.upgrade(make_config(sqlite_url(database)), "head")
     opened = open_database(f"sqlite:///{database}")
     db = opened.sessionmaker()
     try:

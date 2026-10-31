@@ -12,6 +12,7 @@ flush explicitly too, so one sessionmaker covers all three.
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,7 +70,12 @@ def open_database(url: str) -> Database:
     memory = _memory(parsed.database)
     if not memory and (not parsed.database or not Path(parsed.database).is_absolute()):
         raise RuntimeError("SITE_DATABASE_URL must name an absolute local SQLite file")
-    kwargs: dict = {"connect_args": {"check_same_thread": False}}
+    # hide_parameters keeps bound values (including a birthday) out of engine
+    # logs and SQLAlchemy exception text for every site connection.
+    kwargs: dict = {
+        "connect_args": {"check_same_thread": False},
+        "hide_parameters": True,
+    }
     if memory:
         kwargs["poolclass"] = StaticPool
     engine = configure_engine(create_engine(url, **kwargs))
@@ -93,7 +99,10 @@ def get_db(request: Request):
         yield db
         db.commit()
     except Exception:
-        db.rollback()
+        # A failed rollback must not replace the original error. Rollback
+        # messages can include statement parameters.
+        with suppress(Exception):
+            db.rollback()
         raise
     finally:
         db.close()

@@ -249,11 +249,12 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
             )
         return {"status": "ok", "release": release}
 
-    from apps.server.identity import account
+    from apps.server.identity import account, birthday
     from apps.server.identity import routes as identity_routes
 
     application.include_router(identity_routes.router, prefix="/api")
     application.include_router(account.router, prefix="/api")
+    application.include_router(birthday.router, prefix="/api")
     register_finance(application)
     register_travel(application)
     register_media(application)
