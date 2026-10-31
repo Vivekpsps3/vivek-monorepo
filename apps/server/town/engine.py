@@ -9,10 +9,17 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
 
-from apps.server.town.constants import DAILY_CAP, HABIT_NAME_MAX, LOT_UNLOCK_LV, XP
+from apps.server.errors import APIError
+from apps.server.town.constants import (
+    DAILY_CAP,
+    HABIT_NAME_MAX,
+    LOT_UNLOCK_LV,
+    SLOT_DEFAULT_STYLE,
+    XP,
+)
 
 CadenceKind = Literal["daily", "weekly"]
-CadenceAction = Literal["insert", "update"]
+CadenceAction = Literal["insert", "update", "delete"]
 CadenceRow = tuple[date, int]
 
 
@@ -84,12 +91,12 @@ def lots(town_level: int, occupied: Mapping[int, int]) -> tuple[dict[str, int | 
 
 
 def cadence_kind(per_week: int) -> CadenceKind:
-    """Return daily for 7 and weekly for 1..6."""
+    """Return daily for 7 and weekly for 1..6. Any other value is a validation error."""
     if per_week == 7:
         return "daily"
     if 1 <= per_week <= 6:
         return "weekly"
-    raise ValueError("per_week must be an integer from 1 to 7")
+    raise field_validation_error("per_week", PER_WEEK_ERROR)
 
 
 def cadence_on(day: date, per_week: int, cadences: Iterable[CadenceRow] = ()) -> int:
@@ -117,13 +124,20 @@ def plan_cadence_change(
     cadences: Iterable[CadenceRow],
     new_per_week: int,
 ) -> CadenceChange | None:
-    """Return the next-Monday upsert, or None when that value is already in effect."""
+    """Return the next-Monday write, or None when that Monday already has this value.
+
+    Setting per_week back to the value in effect this week deletes the pending
+    Monday row instead of leaving a row that only repeats the current cadence.
+    """
     cadence_kind(new_per_week)
     rows = tuple(cadences)
     effective = next_monday_after(today)
+    has_monday = any(start == effective for start, _ in rows)
+    if new_per_week == cadence_on(today, per_week, rows) and has_monday:
+        return CadenceChange(effective, new_per_week, "delete")
     if new_per_week == cadence_on(effective, per_week, rows):
         return None
-    action: CadenceAction = "update" if any(start == effective for start, _ in rows) else "insert"
+    action: CadenceAction = "update" if has_monday else "insert"
     return CadenceChange(effective, new_per_week, action)
 
 
@@ -162,6 +176,12 @@ def inn_day(reminders: int, trips_done: int) -> int:
 
 _WHITESPACE = re.compile(r"\s+")
 NAME_CHARACTERS_ERROR = "Use letters, numbers and punctuation only."
+NAME_LENGTH_ERROR = "Use 1 to 40 characters."
+PER_WEEK_ERROR = "per_week must be an integer from 1 to 7"
+SLOT_ERROR = "slot must be one of the town lots"
+BUILDING_STYLE_ERROR = "building_style must be one of the town styles"
+_VALIDATION_MESSAGE = "Check the highlighted fields."
+_BUILDING_STYLES = frozenset(SLOT_DEFAULT_STYLE)
 
 
 @dataclass(frozen=True)
@@ -177,8 +197,67 @@ def normalize_name(raw: str) -> str:
 
 
 def name_key(name: str) -> str:
-    """Return the casefold uniqueness key. Callers pass the normalized name."""
-    return name.casefold()
+    """Return the casefold uniqueness key. Callers pass the normalized name.
+
+    casefold can lengthen a name, so the length check is on the folded key.
+    A key longer than 40 characters is rejected. It is not truncated: truncation
+    collided 39 a's plus ß with 39 a's plus s, and it can split a combining mark.
+    The failure is 422 name_too_long and field_errors.name is the length sentence.
+    """
+    key = name.casefold()
+    if len(key) > HABIT_NAME_MAX:
+        raise APIError(
+            422,
+            "name_too_long",
+            NAME_LENGTH_ERROR,
+            field_errors={"name": NAME_LENGTH_ERROR},
+        )
+    return key
+
+
+def name_field_errors(result: NameValidation) -> dict[str, str]:
+    """Map a name check to field_errors. A length failure is never null."""
+    if result.ok:
+        return {}
+    if result.error is None:
+        return {"name": NAME_LENGTH_ERROR}
+    return {"name": result.error}
+
+
+def name_validation_error(result: NameValidation) -> APIError:
+    """Return 422 validation_error for a failed name. Length copy is never null."""
+    if result.ok:
+        raise ValueError("name passed validation")
+    return APIError(
+        422,
+        "validation_error",
+        _VALIDATION_MESSAGE,
+        field_errors=name_field_errors(result),
+    )
+
+
+def field_validation_error(field: str, detail: str) -> APIError:
+    """Return 422 validation_error with field_errors keyed by that one field."""
+    return APIError(
+        422,
+        "validation_error",
+        _VALIDATION_MESSAGE,
+        field_errors={field: detail},
+    )
+
+
+def require_slot(slot: int) -> int:
+    """Accept a lot index from LOT_UNLOCK_LV. Reject anything else."""
+    if isinstance(slot, bool) or slot not in range(len(LOT_UNLOCK_LV)):
+        raise field_validation_error("slot", SLOT_ERROR)
+    return slot
+
+
+def require_building_style(style: str) -> str:
+    """Accept a style named by SLOT_DEFAULT_STYLE. Reject anything else."""
+    if style not in _BUILDING_STYLES:
+        raise field_validation_error("building_style", BUILDING_STYLE_ERROR)
+    return style
 
 
 def validate_name(raw: str) -> NameValidation:
