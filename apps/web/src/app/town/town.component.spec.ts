@@ -46,6 +46,13 @@ describe('Town page', () => {
     const data = snapshot(); Object.assign(data.town, { level: 10, xp: 5500, level_xp_start: 5000, next_level_xp: null });
     expect(render(data).el.textContent).toContain('Lv 10 · Max');
   });
+  it('omits the progress bar at max level and renders Lv 10 · Max', () => {
+    const data = snapshot(); Object.assign(data.town, { level: 10, xp: 5500, level_xp_start: 5000, next_level_xp: null });
+    const el = render(data).el;
+    expect(el.querySelector('header p')?.textContent).toBe('Lv 10 · Max');
+    expect(el.querySelector('progress')).toBeNull();
+    expect(el.querySelector('[role="progressbar"]')).toBeNull();
+  });
   it('recovers from unavailable via Retry', () => {
     const { fixture, el } = render();
     response.error({ status: 503 }); fixture.detectChanges();
@@ -56,12 +63,13 @@ describe('Town page', () => {
     response.next(snapshot()); fixture.detectChanges();
     expect(el.querySelector('ul')).not.toBeNull();
   });
-  it('uses the existing expired banner with a sign-in return path and no redirect', () => {
+  it('does not render a session-expired banner on 401', () => {
     const { fixture, el } = render();
     response.error({ status: 401 }); fixture.detectChanges();
-    expect(el.textContent).toContain('Your session ended. Sign in again');
-    expect(el.querySelector('a')?.getAttribute('href')).toBe('/auth/login?next=%2Ftown');
-    expect(el.querySelector('ul')).toBeNull();
+    expect(el.textContent).not.toContain('Your session ended');
+    expect(el.textContent).not.toContain('Town is unavailable right now.');
+    expect(el.querySelector('a[href^="/auth/login"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Loading Town"]')).not.toBeNull();
   });
   it('offers the exact first-run copy and all three prefills, hiding Today', () => {
     const data = snapshot(); data.town.founded_on = null;

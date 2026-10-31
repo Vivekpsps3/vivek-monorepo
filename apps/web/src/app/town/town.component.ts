@@ -21,7 +21,7 @@ export class TownComponent {
   private readonly destroy = inject(DestroyRef);
   readonly data = signal<TownResponse | null>(null);
   readonly financeVaultPresent = financeVaultPresent;
-  readonly state = signal<'loading' | 'ready' | 'unavailable' | 'expired'>('loading');
+  readonly state = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly placeholders = Array.from({ length: 9 }, (_, i) => i);
   readonly suggestions = ['Read 20 pages', 'Walk 30 minutes', 'Sleep by 12'];
   readonly emptySprite = townSpriteUrl('lot-empty');
@@ -40,7 +40,8 @@ export class TownComponent {
       },
       error: (error: { status?: number }) => {
         this.data.set(null);
-        this.state.set(error.status === 401 ? 'expired' : 'unavailable');
+        // A 401 follows the global auth redirect. Town does not paint a session banner.
+        if (error.status !== 401) this.state.set('unavailable');
       },
     });
   }

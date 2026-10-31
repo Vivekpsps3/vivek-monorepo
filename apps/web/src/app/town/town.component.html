@@ -12,8 +12,6 @@
   <ui-state state="ready" thing="Town">
     <div role="status"><p>Town is unavailable right now.</p><ui-button variant="secondary" (clicked)="load()">Retry</ui-button></div>
   </ui-state>
-} @else if (state() === 'expired') {
-  <ui-state state="expired" thing="Town" next="/town" />
 } @else if (data(); as data) {
   <header>
     <h1>{{ data.town.name }}</h1>
