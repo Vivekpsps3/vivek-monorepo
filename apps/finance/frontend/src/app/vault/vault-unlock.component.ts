@@ -74,7 +74,8 @@ export class VaultUnlockComponent implements OnInit {
     this.error = '';
     this.busy = true;
     try {
-      await this.vault.unlock(this.passphrase);
+      const opened = await this.vault.unlock(this.passphrase);
+      if (!opened || !this.vault.isUnlocked) return;
       // A long-lived session never went through loginWithVault, so this is the upgrade path.
       // Do not await it: the rewrap must not hold the unlock screen.
       void this.vault.upgradeKdfIfNeeded(this.passphrase);

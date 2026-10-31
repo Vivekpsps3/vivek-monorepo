@@ -11,7 +11,7 @@ describe('VaultUnlockComponent', () => {
     const vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
     vault.isUnlocked = false;
     vault.refreshStatus.and.resolveTo({ exists: true });
-    vault.unlock.and.resolveTo();
+    vault.unlock.and.callFake(async () => { vault.isUnlocked = true; return true; });
     vault.upgradeKdfIfNeeded.and.returnValue(new Promise(() => undefined));
 
     TestBed.configureTestingModule({
@@ -64,5 +64,23 @@ describe('VaultUnlockComponent', () => {
     expect(fixture.componentInstance.passphrase).toBe('correct horse battery staple');
     expect(fixture.componentInstance.error).toBe('Unlock failed');
     expect(vault.upgradeKdfIfNeeded).not.toHaveBeenCalled();
+  });
+
+  it('stays on the unlock form when the vault discards the unlock', async () => {
+    const auth = jasmine.createSpyObj('AuthService', ['loadSession']);
+    auth.currentUser = { username: 'vivek' };
+    const vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
+    vault.isUnlocked = false;
+    vault.refreshStatus.and.resolveTo({ exists: true });
+    vault.unlock.and.resolveTo(false);
+    TestBed.configureTestingModule({ imports: [VaultUnlockComponent], providers: [
+      { provide: SESSION_CONTEXT, useValue: auth }, { provide: VaultService, useValue: vault }, provideRouter([]),
+    ] });
+    const navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
+    const fixture = TestBed.createComponent(VaultUnlockComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await fixture.componentInstance.unlock();
+    expect([vault.upgradeKdfIfNeeded.calls.any(), navigate.calls.any(), fixture.componentInstance.error, !!fixture.nativeElement.querySelector('form')]).toEqual([false, false, '', true]);
   });
 });

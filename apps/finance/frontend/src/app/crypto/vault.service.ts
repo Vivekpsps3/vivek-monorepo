@@ -70,9 +70,9 @@ export class VaultService {
   }
 
   private async hydrate(): Promise<void> {
-    const epoch = this.epoch;
+    const epoch = readLockEpoch();
     const dek = await restoreDekLocal();
-    if (!dek || epoch !== this.epoch) return;
+    if (!dek || epoch !== readLockEpoch()) return;
     this.dek = dek;
     this.unlockedSubject.next(true);
   }
@@ -223,7 +223,7 @@ export class VaultService {
     return rewrapDekWithPassphrase(this.requireDek(), passphrase, DEFAULT_PBKDF2_ITERATIONS);
   }
 
-  async unlock(passphrase: string): Promise<void> {
+  async unlock(passphrase: string): Promise<boolean> {
     const status = this.statusSubject.value ?? (await this.refreshStatus());
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');
@@ -235,8 +235,9 @@ export class VaultService {
       status.kdf_iterations,
       status.wrapped_dek_b64,
     );
-    if (epoch !== readLockEpoch()) return;
+    if (epoch !== readLockEpoch()) return false;
     await this.hold(dek, epoch);
+    return this.isUnlocked;
   }
 
   requireDek(): CryptoKey {

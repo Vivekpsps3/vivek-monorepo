@@ -5,7 +5,7 @@ import { apiUrl } from '../core/api-url';
 import { SILENT_ERROR_TOAST } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { hasDek, holdDek } from './dek-holder';
-import { createVaultMaterial } from './vault-crypto';
+import { createVaultMaterial, persistDekLocal } from './vault-crypto';
 import { VaultService } from './vault.service';
 
 describe('VaultService KDF upgrade', () => {
@@ -142,10 +142,11 @@ describe('VaultService lock', () => {
     const epoch = service['epoch'];
     service.unlocked$.subscribe(value => seen.push(value));
     localStorage.setItem('finance-dek', 'again');
+    holdDek({} as CryptoKey);
     service.lock();
-    expect(seen).toEqual([false]);
-    expect(service['epoch']).toBe(epoch);
-    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect([localStorage.getItem('finance-dek'), hasDek(), service['epoch'], seen.join()]).toEqual([null, false, epoch + 1, 'false,false']);
+    service.lock();
+    expect([service['epoch'], seen.join(), hasDek()]).toEqual([epoch + 1, 'false,false', false]);
     service['unlockedSubject'].next(true);
     expect(hasDek()).toBeFalse();
   });
@@ -175,12 +176,27 @@ describe('VaultService unlock epoch', () => {
     while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
     service.lock();
     open();
-    await pending;
-    expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
+    expect([await pending, localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([false, null, false, false]);
   }
 
   it('discards the key when a lock lands during derivation', () => lockDuring('deriveKey'));
   it('discards the key when a lock lands before the finance-dek write', () => lockDuring('exportKey'));
+
+  it('discards a browser key when a lock lands during hydrate', async () => {
+    await persistDekLocal((await createVaultMaterial(passphrase, 1000)).dek);
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { open = () => resolve(); });
+    let parked = false;
+    const real = crypto.subtle.importKey.bind(crypto.subtle) as (...args: never[]) => Promise<unknown>;
+    spyOn(crypto.subtle, 'importKey').and.callFake(((...args: never[]) => real(...args).then(async (result: unknown) => { parked = true; await gate; return result; })) as never);
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
+    service.lock();
+    open();
+    await service.whenReady();
+    expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
+  });
 });
 
 describe('VaultService whenReady', () => {

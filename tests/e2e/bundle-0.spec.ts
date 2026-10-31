@@ -423,7 +423,7 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
   ]);
   expect(await finance.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('finance');
   expect(await hub.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('hub');
-  await expect(page).toHaveURL(/\/settings\//);
+  await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/settings(\/|$)/);
 });
 
 test('an empty Finance vault shows the empty state instead of $0.00', async ({ page }) => {
