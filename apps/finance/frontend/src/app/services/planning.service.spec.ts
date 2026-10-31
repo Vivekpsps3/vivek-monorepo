@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { PlanningService } from './planning.service';
 import { MC_TOOL_ID } from '../models/planning.model';
+import { spendingModeInference } from '../planning/spending-mode';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { MoneyPipe } from '@vivek/ui';
 import { formatStoredMoney } from '../shared/stored-money';
@@ -178,6 +179,7 @@ describe('PlanningService', () => {
   });
 
   it('applies run overrides and preserves seed zero', done => {
+    const infer = spyOn(spendingModeInference, 'inferMissing').and.callThrough();
     encStore.getNetWorth.and.resolveTo({ total: 100_000, portfolio: 0, liabilities: 0 } as any);
     encStore.getJobIncomes.and.resolveTo([{ id: 1, monthly_net: 5_000, is_active: true } as any]);
     encStore.getFixedExpenses.and.resolveTo([{ id: 1, annual_amount: 12_000, is_active: true } as any]);
@@ -211,7 +213,8 @@ describe('PlanningService', () => {
         expect(run.seed).toBe(0);
         expect(run.result_summary.start_net_worth).toBe(250_000);
         expect(run.result_summary.annual_contribution_start).toBe(5_000);
-          expect(run.result_summary.spend_assumption_source).toBe('manual-profile');
+          expect(infer).toHaveBeenCalledWith({ annual_spending: 10_000 });
+        expect(run.result_summary.spend_assumption_source).toBe('manual-profile');
         expect(run.result_summary.terminal_p50).toBe(240_000);
         done();
       },

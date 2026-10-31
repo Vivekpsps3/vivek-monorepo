@@ -2,6 +2,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { failureCopy } from '@vivek/ui';
 import { PlanningComponent } from './planning.component';
 import { DEFAULT_MC_ASSUMPTIONS, PlanningProfile } from '../models/planning.model';
+import { spendingModeInference } from './spending-mode';
 import { lastThreeCompletedMonths } from '../utils/planning-spending.util';
 
 function createComponent() {
@@ -209,6 +210,31 @@ describe('PlanningComponent spending acceptance', () => {
     expect(component.acceptingSpendingSuggestion).toBeFalse();
     expect(component.error).toBe("Couldn't save the spending estimate.");
     expect(component.error).not.toContain('vault write failed');
+  });
+
+  it('infers a missing spending mode through the shared helper', () => {
+    const infer = spyOn(spendingModeInference, 'inferMissing').and.callThrough();
+    const { component } = createComponent();
+    const parts = { fixed_annual: 1, variable_annual: 2, irregular_annual: 3 };
+    const withoutMode = (extra: Record<string, unknown>) => {
+      const payload = structuredClone(DEFAULT_MC_ASSUMPTIONS);
+      delete payload.spending_mode;
+      return Object.assign(payload, extra);
+    };
+    const rows = [
+      [1, withoutMode({ spending_components: parts, annual_spending: 9 }), 'components'],
+      [2, withoutMode({ spending_components: undefined, annual_spending: 9 }), 'manual'],
+      [3, withoutMode({ spending_components: undefined, annual_spending: null }), 'recurring'],
+    ] as const;
+    component.profiles = rows.map(([id, payload]) => ({
+      id, name: 'p', base_currency: 'USD', payload, created_at: '', updated_at: '',
+    }));
+    for (const [id, , mode] of rows) {
+      component.onProfileSelected(String(id));
+      expect(component.spendingMode).toBe(mode);
+      expect(component.assumptions.spending_mode).toBe(mode);
+    }
+    expect(infer).toHaveBeenCalledTimes(3);
   });
 
   it('keeps the saved profile and shows the delete error when delete returns 503', async () => {

@@ -11,7 +11,7 @@ export async function loadFinanceHubSnapshot(injector: Injector, signal: AbortSi
   return (await import('./app/hub/finance-hub-facade')).loadFinanceHubSnapshot(injector, signal, deadlineMs);
 }
 export type { FinanceHubResult } from './app/hub/finance-hub-facade';
-export async function loadFinanceBudgetKept(
+export function loadFinanceBudgetKept(
   injector: Injector,
   signal: AbortSignal,
   opts: { today: string; weeks: number; includeCurrentWeek?: boolean; deadlineMs?: number },
