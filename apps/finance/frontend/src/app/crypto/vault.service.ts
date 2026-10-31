@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, isDevMode } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
 import { apiUrl } from '../core/api-url';
@@ -58,6 +58,10 @@ export class VaultService {
   private reindexed = new Set<string>();
   private reindexTask: Promise<void> | null = null;
   private reindexGeneration = 0;
+  private holdGeneration = 0;
+  private opChain: Promise<void> = Promise.resolve();
+  /** Dev-only tally. The log line has the count and no row ids. */
+  private undecryptableRows = 0;
   private unlockedWrap: string | null = null;
   private statusSubject = new BehaviorSubject<VaultStatus | null>(null);
   private unlockedSubject = new BehaviorSubject<boolean>(false);
@@ -83,41 +87,71 @@ export class VaultService {
   private ownerId(): number | null {
     return this.sessionPort?.currentUser?.id ?? null;
   }
+
+  /** Epoch must match. A known user id must still be that user. A newer hold supersedes this one. */
+  private owns(epoch: number, userId: number | null, generation?: number): boolean {
+    return !!this.dek && this.sameSession(epoch, userId, generation);
+  }
+
+  private sameSession(epoch: number, userId: number | null, generation?: number): boolean {
+    if (epoch !== this.epoch) return false;
+    if (generation !== undefined && generation !== this.holdGeneration) return false;
+    return userId == null || this.ownerId() === userId;
+  }
+
+  private enqueue(run: () => Promise<void>): Promise<void> {
+    const next = this.opChain.then(run, run);
+    this.opChain = next.then(() => undefined, () => undefined);
+    return next;
+  }
+
   private async hydrate(): Promise<void> {
     const epoch = this.epoch;
+    const userId = this.ownerId();
     let stored: StoredVaultKeys | null = null;
-    try { stored = await restoreVaultKeys(); } catch { stored = null; }
-    if (!stored || epoch !== this.epoch) return;
+    try { stored = await restoreVaultKeys(() => this.sameSession(epoch, userId)); } catch { stored = null; }
+    if (!stored || !this.sameSession(epoch, userId)) {
+      // A newer hold owns the key once it has started. This path only deletes a key this restore just wrote.
+      if (stored && this.holdGeneration === 0 && !this.dek) await clearDekLocal();
+      return;
+    }
     await this.hold(stored.dek, stored.blind_index_version, stored.reindexed);
   }
 
-  private async hold(dek: CryptoKey, version: number, reindexed: string[] = []): Promise<void> {
+  private hold(dek: CryptoKey, version: number, reindexed: string[] = []): Promise<void> {
+    const generation = ++this.holdGeneration;
     const epoch = this.epoch;
+    const userId = this.ownerId();
+    return this.enqueue(() => this.applyHold(dek, version, reindexed, epoch, userId, generation));
+  }
+
+  private async applyHold(dek: CryptoKey, version: number, reindexed: string[], epoch: number, userId: number | null, generation: number): Promise<void> {
+    if (!this.sameSession(epoch, userId, generation)) return;
     this.dek = dek;
     this.versionNumber = version;
     this.reindexed = new Set(reindexed);
     this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
     // The hub reads presence before it will load vault code. Store the key before unlock returns.
-    await this.persistProgress();
-    if (epoch !== this.epoch) return;
+    await this.persistProgress(epoch, userId, generation);
+    if (!this.sameSession(epoch, userId, generation)) return;
     if (version < 2) {
       try { await this.ensureBlindIndexes(); } catch { /* next unlock resumes */ }
     }
-    if (epoch !== this.epoch) return;
+    if (!this.sameSession(epoch, userId, generation)) return;
     this.unlockedSubject.next(true);
   }
 
-  private async persistProgress(): Promise<void> {
-    const epoch = this.epoch;
+  private async persistProgress(epoch: number, userId: number | null, generation: number): Promise<void> {
     const dek = this.dek;
-    if (!dek) return;
+    if (!dek || !this.sameSession(epoch, userId, generation)) return;
     const progress = { blind_index_version: this.versionNumber, reindexed: [...this.reindexed] };
     await persistVaultKeys({ dek, ...progress });
-    if (epoch !== this.epoch) {
-      clearDekLocal();
+    if (generation !== this.holdGeneration) return;
+    if (epoch !== this.epoch || (userId != null && this.ownerId() !== userId)) {
+      if (this.dek === dek) { this.dek = null; this.unlockedSubject.next(false); }
+      await clearDekLocal();
       return;
     }
-    const userId = this.ownerId();
     if (userId == null) return;
     await writeBlindIndexProgress(userId, progress);
   }
@@ -193,17 +227,24 @@ export class VaultService {
   }
 
   async setup(passphrase: string): Promise<void> {
+    const epoch = this.epoch;
+    const userId = this.ownerId();
     const material = await createVaultMaterial(passphrase);
+    if (!this.sameSession(epoch, userId)) return;
     const status = await firstValueFrom(
       this.http.post<VaultStatus>(apiUrl('/finance/vault/setup'), material.setupPayload)
     );
+    if (!this.sameSession(epoch, userId)) return;
     this.statusSubject.next(status);
     await this.hold(material.dek, 2);
   }
 
   /** Completes an atomically-created vault after passwordless account bootstrap/signup. */
   async adoptBootstrapVault(dek: CryptoKey): Promise<void> {
+    const epoch = this.epoch;
+    const userId = this.ownerId();
     await this.refreshStatus();
+    if (!this.sameSession(epoch, userId)) return;
     await this.hold(dek, 2);
   }
 
@@ -267,12 +308,17 @@ export class VaultService {
   }
 
   async unlock(passphrase: string): Promise<void> {
+    const epoch = this.epoch;
+    const userId = this.ownerId();
     const status = this.statusSubject.value ?? (await this.refreshStatus());
+    if (!this.sameSession(epoch, userId)) return;
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');
     }
     const dek = await unlockWithPassphrase(passphrase, status.kdf_salt_b64, status.kdf_iterations, status.wrapped_dek_b64);
-    const progress = await readBlindIndexProgress(this.ownerId()).catch(() => null);
+    if (!this.sameSession(epoch, userId)) return;
+    const progress = await readBlindIndexProgress(userId).catch(() => null);
+    if (!this.sameSession(epoch, userId)) return;
     await this.hold(dek, progress?.blind_index_version ?? 1, progress?.reindexed ?? []);
   }
 
@@ -320,12 +366,21 @@ export class VaultService {
     return hmacBlindIndex(this.requireDek(), value);
   }
 
+  /** Unions the HKDF index with the pre-upgrade index, including after version 2. Health rows keep the legacy index. */
   async lookupBlindIndex(collection: string, indexName: string, value: string): Promise<string[]> {
     const dek = this.requireDek();
-    const primary = await this.postBlindIndex(collection, indexName, await hmacBlindIndex(dek, value));
-    if (primary.length) return primary;
-    try { return await this.postBlindIndex(collection, indexName, await legacyDekBlindIndex(dek, value)); }
-    catch { return primary; }
+    const epoch = this.epoch;
+    const userId = this.ownerId();
+    const hkdf = await hmacBlindIndex(dek, value);
+    if (!this.sameSession(epoch, userId)) return [];
+    const legacy = await legacyDekBlindIndex(dek, value);
+    if (!this.sameSession(epoch, userId)) return [];
+    const primary = await this.postBlindIndex(collection, indexName, hkdf);
+    if (!this.sameSession(epoch, userId)) return [];
+    let secondary: string[] = [];
+    try { secondary = await this.postBlindIndex(collection, indexName, legacy); } catch { secondary = []; }
+    if (!this.sameSession(epoch, userId)) return [];
+    return [...new Set([...primary, ...secondary])];
   }
 
   private postBlindIndex(collection: string, indexName: string, indexValue: string): Promise<string[]> {
@@ -337,58 +392,81 @@ export class VaultService {
   ensureBlindIndexes(): Promise<void> {
     if (this.versionNumber >= 2 || !this.dek) return Promise.resolve();
     if (this.reindexTask) return this.reindexTask;
-    const generation = ++this.reindexGeneration;
+    const token = ++this.reindexGeneration;
     const epoch = this.epoch;
-    this.reindexTask = this.runReindex(epoch).finally(() => {
-      if (this.reindexGeneration === generation) this.reindexTask = null;
+    const userId = this.ownerId();
+    const generation = this.holdGeneration;
+    this.reindexTask = this.runReindex(epoch, userId, generation).finally(() => {
+      if (this.reindexGeneration === token) this.reindexTask = null;
     });
     return this.reindexTask;
   }
 
-  private async runReindex(epoch: number): Promise<void> {
-    if (!this.dek || this.versionNumber >= 2) return;
-    const records = await firstValueFrom(this.listRecords(undefined, { silent: true }));
-    for (const record of records) {
-      if (epoch !== this.epoch || !this.dek) return;
-      const token = `${record.collection}/${record.client_id}`;
-      if (this.reindexed.has(token)) continue;
-      if (record.collection === 'transactions') await this.reindexTransaction(record, epoch);
-      if (epoch !== this.epoch || !this.dek) return;
-      this.reindexed.add(token);
-      await this.persistProgress();
+  private async replaced(epoch: number, userId: number | null, generation: number): Promise<boolean> {
+    if (this.owns(epoch, userId, generation)) return false;
+    if (generation === this.holdGeneration && (epoch !== this.epoch || (userId != null && this.ownerId() !== userId))) {
+      this.dek = null;
+      this.unlockedSubject.next(false);
+      await clearDekLocal();
     }
-    if (epoch !== this.epoch || !this.dek) return;
-    this.versionNumber = 2;
-    this.reindexed.clear();
-    await this.persistProgress();
+    return true;
   }
 
-  private async reindexTransaction(record: EncryptedRecordDto, epoch: number): Promise<void> {
-    let current = record;
+  private async runReindex(epoch: number, userId: number | null, generation: number): Promise<void> {
+    if (await this.replaced(epoch, userId, generation) || this.versionNumber >= 2) return;
+    const records = await firstValueFrom(this.listRecords(undefined, { silent: true }));
+    for (const record of records) {
+      if (await this.replaced(epoch, userId, generation)) return;
+      const visited = `${record.collection}/${record.client_id}`;
+      if (this.reindexed.has(visited)) continue;
+      if (record.collection === 'transactions') await this.reindexTransaction(record, epoch, userId, generation);
+      if (await this.replaced(epoch, userId, generation)) return;
+      this.reindexed.add(visited);
+      await this.persistProgress(epoch, userId, generation);
+    }
+    if (await this.replaced(epoch, userId, generation)) return;
+    this.versionNumber = 2;
+    this.reindexed.clear();
+    await this.persistProgress(epoch, userId, generation);
+  }
+
+  private async reindexTransaction(record: EncryptedRecordDto, epoch: number, userId: number | null, generation: number): Promise<void> {
+    const dek = this.dek;
+    if (!dek || !this.sameSession(epoch, userId, generation)) return;
+    let dedupe = '';
+    try {
+      const data = await this.decryptPayload<{ dedupe_key?: unknown }>(record.ciphertext_b64, record.collection, record.client_id, record.schema_version, record.key_version);
+      dedupe = typeof data?.dedupe_key === 'string' ? data.dedupe_key : '';
+    } catch {
+      if (!this.owns(epoch, userId, generation)) return;
+      this.noteUndecryptable();
+      return;
+    }
+    if (!dedupe || !this.owns(epoch, userId, generation)) return;
+    const indexValue = await hmacBlindIndex(dek, dedupe);
+    if (!this.owns(epoch, userId, generation)) return;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      let dedupe = '';
-      try {
-        const data = await this.decryptPayload<{ dedupe_key?: unknown }>(
-          current.ciphertext_b64, current.collection, current.client_id, current.schema_version, current.key_version,
-        );
-        dedupe = typeof data?.dedupe_key === 'string' ? data.dedupe_key : '';
-      } catch { return; }
-      if (!dedupe || epoch !== this.epoch || !this.dek) return;
+      if (!this.owns(epoch, userId, generation)) return;
+      const fresh = (await firstValueFrom(this.listRecords('transactions', { silent: true }))).find(row => row.client_id === record.client_id);
+      // Gone means deleted. Upsert would insert it again, so skip. The gap after this response stays open.
+      if (!fresh || !this.owns(epoch, userId, generation)) return;
       try {
         await firstValueFrom(this.upsertRecords([{
-          collection: current.collection, client_id: current.client_id, ciphertext_b64: current.ciphertext_b64,
-          schema_version: current.schema_version, key_version: current.key_version, expected_revision: current.revision,
-          indexes: [{ index_name: 'dedupe_key', index_value_b64: await hmacBlindIndex(this.dek, dedupe) }],
+          collection: fresh.collection, client_id: fresh.client_id, ciphertext_b64: fresh.ciphertext_b64,
+          schema_version: fresh.schema_version, key_version: fresh.key_version, expected_revision: fresh.revision,
+          indexes: [{ index_name: 'dedupe_key', index_value_b64: indexValue }],
         }], { silent: true }));
         return;
       } catch (error) {
         const status = typeof error === 'object' && error && 'status' in error ? Number((error as { status?: unknown }).status) : 0;
         if (attempt === 1 || status !== 409) throw error;
-        const latest = (await firstValueFrom(this.listRecords('transactions', { silent: true }))).find(row => row.client_id === record.client_id);
-        if (!latest || epoch !== this.epoch || !this.dek) return;
-        current = latest;
       }
     }
+  }
+
+  private noteUndecryptable(): void {
+    this.undecryptableRows += 1;
+    if (isDevMode()) console.debug(`vault re-index skipped undecryptable rows: ${this.undecryptableRows}`);
   }
 
   listRecords(collection?: string, options?: VaultWriteOptions): Observable<EncryptedRecordDto[]> {

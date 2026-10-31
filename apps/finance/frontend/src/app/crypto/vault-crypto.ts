@@ -174,7 +174,7 @@ export async function readBlindIndexProgress(userId: number | null): Promise<Pro
   const record = await withVaultStore<Progress | undefined>('readonly', store => store.get(progressId(userId)));
   return record ? { blind_index_version: record.blind_index_version || 1, reindexed: record.reindexed ?? [] } : null;
 }
-export async function restoreVaultKeys(): Promise<StoredVaultKeys | null> {
+export async function restoreVaultKeys(stillCurrent: () => boolean = () => true): Promise<StoredVaultKeys | null> {
   let legacy: string | null = null;
   try { legacy = localStorage.getItem(DEK_STORE); } catch { legacy = null; }
   if (legacy) {
@@ -183,16 +183,23 @@ export async function restoreVaultKeys(): Promise<StoredVaultKeys | null> {
     if (raw.byteLength !== 32) return null;
     const imported = await importVaultKeys(raw);
     raw.fill(0);
+    if (!stillCurrent()) {
+      try { localStorage.removeItem(DEK_STORE); } catch { /* private mode */ }
+      return null;
+    }
     const stored: StoredVaultKeys = { dek: imported.dek, blind_index_version: 1, reindexed: [] };
     await persistVaultKeys(stored);
+    if (!stillCurrent()) { await clearFinanceSessionStorage(); await deleteFinanceVaultKey(); return null; }
     return stored;
   }
+  if (!stillCurrent()) return null;
   if (!vaultMarkedPresent()) {
     await deleteFinanceVaultKey();
     return null;
   }
   const record = await withVaultStore<DekRecord | undefined>('readonly', store => store.get(VAULT_KEY_ID));
-  if (!record?.dek || !record.blindKey) {
+  if (!stillCurrent() || !record?.dek || !record.blindKey) {
+    if (!stillCurrent()) return null;
     clearFinanceSessionStorage();
     return null;
   }
@@ -203,8 +210,8 @@ export async function restoreVaultKeys(): Promise<StoredVaultKeys | null> {
 export async function restoreDekLocal(): Promise<CryptoKey | null> {
   return (await restoreVaultKeys())?.dek ?? null;
 }
-export function clearDekLocal(): void {
-  clearFinanceSessionStorage();
+export function clearDekLocal(): Promise<void> {
+  return clearFinanceSessionStorage();
 }
 export async function indexedDbHoldsDek(): Promise<boolean> {
   if (!globalThis.indexedDB) return false;

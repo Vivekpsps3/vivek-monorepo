@@ -1,15 +1,15 @@
-/** localStorage key for the browser-only vault key. Not the crypto implementation. */
+/** Legacy localStorage name. The key itself lives in IndexedDB. */
 export const DEK_STORE = 'finance-dek';
 export const VAULT_PRESENCE = 'finance-vault-present';
 export const VAULT_DB_NAME = 'finance-vault';
 export const VAULT_KEY_STORE = 'keys';
 export const VAULT_KEY_ID = 'dek';
 
-/** Clear the persisted key without loading the vault implementation. */
-export function clearFinanceSessionStorage(): void {
+/** Clear the persisted key without loading the vault implementation. localStorage is cleared before the promise resolves. */
+export function clearFinanceSessionStorage(): Promise<void> {
   try { localStorage.removeItem(DEK_STORE); } catch { /* private mode */ }
   try { localStorage.removeItem(VAULT_PRESENCE); } catch { /* private mode */ }
-  void deleteFinanceVaultKey();
+  return deleteFinanceVaultKey();
 }
 
 /** True when this browser still has a saved vault key. Does not import vault crypto. */
@@ -56,12 +56,14 @@ export function withVaultStore<T>(mode: IDBTransactionMode, run: (store: IDBObje
 
 /** Drop the IndexedDB key record. Progress rows in the same database stay. */
 export function deleteFinanceVaultKey(): Promise<void> {
-  if (removingKey) return removingKey;
   if (!globalThis.indexedDB) return Promise.resolve();
-  removingKey = withVaultStore('readwrite', store => store.delete(VAULT_KEY_ID))
-    .then(() => undefined, () => undefined)
-    .finally(() => { removingKey = null; });
-  return removingKey;
+  const prev = removingKey ?? Promise.resolve();
+  let tracked: Promise<void> = Promise.resolve();
+  tracked = prev.catch(() => undefined).then(() => withVaultStore('readwrite', store => store.delete(VAULT_KEY_ID))).then(() => undefined, () => undefined).finally(() => {
+    if (removingKey === tracked) removingKey = null;
+  });
+  removingKey = tracked;
+  return tracked;
 }
 
 let droppingDb: Promise<void> | null = null;
