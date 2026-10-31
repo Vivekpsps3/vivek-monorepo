@@ -46,6 +46,7 @@ report=$(mktemp)
 trap 'rm -f "$report"' EXIT
 set +e
 "$py" -m pytest -q "$tests" \
+  -m "not perf" \
   "${coverage_args[@]}" \
   --cov-report=term \
   --cov-fail-under="$floor" | tee "$report"

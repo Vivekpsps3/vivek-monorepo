@@ -68,6 +68,7 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     from apps.finance.backend.app import register_finance
     from apps.finance.backend.logging_config import get_logger, setup_logging
     from apps.media.backend.app import register_media
+    from apps.server.town.router import router as town_router
     from apps.travel.backend.app import register_travel, validation_response
 
     setup_logging()
@@ -245,6 +246,7 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     register_finance(application)
     register_travel(application)
     register_media(application)
+    application.include_router(town_router, prefix="/api")
     if dependencies.test_router is not None:
         application.include_router(dependencies.test_router)
 

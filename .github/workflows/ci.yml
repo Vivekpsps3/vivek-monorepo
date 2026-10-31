@@ -53,6 +53,8 @@ jobs:
           done
       - run: ./scripts/coverage-gate.sh finance
       - run: ./scripts/coverage-gate.sh server
+      - name: Town read performance
+        run: python -m pytest -q -s apps/server/tests/test_town_perf.py
       - run: make test-fast
       - run: make lint-python
       - run: make typecheck-python

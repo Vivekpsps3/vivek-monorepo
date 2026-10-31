@@ -348,3 +348,32 @@ def test_archive_week_dst_and_before_creation():
     assert empty.last7 == ("none",) * 7
     tied = ((date(2026, 10, 19), 3), (date(2026, 10, 19), 5))
     assert cadence_on(date(2026, 10, 19), 7, tied) == 5
+
+
+def test_rest_day_used_one_week_is_available_the_next():
+    days = [
+        date(2026, 10, 12),
+        *_span("2026-10-14", "2026-10-18"),
+        date(2026, 10, 19),
+        date(2026, 10, 20),
+    ]
+    got = _habit("2026-10-12", "2026-10-21", days)
+    assert got.rest_day_available is True and got.rest_used_on is None
+    earlier = _habit("2026-10-12", "2026-10-14", [date(2026, 10, 12)])
+    assert earlier.rest_used_on == date(2026, 10, 13) and earlier.rest_day_available is False
+
+
+def test_checkin_ordinals_match_the_date_path():
+    created, today = date(2026, 10, 1), date(2026, 10, 29)
+    days = _span("2026-10-01", "2026-10-18")
+    cadence = ((date(2026, 10, 12), 7),)
+    by_date = evaluate_streak(created, today, days, 3, cadence)
+    by_ord = evaluate_streak(
+        created,
+        today,
+        (),
+        3,
+        cadence,
+        checkin_ords=[day.toordinal() for day in days],
+    )
+    assert by_ord == by_date
