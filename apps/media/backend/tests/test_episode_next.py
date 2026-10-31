@@ -499,3 +499,26 @@ def test_concurrent_next_returns_success_and_conflict(client, monkeypatch):
     progress = client.get(f"/api/entries/{saved['id']}").json()["show"]
     assert progress["watched_count"] == 1
     assert progress["next_episode"]["episode_number"] == 2
+
+
+@pytest.mark.parametrize("kind", ["tv", "movie"])
+@pytest.mark.parametrize("expected", ["12", True, 987654, None])
+def test_foreign_next_matches_unknown_before_validation(client, monkeypatch, kind, expected):
+    saved = _create(client, kind=kind)
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
+
+    def must_not_mark(*_args, **_kwargs):
+        raise AssertionError("mark_next_checked must not run for foreign or unknown entries")
+
+    monkeypatch.setattr(
+        "apps.media.backend.services.episode_next.mark_next_checked", must_not_mark
+    )
+    kwargs = {} if expected is None else {"json": {"expected_episode_id": expected}}
+    unknown = client.post("/api/entries/999999999/episodes/next", **kwargs)
+    foreign = client.post(f"/api/entries/{saved['id']}/episodes/next", **kwargs)
+    assert unknown.status_code == 404
+    assert unknown.json() == {"detail": "That item is not in your library."}
+    assert foreign.status_code == unknown.status_code
+    assert foreign.content == unknown.content
+    with _session(client) as db:
+        assert db.query(EpisodeProgress).count() == 0
