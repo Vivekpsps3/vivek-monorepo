@@ -1,7 +1,11 @@
 """Mark the next aired episode once, and name the one that changed."""
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import event
 
 from apps.media.backend.models import EpisodeProgress, UserEntry
 from apps.media.backend.services import records
@@ -448,3 +452,50 @@ def test_next_makes_no_provider_calls(client, monkeypatch):
     response = client.post(f"/api/entries/{saved['id']}/episodes/next")
     assert response.status_code == 200, response.text
     assert response.json()["marked"]["label"] == "S1E1"
+
+
+def test_concurrent_next_returns_success_and_conflict(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", TODAY)
+    saved = _show(client, _aired(2))
+    expected_id = saved["show"]["next_episode"]["id"]
+    barrier = Barrier(2, timeout=10)
+    database = client.app.state.database
+    rollbacks = []
+
+    def wait_before_insert(db, _context, _instances):
+        if any(isinstance(row, EpisodeProgress) for row in db.new):
+            # Both requests must select the same missing progress row before either inserts.
+            barrier.wait()
+
+    def record_rollback(db, _transaction):
+        if db.is_active:
+            rollbacks.append(db)
+
+    def mark():
+        return client.post(
+            f"/api/entries/{saved['id']}/episodes/next",
+            json={"expected_episode_id": expected_id},
+        )
+
+    event.listen(database.sessionmaker, "before_flush", wait_before_insert)
+    event.listen(database.sessionmaker, "after_soft_rollback", record_rollback)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(lambda _: mark(), range(2)))
+    finally:
+        event.remove(database.sessionmaker, "before_flush", wait_before_insert)
+        event.remove(database.sessionmaker, "after_soft_rollback", record_rollback)
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    conflict = next(response for response in responses if response.status_code == 409)
+    assert conflict.json() == {
+        "detail": "That episode is no longer next. Refresh to see your progress."
+    }
+    assert len(rollbacks) == 1
+    with _session(client) as db:
+        rows = db.query(EpisodeProgress).all()
+        assert len(rows) == 1
+        assert rows[0].episode_id == expected_id
+        assert rows[0].watched is True
+    progress = client.get(f"/api/entries/{saved['id']}").json()["show"]
+    assert progress["watched_count"] == 1
+    assert progress["next_episode"]["episode_number"] == 2
