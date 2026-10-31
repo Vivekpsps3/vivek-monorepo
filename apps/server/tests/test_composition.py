@@ -348,8 +348,8 @@ def test_session_csrf_rotation_and_two_users(tmp_path):
         ).status_code == (404)
         assert _call(client, "get", "/travel/api/home", "token2", "csrf2").json()["upcoming"] == []
         media = _call(client, "get", "/media/api/entries/nope", "token1", "csrf1")
-        assert media.status_code == 422
-        assert media.json()["detail"] == "Check the form and try again."
+        assert media.status_code == 404
+        assert media.json()["detail"] == "That item is not in your library."
         expired = _call(client, "get", "/travel/api/home", "token3", "csrf3")
         assert expired.status_code == 401
         assert expired.json()["detail"] == "Session expired"
