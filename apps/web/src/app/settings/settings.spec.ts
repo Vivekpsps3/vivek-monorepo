@@ -3,7 +3,7 @@ import { provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { ThemeService } from '@vivek/ui';
 import { FinanceService, VaultService } from '../../../../finance/frontend/src/testing';
-import { MarketRefreshCoordinatorService } from '../../../../finance/frontend/src/app/services/market-refresh-coordinator.service';
+import { loadMarketRefreshCoordinatorService } from '../../../../finance/frontend/src/public-api';
 import { PrivateLayoutComponent } from '../private-layout.component';
 import { routes } from '../routes';
 import { SessionService } from '../platform/session.service';
@@ -109,7 +109,8 @@ describe('AppearanceSectionComponent', () => {
 });
 
 describe('FinanceSectionComponent', () => {
-  function setup(unlocked: boolean): { fixture: ComponentFixture<FinanceSectionComponent>; lock: jasmine.Spy } {
+  async function setup(unlocked: boolean): Promise<{ fixture: ComponentFixture<FinanceSectionComponent>; lock: jasmine.Spy }> {
+    const MarketRefreshCoordinatorService = await loadMarketRefreshCoordinatorService();
     const unlocked$ = new BehaviorSubject(unlocked);
     const vault = {
       whenReady: () => Promise.resolve(),
@@ -135,7 +136,7 @@ describe('FinanceSectionComponent', () => {
   }
 
   it('shows the locked state and no lock button while the vault is locked', async () => {
-    const { fixture } = setup(false);
+    const { fixture } = await setup(false);
     await fixture.whenStable();
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
@@ -147,7 +148,7 @@ describe('FinanceSectionComponent', () => {
   });
 
   it('locks the vault from Lock now and then shows only the locked state', async () => {
-    const { fixture, lock } = setup(true);
+    const { fixture, lock } = await setup(true);
     await fixture.whenStable();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Lock now');

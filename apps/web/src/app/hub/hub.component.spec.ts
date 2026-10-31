@@ -7,7 +7,7 @@ import { DEK_STORE } from '../../../../finance/frontend/src/testing';
 import { VaultService } from '../../../../finance/frontend/src/testing';
 import { Asset, Holding, Liability } from '../../../../finance/frontend/src/testing';
 import { FinanceService } from '../../../../finance/frontend/src/testing';
-import { MarketRefreshCoordinatorService } from '../../../../finance/frontend/src/app/services/market-refresh-coordinator.service';
+import { loadMarketRefreshCoordinatorService } from '../../../../finance/frontend/src/public-api';
 import { ThemeService } from '@vivek/ui';
 import { HubComponent } from './hub.component';
 
@@ -64,6 +64,7 @@ describe('HubComponent', () => {
   };
   let vaultReads: number;
   let vaultUnlocked: boolean;
+  let vaultLocks: number;
   let financeCalls: number;
   let financeError: unknown;
   let assets$: BehaviorSubject<Asset[]>;
@@ -104,6 +105,7 @@ describe('HubComponent', () => {
     pending.length = 0;
     vaultReads = 0;
     vaultUnlocked = false;
+    vaultLocks = 0;
     financeCalls = 0;
     financeError = null;
     localStorage.removeItem(DEK_STORE);
@@ -121,6 +123,7 @@ describe('HubComponent', () => {
     spyOn(window, 'fetch').and.callFake((input: RequestInfo | URL) => new Promise<Response>(resolve => {
       pending.push({ url: String(input), resolve });
     }));
+    const MarketRefreshCoordinatorService = await loadMarketRefreshCoordinatorService();
     await TestBed.configureTestingModule({
       imports: [HubComponent],
       providers: [
@@ -141,7 +144,10 @@ describe('HubComponent', () => {
               vaultReads += 1;
               return vaultUnlocked;
             },
-            lock: () => { vaultUnlocked = false; },
+            lock: () => {
+              vaultLocks += 1;
+              vaultUnlocked = false;
+            },
           },
         },
         {
@@ -358,6 +364,12 @@ describe('HubComponent', () => {
     return channel;
   }
 
+  async function waitForVaultLock(): Promise<void> {
+    for (let i = 0; i < 20 && vaultLocks === 0; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+
   async function showHarbor(): Promise<void> {
     localStorage.setItem(DEK_STORE, 'present');
     vaultUnlocked = true;
@@ -416,11 +428,16 @@ describe('HubComponent', () => {
     expect(text).not.toMatch(/\$[\s]*\d/);
     expect(text).not.toContain('HBRX');
     expect(text).not.toContain('Harbor');
+    expect(fixture.componentInstance.netWorth).toBeNull();
+    expect(fixture.componentInstance.accounts).toEqual([]);
+    expect(fixture.componentInstance.positions).toEqual([]);
     expect(fixture.componentInstance['financeGeneration']).toBe(1);
     const echo = postLock(1);
     await new Promise(resolve => setTimeout(resolve, 20));
     echo.close();
     expect(fixture.componentInstance['financeGeneration']).toBe(1);
+    await waitForVaultLock();
+    expect(vaultLocks).toBe(1);
   });
 
   it('keeps a loaded card when the lock broadcast is for someone else or is not a lock', async () => {
@@ -444,7 +461,12 @@ describe('HubComponent', () => {
     expect(text).toContain('Finance is locked.');
     expect(text).not.toMatch(/\$[\s]*\d/);
     expect(text).not.toContain('Harbor');
+    expect(fixture.componentInstance.netWorth).toBeNull();
+    expect(fixture.componentInstance.accounts).toEqual([]);
+    expect(fixture.componentInstance.positions).toEqual([]);
     expect(fixture.componentInstance['financeGeneration']).toBe(1);
+    await waitForVaultLock();
+    expect(vaultLocks).toBe(1);
   });
 
   it('drops an in-flight finance load that resolves after a lock', async () => {
