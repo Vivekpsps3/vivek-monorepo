@@ -564,33 +564,65 @@ def test_commit_and_rollback_failure_does_not_leak_the_birthday(
     assert SECRET not in _captured_logs(caplog, capsys)
 
 
+def _assert_no_secret(value: object, secret: str, seen: set[int], where: str) -> None:
+    """str, repr, date.isoformat, and instance attributes all count as hits."""
+    marker = id(value)
+    if marker in seen:
+        return
+    seen.add(marker)
+    assert secret not in str(value), where
+    assert secret not in repr(value), where
+    if isinstance(value, date):
+        assert secret not in value.isoformat(), where
+    children: list[object] = []
+    if isinstance(value, dict):
+        children.extend(value.values())
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        children.extend(value)
+    elif getattr(type(value), "__module__", "").startswith("apps.server."):
+        attrs = getattr(value, "__dict__", None)
+        if isinstance(attrs, dict):
+            children.extend(attrs.values())
+    for child in children:
+        _assert_no_secret(child, secret, seen, where)
+
+
 def _assert_birthday_is_detached(error: BaseException, secret: str, *names: str) -> None:
     """The client error must not chain, or retain, the value that caused it."""
     assert error.__context__ is None
     assert error.__cause__ is None
+    assert secret not in str(error.args)
     assert secret not in repr(error.args)
     found: list[str] = []
+    seen: set[int] = set()
     frame = error.__traceback__
     while frame is not None:
         found.append(frame.tb_frame.f_code.co_name)
+        where = frame.tb_frame.f_code.co_name
         for value in frame.tb_frame.f_locals.values():
-            assert secret not in repr(value), frame.tb_frame.f_code.co_name
+            _assert_no_secret(value, secret, seen, where)
         frame = frame.tb_next
     for name in names:
         assert name in found
 
 
-def _secret_body_request() -> birthday_route.Request:
-    """Raw body and its birthday field are both SECRET. The helper frame is not on the traceback."""
+def _secret_body_request(note: bool = False) -> birthday_route.Request:
+    """Stream the body once. The request does not keep those bytes."""
 
     class _Request:
         def __init__(self) -> None:
-            body = ('{"birthday":"' + SECRET + '","show_age":true}').encode()
+            text = '{"birthday":"' + SECRET + '","show_age":true'
+            if note:
+                text += ',"note":"' + SECRET + '"'
+            body = (text + "}").encode()
             self.headers = {"content-length": str(len(body))}
-            self._body = body
+            self._pending: bytes | None = body
 
         async def stream(self):
-            yield self._body
+            body = self._pending
+            del self._pending
+            if body:
+                yield body
 
     return cast(birthday_route.Request, _Request())
 
@@ -671,20 +703,26 @@ def test_reject_frame_omits_the_submitted_birthday(monkeypatch: pytest.MonkeyPat
     _assert_birthday_is_detached(error, SECRET, "update_birthday", "_parse_body", "_parse_birthday")
 
 
+def test_sibling_note_is_absent_when_parse_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(birthday_route, "server_today", lambda: date(1900, 1, 1))
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(
+            birthday_route.update_birthday(
+                _secret_body_request(note=True),
+                cast(Session, object()),
+                cast(User, object()),
+            )
+        )
+    error = caught.value
+    assert error.status_code == 422
+    assert error.detail == MSG_FUTURE
+    _assert_birthday_is_detached(error, SECRET, "update_birthday", "_parse_body", "_parse_birthday")
+
+
 def test_commit_failure_frame_omits_the_submitted_birthday(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(birthday_route, "server_today", lambda: TODAY)
-
-    class _Rows:
-        def add(self, _row: object) -> None:
-            return None
-
-        def commit(self) -> None:
-            raise _driver_error()
-
-        def rollback(self) -> None:
-            raise _driver_error()
 
     class _Owner:
         id = 1
@@ -692,12 +730,27 @@ def test_commit_failure_frame_omits_the_submitted_birthday(
         pixels_show_age = False
         updated_at = None
 
+    class _Rows:
+        def __init__(self, owner: _Owner) -> None:
+            self._owner = owner
+
+        def add(self, _row: object) -> None:
+            return None
+
+        def commit(self) -> None:
+            raise _driver_error()
+
+        def rollback(self) -> None:
+            self._owner.birthday = None
+            raise _driver_error()
+
+    owner = _Owner()
     with pytest.raises(APIError) as caught:
         asyncio.run(
             birthday_route.update_birthday(
                 _secret_body_request(),
-                cast(Session, _Rows()),
-                cast(User, _Owner()),
+                cast(Session, _Rows(owner)),
+                cast(User, owner),
             )
         )
     error = caught.value

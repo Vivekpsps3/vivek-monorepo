@@ -74,11 +74,18 @@ def _parse_birthday(value: object, today: date) -> date | None:
     del value
     if parsed is None:
         _reject(MSG_FULL_DATE)
-    if parsed < _EARLIEST:
-        _reject(MSG_YEAR)
-    if parsed > today + timedelta(days=1):
-        _reject(MSG_FUTURE)
+    if parsed < _EARLIEST or parsed > today + timedelta(days=1):
+        detail = MSG_YEAR if parsed < _EARLIEST else MSG_FUTURE
+        del parsed
+        _reject(detail)
     return parsed
+
+
+def _pop_birthday(payload: dict[str, object]) -> object:
+    """Return the birthday and drop every sibling before a nested reject."""
+    value = payload.pop("birthday")
+    payload.clear()
+    return value
 
 
 def _parse_body(payload: object, today: date) -> tuple[date | None, bool]:
@@ -88,14 +95,15 @@ def _parse_body(payload: object, today: date) -> tuple[date | None, bool]:
     if "birthday" not in payload:
         payload.clear()
         _reject(MSG_FULL_DATE)
-    # Pop before the call so a nested reject does not still see the date here.
-    birthday = _parse_birthday(payload.pop("birthday"), today)
     show_age = payload.get("show_age")
     unknown = bool(set(payload) - _FIELDS)
-    payload.clear()
+    birthday = _parse_birthday(_pop_birthday(payload), today)
     if not isinstance(show_age, bool):
+        del birthday
+        del show_age
         _reject(MSG_SHOW_AGE)
     if unknown:
+        del birthday
         _reject(MSG_UNKNOWN)
     return birthday, show_age
 
@@ -191,6 +199,7 @@ async def update_birthday(
     current_user.birthday = birthday
     current_user.pixels_show_age = show_age
     current_user.updated_at = utc_now_naive()
+    del birthday
     audit_event(
         db,
         "account.birthday_changed",
