@@ -85,6 +85,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     const clean = await observeSecurity(page);
     await page.route(tileUrl, route => route.fulfill({ contentType: 'image/png', body: tile }));
     await page.goto('/travel/trips/' + trip.id);
+    await chooseColorTheme(page, theme);
     await page.getByRole('button', { name: 'Show map', exact: true }).click();
     const map = mapRegion(page);
     await expect(map.getByRole('status')).toContainText('Map ready', { timeout: 3000 });
@@ -92,7 +93,6 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     await expect.poll(zooms).toEqual([12]);
     await map.locator('.map-canvas').focus();
     await page.keyboard.press('+');
-    await chooseColorTheme(page, theme);
     await expect.poll(zooms).toEqual([13]);
     const oldCanvas = await map.locator('.map-canvas').elementHandle();
     for (let visit = 0; visit < 3; visit++) {

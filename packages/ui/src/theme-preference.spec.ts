@@ -1,4 +1,4 @@
-import { bindStoredTheme, bindSystemTheme, readThemeChoice, setThemePreference } from './theme-preference';
+import { bindSystemTheme, readThemeChoice, setThemePreference } from './theme-preference';
 
 describe('shared theme preference', () => {
   let stored: Map<string, string>;
@@ -57,17 +57,5 @@ describe('shared theme preference', () => {
     expect(changed).toHaveBeenCalledTimes(1);
     dispose();
     expect(removed).toHaveBeenCalledOnceWith('change', listener);
-  });
-  it('reports a theme saved in another document and releases its listener', () => {
-    const changed = jasmine.createSpy('changed');
-    const dispose = bindStoredTheme('ft-theme', changed);
-    window.dispatchEvent(new StorageEvent('storage', { key: 'finance-dek', newValue: 'x' }));
-    stored.set('suite-theme', 'dark');
-    window.dispatchEvent(new StorageEvent('storage', { key: 'suite-theme', newValue: 'dark' }));
-    expect(changed).toHaveBeenCalledOnceWith('dark');
-    dispose();
-    stored.set('suite-theme', 'light');
-    window.dispatchEvent(new StorageEvent('storage', { key: 'suite-theme', newValue: 'light' }));
-    expect(changed).toHaveBeenCalledTimes(1);
   });
 });

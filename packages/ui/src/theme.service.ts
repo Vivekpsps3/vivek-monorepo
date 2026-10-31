@@ -1,7 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import {
-  bindStoredTheme,
   bindSystemTheme,
   readThemeChoice,
   resolveThemeChoice,
@@ -24,10 +23,6 @@ export class ThemeService implements OnDestroy {
   private readonly unbind = bindSystemTheme(KEY, resolved => {
     this.resolvedSubject.next(resolved);
   });
-  private readonly unbindStored = bindStoredTheme(KEY, choice => {
-    if (choice === this.choiceSubject.value) return;
-    this.set(choice);
-  });
 
   constructor() {
     setThemePreference(this.choiceSubject.value, KEY);
@@ -49,6 +44,5 @@ export class ThemeService implements OnDestroy {
 
   ngOnDestroy(): void {
     this.unbind();
-    this.unbindStored();
   }
 }
