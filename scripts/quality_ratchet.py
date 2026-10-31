@@ -322,7 +322,7 @@ TOOLS = {
         lambda: eslint_findings(
             "apps/finance/frontend",
             ROOT / "packages",
-            ["browser/src", "auth/src", "ui/src"],
+            ["browser/src", "auth/src", "ui/src", "ui/pixels"],
         ),
     ),
     "suppressions": (BASELINES / "suppressions-baseline.txt", suppression_findings),
