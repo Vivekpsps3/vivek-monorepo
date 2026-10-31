@@ -6,7 +6,7 @@ import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
 import { SESSION_CONTEXT, SILENT_ERROR_TOAST, ToastService, type SessionPort } from '@vivek/ui';
 import { VAULT_PRESENCE, deleteFinanceVaultDb } from './dek-store';
-import { encryptJson, hmacBlindIndex, importVaultKeys, indexedDbHoldsDek, legacyDekBlindIndex, recordAad } from './vault-crypto';
+import { createVaultMaterial, encryptJson, hmacBlindIndex, importVaultKeys, indexedDbHoldsDek, legacyDekBlindIndex, recordAad } from './vault-crypto';
 import { VaultService, type EncryptedRecordDto } from './vault.service';
 
 describe('VaultService KDF upgrade', () => {
@@ -317,13 +317,16 @@ describe('VaultService blind-index upgrade', () => {
     TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
     const reloaded = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
-    const ready = reloaded.whenReady();
+    await reloaded.whenReady();
+    expect(reloaded.isUnlocked).toBeTrue();
+    expect(reloaded.blindIndexVersion).toBe(1);
+    const batch = reloaded.ensureBlindIndexes();
     (await requestFor(apiUrl('/vault/records'))).flush([tx1, tx2]);
     (await requestFor(txUrl)).flush([tx2]);
     const only = await requestFor(apiUrl('/vault/records/upsert'));
     expect(bodyOf(only).records.map(row => row.client_id)).toEqual(['txn_bbbbbbbb']);
     only.flush([{ ...tx2, revision: 2 }]);
-    await ready;
+    await batch;
     expect(reloaded.blindIndexVersion).toBe(2);
   });
 
@@ -386,5 +389,107 @@ describe('VaultService blind-index upgrade', () => {
     expect(text).toContain('undecryptable rows: 1');
     expect(text).not.toContain('txn_poison00');
     expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+  });
+
+  it('resolves unlock before the re-index batch finishes', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createVaultMaterial(passphrase, 1_000);
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+    await service.whenReady();
+    service.loadPublicStatus({
+      exists: true,
+      kdf_salt_b64: material.setupPayload.kdf_salt_b64,
+      kdf_iterations: material.setupPayload.kdf_iterations,
+      wrapped_dek_b64: material.setupPayload.wrapped_dek_b64,
+      key_version: 1,
+    });
+    const tx = await sealed(material.dek, 'transactions', 'txn_aaaaaaaa', { dedupe_key: 'dedupe-one' });
+    const pending = service.unlock(passphrase);
+    const listed = await requestFor(apiUrl('/vault/records'));
+    await pending;
+    const batch = service.ensureBlindIndexes();
+    expect(service.isUnlocked).toBeTrue();
+    expect(service.blindIndexVersion).toBe(1);
+    const newer = { ...tx, revision: 3, ciphertext_b64: 'bmV3ZXItY2lwaGVy' };
+    listed.flush([tx]);
+    (await requestFor(txUrl)).flush([newer]);
+    const posted = await requestFor(apiUrl('/vault/records/upsert'));
+    expect(bodyOf(posted).records[0].ciphertext_b64).toBe(newer.ciphertext_b64);
+    expect(bodyOf(posted).records[0].expected_revision).toBe(3);
+    posted.flush([{ ...newer, revision: 4 }]);
+    await batch;
+    expect(service.blindIndexVersion).toBe(2);
+  });
+
+  it('a logout during the batch stops it', async () => {
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const service = await boot(11);
+    const tx = await sealed(service.requireDek(), 'transactions', 'txn_aaaaaaaa', { dedupe_key: 'dedupe-one' });
+    (VaultService.prototype.ensureBlindIndexes as jasmine.Spy).and.callThrough();
+    const batch = service.ensureBlindIndexes();
+    const listed = await requestFor(apiUrl('/vault/records'));
+    service.lock();
+    listed.flush([tx]);
+    await batch;
+    expect(service.isUnlocked).toBeFalse();
+    expect(service.blindIndexVersion).toBe(1);
+    expect(await indexedDbHoldsDek()).toBeFalse();
+    expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+  });
+
+  it('does not list a second batch until the stopped one finishes', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createVaultMaterial(passphrase, 1_000);
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+    await service.whenReady();
+    service.loadPublicStatus({
+      exists: true,
+      kdf_salt_b64: material.setupPayload.kdf_salt_b64,
+      kdf_iterations: material.setupPayload.kdf_iterations,
+      wrapped_dek_b64: material.setupPayload.wrapped_dek_b64,
+      key_version: 1,
+    });
+    const pending = service.unlock(passphrase);
+    const firstList = await requestFor(apiUrl('/vault/records'));
+    await pending;
+    service.lock();
+    await service.unlock(passphrase);
+    const batch = service.ensureBlindIndexes();
+    let startedEarly = false;
+    for (let attempt = 0; attempt < 5 && !startedEarly; attempt += 1) {
+      startedEarly = http.match(request => request.url === apiUrl('/vault/records')).length > 0;
+      if (!startedEarly) await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(startedEarly).toBeFalse();
+    firstList.flush([]);
+    (await requestFor(apiUrl('/vault/records'))).flush([]);
+    await batch;
+    expect(service.blindIndexVersion).toBe(2);
+    expect(service.isUnlocked).toBeTrue();
+  });
+
+  it('logs a background re-index failure without ids', async () => {
+    localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(12)));
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+    const debug = spyOn(console, 'debug');
+    await service.whenReady();
+    const batch = service.ensureBlindIndexes();
+    expect(service.isUnlocked).toBeTrue();
+    const tx = await sealed(service.requireDek(), 'transactions', 'txn_logme0001', { dedupe_key: 'dedupe-log' });
+    (await requestFor(apiUrl('/vault/records'))).flush([tx]);
+    (await requestFor(txUrl)).flush([tx]);
+    (await requestFor(apiUrl('/vault/records/upsert'))).flush({ detail: 'txn_logme0001 failed' }, { status: 500, statusText: 'Error' });
+    await batch.catch(() => undefined);
+    const text = debug.calls.allArgs().map(args => args.map(String).join(' ')).join('\n');
+    expect(text).toContain('vault re-index stopped before version 2');
+    expect(text).not.toContain('txn_logme0001');
+    expect(service.blindIndexVersion).toBe(1);
+    expect(service.isUnlocked).toBeTrue();
   });
 });

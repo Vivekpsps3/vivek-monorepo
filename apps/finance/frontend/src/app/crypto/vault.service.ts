@@ -57,6 +57,8 @@ export class VaultService {
   private versionNumber = 1;
   private reindexed = new Set<string>();
   private reindexTask: Promise<void> | null = null;
+  /** Prior batch, including one that lock already stopped. The next batch waits for it. */
+  private reindexTail: Promise<void> = Promise.resolve();
   private reindexGeneration = 0;
   private holdGeneration = 0;
   private opChain: Promise<void> = Promise.resolve();
@@ -134,11 +136,9 @@ export class VaultService {
     // The hub reads presence before it will load vault code. Store the key before unlock returns.
     await this.persistProgress(epoch, userId, generation);
     if (!this.sameSession(epoch, userId, generation)) return;
-    if (version < 2) {
-      try { await this.ensureBlindIndexes(); } catch { /* next unlock resumes */ }
-    }
-    if (!this.sameSession(epoch, userId, generation)) return;
+    // Publish unlock before the batch. Navigation must not wait on re-index.
     this.unlockedSubject.next(true);
+    if (this.versionNumber < 2) this.startBlindIndexes();
   }
 
   private async persistProgress(epoch: number, userId: number | null, generation: number): Promise<void> {
@@ -396,10 +396,22 @@ export class VaultService {
     const epoch = this.epoch;
     const userId = this.ownerId();
     const generation = this.holdGeneration;
-    this.reindexTask = this.runReindex(epoch, userId, generation).finally(() => {
+    const run = this.reindexTail.then(() => this.runReindex(epoch, userId, generation));
+    this.reindexTail = run.then(() => undefined, () => undefined);
+    this.reindexTask = run.finally(() => {
       if (this.reindexGeneration === token) this.reindexTask = null;
     });
     return this.reindexTask;
+  }
+
+  /** Fire-and-forget. A failure stays on the dev log and does not reject unlock. */
+  private startBlindIndexes(): void {
+    const task = this.ensureBlindIndexes();
+    void task.catch(() => this.noteReindexFailure());
+  }
+
+  private noteReindexFailure(): void {
+    if (isDevMode()) console.debug('vault re-index stopped before version 2');
   }
 
   private async replaced(epoch: number, userId: number | null, generation: number): Promise<boolean> {
@@ -451,6 +463,7 @@ export class VaultService {
       // Gone means deleted. Upsert would insert it again, so skip. The gap after this response stays open.
       if (!fresh || !this.owns(epoch, userId, generation)) return;
       try {
+        // Fresh ciphertext and revision, so a save made while this batch runs is not replaced by the snapshot.
         await firstValueFrom(this.upsertRecords([{
           collection: fresh.collection, client_id: fresh.client_id, ciphertext_b64: fresh.ciphertext_b64,
           schema_version: fresh.schema_version, key_version: fresh.key_version, expected_revision: fresh.revision,
