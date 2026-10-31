@@ -3,7 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { authPath, continueAfterAuth } from '@vivek/ui';
 import { AuthService } from './auth.service';
-import { UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
+import { takeSessionEndedCopy } from './session-ended';
+import { ToastService, UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-login',
@@ -17,6 +18,7 @@ export class LoginComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
+  private toast = inject(ToastService);
 
   email = '';
   username = '';
@@ -35,6 +37,8 @@ export class LoginComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    const ended = takeSessionEndedCopy();
+    if (ended) this.toast.info(ended);
     this.auth.bootstrapStatus().subscribe({
       next: status => {
         this.setupMode = status.needs_setup;

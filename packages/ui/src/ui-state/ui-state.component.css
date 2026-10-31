@@ -1,0 +1,28 @@
+.ui-state__banner {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  color: var(--text);
+}
+
+.ui-state__banner--warning {
+  background: var(--warning-soft-bg);
+}
+
+.ui-state__banner--info {
+  background: var(--info-soft-bg);
+}
+
+.ui-state__line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.ui-state__meta {
+  margin: var(--space-3) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}

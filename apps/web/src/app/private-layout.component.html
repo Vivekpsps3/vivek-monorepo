@@ -1,0 +1,58 @@
+<a class="skip-link" href="#workspace-content">Skip to content</a>
+<header class="suite-header">
+  <div class="suite-header__inner">
+    <div class="app-switcher">
+      <nav class="app-switcher__bar" aria-label="Apps">
+        @for (app of apps; track app.href) {
+          <a [routerLink]="app.href" routerLinkActive="is-current" ariaCurrentWhenActive="page"
+            [routerLinkActiveOptions]="{ exact: app.exact }">{{ app.label }}</a>
+        }
+      </nav>
+      <div class="app-switcher__compact" #switcher (keydown)="onSwitcherKey($event)">
+        <button #switcherButton class="app-switcher__toggle" type="button"
+          [attr.aria-expanded]="switcherOpen()" aria-controls="app-switcher-menu"
+          (click)="toggleSwitcher()">
+          <ui-icon name="grid" />
+          <span>{{ appName }}</span>
+          <ui-icon name="chevron-down" />
+        </button>
+        @if (switcherOpen()) {
+          <nav id="app-switcher-menu" class="app-switcher__menu" aria-label="Apps">
+            @for (app of apps; track app.href) {
+              <a [routerLink]="app.href" routerLinkActive="is-current" ariaCurrentWhenActive="page"
+                [routerLinkActiveOptions]="{ exact: app.exact }" (click)="closeSwitcher(false)">{{ app.label }}</a>
+            }
+          </nav>
+        }
+      </div>
+    </div>
+    <div class="suite-header__end">
+      <div class="suite-health" aria-hidden="true"></div>
+      <div class="suite-account" #userMenu>
+        <button #userButton class="btn btn-ghost user-menu-toggle" type="button"
+          [attr.aria-expanded]="menuOpen()" aria-controls="user-dropdown" (click)="toggleMenu()">
+          {{ session.currentUser?.username || session.currentUser?.display_name || 'You' }}
+        </button>
+        @if (menuOpen()) {
+          <nav id="user-dropdown" class="user-dropdown" aria-label="User options" (click)="onMenuAction($event)">
+            <a class="btn btn-ghost user-menu-item" routerLink="/settings">Settings</a>
+            @if (session.isAdmin()) { <a class="btn btn-ghost user-menu-item" routerLink="/hub/admin">Account stats · Admin</a> }
+            <label class="user-menu-theme" for="suite-theme">Color theme
+              <select id="suite-theme" [ngModel]="theme.current" (ngModelChange)="setTheme($event)">
+                <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
+              </select>
+            </label>
+            @if (featureMenu.template(); as actions) { <div class="user-menu-feature"><ng-container [ngTemplateOutlet]="actions" /></div> }
+            <button class="btn btn-ghost user-menu-item" type="button" (click)="session.logout()">Sign out</button>
+          </nav>
+        }
+      </div>
+    </div>
+  </div>
+</header>
+<div id="workspace-content" tabindex="-1">
+  @if (session.user$ | async; as user) {
+    @for (identity of [user]; track identity.id) { <router-outlet /> }
+  }
+  @else { <p class="page" role="status">Your session ended. <a routerLink="/auth/login">Sign in</a></p> }
+</div>

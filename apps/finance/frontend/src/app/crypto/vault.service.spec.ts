@@ -4,6 +4,8 @@ import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
 import { SILENT_ERROR_TOAST } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
+import { hasDek, holdDek } from './dek-holder';
+import { createVaultMaterial, persistDekLocal } from './vault-crypto';
 import { VaultService } from './vault.service';
 
 describe('VaultService KDF upgrade', () => {
@@ -119,6 +121,104 @@ describe('VaultService per-request silence', () => {
     expect(requests[0].request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
     expect(requests[1].request.context.get(SILENT_ERROR_TOAST)).toBeFalse();
     requests.forEach(request => request.flush({ deleted: 1 }));
+  });
+});
+
+describe('VaultService lock', () => {
+  afterEach(() => localStorage.removeItem('finance-dek'));
+
+  it('clears the stored key and the in-memory key independently of the unlocked flag', async () => {
+    localStorage.removeItem('finance-dek');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    holdDek({} as CryptoKey);
+    service['unlockedSubject'].next(true);
+    localStorage.setItem('finance-dek', 'raw-key-bytes');
+    expect(service.isUnlocked).toBeTrue();
+    service.lock();
+    expect(service.isUnlocked).toBeFalse();
+    const seen: boolean[] = [];
+    const epoch = service['epoch'];
+    service.unlocked$.subscribe(value => seen.push(value));
+    localStorage.setItem('finance-dek', 'again');
+    holdDek({} as CryptoKey);
+    service.lock();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(hasDek()).toBeFalse();
+    expect(service['epoch']).toBe(epoch + 1);
+    expect(seen).toEqual([false, false]);
+    localStorage.setItem('finance-dek', 'again');
+    holdDek({} as CryptoKey);
+    service.lock();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(hasDek()).toBeFalse();
+    expect(service['epoch']).toBe(epoch + 2);
+    expect(seen).toEqual([false, false, false]);
+    localStorage.setItem('finance-dek', 'again');
+    service.lock();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(hasDek()).toBeFalse();
+    expect(service['epoch']).toBe(epoch + 2);
+    expect(seen).toEqual([false, false, false]);
+    service['unlockedSubject'].next(true);
+    expect(hasDek()).toBeFalse();
+  });
+});
+
+describe('VaultService unlock epoch', () => {
+  const passphrase = 'correct-horse-battery';
+  afterEach(() => { localStorage.removeItem('finance-dek'); TestBed.resetTestingModule(); });
+
+  async function lockDuring(name: 'deriveKey' | 'exportKey'): Promise<void> {
+    localStorage.removeItem('finance-dek');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    const payload = (await createVaultMaterial(passphrase, 1000)).setupPayload;
+    service.loadPublicStatus({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 });
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { open = () => resolve(); });
+    let parked = false;
+    const real = crypto.subtle[name].bind(crypto.subtle) as (...args: never[]) => Promise<unknown>;
+    spyOn(crypto.subtle, name).and.callFake(((...args: never[]) => real(...args).then(async result => {
+      parked = true;
+      await gate;
+      return result;
+    })) as never);
+    const pending = service.unlock(passphrase);
+    while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
+    service.lock();
+    open();
+    const opened = await pending;
+    expect(opened).toBeFalse();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(hasDek()).toBeFalse();
+    expect(service.isUnlocked).toBeFalse();
+  }
+
+  it('discards the key when a lock lands during derivation', () => lockDuring('deriveKey'));
+  it('discards the key when a lock lands before the finance-dek write', () => lockDuring('exportKey'));
+
+  it('discards a browser key when a lock lands during hydrate', async () => {
+    localStorage.removeItem('finance-dek');
+    await persistDekLocal((await createVaultMaterial(passphrase, 1000)).dek);
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { open = () => resolve(); });
+    let parked = false;
+    const real = crypto.subtle.importKey.bind(crypto.subtle) as (...args: never[]) => Promise<unknown>;
+    spyOn(crypto.subtle, 'importKey').and.callFake(((...args: never[]) => real(...args).then(async result => {
+      parked = true;
+      await gate;
+      return result;
+    })) as never);
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    const service = TestBed.inject(VaultService);
+    while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
+    service.lock();
+    open();
+    await service.whenReady();
+    expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
   });
 });
 

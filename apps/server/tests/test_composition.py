@@ -420,6 +420,12 @@ def test_startup_checks_schema_frontend_and_static_files(tmp_path):
         screen = client.get("/media/library", follow_redirects=False)
         assert screen.status_code == 200
         assert "<app-root" in screen.text
+        settings = client.get("/settings", follow_redirects=False)
+        assert settings.status_code == 200
+        assert "<app-root" in settings.text
+        assert client.get("/settings/account").status_code == 200
+        assert client.get("/settings/profile").status_code == 404
+        assert client.get("/account").status_code == 200
         assert client.get("/travel/trips/42").status_code == 200
         assert client.get("/media/api/missing").status_code == 404
         assert client.get("/travel/no-such-page").status_code == 404

@@ -5,6 +5,7 @@ import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rx
 import { authNavigation } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
+import { financeTabId, lockedHere } from '../crypto/dek-holder';
 import { VaultService } from '../crypto/vault.service';
 import { MarketPriceQuote } from '../models/transaction.model';
 import { FinanceService } from './finance.service';
@@ -42,6 +43,7 @@ interface TabMessage {
   userId: number;
   kind: 'invalidate' | 'lock' | 'signout';
   collections?: EncryptedCollection[];
+  tabId?: string;
 }
 
 const EMPTY_STATE: MarketRefreshState = {
@@ -169,8 +171,8 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     return result;
   }
 
-  broadcastLock(): void {
-    this.broadcastSessionMessage('lock');
+  broadcastLock(originTabId?: string): void {
+    this.broadcastSessionMessage('lock', originTabId);
   }
 
   broadcastSignOut(): void {
@@ -367,13 +369,15 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     this.sessionCancel$ = new Subject<void>();
   }
 
-  private broadcastSessionMessage(kind: 'lock' | 'signout'): void {
+  private broadcastSessionMessage(kind: 'lock' | 'signout', originTabId?: string): void {
     if (this.activeUserId == null || !this.channel) return;
-    this.channel.postMessage({ version: 1, userId: this.activeUserId, kind } satisfies TabMessage);
+    const tabId = kind === 'lock' ? originTabId ?? financeTabId() : undefined;
+    this.channel.postMessage({ version: 1, userId: this.activeUserId, kind, tabId } satisfies TabMessage);
   }
 
   private async receiveTabMessage(message: unknown): Promise<void> {
     if (!isTabMessage(message) || message.userId !== this.auth.currentUser?.id) return;
+    if (message.kind === 'lock' && (message.tabId === financeTabId() || lockedHere())) return;
     if (message.kind === 'invalidate') {
       if (!this.vault.isUnlocked || !message.collections?.length) return;
       try {
