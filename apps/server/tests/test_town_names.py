@@ -1,5 +1,6 @@
 """Habit name normalization, casefold keys, and the §8.4 character check."""
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ from fastapi.testclient import TestClient
 from apps.server.database import open_database
 from apps.server.errors import APIError
 from apps.server.main import Dependencies, Settings, create_app
+from apps.server.town.audit_habit_names import audit_habit_names, main
+from apps.server.town.constants import HABIT_NAME_MAX
 from apps.server.town.engine import (
     NAME_CHARACTERS_ERROR,
     NAME_LENGTH_ERROR,
@@ -168,3 +171,34 @@ def test_name_too_long_sets_field_errors_name(tmp_path: Path):
     assert body["field_errors"] == {"name": "Use 1 to 40 characters."}
     assert body["field_errors"]["name"] is not None
     assert body["retry_after"] is None
+
+
+@pytest.mark.parametrize("legacy_overlong", [False, True])
+def test_stored_habit_name_audit_is_read_only(
+    tmp_path: Path, legacy_overlong: bool, monkeypatch: pytest.MonkeyPatch
+):
+    database = tmp_path / "seeded-habits.db"
+    names = ["Read", "a" * HABIT_NAME_MAX, "ß" * (HABIT_NAME_MAX // 2)]
+    if legacy_overlong:
+        names += ["a" * (HABIT_NAME_MAX + 1), "a" * (HABIT_NAME_MAX - 1) + "ß"]
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE habits (name TEXT NOT NULL)")
+        db.executemany("INSERT INTO habits (name) VALUES (?)", [(name,) for name in names])
+    before = database.read_bytes()
+    counts = audit_habit_names(database)
+    assert counts == {
+        "checked": len(names),
+        "overlong_names": 1 if legacy_overlong else 0,
+        "overlong_folded_names": 2 if legacy_overlong else 0,
+    }
+    monkeypatch.setattr("sys.argv", ["audit_habit_names", str(database)])
+    assert main() == int(legacy_overlong)
+    assert database.read_bytes() == before
+    print(f"Seeded habit audit: {counts}")
+
+
+def test_habit_audit_does_not_create_a_missing_database(tmp_path: Path):
+    database = tmp_path / "missing.db"
+    with pytest.raises(sqlite3.OperationalError):
+        audit_habit_names(database)
+    assert not database.exists()

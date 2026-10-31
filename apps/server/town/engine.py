@@ -246,16 +246,16 @@ def field_validation_error(field: str, detail: str) -> APIError:
     )
 
 
-def require_slot(slot: int) -> int:
+def require_slot(slot: object) -> int:
     """Accept a lot index from LOT_UNLOCK_LV. Reject anything else."""
-    if isinstance(slot, bool) or slot not in range(len(LOT_UNLOCK_LV)):
+    if type(slot) is not int or slot not in range(len(LOT_UNLOCK_LV)):
         raise field_validation_error("slot", SLOT_ERROR)
     return slot
 
 
-def require_building_style(style: str) -> str:
+def require_building_style(style: object) -> str:
     """Accept a style named by SLOT_DEFAULT_STYLE. Reject anything else."""
-    if style not in _BUILDING_STYLES:
+    if not isinstance(style, str) or style not in _BUILDING_STYLES:
         raise field_validation_error("building_style", BUILDING_STYLE_ERROR)
     return style
 

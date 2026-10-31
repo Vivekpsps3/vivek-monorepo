@@ -628,3 +628,62 @@ def test_owned_next_rejects_raw_scalar_body(client, monkeypatch, raw):
     after = client.get(f"/api/entries/{saved['id']}").json()["show"]
     assert after["watched_count"] == before["watched_count"] == 0
     assert after["next_episode"]["id"] == before["next_episode"]["id"]
+
+
+def test_next_conditional_update_clears_operation_token(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", TODAY)
+    saved = _show(client, _aired(2))
+    episode_id = saved["show"]["next_episode"]["id"]
+    token = "11111111-1111-1111-1111-111111111111"
+    with _session(client) as db:
+        entry = _entry(db, saved["id"])
+        db.add(
+            EpisodeProgress(
+                user_id=entry.user_id,
+                episode_id=episode_id,
+                watched=False,
+                operation_token=token,
+            )
+        )
+        db.commit()
+        seeded = db.query(EpisodeProgress).one()
+        assert seeded.watched is False
+        assert seeded.operation_token == token
+        seeded_id = seeded.id
+    marked = client.post(f"/api/entries/{saved['id']}/episodes/next")
+    assert marked.status_code == 200, marked.text
+    with _session(client) as db:
+        row = db.query(EpisodeProgress).one()
+        assert row.id == seeded_id
+        assert row.watched is True
+        assert row.operation_token is None
+
+
+def test_integrity_error_conflict_has_no_context(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", TODAY)
+    saved = _show(client, _aired(2))
+    db = _session(client)
+
+    def plant_duplicate(session, _flush_context, _instances):
+        # A second pending row trips uq_episode_progress during the insert flush.
+        pending = [row for row in session.new if isinstance(row, EpisodeProgress)]
+        if len(pending) != 1:
+            return
+        row = pending[0]
+        session.add(EpisodeProgress(user_id=row.user_id, episode_id=row.episode_id, watched=True))
+
+    event.listen(db, "before_flush", plant_duplicate)
+    try:
+        entry = _entry(db, saved["id"])
+        with pytest.raises(HTTPException) as caught:
+            mark_next_checked(db, entry.user_id, entry, None)
+        error = caught.value
+        assert error.status_code == 409
+        assert error.detail == "That episode is no longer next. Refresh to see your progress."
+        assert error.__context__ is None
+        assert error.__cause__ is None
+    finally:
+        event.remove(db, "before_flush", plant_duplicate)
+        db.close()
+    with _session(client) as fresh:
+        assert fresh.query(EpisodeProgress).count() == 0

@@ -40,6 +40,7 @@ def mark_next_checked(
     marks = db.query(EpisodeProgress).filter(
         EpisodeProgress.user_id == user_id, EpisodeProgress.episode_id == episode.id
     )
+    failed = False
     try:
         if marks.first() is None:
             # uq_episode_progress arbitrates competing inserts, including a late winner.
@@ -51,16 +52,19 @@ def mark_next_checked(
             db.flush()
         elif (
             marks.filter(EpisodeProgress.watched.is_(False)).update(
-                {"watched": True, "watched_on": watched_on, "operation_token": None}
+                records.watched_values(True, watched_on)
             )
             != 1
         ):
             # A row found after the check may already belong to another successful request.
             db.rollback()
             raise conflict
-    except IntegrityError as exc:
+    except IntegrityError:
         db.rollback()
-        raise conflict from exc
+        failed = True
+    # Raised outside the handler so the driver error is not attached as __context__.
+    if failed:
+        raise conflict from None
     entry.updated_at = utc_now()
     db.flush()
     marked = {
