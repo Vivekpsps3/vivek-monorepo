@@ -49,6 +49,15 @@ def _watched_count(db, user_id):
     return sum(1 for row in rows if row.watched)
 
 
+def _raw_post(client, path, raw):
+    if raw is None:
+        return client.post(path)
+    return client.post(path, content=raw, headers={"Content-Type": "application/json"})
+
+
+_RAW_BODIES = (None, b'"12"', b"true", b"987654")
+
+
 def _aired(count):
     return [
         {
@@ -520,3 +529,45 @@ def test_foreign_next_matches_unknown_before_validation(client, monkeypatch, kin
     assert foreign.content == unknown.content
     with _session(client) as db:
         assert db.query(EpisodeProgress).count() == 0
+
+
+def test_raw_scalar_or_absent_body_matches_unknown_404(client, monkeypatch):
+    saved = {kind: _create(client, kind=kind) for kind in ("tv", "movie")}
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
+
+    def must_not_mark(*_args, **_kwargs):
+        raise AssertionError("mark_next_checked must not run for foreign or unknown entries")
+
+    monkeypatch.setattr("apps.media.backend.services.episode_next.mark_next_checked", must_not_mark)
+    paths = [
+        "/api/entries/999999999/episodes/next",
+        f"/api/entries/{saved['tv']['id']}/episodes/next",
+        f"/api/entries/{saved['movie']['id']}/episodes/next",
+    ]
+    responses = [_raw_post(client, path, raw) for path in paths for raw in _RAW_BODIES]
+    unknown = responses[0]
+    assert unknown.status_code == 404
+    assert unknown.json() == {"detail": "That item is not in your library."}
+    assert [response.status_code for response in responses] == [404] * len(responses)
+    assert [response.content for response in responses] == [unknown.content] * len(responses)
+    with _session(client) as db:
+        assert db.query(EpisodeProgress).count() == 0
+
+
+@pytest.mark.parametrize("raw", [b'"12"', b"true", b"987654"])
+def test_owned_next_rejects_raw_scalar_body(client, monkeypatch, raw):
+    monkeypatch.setenv("MEDIA_TODAY", TODAY)
+    saved = _show(client, _aired(2))
+    path = f"/api/entries/{saved['id']}/episodes/next"
+    before = client.get(f"/api/entries/{saved['id']}").json()["show"]
+
+    def must_not_mark(*_args, **_kwargs):
+        raise AssertionError("a scalar body must be rejected before mark_next_checked")
+
+    monkeypatch.setattr("apps.media.backend.services.episode_next.mark_next_checked", must_not_mark)
+    response = _raw_post(client, path, raw)
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Check the form and try again."}
+    after = client.get(f"/api/entries/{saved['id']}").json()["show"]
+    assert after["watched_count"] == before["watched_count"] == 0
+    assert after["next_episode"]["id"] == before["next_episode"]["id"]
