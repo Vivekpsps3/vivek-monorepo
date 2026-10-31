@@ -79,10 +79,22 @@ describe('lockFinance', () => {
     expect([hasDek(), localStorage.getItem('finance-dek'), vault.isUnlocked, unlocked.at(-1)]).toEqual([false, null, false, false]);
     expect(toast.error).toHaveBeenCalledWith(jasmine.any(String), jasmine.objectContaining({ label: 'Try again' }));
     expect(cleared).toHaveBeenCalled();
+    const before = cleared.calls.count();
+    (toast.error as jasmine.Spy).calls.mostRecent().args[1].run();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(cleared.calls.count()).toBeGreaterThan(before);
+    expect((toast.error as jasmine.Spy).calls.count()).toBe(2);
   });
 
   it('toasts and stays locked when BroadcastChannel throws', async () => {
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [{ provide: SESSION_CONTEXT, useValue: { currentUser: { id: 3 } } as unknown as SessionPort }] });
+    const cleared = jasmine.createSpy('clearSessionState');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [
+      { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 3 } } as unknown as SessionPort },
+      { provide: FinanceService, useValue: { clearSessionState: cleared } },
+    ] });
+    const vault = TestBed.inject(VaultService); await vault.whenReady(); holdDek({} as CryptoKey);
+    vault['unlockedSubject'].next(true); localStorage.setItem('finance-dek', 'raw-key-bytes');
+    const lock = spyOn(vault, 'lock').and.callThrough();
     spyOn(TestBed.inject(ToastService), 'error');
     const Real = globalThis.BroadcastChannel;
     globalThis.BroadcastChannel = function BroadcastChannel() { throw new Error('down'); } as unknown as typeof BroadcastChannel;
@@ -90,5 +102,7 @@ describe('lockFinance', () => {
     finally { globalThis.BroadcastChannel = Real; }
     expect(TestBed.inject(ToastService).error).toHaveBeenCalled();
     expect(hasDek()).toBeFalse();
+    expect(cleared).toHaveBeenCalled();
+    expect(lock).toHaveBeenCalled();
   });
 });

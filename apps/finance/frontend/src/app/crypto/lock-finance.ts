@@ -9,6 +9,8 @@ export const lockLoad = { modules: () => Promise.all([
 ] as const) };
 
 const VAULT_CHANNEL = 'finance-vault-sync-v1';
+let dropSnapshots = () => undefined as void;
+export function bindLockSnapshots(drop: () => void): void { dropSnapshots = drop; }
 
 function postLock(userId: number, originTabId?: string): void {
   if (typeof BroadcastChannel === 'undefined') return;
@@ -20,6 +22,7 @@ function postLock(userId: number, originTabId?: string): void {
 export async function lockFinance(injector: Injector, originTabId?: string): Promise<void> {
   wipeDek();
   try {
+    dropSnapshots();
     const load = lockLoad.modules, userId = injector.get(SESSION_CONTEXT, null, { optional: true })?.currentUser?.id;
     if (typeof userId === 'number') postLock(userId, originTabId);
     await import('../services/finance.service').then(m => injector.get(m.FinanceService).clearSessionState()).catch(() => undefined);

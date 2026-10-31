@@ -26,6 +26,7 @@ import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { hasDek, readLockEpoch } from '../crypto/dek-holder';
+import { bindLockSnapshots } from '../crypto/lock-finance';
 import { VaultService, type VaultWriteOptions } from '../crypto/vault.service';
 import {
   BankAccountRecord,
@@ -125,6 +126,7 @@ export class FinanceService {
     private encStore: EncryptedStoreService,
     private financeImports: FinanceImportService
   ) {
+    bindLockSnapshots(() => { this._netWorth.next(null); this._assets.next([]); });
     inject(SESSION_CONTEXT, { optional: true })?.cleared$?.pipe(takeUntilDestroyed()).subscribe(() => this.clearSessionState());
     this.market = new FinanceMarketCoordinator(this.encStore, {
       sessionToken: () => this.encStore.sessionToken,

@@ -142,6 +142,20 @@ describe('FinanceService', () => {
     expect([worth, (service as unknown as { _netWorth: { value: unknown } })._netWorth.value]).toEqual([[], null]);
   });
 
+  it('does not replay cached assets or net worth once lockFinance starts', () => {
+    const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
+    (service as unknown as { _assets: { next(rows: Asset[]): void }; _netWorth: { next(value: unknown): void } })._assets.next([secret]);
+    (service as unknown as { _netWorth: { next(value: unknown): void } })._netWorth.next({ total: 40 });
+    const assets: Asset[][] = []; const totals: unknown[] = []; const real = lockLoad.modules;
+    lockLoad.modules = (() => new Promise(() => undefined)) as typeof lockLoad.modules;
+    try {
+      void lockFinance(TestBed.inject(Injector));
+      service.assets$.subscribe(rows => assets.push(rows));
+      service.netWorth$.subscribe(value => totals.push(value));
+      expect([assets, totals]).toEqual([[[]], [null]]);
+    } finally { lockLoad.modules = real; }
+  });
+
   it('does not deliver asset rows deferred across lockFinance', async () => {
     const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
     let release: (rows: Asset[]) => void = () => undefined;
