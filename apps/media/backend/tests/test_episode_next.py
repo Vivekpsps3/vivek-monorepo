@@ -420,6 +420,10 @@ def test_undo_by_unwatching_marked_episode_restores_state(client, monkeypatch):
     show = cleared.json()["show"]
     assert show["next_episode"]["id"] == episode_id
     assert show["watched_count"] == before
+    remarked = client.post(entry + "/episodes/next")
+    assert remarked.status_code == 200, remarked.text
+    assert remarked.json()["marked"]["episode_id"] == episode_id
+    assert remarked.json()["show"]["watched_count"] == before + 1
 
 
 def test_summary_next_episodes_advances_after_mark(client, monkeypatch):
@@ -508,6 +512,48 @@ def test_concurrent_next_returns_success_and_conflict(client, monkeypatch):
     progress = client.get(f"/api/entries/{saved['id']}").json()["show"]
     assert progress["watched_count"] == 1
     assert progress["next_episode"]["episode_number"] == 2
+
+
+@pytest.mark.parametrize("existing_unwatched", [False, True])
+def test_next_conflicts_when_winner_commits_between_check_and_write(
+    client, monkeypatch, existing_unwatched
+):
+    from apps.media.backend.services import episode_next
+
+    monkeypatch.setenv("MEDIA_TODAY", TODAY)
+    saved = _show(client, _aired(2))
+    expected_id = saved["show"]["next_episode"]["id"]
+    path = f"/api/entries/{saved['id']}/episodes/next"
+    if existing_unwatched:
+        cleared = client.post(
+            f"/api/entries/{saved['id']}/episodes/{expected_id}/watched", json={"watched": False}
+        )
+        assert cleared.status_code == 200
+    original_today = episode_next.today
+    winners = []
+
+    def commit_winner_before_write():
+        # A has checked next. B commits in its own request/session before A writes.
+        monkeypatch.setattr(episode_next, "today", original_today)
+        winners.append(client.post(path, json={"expected_episode_id": expected_id}))
+        return original_today()
+
+    monkeypatch.setattr(episode_next, "today", commit_winner_before_write)
+    loser = client.post(path, json={"expected_episode_id": expected_id})
+    assert [response.status_code for response in winners] == [200]
+    assert winners[0].json()["marked"]["episode_id"] == expected_id
+    assert loser.status_code == 409, loser.text
+    assert loser.json() == {
+        "detail": "That episode is no longer next. Refresh to see your progress."
+    }
+    with _session(client) as db:
+        rows = db.query(EpisodeProgress).all()
+        assert len(rows) == 1
+        assert rows[0].episode_id == expected_id
+        assert rows[0].watched is True
+    show = client.get(f"/api/entries/{saved['id']}").json()["show"]
+    assert show["watched_count"] == 1
+    assert show["next_episode"]["episode_number"] == 2
 
 
 @pytest.mark.parametrize("kind", ["tv", "movie"])
