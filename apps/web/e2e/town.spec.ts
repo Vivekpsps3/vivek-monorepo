@@ -49,7 +49,7 @@ test.describe('Town TH1 fixtures', () => {
       if (width === 1280) expect(await page.locator('app-town ui-card').evaluate(el => el.getBoundingClientRect().width)).toBe(360);
       const scan = await new AxeBuilder({ page }).include('app-town').analyze();
       expect(scan.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
-      await info.attach(`town-${width}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+      await info.attach(`town-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
     });
   }
   test('15: DST check-in keeps the server calendar day', async ({ page, request }) => {
