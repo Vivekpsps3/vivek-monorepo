@@ -391,7 +391,7 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
   await expect(page).toHaveURL(/\/vault\/unlock$/);
   await expect(second).toHaveURL(/\/vault\/unlock$/);
   const lockMessages = await page.evaluate(() => (window as any).__financeMessages as unknown[]);
-  expect(lockMessages).toContainEqual({ version: 1, userId: 987, kind: 'lock' });
+  expect(lockMessages).toContainEqual({ version: 1, userId: 987, kind: 'lock', tabId: expect.any(String) });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '/tmp/finance-ux-lock-propagation.png', fullPage: true });
 });
