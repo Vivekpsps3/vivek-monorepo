@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { DestroyRef, Injectable, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -126,7 +126,8 @@ export class FinanceService {
     private encStore: EncryptedStoreService,
     private financeImports: FinanceImportService
   ) {
-    bindLockSnapshots(() => { this._netWorth.next(null); this._assets.next([]); });
+    const releaseSnapshots = bindLockSnapshots(() => this.clearSessionState());
+    inject(DestroyRef).onDestroy(releaseSnapshots);
     inject(SESSION_CONTEXT, { optional: true })?.cleared$?.pipe(takeUntilDestroyed()).subscribe(() => this.clearSessionState());
     this.market = new FinanceMarketCoordinator(this.encStore, {
       sessionToken: () => this.encStore.sessionToken,

@@ -142,17 +142,36 @@ describe('FinanceService', () => {
     expect([worth, (service as unknown as { _netWorth: { value: unknown } })._netWorth.value]).toEqual([[], null]);
   });
 
-  it('does not replay cached assets or net worth once lockFinance starts', () => {
+  it('does not replay cached plaintext or apply an in-flight refresh once lockFinance starts', async () => {
     const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
-    (service as unknown as { _assets: { next(rows: Asset[]): void }; _netWorth: { next(value: unknown): void } })._assets.next([secret]);
-    (service as unknown as { _netWorth: { next(value: unknown): void } })._netWorth.next({ total: 40 });
-    const assets: Asset[][] = []; const totals: unknown[] = []; const real = lockLoad.modules;
+    const subjects = service as unknown as Record<string, { next(value: unknown): void }>;
+    for (const name of ['_transactions', '_dashboardTransactions', '_holdings', '_assets', '_liabilities', '_jobIncomes', '_fixedExpenses', '_subscriptions']) subjects[name].next([secret]);
+    subjects['_netWorth'].next({ total: 40 });
+    subjects['_cashflowSummary'].next({ total: 40 });
+    let token = 1;
+    Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
+    (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    let release: (rows: Asset[]) => void = () => undefined;
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getAssets.and.returnValue(new Promise<Asset[]>(resolve => { release = resolve; }));
+    encStore.getNetWorth.and.resolveTo({ total: 1 } as never);
+    const refresh = service.refreshCollectionsFromAnotherTab(['assets']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const epoch = (service as unknown as { snapshotEpoch: number }).snapshotEpoch;
+    const real = lockLoad.modules;
     lockLoad.modules = (() => new Promise(() => undefined)) as typeof lockLoad.modules;
+    const replay: unknown[] = [];
     try {
       void lockFinance(TestBed.inject(Injector));
-      service.assets$.subscribe(rows => assets.push(rows));
-      service.netWorth$.subscribe(value => totals.push(value));
-      expect([assets, totals]).toEqual([[[]], [null]]);
+      for (const stream of [service.transactions$, service.dashboardTransactions$, service.holdings$, service.assets$, service.liabilities$, service.jobIncomes$, service.fixedExpenses$, service.subscriptions$, service.netWorth$, service.cashflowSummary$] as Array<{ subscribe(next: (value: unknown) => void): unknown }>) stream.subscribe(value => replay.push(value));
+      expect(replay).toEqual([[], [], [], [], [], [], [], [], null, null]);
+      expect([(service as unknown as { snapshotEpoch: number }).snapshotEpoch, token]).toEqual([epoch + 1, 2]);
+      release([secret]);
+      await refresh.catch(() => undefined);
+      const after: Asset[][] = [];
+      service.assets$.subscribe(rows => after.push(rows));
+      expect(after).toEqual([[]]);
     } finally { lockLoad.modules = real; }
   });
 
@@ -173,7 +192,7 @@ describe('FinanceService', () => {
       hang(); service.getAssets().subscribe(rows => seen.push(rows));
       lockLoad.modules = (() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules;
       await lockFinance(TestBed.inject(Injector)); release([secret]); await Promise.resolve();
-      expect([seen, cleared]).toEqual([[], 3]);
+      expect([seen, cleared]).toEqual([[], 5]);
     } finally { lockLoad.modules = real; }
   });
 

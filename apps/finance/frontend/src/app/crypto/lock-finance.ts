@@ -10,7 +10,10 @@ export const lockLoad = { modules: () => Promise.all([
 
 const VAULT_CHANNEL = 'finance-vault-sync-v1';
 let dropSnapshots = () => undefined as void;
-export function bindLockSnapshots(drop: () => void): void { dropSnapshots = drop; }
+export function bindLockSnapshots(drop: () => void): () => void {
+  dropSnapshots = drop;
+  return () => { if (dropSnapshots === drop) dropSnapshots = () => undefined as void; };
+}
 
 function postLock(userId: number, originTabId?: string): void {
   if (typeof BroadcastChannel === 'undefined') return;
