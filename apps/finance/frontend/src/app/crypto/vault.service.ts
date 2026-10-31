@@ -78,6 +78,7 @@ export class VaultService {
   }
 
   private async hold(dek: CryptoKey, epoch = readLockEpoch()): Promise<void> {
+    if (epoch !== readLockEpoch()) return;
     this.dek = dek;
     this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
     this.unlockedSubject.next(true);
@@ -156,18 +157,22 @@ export class VaultService {
   }
 
   async setup(passphrase: string): Promise<void> {
+    const epoch = readLockEpoch();
     const material = await createVaultMaterial(passphrase);
     const status = await firstValueFrom(
       this.http.post<VaultStatus>(apiUrl('/finance/vault/setup'), material.setupPayload)
     );
     this.statusSubject.next(status);
-    await this.hold(material.dek);
+    if (epoch !== readLockEpoch()) return;
+    await this.hold(material.dek, epoch);
   }
 
   /** Completes an atomically-created vault after passwordless account bootstrap/signup. */
   async adoptBootstrapVault(dek: CryptoKey): Promise<void> {
+    const epoch = readLockEpoch();
     await this.refreshStatus();
-    await this.hold(dek);
+    if (epoch !== readLockEpoch()) return;
+    await this.hold(dek, epoch);
   }
 
   /**
@@ -224,11 +229,12 @@ export class VaultService {
   }
 
   async unlock(passphrase: string): Promise<boolean> {
+    const epoch = readLockEpoch();
     const status = this.statusSubject.value ?? (await this.refreshStatus());
+    if (epoch !== readLockEpoch()) return false;
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');
     }
-    const epoch = readLockEpoch();
     const dek = await unlockWithPassphrase(
       passphrase,
       status.kdf_salt_b64,

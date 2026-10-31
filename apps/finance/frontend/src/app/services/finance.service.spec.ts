@@ -4,6 +4,7 @@ import { firstValueFrom, Subject } from 'rxjs';
 import { FinanceService } from './finance.service';
 import { VaultService } from '../crypto/vault.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
+import { Asset } from '../models/transaction.model';
 
 describe('FinanceService', () => {
   let service: FinanceService;
@@ -113,6 +114,28 @@ describe('FinanceService', () => {
     expect((service as any)._liabilities.value).toEqual([liability]);
     expect(events).toContain(jasmine.objectContaining({ collections: ['assets'], source: 'remote' }));
     expect(events).toContain(jasmine.objectContaining({ collections: ['liabilities'], source: 'remote' }));
+  });
+
+  it('does not deliver decrypted assets after a lock', async () => {
+    const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
+    let release: (rows: Asset[]) => void = () => undefined;
+    const pending = new Promise<Asset[]>(resolve => { release = resolve; });
+    encStore.getAssets.and.returnValue(pending);
+    let token = 4;
+    Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
+    (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    const seen: Asset[][] = [];
+    let completed = false;
+    service.getAssets().subscribe({
+      next: rows => seen.push(rows),
+      complete: () => { completed = true; },
+    });
+    service.clearSessionState();
+    release([secret]);
+    await Promise.resolve();
+    expect(seen).toEqual([]);
+    expect(completed).toBeTrue();
   });
 
   it('continues refreshing valid collections when one member of a multi-collection snapshot goes stale', async () => {

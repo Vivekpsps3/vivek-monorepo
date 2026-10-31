@@ -1,6 +1,7 @@
 import { Injector } from '@angular/core';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { SESSION_CONTEXT, ToastService, type SessionPort } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { hasDek, holdDek } from './dek-holder';
@@ -48,18 +49,37 @@ describe('lockFinance', () => {
     expect(localStorage.getItem('finance-dek')).toBeNull();
     expect(hasDek()).toBeFalse();
   });
-  it('wipes memory and storage when the import rejects or never resolves', async () => {
+  it('wipes memory and storage when the import never resolves', () => {
     TestBed.configureTestingModule({});
+    holdDek({} as CryptoKey);
+    localStorage.setItem('finance-dek', 'raw-key-bytes');
+    lockLoad.modules = (() => new Promise(() => undefined)) as typeof lockLoad.modules;
+    void lockFinance(TestBed.inject(Injector));
+    expect([hasDek(), localStorage.getItem('finance-dek')]).toEqual([false, null]);
+  });
+
+  it('broadcasts the lock, toasts, and stays locked when the import rejects', async () => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{ provide: SESSION_CONTEXT, useValue: { currentUser: { id: 7 } } as unknown as SessionPort }],
+    });
     const injector = TestBed.inject(Injector);
-    const run = async (load: typeof lockLoad.modules, wait: boolean) => {
-      holdDek({} as CryptoKey);
-      localStorage.setItem('finance-dek', 'raw-key-bytes');
-      lockLoad.modules = load;
-      const pending = lockFinance(injector);
-      if (wait) await expectAsync(pending).toBeRejected();
-      expect([hasDek(), localStorage.getItem('finance-dek')]).toEqual([false, null]);
-    };
-    await run((() => new Promise(() => undefined)) as typeof lockLoad.modules, false);
-    await run((() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules, true);
+    const vault = TestBed.inject(VaultService);
+    await vault.whenReady();
+    holdDek({} as CryptoKey);
+    vault['unlockedSubject'].next(true);
+    localStorage.setItem('finance-dek', 'raw-key-bytes');
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    const heard: unknown[] = [];
+    const other = new BroadcastChannel('finance-vault-sync-v1');
+    other.onmessage = event => heard.push(event.data);
+    lockLoad.modules = (() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules;
+    await expectAsync(lockFinance(injector)).toBeResolved();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    other.close();
+    expect([hasDek(), localStorage.getItem('finance-dek'), vault.isUnlocked]).toEqual([false, null, false]);
+    expect(toast.error).toHaveBeenCalled();
+    expect(heard).toContain(jasmine.objectContaining({ version: 1, userId: 7, kind: 'lock' }));
   });
 });

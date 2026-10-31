@@ -674,10 +674,17 @@ export class FinanceService {
 
   getAssets(): Observable<Asset[]> {
     const epoch = this.dataEpoch(['assets']);
-    return from(this.encStore.getAssets().then(rows => {
-      if (epoch === this.dataEpoch(['assets'])) this._assets.next(rows);
-      return rows;
-    }));
+    return new Observable(subscriber => {
+      void this.encStore.getAssets().then(rows => {
+        if (epoch !== this.dataEpoch(['assets'])) {
+          subscriber.complete();
+          return;
+        }
+        this._assets.next(rows);
+        subscriber.next(rows);
+        subscriber.complete();
+      }, (error: unknown) => subscriber.error(error));
+    });
   }
 
   addAsset(body: AssetCreate, silent = false): Observable<Asset> {

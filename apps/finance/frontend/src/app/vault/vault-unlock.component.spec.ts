@@ -85,7 +85,7 @@ describe('VaultUnlockComponent', () => {
     await fixture.componentInstance.unlock();
     expect(vault.upgradeKdfIfNeeded).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
-    expect(fixture.componentInstance.error).toBe('');
+    expect(fixture.componentInstance.error).toBe('Vault was locked, try again');
     expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
   });
 });
