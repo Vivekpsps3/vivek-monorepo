@@ -325,6 +325,14 @@ TOOLS = {
             ["browser/src", "auth/src", "ui/src", "ui/pixels"],
         ),
     ),
+    "eslint-world-engine": (
+        BASELINES / "eslint-world-engine-baseline.txt",
+        lambda: eslint_findings(
+            "apps/web",
+            ROOT,
+            ["apps/web/src/app/world/engine"],
+        ),
+    ),
     "suppressions": (BASELINES / "suppressions-baseline.txt", suppression_findings),
 }
 

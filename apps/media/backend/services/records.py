@@ -860,6 +860,7 @@ def list_library(
     offset: int = 0,
     limit: int = 50,
     favorite: bool = False,
+    tags: list[str] | None = None,
 ) -> tuple[list[UserEntry], int]:
     rows = db.query(UserEntry).join(CatalogItem).filter(UserEntry.user_id == user_id)
     if favorite:
@@ -883,6 +884,10 @@ def list_library(
     if query:
         like = f"%{query.strip()}%"
         rows = rows.filter(or_(CatalogItem.title.ilike(like), CatalogItem.creator.ilike(like)))
+    if tags:
+        from apps.media.backend.services.tag_filter import tags_clause
+
+        rows = rows.filter(tags_clause(tags))
     total = rows.count()
     title = CatalogItem.title_sort
     if sort == "rating":

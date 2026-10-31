@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -175,7 +176,10 @@ class SeasonProgress(Base):
 
 class EpisodeProgress(Base):
     __tablename__ = "episode_progress"
-    __table_args__ = (UniqueConstraint("user_id", "episode_id", name="uq_episode_progress"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "episode_id", name="uq_episode_progress"),
+        Index("ix_episode_progress_user_watched_on", "user_id", "watched_on"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
