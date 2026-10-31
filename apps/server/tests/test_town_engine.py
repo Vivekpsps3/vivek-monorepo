@@ -1,9 +1,15 @@
-"""Pure Town engine: constants, levels, lots, cadence, caps, and streaks."""
+"""Town engine: constants, levels, lots, cadence, caps, streaks, and field validation."""
 
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
+from fastapi import APIRouter
+from fastapi.testclient import TestClient
 
+from apps.server.database import open_database
+from apps.server.errors import APIError
+from apps.server.main import Dependencies, Settings, create_app
 from apps.server.town.constants import (
     BUILDING_LV,
     CHECKIN_WINDOW,
@@ -20,6 +26,9 @@ from apps.server.town.constants import (
     XP,
 )
 from apps.server.town.engine import (
+    BUILDING_STYLE_ERROR,
+    PER_WEEK_ERROR,
+    SLOT_ERROR,
     CadenceAction,
     CadenceChange,
     WeekProgress,
@@ -35,6 +44,8 @@ from apps.server.town.engine import (
     lots,
     next_monday_after,
     plan_cadence_change,
+    require_building_style,
+    require_slot,
     stage,
 )
 
@@ -136,8 +147,9 @@ def test_cadence_on_uses_the_latest_row_on_or_before_the_day():
     assert cadence_kind(7) == "daily"
     assert cadence_kind(1) == "weekly"
     assert cadence_kind(6) == "weekly"
-    with pytest.raises(ValueError, match="per_week"):
+    with pytest.raises(APIError) as bad_week:
         cadence_kind(0)
+    assert bad_week.value.field_errors == {"per_week": PER_WEEK_ERROR}
 
 
 def test_plan_cadence_change_midweek_insert_update_and_noop():
@@ -348,3 +360,98 @@ def test_archive_week_dst_and_before_creation():
     assert empty.last7 == ("none",) * 7
     tied = ((date(2026, 10, 19), 3), (date(2026, 10, 19), 5))
     assert cadence_on(date(2026, 10, 19), 7, tied) == 5
+
+
+def test_reverting_to_this_weeks_per_week_deletes_the_pending_row():
+    today = date(2026, 10, 15)
+    monday = date(2026, 10, 19)
+    rows = ((date(2026, 10, 5), 3), (monday, 5))
+    change = plan_cadence_change(today, 7, rows, 3)
+    assert change == _change(monday, 3, "delete")
+    assert change is not None
+    remaining = tuple(row for row in rows if row[0] != change.effective_from)
+    described = describe_cadence(today, 7, remaining)
+    assert described.pending is None
+    assert (described.per_week, described.kind) == (3, "weekly")
+
+
+def _town_error_body(tmp_path: Path, error: APIError) -> dict[str, object]:
+    router = APIRouter()
+
+    @router.post("/town-validation-probe")
+    def probe() -> None:
+        raise error
+
+    url = f"sqlite:///{tmp_path / 'site.db'}"
+    application = create_app(
+        Settings(
+            database_url=url,
+            release="test",
+            web_root=tmp_path / "web",
+            openapi=False,
+        ),
+        Dependencies(
+            database=open_database(url),
+            check_schema=False,
+            check_frontend=False,
+            test_router=router,
+        ),
+    )
+    with TestClient(application) as client:
+        response = client.post("/town-validation-probe")
+    assert response.status_code == 422
+    body = response.json()
+    assert isinstance(body, dict)
+    return body
+
+
+def _assert_field_validation(tmp_path: Path, error: APIError, field: str, detail: str) -> None:
+    assert error.status_code == 422
+    assert error.code == "validation_error"
+    assert error.message == "Check the highlighted fields."
+    assert error.field_errors == {field: detail}
+    body = _town_error_body(tmp_path, error)
+    assert body["code"] == "validation_error"
+    assert body["message"] == "Check the highlighted fields."
+    assert body["detail"] == "Check the highlighted fields."
+    assert body["field_errors"] == {field: detail}
+    assert body["retry_after"] is None
+
+
+def test_per_week_slot_and_building_style_stay_inside_the_constants():
+    for value in range(1, 8):
+        cadence_kind(value)
+    for bad in (0, 8):
+        with pytest.raises(APIError) as bad_week:
+            cadence_kind(bad)
+        assert bad_week.value.code == "validation_error"
+        assert bad_week.value.field_errors == {"per_week": PER_WEEK_ERROR}
+    for slot in range(len(LOT_UNLOCK_LV)):
+        assert require_slot(slot) == slot
+    for bad in (-1, 6, 9, True):
+        with pytest.raises(APIError) as bad_slot:
+            require_slot(bad)
+        assert bad_slot.value.field_errors == {"slot": SLOT_ERROR}
+    for style in dict.fromkeys(SLOT_DEFAULT_STYLE):
+        assert require_building_style(style) == style
+    with pytest.raises(APIError) as bad_style:
+        require_building_style("castle")
+    assert bad_style.value.field_errors == {"building_style": BUILDING_STYLE_ERROR}
+
+
+def test_per_week_failure_uses_the_town_validation_shape(tmp_path: Path):
+    with pytest.raises(APIError) as caught:
+        cadence_kind(8)
+    _assert_field_validation(tmp_path, caught.value, "per_week", PER_WEEK_ERROR)
+
+
+def test_slot_failure_uses_the_town_validation_shape(tmp_path: Path):
+    with pytest.raises(APIError) as caught:
+        require_slot(6)
+    _assert_field_validation(tmp_path, caught.value, "slot", SLOT_ERROR)
+
+
+def test_building_style_failure_uses_the_town_validation_shape(tmp_path: Path):
+    with pytest.raises(APIError) as caught:
+        require_building_style("castle")
+    _assert_field_validation(tmp_path, caught.value, "building_style", BUILDING_STYLE_ERROR)

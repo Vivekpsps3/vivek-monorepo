@@ -17,6 +17,7 @@ import {
   DEFAULT_MC_ASSUMPTIONS,
   ProfilePayload,
 } from '../models/planning.model';
+import { spendingModeInference } from '../planning/spending-mode';
 import { inferredPortfolioAllocation } from '../utils/planning-allocation.util';
 import { dollarsFromCountedCents, isOnOrBeforeToday, parseDateOnly, todayIsoDate } from '@vivek/browser';
 import { countableCents } from '../utils/validators';
@@ -215,8 +216,10 @@ export class PlanningService {
     };
     // An older/manual override may supply annual_spending without the newer mode field.
     // Preserve that explicit contract instead of inheriting the default recurring mode.
+    // spending_components is omitted here: this path does not treat it as a mode.
+    const inferred = spendingModeInference.inferMissing({ annual_spending: overrides.annual_spending });
     const spendingMode = overrides.spending_mode
-      ?? (overrides.annual_spending != null ? 'manual' : profile.spending_mode);
+      ?? (inferred === 'manual' ? 'manual' : profile.spending_mode);
     let state = seed >>> 0;
     const rand = () => {
       state = (1664525 * state + 1013904223) >>> 0;
