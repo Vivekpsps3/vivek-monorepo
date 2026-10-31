@@ -531,6 +531,17 @@ def test_foreign_next_matches_unknown_before_validation(client, monkeypatch, kin
         assert db.query(EpisodeProgress).count() == 0
 
 
+def test_malformed_json_foreign_next_matches_unknown(client):
+    saved = _create(client)
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
+    foreign = _raw_post(client, f"/api/entries/{saved['id']}/episodes/next", b"{")
+    unknown = _raw_post(client, "/api/entries/999999999/episodes/next", b"{")
+    assert foreign.status_code == unknown.status_code == 422
+    assert foreign.json() == unknown.json()
+    for header in ("content-type", "content-length"):
+        assert foreign.headers[header] == unknown.headers[header]
+
+
 def test_raw_scalar_or_absent_body_matches_unknown_404(client, monkeypatch):
     saved = {kind: _create(client, kind=kind) for kind in ("tv", "movie")}
     client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
