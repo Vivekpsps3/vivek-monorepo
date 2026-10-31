@@ -22,3 +22,14 @@ li { min-width: 0; }
 @media (min-width: 641px) {
   @container (width < calc(19.5rem + 24px)) { ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 }
+
+.first-sprite { display: block; image-rendering: pixelated; margin: 0 auto 16px; }
+.suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.header-skeleton { display: block; margin-bottom: 24px; }
+.tile-skeleton { display: block; width: 96px; height: 96px; margin: 32px auto; }
+/* Town's static skeletons retain the shared primitive without its shimmer. */
+:host ::ng-deep ui-skeleton [class^="ui-skeleton__"] { animation: none; }
+@media (min-width: 1024px) {
+  .tile-skeleton { width: 128px; height: 128px; }
+  :host ::ng-deep .tile-skeleton .ui-skeleton__block { width: 128px !important; height: 128px !important; }
+}
