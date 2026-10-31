@@ -644,3 +644,16 @@ class TripDetail(BaseModel):
     """Loose response model. The assembler fills every field the UI reads."""
 
     model_config = ConfigDict(extra="allow")
+
+
+class HomeTripCard(TripDetail):
+    days_until: int | None
+    next_action: str | None
+
+
+class HomeResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    in_progress: list[HomeTripCard]
+    upcoming: list[HomeTripCard]
+    past: list[HomeTripCard]
