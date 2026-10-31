@@ -5,7 +5,9 @@ import {
   encryptJson,
   generateDataKey,
   hmacBlindIndex,
-  persistDekLocal,
+  importVaultKeys,
+  indexedDbHoldsDek,
+  legacyDekBlindIndex,
   randomBytes,
   randomClientId,
   recordAad,
@@ -14,9 +16,17 @@ import {
   unlockWithPassphrase,
 } from './vault-crypto';
 import { encodeBase64 } from '@vivek/browser';
+import { VAULT_PRESENCE, deleteFinanceVaultDb, deleteFinanceVaultKey, financeVaultPresent } from './dek-store';
 
 describe('vault-crypto', () => {
   const fastIterations = 120_000;
+
+  afterEach(async () => {
+    localStorage.removeItem('finance-dek');
+    localStorage.removeItem(VAULT_PRESENCE);
+    await deleteFinanceVaultKey();
+    await deleteFinanceVaultDb();
+  });
 
   it('generates random bytes and client ids', () => {
     const a = randomBytes(16);
@@ -29,17 +39,41 @@ describe('vault-crypto', () => {
     expect(id.length).toBeGreaterThan(8);
   });
 
-  it('persists and restores a DEK in localStorage', async () => {
-    clearDekLocal();
-    const dek = await generateDataKey();
-    const payload = { ok: true };
-    const ct = await encryptJson(dek, payload);
-    await persistDekLocal(dek);
+  it('migrates a localStorage DEK into a non-extractable IndexedDB key', async () => {
+    const raw = new Uint8Array(32).fill(5);
+    const payload = { ok: true, scope: 'finance' };
+    const ct = await encryptJson((await importVaultKeys(raw)).dek, payload);
+    localStorage.setItem('finance-dek', encodeBase64(raw));
     const restored = await restoreDekLocal();
-    expect(restored).toBeTruthy();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(financeVaultPresent()).toBeTrue();
+    expect(restored?.extractable).toBeFalse();
+    await expectAsync(crypto.subtle.exportKey('raw', restored!)).toBeRejected();
+    expect(await indexedDbHoldsDek()).toBeTrue();
     expect(await decryptJson<typeof payload>(restored!, ct)).toEqual(payload);
+  });
+
+  it('removes the IndexedDB key on wipe', async () => {
+    localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(3)));
+    expect(await restoreDekLocal()).toBeTruthy();
     clearDekLocal();
+    await deleteFinanceVaultKey();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(financeVaultPresent()).toBeFalse();
+    expect(await indexedDbHoldsDek()).toBeFalse();
     expect(await restoreDekLocal()).toBeNull();
+  });
+
+  it('derives an HKDF blind-index subkey that differs from the DEK', async () => {
+    const { dek, blindKey } = await importVaultKeys(new Uint8Array(32).fill(9));
+    const next = await hmacBlindIndex(dek, 'dedupe:abc');
+    expect(next).not.toBe(await legacyDekBlindIndex(dek, 'dedupe:abc'));
+    expect(next.length).toBeGreaterThan(10);
+    expect(blindKey.extractable).toBeFalse();
+    expect(dek.extractable).toBeFalse();
+    await expectAsync(crypto.subtle.exportKey('raw', blindKey)).toBeRejected();
+    await expectAsync(crypto.subtle.exportKey('raw', dek)).toBeRejected();
+    expect(await hmacBlindIndex(dek, 'dedupe:abc')).toBe(next);
   });
 
   it('treats a stored value with an invalid AES key length as an unusable DEK', async () => {
@@ -170,7 +204,12 @@ describe('vault-crypto', () => {
     const material = await createVaultMaterial('original-passphrase-12', fastIterations);
     const payload = { value: 99 };
     const ct = await encryptJson(material.dek, payload);
-    const rewrap = await rewrapDekWithPassphrase(material.dek, 'new-passphrase-12', fastIterations);
+    const rewrap = await rewrapDekWithPassphrase(
+      'original-passphrase-12',
+      material.setupPayload,
+      'new-passphrase-12',
+      fastIterations,
+    );
     const unlocked = await unlockWithPassphrase(
       'new-passphrase-12',
       rewrap.kdf_salt_b64,
