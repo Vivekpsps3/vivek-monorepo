@@ -3,6 +3,7 @@ import { Injector } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import { DEK_STORE } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
+import { spendingModeInference } from '../planning/spending-mode';
 import type { Transaction } from '../models/transaction.model';
 import { loadFinanceBudgetKeptGuarded } from './budget-kept-import';
 import {
@@ -92,6 +93,21 @@ describe('budget kept pure core', () => {
     const recurring = profile({ id: 5, updated_at: at, mode: 'recurring', annual: 99999 });
     expect(resolveAnnualPlan([recurring], inputs(4800, 100))).toEqual({ annualPlan: 4800, mode: 'recurring' });
     expect(resolveAnnualPlan([], inputs(4800, 100))).toBeNull();
+  });
+
+  it('infers a missing spending mode through the shared helper', () => {
+    const infer = spyOn(spendingModeInference, 'inferMissing').and.callThrough();
+    const parts = { fixed_annual: 1000, variable_annual: 2000, irregular_annual: 650 };
+    expect(resolveAnnualPlan([
+      profile({ id: 1, updated_at: at, annual: 1, components: parts }),
+    ], inputs(9, 9))).toEqual({ annualPlan: PLAN, mode: 'components' });
+    expect(resolveAnnualPlan([
+      profile({ id: 2, updated_at: at, annual: 1800 }),
+    ], inputs(9, 9))).toEqual({ annualPlan: 1800, mode: 'manual' });
+    expect(resolveAnnualPlan([
+      profile({ id: 3, updated_at: at }),
+    ], inputs(4800, 100))).toEqual({ annualPlan: 4800, mode: 'recurring' });
+    expect(infer.calls.all().map(call => call.returnValue)).toEqual(['components', 'manual', 'recurring']);
   });
 
   it('treats a missing or null spending_mode as manual', () => {

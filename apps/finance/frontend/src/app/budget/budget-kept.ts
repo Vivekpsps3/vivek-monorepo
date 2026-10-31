@@ -5,6 +5,7 @@ import { fromDollars } from '@vivek/browser';
 import { transactionEffects } from '../crypto/client-finance';
 import { financeVaultPresent } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
+import { spendingModeInference } from '../planning/spending-mode';
 import type { Transaction } from '../models/transaction.model';
 
 export interface BudgetKeptWeek {
@@ -98,10 +99,10 @@ type PlanDecision =
   | { status: 'no_plan' }
   | { status: 'unavailable' };
 
-/** Missing or null is legacy manual. Any other string is unrecognized and is not guessed. */
+/** Missing or null mode is inferred. Any other string is unrecognized and is not guessed. */
 function spendingModeOf(payload: ProfilePayload): SpendingPlanMode | 'unrecognized' {
   const mode = payload.spending_mode as unknown;
-  if (mode == null) return 'manual';
+  if (mode == null) return spendingModeInference.inferMissing(payload);
   if (mode === 'manual' || mode === 'components' || mode === 'recurring') return mode;
   return 'unrecognized';
 }
@@ -139,7 +140,7 @@ function decideLatestPlan(profiles: PlanningProfile[], inputs: PlanInputs): Plan
   return decidePayload(latest.payload, inputs);
 }
 
-/** Latest updated_at, then highest id. Missing or null mode is manual. A non-positive number is null. */
+/** Latest updated_at, then highest id. A missing mode is inferred. A non-positive number is null. */
 export function resolveAnnualPlan(
   profiles: PlanningProfile[],
   inputs: PlanInputs,
