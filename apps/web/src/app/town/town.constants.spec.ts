@@ -1,4 +1,5 @@
 import * as constants from './town.constants';
+import * as town from './index';
 
 describe('Town constants', () => {
   it('freezes every exported object and its nested values', () => {
@@ -33,5 +34,18 @@ describe('Town constants', () => {
     expect(constants.SLOT_DEFAULT_STYLE).toEqual([
       'forge', 'garden', 'cottage', 'cottage', 'cottage', 'cottage',
     ]);
+  });
+});
+
+
+describe('Town Worldgen barrel', () => {
+  it('exports exactly the section 20 runtime contract', () => {
+    expect(Object.keys(town).sort()).toEqual([
+      'TOWN_NAME', 'XP', 'DAILY_CAP', 'BUILDING_LV', 'TOWN_LV', 'LOT_UNLOCK_LV',
+      'TREASURY_WEEKS', 'MEDIA_FINISHED_KINDS', 'HABIT_NAME_MAX', 'HABIT_TOTAL_MAX',
+      'CHECKIN_WINDOW', 'SLOT_DEFAULT_STYLE', 'FIXED_LOTS', 'TOWN_LOTS', 'TOWN_CONSTANTS_VERSION',
+      'TOWN_SPRITE_IDS', 'townSpriteUrl', 'buildingSprite',
+      'level', 'stage', 'levelProgress', 'treasuryTier',
+    ].sort());
   });
 });
