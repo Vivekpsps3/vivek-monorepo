@@ -1,15 +1,18 @@
 """Owner-only birthday route: validation, CSRF, privacy, and audit."""
 
+import asyncio
 import logging
 import os
 import re
 import time
 import traceback
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import cast
 
 import pytest
+from fastapi import HTTPException
+from fastapi.responses import Response
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -561,6 +564,69 @@ def test_commit_and_rollback_failure_does_not_leak_the_birthday(
     assert SECRET not in _captured_logs(caplog, capsys)
 
 
+def _assert_no_secret(value: object, secret: str, seen: set[int], where: str) -> None:
+    """str, repr, date.isoformat, and instance attributes all count as hits."""
+    marker = id(value)
+    if marker in seen:
+        return
+    seen.add(marker)
+    assert secret not in str(value), where
+    assert secret not in repr(value), where
+    if isinstance(value, date):
+        assert secret not in value.isoformat(), where
+    children: list[object] = []
+    if isinstance(value, dict):
+        children.extend(value.values())
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        children.extend(value)
+    elif getattr(type(value), "__module__", "").startswith("apps.server."):
+        attrs = getattr(value, "__dict__", None)
+        if isinstance(attrs, dict):
+            children.extend(attrs.values())
+    for child in children:
+        _assert_no_secret(child, secret, seen, where)
+
+
+def _assert_birthday_is_detached(error: BaseException, secret: str, *names: str) -> None:
+    """The client error must not chain, or retain, the value that caused it."""
+    assert error.__context__ is None
+    assert error.__cause__ is None
+    assert secret not in str(error.args)
+    assert secret not in repr(error.args)
+    found: list[str] = []
+    seen: set[int] = set()
+    frame = error.__traceback__
+    while frame is not None:
+        found.append(frame.tb_frame.f_code.co_name)
+        where = frame.tb_frame.f_code.co_name
+        for value in frame.tb_frame.f_locals.values():
+            _assert_no_secret(value, secret, seen, where)
+        frame = frame.tb_next
+    for name in names:
+        assert name in found
+
+
+def _secret_body_request(note: bool = False) -> birthday_route.Request:
+    """Stream the body once. The request does not keep those bytes."""
+
+    class _Request:
+        def __init__(self) -> None:
+            text = '{"birthday":"' + SECRET + '","show_age":true'
+            if note:
+                text += ',"note":"' + SECRET + '"'
+            body = (text + "}").encode()
+            self.headers = {"content-length": str(len(body))}
+            self._pending: bytes | None = body
+
+        async def stream(self):
+            body = self._pending
+            del self._pending
+            if body:
+                yield body
+
+    return cast(birthday_route.Request, _Request())
+
+
 def test_write_failure_raises_api_error_without_a_cause() -> None:
     class Boom:
         def commit(self) -> None:
@@ -572,12 +638,158 @@ def test_write_failure_raises_api_error_without_a_cause() -> None:
     with pytest.raises(APIError) as caught:
         _commit(cast(Session, Boom()))
     error = caught.value
-    assert error.__cause__ is None
     assert error.__suppress_context__ is True
+    _assert_birthday_is_detached(error, SECRET)
     rendered = "".join(traceback.format_exception(error))
     assert SECRET not in rendered
     assert error.status_code == 500
     assert error.message == "Internal server error"
+
+
+def test_reject_does_not_chain_the_parse_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Date:
+        @staticmethod
+        def fromisoformat(_value: str) -> date:
+            raise ValueError(SECRET)
+
+    monkeypatch.setattr(birthday_route, "date", _Date)
+    with pytest.raises(HTTPException) as caught:
+        birthday_route._parse_birthday("1996-03-14", TODAY)
+    error = caught.value
+    assert error.status_code == 422
+    assert error.detail == MSG_FULL_DATE
+    assert error.__suppress_context__ is True
+    _assert_birthday_is_detached(error, SECRET)
+
+    def explode_json(_text: str) -> object:
+        raise ValueError(SECRET)
+
+    monkeypatch.setattr(birthday_route.json, "loads", explode_json)
+
+    class Request:
+        def __init__(self) -> None:
+            self.headers = {"content-length": "2"}
+
+        async def stream(self):
+            yield b"{}"
+
+    with pytest.raises(HTTPException) as body_error:
+        asyncio.run(
+            birthday_route.update_birthday(
+                cast(birthday_route.Request, Request()),
+                cast(Session, object()),
+                cast(User, object()),
+            )
+        )
+    raised = body_error.value
+    assert raised.status_code == 422
+    assert raised.detail == MSG_FULL_DATE
+    _assert_birthday_is_detached(raised, SECRET)
+
+
+def test_reject_frame_omits_the_submitted_birthday(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(birthday_route, "server_today", lambda: date(1900, 1, 1))
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(
+            birthday_route.update_birthday(
+                _secret_body_request(),
+                cast(Session, object()),
+                cast(User, object()),
+            )
+        )
+    error = caught.value
+    assert error.status_code == 422
+    assert error.detail == MSG_FUTURE
+    _assert_birthday_is_detached(error, SECRET, "update_birthday", "_parse_body", "_parse_birthday")
+
+
+def test_sibling_note_is_absent_when_parse_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(birthday_route, "server_today", lambda: date(1900, 1, 1))
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(
+            birthday_route.update_birthday(
+                _secret_body_request(note=True),
+                cast(Session, object()),
+                cast(User, object()),
+            )
+        )
+    error = caught.value
+    assert error.status_code == 422
+    assert error.detail == MSG_FUTURE
+    _assert_birthday_is_detached(error, SECRET, "update_birthday", "_parse_body", "_parse_birthday")
+
+
+def test_commit_failure_frame_omits_the_submitted_birthday(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(birthday_route, "server_today", lambda: TODAY)
+
+    class _Owner:
+        id = 1
+        birthday = None
+        pixels_show_age = False
+        updated_at = None
+
+    class _Rows:
+        def __init__(self, owner: _Owner) -> None:
+            self._owner = owner
+
+        def add(self, _row: object) -> None:
+            return None
+
+        def commit(self) -> None:
+            raise _driver_error()
+
+        def rollback(self) -> None:
+            self._owner.birthday = None
+            raise _driver_error()
+
+    owner = _Owner()
+    with pytest.raises(APIError) as caught:
+        asyncio.run(
+            birthday_route.update_birthday(
+                _secret_body_request(),
+                cast(Session, _Rows(owner)),
+                cast(User, owner),
+            )
+        )
+    error = caught.value
+    assert error.status_code == 500
+    assert error.message == "Internal server error"
+    _assert_birthday_is_detached(error, SECRET, "update_birthday", "_commit")
+
+
+def test_debug_root_does_not_log_a_birthday_query(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    sqlalchemy_log = logging.getLogger("sqlalchemy")
+    engine_log = logging.getLogger("sqlalchemy.engine")
+    previous = (sqlalchemy_log.level, engine_log.level)
+    sqlalchemy_log.setLevel(logging.DEBUG)
+    engine_log.setLevel(logging.DEBUG)
+    caplog.set_level(logging.DEBUG)
+    try:
+        _application, database = _app(tmp_path)
+        assert engine_log.getEffectiveLevel() >= logging.WARNING
+        assert database.engine.echo is False
+        assert database.engine.hide_parameters is True
+        _user(database, 1, "token-a", "csrf-a")
+        db = database.sessionmaker()
+        try:
+            user = db.query(User).filter(User.id == 1).one()
+            user.birthday = date.fromisoformat(SECRET)
+            db.commit()
+            loaded = db.query(User).filter(User.birthday == date.fromisoformat(SECRET)).one()
+            assert loaded.birthday is not None
+            assert loaded.birthday.isoformat() == SECRET
+        finally:
+            db.close()
+        assert SECRET not in caplog.text
+        for record in caplog.records:
+            assert SECRET not in record.getMessage()
+    finally:
+        sqlalchemy_log.setLevel(previous[0])
+        engine_log.setLevel(previous[1])
 
 
 def test_engine_hides_bound_parameters(tmp_path: Path) -> None:
@@ -609,7 +821,9 @@ def test_server_today_follows_utc_when_the_local_date_differs(
         class _Clock:
             @staticmethod
             def now(tz: object = None) -> datetime:
-                return instant
+                assert isinstance(tz, tzinfo)
+                assert tz is UTC
+                return instant.astimezone(tz)
 
         monkeypatch.setattr(birthday_route, "datetime", _Clock)
         assert birthday_route.server_today() == date(2026, 10, 30)
@@ -703,6 +917,89 @@ def test_bodies_over_4kb_are_413_before_parsing(
             headers={"Content-Type": "application/json", "Content-Length": "4097"},
         )
         assert declared.status_code == 413
+        huge = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            content=b"{}",
+            headers={"Content-Type": "application/json", "Content-Length": "9" * 4301},
+        )
+        assert huge.status_code == 413
+        assert huge.content == b""
+        current = _call(client, "get", "/api/account/birthday", "token-a")
+        assert current.json() == {"birthday": None, "show_age": False}
+
+
+def test_non_ascii_digit_content_length_is_400() -> None:
+    class Request:
+        def __init__(self) -> None:
+            self.headers = {"content-length": "²"}
+
+        async def stream(self):
+            raise AssertionError("body should not be read")
+
+    response = asyncio.run(
+        birthday_route.update_birthday(
+            cast(birthday_route.Request, Request()),
+            cast(Session, object()),
+            cast(User, object()),
+        )
+    )
+    assert isinstance(response, Response)
+    assert response.status_code == 400
+    assert response.body == b""
+
+
+def test_read_body_rejects_a_4301_digit_length_before_int() -> None:
+    class Request:
+        def __init__(self) -> None:
+            self.headers = {"content-length": "9" * 4301}
+
+        async def stream(self):
+            raise AssertionError("int() should fail closed before the body is read")
+
+    assert asyncio.run(birthday_route._read_body(cast(birthday_route.Request, Request()))) is None
+
+
+def test_missing_and_understated_content_length_over_4kb_are_413(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, database = _open(tmp_path, monkeypatch)
+    _user(database, 1, "token-a", "csrf-a")
+
+    def missing_length():
+        yield b"a" * 4096
+        yield b"b"
+
+    def understated():
+        yield b"c" * 4096
+        yield b"d"
+
+    with TestClient(application) as client:
+        missing = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            content=missing_length(),
+            headers={"Content-Type": "application/json"},
+        )
+        assert missing.status_code == 413
+        assert missing.content == b""
+        short = _call(
+            client,
+            "patch",
+            "/api/account/birthday",
+            "token-a",
+            "csrf-a",
+            content=understated(),
+            headers={"Content-Type": "application/json", "Content-Length": "1"},
+        )
+        assert short.status_code == 413
+        assert short.content == b""
         current = _call(client, "get", "/api/account/birthday", "token-a")
         assert current.json() == {"birthday": None, "show_age": False}
 
