@@ -1,19 +1,23 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, input } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, input } from '@angular/core';
+import { IsActiveMatchOptions, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface UiSectionNavItem {
   label: string;
   shortLabel?: string;
+  /** Accessible name when the short label replaces the visible text. */
+  ariaLabel?: string;
   link: string;
   exact?: boolean;
+  /** Extra URL prefixes that keep this section current. Non-exact, so a trip stays on Trips. */
+  also?: readonly string[];
 }
 
 @Component({
   selector: 'ui-section-nav',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink],
   templateUrl: './ui-section-nav.component.html',
   styleUrl: './ui-section-nav.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -27,13 +31,18 @@ export class UiSectionNavComponent implements AfterViewInit {
 
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroy = inject(DestroyRef);
+  private readonly router = inject(Router);
+  private readonly cdr = inject(ChangeDetectorRef);
   private revealTimer = 0;
 
   constructor() {
-    inject(Router).events.pipe(
+    this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
       takeUntilDestroyed(this.destroy),
-    ).subscribe(() => this.revealSoon());
+    ).subscribe(() => {
+      this.cdr.markForCheck();
+      this.revealSoon();
+    });
     this.destroy.onDestroy(() => {
       if (typeof window !== 'undefined') window.clearTimeout(this.revealTimer);
     });
@@ -69,6 +78,12 @@ export class UiSectionNavComponent implements AfterViewInit {
       if (active instanceof HTMLElement) active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
       this.updateFades();
     });
+  }
+
+  protected current(item: UiSectionNavItem): boolean {
+    const ignored = { queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
+    if (this.router.isActive(item.link, { ...ignored, paths: item.exact ? 'exact' : 'subset' })) return true;
+    return (item.also ?? []).some(link => this.router.isActive(link, { ...ignored, paths: 'subset' } satisfies Partial<IsActiveMatchOptions>));
   }
 
   private updateFades(): void {
