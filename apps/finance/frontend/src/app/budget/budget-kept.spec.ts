@@ -119,6 +119,18 @@ describe('budget kept pure core', () => {
     expect(resolveAnnualPlan([explicitNull], inputs(9999, 9999))).toEqual({ annualPlan: 1800, mode: 'manual' });
   });
 
+  it('infers every spending mode when the saved mode is empty', () => {
+    const rows = [
+      [profile({ id: 1, updated_at: at, annual: 9, components: { fixed_annual: 1, variable_annual: 2, irregular_annual: 3 } }), 6, 'components'],
+      [profile({ id: 2, updated_at: at, annual: 9 }), 9, 'manual'],
+      [profile({ id: 3, updated_at: at }), 4800, 'recurring'],
+    ] as const;
+    for (const [row, annualPlan, mode] of rows) {
+      row.payload.spending_mode = '' as ProfilePayload['spending_mode'];
+      expect(resolveAnnualPlan([row], inputs(4800, 100))).toEqual({ annualPlan, mode });
+    }
+  });
+
   it('does not resolve an unrecognized spending_mode to a plan', () => {
     const row = profile({ id: 1, updated_at: at, annual: PLAN, mode: 'manual' });
     row.payload.spending_mode = 'seasonal' as ProfilePayload['spending_mode'];
@@ -465,6 +477,56 @@ describe('loadFinanceBudgetKept', () => {
     expect(await ask(injector)).toEqual({ status: 'expired' });
   });
 
+  it('returns expired for a 401 from initialization even while locked', async () => {
+    for (const isUnlocked of [true, false]) {
+      const { injector } = unlock({
+        isUnlocked, whenReady: () => Promise.reject(new HttpErrorResponse({ status: 401 })),
+      });
+      expect(await ask(injector)).toEqual({ status: 'expired' });
+    }
+  });
+
+  it('returns expired for a 401 from either planning read', async () => {
+    for (const source of ['listProfiles', 'getInputs'] as const) {
+      const { injector } = unlock({
+        [source]: () => throwError(() => new HttpErrorResponse({ status: 401 })),
+      });
+      expect(await ask(injector)).toEqual({ status: 'expired' });
+    }
+  });
+
+  it('returns cancelled for a 401 after abort during initialization or a read', async () => {
+    for (const source of ['whenReady', 'getTransactions'] as const) {
+      const ctrl = new AbortController();
+      const { injector } = unlock({
+        [source]: () => {
+          ctrl.abort();
+          return Promise.reject(new HttpErrorResponse({ status: 401 }));
+        },
+      });
+      expect(await ask(injector, { signal: ctrl.signal })).toEqual({ status: 'cancelled' });
+    }
+  });
+
+  it('returns expired for a 401 when the vault locks during the read', async () => {
+    const { injector } = unlock({
+      lockDuringTransactions: true,
+      getTransactions: () => Promise.reject(new HttpErrorResponse({ status: 401 })),
+    });
+    expect(await ask(injector)).toEqual({ status: 'expired' });
+  });
+
+  it('maps Vault locked errors from initialization and reads to locked', async () => {
+    for (const source of ['whenReady', 'getTransactions'] as const) {
+      const { injector } = unlock({ [source]: () => Promise.reject(new Error('Vault locked')) });
+      expect(await ask(injector)).toEqual({ status: 'locked' });
+    }
+  });
+
+  it('accepts the largest timer deadline', async () => {
+    expect(await ask(unlock({}).injector, { deadlineMs: 2 ** 31 - 1 })).toEqual({ status: 'no_plan' });
+  });
+
   it('returns unavailable for 403, 404, and 429, and for a plain 401 object', async () => {
     for (const status of [403, 404, 429]) {
       const { injector } = unlock({
@@ -541,7 +603,7 @@ describe('loadFinanceBudgetKept', () => {
   it('throws RangeError when today is not a YYYY-MM-DD string', () => {
     const load = spyOn(budgetKeptCryptoImports, 'load');
     const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
-    for (const today of ['2026-10-1', '2026-1-14', '2026-10-14 ', ' 2026-10-14']) {
+    for (const today of ['2026-10-1', '2026-1-14', '2026-10-14 ', ' 2026-10-14', '2026-10-14\n']) {
       expect(() => ask(injector, { today })).toThrowError(RangeError, /today/);
     }
     expect(load).not.toHaveBeenCalled();
@@ -550,7 +612,7 @@ describe('loadFinanceBudgetKept', () => {
   it('throws RangeError synchronously when deadlineMs is NaN, infinite, or not positive', () => {
     const load = spyOn(budgetKeptCryptoImports, 'load');
     const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
-    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
+    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, 2 ** 31, Number.MAX_VALUE]) {
       expect(() => ask(injector, { deadlineMs })).toThrowError(RangeError, /deadlineMs/);
     }
     expect(load).not.toHaveBeenCalled();
@@ -699,6 +761,8 @@ describe('loadFinanceBudgetKeptGuarded', () => {
       .toThrowError(RangeError);
     expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-02-31' }, load))
       .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-10-14\n' }, load))
+      .toThrowError(RangeError);
     expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-10-1' }, load))
       .toThrowError(RangeError);
     expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 0 }, load))
@@ -707,11 +771,19 @@ describe('loadFinanceBudgetKeptGuarded', () => {
       .toThrowError(RangeError);
     expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 521 }, load))
       .toThrowError(RangeError);
-    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
+    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, 2 ** 31, Number.MAX_VALUE]) {
       expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, deadlineMs }, load))
         .toThrowError(RangeError);
     }
     expect(load).not.toHaveBeenCalled();
+  });
+
+  it('accepts the largest timer deadline before importing', async () => {
+    const read = jasmine.createSpy('read').and.resolveTo({ status: 'no_plan' });
+    const load = () => Promise.resolve({ loadFinanceBudgetKept: read });
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal,
+      { ...opts, deadlineMs: 2 ** 31 - 1 }, load)).toEqual({ status: 'no_plan' });
+    expect(read).toHaveBeenCalled();
   });
 
   it('returns unavailable without calling the module when the import uses the whole deadline', async () => {
