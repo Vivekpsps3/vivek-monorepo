@@ -10,7 +10,8 @@ export const routes: Routes = [
   { path: 'signup', redirectTo: 'auth/signup', pathMatch: 'full' },
   { path: 'enroll', redirectTo: 'auth/signup', pathMatch: 'full' },
   { path: '', component: PrivateLayoutComponent, canActivateChild: [authGuard], children: [
-    { path: 'account', redirectTo: () => '/hub?settings=account', pathMatch: 'full' },
+    { path: 'account', redirectTo: () => '/settings/account', pathMatch: 'full' },
+    { path: 'settings', loadChildren: () => import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES) },
   { path: 'hub/admin', title: 'Account administration', canActivate: [authGuard, adminGuard], loadComponent: () => import('./account/suite-admin.component').then(m => m.SuiteAdminComponent) },
   { path: 'hub', title: 'Workspace', pathMatch: 'full', canActivate: [authGuard], loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent) },
   { path: 'finance', loadChildren: () => import('../../../finance/frontend/src/public-api').then(m => m.loadFinanceRoutes()) },

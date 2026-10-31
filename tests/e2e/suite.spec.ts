@@ -24,7 +24,16 @@ for (const width of [320, 1440]) for (const theme of ['light', 'dark'] as const)
   await chooseColorTheme(page, theme);
   for (const route of ['/travel', '/travel/trips/new', '/travel/pto', '/travel/settings', '/media/library', '/media/search', '/media/add', '/media/calendar', '/hub']) {
     await page.goto(route);
+    // Below 640px the four app links live in the closed compact switcher.
+    if (width <= 640) {
+      await page.locator('.app-switcher__toggle').click();
+      await expect(page.locator('#app-switcher-menu')).toBeVisible();
+    }
     await expect(page.getByRole('link', { name: 'Hub', exact: true })).toHaveCount(1);
+    if (width <= 640) {
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#app-switcher-menu')).toHaveCount(0);
+    }
     await expect(page.locator('main').first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);

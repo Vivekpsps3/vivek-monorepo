@@ -1,5 +1,9 @@
+from typing import Any
+
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError, field_validator
 from sqlalchemy.orm import Session
 
 from apps.media.backend.database import get_db
@@ -514,19 +518,42 @@ def watched(
     return records.detail(db, entry)
 
 
+class NextEpisodeBody(BaseModel):
+    expected_episode_id: int | None = None
+
+    @field_validator("expected_episode_id", mode="before")
+    @classmethod
+    def expected_episode_is_a_number(cls, value: object) -> object:
+        if value is None or (isinstance(value, int) and not isinstance(value, bool)):
+            return value
+        raise ValueError("Expected episode must be a number.")
+
+
+def _expected_episode_id(payload: object) -> int | None:
+    if payload is None:
+        return None
+    try:
+        return NextEpisodeBody.model_validate(payload).expected_episode_id
+    except ValidationError as exc:
+        for error in exc.errors():
+            if error.get("loc") == ("expected_episode_id",):
+                raise HTTPException(
+                    status_code=422, detail="Expected episode must be a number."
+                ) from exc
+        raise RequestValidationError(exc.errors()) from exc
+
+
 @router.post("/entries/{entry_id}/episodes/next")
 def next_episode(
     entry_id: int,
-    body: dict | None = Body(default=None),
+    # Any, not dict: a typed body is validated before this function, which would
+    # turn a foreign id plus a JSON scalar into 422 instead of the library 404.
+    body: Any = Body(default=None),
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
     entry = records.owned_entry(db, principal.id, entry_id)
-    expected = None
-    if isinstance(body, dict) and body.get("expected_episode_id") is not None:
-        expected = body["expected_episode_id"]
-        if isinstance(expected, bool) or not isinstance(expected, int):
-            raise HTTPException(status_code=422, detail="Expected episode must be a number.")
+    expected = _expected_episode_id(body)
     state, marked = episode_next.mark_next_checked(db, principal.id, entry, expected)
     payload = records.detail(db, entry)
     payload["show"] = state

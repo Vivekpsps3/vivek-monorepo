@@ -108,9 +108,17 @@
   select:focus-visible,
   textarea:focus-visible,
   button:focus-visible,
-  a:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
+  a:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible,
+  [role="button"]:focus-visible,
+  label:has(> input:focus-visible) {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  summary {
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -118,6 +126,26 @@
   app-stock-lab .ui-card__header {
     flex-direction: row;
     align-items: center;
+  }
+
+  /* 44px hit targets at a phone width. :where keeps this weaker than component rules.
+     Inline text links inside paragraphs stay at their text size. */
+  :where(#workspace-content) a {
+    display: inline-block;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-height: 44px;
+  }
+
+  :where(#workspace-content) p a {
+    display: inline;
+    max-width: none;
+    min-height: 0;
+  }
+
+  :where(#workspace-content) :where(button, summary, [role="button"]) {
+    box-sizing: border-box;
+    min-height: 44px;
   }
 }
 
@@ -154,13 +182,18 @@
 
 .skip-link {
   position: absolute;
-  left: -9999px;
+  left: var(--gutter);
   top: var(--space-2);
+  transform: translateY(-150%);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   background: var(--accent);
   color: var(--on-accent);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   z-index: 3000;
+  text-decoration: none;
 }
 
 .visually-hidden {
@@ -176,7 +209,7 @@
 }
 
 .skip-link:focus {
-  left: var(--space-4);
+  transform: none;
 }
 
 .page {
@@ -248,8 +281,8 @@ h2:focus,
 h1:focus-visible,
 h2:focus-visible,
 .ui-page-header__title:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 3px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-sm);
 }
 

@@ -20,6 +20,7 @@ import { HTTP_ERROR_FALLBACK, ToastService } from '@vivek/ui';
 import { silentErrorToast } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { hasDek, holdDek, readDek, readLockEpoch, wipeDek } from './dek-holder';
 
 export interface VaultStatus {
   exists: boolean;
@@ -49,7 +50,8 @@ export interface EncryptedRecordDto {
 @Injectable({ providedIn: 'root' })
 export class VaultService {
   private epoch = 0;
-  private dek: CryptoKey | null = null;
+  private get dek(): CryptoKey | null { return readDek(); }
+  private set dek(next: CryptoKey | null) { holdDek(next); }
   private unlockedWrap: string | null = null;
   private statusSubject = new BehaviorSubject<VaultStatus | null>(null);
   private unlockedSubject = new BehaviorSubject<boolean>(false);
@@ -68,19 +70,19 @@ export class VaultService {
   }
 
   private async hydrate(): Promise<void> {
-    const epoch = this.epoch;
+    const epoch = readLockEpoch();
     const dek = await restoreDekLocal();
-    if (!dek || epoch !== this.epoch) return;
+    if (!dek || epoch !== readLockEpoch()) return;
     this.dek = dek;
     this.unlockedSubject.next(true);
   }
 
-  private async hold(dek: CryptoKey): Promise<void> {
+  private async hold(dek: CryptoKey, epoch = readLockEpoch()): Promise<void> {
     this.dek = dek;
     this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
     this.unlockedSubject.next(true);
     // The hub reads this key before it will load vault code. Store it before unlock returns.
-    await persistDekLocal(dek);
+    await persistDekLocal(dek, () => epoch === readLockEpoch());
   }
 
   get isUnlocked(): boolean {
@@ -144,11 +146,13 @@ export class VaultService {
   }
 
   lock(): void {
-    this.epoch += 1;
-    this.dek = null;
+    const counting = this.unlockedSubject.value || hasDek();
+    wipeDek();
     this.unlockedWrap = null;
-    this.unlockedSubject.next(false);
     clearDekLocal();
+    if (!counting) return;
+    this.epoch += 1;
+    this.unlockedSubject.next(false);
   }
 
   async setup(passphrase: string): Promise<void> {
@@ -219,19 +223,21 @@ export class VaultService {
     return rewrapDekWithPassphrase(this.requireDek(), passphrase, DEFAULT_PBKDF2_ITERATIONS);
   }
 
-  async unlock(passphrase: string): Promise<void> {
+  async unlock(passphrase: string): Promise<boolean> {
     const status = this.statusSubject.value ?? (await this.refreshStatus());
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');
     }
-    await this.hold(
-      await unlockWithPassphrase(
-        passphrase,
-        status.kdf_salt_b64,
-        status.kdf_iterations,
-        status.wrapped_dek_b64
-      )
+    const epoch = readLockEpoch();
+    const dek = await unlockWithPassphrase(
+      passphrase,
+      status.kdf_salt_b64,
+      status.kdf_iterations,
+      status.wrapped_dek_b64,
     );
+    if (epoch !== readLockEpoch()) return false;
+    await this.hold(dek, epoch);
+    return this.isUnlocked;
   }
 
   requireDek(): CryptoKey {

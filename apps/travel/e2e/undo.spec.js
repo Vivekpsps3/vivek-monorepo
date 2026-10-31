@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { ptoChoice } from './dates.mjs';
 
 const cases = [
   ['stays', 'destination', { city: 'Restore destination', arrive_on: '2026-12-01', leave_on: '2026-12-03', notes: 'Keep lodging note' }],
@@ -46,7 +47,7 @@ test('PTO typed during a save stays a draft until the next save', async ({ page,
   const trip = await (await request.post('/travel/api/trips', { data: { title: 'PTO save race', start_date: '2026-12-01', end_date: '2026-12-02' } })).json();
   await page.goto('/travel/trips/' + trip.id);
   await page.locator('summary').filter({ hasText: /^PTO ·/ }).click();
-  const choice = page.getByRole('combobox', { name: '2026-12-01', exact: true });
+  const choice = ptoChoice(page, '2026-12-01');
   await choice.selectOption({ label: 'Half day' });
   let release;
   const gate = new Promise(resolve => { release = resolve; });

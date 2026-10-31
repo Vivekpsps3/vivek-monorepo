@@ -136,7 +136,8 @@ describe('PlanningService', () => {
         expect(inputs.annual_subscriptions).toBe(191.88);
         expect(inputs.annual_subscriptions).not.toBe(480);
         expect(formatStoredMoney(inputs.net_worth_total)).toBe(new MoneyPipe().transform(inputs.net_worth_total));
-        expect(formatStoredMoney(inputs.net_worth_total)).toBe('$1,234.50');
+        expect(formatStoredMoney(inputs.net_worth_total).replaceAll('\u2060', '')).toBe('$1,234.50');
+        expect(formatStoredMoney(inputs.net_worth_total)).toContain('\u2060');
         done();
       },
       error: done.fail,

@@ -128,6 +128,9 @@ def classify(path: str) -> str:
         or normalized.startswith("/finance/")
         or normalized == "/hub"
         or normalized.startswith("/hub/")
+        or normalized == "/account"
+        or normalized == "/settings"
+        or normalized.startswith("/settings/")
         or normalized == "/auth"
         or normalized.startswith("/auth/")
     ):
@@ -149,6 +152,8 @@ def expects_shell(path: str) -> bool:
         "/hub",
         "/hub/",
         "/hub/admin",
+        "/account",
+        "/settings",
         "/auth/login",
         "/auth/signup",
         "/finance",
@@ -161,7 +166,8 @@ def expects_shell(path: str) -> bool:
     }:
         return True
     return any(
-        normalized.startswith(prefix) for prefix in ("/finance/", "/travel/", "/media/")
+        normalized.startswith(prefix)
+        for prefix in ("/finance/", "/travel/", "/media/", "/settings/")
     ) and not re.search(r"\.[a-z0-9]+$", normalized)
 
 

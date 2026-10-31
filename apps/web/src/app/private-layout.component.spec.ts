@@ -44,17 +44,23 @@ describe('Shared private shell', () => {
     fixture.detectChanges();
     return { fixture, session };
   }
-  it('provides exactly one labeled Hub link and one account/theme surface', async () => {
+  it('provides the app switcher and one account/theme surface', async () => {
     const { fixture } = await render();
-    expect(fixture.nativeElement.querySelectorAll('a.suite-hub').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('a.suite-hub').getAttribute('href')).toBe('/hub');
+    const apps = fixture.nativeElement.querySelector('nav[aria-label="Apps"]') as HTMLElement;
+    const links = [...apps.querySelectorAll('a')].map(link => link.getAttribute('href'));
+    expect(links).toEqual(['/hub', '/finance', '/travel', '/media']);
+    expect(fixture.nativeElement.querySelector('a.suite-hub')).toBeNull();
+    expect(fixture.nativeElement.querySelector('a.suite-brand')).toBeNull();
     expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('a[href="/settings"]')).toBeNull();
     const trigger = fixture.nativeElement.querySelector('.user-menu-toggle') as HTMLButtonElement;
     expect(trigger.textContent?.trim()).toBe('Ada');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     trigger.click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('a[href="/account"]').length).toBe(1);
+    expect(fixture.nativeElement.querySelectorAll('a[href="/settings"]').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('a[href="/travel/settings"]')).toBeNull();
     expect(fixture.nativeElement.querySelectorAll('select#suite-theme').length).toBe(1);
     expect(fixture.nativeElement.querySelector('a[href="/hub/admin"]')).toBeNull();
   });

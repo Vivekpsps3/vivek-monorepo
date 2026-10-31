@@ -213,7 +213,7 @@ test('leaving a slow save is deliberate and does not block the next screen', asy
   await page.getByLabel('Note').fill('Draft on the first item');
   await page.getByRole('button', { name: 'Save changes' }).click();
   await entered.promise;
-  await page.getByRole('navigation', { name: 'Media', exact: true }).getByRole('link', { name: 'Now', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Media sections', exact: true }).getByRole('link', { name: 'Now', exact: true }).click();
   await page.getByRole('button', { name: 'Leave item', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Now/ })).toBeVisible();
   release.resolve();
@@ -225,7 +225,7 @@ test('a late library response cannot replace Search and a late old-type search c
   await page.route('**/media/api/library?**', async route => { libraryEntered.resolve(); await libraryRelease.promise; await route.fulfill({ json: { items: [], total: 0, offset: 0, limit: 24, has_more: false, continue: [] } }).catch(() => {}); });
   await page.goto('/media/library');
   await libraryEntered.promise;
-  await page.getByRole('navigation', { name: 'Media', exact: true }).getByRole('link', { name: 'Search', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Media sections', exact: true }).getByRole('link', { name: 'Search', exact: true }).click();
   libraryRelease.resolve();
   await expect(page.getByRole('heading', { name: 'Search Media', exact: true })).toBeVisible();
   const oldEntered = deferred(), oldRelease = deferred();
@@ -255,7 +255,7 @@ test('typing a failed search retains focus in the query and a retry recovers loc
   await expect(page.getByRole('searchbox')).toBeFocused();
   failed = false;
   await page.getByRole('button', { name: 'Retry search' }).click();
-  await expect(page.getByRole('heading', { name: 'No matching titles' })).toBeVisible();
+  await expect(page.getByText('No matching titles', { exact: true })).toBeVisible();
   await expect(page.locator('main [role=alert]')).toHaveCount(0);
 });
 
