@@ -3,7 +3,7 @@ import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { syntheticVault } from '../../apps/finance/frontend/e2e/synthetic-vault';
-import { chooseColorTheme } from './user-menu.mjs';
+import { chooseColorTheme, openUserMenu } from './user-menu.mjs';
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -315,6 +315,7 @@ test('navigation focus falls back when the route has no main heading', async ({ 
 });
 
 test('a locked Finance card drops money, counts, and names loaded while unlocked', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   const vault = await syntheticVault(page, {
     assets: [{ id: 1, name: 'Harbor Checking', category: 'cash', current_value: 1500, as_of_date: '2026-10-01' }],
     holdings: [{
@@ -336,16 +337,40 @@ test('a locked Finance card drops money, counts, and names loaded while unlocked
   await expect(card).toContainText('Harbor Brokerage');
   await expect(card).toContainText('HBRX');
   await expect(card).toContainText('1 position');
-  await page.goto('/settings/finance');
+  // Stay in this document. page.goto would drop the in-memory Finance caches.
+  const documentId = await page.evaluate(() => {
+    const host = window as Window & { __bundle0Document?: string };
+    host.__bundle0Document = 'locked-finance';
+    return host.__bundle0Document;
+  });
+  const menu = await openUserMenu(page);
+  await menu.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Finance', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/finance$/);
   await page.getByRole('button', { name: 'Lock now' }).click();
   await expect(page.getByText('Finance is locked. Unlock to see settings.')).toBeVisible();
-  await page.goto('/hub');
-  await expect(card).toContainText('Finance is locked. Unlock to see net worth.');
-  const locked = await card.evaluate(el => el.textContent || '');
-  expect(locked).not.toMatch(/\$[\s\u2060]*\d/);
-  expect(locked).not.toContain('Harbor');
-  expect(locked).not.toContain('HBRX');
-  expect(locked).not.toMatch(/\d+\s+positions?/);
+  await page.locator('.app-switcher__bar').getByRole('link', { name: 'Hub', exact: true }).click();
+  await expect(page).toHaveURL(/\/hub$/);
+  await expect.poll(async () => page.evaluate(() => (window as Window & { __bundle0Document?: string }).__bundle0Document)).toBe(documentId);
+  // The new Hub paints locked before its load finishes. Hold the clean card
+  // long enough for a cached snapshot to replace it.
+  await page.waitForFunction(() => {
+    const text = document.querySelector('.finance-bar')?.textContent || '';
+    const clean = text.includes('Finance is locked. Unlock to see net worth.')
+      && !/\$[\s\u2060]*\d/.test(text)
+      && !text.includes('Harbor')
+      && !text.includes('HBRX')
+      && !/\d+\s+positions?/.test(text);
+    const host = window as Window & { __financeCleanSince?: number };
+    if (!clean) {
+      host.__financeCleanSince = undefined;
+      return false;
+    }
+    const now = performance.now();
+    if (host.__financeCleanSince == null) host.__financeCleanSince = now;
+    return now - host.__financeCleanSince >= 1000;
+  });
 });
 
 test('an empty Finance vault shows the empty state instead of $0.00', async ({ page }) => {
