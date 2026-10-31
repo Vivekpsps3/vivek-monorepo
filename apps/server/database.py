@@ -11,6 +11,7 @@ flush explicitly too, so one sessionmaker covers all three.
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import suppress
 from dataclasses import dataclass
@@ -72,9 +73,15 @@ def open_database(url: str) -> Database:
         raise RuntimeError("SITE_DATABASE_URL must name an absolute local SQLite file")
     # hide_parameters keeps bound values (including a birthday) out of engine
     # logs and SQLAlchemy exception text for every site connection.
+    # Result rows are still logged when sqlalchemy.engine is DEBUG, so the
+    # engine logger stays at WARNING or higher whatever the app level is.
+    engine_log = logging.getLogger("sqlalchemy.engine")
+    if engine_log.level < logging.WARNING:
+        engine_log.setLevel(logging.WARNING)
     kwargs: dict = {
         "connect_args": {"check_same_thread": False},
         "hide_parameters": True,
+        "echo": False,
     }
     if memory:
         kwargs["poolclass"] = StaticPool
