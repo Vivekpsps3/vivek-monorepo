@@ -20,13 +20,13 @@ function postLock(userId: number, originTabId?: string): void {
 export async function lockFinance(injector: Injector, originTabId?: string): Promise<void> {
   wipeDek();
   try {
-    const userId = injector.get(SESSION_CONTEXT, null, { optional: true })?.currentUser?.id;
+    const load = lockLoad.modules, userId = injector.get(SESSION_CONTEXT, null, { optional: true })?.currentUser?.id;
     if (typeof userId === 'number') postLock(userId, originTabId);
-    const [{ VaultService }, { FinanceService }, { MarketRefreshCoordinatorService }] = await lockLoad.modules();
+    await import('../services/finance.service').then(m => injector.get(m.FinanceService).clearSessionState()).catch(() => undefined);
+    const [{ VaultService }, , { MarketRefreshCoordinatorService }] = await load();
     const market = injector.get(MarketRefreshCoordinatorService);
     market.broadcastLock(originTabId);
     market.endSession();
-    injector.get(FinanceService).clearSessionState();
     injector.get(VaultService).lock();
   } catch {
     try { injector.get((await import('../services/finance.service')).FinanceService).clearSessionState(); }

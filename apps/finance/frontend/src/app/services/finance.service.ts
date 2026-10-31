@@ -25,7 +25,7 @@ import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
-import { readLockEpoch } from '../crypto/dek-holder';
+import { hasDek, readLockEpoch } from '../crypto/dek-holder';
 import { VaultService, type VaultWriteOptions } from '../crypto/vault.service';
 import {
   BankAccountRecord,
@@ -666,11 +666,12 @@ export class FinanceService {
 
   getNetWorth(): Observable<NetWorth> {
     const dependencies: EncryptedCollection[] = ['holdings', 'assets', 'liabilities'];
-    const epoch = this.dataEpoch(dependencies);
-    return from(this.encStore.getNetWorth().then(nw => {
+    const epoch = this.dataEpoch(dependencies), lock = readLockEpoch();
+    return new Observable(subscriber => { void this.encStore.getNetWorth().then(nw => {
+      if (!hasDek() || lock !== readLockEpoch()) { subscriber.complete(); return; }
       if (epoch === this.dataEpoch(dependencies)) this._netWorth.next(nw);
-      return nw;
-    }));
+      subscriber.next(nw); subscriber.complete();
+    }, (error: unknown) => subscriber.error(error)); });
   }
 
   getAssets(): Observable<Asset[]> {
@@ -678,7 +679,7 @@ export class FinanceService {
     const lock = readLockEpoch();
     return new Observable(subscriber => {
       void this.encStore.getAssets().then(rows => {
-        if (epoch !== this.dataEpoch(['assets']) || lock !== readLockEpoch()) {
+        if (epoch !== this.dataEpoch(['assets']) || lock !== readLockEpoch() || !hasDek()) {
           subscriber.complete();
           return;
         }

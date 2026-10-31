@@ -317,7 +317,7 @@ export class HubComponent implements OnInit {
     this.clearFinanceNumbers();
     this.financePending = false;
     this.financeState = 'locked';
-    this.cdr.markForCheck();
+    this.cdr.detectChanges();
     void lockFinance(this.injector, originTabId);
   }
 

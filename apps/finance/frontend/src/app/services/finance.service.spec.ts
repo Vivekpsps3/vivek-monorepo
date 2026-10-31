@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { firstValueFrom, Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
+import { holdDek, wipeDek } from '../crypto/dek-holder';
 import { lockFinance, lockLoad } from '../crypto/lock-finance';
 import { FinanceService } from './finance.service';
 import { VaultService } from '../crypto/vault.service';
@@ -51,9 +52,11 @@ describe('FinanceService', () => {
     });
     service = TestBed.inject(FinanceService);
     http = TestBed.inject(HttpTestingController);
+    holdDek({} as CryptoKey);
   });
 
   afterEach(() => http.verify());
+  afterEach(() => wipeDek());
 
   it('refreshes the complete transaction stream after an import instead of truncating it', async () => {
     const transactions = Array.from({ length: 5001 }, (_, id) => ({
@@ -134,6 +137,9 @@ describe('FinanceService', () => {
     release([secret]);
     await Promise.resolve();
     expect([seen, completed]).toEqual([[], true]);
+    wipeDek(); const worth: unknown[] = []; encStore.getNetWorth.and.resolveTo({ total: 9 } as never);
+    service.getNetWorth().subscribe(value => worth.push(value)); await Promise.resolve();
+    expect([worth, (service as unknown as { _netWorth: { value: unknown } })._netWorth.value]).toEqual([[], null]);
   });
 
   it('does not deliver asset rows deferred across lockFinance', async () => {
@@ -153,7 +159,7 @@ describe('FinanceService', () => {
       hang(); service.getAssets().subscribe(rows => seen.push(rows));
       lockLoad.modules = (() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules;
       await lockFinance(TestBed.inject(Injector)); release([secret]); await Promise.resolve();
-      expect([seen, cleared]).toEqual([[], 1]);
+      expect([seen, cleared]).toEqual([[], 3]);
     } finally { lockLoad.modules = real; }
   });
 
