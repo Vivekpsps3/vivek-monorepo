@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
@@ -311,10 +312,13 @@ def evaluate_streak(
     per_week: int,
     cadences: Iterable[CadenceRow] = (),
     archived_on: date | None = None,
+    *,
+    checkin_ords: Sequence[int] | None = None,
 ) -> Streak:
     """Evaluate one habit from created_on through min(today, archived_on)."""
     rows = tuple(cadences)
-    checked = frozenset(checkins)
+    # checkin_ords: strictly increasing Python ordinals from SQL. No per-row date.
+    ords = checkin_ords if checkin_ords is not None else _ordinals(checkins)
     end = today if archived_on is None else min(today, archived_on)
     labels: dict[date, Last7Value] = {}
     streak7: list[date] = []
@@ -324,69 +328,33 @@ def evaluate_streak(
     unit: Literal["days", "weeks"] = "days"
     current = 0
     open_week: WeekProgress | None = None
-
-    def daily(day: date, streak: int) -> int:
-        nonlocal best_days
-        if day in checked:
-            streak += 1
-            labels[day] = "done"
-            if streak % 7 == 0:
-                streak7.append(day)
-        elif day == today:
-            labels[day] = "pending"  # pending does not spend the week's rest
-        elif streak > 0 and (key := _iso_week(day)) not in rests:
-            labels[day] = "rest"
-            rests[key] = day
-        else:
-            labels[day] = "miss"
-            streak = 0
-        best_days = max(best_days, streak)
-        return streak
-
-    def weekly(seg_start: date, seg_end: date) -> int:
-        nonlocal best_weeks, open_week
-        streak = 0
-        monday = _monday(seg_start)
-        creation = _monday(created_on)
-        archive = _monday(archived_on) if archived_on is not None and archived_on <= today else None
-        current_week = _monday(today) if end == today else None
-        while monday <= _monday(seg_end):
-            days = [
-                monday + timedelta(days=offset)
-                for offset in range(7)
-                if seg_start <= monday + timedelta(days=offset) <= seg_end
-            ]
-            for day in days:
-                labels[day] = "done" if day in checked else "off"
-            done = sum(day in checked for day in days)
-            born_here = seg_start <= created_on <= seg_end and monday == creation
-            anchor = created_on if born_here else monday if monday >= seg_start else seg_start
-            target = cadence_on(anchor, per_week, rows)
-            protects = born_here or monday == current_week
-            if archive is not None and archived_on is not None:
-                protects = protects or (monday == archive and seg_start <= archived_on <= seg_end)
-            if done >= target:
-                streak += 1
-                if streak >= 2:
-                    hit = sorted(day for day in days if day in checked)
-                    streak7.append(hit[target - 1])
-            elif not protects:
-                streak = 0
-            best_weeks = max(best_weeks, streak)
-            if seg_start <= end <= seg_end and monday == _monday(end):
-                open_week = WeekProgress(done, target)
-            monday += timedelta(days=7)
-        return streak
+    label_from = (today - timedelta(days=6)).toordinal()
+    table = _cadence_table(rows)
 
     if end >= created_on:
-        for kind, seg_start, seg_end in _kind_segments(created_on, end, per_week, rows):
+        for kind, seg_start, seg_end in _kind_segments(created_on, end, per_week, table):
             if kind == "daily":
-                streak = 0
-                for day in _dates(seg_start, seg_end):
-                    streak = daily(day, streak)
-                unit, current = "days", streak
+                current, best_days = _daily_segment(
+                    seg_start, seg_end, ords, rests, labels, streak7, best_days, today, label_from
+                )
+                unit = "days"
             else:
-                unit, current = "weeks", weekly(seg_start, seg_end)
+                current, best_weeks, open_week = _weekly_segment(
+                    seg_start,
+                    seg_end,
+                    ords,
+                    table,
+                    per_week,
+                    created_on,
+                    today,
+                    end,
+                    archived_on,
+                    labels,
+                    streak7,
+                    best_weeks,
+                    label_from,
+                )
+                unit = "weeks"
     elif cadence_kind(cadence_on(today, per_week, rows)) == "weekly":
         unit = "weeks"
 
@@ -425,33 +393,178 @@ def _iso_week(day: date) -> _WeekKey:
     return calendar.year, calendar.week
 
 
-def _monday(day: date) -> date:
-    return day - timedelta(days=day.weekday())
+def _ordinals(checkins: Iterable[date]) -> list[int]:
+    data = checkins if isinstance(checkins, list) else list(checkins)
+    ords: list[int] = []
+    last = -1
+    for day in data:
+        ordinal = day.toordinal()
+        if ordinal <= last:
+            return sorted({item.toordinal() for item in data})
+        ords.append(ordinal)
+        last = ordinal
+    return ords
 
 
-def _dates(start: date, end: date) -> Iterable[date]:
-    day = start
-    while day <= end:
-        yield day
-        day += timedelta(days=1)
+def _cadence_table(rows: Sequence[CadenceRow]) -> list[CadenceRow]:
+    # A later row for the same day replaces an earlier one, matching cadence_on.
+    return sorted(dict(rows).items())
 
 
 def _kind_segments(
-    start: date, end: date, per_week: int, rows: tuple[CadenceRow, ...]
+    start: date, end: date, per_week: int, table: Sequence[CadenceRow]
 ) -> list[tuple[CadenceKind, date, date]]:
+    # Kind changes only on a cadence start date, not once per day.
     segments: list[tuple[CadenceKind, date, date]] = []
-    current: CadenceKind | None = None
-    seg_start = previous = start
-    for day in _dates(start, end):
-        kind = cadence_kind(cadence_on(day, per_week, rows))
-        if current is None:
+    current = cadence_kind(per_week)
+    seg_start = start
+    for change_day, value in table:
+        if change_day > end:
+            break
+        kind = cadence_kind(value)
+        if change_day <= start:
             current = kind
-            seg_start = day
         elif kind != current:
-            segments.append((current, seg_start, previous))
-            current = kind
-            seg_start = day
-        previous = day
-    if current is not None:
+            segments.append((current, seg_start, change_day - timedelta(days=1)))
+            current, seg_start = kind, change_day
+    if seg_start <= end:
         segments.append((current, seg_start, end))
     return segments
+
+
+def _run_length(ords: Sequence[int], index: int, hi: int, base: int) -> int:
+    lo, hi_off = 0, hi - index - 1
+    while lo < hi_off:
+        mid = (lo + hi_off + 1) // 2
+        if ords[index + mid] == base + mid:
+            lo = mid
+        else:
+            hi_off = mid - 1
+    return lo + 1
+
+
+def _paint(
+    labels: dict[date, Last7Value],
+    start: int,
+    end: int,
+    label_from: int,
+    today_ord: int,
+    value: Last7Value,
+    *,
+    pending_today: bool = False,
+) -> None:
+    for ordinal in range(max(start, label_from), min(end, today_ord) + 1):
+        picked = "pending" if pending_today and ordinal == today_ord else value
+        labels[date.fromordinal(ordinal)] = picked
+
+
+def _daily_segment(
+    seg_start: date,
+    seg_end: date,
+    ords: Sequence[int],
+    rests: dict[_WeekKey, date],
+    labels: dict[date, Last7Value],
+    streak7: list[date],
+    best_days: int,
+    today: date,
+    label_from: int,
+) -> tuple[int, int]:
+    index = bisect.bisect_left(ords, seg_start.toordinal())
+    hi = bisect.bisect_right(ords, seg_end.toordinal())
+    cursor = seg_start.toordinal()
+    end_ord = seg_end.toordinal()
+    today_ord = today.toordinal()
+    streak = 0
+    while cursor <= end_ord:
+        if index < hi and ords[index] == cursor:
+            length = _run_length(ords, index, hi, cursor)
+            for mark in range(7 - streak % 7, length + 1, 7):
+                streak7.append(date.fromordinal(ords[index + mark - 1]))
+            streak += length
+            best_days = max(best_days, streak)
+            _paint(labels, cursor, cursor + length - 1, label_from, today_ord, "done")
+            index += length
+            cursor += length
+            continue
+        if streak == 0:
+            gap_end = ords[index] if index < hi else end_ord + 1
+            last = min(gap_end - 1, end_ord)
+            _paint(labels, cursor, last, label_from, today_ord, "miss", pending_today=True)
+            cursor = gap_end
+            continue
+        if cursor == today_ord:
+            _paint(labels, cursor, cursor, label_from, today_ord, "pending")
+            cursor += 1
+            continue
+        day = date.fromordinal(cursor)
+        week = _iso_week(day)
+        if week not in rests:
+            rests[week] = day
+            _paint(labels, cursor, cursor, label_from, today_ord, "rest")
+        else:
+            _paint(labels, cursor, cursor, label_from, today_ord, "miss")
+            streak = 0
+        cursor += 1
+    return streak, best_days
+
+
+def _weekly_segment(
+    seg_start: date,
+    seg_end: date,
+    ords: Sequence[int],
+    table: Sequence[CadenceRow],
+    per_week: int,
+    created_on: date,
+    today: date,
+    end: date,
+    archived_on: date | None,
+    labels: dict[date, Last7Value],
+    streak7: list[date],
+    best_weeks: int,
+    label_from: int,
+) -> tuple[int, int, WeekProgress | None]:
+    streak = 0
+    open_week: WeekProgress | None = None
+    start_ord = seg_start.toordinal()
+    end_ord = seg_end.toordinal()
+    monday = start_ord - seg_start.weekday()
+    last_monday = end_ord - seg_end.weekday()
+    created_ord = created_on.toordinal()
+    today_ord = today.toordinal()
+    end_o = end.toordinal()
+    creation_monday = created_ord - created_on.weekday()
+    end_monday = end_o - end.weekday()
+    protected_end = end == today or archived_on == end
+    index = bisect.bisect_left(ords, start_ord)
+    hi = bisect.bisect_right(ords, end_ord)
+    table_ords = [(row[0].toordinal(), row[1]) for row in table]
+    cadence_index = 0
+    value = per_week
+    born_possible = start_ord <= created_ord <= end_ord
+    while monday <= last_monday:
+        lo_ord, hi_ord = max(start_ord, monday), min(end_ord, monday + 6)
+        stop = index
+        while stop < hi and ords[stop] <= hi_ord:
+            stop += 1
+        done = stop - index
+        born = born_possible and monday == creation_monday
+        anchor = created_ord if born else lo_ord
+        while cadence_index < len(table_ords) and table_ords[cadence_index][0] <= anchor:
+            value = table_ords[cadence_index][1]
+            cadence_index += 1
+        protects = born or (protected_end and monday == end_monday and end_o <= end_ord)
+        if done >= value:
+            streak += 1
+            if streak >= 2:
+                streak7.append(date.fromordinal(ords[index + value - 1]))
+        elif not protects:
+            streak = 0
+        best_weeks = max(best_weeks, streak)
+        if start_ord <= end_o <= end_ord and monday == end_monday:
+            open_week = WeekProgress(done, value)
+        if hi_ord >= label_from and lo_ord <= today_ord:
+            for mark in range(bisect.bisect_left(ords, label_from, index, stop), stop):
+                labels[date.fromordinal(ords[mark])] = "done"
+        index = stop
+        monday += 7
+    return streak, best_weeks, open_week
