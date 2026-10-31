@@ -510,9 +510,7 @@ def test_foreign_next_matches_unknown_before_validation(client, monkeypatch, kin
     def must_not_mark(*_args, **_kwargs):
         raise AssertionError("mark_next_checked must not run for foreign or unknown entries")
 
-    monkeypatch.setattr(
-        "apps.media.backend.services.episode_next.mark_next_checked", must_not_mark
-    )
+    monkeypatch.setattr("apps.media.backend.services.episode_next.mark_next_checked", must_not_mark)
     kwargs = {} if expected is None else {"json": {"expected_episode_id": expected}}
     unknown = client.post("/api/entries/999999999/episodes/next", **kwargs)
     foreign = client.post(f"/api/entries/{saved['id']}/episodes/next", **kwargs)

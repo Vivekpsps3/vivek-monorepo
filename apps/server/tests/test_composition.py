@@ -522,3 +522,21 @@ def test_commit_failure_returns_error_instead_of_success(tmp_path):
         assert response.status_code == 500
     with database.engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM trips")).scalar_one() == 0
+
+
+def test_create_app_warms_each_included_route_matcher(tmp_path):
+    application, database = _app(tmp_path)
+    try:
+        included = [
+            route for route in application.router.routes if hasattr(route, "original_router")
+        ]
+        assert {"/api", "/travel/api", "/media/api"} <= {
+            route.include_context.prefix for route in included
+        }
+        for route in included:
+            assert callable(getattr(route, "effective_candidates", None)), route
+            # Check before calling the hook: create_app must have populated the cache already.
+            assert route._effective_candidates, route
+            assert route.effective_candidates() is route._effective_candidates
+    finally:
+        database.engine.dispose()
