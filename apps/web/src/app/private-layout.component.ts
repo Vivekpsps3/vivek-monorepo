@@ -1,23 +1,21 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, isDevMode, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
-import { ThemeService, UiIconComponent, UserMenuContent, type Theme } from '@vivek/ui';
+import { UiIconComponent, UserMenuContent } from '@vivek/ui';
 import { SessionService } from './platform/session.service';
 
 @Component({
   selector: 'suite-private-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, FormsModule, AsyncPipe, NgTemplateOutlet, UiIconComponent],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, AsyncPipe, NgTemplateOutlet, UiIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './private-layout.component.html',
   styleUrl: './private-layout.component.css',
 })
 export class PrivateLayoutComponent {
   readonly session = inject(SessionService);
-  readonly theme = inject(ThemeService);
   readonly featureMenu = inject(UserMenuContent);
   readonly menuOpen = signal(false);
   readonly switcherOpen = signal(false);
@@ -81,7 +79,7 @@ export class PrivateLayoutComponent {
         if (active !== heading) {
           confirm = false;
           heading.tabIndex = -1;
-          heading.focus({ preventScroll: true });
+          heading.focus({ preventScroll: true, focusVisible: false } as FocusOptions & { focusVisible?: boolean });
           setTimeout(tick, 0);
           return;
         }
@@ -121,11 +119,6 @@ export class PrivateLayoutComponent {
   closeSwitcher(restoreFocus = true): void {
     this.switcherOpen.set(false);
     if (restoreFocus) this.switcherButton?.nativeElement.focus();
-  }
-
-  setTheme(choice: Theme): void {
-    this.theme.set(choice);
-    this.closeMenu();
   }
 
   onMenuAction(event: MouseEvent): void {

@@ -110,7 +110,7 @@
   button:focus-visible,
   a:focus-visible,
   summary:focus-visible,
-  [tabindex]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible,
   [role="button"]:focus-visible,
   label:has(> input:focus-visible) {
     outline: var(--focus-ring-width) solid var(--focus-ring);
@@ -129,7 +129,7 @@
   }
 
   /* 44px hit targets at a phone width. :where keeps this weaker than component rules.
-     Inline text links inside paragraphs stay at their text size. */
+     Inline links in paragraphs, lists, cells, and small notes stay at text size. */
   :where(#workspace-content) a {
     display: inline-block;
     box-sizing: border-box;
@@ -137,7 +137,7 @@
     min-height: 44px;
   }
 
-  :where(#workspace-content) p a {
+  :where(#workspace-content) :where(p, li, td, small, .figure-note) a {
     display: inline;
     max-width: none;
     min-height: 0;
