@@ -62,13 +62,16 @@ def _parse_birthday(value: object, today: date) -> date | None:
     if value is None:
         return None
     if not isinstance(value, str) or _FULL_ISO_DATE.fullmatch(value) is None:
+        # This frame stays on the traceback. Drop the submitted text first.
+        del value
         _reject(MSG_FULL_DATE)
     try:
         parsed = date.fromisoformat(value)
     except ValueError:
         parsed = None
     # Raised outside the handler so the parse error, which can carry the date,
-    # is not attached as __context__.
+    # is not attached as __context__. The text itself is already gone.
+    del value
     if parsed is None:
         _reject(MSG_FULL_DATE)
     if parsed < _EARLIEST:
@@ -80,14 +83,19 @@ def _parse_birthday(value: object, today: date) -> date | None:
 
 def _parse_body(payload: object, today: date) -> tuple[date | None, bool]:
     if not isinstance(payload, dict):
+        del payload
         _reject(MSG_FULL_DATE)
     if "birthday" not in payload:
+        payload.clear()
         _reject(MSG_FULL_DATE)
-    birthday = _parse_birthday(payload["birthday"], today)
+    # Pop before the call so a nested reject does not still see the date here.
+    birthday = _parse_birthday(payload.pop("birthday"), today)
     show_age = payload.get("show_age")
+    unknown = bool(set(payload) - _FIELDS)
+    payload.clear()
     if not isinstance(show_age, bool):
         _reject(MSG_SHOW_AGE)
-    if set(payload) - _FIELDS:
+    if unknown:
         _reject(MSG_UNKNOWN)
     return birthday, show_age
 
@@ -159,18 +167,25 @@ async def update_birthday(
     rejected = False
     birthday: date | None = None
     show_age = False
+    parsed: object = None
     try:
-        if not raw:
-            parsed: object = None
-        elif raw.startswith(_UTF8_BOM):
+        if raw.startswith(_UTF8_BOM):
             rejected = True
-            parsed = None
-        else:
+        elif raw:
             parsed = json.loads(raw.decode("utf-8"))
+        # Drop the raw body before a nested reject. parsed is the same dict
+        # _parse_body mutates, so the date is popped before that call raises.
+        raw = b""
+        if not rejected and not isinstance(parsed, dict):
+            parsed = None
+            rejected = True
         if not rejected:
             birthday, show_age = _parse_body(parsed, server_today())
     except (ValueError, RecursionError):
         rejected = True
+    # Commit failures and the post-except reject both keep this frame.
+    raw = b""
+    parsed = None
     if rejected:
         _reject(MSG_FULL_DATE)
     current_user.birthday = birthday

@@ -564,16 +564,35 @@ def test_commit_and_rollback_failure_does_not_leak_the_birthday(
     assert SECRET not in _captured_logs(caplog, capsys)
 
 
-def _assert_birthday_is_detached(error: BaseException, secret: str) -> None:
+def _assert_birthday_is_detached(error: BaseException, secret: str, *names: str) -> None:
     """The client error must not chain, or retain, the value that caused it."""
     assert error.__context__ is None
     assert error.__cause__ is None
     assert secret not in repr(error.args)
+    found: list[str] = []
     frame = error.__traceback__
     while frame is not None:
+        found.append(frame.tb_frame.f_code.co_name)
         for value in frame.tb_frame.f_locals.values():
-            assert secret not in repr(value)
+            assert secret not in repr(value), frame.tb_frame.f_code.co_name
         frame = frame.tb_next
+    for name in names:
+        assert name in found
+
+
+def _secret_body_request() -> birthday_route.Request:
+    """Raw body and its birthday field are both SECRET. The helper frame is not on the traceback."""
+
+    class _Request:
+        def __init__(self) -> None:
+            body = ('{"birthday":"' + SECRET + '","show_age":true}').encode()
+            self.headers = {"content-length": str(len(body))}
+            self._body = body
+
+        async def stream(self):
+            yield self._body
+
+    return cast(birthday_route.Request, _Request())
 
 
 def test_write_failure_raises_api_error_without_a_cause() -> None:
@@ -634,6 +653,57 @@ def test_reject_does_not_chain_the_parse_error(monkeypatch: pytest.MonkeyPatch) 
     assert raised.status_code == 422
     assert raised.detail == MSG_FULL_DATE
     _assert_birthday_is_detached(raised, SECRET)
+
+
+def test_reject_frame_omits_the_submitted_birthday(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(birthday_route, "server_today", lambda: date(1900, 1, 1))
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(
+            birthday_route.update_birthday(
+                _secret_body_request(),
+                cast(Session, object()),
+                cast(User, object()),
+            )
+        )
+    error = caught.value
+    assert error.status_code == 422
+    assert error.detail == MSG_FUTURE
+    _assert_birthday_is_detached(error, SECRET, "update_birthday", "_parse_body", "_parse_birthday")
+
+
+def test_commit_failure_frame_omits_the_submitted_birthday(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(birthday_route, "server_today", lambda: TODAY)
+
+    class _Rows:
+        def add(self, _row: object) -> None:
+            return None
+
+        def commit(self) -> None:
+            raise _driver_error()
+
+        def rollback(self) -> None:
+            raise _driver_error()
+
+    class _Owner:
+        id = 1
+        birthday = None
+        pixels_show_age = False
+        updated_at = None
+
+    with pytest.raises(APIError) as caught:
+        asyncio.run(
+            birthday_route.update_birthday(
+                _secret_body_request(),
+                cast(Session, _Rows()),
+                cast(User, _Owner()),
+            )
+        )
+    error = caught.value
+    assert error.status_code == 500
+    assert error.message == "Internal server error"
+    _assert_birthday_is_detached(error, SECRET, "update_birthday", "_commit")
 
 
 def test_debug_root_does_not_log_a_birthday_query(
