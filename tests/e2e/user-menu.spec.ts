@@ -16,6 +16,7 @@ for (const width of [320, 1440]) test(`the username dropdown keeps the header co
   await page.keyboard.press('Enter');
   const menu = page.getByRole('navigation', { name: 'User options', exact: true });
   await expect(menu).toBeVisible();
+  await expect(menu.getByRole('combobox', { name: 'Color theme' })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('href', '/settings');
   await expect(menu.getByRole('link', { name: 'Account settings', exact: true })).toHaveCount(0);

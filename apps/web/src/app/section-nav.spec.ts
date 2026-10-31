@@ -2,8 +2,8 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { UiSectionNavComponent, type UiSectionNavItem } from '@vivek/ui';
-import { MediaComponent } from '../../../media/frontend/src/media.component';
-import { TravelLayoutComponent } from '../../../travel/frontend/src/travel-layout.component';
+import { routes as mediaRoutes } from '../../../media/frontend/src/public-api';
+import { routes as travelRoutes } from '../../../travel/frontend/src/public-api';
 
 @Component({ standalone: true, template: '' })
 class Blank {}
@@ -37,8 +37,11 @@ describe('section nav', () => {
   }
 
   it('keeps Trips current on a trip page and Library current on an item page', async () => {
-    expect(new TravelLayoutComponent().sections[0]).toEqual({ label: 'Trips', link: '/travel', exact: true, also: ['/travel/trips'] });
-    expect(new MediaComponent().sections.find(section => section.link === '/media/library')?.also).toEqual(['/media/item']);
+    const travelLayout = travelRoutes[0].component;
+    const mediaLayout = mediaRoutes[0].component;
+    if (!travelLayout || !mediaLayout) throw new Error('section layouts are missing from the public routes');
+    expect(new travelLayout().sections[0]).toEqual({ label: 'Trips', link: '/travel', exact: true, also: ['/travel/trips'] });
+    expect(new mediaLayout().sections.find((section: UiSectionNavItem) => section.link === '/media/library')?.also).toEqual(['/media/item']);
     expect(await currentAt('/travel/trips/9')).toEqual(['Trips']);
     expect(await currentAt('/travel/calendar')).toEqual(['Calendar']);
     expect(await currentAt('/media/item/3')).toEqual(['Library']);
