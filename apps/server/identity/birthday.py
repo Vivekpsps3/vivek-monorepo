@@ -34,6 +34,7 @@ MSG_SHOW_AGE = "Show age must be true or false."
 MSG_UNKNOWN = "Unknown field."
 
 _MAX_BODY_BYTES = 4096
+_MAX_DECLARED_DIGITS = 10
 _UTF8_BOM = b"\xef\xbb\xbf"
 
 
@@ -65,6 +66,10 @@ def _parse_birthday(value: object, today: date) -> date | None:
     try:
         parsed = date.fromisoformat(value)
     except ValueError:
+        parsed = None
+    # Raised outside the handler so the parse error, which can carry the date,
+    # is not attached as __context__.
+    if parsed is None:
         _reject(MSG_FULL_DATE)
     if parsed < _EARLIEST:
         _reject(MSG_YEAR)
@@ -88,18 +93,39 @@ def _parse_body(payload: object, today: date) -> tuple[date | None, bool]:
 
 
 def _commit(db: Session) -> None:
+    failed = False
     try:
         db.commit()
     except SQLAlchemyError:
+        failed = True
         with suppress(SQLAlchemyError):
             db.rollback()
+    # Raised outside the handler so the driver error, which can carry the
+    # birthday, is not attached as __context__.
+    if failed:
         raise APIError(500, "internal", "Internal server error") from None
+
+
+def _declared_body_status(declared: str) -> int | None:
+    """400 for a non-ascii digit, 413 over the cap, else None.
+
+    int() is not used for a non-ascii digit or for more than 10 digits.
+    Past 4300 digits int() raises ValueError and the route would answer 500.
+    """
+    if any(not character.isascii() and character.isdigit() for character in declared):
+        return 400
+    if not declared.isascii() or not declared.isdigit():
+        return None
+    if len(declared) > _MAX_DECLARED_DIGITS:
+        return 413
+    if int(declared) > _MAX_BODY_BYTES:
+        return 413
+    return None
 
 
 async def _read_body(request: Request) -> bytes | None:
     """At most 4 KB. None means the declared or actual size exceeded the cap."""
-    declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > _MAX_BODY_BYTES:
+    if _declared_body_status(request.headers.get("content-length", "")) is not None:
         return None
     body = bytearray()
     async for chunk in request.stream():
@@ -124,18 +150,28 @@ async def update_birthday(
 ) -> BirthdayView | Response:
     # Parsed here, not by a body model, so the shared validation handler
     # cannot echo the submitted date in its default ``input`` field.
+    blocked = _declared_body_status(request.headers.get("content-length", ""))
+    if blocked is not None:
+        return Response(status_code=blocked)
     raw = await _read_body(request)
     if raw is None:
         return Response(status_code=413)
+    rejected = False
+    birthday: date | None = None
+    show_age = False
     try:
         if not raw:
             parsed: object = None
         elif raw.startswith(_UTF8_BOM):
-            _reject(MSG_FULL_DATE)
+            rejected = True
+            parsed = None
         else:
             parsed = json.loads(raw.decode("utf-8"))
-        birthday, show_age = _parse_body(parsed, server_today())
+        if not rejected:
+            birthday, show_age = _parse_body(parsed, server_today())
     except (ValueError, RecursionError):
+        rejected = True
+    if rejected:
         _reject(MSG_FULL_DATE)
     current_user.birthday = birthday
     current_user.pixels_show_age = show_age
