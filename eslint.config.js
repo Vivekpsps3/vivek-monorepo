@@ -41,7 +41,7 @@ module.exports = tseslint.config(
     },
   },
   {files:['apps/**/src/**/*.html','packages/ui/src/**/*.html'],extends:[...angular.configs.templateRecommended]},
-  {files:['apps/**/e2e/**/*.ts','packages/browser/src/**/*.ts','packages/auth/src/**/*.ts'],extends:[eslint.configs.recommended,...tseslint.configs.recommended],rules},
+  {files:['apps/**/e2e/**/*.ts','packages/browser/src/**/*.ts','packages/auth/src/**/*.ts','packages/ui/pixels/**/*.ts'],extends:[eslint.configs.recommended,...tseslint.configs.recommended],rules},
   {
     files: ['apps/web/src/app/world/engine/**/*.ts'],
     rules: {
