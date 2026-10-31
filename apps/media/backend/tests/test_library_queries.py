@@ -126,7 +126,7 @@ def test_mixed_page_has_bounded_queries_and_matches_detail_truth(client, monkeyp
     _seed_mixed(client, monkeypatch)
     page, metrics = _measure(client, sort="title", limit=24)
     assert len(page["items"]) == 24
-    assert metrics["selects"] <= 5, metrics
+    assert metrics["selects"] <= 6, metrics  # available_tags is one extra SELECT.
     assert "continue" not in page  # Continuation belongs to /summary and Now.
     for card in page["items"]:
         detail = client.get(f"/api/entries/{card['id']}").json()
@@ -149,13 +149,13 @@ def test_book_page_does_not_read_off_page_shows_or_music(client, monkeypatch):
     monkeypatch.setattr(summary, "next_episodes", forbidden)
     monkeypatch.setattr(providers, "lookup_detail", forbidden)
     page, metrics = _measure(client, kind="book", sort="title", limit=24)
-    assert metrics["selects"] == 2, metrics
+    assert metrics["selects"] == 3, metrics  # available_tags is one extra SELECT.
     assert page["total"] == 120
     assert len(page["items"]) == 24
     assert page["has_more"] is True
     empty, empty_metrics = _measure(client, kind="book", offset=120, limit=24)
     assert empty["items"] == []
-    assert empty_metrics["selects"] == 2
+    assert empty_metrics["selects"] == 3  # available_tags is one extra SELECT.
 
 
 def test_artist_counts_include_saved_songs_on_unsaved_albums_once_per_artist(client):
