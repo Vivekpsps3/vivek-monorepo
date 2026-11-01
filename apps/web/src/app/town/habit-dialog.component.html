@@ -1,0 +1,38 @@
+<ui-dialog [open]="true" labelledBy="habit-dialog-title" (closed)="dismiss()">
+  <h3 id="habit-dialog-title">{{ editing() ? 'Edit habit' : 'New habit' }}</h3>
+  <form (submit)="save($event)">
+    <label for="habit-name">Name</label>
+    <input id="habit-name" data-dialog-initial-focus [value]="name()" maxlength="40" (input)="onName($event)" [attr.aria-describedby]="nameError() || fieldErrors()['name'] ? 'habit-name-error' : 'habit-count'">
+    <span id="habit-count">{{ count() }}/40</span>
+    @if (nameError() || fieldErrors()['name']; as message) { <p id="habit-name-error" role="alert">{{ message }}</p> }
+    @if (!editing()) {
+      <label for="habit-lot">Lot</label>
+      <select id="habit-lot" [value]="chosenSlot()" (change)="onSlot($event)">
+        @for (slot of slotChoices(); track slot) { <option [value]="slot">Slot {{ slot }}</option> }
+      </select>
+    }
+    <fieldset>
+      <legend>Building</legend>
+      @for (choice of styles; track choice) {
+        <label class="card">
+          <input type="radio" name="building" [checked]="choice === buildingStyle()" (change)="onStyle(choice)">
+          <img [src]="preview(choice)" alt="" width="48" height="48">
+          <span>{{ choice === 'forge' ? 'Forge' : choice === 'garden' ? 'Garden' : 'Cottage' }}</span>
+        </label>
+      }
+    </fieldset>
+    <label for="habit-cadence">Cadence</label>
+    <select id="habit-cadence" [value]="perWeek()" (change)="onCadence($event)">
+      @for (week of weeks; track week) { <option [value]="week">{{ cadenceLabel(week) }}</option> }
+    </select>
+    @if (hint()) { <p class="hint">{{ hint() }}</p> }
+    @if (formError()) { <p role="alert">{{ formError() }}</p> }
+    <div class="actions">
+      <ui-button type="submit" [busy]="busy()" [disabled]="busy()">Save</ui-button>
+      <ui-button variant="secondary" (clicked)="dismiss()">Cancel</ui-button>
+      @if (habit(); as habit) {
+        <ui-button variant="danger" (clicked)="archive()">Archive habit</ui-button>
+      }
+    </div>
+  </form>
+</ui-dialog>

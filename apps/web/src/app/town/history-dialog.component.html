@@ -1,0 +1,47 @@
+<ui-dialog [open]="true" labelledBy="history-dialog-title" (closed)="dismiss()">
+  <h3 id="history-dialog-title">History</h3>
+  @for (habit of data().habits; track habit.id) {
+    <section>
+      <h4>{{ habit.name }}</h4>
+      @if (habit.can_check_yesterday) {
+        <ui-button variant="secondary" (clicked)="mark(habit)">Mark yesterday</ui-button>
+      }
+      @if (!loaded(habit)) {
+        <ui-skeleton variant="lines" [lines]="3" />
+      } @else {
+        <table>
+          <caption>{{ habit.name }}, last 8 weeks</caption>
+          <thead>
+            <tr>
+              <th scope="col"><span class="visually-hidden">Week</span></th>
+              @for (day of weekdays; track day) { <th scope="col">{{ day }}</th> }
+            </tr>
+          </thead>
+          <tbody>
+            @for (week of weeks(habit); track week.start) {
+              <tr>
+                <th scope="row">{{ formatTownDay(week.start) }}</th>
+                @for (cell of week.cells; track $index) {
+                  <td [attr.data-kind]="cell.kind"><span class="sq"></span><span class="visually-hidden">{{ cell.text }}</span></td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+  <h4>Archived</h4>
+  @for (item of archivedItems(); track item.id) {
+    <p>{{ item.name }}</p>
+    <p>{{ bestText(item) }}</p>
+    <p>Archived {{ formatTownDay(item.archived_on) }}</p>
+  }
+  @if (archivedPages() > 1) {
+    <div class="actions">
+      <ui-button variant="secondary" [disabled]="archivedPage() === 0" (clicked)="archivedPage.update(page => page - 1)">Previous</ui-button>
+      <ui-button variant="secondary" [disabled]="archivedPage() + 1 >= archivedPages()" (clicked)="archivedPage.update(page => page + 1)">Next</ui-button>
+    </div>
+  }
+  <ui-button variant="secondary" (clicked)="dismiss()">Close</ui-button>
+</ui-dialog>

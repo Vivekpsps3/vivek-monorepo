@@ -1,0 +1,8 @@
+table { border-collapse: collapse; margin: 8px 0 16px; }
+th, td { padding: 2px; text-align: center; font-size: .75rem; }
+.sq { display: inline-block; width: 12px; height: 12px; vertical-align: middle; }
+td[data-kind='done'] .sq { background: var(--success, #2f7d4a); }
+td[data-kind='rest'] .sq { background: var(--warning, #a86b00); }
+td[data-kind='miss'] .sq { background: var(--danger, #8d2f2f); }
+td[data-kind='pending'] .sq, td[data-kind='empty'] .sq { outline: 1px solid var(--border); }
+h4 { margin: 12px 0 4px; }

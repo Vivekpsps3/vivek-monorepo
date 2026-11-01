@@ -8,6 +8,8 @@ import { townSpriteUrl } from './town-sprites';
 import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
+import { HabitDialogComponent } from './habit-dialog.component';
+import { HistoryDialogComponent } from './history-dialog.component';
 import { TownLotComponent } from './town-lot.component';
 import { TownTodayComponent, liveCheck } from './town-today.component';
 import { stage } from './town-levels';
@@ -16,7 +18,7 @@ import type { TownResponse } from './town.types';
 
 @Component({
   selector: 'app-town',
-  imports: [UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, TownLotComponent, TownTodayComponent],
+  imports: [UiButtonComponent, UiCardComponent, UiEmptyStateComponent, UiSkeletonComponent, UiStateComponent, TownLotComponent, TownTodayComponent, HabitDialogComponent, HistoryDialogComponent],
   templateUrl: './town.component.html',
   styleUrl: './town.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,6 +35,8 @@ export class TownComponent {
   readonly state = signal<'loading' | 'ready' | 'unavailable'>('loading');
   readonly live = signal('');
   readonly swapping = signal<Record<string, 1 | 2 | 3>>({});
+  readonly edit = signal<{ slot: number | null; habitId: number | null; prefill: string } | null>(null);
+  readonly historyOpen = signal(false);
   readonly placeholders = Array.from({ length: 9 }, (_, i) => i);
   readonly suggestions = ['Read 20 pages', 'Walk 30 minutes', 'Sleep by 12'];
   readonly emptySprite = townSpriteUrl('lot-empty');
@@ -59,11 +63,18 @@ export class TownComponent {
     this.loads.next();
   }
   openHabitDialog(slot: number | null, habitId: number | null, prefillName?: string): void {
-    // TF3 implements this hook.
-    void slot; void habitId; void prefillName;
+    this.edit.set({ slot, habitId, prefill: prefillName ?? '' });
   }
   openHistory(): void {
-    // TF3 opens the history dialog.
+    this.historyOpen.set(true);
+  }
+  closeEdit(changed: boolean): void {
+    this.edit.set(null);
+    if (changed) this.reload();
+  }
+  closeHistory(changed: boolean): void {
+    this.historyOpen.set(false);
+    if (changed) this.reload();
   }
   onSettled(result: CheckinResult): void {
     this.data.update(data => data && ({ ...data, town: { ...data.town, ...result.town } }));

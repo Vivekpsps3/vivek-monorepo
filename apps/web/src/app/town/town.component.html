@@ -51,4 +51,10 @@
     </ui-card>
   </div>
 }
+  @if (edit(); as edit) {
+    <app-habit-dialog [data]="data" [slot]="edit.slot" [habitId]="edit.habitId" [prefill]="edit.prefill" (closed)="closeEdit($event)" />
+  }
+  @if (historyOpen()) {
+    <app-history-dialog [data]="data" (dirty)="reload()" (closed)="closeHistory($event)" />
+  }
 }
