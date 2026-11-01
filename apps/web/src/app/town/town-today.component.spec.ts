@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { TownApiService, type CheckinResult } from './town.api';
@@ -139,4 +139,35 @@ describe('Today panel', () => {
     expect(toast.error).toHaveBeenCalledWith('The day changed. Try again.');
     expect(dayChanged).toHaveBeenCalledTimes(1);
   });
+
+  it('refocuses the check button only on the refresh that follows that write', fakeAsync(() => {
+    const read = habit({ id: 12, name: 'Read 20 pages' });
+    const { fixture, el } = render(snapshot([read]));
+    const button = el.querySelector<HTMLButtonElement>('[data-check="12"] button')!;
+    const history = () => [...el.querySelectorAll('button')].find(item => item.textContent?.trim() === 'History')!;
+    const settle = () => {
+      fixture.detectChanges();
+      TestBed.tick();
+      flushMicrotasks();
+    };
+    button.click();
+    settle();
+    history().focus();
+    expect(document.activeElement).toBe(history());
+    read.checked_today = true;
+    fixture.componentRef.setInput('data', snapshot([read]));
+    settle();
+    expect(document.activeElement).toBe(button);
+    // Dialog close, Mark yesterday, and the visible-date poll are later snapshots.
+    for (const data of [
+      snapshot([{ ...read }]),
+      snapshot([{ ...read, xp: 90 }]),
+      snapshot([{ ...read, streak: { ...read.streak, current: 5 } }]),
+    ]) {
+      history().focus();
+      fixture.componentRef.setInput('data', data);
+      settle();
+      expect(document.activeElement).toBe(history());
+    }
+  }));
 });

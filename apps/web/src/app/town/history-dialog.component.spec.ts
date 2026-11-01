@@ -90,4 +90,42 @@ describe('History dialog', () => {
     checkin.next({} as CheckinResult); fixture.detectChanges();
     expect(dirty).toHaveBeenCalled();
   });
+
+  it('keeps a failed check-in load in an error state and retries that row', () => {
+    const toast = spyOn(TestBed.inject(ToastService), 'error');
+    const pending = new Map<number, Subject<{ days: string[] }>>();
+    api.getCheckins.and.callFake((id: number) => {
+      const subject = new Subject<{ days: string[] }>();
+      pending.set(id, subject);
+      return subject;
+    });
+    const fixture = TestBed.createComponent(HistoryDialogComponent);
+    fixture.componentRef.setInput('data', snapshot());
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const section = (name: string) => [...el.querySelectorAll('section')].find(node => node.querySelector('h4')?.textContent === name)!;
+    pending.get(12)!.error({ error: { message: 'Town is unavailable right now.' } });
+    pending.get(15)!.next({ days: ['2026-10-28'] });
+    fixture.detectChanges();
+    const read = section('Read 20 pages');
+    const walk = section('Walk 30 minutes');
+    expect(toast).toHaveBeenCalledWith('Town is unavailable right now.');
+    expect(read.querySelector('table')).toBeNull();
+    expect(read.textContent).not.toContain('missed');
+    expect(read.textContent).toContain("Couldn't load history.");
+    expect([...read.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Retry')).toBeTrue();
+    expect(walk.querySelector('table')).not.toBeNull();
+    expect(walk.textContent).not.toContain('missed');
+    const calls = api.getCheckins.calls.count();
+    [...read.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Retry')!.click();
+    fixture.detectChanges();
+    expect(api.getCheckins.calls.count()).toBe(calls + 1);
+    expect(api.getCheckins.calls.mostRecent().args).toEqual([12, '2026-10-05', '2026-10-29']);
+    expect(read.querySelector('table')).toBeNull();
+    pending.get(12)!.next({ days: [] });
+    fixture.detectChanges();
+    expect(read.querySelector('table')).not.toBeNull();
+    expect(read.textContent).toContain('missed');
+    expect(read.textContent).not.toContain("Couldn't load history.");
+  });
 });

@@ -6,7 +6,9 @@
       @if (habit.can_check_yesterday) {
         <ui-button variant="secondary" (clicked)="mark(habit)">Mark yesterday</ui-button>
       }
-      @if (!loaded(habit)) {
+      @if (rowFailed(habit)) {
+        <ui-state state="unavailable" thing="history" (retry)="retry(habit)" />
+      } @else if (!loaded(habit)) {
         <ui-skeleton variant="lines" [lines]="3" />
       } @else {
         <table>

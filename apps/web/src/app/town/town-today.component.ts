@@ -63,14 +63,16 @@ export class TownTodayComponent {
   readonly dayChanged = output<void>();
   readonly pending = signal<Readonly<Record<number, boolean>>>({});
   private readonly focusHabit = signal<number | null>(null);
+  /** Snapshot present when a check was armed. Only the next snapshot may move focus back. */
+  private focusBaseline: TownResponse | null = null;
 
   constructor() {
     effect(() => {
-      const habits = this.data().habits;
+      const data = this.data();
       const pending = this.pending();
       const copy = { ...pending };
       let changed = false;
-      for (const habit of habits) {
+      for (const habit of data.habits) {
         if (copy[habit.id] === habit.checked_today) {
           delete copy[habit.id];
           changed = true;
@@ -78,11 +80,25 @@ export class TownTodayComponent {
       }
       if (changed) this.pending.set(copy);
       const id = this.focusHabit();
-      if (id == null) return;
-      queueMicrotask(() => {
-        const button = this.host.nativeElement.querySelector(`[data-check="${id}"] button`);
-        if (button instanceof HTMLButtonElement) button.focus();
-      });
+      if (id == null) {
+        this.focusBaseline = null;
+        return;
+      }
+      const refresh = this.focusBaseline !== null && data !== this.focusBaseline;
+      if (this.focusBaseline === null || refresh) this.focusCheck(id);
+      if (refresh) {
+        this.focusHabit.set(null);
+        this.focusBaseline = null;
+        return;
+      }
+      this.focusBaseline = data;
+    });
+  }
+
+  private focusCheck(id: number): void {
+    queueMicrotask(() => {
+      const button = this.host.nativeElement.querySelector(`[data-check="${id}"] button`);
+      if (button instanceof HTMLButtonElement) button.focus();
     });
   }
 
@@ -146,6 +162,7 @@ export class TownTodayComponent {
       this.dayChanged.emit();
       return;
     }
+    this.focusHabit.set(null);
     this.toast.error(issue.message);
   }
 }
