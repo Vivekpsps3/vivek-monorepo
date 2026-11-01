@@ -185,19 +185,10 @@ test('broken photo candidates are disabled and a failed selection preserves the 
 test('the main Media screens pass accessibility in both themes at phone and desktop widths', async ({ page, request }) => {
   test.setTimeout(180_000);
   // .ui-badge fades color/background over 200ms. Axe was sampling that blend
-  // (contrast 2.91 and 2.69) before the dark theme finished.
-  await page.addInitScript(() => {
-    const apply = () => {
-      const root = document.documentElement;
-      if (!root || root.querySelector('style[data-ci2-motion]')) return;
-      const style = document.createElement('style');
-      style.setAttribute('data-ci2-motion', 'off');
-      style.textContent = '*,*::before,*::after{animation:none !important;transition:none !important;}';
-      root.appendChild(style);
-    };
-    apply();
-    document.addEventListener('DOMContentLoaded', apply);
-  });
+  // (contrast 2.91 and 2.69) before the dark theme finished. style-src drops a
+  // nonce-less sheet; the nonced prefers-reduced-motion rule already sets
+  // transition-duration to 0.01ms.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const artist = await addItem(request, { kind: 'artist', title: 'A very long synthetic artist name that must wrap', status: 'following' });
   const routes = ['/media', '/media/library', '/media/search', '/media/calendar', '/media/add', '/media/item/' + artist.id];
   for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
@@ -212,11 +203,14 @@ test('the main Media screens pass accessibility in both themes at phone and desk
           const iterations = animation.effect?.getComputedTiming()?.iterations;
           return animation.playState === 'running' && iterations !== Infinity;
         });
-        const started = performance.now();
-        while (performance.now() - started < 1000) {
+        const deadline = performance.now() + 1000;
+        for (;;) {
           await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
           const pending = finiteRunning();
           if (pending.length === 0) return;
+          if (performance.now() >= deadline) {
+            throw new Error('Finite animation still running before accessibility scan');
+          }
           await Promise.race([
             Promise.all(pending.map(animation => animation.finished.catch(() => undefined))),
             new Promise(resolve => setTimeout(resolve, 250)),
