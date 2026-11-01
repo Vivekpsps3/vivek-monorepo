@@ -34,11 +34,11 @@ export async function lockFinance(injector: Injector, originTabId?: string): Pro
     const market = injector.get(MarketRefreshCoordinatorService);
     if (!posted) market.broadcastLock(originTabId);
     market.endSession();
-    injector.get(VaultService).lock();
+    await injector.get(VaultService).lock();
   } catch {
     try { injector.get((await import('../services/finance.service')).FinanceService).clearSessionState(); }
     catch { /* store module failed; the key is already wiped */ }
-    try { injector.get((await import('./vault.service')).VaultService).lock(); }
+    try { await injector.get((await import('./vault.service')).VaultService).lock(); }
     catch { /* the key is already wiped */ }
     injector.get(ToastService).error(failureCopy('lock', 'this vault'), {
       label: 'Try again', run: () => { void lockFinance(injector, originTabId); },

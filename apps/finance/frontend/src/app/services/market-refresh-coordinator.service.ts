@@ -399,8 +399,10 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     this.endSession();
     this.finance.clearSessionState();
     if (message.kind === 'signout') {
-      this.auth.clearLocalSession();
-      authNavigation.goToLogin(false);
+      await Promise.resolve()
+        .then(() => this.auth.clearLocalSession())
+        .then(() => { authNavigation.goToLogin(false); })
+        .catch(() => undefined);
     } else {
       await this.router.navigateByUrl('/finance/vault/unlock');
     }

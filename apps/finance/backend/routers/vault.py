@@ -10,6 +10,7 @@ from apps.finance.backend.schemas_vault import (
     BlindIndexLookupRequest,
     EncryptedRecordBatchDelete,
     EncryptedRecordBatchUpsert,
+    EncryptedRecordReindexResponse,
     EncryptedRecordResponse,
     VaultCreateRequest,
     VaultResponse,
@@ -161,6 +162,40 @@ def upsert_encrypted_records(
         )
         for r in rows
     ]
+
+
+def _record_response(row: store.EncryptedRecord) -> EncryptedRecordResponse:
+    return EncryptedRecordResponse(
+        collection=row.collection,
+        client_id=row.client_id,
+        ciphertext_b64=row.ciphertext_b64,
+        schema_version=row.schema_version,
+        key_version=row.key_version,
+        revision=row.revision,
+        updated_at=_iso(row.updated_at) or "",
+    )
+
+
+@router.post("/records/reindex", response_model=EncryptedRecordReindexResponse)
+def reindex_encrypted_records(
+    body: EncryptedRecordBatchUpsert,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    if not store.get_vault(db, current_user.id):
+        raise HTTPException(status_code=400, detail="Vault required before storing records")
+    rows, skipped = store.reindex_records(
+        db,
+        current_user.id,
+        [item.model_dump() for item in body.records],
+    )
+    db.commit()
+    for row in rows:
+        db.refresh(row)
+    return EncryptedRecordReindexResponse(
+        records=[_record_response(row) for row in rows],
+        skipped=skipped,
+    )
 
 
 @router.post("/records/delete")

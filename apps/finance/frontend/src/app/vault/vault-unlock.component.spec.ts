@@ -101,7 +101,7 @@ describe('routed vault unlock', () => {
   afterEach(() => { localStorage.removeItem('finance-dek'); TestBed.resetTestingModule(); });
   it('discards an unlock when another tab broadcasts a lock', async () => {
     const user = { id: 7, username: 'vivek', email: '', display_name: '', role: 'user' as const, is_active: true, must_change_password: false, created_at: '', updated_at: '' };
-    const auth: SessionPort = { user$: new BehaviorSubject(user), currentUser: user, csrfToken: null, revision: 0, cleared$: new Subject<void>(), isAdmin: () => false, loadSession: () => of(user), clearLocalSession: () => undefined, logout: () => undefined };
+    const auth: SessionPort = { user$: new BehaviorSubject(user), currentUser: user, csrfToken: null, revision: 0, cleared$: new Subject<void>(), isAdmin: () => false, loadSession: () => of(user), clearLocalSession: () => Promise.resolve(), logout: () => undefined };
     TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [provideRouter(routes, withDisabledInitialNavigation()), { provide: SESSION_CONTEXT, useValue: auth }] });
     const vault = TestBed.inject(VaultService);
     await vault.whenReady();
