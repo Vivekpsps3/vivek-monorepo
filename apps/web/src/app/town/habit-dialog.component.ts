@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ConfirmService, ToastService, UiButtonComponent, UiDialogComponent } from '@vivek/ui';
-import { TownApiService } from './town.api';
+import { TownApiService, type PatchHabit } from './town.api';
 import { SLOT_DEFAULT_STYLE } from './town.constants';
 import { townSpriteUrl } from './town-sprites';
 import { apiProblem, cadenceLabel, habitNameError, normalizedHabitName, pendingHint } from './town-text';
@@ -38,6 +38,8 @@ export class HabitDialogComponent {
   readonly weeks = [7, 6, 5, 4, 3, 2, 1];
   readonly cadenceLabel = cadenceLabel;
   private seeded = false;
+  /** Cadence shown when the dialog opened. Edit saves omit per_week until the user moves off it. */
+  private seededPerWeek = 7;
 
   readonly habit = computed(() => this.data().habits.find(item => item.id === this.habitId()) ?? null);
   readonly editing = computed(() => this.habit() != null);
@@ -54,9 +56,11 @@ export class HabitDialogComponent {
       const slots = this.emptySlots();
       const preset = this.slot();
       if (this.seeded) return;
+      const seededPerWeek = habit?.cadence.pending?.per_week ?? habit?.cadence.per_week ?? 7;
       this.name.set(habit?.name ?? this.prefill());
       this.buildingStyle.set(habit?.building_style ?? SLOT_DEFAULT_STYLE[preset ?? 0] ?? 'forge');
-      this.perWeek.set(habit?.cadence.per_week ?? 7);
+      this.perWeek.set(seededPerWeek);
+      this.seededPerWeek = seededPerWeek;
       this.chosenSlot.set(preset != null && (slots.includes(preset) || slots.length === 0) ? preset : slots[0] ?? preset ?? 0);
       this.seeded = true;
     });
@@ -92,7 +96,7 @@ export class HabitDialogComponent {
     const name = normalizedHabitName(this.name());
     const habit = this.habit();
     const request = habit
-      ? this.api.patchHabit(habit.id, { name, per_week: this.perWeek(), building_style: this.buildingStyle() })
+      ? this.api.patchHabit(habit.id, this.editPatch(habit, name))
       : this.api.createHabit({ name, slot: this.chosenSlot(), per_week: this.perWeek(), building_style: this.buildingStyle() });
     this.busy.set(true);
     request.pipe(takeUntilDestroyed(this.destroy)).subscribe({
@@ -105,6 +109,15 @@ export class HabitDialogComponent {
         this.toast.error(problem.message);
       },
     });
+  }
+
+  private editPatch(habit: Habit, name: string): PatchHabit {
+    const body: PatchHabit = {};
+    if (name !== habit.name) body.name = name;
+    if (this.buildingStyle() !== habit.building_style) body.building_style = this.buildingStyle();
+    // Sending this week's per_week deletes a pending Monday row (§6.4). Leave it off when the select is unchanged.
+    if (this.perWeek() !== this.seededPerWeek) body.per_week = this.perWeek();
+    return body;
   }
 
   archive(): void {

@@ -16,6 +16,14 @@ function habit(partial: Partial<Habit> & Pick<Habit, 'id' | 'name'>): Habit {
   };
 }
 
+/** §6.4. Omitting per_week leaves the pending Monday row. Submitting this week's value deletes it. */
+function cadenceAfterEdit(cadence: Habit['cadence'], perWeek: number | undefined): Habit['cadence'] {
+  if (perWeek === undefined) return cadence;
+  if (perWeek === cadence.per_week) return { ...cadence, pending: null };
+  if (perWeek === cadence.pending?.per_week) return cadence;
+  return { ...cadence, pending: { per_week: perWeek, effective_from: cadence.pending?.effective_from ?? '2026-11-02' } };
+}
+
 function snapshot(habits: Habit[] = []): TownResponse {
   const building = { xp: 0, level: 1, stage: 1 as const, level_xp_start: 0, next_level_xp: 50, today_xp: 0, today_cap: 10, source: 'ok' as const };
   return {
@@ -100,4 +108,66 @@ describe('Habit dialog', () => {
     );
     expect(api.patchHabit).toHaveBeenCalledWith(15, { archived: true });
   }));
+
+  function pendingWalk(): Habit {
+    return habit({
+      id: 15, name: 'Walk 30 minutes', slot: 1, building_style: 'garden',
+      cadence: { per_week: 3, kind: 'weekly', pending: { per_week: 4, effective_from: '2026-11-02' } },
+    });
+  }
+
+  function patchBody(): { name?: string; per_week?: number; building_style?: Habit['building_style'] } {
+    return api.patchHabit.calls.mostRecent().args[1];
+  }
+
+  it('shows the pending cadence in the select', () => {
+    const walk = pendingWalk();
+    const { el } = render(snapshot([walk]), { habitId: 15 });
+    const select = el.querySelector<HTMLSelectElement>('#habit-cadence')!;
+    expect(select.value).toBe(String(walk.cadence.pending!.per_week));
+    expect(select.options[select.selectedIndex]?.textContent?.trim()).toBe('4× a week');
+  });
+
+  it('renames without removing a pending cadence change', () => {
+    const walk = pendingWalk();
+    const { fixture, el } = render(snapshot([walk]), { habitId: 15 });
+    const input = el.querySelector<HTMLInputElement>('#habit-name')!;
+    input.value = 'Walk further';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    const body = patchBody();
+    expect(body.name).toBe('Walk further');
+    expect(body.building_style).toBeUndefined();
+    expect(body.per_week === undefined || body.per_week === walk.cadence.pending!.per_week).toBeTrue();
+    expect(cadenceAfterEdit(walk.cadence, body.per_week)).toEqual(walk.cadence);
+  });
+
+  it('sends per_week only when the cadence select moves off its seeded value', () => {
+    const walk = pendingWalk();
+    const { fixture, el } = render(snapshot([walk]), { habitId: 15 });
+    const select = el.querySelector<HTMLSelectElement>('#habit-cadence')!;
+    expect(select.value).toBe('4');
+    select.value = '5';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    expect(api.patchHabit).toHaveBeenCalledWith(15, { per_week: 5 });
+    expect(cadenceAfterEdit(walk.cadence, patchBody().per_week).pending?.per_week).toBe(5);
+  });
+
+  it('restyles without sending this week over a pending cadence', () => {
+    const walk = pendingWalk();
+    const { fixture, el } = render(snapshot([walk]), { habitId: 15 });
+    const cottage = [...el.querySelectorAll<HTMLInputElement>('input[name="building"]')]
+      .find(input => input.parentElement?.textContent?.includes('Cottage'));
+    cottage!.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    const body = patchBody();
+    expect(body.building_style).toBe('cottage');
+    expect(body.name).toBeUndefined();
+    expect(body.per_week === undefined || body.per_week === walk.cadence.pending!.per_week).toBeTrue();
+    expect(cadenceAfterEdit(walk.cadence, body.per_week)).toEqual(walk.cadence);
+  });
 });

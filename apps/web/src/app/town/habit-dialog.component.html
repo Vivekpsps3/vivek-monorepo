@@ -22,8 +22,8 @@
       }
     </fieldset>
     <label for="habit-cadence">Cadence</label>
-    <select id="habit-cadence" [value]="perWeek()" (change)="onCadence($event)">
-      @for (week of weeks; track week) { <option [value]="week">{{ cadenceLabel(week) }}</option> }
+    <select id="habit-cadence" (change)="onCadence($event)">
+      @for (week of weeks; track week) { <option [value]="week" [selected]="week === perWeek()">{{ cadenceLabel(week) }}</option> }
     </select>
     @if (hint()) { <p class="hint">{{ hint() }}</p> }
     @if (formError()) { <p role="alert">{{ formError() }}</p> }
