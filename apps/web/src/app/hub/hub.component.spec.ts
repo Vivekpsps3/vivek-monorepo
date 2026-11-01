@@ -1,3 +1,4 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, from, of, throwError } from 'rxjs';
@@ -286,7 +287,7 @@ describe('HubComponent', () => {
     await paint();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Lisbon');
-    expect(text).toContain("Couldn't load what's in progress.");
+    expect(text).toContain("Couldn't load in-progress items.");
     expect(text).toContain("Couldn't load net worth.");
     expect(vaultReads).toBeGreaterThan(0);
     expect(financeCalls).toBe(1);
@@ -348,6 +349,7 @@ describe('HubComponent', () => {
     expect(component.formatDay(null)).toBe('No date');
     expect(component.formatDay('nope')).toBe('nope');
     expect(component.formatDay('2026-11-02')).toContain('2026');
+    expect(component.formatRange('2026-12-12', '2026-12-15')).toBe('Dec 12\u2009\u2013\u200915, 2026');
     expect(component.mediaWhen({ id: 1, kind: 'book', title: 'Dune', when: 'unknown' })).toBe('No date');
     expect(component.mediaWhen({ id: 2, kind: 'movie', title: 'Later', when: 'upcoming', precision: 'day', release_on: '2026-12-02' })).toContain('2026');
     expect(component.kindLabel('album')).toBe('Album');
@@ -451,6 +453,37 @@ describe('HubComponent', () => {
     expect(text).toContain('HBRX');
     expect(text).not.toContain('Finance is locked.');
     expect(fixture.componentInstance['financeGeneration']).toBe(0);
+  });
+
+  it('hides the finance breakdown while locked, loading, or expired', async () => {
+    await showHarbor();
+    expect(fixture.nativeElement.textContent).toContain('Breakdown');
+    for (const state of ['locked', 'loading', 'expired'] as const) {
+      fixture.componentInstance.financeState = state;
+      fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain('Breakdown');
+    }
+  });
+
+  it('clears a loaded card when localStorage is cleared', async () => {
+    await showHarbor();
+    window.dispatchEvent(new StorageEvent('storage', { key: null }));
+    fixture.detectChanges();
+    expect([fixture.componentInstance.financeState, fixture.componentInstance.netWorth, fixture.nativeElement.textContent.includes('Breakdown')]).toEqual(['locked', null, false]);
+  });
+
+  it('clears a loaded card on a sign-out broadcast', async () => {
+    await showHarbor();
+    const channel = postLock(1, 'signout');
+    for (let i = 0; i < 10 && fixture.componentInstance.financeState !== 'locked'; i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      fixture.detectChanges();
+    }
+    channel.close();
+    expect([fixture.componentInstance.financeState, fixture.componentInstance.netWorth, fixture.nativeElement.textContent.includes('Breakdown')]).toEqual(['locked', null, false]);
+    await waitForVaultLock();
+    expect(vaultLocks).toBe(1);
   });
 
   it('clears a loaded card when finance-dek is removed in another tab', async () => {

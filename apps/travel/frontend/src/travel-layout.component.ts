@@ -11,7 +11,7 @@ import { UiSectionNavComponent, type UiSectionNavItem } from "@vivek/ui";
 })
 export class TravelLayoutComponent {
   readonly sections: UiSectionNavItem[] = [
-    { label: "Trips", link: "/travel", exact: true },
+    { label: "Trips", link: "/travel", exact: true, also: ["/travel/trips"] },
     { label: "Calendar", link: "/travel/calendar" },
     { label: "PTO", link: "/travel/pto" },
   ];

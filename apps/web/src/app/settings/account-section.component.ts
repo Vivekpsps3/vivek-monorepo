@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
+import { ToastService, UiButtonComponent, UiCardComponent, UiInputComponent } from '@vivek/ui';
 import { UsernameChangeComponent } from '../hub/username-change.component';
 import { SessionService } from '../platform/session.service';
 
@@ -14,6 +14,7 @@ import { SessionService } from '../platform/session.service';
 })
 export class AccountSectionComponent implements OnInit {
   private readonly session = inject(SessionService);
+  private readonly toast = inject(ToastService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -49,6 +50,7 @@ export class AccountSectionComponent implements OnInit {
     this.cdr.markForCheck();
     try {
       await this.session.updateDisplayName(name);
+      this.toast.success('Saved');
     } catch (err) {
       this.showNameError(err instanceof Error ? err.message : 'The name could not be saved.', false);
     } finally {

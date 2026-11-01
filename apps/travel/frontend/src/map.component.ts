@@ -10,7 +10,7 @@ import {
   inject,
 } from "@angular/core";
 import type { CircleMarker, Map as LeafletMap, TileLayer } from "leaflet";
-import { UiButtonComponent } from "@vivek/ui";
+import { ThemeService, UiButtonComponent } from "@vivek/ui";
 export interface TravelPlace {
   label: string;
   lat: number | null;
@@ -136,6 +136,7 @@ export class MapComponent implements OnChanges {
   canvas!: ElementRef<HTMLDivElement>;
   private readonly change = inject(ChangeDetectorRef);
   private readonly destroy = inject(DestroyRef);
+  private readonly theme = inject(ThemeService);
   private library: typeof import("leaflet") | null = null;
   private tiles?: TileLayer;
   private pins = new Map<number, CircleMarker>();
@@ -161,7 +162,9 @@ export class MapComponent implements OnChanges {
     afterNextRender(() => {
       void this.initialize();
     });
+    const themeSub = this.theme.theme$.subscribe(() => this.restyle());
     this.destroy.onDestroy(() => {
+      themeSub.unsubscribe();
       this.tiles?.off();
       this.map?.remove();
       this.map = null;
@@ -253,7 +256,20 @@ export class MapComponent implements OnChanges {
       this.loading = false;
       this.failed = false;
     }
+    this.restyle();
     this.change.markForCheck();
+  }
+  private restyle(): void {
+    const map = this.map;
+    if (!map) return;
+    const dark = this.theme.resolved === "dark";
+    const styles = getComputedStyle(document.documentElement);
+    const surface = dark ? styles.getPropertyValue("--surface-2").trim() : "";
+    const accent = dark ? styles.getPropertyValue("--accent").trim() : "#3388ff";
+    this.canvas.nativeElement.style.backgroundColor = surface;
+    const tiles = map.getPane("tilePane");
+    if (tiles) tiles.style.backgroundColor = surface;
+    this.pins.forEach((pin) => pin.setStyle({ color: accent, fillColor: accent }));
   }
   show(index: number): void {
     const pin = this.pins.get(index);

@@ -30,13 +30,14 @@ test('axe on all native Travel screens in light and dark at phone and desktop wi
 
 test('the shared theme choice replaces an earlier choice and persists on reload', async ({ page }) => {
   await page.goto('/travel');
-  const theme = page.getByRole('combobox', { name: 'Color theme' });
   await chooseColorTheme(page, 'light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await chooseColorTheme(page, 'dark');
   await page.reload();
-  await openUserMenu(page);
-  await expect(theme).toHaveValue('dark');
+  const menu = await openUserMenu(page);
+  await expect(menu.getByRole('combobox', { name: 'Color theme' })).toHaveCount(0);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme-choice', 'dark');
+  await page.goto('/settings/appearance');
+  await expect(page.locator('input[name="color-theme"][value="dark"]')).toBeChecked();
 });
