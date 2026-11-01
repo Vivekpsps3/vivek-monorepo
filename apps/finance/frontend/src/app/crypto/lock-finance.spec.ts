@@ -85,7 +85,11 @@ describe('lockFinance', () => {
     expect(cleared).toHaveBeenCalled();
     const before = cleared.calls.count();
     (toast.error as jasmine.Spy).calls.mostRecent().args[1].run();
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // The retry awaits the IndexedDB delete before it toasts again.
+    const started = Date.now();
+    while ((toast.error as jasmine.Spy).calls.count() < 2 && Date.now() - started < 5000) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
     expect(cleared.calls.count()).toBeGreaterThan(before);
     expect((toast.error as jasmine.Spy).calls.count()).toBe(2);
   });
