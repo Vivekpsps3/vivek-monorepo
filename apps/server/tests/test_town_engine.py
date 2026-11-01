@@ -462,3 +462,19 @@ def test_building_style_failure_uses_the_town_validation_shape(tmp_path: Path):
     with pytest.raises(APIError) as caught:
         require_building_style("castle")
     _assert_field_validation(tmp_path, caught.value, "building_style", BUILDING_STYLE_ERROR)
+
+
+def test_checkin_ordinals_match_the_date_path():
+    created, today = date(2026, 10, 1), date(2026, 10, 29)
+    days = _span("2026-10-01", "2026-10-18")
+    cadence = ((date(2026, 10, 12), 7),)
+    by_date = evaluate_streak(created, today, days, 3, cadence)
+    by_ord = evaluate_streak(
+        created,
+        today,
+        (),
+        3,
+        cadence,
+        checkin_ords=[day.toordinal() for day in days],
+    )
+    assert by_ord == by_date

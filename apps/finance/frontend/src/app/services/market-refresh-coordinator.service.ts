@@ -5,7 +5,7 @@ import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rx
 import { authNavigation } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
-import { financeTabId, lockedHere } from '../crypto/dek-holder';
+import { financeTabId, lockedHere, wipeDek } from '../crypto/dek-holder';
 import { VaultService } from '../crypto/vault.service';
 import { MarketPriceQuote } from '../models/transaction.model';
 import { FinanceService } from './finance.service';
@@ -377,7 +377,11 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
 
   private async receiveTabMessage(message: unknown): Promise<void> {
     if (!isTabMessage(message) || message.userId !== this.auth.currentUser?.id) return;
-    if (message.kind === 'lock' && (message.tabId === financeTabId() || lockedHere())) return;
+    if (message.kind === 'lock' && message.tabId === financeTabId()) return;
+    if (message.kind === 'lock' && lockedHere()) {
+      wipeDek();
+      return;
+    }
     if (message.kind === 'invalidate') {
       if (!this.vault.isUnlocked || !message.collections?.length) return;
       try {

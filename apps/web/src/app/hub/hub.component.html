@@ -29,7 +29,7 @@
             @if (trip.destination && trip.title !== trip.destination) {
               <p class="figure-note">{{ trip.title }}</p>
             }
-            <p class="figure-note">{{ formatDay(trip.start_date) }} – {{ formatDay(trip.end_date) }}</p>
+            <p class="figure-note">{{ formatRange(trip.start_date, trip.end_date) }}</p>
             <a class="open-link" [routerLink]="trip.href || '/travel/'">{{ trip.next_action }}</a>
           }
         </ui-state>
@@ -45,7 +45,7 @@
         </div>
         <ui-state
           [state]="mediaState"
-          thing="what's in progress"
+          thing="in-progress items"
           emptyTitle="Nothing in progress"
           emptyMessage="Add something to keep track of it here."
           emptyAction="Add something"

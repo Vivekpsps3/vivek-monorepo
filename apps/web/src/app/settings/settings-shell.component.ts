@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
@@ -8,7 +8,15 @@ import { SETTINGS_SECTIONS } from './settings.registry';
   standalone: true,
   template: '',
 })
-export class SettingsHomeComponent {}
+export class SettingsHomeComponent implements OnInit {
+  private readonly router = inject(Router);
+
+  ngOnInit(): void {
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+      void this.router.navigate(['/settings/account'], { replaceUrl: true });
+    }
+  }
+}
 
 @Component({
   selector: 'app-settings-shell',

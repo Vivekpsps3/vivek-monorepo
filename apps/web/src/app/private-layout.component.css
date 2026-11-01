@@ -31,6 +31,7 @@
 }
 
 .suite-health {
+  display: none;
   flex: 0 0 auto;
 }
 
@@ -80,20 +81,6 @@
   min-height: 44px;
   color: var(--text);
   white-space: normal;
-}
-
-.user-menu-theme {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.user-menu-theme select {
-  width: 100%;
-  margin: 0;
-  min-height: 44px;
 }
 
 .user-menu-feature {

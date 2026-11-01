@@ -13,9 +13,9 @@ import { UiSectionNavComponent, type UiSectionNavItem } from "@vivek/ui";
 export class MediaComponent {
   readonly sections: UiSectionNavItem[] = [
     { label: "Now", link: "/media", exact: true },
-    { label: "Library", link: "/media/library" },
+    { label: "Library", link: "/media/library", also: ["/media/item"] },
     { label: "Search", link: "/media/search" },
     { label: "Calendar", link: "/media/calendar" },
-    { label: "Add manually", link: "/media/add" },
+    { label: "Add manually", shortLabel: "Add", ariaLabel: "Add manually", link: "/media/add" },
   ];
 }

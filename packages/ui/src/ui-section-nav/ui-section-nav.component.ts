@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, input } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, input } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -6,8 +6,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 export interface UiSectionNavItem {
   label: string;
   shortLabel?: string;
+  ariaLabel?: string;
   link: string;
   exact?: boolean;
+  also?: readonly string[];
 }
 
 @Component({
@@ -27,13 +29,21 @@ export class UiSectionNavComponent implements AfterViewInit {
 
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroy = inject(DestroyRef);
+  private readonly router = inject(Router);
+  private readonly cdr = inject(ChangeDetectorRef);
   private revealTimer = 0;
+  private readonly active = new Set<string>();
+  protected readonly subsetMatch = { paths: 'subset', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
+  protected readonly exactMatch = { paths: 'exact', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' } as const;
 
   constructor() {
-    inject(Router).events.pipe(
+    this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
       takeUntilDestroyed(this.destroy),
-    ).subscribe(() => this.revealSoon());
+    ).subscribe(() => {
+      this.cdr.markForCheck();
+      this.revealSoon();
+    });
     this.destroy.onDestroy(() => {
       if (typeof window !== 'undefined') window.clearTimeout(this.revealTimer);
     });
@@ -69,6 +79,16 @@ export class UiSectionNavComponent implements AfterViewInit {
       if (active instanceof HTMLElement) active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
       this.updateFades();
     });
+  }
+
+  protected current(item: UiSectionNavItem): boolean {
+    return this.active.has(item.link) || (item.also ?? []).some(link => this.active.has(link));
+  }
+
+  protected setActive(key: string, active: boolean): void {
+    if (active) this.active.add(key);
+    else this.active.delete(key);
+    this.cdr.markForCheck();
   }
 
   private updateFades(): void {

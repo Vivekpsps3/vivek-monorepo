@@ -1,5 +1,5 @@
 import { HttpClientTestingModule, HttpTestingController, type TestRequest } from '@angular/common/http/testing';
-import { EMPTY, firstValueFrom, Observable } from 'rxjs';
+import { EMPTY, firstValueFrom, Observable, Subject } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { encodeBase64 } from '@vivek/browser';
 import { WrappedSigningKey } from '@vivek/auth';
@@ -226,6 +226,61 @@ describe('VaultService unlock epoch', () => {
     expect(hasDek()).toBeFalse();
     expect(service.isUnlocked).toBeFalse();
     expect(await indexedDbHoldsDek()).toBeFalse();
+  });
+
+  async function discardDuringStatus(signOut: boolean): Promise<void> {
+    localStorage.removeItem('finance-dek');
+    const cleared$ = new Subject<void>();
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [{ provide: SESSION_CONTEXT, useValue: { cleared$ } as unknown as SessionPort }] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    const http = TestBed.inject(HttpTestingController);
+    const payload = (await createVaultMaterial(passphrase, 1000)).setupPayload;
+    const pending = service.unlock(passphrase);
+    let request: ReturnType<HttpTestingController['expectOne']> | undefined;
+    for (let attempt = 0; attempt < 20 && !request; attempt += 1) {
+      request = http.match(apiUrl('/vault/status'))[0];
+      if (!request) await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    if (signOut) cleared$.next(); else service.lock();
+    (request ?? http.expectOne(apiUrl('/vault/status'))).flush({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 });
+    expect([await pending, localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([false, null, false, false]);
+    http.verify();
+  }
+
+  it('discards an unlock when a lock lands during an uncached status fetch', () => discardDuringStatus(false));
+  it('discards an unlock when a sign-out lands during an uncached status fetch', () => discardDuringStatus(true));
+
+  async function nextHttp(http: HttpTestingController, url: string): Promise<ReturnType<HttpTestingController['expectOne']>> {
+    const started = Date.now();
+    while (Date.now() - started < 20000) {
+      const [request] = http.match(url);
+      if (request) return request;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    return http.expectOne(url);
+  }
+
+  it('does not store a key when a lock lands during setup or adopt', async () => {
+    localStorage.removeItem('finance-dek');
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
+    const service = TestBed.inject(VaultService);
+    await service.whenReady();
+    const http = TestBed.inject(HttpTestingController);
+    const material = await createVaultMaterial(passphrase, 1000);
+    const setup = service.setup(passphrase);
+    const posted = await nextHttp(http, apiUrl('/finance/vault/setup'));
+    service.lock();
+    posted.flush({ exists: true });
+    await setup;
+    expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
+    const adopted = service.adoptBootstrapVault(material.dek);
+    const status = await nextHttp(http, apiUrl('/vault/status'));
+    service.lock();
+    status.flush({ exists: true });
+    await adopted;
+    expect([localStorage.getItem('finance-dek'), hasDek(), service.isUnlocked]).toEqual([null, false, false]);
+    http.verify();
   });
 
   it('discards a browser key when a lock lands during hydrate', async () => {

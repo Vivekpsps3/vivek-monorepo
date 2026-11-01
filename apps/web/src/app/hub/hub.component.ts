@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, Inje
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
-import { todayIsoDate } from '@vivek/browser';
+import { formatDateRange, todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
 import { LOCK_SIGNAL, VAULT_PRESENCE, financeTabId, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
@@ -171,6 +171,8 @@ export class HubComponent implements OnInit {
     return todayIsoDate();
   }
 
+  readonly formatRange = formatDateRange;
+
   formatDay(iso: string | null | undefined): string {
     if (!iso) return 'No date';
     const [year, month, day] = iso.split('-').map(Number);
@@ -284,6 +286,8 @@ export class HubComponent implements OnInit {
   private watchVaultLock(): void {
     const onStorage = (event: StorageEvent) => {
       // Migration removes finance-dek and must not lock the other tab. A lock writes the signal and drops presence.
+      // Clearing the whole store arrives as one event with a null key.
+      if (event.key === null) this.applyExternalLock();
       if (event.key === LOCK_SIGNAL && event.newValue !== null) this.applyExternalLock();
       if (event.key === VAULT_PRESENCE && event.newValue === null) this.applyExternalLock();
     };
@@ -305,7 +309,8 @@ export class HubComponent implements OnInit {
     const userId = this.auth.currentUser?.id;
     if (userId == null || !value || typeof value !== 'object') return false;
     const message = value as { version?: unknown; userId?: unknown; kind?: unknown; tabId?: unknown };
-    return message.version === 1 && message.userId === userId && message.kind === 'lock' && message.tabId !== financeTabId();
+    const kindOk = message.kind === 'lock' || message.kind === 'signout';
+    return message.version === 1 && message.userId === userId && kindOk && message.tabId !== financeTabId();
   }
 
   private applyExternalLock(originTabId?: string): void {
@@ -316,7 +321,7 @@ export class HubComponent implements OnInit {
     this.clearFinanceNumbers();
     this.financePending = false;
     this.financeState = 'locked';
-    this.cdr.markForCheck();
+    this.cdr.detectChanges();
     void lockFinance(this.injector, originTabId);
   }
 

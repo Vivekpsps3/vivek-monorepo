@@ -352,11 +352,11 @@ export class VaultService {
     }, passphrase, DEFAULT_PBKDF2_ITERATIONS);
   }
 
-  async unlock(passphrase: string): Promise<boolean> {
+  async unlock(passphrase: string, forceRefresh = false): Promise<boolean> {
     const epoch = this.epoch;
     const lockAt = readLockEpoch();
     const userId = await this.resolvedOwner();
-    const status = this.statusSubject.value ?? (await this.refreshStatus());
+    const status = !forceRefresh && this.statusSubject.value ? this.statusSubject.value : await this.refreshStatus();
     if (!this.sameSession(epoch, lockAt, userId)) return false;
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');
