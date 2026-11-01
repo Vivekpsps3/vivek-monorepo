@@ -6,6 +6,9 @@ import { TownComponent } from './town.component';
 import { LOT_UNLOCK_LV } from './town.constants';
 import type { TownResponse } from './town.types';
 
+function localDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 function snapshot(): TownResponse {
   const building = { xp: 0, level: 1, stage: 1 as const, level_xp_start: 0, next_level_xp: 50, today_xp: 0, today_cap: 10, source: 'ok' as const };
   return {
@@ -102,12 +105,14 @@ describe('Town page', () => {
     expect(el.querySelector('footer')?.textContent).toBe('All lots are built.');
   });
   it('refreshes only on a visible date change, polls every five minutes, and cleans up', fakeAsync(() => {
-    const date = new Date();
-    const today = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    // mockDate sets fakeAsync's base time. install() would replace zone's interval, so the poll would never run.
+    jasmine.clock().mockDate(new Date(2026, 9, 29, 12, 0, 0));
+    const today = localDay(new Date());
+    expect(today).toBe('2026-10-29');
     const visibility = spyOnProperty(document, 'visibilityState', 'get').and.returnValue('hidden');
     const data = snapshot(); data.town.today = '2000-01-01';
     const { fixture } = render(data);
-    tick(300_000); expect(api.getTown).toHaveBeenCalledTimes(1);
+    tick(300_000); expect(localDay(new Date())).toBe(today); expect(api.getTown).toHaveBeenCalledTimes(1);
     visibility.and.returnValue('visible'); document.dispatchEvent(new Event('visibilitychange'));
     expect(api.getTown).toHaveBeenCalledTimes(2);
     data.town.today = today; response.next(data); tick(300_000);
@@ -116,6 +121,26 @@ describe('Town page', () => {
     expect(api.getTown).toHaveBeenCalledTimes(3);
     fixture.destroy(); tick(300_000); document.dispatchEvent(new Event('visibilitychange'));
     expect(api.getTown).toHaveBeenCalledTimes(3);
+  }));
+  it('refreshes once when the visible local date changes across midnight', fakeAsync(() => {
+    // Local 23:55 plus five minutes is 00:00 the next day in every timezone.
+    jasmine.clock().mockDate(new Date(2026, 9, 29, 23, 55, 0));
+    expect(localDay(new Date())).toBe('2026-10-29');
+    spyOnProperty(document, 'visibilityState', 'get').and.returnValue('visible');
+    expect(document.visibilityState).toBe('visible');
+    const data = snapshot(); data.town.today = '2026-10-29';
+    const { fixture } = render(data);
+    tick(4 * 60_000);
+    expect(localDay(new Date())).toBe('2026-10-29');
+    expect(api.getTown).toHaveBeenCalledTimes(1);
+    tick(60_000);
+    expect(localDay(new Date())).toBe('2026-10-30');
+    expect(api.getTown).toHaveBeenCalledTimes(2);
+    data.town.today = '2026-10-30'; response.next(data); tick(300_000);
+    expect(localDay(new Date())).toBe('2026-10-30');
+    expect(api.getTown).toHaveBeenCalledTimes(2);
+    fixture.destroy(); tick(300_000); document.dispatchEvent(new Event('visibilitychange'));
+    expect(api.getTown).toHaveBeenCalledTimes(2);
   }));
   it('reflows to two columns below the minimum tile width using the scene container', () => {
     const { el } = render(snapshot());
