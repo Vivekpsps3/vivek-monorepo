@@ -4,13 +4,13 @@ import random
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import insert
+from sqlalchemy import event, insert
 from sqlalchemy.orm import Session
 
 from apps.server.database import open_database
 from apps.server.town.engine import evaluate_streak, habit_xp
 from apps.server.town.models import Habit, HabitCadence, HabitCheckin, TownBase
-from apps.server.town.service import _run_streak, _runs, read_town
+from apps.server.town.service import _run_streak, _runs, read_checkins, read_habits, read_town
 
 
 def test_runs_equal_day_lists_and_owner_scoping(tmp_path):
@@ -313,6 +313,100 @@ def test_seeded_oracle_read_town_matches_evaluate_streak(tmp_path):
                 habit_xp(_counted(hist, today), streak.streak7_count),
             ), hist.name
     database.engine.dispose()
+
+
+def test_explain_query_plan_uses_the_hinted_checkin_index(tmp_path):
+    """Check-in reads must search sqlite_autoindex_habit_checkins_1."""
+    database = open_database(f"sqlite:///{tmp_path / 'plan.db'}")
+    TownBase.metadata.create_all(database.engine)
+    captured = []
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        folded = statement.lstrip().upper()
+        if "HABIT_CHECKINS" in folded and folded.startswith(("SELECT", "WITH")):
+            captured.append((statement, parameters))
+
+    event.listen(database.engine, "before_cursor_execute", capture)
+    today = date(2026, 10, 29)
+    now = datetime(2026, 10, 29, tzinfo=UTC)
+    created = date(2026, 9, 1)
+    try:
+        with Session(database.engine) as db:
+            db.execute(
+                insert(Habit),
+                [
+                    dict(
+                        id=1,
+                        user_id=1,
+                        name="Daily",
+                        name_key="daily",
+                        slot=0,
+                        building_style="cottage",
+                        per_week=7,
+                        created_on=date(2026, 10, 1),
+                        created_at=now,
+                        archived_at=None,
+                        archived_on=None,
+                    ),
+                    dict(
+                        id=2,
+                        user_id=1,
+                        name="Old daily",
+                        name_key="old daily",
+                        slot=0,
+                        building_style="cottage",
+                        per_week=7,
+                        created_on=created,
+                        created_at=now,
+                        archived_at=now,
+                        archived_on=date(2026, 10, 1),
+                    ),
+                    dict(
+                        id=3,
+                        user_id=1,
+                        name="Old weekly",
+                        name_key="old weekly",
+                        slot=0,
+                        building_style="cottage",
+                        per_week=3,
+                        created_on=created,
+                        created_at=now,
+                        archived_at=now,
+                        archived_on=date(2026, 10, 1),
+                    ),
+                ],
+            )
+            db.execute(
+                insert(HabitCheckin),
+                [
+                    dict(habit_id=1, user_id=1, day=date(2026, 10, 20), created_at=now),
+                    dict(habit_id=2, user_id=1, day=date(2026, 9, 10), created_at=now),
+                    dict(habit_id=3, user_id=1, day=date(2026, 9, 10), created_at=now),
+                ],
+            )
+            captured.clear()
+            read_town(db, 1, today, "UTC")
+            read_checkins(db, 1, 1, date(2026, 10, 1), today)
+            read_habits(db, 1, today, "UTC", include_archived=True)
+            statements = [statement for statement, _parameters in captured]
+            assert any(
+                statement.lstrip().upper().startswith("SELECT DAY FROM HABIT_CHECKINS")
+                for statement in statements
+            )
+            assert any("PRINTF(" in statement.upper() for statement in statements)
+            assert any("COUNT(*)" in statement for statement in statements)
+            assert any(statement.lstrip().upper().startswith("WITH") for statement in statements)
+            for statement, parameters in captured:
+                plan = "\n".join(
+                    str(row[-1])
+                    for row in db.connection().exec_driver_sql(
+                        "EXPLAIN QUERY PLAN " + statement, parameters
+                    )
+                )
+                assert "USING INDEX sqlite_autoindex_habit_checkins_1" in plan
+    finally:
+        event.remove(database.engine, "before_cursor_execute", capture)
+        database.engine.dispose()
 
 
 def test_wrong_owner_checkin_inside_the_range_is_ignored(tmp_path):
