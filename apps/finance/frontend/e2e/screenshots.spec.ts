@@ -1,7 +1,8 @@
 import { chooseColorTheme } from '../../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from './frozen-clock';
+import { moneyText } from './money-text';
 import { syntheticVault } from './synthetic-vault';
 
 const dir = process.env.SCREENSHOT_DIR || path.resolve('test-results/finance/screenshots');
@@ -149,8 +150,8 @@ test.describe('finance F1 screenshot matrix', () => {
         await thawCharts(page);
 
         await vault.open('/planning');
-        await expect(page.getByText('Current net worth').locator('..')).toContainText('$1,');
-        await expect(page.getByText('−$480.00')).toHaveCount(0);
+        await expect(page.getByText('Current net worth').locator('..')).toContainText(moneyText('$1,'));
+        await expect(page.getByText(moneyText('−$480.00'))).toHaveCount(0);
         await shot('planning-negative-subscription', width, theme);
 
         await vault.open('/planning?tool=simulation');

@@ -1,7 +1,10 @@
 import type { Injector } from '@angular/core';
 import type { Routes } from '@angular/router';
 import { loadFinanceBudgetKeptGuarded } from './app/budget/budget-kept-import';
-export { financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
+export { DEK_STORE, financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
+export { lockFinance } from './app/crypto/lock-finance';
+export { financeTabId } from './app/crypto/dek-holder';
+export async function loadMarketRefreshCoordinatorService() { return (await import('./app/services/market-refresh-coordinator.service')).MarketRefreshCoordinatorService; }
 export type { NetWorth } from './app/models/transaction.model';
 export type { PortfolioAccount, PositionHighlight } from './app/hub/finance-hub-snapshot';
 export async function loadFinanceRoutes(): Promise<Routes> { return (await import('./app/app.routes')).routes; }
@@ -11,7 +14,7 @@ export async function loadFinanceHubSnapshot(injector: Injector, signal: AbortSi
   return (await import('./app/hub/finance-hub-facade')).loadFinanceHubSnapshot(injector, signal, deadlineMs);
 }
 export type { FinanceHubResult } from './app/hub/finance-hub-facade';
-export async function loadFinanceBudgetKept(
+export function loadFinanceBudgetKept(
   injector: Injector,
   signal: AbortSignal,
   opts: { today: string; weeks: number; includeCurrentWeek?: boolean; deadlineMs?: number },

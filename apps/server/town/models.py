@@ -19,6 +19,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+# Same function as engine.name_key. A folded key longer than 40 characters
+# raises APIError 422 name_too_long with field_errors.name set; it is not truncated.
+from apps.server.town.engine import name_key as make_name_key
+
+__all__ = ["Habit", "HabitCadence", "HabitCheckin", "TownBase", "make_name_key"]
+
 
 class TownBase(DeclarativeBase):
     pass
@@ -55,6 +61,7 @@ class Habit(TownBase):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     # make_name_key(name). Uniqueness is the partial index, among active rows only.
+    # A casefold longer than 40 characters is rejected, not truncated.
     name_key: Mapped[str] = mapped_column(String(40), nullable=False)
 
 
@@ -84,11 +91,3 @@ class HabitCadence(TownBase):
     per_week: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
-def make_name_key(name: str) -> str:
-    """Casefold `name`, then keep the first 40 characters.
-
-    casefold can lengthen a string, so the cut happens after folding.
-    """
-    return name.casefold()[:40]

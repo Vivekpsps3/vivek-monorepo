@@ -1,12 +1,11 @@
 import type { PortfolioAccount, PositionHighlight } from '../../../../finance/frontend/src/public-api';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, Injector, OnInit, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { UiDialogComponent } from '@vivek/ui';
+import { UiStateComponent } from '@vivek/ui';
 import { todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
-import { financeVaultPresent } from '../../../../finance/frontend/src/public-api';
+import { DEK_STORE, financeTabId, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
 import { AppDatePipe } from '@vivek/ui';
 import { MoneyPipe } from '@vivek/ui';
@@ -21,8 +20,6 @@ import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
-import { UsernameChangeComponent } from './username-change.component';
-
 interface TravelTrip {
   id: number;
   title: string;
@@ -65,6 +62,7 @@ interface FinanceView {
     positions: PositionHighlight[];
     freshness: string;
     cashOverlap: boolean;
+    counts?: { accounts: number; holdings: number; debts: number };
   };
 }
 
@@ -74,10 +72,8 @@ interface FinanceView {
   imports: [
     AppDatePipe,
     MoneyPipe,
-    FormsModule,
     RouterLink,
-    UiDialogComponent,
-    UsernameChangeComponent,
+    UiStateComponent,
   ],
   templateUrl: './hub.component.html',
   styleUrl: './hub.component.css',
@@ -90,16 +86,11 @@ export class HubComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   name = 'Your library of days';
-  username = '';
-  draftName = '';
-  settingsOpen = false;
-  savingName = false;
-  nameError = '';
-  admin = false;
   readonly today = new Date();
 
-  financeState: HubCardState | 'locked' = 'locked';
+  financeState: HubCardState = 'locked';
   netWorth: NetWorth | null = null;
+  financeUpdatedAt: number | null = null;
   accounts: PortfolioAccount[] = [];
   positions: PositionHighlight[] = [];
   freshness = '';
@@ -109,11 +100,14 @@ export class HubComponent implements OnInit {
   travelState: HubCardState = 'loading';
   trip: TravelTrip | null = null;
   travelPending = false;
+  travelUpdatedAt: number | null = null;
   mediaState: HubCardState = 'loading';
   media: MediaSummary | null = null;
   mediaPending = false;
+  mediaUpdatedAt: number | null = null;
 
   private generation = 0;
+  private financeGeneration = 0;
   private userId: number | null | undefined = undefined;
   private travelCtrl: AbortController | null = null;
   private mediaCtrl: AbortController | null = null;
@@ -123,18 +117,15 @@ export class HubComponent implements OnInit {
   private readonly router = inject(Router);
 
   ngOnInit(): void {
+    this.watchVaultLock();
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.get('settings') === 'account') {
-        this.settingsOpen = true;
-        this.cdr.markForCheck();
+        void this.router.navigateByUrl('/settings/account', { replaceUrl: true });
       }
     });
     this.destroyRef.onDestroy(() => this.cancelSummaries());
     this.auth.user$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
       this.name = user?.display_name || user?.username || 'Your library of days';
-      this.username = user?.username || '';
-      if (!this.savingName) this.draftName = user?.display_name || '';
-      this.admin = user?.role === 'admin';
       const nextId = user?.id ?? null;
       if (this.userId !== undefined && this.userId !== nextId) {
         this.cancelSummaries();
@@ -155,45 +146,6 @@ export class HubComponent implements OnInit {
     void this.loadTravel();
     void this.loadMedia();
     void this.loadFinance();
-  }
-
-  toggleSettings(): void {
-    this.settingsOpen = !this.settingsOpen;
-    this.nameError = '';
-    this.cdr.markForCheck();
-  }
-
-  closeSettings(): void {
-    this.settingsOpen = false;
-    this.nameError = '';
-    this.cdr.markForCheck();
-    void this.router.navigate([], {relativeTo: this.route, queryParams: {settings: null}, queryParamsHandling: 'merge', replaceUrl: true});
-  }
-
-  async saveName(): Promise<void> {
-    if (this.savingName) return;
-    const name = this.draftName.trim().replace(/\s+/g, ' ');
-    if (!name) {
-      this.nameError = 'Enter a name.';
-      this.cdr.markForCheck();
-      return;
-    }
-    if (name.length > 160) {
-      this.nameError = 'Name must be 160 characters or fewer.';
-      this.cdr.markForCheck();
-      return;
-    }
-    this.savingName = true;
-    this.nameError = '';
-    this.cdr.markForCheck();
-    try {
-      await this.auth.updateDisplayName(name);
-    } catch (err) {
-      this.nameError = err instanceof Error ? err.message : 'The name could not be saved.';
-    } finally {
-      this.savingName = false;
-      this.cdr.markForCheck();
-    }
   }
 
   fidelityAccounts(): PortfolioAccount[] {
@@ -299,6 +251,7 @@ export class HubComponent implements OnInit {
         trip => trip == null,
       );
       if (!settled) return;
+      if (settled.state === 'ready' || settled.state === 'empty') this.travelUpdatedAt = Date.now();
       this.travelState = settled.state;
       this.trip = settled.data;
     } finally {
@@ -319,6 +272,7 @@ export class HubComponent implements OnInit {
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(this.media, result, mediaIsEmpty);
       if (!settled) return;
+      if (settled.state === 'ready' || settled.state === 'empty') this.mediaUpdatedAt = Date.now();
       this.mediaState = settled.state;
       this.media = settled.data;
     } finally {
@@ -327,13 +281,53 @@ export class HubComponent implements OnInit {
     }
   }
 
+  private watchVaultLock(): void {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === DEK_STORE && event.newValue === null) this.applyExternalLock();
+    };
+    window.addEventListener('storage', onStorage);
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel('finance-vault-sync-v1');
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        if (this.isRemoteLock(event.data)) this.applyExternalLock((event.data as { tabId?: string }).tabId);
+      };
+    }
+    this.destroyRef.onDestroy(() => {
+      window.removeEventListener('storage', onStorage);
+      channel?.close();
+    });
+  }
+
+  private isRemoteLock(value: unknown): boolean {
+    const userId = this.auth.currentUser?.id;
+    if (userId == null || !value || typeof value !== 'object') return false;
+    const message = value as { version?: unknown; userId?: unknown; kind?: unknown; tabId?: unknown };
+    return message.version === 1 && message.userId === userId && message.kind === 'lock' && message.tabId !== financeTabId();
+  }
+
+  private applyExternalLock(originTabId?: string): void {
+    // lockFinance broadcasts, and this tab's channel hears that echo. The card is already clear.
+    if (this.financeGeneration > 0 && this.financeState === 'locked') return;
+    this.financeGeneration += 1;
+    this.financeCtrl?.abort();
+    this.clearFinanceNumbers();
+    this.financePending = false;
+    this.financeState = 'locked';
+    this.cdr.markForCheck();
+    void lockFinance(this.injector, originTabId);
+  }
+
   private async loadFinance(): Promise<void> {
     const generation = this.generation;
+    const financeGeneration = this.financeGeneration;
     this.financeCtrl?.abort();
     const ctrl = new AbortController();
     this.financeCtrl = ctrl;
+    const dropped = () => generation !== this.generation || financeGeneration !== this.financeGeneration || ctrl.signal.aborted;
     try {
       if (!financeVaultPresent()) {
+        if (dropped()) return;
         this.clearFinanceNumbers();
         this.financeState = 'locked';
         return;
@@ -341,12 +335,12 @@ export class HubComponent implements OnInit {
       if (!this.netWorth) this.financeState = 'loading';
       this.cdr.markForCheck();
       const { loadFinanceHubSnapshot } = await import('../../../../finance/frontend/src/public-api');
-      if (generation !== this.generation || ctrl.signal.aborted) return;
+      if (dropped()) return;
       const result = await loadFinanceHubSnapshot(this.injector, ctrl.signal);
-      if (generation !== this.generation || ctrl.signal.aborted) return;
+      if (dropped()) return;
       this.applyFinance(result);
     } catch {
-      if (generation !== this.generation || ctrl.signal.aborted) return;
+      if (dropped()) return;
       this.applyFinance({ status: 'unavailable' });
     } finally {
       if (this.financeCtrl === ctrl) this.financePending = false;
@@ -357,11 +351,19 @@ export class HubComponent implements OnInit {
   private applyFinance(result: FinanceView): void {
     if (result.status === 'cancelled') return;
     if (result.status === 'ready' && result.snapshot) {
+      const counts = result.snapshot.counts;
+      if (counts != null && counts.accounts + counts.holdings + counts.debts === 0) {
+        this.clearFinanceNumbers();
+        this.financeUpdatedAt = Date.now();
+        this.financeState = 'empty';
+        return;
+      }
       this.netWorth = result.snapshot.netWorth;
       this.accounts = result.snapshot.accounts;
       this.positions = result.snapshot.positions;
       this.freshness = result.snapshot.freshness;
       this.cashOverlap = result.snapshot.cashOverlap;
+      this.financeUpdatedAt = Date.now();
       this.financeState = 'ready';
       return;
     }

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
 import { SESSION_CONTEXT } from '@vivek/ui';
+import { financeTabId, holdDek, wipeDek } from '../crypto/dek-holder';
 import { VaultService } from '../crypto/vault.service';
 import { FinanceService } from './finance.service';
 import { MarketRefreshCoordinatorService } from './market-refresh-coordinator.service';
@@ -217,5 +218,16 @@ describe('MarketRefreshCoordinatorService', () => {
     await (coordinator as any).receiveTabMessage({ version: 1, userId: 8, kind: 'invalidate', collections: ['assets'] });
 
     expect(finance.refreshCollectionsFromAnotherTab).toHaveBeenCalledOnceWith(['holdings']);
+  });
+  it('ignores a lock from this tab and opens unlock for another tab', async () => {
+    holdDek({} as CryptoKey);
+    const receive = (tabId: string) => (coordinator as unknown as { receiveTabMessage(m: object): Promise<void> }).receiveTabMessage({ version: 1, userId: 7, kind: 'lock', tabId });
+    await receive(financeTabId());
+    await receive('other-tab');
+    expect(router.navigateByUrl).toHaveBeenCalledOnceWith('/finance/vault/unlock');
+    router.navigateByUrl.calls.reset();
+    wipeDek();
+    await receive('other-tab');
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 });

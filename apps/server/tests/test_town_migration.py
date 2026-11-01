@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from apps.server.database import open_database
+from apps.server.errors import APIError
 from apps.server.identity.admin import delete_user_account
 from apps.server.identity.models import User, UserRole
 from apps.server.migrate import check_integrity
@@ -52,7 +53,7 @@ def _upgrade(tmp_path: Path) -> Path:
     config = make_config(sqlite_url(database))
     command.upgrade(config, PREVIOUS)
     assert current_revision(database) == PREVIOUS
-    command.upgrade(config, "head")
+    command.upgrade(config, REVISION)
     assert current_revision(database) == REVISION
     return database
 
@@ -174,7 +175,7 @@ def test_downgrade_removes_town_schema_and_upgrade_again(tmp_path: Path) -> None
             "SELECT COUNT(*) FROM site_revision_compatibility WHERE revision = ?",
             (REVISION,),
         ).fetchone() == (0,)
-    command.upgrade(config, "head")
+    command.upgrade(config, REVISION)
     assert current_revision(database) == REVISION
     with sqlite3.connect(database) as db:
         assert set(TOWN_TABLES) <= {
@@ -339,6 +340,9 @@ def _insert_account_habit(db: Session, user_id: int) -> int:
 
 def test_delete_user_account_removes_town_rows_for_that_user_only(tmp_path: Path) -> None:
     database = _upgrade(tmp_path)
+    # The identity model includes later add-only user columns. Apply head so
+    # the ORM insert matches the table this process maps.
+    command.upgrade(make_config(sqlite_url(database)), "head")
     opened = open_database(f"sqlite:///{database}")
     db = opened.sessionmaker()
     try:
@@ -405,12 +409,42 @@ def test_delete_user_account_removes_town_rows_for_that_user_only(tmp_path: Path
         opened.engine.dispose()
 
 
-def test_make_name_key_truncates_after_casefold() -> None:
-    folded = ("ß" * 40).casefold()
-    key = make_name_key("ß" * 40)
-    assert len(key) == 40
-    assert key == folded[:40]
+def test_make_name_key_rejects_casefold_longer_than_40() -> None:
+    assert make_name_key("ß" * 20) == "ss" * 20
+    assert len(make_name_key("ß" * 20)) == 40
     assert make_name_key("Morning") == "morning"
+    with pytest.raises(APIError) as caught:
+        make_name_key("ß" * 40)
+    assert caught.value.status_code == 422
+    assert caught.value.code == "name_too_long"
+    assert caught.value.message == "Use 1 to 40 characters."
+    assert caught.value.field_errors == {"name": "Use 1 to 40 characters."}
+
+
+def test_deleting_a_habit_that_still_has_a_cadence_row_is_refused(tmp_path: Path) -> None:
+    database = _upgrade(tmp_path)
+    with sqlite3.connect(database) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        _insert_user(db)
+        habit_id = _insert_habit(db, slot=0, name="Morning", name_key="morning")
+        db.execute(
+            "INSERT INTO habit_cadences (habit_id, user_id, per_week, effective_from, created_at) "
+            "VALUES (?, 1, 3, '2026-10-05', '2026-10-01T00:00:00+00:00')",
+            (habit_id,),
+        )
+        on_delete = {
+            row[3]: row[6] for row in db.execute("PRAGMA foreign_key_list(habit_cadences)")
+        }
+        assert on_delete["habit_id"] != "CASCADE"
+        with pytest.raises(sqlite3.IntegrityError):
+            db.execute("DELETE FROM habits WHERE id = ?", (habit_id,))
+        assert db.execute("SELECT COUNT(*) FROM habits WHERE id = ?", (habit_id,)).fetchone() == (
+            1,
+        )
+        assert db.execute(
+            "SELECT COUNT(*) FROM habit_cadences WHERE habit_id = ?",
+            (habit_id,),
+        ).fetchone() == (1,)
 
 
 def test_owner_tables_and_metadata_include_town() -> None:

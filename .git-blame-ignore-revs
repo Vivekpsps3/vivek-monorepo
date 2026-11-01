@@ -5,3 +5,5 @@
 2c41a00fecfabaefd4acab7229f613f7951a1d2a
 # Format the merged Python with Ruff.
 0ccfa2cb0696d2c6c278fa21093cdeb3828fb9de
+# Format Travel and Media templates and CSS with Prettier.
+116903ebc22c48c17947200c0e19e4d5f3f56e68

@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
-import { NEVER, of, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 import { VaultService } from '../crypto/vault.service';
 import { Asset, Liability } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
@@ -44,6 +44,32 @@ describe('finance hub facade', () => {
     if (result.status !== 'ready') return;
     expect(result.snapshot.netWorth.total).toBe(475);
     expect(result.snapshot.cashOverlap).toBeFalse();
+  });
+
+  it('ends locked with no numbers when the vault locks during the dashboard load', async () => {
+    let unlocked = true;
+    const gate = new Subject<null>();
+    const pending = loadFinanceHubSnapshot(injectorFor(
+      {
+        whenReady: () => Promise.resolve(),
+        get isUnlocked() { return unlocked; },
+      },
+      {
+        loadDashboard: () => gate.asObservable(),
+        assets$: of([asset]),
+        liabilities$: of([liability]),
+        holdings$: of([]),
+      },
+    ), new AbortController().signal, 5000);
+    for (let i = 0; i < 20 && !gate.observed; i += 1) await new Promise(resolve => setTimeout(resolve, 0));
+    expect(gate.observed).toBeTrue();
+    unlocked = false;
+    gate.next(null);
+    gate.complete();
+    const result = await pending;
+    expect(result).toEqual({ status: 'locked' });
+    expect(JSON.stringify(result)).not.toContain('500');
+    expect(JSON.stringify(result)).not.toContain('Savings');
   });
 
   it('turns a finance failure into an unavailable card instead of a sign-out', async () => {

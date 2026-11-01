@@ -1,121 +1,195 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, isDevMode, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
-import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
-import { SuiteHubLinkComponent, ThemeService, UserMenuContent, type Theme } from '@vivek/ui';
+import { ThemeService, UiIconComponent, UserMenuContent, type Theme } from '@vivek/ui';
 import { SessionService } from './platform/session.service';
 
 @Component({
-  selector: 'suite-private-layout', standalone: true,
-  imports: [RouterLink, RouterOutlet, FormsModule, AsyncPipe, NgTemplateOutlet, SuiteHubLinkComponent],
+  selector: 'suite-private-layout',
+  standalone: true,
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, FormsModule, AsyncPipe, NgTemplateOutlet, UiIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <a class="skip-link" href="#workspace-content">Skip to content</a>
-    <header class="suite-header">
-      <div class="suite-header__inner">
-        <ui-suite-hub />
-        <a class="suite-brand" [routerLink]="home" [attr.aria-label]="appName + ' home'">{{ appName }}</a>
-        <div class="suite-account" #userMenu>
-          <button #userButton class="btn btn-ghost user-menu-toggle" type="button"
-            [attr.aria-expanded]="menuOpen()" aria-controls="user-dropdown" (click)="menuOpen.set(!menuOpen())">
-            {{ session.currentUser?.username || session.currentUser?.display_name || 'You' }}
-          </button>
-          @if (menuOpen()) {
-            <nav id="user-dropdown" class="user-dropdown" aria-label="User options" (click)="onMenuAction($event)">
-              <a class="btn btn-ghost user-menu-item" routerLink="/account">Account settings</a>
-              @if (session.isAdmin()) { <a class="btn btn-ghost user-menu-item" routerLink="/hub/admin">Account stats · Admin</a> }
-              @if (appName === 'Travel') { <a class="btn btn-ghost user-menu-item" routerLink="/travel/settings">Travel settings</a> }
-              <label class="user-menu-theme" for="suite-theme">Color theme
-                <select id="suite-theme" [ngModel]="theme.current" (ngModelChange)="setTheme($event)">
-                  <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
-                </select>
-              </label>
-              @if (featureMenu.template(); as actions) { <div class="user-menu-feature"><ng-container [ngTemplateOutlet]="actions" /></div> }
-              <button class="btn btn-ghost user-menu-item" type="button" (click)="session.logout()">Sign out</button>
-            </nav>
-          }
-        </div>
-      </div>
-    </header>
-    <div id="workspace-content" tabindex="-1">
-      @if (session.user$ | async; as user) {
-        @for (identity of [user]; track identity.id) { <router-outlet /> }
-      }
-      @else { <p class="page" role="status">Your session ended. <a routerLink="/auth/login">Sign in</a></p> }
-    </div>`,
-  styles: [`
-    :host{display:block;--suite-header-height:4.5rem}
-    .suite-header{position:sticky;top:0;z-index:40;border-bottom:1px solid var(--border);background:var(--card-bg);padding:0 max(1rem,env(safe-area-inset-left))}
-    .suite-header__inner{min-height:var(--suite-header-height);max-width:80rem;margin:auto;display:flex;align-items:center;gap:1rem}
-    .suite-brand{font-weight:650;text-decoration:none;letter-spacing:-.025em}
-    .suite-account{position:relative;margin-left:auto;min-width:0;max-width:min(18rem,42vw)}
-    .user-menu-toggle{display:block;width:100%;min-width:44px;min-height:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
-    .user-dropdown{position:absolute;right:0;top:calc(100% + .5rem);width:min(18rem,calc(100vw - 1.5rem));max-height:calc(100dvh - 5.5rem);overflow-y:auto;padding:.5rem;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--card-bg);box-shadow:var(--shadow-lg);display:grid;gap:.25rem}
-    .user-menu-item{justify-content:flex-start;text-align:left;width:100%;min-height:44px;color:var(--text);white-space:normal}
-    .user-menu-theme{display:grid;gap:.4rem;padding:.5rem .75rem;font-size:.875rem;color:var(--text-secondary)}
-    .user-menu-theme select{width:100%;margin:0;min-height:44px}
-    .user-menu-feature{border-top:1px solid var(--border);padding-top:.25rem}
-    #workspace-content{min-width:0;outline:none}
-    @supports(backdrop-filter:blur(1px)){.suite-header{background:color-mix(in srgb,var(--card-bg) 94%,transparent);backdrop-filter:blur(18px) saturate(1.2)}}
-    @media(max-width:640px){:host{--suite-header-height:4rem}.suite-header__inner{gap:.5rem}.suite-header{padding-inline:.75rem}.suite-brand{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.user-menu-toggle{padding-inline:.5rem;font-size:.875rem}}
-    @media(prefers-reduced-transparency:reduce),(forced-colors:active){.suite-header{backdrop-filter:none;background:var(--card-bg)}}
-  `],
+  templateUrl: './private-layout.component.html',
+  styleUrl: './private-layout.component.css',
 })
 export class PrivateLayoutComponent {
   readonly session = inject(SessionService);
   readonly theme = inject(ThemeService);
   readonly featureMenu = inject(UserMenuContent);
   readonly menuOpen = signal(false);
+  readonly switcherOpen = signal(false);
+  readonly apps = [
+    { label: 'Hub', href: '/hub', exact: true },
+    { label: 'Finance', href: '/finance', exact: false },
+    { label: 'Travel', href: '/travel', exact: false },
+    { label: 'Media', href: '/media', exact: false },
+  ] as const;
+
   @ViewChild('userMenu') private userMenu?: ElementRef<HTMLElement>;
   @ViewChild('userButton') private userButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild('switcher') private switcher?: ElementRef<HTMLElement>;
+  @ViewChild('switcherButton') private switcherButton?: ElementRef<HTMLButtonElement>;
+
   private readonly router = inject(Router);
   private readonly change = inject(ChangeDetectorRef);
   private lastFocusedPath = '';
+  /** Drops a heading-focus retry when a newer navigation starts. */
+  private focusAttempt = 0;
+
   constructor() {
     const destroy = inject(DestroyRef);
-    this.session.user$.pipe(takeUntilDestroyed(destroy)).subscribe(() => this.closeMenu(false));
-    if (typeof document === 'undefined') return;
-    this.router.events.pipe(filter(event => event instanceof NavigationEnd), takeUntilDestroyed(inject(DestroyRef))).subscribe(event => {
+    this.session.user$.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
       this.closeMenu(false);
+      this.closeSwitcher(false);
+    });
+    if (typeof document === 'undefined') return;
+    this.router.events.pipe(filter(event => event instanceof NavigationEnd), takeUntilDestroyed(destroy)).subscribe(event => {
+      this.closeMenu(false);
+      this.closeSwitcher(false);
       this.change.markForCheck();
       const path = event.urlAfterRedirects.split(/[?#]/)[0];
       if (path === this.lastFocusedPath) return;
       this.lastFocusedPath = path;
-      queueMicrotask(() => {
-        if (document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return;
-        const heading = document.querySelector<HTMLElement>('#workspace-content main h1');
-        if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
-      });
+      this.focusArrivedHeading(path);
     });
   }
+
+  /**
+   * Move focus to the new page heading. A confirm dialog often closes in the
+   * same turn and restores focus to its trigger, so one microtask is too early:
+   * the dialog is still open (and the page is inert) or its close runs afterwards.
+   * Wait for that close, focus the heading, confirm once, then stop. A longer
+   * loop steals focus from the next keyboard or menu action.
+   */
+  private focusArrivedHeading(path: string): void {
+    const attempt = ++this.focusAttempt;
+    const started = performance.now();
+    let confirm = false;
+    const tick = (): void => {
+      if (attempt !== this.focusAttempt || path !== this.lastFocusedPath) return;
+      if (this.menuOpen() || this.switcherOpen()) return;
+      const dialogOpen = !!document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]');
+      const heading = document.querySelector<HTMLElement>('#workspace-content main h1');
+      const active = document.activeElement;
+      const editing = active instanceof HTMLElement
+        && !!active.closest('input, textarea, select, [contenteditable="true"]');
+      if (editing) return;
+      if (!dialogOpen && heading) {
+        if (active !== heading) {
+          confirm = false;
+          heading.tabIndex = -1;
+          heading.focus({ preventScroll: true });
+          setTimeout(tick, 0);
+          return;
+        }
+        if (!confirm) {
+          confirm = true;
+          setTimeout(tick, 0);
+        }
+        return;
+      }
+      if (performance.now() - started < 400) {
+        setTimeout(tick, 16);
+        return;
+      }
+      if (!dialogOpen) {
+        document.getElementById('workspace-content')?.focus({ preventScroll: true });
+        if (isDevMode()) console.warn(`No main h1 to focus after navigation to ${path}`);
+      }
+    };
+    queueMicrotask(tick);
+  }
+
+  toggleMenu(): void {
+    this.closeSwitcher(false);
+    this.menuOpen.update(open => !open);
+  }
+
+  toggleSwitcher(): void {
+    this.closeMenu(false);
+    this.switcherOpen.update(open => !open);
+  }
+
   closeMenu(restoreFocus = true): void {
     this.menuOpen.set(false);
     if (restoreFocus) this.userButton?.nativeElement.focus();
   }
+
+  closeSwitcher(restoreFocus = true): void {
+    this.switcherOpen.set(false);
+    if (restoreFocus) this.switcherButton?.nativeElement.focus();
+  }
+
   setTheme(choice: Theme): void {
     this.theme.set(choice);
     this.closeMenu();
   }
+
   onMenuAction(event: MouseEvent): void {
     if (event.target instanceof Element && event.target.closest('a,button')) this.closeMenu();
   }
+
+  onSwitcherKey(event: KeyboardEvent): void {
+    if (!this.switcherOpen()) return;
+    const items = [...(this.switcher?.nativeElement.querySelectorAll<HTMLAnchorElement>('a') ?? [])];
+    if (!items.length) return;
+    const index = items.indexOf(document.activeElement as HTMLAnchorElement);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const next = index === -1
+        ? (event.key === 'ArrowDown' ? 0 : items.length - 1)
+        : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      items[0]?.focus();
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const active = document.activeElement;
+    const leavingForward = !event.shiftKey && active === items[items.length - 1];
+    const leavingBackward = !!event.shiftKey && (active === items[0] || active === this.switcherButton?.nativeElement);
+    if (leavingForward || leavingBackward) this.closeSwitcher(false);
+  }
+
   @HostListener('document:click', ['$event'])
   @HostListener('document:focusin', ['$event'])
   onOutside(event: Event): void {
-    if (this.menuOpen() && event.target instanceof Node && !this.userMenu?.nativeElement.contains(event.target)) this.closeMenu(false);
+    if (!(event.target instanceof Node)) return;
+    if (this.menuOpen() && !this.userMenu?.nativeElement.contains(event.target)) this.closeMenu(false);
+    if (this.switcherOpen() && !this.switcher?.nativeElement.contains(event.target)) this.closeSwitcher(false);
   }
+
   @HostListener('document:keydown.escape', ['$event'])
   onEscape(event: Event): void {
+    if (this.switcherOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.closeSwitcher();
+      return;
+    }
     if (!this.menuOpen()) return;
     event.preventDefault();
     event.stopPropagation();
     this.closeMenu();
   }
+
   get appName(): string {
-    const section = this.router.url.split('/')[1];
-    return ({ finance: 'Finance', travel: 'Travel', media: 'Media' } as Record<string, string>)[section] || 'Workspace';
+    const section = this.router.url.split(/[?#]/)[0].split('/')[1] ?? '';
+    return ({ hub: 'Hub', finance: 'Finance', travel: 'Travel', media: 'Media' } as Record<string, string>)[section] || 'Apps';
   }
-  get home(): string { return this.appName === 'Workspace' ? '/hub' : `/${this.appName.toLowerCase()}/`; }
+
+  get home(): string {
+    return this.appName === 'Apps' || this.appName === 'Hub' ? '/hub' : `/${this.appName.toLowerCase()}/`;
+  }
 }

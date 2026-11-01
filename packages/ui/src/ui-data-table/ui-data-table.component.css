@@ -4,6 +4,10 @@
   max-width: 100%;
 }
 
+:host([hidden]) {
+  display: none;
+}
+
 .ui-data-table {
   position: relative;
   width: 100%;

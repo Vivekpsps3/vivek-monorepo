@@ -11,6 +11,7 @@ import {
 import {
   DEK_STORE, VAULT_KEY_ID, clearFinanceSessionStorage, deleteFinanceVaultKey, markVaultPresent, vaultMarkedPresent, withVaultStore,
 } from './dek-store';
+import { migrateLegacyDek } from './dek-holder';
 
 export { DEFAULT_PBKDF2_ITERATIONS, randomBytes };
 
@@ -158,13 +159,18 @@ function progressId(userId: number | null): string {
   return `progress:${userId ?? 'none'}`;
 }
 
-export async function persistVaultKeys(keys: StoredVaultKeys): Promise<void> {
+/** Store the key, then drop the legacy localStorage item through dek-holder's migrate path. */
+export async function persistVaultKeys(keys: StoredVaultKeys, stillCurrent: () => boolean = () => true): Promise<boolean> {
   const extra = requireAttached(keys.dek);
+  if (!stillCurrent()) return false;
   await withVaultStore('readwrite', store => store.put({
     id: VAULT_KEY_ID, ...keys, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey,
   } satisfies DekRecord));
+  if (!stillCurrent()) return false;
   markVaultPresent();
-  try { localStorage.removeItem(DEK_STORE); } catch { /* private mode */ }
+  if (!stillCurrent()) return false;
+  migrateLegacyDek();
+  return stillCurrent();
 }
 
 export async function writeBlindIndexProgress(userId: number | null, progress: Progress): Promise<void> {
@@ -184,12 +190,15 @@ export async function restoreVaultKeys(stillCurrent: () => boolean = () => true)
     const imported = await importVaultKeys(raw);
     raw.fill(0);
     if (!stillCurrent()) {
-      try { localStorage.removeItem(DEK_STORE); } catch { /* private mode */ }
+      migrateLegacyDek();
       return null;
     }
     const stored: StoredVaultKeys = { dek: imported.dek, blind_index_version: 1, reindexed: [] };
-    await persistVaultKeys(stored);
-    if (!stillCurrent()) { await clearFinanceSessionStorage(); await deleteFinanceVaultKey(); return null; }
+    const kept = await persistVaultKeys(stored, stillCurrent);
+    if (!kept || !stillCurrent()) {
+      await clearFinanceSessionStorage();
+      return null;
+    }
     return stored;
   }
   if (!stillCurrent()) return null;
@@ -200,7 +209,7 @@ export async function restoreVaultKeys(stillCurrent: () => boolean = () => true)
   const record = await withVaultStore<DekRecord | undefined>('readonly', store => store.get(VAULT_KEY_ID));
   if (!stillCurrent() || !record?.dek || !record.blindKey) {
     if (!stillCurrent()) return null;
-    clearFinanceSessionStorage();
+    await clearFinanceSessionStorage();
     return null;
   }
   remember(record.dek, record.blindKey, record.legacyBlindKey ?? null);

@@ -8,7 +8,7 @@ for (const width of [320, 1440]) test(`the username dropdown keeps the header co
   await chooseColorTheme(page, 'dark');
   const header = page.getByRole('banner');
   const trigger = header.getByRole('button', { name: 'synthetic', exact: true });
-  await expect(header.getByRole('button')).toHaveCount(1);
+  await expect(header.getByRole('button')).toHaveCount(width <= 640 ? 2 : 1);
   await expect(header.getByRole('combobox')).toHaveCount(0);
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   expect((await header.boundingBox())!.height).toBeLessThan(80);
@@ -16,8 +16,10 @@ for (const width of [320, 1440]) test(`the username dropdown keeps the header co
   await page.keyboard.press('Enter');
   const menu = page.getByRole('navigation', { name: 'User options', exact: true });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('link', { name: 'Account settings', exact: true })).toBeVisible();
-  await expect(menu.getByRole('link', { name: 'Travel settings', exact: true })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('href', '/settings');
+  await expect(menu.getByRole('link', { name: 'Account settings', exact: true })).toHaveCount(0);
+  await expect(menu.getByRole('link', { name: 'Travel settings', exact: true })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'Account stats · Admin', exact: true })).toHaveCount(0);
   await expect(menu.getByRole('button', { name: 'Lock vault', exact: true })).toHaveCount(0);
   const box = (await menu.boundingBox())!;
@@ -26,15 +28,11 @@ for (const width of [320, 1440]) test(`the username dropdown keeps the header co
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('user-dropdown.png'), fullPage: true });
   await page.keyboard.press('Tab');
-  await expect(menu.getByRole('link', { name: 'Account settings', exact: true })).toBeFocused();
+  await expect(menu.getByRole('link', { name: 'Settings', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await openUserMenu(page);
   await header.click({ position: { x: 2, y: 2 } });
-  await expect(menu).toHaveCount(0);
-  await openUserMenu(page);
-  await menu.getByRole('link', { name: 'Travel settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/travel\/settings$/);
   await expect(menu).toHaveCount(0);
 });

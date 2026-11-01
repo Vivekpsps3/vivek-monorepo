@@ -5,6 +5,7 @@ import { fromDollars } from '@vivek/browser';
 import { transactionEffects } from '../crypto/client-finance';
 import { financeVaultPresent } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
+import { spendingModeInference } from '../planning/spending-mode';
 import type { Transaction } from '../models/transaction.model';
 
 export interface BudgetKeptWeek {
@@ -35,7 +36,16 @@ type PlanInputs = Pick<PlanningInputsPreview, 'recurring_annual_spending' | 'imp
 /** Matches HUB_SUMMARY_DEADLINE_MS in apps/web/src/app/hub/hub-load.ts. Finance cannot import that module. */
 const BUDGET_KEPT_DEFAULT_DEADLINE_MS = 8_000;
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+function requireDeadlineMs(deadlineMs: number | undefined, fallback: number): number {
+  const value = deadlineMs ?? fallback;
+  if (!Number.isFinite(value) || value <= 0 || value > 2 ** 31 - 1) {
+    throw new RangeError('deadlineMs must be a finite number greater than 0 and at most 2147483647');
+  }
+  return value;
+}
+
+// Strict end of input: JavaScript $ also matches before a trailing newline.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?![\s\S])/;
 
 function weeklyPlanFor(annualPlan: number): number {
   return annualPlan * 7 / 365;
@@ -90,10 +100,10 @@ type PlanDecision =
   | { status: 'no_plan' }
   | { status: 'unavailable' };
 
-/** Missing or null is legacy manual. Any other string is unrecognized and is not guessed. */
+/** Missing, null, or empty mode is inferred. Any other string is unrecognized and is not guessed. */
 function spendingModeOf(payload: ProfilePayload): SpendingPlanMode | 'unrecognized' {
   const mode = payload.spending_mode as unknown;
-  if (mode == null) return 'manual';
+  if (mode == null || mode === '') return spendingModeInference.inferMissing(payload);
   if (mode === 'manual' || mode === 'components' || mode === 'recurring') return mode;
   return 'unrecognized';
 }
@@ -131,7 +141,7 @@ function decideLatestPlan(profiles: PlanningProfile[], inputs: PlanInputs): Plan
   return decidePayload(latest.payload, inputs);
 }
 
-/** Latest updated_at, then highest id. Missing or null mode is manual. A non-positive number is null. */
+/** Latest updated_at, then highest id. A missing mode is inferred. A non-positive number is null. */
 export function resolveAnnualPlan(
   profiles: PlanningProfile[],
   inputs: PlanInputs,
@@ -152,10 +162,10 @@ export function firstTransactionDate(txs: Transaction[]): string | null {
   return first;
 }
 
-function keptForSpend(spend: number, weeklyPlan: number): boolean {
+function keptForSpend(spend: number, weeklyPlan: number): boolean | null {
   const spendCents = fromDollars(spend);
   const planCents = fromDollars(weeklyPlan);
-  if (spendCents == null || planCents == null) return false;
+  if (spendCents == null || planCents == null) return null;
   return spendCents <= planCents;
 }
 
@@ -230,9 +240,15 @@ function abort$(signal: AbortSignal): Observable<void> {
   });
 }
 
+/**
+ * Abort wins over every error. A real HTTP 401 from initialization or any read
+ * means expired, including while the vault is locked; it never maps to locked.
+ * A Vault locked error is locked; other failures are unavailable.
+ */
 function mapLoadError(signal: AbortSignal, err: unknown): BudgetKeptResult {
   if (signal.aborted) return { status: 'cancelled' };
   if (err instanceof HttpErrorResponse && err.status === 401) return { status: 'expired' };
+  if (err instanceof Error && err.message === 'Vault locked') return { status: 'locked' };
   return { status: 'unavailable' };
 }
 
@@ -318,8 +334,27 @@ async function readBudgetKept(
   return assembleBudgetKept(profiles, inputs, txs, weekStarts);
 }
 
+async function loadBudgetKeptBody(
+  injector: Injector,
+  signal: AbortSignal,
+  weekStarts: string[],
+  deadlineMs: number,
+): Promise<BudgetKeptResult> {
+  try {
+    if (!financeVaultPresent()) return { status: 'locked' };
+    return await firstValueFrom(
+      defer(() => from(readBudgetKept(injector, signal, weekStarts))).pipe(
+        takeUntil(abort$(signal)),
+        timeout(deadlineMs),
+      ),
+    );
+  } catch (err) {
+    return mapLoadError(signal, err);
+  }
+}
+
 /** Lazy, like loadFinanceHubSnapshot. Locked before any vault or network read. */
-export async function loadFinanceBudgetKept(
+export function loadFinanceBudgetKept(
   injector: Injector,
   signal: AbortSignal,
   opts: {
@@ -329,18 +364,8 @@ export async function loadFinanceBudgetKept(
     deadlineMs?: number;
   },
 ): Promise<BudgetKeptResult> {
-  if (signal.aborted) return { status: 'cancelled' };
-  try {
-    const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
-    if (!financeVaultPresent()) return { status: 'locked' };
-    return await firstValueFrom(
-      defer(() => from(readBudgetKept(injector, signal, weekStarts))).pipe(
-        takeUntil(abort$(signal)),
-        timeout(opts.deadlineMs ?? BUDGET_KEPT_DEFAULT_DEADLINE_MS),
-      ),
-    );
-  } catch (err) {
-    if (err instanceof RangeError) throw err;
-    return mapLoadError(signal, err);
-  }
+  if (signal.aborted) return Promise.resolve({ status: 'cancelled' });
+  const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
+  const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_DEFAULT_DEADLINE_MS);
+  return loadBudgetKeptBody(injector, signal, weekStarts, deadlineMs);
 }

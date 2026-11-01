@@ -3,7 +3,7 @@
 import json
 import math
 from datetime import UTC, date, datetime
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from fastapi import HTTPException
 from sqlalchemy import and_, case, func, or_
@@ -860,6 +860,7 @@ def list_library(
     offset: int = 0,
     limit: int = 50,
     favorite: bool = False,
+    tags: list[str] | None = None,
 ) -> tuple[list[UserEntry], int]:
     rows = db.query(UserEntry).join(CatalogItem).filter(UserEntry.user_id == user_id)
     if favorite:
@@ -883,6 +884,10 @@ def list_library(
     if query:
         like = f"%{query.strip()}%"
         rows = rows.filter(or_(CatalogItem.title.ilike(like), CatalogItem.creator.ilike(like)))
+    if tags:
+        from apps.media.backend.services.tag_filter import tags_clause
+
+        rows = rows.filter(tags_clause(tags))
     total = rows.count()
     title = CatalogItem.title_sort
     if sort == "rating":
@@ -1071,6 +1076,15 @@ def save_season(db: Session, entry: UserEntry, body: dict) -> None:
     db.flush()
 
 
+def watched_values(watched: bool, watched_on: date | None) -> dict[Any, Any]:
+    """Columns a watched edit writes. Personal edits clear operation_token."""
+    return {
+        "watched": watched,
+        "watched_on": watched_on if watched else None,
+        "operation_token": None,
+    }
+
+
 def mark_watched(
     db: Session, user_id: int, episode: Episode, watched: bool, watched_on: date | None
 ) -> None:
@@ -1084,9 +1098,8 @@ def mark_watched(
     if row is None:
         row = EpisodeProgress(user_id=user_id, episode_id=episode.id)
         db.add(row)
-    row.watched = watched
-    row.watched_on = watched_on if watched else None
-    row.operation_token = None
+    for column, value in watched_values(watched, watched_on).items():
+        setattr(row, column, value)
     db.flush()
 
 
