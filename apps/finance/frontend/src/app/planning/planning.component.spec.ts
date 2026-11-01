@@ -212,7 +212,7 @@ describe('PlanningComponent spending acceptance', () => {
     expect(component.error).not.toContain('vault write failed');
   });
 
-  it('infers a missing spending mode through the shared helper', () => {
+  it('infers missing and empty spending modes through the shared helper', () => {
     const infer = spyOn(spendingModeInference, 'inferMissing').and.callThrough();
     const { component } = createComponent();
     const parts = { fixed_annual: 1, variable_annual: 2, irregular_annual: 3 };
@@ -225,6 +225,9 @@ describe('PlanningComponent spending acceptance', () => {
       [1, withoutMode({ spending_components: parts, annual_spending: 9 }), 'components'],
       [2, withoutMode({ spending_components: undefined, annual_spending: 9 }), 'manual'],
       [3, withoutMode({ spending_components: undefined, annual_spending: null }), 'recurring'],
+      [4, withoutMode({ spending_mode: '', spending_components: parts, annual_spending: 9 }), 'components'],
+      [5, withoutMode({ spending_mode: '', spending_components: undefined, annual_spending: 9 }), 'manual'],
+      [6, withoutMode({ spending_mode: '', spending_components: undefined, annual_spending: null }), 'recurring'],
     ] as const;
     component.profiles = rows.map(([id, payload]) => ({
       id, name: 'p', base_currency: 'USD', payload, created_at: '', updated_at: '',
@@ -234,7 +237,7 @@ describe('PlanningComponent spending acceptance', () => {
       expect(component.spendingMode).toBe(mode);
       expect(component.assumptions.spending_mode).toBe(mode);
     }
-    expect(infer).toHaveBeenCalledTimes(3);
+    expect(infer).toHaveBeenCalledTimes(6);
   });
 
   it('keeps the saved profile and shows the delete error when delete returns 503', async () => {

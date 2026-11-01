@@ -8,7 +8,8 @@ import type { BudgetKeptResult } from './budget-kept';
 const BUDGET_KEPT_IMPORT_DEADLINE_MS = 8_000;
 const BUDGET_KEPT_MIN_WEEKS = 1;
 const BUDGET_KEPT_MAX_WEEKS = 520;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// Strict end of input: JavaScript $ also matches before a trailing newline.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?![\s\S])/;
 
 /** Same caller bugs as the core, checked here so the chunk is not loaded first. */
 function requireBudgetKeptWindow(today: string, weeks: number): void {
@@ -25,8 +26,8 @@ function requireBudgetKeptWindow(today: string, weeks: number): void {
 
 function requireDeadlineMs(deadlineMs: number | undefined, fallback: number): number {
   const value = deadlineMs ?? fallback;
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError('deadlineMs must be a finite number greater than 0');
+  if (!Number.isFinite(value) || value <= 0 || value > 2 ** 31 - 1) {
+    throw new RangeError('deadlineMs must be a finite number greater than 0 and at most 2147483647');
   }
   return value;
 }

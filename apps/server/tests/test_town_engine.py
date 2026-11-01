@@ -428,15 +428,22 @@ def test_per_week_slot_and_building_style_stay_inside_the_constants():
         assert bad_week.value.field_errors == {"per_week": PER_WEEK_ERROR}
     for slot in range(len(LOT_UNLOCK_LV)):
         assert require_slot(slot) == slot
-    for bad in (-1, 6, 9, True):
+    bad_slot_input: object
+    for bad_slot_input in (-1, 6, 9, True, False, 0.0, 1.5, "0", None):
         with pytest.raises(APIError) as bad_slot:
-            require_slot(bad)
+            require_slot(bad_slot_input)
+        assert bad_slot.value.status_code == 422
+        assert bad_slot.value.code == "validation_error"
         assert bad_slot.value.field_errors == {"slot": SLOT_ERROR}
     for style in dict.fromkeys(SLOT_DEFAULT_STYLE):
         assert require_building_style(style) == style
-    with pytest.raises(APIError) as bad_style:
-        require_building_style("castle")
-    assert bad_style.value.field_errors == {"building_style": BUILDING_STYLE_ERROR}
+    bad_style_input: object
+    for bad_style_input in ("castle", ["x"], {}, None, 1, True):
+        with pytest.raises(APIError) as bad_style:
+            require_building_style(bad_style_input)
+        assert bad_style.value.status_code == 422
+        assert bad_style.value.code == "validation_error"
+        assert bad_style.value.field_errors == {"building_style": BUILDING_STYLE_ERROR}
 
 
 def test_per_week_failure_uses_the_town_validation_shape(tmp_path: Path):

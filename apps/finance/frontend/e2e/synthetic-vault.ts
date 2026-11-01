@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { errors, expect, Locator, Page } from '@playwright/test';
 import { DEFAULT_PBKDF2_ITERATIONS } from '@vivek/browser';
+import { frozenNow } from './frozen-clock';
 
 // Finance is a feature of the root router in every test and deployment.
 const BASE_PREFIX = '/finance';
@@ -59,7 +60,7 @@ type RecordRow = {
   schema_version: number; key_version: number; revision: number; updated_at: string;
 };
 
-function lastCompletedTradingDate(now = new Date()): string {
+function lastCompletedTradingDate(now = frozenNow()): string {
   const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const day = date.getUTCDay();
   const daysBack = day === 0 ? 2 : day === 1 ? 3 : day === 6 ? 1 : 0;
@@ -248,7 +249,7 @@ export async function syntheticVault(
       const quote = quoteResponses.get(upperSymbol);
       if (quote?.status && quote.status >= 400) return respond({ detail: `Synthetic ${upperSymbol} quote failure` }, quote.status);
       return respond({ symbol: upperSymbol, price: 125, price_source: 'live_eod', source: 'yfinance', valid: true,
-        price_as_of: new Date().toISOString(), quote_date: lastCompletedTradingDate(), ...quote });
+        price_as_of: frozenNow().toISOString(), quote_date: lastCompletedTradingDate(), ...quote });
     }
     return respond({ detail: `Unexpected synthetic endpoint ${path}` }, 404);
   });

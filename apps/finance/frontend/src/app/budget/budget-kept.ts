@@ -38,13 +38,14 @@ const BUDGET_KEPT_DEFAULT_DEADLINE_MS = 8_000;
 
 function requireDeadlineMs(deadlineMs: number | undefined, fallback: number): number {
   const value = deadlineMs ?? fallback;
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError('deadlineMs must be a finite number greater than 0');
+  if (!Number.isFinite(value) || value <= 0 || value > 2 ** 31 - 1) {
+    throw new RangeError('deadlineMs must be a finite number greater than 0 and at most 2147483647');
   }
   return value;
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// Strict end of input: JavaScript $ also matches before a trailing newline.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?![\s\S])/;
 
 function weeklyPlanFor(annualPlan: number): number {
   return annualPlan * 7 / 365;
@@ -99,10 +100,10 @@ type PlanDecision =
   | { status: 'no_plan' }
   | { status: 'unavailable' };
 
-/** Missing or null mode is inferred. Any other string is unrecognized and is not guessed. */
+/** Missing, null, or empty mode is inferred. Any other string is unrecognized and is not guessed. */
 function spendingModeOf(payload: ProfilePayload): SpendingPlanMode | 'unrecognized' {
   const mode = payload.spending_mode as unknown;
-  if (mode == null) return spendingModeInference.inferMissing(payload);
+  if (mode == null || mode === '') return spendingModeInference.inferMissing(payload);
   if (mode === 'manual' || mode === 'components' || mode === 'recurring') return mode;
   return 'unrecognized';
 }
@@ -239,9 +240,15 @@ function abort$(signal: AbortSignal): Observable<void> {
   });
 }
 
+/**
+ * Abort wins over every error. A real HTTP 401 from initialization or any read
+ * means expired, including while the vault is locked; it never maps to locked.
+ * A Vault locked error is locked; other failures are unavailable.
+ */
 function mapLoadError(signal: AbortSignal, err: unknown): BudgetKeptResult {
   if (signal.aborted) return { status: 'cancelled' };
   if (err instanceof HttpErrorResponse && err.status === 401) return { status: 'expired' };
+  if (err instanceof Error && err.message === 'Vault locked') return { status: 'locked' };
   return { status: 'unavailable' };
 }
 
