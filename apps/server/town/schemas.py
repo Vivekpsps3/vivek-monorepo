@@ -1,9 +1,9 @@
-"""Town read response shapes. Field names and nesting match design §8.1."""
+"""Town API shapes. Field names and nesting match design §8.1."""
 
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 Last7Value = Literal["done", "rest", "miss", "pending", "none", "off"]
 CadenceKind = Literal["daily", "weekly"]
@@ -132,3 +132,50 @@ class CheckinDays(_Shape):
 
 
 # --- write models (TB2C) ---
+
+
+class _Write(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class HabitCreate(_Write):
+    name: str
+    slot: int
+    per_week: int
+    building_style: str | None = None
+
+
+class HabitPatch(_Write):
+    name: str | None = None
+    building_style: str | None = None
+    per_week: int | None = None
+    archived: bool | None = None
+
+
+class CheckinCreate(_Write):
+    day: date
+
+    @field_validator("day", mode="before")
+    @classmethod
+    def _day(cls, value: object) -> date:
+        # A lax date would accept a datetime string. Require a calendar day.
+        if type(value) is not str or len(value) != 10:
+            raise ValueError("day")
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            raise ValueError("day") from None
+
+
+class TownProgress(_Shape):
+    xp: int
+    level: int
+    level_xp_start: int
+    next_level_xp: int | None
+
+
+class CheckinResult(_Shape):
+    day: date
+    checked: bool
+    habit: Habit
+    town: TownProgress
