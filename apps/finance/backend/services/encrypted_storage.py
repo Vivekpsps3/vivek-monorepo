@@ -237,6 +237,81 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
     return out
 
 
+def reindex_records(
+    db: Session, user_id: int, items: list[dict[str, Any]]
+) -> tuple[list[EncryptedRecord], list[str]]:
+    """Update blind indexes in place. A missing row is skipped and never inserted."""
+    if not items:
+        raise HTTPException(status_code=400, detail="No records provided")
+    if len(items) > MAX_BATCH:
+        raise HTTPException(status_code=400, detail=f"Batch too large (max {MAX_BATCH})")
+    updated: list[EncryptedRecord] = []
+    skipped: list[str] = []
+    for item in items:
+        collection = validate_collection(str(item.get("collection", "")))
+        client_id = validate_client_id(str(item.get("client_id", "")))
+        ciphertext_b64 = str(item.get("ciphertext_b64", ""))
+        if not ciphertext_b64 or _b64_len(ciphertext_b64) > MAX_CIPHERTEXT_BYTES:
+            raise HTTPException(status_code=400, detail="Invalid ciphertext")
+        schema_version = int(item.get("schema_version", 1))
+        key_version = int(item.get("key_version", 1))
+        if schema_version not in {1, CURRENT_RECORD_SCHEMA_VERSION} or key_version < 1:
+            raise HTTPException(status_code=400, detail="Invalid version fields")
+        row = (
+            db.query(EncryptedRecord)
+            .filter(
+                EncryptedRecord.user_id == user_id,
+                EncryptedRecord.collection == collection,
+                EncryptedRecord.client_id == client_id,
+            )
+            .one_or_none()
+        )
+        if row is None:
+            skipped.append(client_id)
+            continue
+        expected_revision = item.get("expected_revision")
+        if expected_revision is None:
+            raise HTTPException(status_code=400, detail="expected_revision is required for updates")
+        expected = int(expected_revision)
+        if expected != row.revision:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Revision conflict for {collection}/{client_id}",
+            )
+        row.ciphertext_b64 = ciphertext_b64
+        row.schema_version = schema_version
+        row.key_version = key_version
+        row.revision = row.revision + 1
+        row.updated_at = utc_now()
+        indexes = item.get("indexes") or []
+        if not isinstance(indexes, list):
+            raise HTTPException(status_code=400, detail="indexes must be a list")
+        db.query(EncryptedRecordIndex).filter(
+            EncryptedRecordIndex.user_id == user_id,
+            EncryptedRecordIndex.collection == collection,
+            EncryptedRecordIndex.client_id == client_id,
+        ).delete(synchronize_session=False)
+        for idx in indexes:
+            name = str(idx.get("index_name", ""))
+            value = str(idx.get("index_value_b64", ""))
+            if not name or not value:
+                raise HTTPException(status_code=400, detail="Invalid blind index")
+            if _b64_len(value) > 128:
+                raise HTTPException(status_code=400, detail="Blind index too long")
+            db.add(
+                EncryptedRecordIndex(
+                    user_id=user_id,
+                    collection=collection,
+                    client_id=client_id,
+                    index_name=name[:64],
+                    index_value_b64=value,
+                )
+            )
+        updated.append(row)
+    db.flush()
+    return updated, skipped
+
+
 def delete_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> int:
     if len(items) > MAX_BATCH:
         raise HTTPException(status_code=400, detail=f"Batch too large (max {MAX_BATCH})")

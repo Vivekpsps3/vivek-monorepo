@@ -348,3 +348,106 @@ def test_vault_accepts_stock_lab_scenarios_collection():
     counts = client.get("/api/vault/counts")
     assert counts.status_code == 200
     assert counts.json()["counts"]["stock_lab_scenarios"] == 1
+
+
+def test_reindex_updates_existing_rows_and_skips_missing_ids():
+    client = authenticated_client(app, email="vault-reindex@example.com")
+    setup = client.post(
+        "/api/vault/setup",
+        json={
+            "kdf_algorithm": "PBKDF2",
+            "kdf_salt_b64": _b64(16),
+            "kdf_iterations": 600000,
+            "wrapped_dek_b64": _b64(48),
+            "recovery_wrapped_dek_b64": "",
+            "key_version": 1,
+        },
+    )
+    assert setup.status_code == 200, setup.text
+    created = client.post(
+        "/api/vault/records/upsert",
+        json={
+            "records": [
+                {
+                    "collection": "transactions",
+                    "client_id": "txn_keep0001",
+                    "ciphertext_b64": _b64(64),
+                    "schema_version": 1,
+                    "key_version": 1,
+                },
+                {
+                    "collection": "transactions",
+                    "client_id": "txn_drop0001",
+                    "ciphertext_b64": _b64(64),
+                    "schema_version": 1,
+                    "key_version": 1,
+                },
+            ]
+        },
+    )
+    assert created.status_code == 200, created.text
+    deleted = client.post(
+        "/api/vault/records/delete",
+        json={
+            "records": [
+                {"collection": "transactions", "client_id": "txn_drop0001", "expected_revision": 1}
+            ]
+        },
+    )
+    assert deleted.status_code == 200, deleted.text
+    reindexed = client.post(
+        "/api/vault/records/reindex",
+        json={
+            "records": [
+                {
+                    "collection": "transactions",
+                    "client_id": "txn_keep0001",
+                    "ciphertext_b64": _b64(64),
+                    "schema_version": 1,
+                    "key_version": 1,
+                    "expected_revision": 1,
+                    "indexes": [{"index_name": "dedupe_key", "index_value_b64": _b64(32)}],
+                },
+                {
+                    "collection": "transactions",
+                    "client_id": "txn_drop0001",
+                    "ciphertext_b64": _b64(64),
+                    "schema_version": 1,
+                    "key_version": 1,
+                    "expected_revision": 1,
+                },
+                {
+                    "collection": "transactions",
+                    "client_id": "txn_gone0001",
+                    "ciphertext_b64": _b64(64),
+                    "expected_revision": 1,
+                },
+            ]
+        },
+    )
+    assert reindexed.status_code == 200, reindexed.text
+    body = reindexed.json()
+    assert [row["client_id"] for row in body["records"]] == ["txn_keep0001"]
+    assert body["records"][0]["revision"] == 2
+    assert body["skipped"] == ["txn_drop0001", "txn_gone0001"]
+    listed = client.get("/api/vault/records?collection=transactions")
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert [row["client_id"] for row in rows] == ["txn_keep0001"]
+    assert rows[0]["revision"] == 2
+    conflict = client.post(
+        "/api/vault/records/reindex",
+        json={
+            "records": [
+                {
+                    "collection": "transactions",
+                    "client_id": "txn_keep0001",
+                    "ciphertext_b64": _b64(64),
+                    "expected_revision": 1,
+                }
+            ]
+        },
+    )
+    assert conflict.status_code == 409
+    again = client.get("/api/vault/records?collection=transactions")
+    assert [row["revision"] for row in again.json()] == [2]
