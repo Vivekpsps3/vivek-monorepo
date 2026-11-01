@@ -1,7 +1,7 @@
 """AC-I14: GET /api/town p50 over 200 habits and three years of check-ins.
 
 The 600 ms assertion is the budget, about twice the CI median (p50 261.66 ms on GitHub runners).
-CI runners are typically faster, so this Pi budget is conservative.
+The Pi median is about 358 ms, still under the budget.
 This file is marked perf so coverage runs skip it. CI runs it once,
 without coverage, and prints the profile.
 """
