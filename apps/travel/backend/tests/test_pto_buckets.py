@@ -489,6 +489,9 @@ def test_settings_are_partial_and_hpd_does_not_rewrite_hours(client, monkeypatch
         != before["buckets"]["pto"]["balance_today_days"]
     )
     assert after["hours_per_day"] == "5"
+    series = client.get("/api/pto/series").json()
+    assert series["hours_per_day"] == "5"
+    assert series["pto"]["balance_today_days"] == after["buckets"]["pto"]["balance_today_days"]
 
 
 def test_entries_keep_a_bucket_and_trip_sync_stays_pto(client, monkeypatch):
@@ -572,6 +575,7 @@ def test_other_users_cannot_see_or_edit_leave(client):
     assert client.get("/api/pto").json()["buckets"]["pto"] is None
     assert client.get("/api/pto/policies/pto").json() == {"bucket": "pto", "configured": False}
     assert client.get("/api/settings").json()["pto"]["hours_per_day"] == "8"
+    assert client.get("/api/pto/series").json()["pto"] is None
     assert client.delete(f"/api/pto/entries/{entry_id}").status_code == 404
     client.app.dependency_overrides[require_principal] = lambda: Principal(1, "tester", "Tester")
     assert client.get("/api/pto/policies/pto").json()["start_balance_hours"] == "80"

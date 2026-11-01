@@ -1,4 +1,4 @@
-"""Leave-bucket policies and PTO settings."""
+"""Leave-bucket policies, the hours chart, and PTO settings."""
 
 from datetime import date
 from decimal import Decimal
@@ -26,6 +26,9 @@ from apps.travel.backend.services.leave_buckets import (
 from apps.travel.backend.services.leave_math import (
     bucket_from_row,
     fmt_hours,
+    policy_year,
+    quantize_hours,
+    segments,
     validate_hours_per_day,
     validate_policy_body,
     walk_bucket,
@@ -95,6 +98,79 @@ def bucket_state(db: Session, user_id: int, bucket: str, usages, today: date, hp
     }
 
 
+def series_body(db: Session, user_id: int, today: date) -> dict:
+    hpd = hours_per_day(db, user_id)
+    _stored, usages = load_usages(db, user_id)
+    rows = {name: _leave_row(db, user_id, name) for name in _BUCKETS}
+    pto_row, sick_row = rows["pto"], rows["sick"]
+    if _configured(pto_row) and pto_row is not None:
+        year_bucket, year_start = "pto", pto_row.year_start
+    elif _configured(sick_row) and sick_row is not None:
+        year_bucket, year_start = "sick", sick_row.year_start
+    else:
+        year_bucket, year_start = None, "01-01"
+    end, horizon, days_left, rolled = policy_year(today, year_start)
+
+    def one(name: str):
+        row = rows[name]
+        if not _configured(row):
+            return None
+        assert row is not None
+        parsed = bucket_from_row(row)
+        charges = _charges([usage for usage in usages if usage.bucket == name], hpd)
+        points = []
+        first = None
+        # Point balances match walk_bucket. Reading them keeps this response
+        # on the event list instead of stepping through every day since as_of.
+        today_balance = parsed.start_balance_hours
+        horizon_balance = parsed.start_balance_hours
+        for point in segments(parsed, charges, today, horizon):
+            if point["on"] == today:
+                today_balance = point["balance"]
+            if point["on"] == horizon:
+                horizon_balance = point["balance"]
+            shown = quantize_hours(point["balance"])
+            public = {
+                "on": point["on"],
+                "hours": store_hours(shown),
+                "days": fmt_days(shown / hpd),
+                "projected": point["projected"],
+                "kinds": point["kinds"],
+            }
+            points.append(public)
+            if first is None and "zero" in point["kinds"]:
+                first = {
+                    "on": public["on"],
+                    "hours": public["hours"],
+                    "days": public["days"],
+                    "projected": public["projected"],
+                }
+        cap = parsed.cap_hours
+        return {
+            "bucket": name,
+            "cap_hours": row.cap_hours,
+            "at_cap_today": cap is not None and today_balance >= cap,
+            "balance_today_hours": fmt_hours(today_balance),
+            "balance_today_days": fmt_days(_days(today_balance, hpd)),
+            "balance_horizon_hours": fmt_hours(horizon_balance),
+            "balance_horizon_days": fmt_days(_days(horizon_balance, hpd)),
+            "first_negative": first,
+            "points": points,
+        }
+
+    return {
+        "today": today,
+        "hours_per_day": hours_per_day_text(db, user_id),
+        "horizon_end": horizon,
+        "policy_year_end": end,
+        "rolled_over": rolled,
+        "days_left_in_policy_year": days_left,
+        "year_start_bucket": year_bucket,
+        "pto": one("pto"),
+        "sick": one("sick"),
+    }
+
+
 def _fail(errors: dict[str, str]) -> None:
     raise APIError(422, "validation_error", _CHECK, field_errors=errors)
 
@@ -145,6 +221,14 @@ def save_policy(
         dual_write_pto_policy(db, principal.id)
         db.flush()
     return _payload(db, principal.id)
+
+
+@router.get("/pto/series")
+def read_series(
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    return series_body(db, principal.id, date.today())
 
 
 @router.put("/settings/pto")

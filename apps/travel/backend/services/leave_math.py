@@ -1,21 +1,37 @@
-"""Hours walk and leave-policy field checks.
+"""Hours walk, chart segments, and leave-policy field checks.
 
-Balances stay Fractions until a response is formatted.
+Balances stay Fractions until a response is formatted. `segments` jumps from
+event to event: it never walks every day.
 """
 
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
+from typing import TypedDict
 
 from apps.travel.backend.services.money import fmt_days
 from apps.travel.backend.services.pto import PERIOD_DAYS, _accrue
 
+HOUR_STEP = Decimal("0.000001")
 _CADENCES = {"weekly", "biweekly", "semimonthly", "monthly", "yearly"}
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_KIND_ORDER = (
+    "as_of",
+    "month",
+    "charge_before",
+    "cap_before",
+    "charge",
+    "cap",
+    "resume",
+    "zero",
+    "today",
+    "horizon",
+)
 _MAX = Decimal("8784")
 _MIN_START = Decimal("-8784")
 _MIN_AS_OF = date(2000, 1, 1)
@@ -85,8 +101,156 @@ def fmt_hours(value: Fraction | Decimal) -> str:
     return fmt_days(amount)
 
 
+def quantize_hours(value: Fraction) -> Decimal:
+    return _decimal(value).quantize(HOUR_STEP, rounding="ROUND_HALF_UP")
+
+
 def _decimal(value: Fraction) -> Decimal:
     return Decimal(value.numerator) / Decimal(value.denominator)
+
+
+def policy_year(today: date, year_start: str) -> tuple[date, date, int, bool]:
+    """Return policy-year end, horizon end, days left, and whether the chart rolled."""
+    month, day = (int(part) for part in year_start.split("-"))
+    start = date(today.year, month, day)
+    if start > today:
+        start = date(today.year - 1, month, day)
+    end = date(start.year + 1, month, day) - timedelta(days=1)
+    days_left = (end - today).days
+    if days_left < 60:
+        horizon = date(start.year + 2, month, day) - timedelta(days=1)
+        return end, horizon, days_left, True
+    return end, end, days_left, False
+
+
+def _apply_n(balance: Fraction, days: int, daily: Fraction, cap: Fraction | None) -> Fraction:
+    if days <= 0 or daily <= 0:
+        return balance
+    if cap is not None and balance >= cap:
+        return balance
+    gained = daily * days
+    if cap is None or gained <= cap - balance:
+        return balance + gained
+    return cap
+
+
+def _cap_on(
+    balance: Fraction, start: date, end: date, daily: Fraction, cap: Fraction | None
+) -> date | None:
+    if cap is None or daily <= 0 or end < start or balance >= cap:
+        return None
+    room = cap - balance
+    steps = int(-(-room // daily))
+    when = start + timedelta(days=steps - 1)
+    if when > end:
+        return None
+    return when
+
+
+def _mark_cap(kinds: dict[date, set[str]], when: date | None, as_of: date, horizon: date) -> None:
+    if when is None or when < as_of or when > horizon:
+        return
+    kinds[when].add("cap")
+    before = when - timedelta(days=1)
+    if as_of < before <= horizon:
+        kinds[before].add("cap_before")
+
+
+class _Point(TypedDict):
+    on: date
+    balance: Fraction
+    projected: bool
+    kinds: list[str]
+
+
+def segments(
+    bucket: Bucket,
+    charges: dict[date, Fraction],
+    today: date,
+    horizon: date,
+) -> list[_Point]:
+    """O(events) chart points. Kinds for one date stay in a stable order."""
+    as_of = bucket.balance_as_of
+    daily = bucket.daily
+    cap = bucket.cap_hours
+    if as_of > horizon:
+        only = ["as_of"]
+        if bucket.start_balance_hours < 0:
+            only.append("zero")
+        return [_point(as_of, bucket.start_balance_hours, only, today)]
+
+    kinds: dict[date, set[str]] = defaultdict(set)
+    kinds[as_of].add("as_of")
+    negative = as_of if bucket.start_balance_hours < 0 else None
+    if negative is not None:
+        kinds[as_of].add("zero")
+    balance = bucket.start_balance_hours
+    cursor = as_of
+    upcoming = sorted(day for day in charges if as_of < day <= horizon)
+    for day in upcoming:
+        gap_end = day - timedelta(days=1)
+        hit = _cap_on(balance, cursor + timedelta(days=1), gap_end, daily, cap)
+        balance = _apply_n(balance, (gap_end - cursor).days, daily, cap)
+        _mark_cap(kinds, hit, as_of, horizon)
+        before = balance
+        balance, _added = _accrue(balance, daily, cap)
+        reached = cap is not None and before < cap and balance >= cap
+        balance -= charges[day]
+        if reached:
+            _mark_cap(kinds, day, as_of, horizon)
+        if cap is not None and (before >= cap or reached) and balance < cap:
+            resume = day + timedelta(days=1)
+            if resume <= horizon:
+                kinds[resume].add("resume")
+        if negative is None and balance < 0:
+            negative = day
+            kinds[day].add("zero")
+        kinds[day].add("charge")
+        prior = day - timedelta(days=1)
+        if prior >= as_of:
+            kinds[prior].add("charge_before")
+        cursor = day
+    tail_start = cursor + timedelta(days=1)
+    hit = _cap_on(balance, tail_start, horizon, daily, cap)
+    _mark_cap(kinds, hit, as_of, horizon)
+    year, month = as_of.year, as_of.month + 1
+    if month == 13:
+        year, month = year + 1, 1
+    while True:
+        current = date(year, month, 1)
+        if current > horizon:
+            break
+        if current > as_of:
+            kinds[current].add("month")
+        month += 1
+        if month == 13:
+            year, month = year + 1, 1
+    if as_of <= today <= horizon:
+        kinds[today].add("today")
+    kinds[horizon].add("horizon")
+
+    points: list[_Point] = []
+    balance = bucket.start_balance_hours
+    prev = as_of
+    for when in sorted(kinds):
+        if when != as_of:
+            gap_end = when - timedelta(days=1)
+            balance = _apply_n(balance, (gap_end - prev).days, daily, cap)
+            balance, _added = _accrue(balance, daily, cap)
+            balance -= charges.get(when, Fraction(0))
+            prev = when
+        ordered = [name for name in _KIND_ORDER if name in kinds[when]]
+        points.append(_point(when, balance, ordered, today))
+    return points
+
+
+def _point(when: date, balance: Fraction, kinds: list[str], today: date) -> _Point:
+    return {
+        "on": when,
+        "balance": balance,
+        "projected": when > today,
+        "kinds": kinds,
+    }
 
 
 def parse_loose(raw: object) -> Decimal | None:
