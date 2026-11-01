@@ -9,7 +9,7 @@ import {
   DEFAULT_PBKDF2_ITERATIONS,
 } from '@vivek/browser';
 import {
-  DEK_STORE, VAULT_KEY_ID, clearFinanceSessionStorage, markVaultPresent, vaultMarkedPresent, withVaultStore,
+  DEK_STORE, VAULT_KEY_ID, VAULT_PRESENCE, clearFinanceSessionStorage, markVaultPresent, vaultMarkedPresent, withVaultStore,
 } from './dek-store';
 import { migrateLegacyDek } from './dek-holder';
 
@@ -152,7 +152,9 @@ export interface StoredVaultKeys {
   reindexed: string[];
 }
 
-type DekRecord = StoredVaultKeys & { id: string; owner_id: number | null; blindKey: CryptoKey; legacyBlindKey: CryptoKey | null };
+type DekRecord = StoredVaultKeys & {
+  id: string; owner_id: number | null; blindKey: CryptoKey; legacyBlindKey: CryptoKey | null; write_token?: string;
+};
 type Progress = { blind_index_version: number; reindexed: string[] };
 type ProgressRecord = Progress & { id: string; owner_id: number | null };
 
@@ -164,19 +166,55 @@ function progressId(userId: number): string {
   return `progress:${userId}`;
 }
 
+/** Remove this write only. A newer hold's record has a different token and stays. */
+async function dropStaleVaultWrite(token: string, ownerId: number): Promise<void> {
+  let removed = false;
+  await withVaultStore('readwrite', store => {
+    const request = store.get(VAULT_KEY_ID);
+    request.onsuccess = () => {
+      const row = request.result as { write_token?: string } | undefined;
+      if (row?.write_token === token) {
+        store.delete(VAULT_KEY_ID);
+        removed = true;
+      }
+    };
+    return request;
+  });
+  if (!removed) return;
+  try {
+    if (localStorage.getItem(VAULT_PRESENCE) === String(ownerId)) localStorage.removeItem(VAULT_PRESENCE);
+  } catch { /* private mode */ }
+}
+
 /** Store the key for this user, then drop the legacy localStorage item through dek-holder's migrate path. */
 export async function persistVaultKeys(keys: StoredVaultKeys, ownerId: number | null, stillCurrent: () => boolean = () => true): Promise<boolean> {
   if (!concreteOwner(ownerId)) return false;
   const extra = requireAttached(keys.dek);
   if (!stillCurrent()) return false;
-  await withVaultStore('readwrite', store => store.put({
-    id: VAULT_KEY_ID, ...keys, owner_id: ownerId, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey,
-  } satisfies DekRecord));
-  if (!stillCurrent()) return false;
+  const writeToken = bufToB64(randomBytes(8));
+  let wrote = false;
+  await withVaultStore('readwrite', store => {
+    if (!stillCurrent()) return store.get(VAULT_KEY_ID);
+    wrote = true;
+    return store.put({
+      id: VAULT_KEY_ID, ...keys, owner_id: ownerId, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey, write_token: writeToken,
+    } satisfies DekRecord);
+  });
+  if (!wrote || !stillCurrent()) {
+    if (wrote) await dropStaleVaultWrite(writeToken, ownerId);
+    return false;
+  }
   markVaultPresent(ownerId);
-  if (!stillCurrent()) return false;
+  if (!stillCurrent()) {
+    await dropStaleVaultWrite(writeToken, ownerId);
+    return false;
+  }
   migrateLegacyDek();
-  return stillCurrent();
+  if (!stillCurrent()) {
+    await dropStaleVaultWrite(writeToken, ownerId);
+    return false;
+  }
+  return true;
 }
 
 export async function writeBlindIndexProgress(userId: number, progress: Progress): Promise<void> {
@@ -202,9 +240,13 @@ export async function restoreVaultKeys(ownerId: number | null, stillCurrent: () 
   let legacy: string | null = null;
   try { legacy = localStorage.getItem(DEK_STORE); } catch { legacy = null; }
   if (legacy) {
-    let raw: Uint8Array;
-    try { raw = b64ToBuf(legacy); } catch { return null; }
-    if (raw.byteLength !== 32) return null;
+    let raw: Uint8Array | null = null;
+    try { raw = b64ToBuf(legacy); } catch { raw = null; }
+    // An unusable legacy value must not keep finance-dek or the presence flag.
+    if (!raw || raw.byteLength !== 32) {
+      await clearFinanceSessionStorage();
+      return null;
+    }
     const imported = await importVaultKeys(raw);
     raw.fill(0);
     if (!stillCurrent()) {
@@ -214,7 +256,7 @@ export async function restoreVaultKeys(ownerId: number | null, stillCurrent: () 
     const stored: StoredVaultKeys = { dek: imported.dek, blind_index_version: 1, reindexed: [] };
     const kept = await persistVaultKeys(stored, ownerId, stillCurrent);
     if (!kept || !stillCurrent()) {
-      await clearFinanceSessionStorage();
+      migrateLegacyDek();
       return null;
     }
     return stored;

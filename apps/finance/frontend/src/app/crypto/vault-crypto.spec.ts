@@ -8,15 +8,55 @@ import {
   importVaultKeys,
   indexedDbHoldsDek,
   legacyDekBlindIndex,
+  persistVaultKeys,
   randomBytes,
   randomClientId,
   recordAad,
   restoreDekLocal,
+  restoreVaultKeys,
   rewrapDekWithPassphrase,
   unlockWithPassphrase,
 } from './vault-crypto';
 import { encodeBase64 } from '@vivek/browser';
 import { LOCK_SIGNAL, VAULT_PRESENCE, deleteFinanceVaultDb, deleteFinanceVaultKey, financeVaultPresent } from './dek-store';
+
+function pauseNextOpen(): { ready: Promise<void>; release: () => void; restore: () => void } {
+  const realOpen = indexedDB.open.bind(indexedDB);
+  let release!: () => void;
+  let markReady!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const ready = new Promise<void>(resolve => { markReady = resolve; });
+  let armed = true;
+  spyOn(indexedDB, 'open').and.callFake((name: string, version?: number) => {
+    if (!armed) return realOpen(name, version);
+    armed = false;
+    const real = realOpen(name, version);
+    let db: IDBDatabase | null = null;
+    let failure: DOMException | null = null;
+    let onsuccess: ((ev: Event) => void) | null = null;
+    let onerror: ((ev: Event) => void) | null = null;
+    let onupgradeneeded: ((ev: Event) => void) | null = null;
+    let upgrade: Event | null = null;
+    const fake = {} as IDBOpenDBRequest;
+    const replayUpgrade = () => { if (upgrade && onupgradeneeded) onupgradeneeded.call(fake, upgrade); };
+    Object.defineProperties(fake, {
+      result: { configurable: true, get: () => db },
+      error: { configurable: true, get: () => failure },
+      onsuccess: { configurable: true, get: () => onsuccess, set: (fn: (ev: Event) => void) => { onsuccess = fn; } },
+      onerror: { configurable: true, get: () => onerror, set: (fn: (ev: Event) => void) => { onerror = fn; } },
+      onupgradeneeded: { configurable: true, get: () => onupgradeneeded, set: (fn: (ev: Event) => void) => { onupgradeneeded = fn; replayUpgrade(); } },
+    });
+    real.onupgradeneeded = ev => { db = real.result; upgrade = ev; replayUpgrade(); };
+    real.onsuccess = () => { db = real.result; markReady(); void gate.then(() => onsuccess?.call(fake, new Event('success'))); };
+    real.onerror = () => { failure = real.error; markReady(); void gate.then(() => onerror?.call(fake, new Event('error'))); };
+    return fake;
+  });
+  return {
+    ready,
+    release,
+    restore: () => { delete (indexedDB as unknown as { open?: unknown }).open; },
+  };
+}
 
 describe('vault-crypto', () => {
   const fastIterations = 120_000;
@@ -57,12 +97,28 @@ describe('vault-crypto', () => {
   it('removes the IndexedDB key on wipe', async () => {
     localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(3)));
     expect(await restoreDekLocal(1)).toBeTruthy();
-    clearDekLocal();
-    await deleteFinanceVaultKey();
+    await clearDekLocal();
     expect(localStorage.getItem('finance-dek')).toBeNull();
     expect(financeVaultPresent()).toBeFalse();
     expect(await indexedDbHoldsDek()).toBeFalse();
     expect(await restoreDekLocal(1)).toBeNull();
+  });
+
+  it('rejects a failed IndexedDB delete and leaves the key', async () => {
+    localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(3)));
+    expect(await restoreDekLocal(1)).toBeTruthy();
+    const del = IDBObjectStore.prototype.delete;
+    const spy = spyOn(IDBObjectStore.prototype, 'delete').and.callFake(function (this: IDBObjectStore, query?: IDBValidKey | IDBKeyRange) {
+      const request = del.call(this, query as IDBValidKey);
+      setTimeout(() => { try { this.transaction.abort(); } catch { /* already finished */ } }, 0);
+      return request;
+    });
+    try {
+      await expectAsync(clearDekLocal()).toBeRejected();
+      expect(await indexedDbHoldsDek()).toBeTrue();
+    } finally {
+      spy.and.callThrough();
+    }
   });
 
   it('derives an HKDF blind-index subkey that differs from the DEK', async () => {
@@ -77,13 +133,43 @@ describe('vault-crypto', () => {
     expect(await hmacBlindIndex(dek, 'dedupe:abc')).toBe(next);
   });
 
-  it('treats a stored value with an invalid AES key length as an unusable DEK', async () => {
-    clearDekLocal();
+  it('wipes an invalid legacy finance-dek and does not leave the vault present', async () => {
+    localStorage.setItem(VAULT_PRESENCE, '1');
     localStorage.setItem('finance-dek', btoa('short'));
-
     await expectAsync(restoreDekLocal(1)).toBeResolvedTo(null);
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(localStorage.getItem(VAULT_PRESENCE)).toBeNull();
+    expect(financeVaultPresent()).toBeFalse();
 
-    clearDekLocal();
+    localStorage.setItem(VAULT_PRESENCE, '1');
+    localStorage.setItem('finance-dek', '%%%not-base64%%%');
+    await expectAsync(restoreDekLocal(1)).toBeResolvedTo(null);
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(financeVaultPresent()).toBeFalse();
+  });
+
+  it('does not wipe a newer key when a legacy migration goes stale', async () => {
+    const raw = new Uint8Array(32).fill(4);
+    localStorage.setItem('finance-dek', encodeBase64(raw));
+    const fresh = (await importVaultKeys(new Uint8Array(32).fill(6))).dek;
+    const secret = await encryptJson(fresh, { marker: 'user-2' });
+    let current = true;
+    const paused = pauseNextOpen();
+    try {
+      const pending = restoreVaultKeys(1, () => current);
+      await paused.ready;
+      current = false;
+      expect(await persistVaultKeys({ dek: fresh, blind_index_version: 2, reindexed: [] }, 2)).toBeTrue();
+      paused.release();
+      await expectAsync(pending).toBeResolvedTo(null);
+      const stored = await restoreVaultKeys(2);
+      expect(await decryptJson(stored!.dek, secret)).toEqual({ marker: 'user-2' });
+      expect(localStorage.getItem('finance-dek')).toBeNull();
+      expect(financeVaultPresent()).toBeTrue();
+    } finally {
+      paused.release();
+      paused.restore();
+    }
   });
 
   it('encrypts and decrypts JSON with a DEK', async () => {

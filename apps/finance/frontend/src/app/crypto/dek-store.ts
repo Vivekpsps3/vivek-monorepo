@@ -69,7 +69,7 @@ export function deleteFinanceVaultKey(): Promise<void> {
   if (!globalThis.indexedDB) return Promise.resolve();
   const prev = removingKey ?? Promise.resolve();
   let tracked: Promise<void> = Promise.resolve();
-  tracked = prev.catch(() => undefined).then(() => withVaultStore('readwrite', store => store.delete(VAULT_KEY_ID))).then(() => undefined, () => undefined).finally(() => {
+  tracked = prev.catch(() => undefined).then(() => withVaultStore('readwrite', store => store.delete(VAULT_KEY_ID))).then(() => undefined).finally(() => {
     if (removingKey === tracked) removingKey = null;
   });
   removingKey = tracked;
