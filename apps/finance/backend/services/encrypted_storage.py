@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
@@ -278,19 +279,10 @@ def reindex_records(
                 status_code=409,
                 detail=f"Revision conflict for {collection}/{client_id}",
             )
-        row.ciphertext_b64 = ciphertext_b64
-        row.schema_version = schema_version
-        row.key_version = key_version
-        row.revision = row.revision + 1
-        row.updated_at = utc_now()
         indexes = item.get("indexes") or []
         if not isinstance(indexes, list):
             raise HTTPException(status_code=400, detail="indexes must be a list")
-        db.query(EncryptedRecordIndex).filter(
-            EncryptedRecordIndex.user_id == user_id,
-            EncryptedRecordIndex.collection == collection,
-            EncryptedRecordIndex.client_id == client_id,
-        ).delete(synchronize_session=False)
+        parsed: list[tuple[str, str]] = []
         for idx in indexes:
             name = str(idx.get("index_name", ""))
             value = str(idx.get("index_value_b64", ""))
@@ -298,15 +290,41 @@ def reindex_records(
                 raise HTTPException(status_code=400, detail="Invalid blind index")
             if _b64_len(value) > 128:
                 raise HTTPException(status_code=400, detail="Blind index too long")
-            db.add(
-                EncryptedRecordIndex(
-                    user_id=user_id,
-                    collection=collection,
-                    client_id=client_id,
-                    index_name=name[:64],
-                    index_value_b64=value,
+            parsed.append((name[:64], value))
+        # Same dedupe_key hashes to one HKDF value. The unique index cannot store
+        # the second row. Skip it so re-index can finish instead of retrying forever.
+        savepoint = db.begin_nested()
+        try:
+            row.ciphertext_b64 = ciphertext_b64
+            row.schema_version = schema_version
+            row.key_version = key_version
+            row.revision = row.revision + 1
+            row.updated_at = utc_now()
+            db.query(EncryptedRecordIndex).filter(
+                EncryptedRecordIndex.user_id == user_id,
+                EncryptedRecordIndex.collection == collection,
+                EncryptedRecordIndex.client_id == client_id,
+            ).delete(synchronize_session=False)
+            for name, value in parsed:
+                db.add(
+                    EncryptedRecordIndex(
+                        user_id=user_id,
+                        collection=collection,
+                        client_id=client_id,
+                        index_name=name,
+                        index_value_b64=value,
+                    )
                 )
-            )
+            db.flush()
+        except IntegrityError as exc:
+            savepoint.rollback()
+            db.expire(row)
+            if "unique" not in str(getattr(exc, "orig", exc)).lower():
+                raise
+            skipped.append(client_id)
+            continue
+        else:
+            savepoint.commit()
         updated.append(row)
     db.flush()
     return updated, skipped

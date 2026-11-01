@@ -451,3 +451,110 @@ def test_reindex_updates_existing_rows_and_skips_missing_ids():
     assert conflict.status_code == 409
     again = client.get("/api/vault/records?collection=transactions")
     assert [row["revision"] for row in again.json()] == [2]
+
+
+def _setup_vault(client) -> None:
+    setup = client.post(
+        "/api/vault/setup",
+        json={
+            "kdf_algorithm": "PBKDF2",
+            "kdf_salt_b64": _b64(16),
+            "kdf_iterations": 600000,
+            "wrapped_dek_b64": _b64(48),
+            "recovery_wrapped_dek_b64": "",
+            "key_version": 1,
+        },
+    )
+    assert setup.status_code == 200, setup.text
+
+
+def _upsert_txn(client, client_id: str) -> str:
+    ciphertext = _b64(64)
+    created = client.post(
+        "/api/vault/records/upsert",
+        json={
+            "records": [
+                {
+                    "collection": "transactions",
+                    "client_id": client_id,
+                    "ciphertext_b64": ciphertext,
+                    "schema_version": 1,
+                    "key_version": 1,
+                }
+            ]
+        },
+    )
+    assert created.status_code == 200, created.text
+    return ciphertext
+
+
+def _reindex_txn(client_id: str, ciphertext: str, index_value: str) -> dict:
+    return {
+        "collection": "transactions",
+        "client_id": client_id,
+        "ciphertext_b64": ciphertext,
+        "schema_version": 1,
+        "key_version": 1,
+        "expected_revision": 1,
+        "indexes": [{"index_name": "dedupe_key", "index_value_b64": index_value}],
+    }
+
+
+def test_reindex_does_not_change_another_users_row():
+    owner = authenticated_client(app, email="vault-owner@example.com")
+    other = authenticated_client(app, email="vault-other@example.com")
+    _setup_vault(owner)
+    _setup_vault(other)
+    original = _upsert_txn(owner, "txn_keep0001")
+    reindexed = other.post(
+        "/api/vault/records/reindex",
+        json={"records": [_reindex_txn("txn_keep0001", _b64(80), _b64(32))]},
+    )
+    assert reindexed.status_code == 200, reindexed.text
+    body = reindexed.json()
+    assert body["records"] == []
+    assert body["skipped"] == ["txn_keep0001"]
+    listed = owner.get("/api/vault/records?collection=transactions")
+    assert listed.status_code == 200, listed.text
+    row = listed.json()[0]
+    assert row["client_id"] == "txn_keep0001"
+    assert row["revision"] == 1
+    assert row["ciphertext_b64"] == original
+
+
+def test_reindex_skips_a_duplicate_blind_index():
+    client = authenticated_client(app, email="vault-dup-index@example.com")
+    _setup_vault(client)
+    first_original = _upsert_txn(client, "txn_dup000001")
+    second_original = _upsert_txn(client, "txn_dup000002")
+    shared = _b64(32)
+    reindexed = client.post(
+        "/api/vault/records/reindex",
+        json={
+            "records": [
+                _reindex_txn("txn_dup000001", _b64(72), shared),
+                _reindex_txn("txn_dup000002", _b64(80), shared),
+            ]
+        },
+    )
+    assert reindexed.status_code == 200, reindexed.text
+    body = reindexed.json()
+    assert [row["client_id"] for row in body["records"]] == ["txn_dup000001"]
+    assert body["records"][0]["revision"] == 2
+    assert body["skipped"] == ["txn_dup000002"]
+    listed = client.get("/api/vault/records?collection=transactions")
+    rows = {row["client_id"]: row for row in listed.json()}
+    assert rows["txn_dup000001"]["revision"] == 2
+    assert rows["txn_dup000001"]["ciphertext_b64"] != first_original
+    assert rows["txn_dup000002"]["revision"] == 1
+    assert rows["txn_dup000002"]["ciphertext_b64"] == second_original
+    lookup = client.post(
+        "/api/vault/indexes/lookup",
+        json={
+            "collection": "transactions",
+            "index_name": "dedupe_key",
+            "index_value_b64": shared,
+        },
+    )
+    assert lookup.status_code == 200, lookup.text
+    assert lookup.json()["client_ids"] == ["txn_dup000001"]
