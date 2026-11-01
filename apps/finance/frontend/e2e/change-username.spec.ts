@@ -1,5 +1,5 @@
 import { openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from './frozen-clock';
 
 const PASSPHRASE = 'hub-username-e2e-passphrase';
 
