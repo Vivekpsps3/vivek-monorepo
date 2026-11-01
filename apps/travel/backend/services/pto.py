@@ -73,6 +73,7 @@ class Usage:
     trip_id: int | None
     # Empty means the whole total is charged on start_date. Date rows fill this.
     charges: tuple[tuple[date, Decimal], ...] = ()
+    bucket: str = "pto"
 
 
 @dataclass(frozen=True)
@@ -325,6 +326,7 @@ def sync_trip_pto(db, trip, choices: dict | None = None) -> None:
     entry.days = store_days(days)
     entry.label = trip.title
     entry.kind = "trip"
+    entry.bucket = "pto"
 
 
 def policy_from_row(row) -> Policy:
@@ -387,6 +389,7 @@ def usages_from_rows(rows, day_rows=()) -> list[Usage]:
                 label=row.label,
                 trip_id=row.trip_id,
                 charges=charges,
+                bucket="pto" if row.trip_id is not None else row.bucket,
             )
         )
     return usages
@@ -496,9 +499,15 @@ def _projection_conflicts(usages: list[Usage], trip_id: int | None) -> list[dict
     return [item for item in pto_conflicts(usages) if trip_id in item["trip_ids"]]
 
 
+def _pto_usages(usages: list[Usage]) -> list[Usage]:
+    """Balance walks count PTO only. Conflict lists keep Sick."""
+    return [usage for usage in usages if usage.bucket == "pto"]
+
+
 def trip_projection(
     policy: Policy, usages: list[Usage], trip, effective: Decimal, auto: bool
 ) -> dict:
+    counted = _pto_usages(usages)
     payload = {
         "counts": bool(trip.counts_as_pto),
         "days": fmt_days(effective if trip.counts_as_pto else Decimal(0)),
@@ -515,7 +524,7 @@ def trip_projection(
     if not policy.configured:
         payload["note"] = "Set a balance and accrual rate to project leftover PTO."
         return payload
-    own = next((usage for usage in usages if usage.trip_id == trip.id), None)
+    own = next((usage for usage in counted if usage.trip_id == trip.id), None)
     later = _later_than_balance(own, policy.balance_as_of)
     if trip.start_date <= policy.balance_as_of and not later:
         payload["note"] = (
@@ -526,10 +535,10 @@ def trip_projection(
         payload["note"] = (
             "Days on or before your balance date stay in that balance. Later selected days are deducted."
         )
-        payload["leftover_after"] = fmt_days(walk(policy, usages, trip.end_date).balance)
+        payload["leftover_after"] = fmt_days(walk(policy, counted, trip.end_date).balance)
         return payload
-    available = walk(policy, usages, trip.start_date - timedelta(days=1)).balance
-    leftover = walk(policy, usages, trip.end_date).balance
+    available = walk(policy, counted, trip.start_date - timedelta(days=1)).balance
+    leftover = walk(policy, counted, trip.end_date).balance
     payload["balance_when_you_leave"] = fmt_days(available)
     payload["leftover_after"] = fmt_days(leftover)
     return payload

@@ -210,8 +210,12 @@ def test_upgrade_is_lossless_and_get_pto_is_unchanged(tmp_path):
                 "kind",
                 "notes",
                 "charges",
+                "bucket",
+                "hours",
             }
             assert body["entries"][0]["days"] == "1.0000"
+            assert body["entries"][0]["bucket"] == "pto"
+            assert body["entries"][0]["hours"] == "8"
     assert _read(database, 6)["policy"]["configured"] is False
     assert _read(database, 6)["entries"] == []
 

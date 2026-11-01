@@ -4,6 +4,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
@@ -12,14 +13,25 @@ from apps.travel.backend.models import PtoEntry, PtoPolicy
 from apps.travel.backend.schemas import PtoEntryIn, PtoPolicyIn
 from apps.travel.backend.services.assemble import snapshot_pto
 from apps.travel.backend.services.dates import weekday_count
-from apps.travel.backend.services.leave_buckets import mirror_legacy_policy
+from apps.travel.backend.services.leave_buckets import (
+    hours_per_day,
+    hours_per_day_text,
+    legacy_policy_field_errors,
+    mirror_legacy_policy,
+    policy_for_bucket,
+    policy_for_read,
+    sick_prompt_dismissed,
+)
+from apps.travel.backend.services.leave_math import fmt_hours
 from apps.travel.backend.services.money import DAY_STEP, parse_days, store_days
 from apps.travel.backend.services.pto import (
     load_usages,
-    policy_from_row,
     preview_take,
     usage_charges_payload,
 )
+
+_BUCKETS = ("pto", "sick")
+_MISSING = "That leave bucket is not here."
 
 router = APIRouter()
 
@@ -33,9 +45,11 @@ def _policy_row(db: Session, user_id: int) -> PtoPolicy | None:
 
 
 def _payload(db: Session, user_id: int, today: date | None = None) -> dict:
+    from apps.travel.backend.routers.leave import bucket_state
+
     today = today or date.today()
-    row = _policy_row(db, user_id)
-    policy = policy_from_row(row)
+    policy = policy_for_read(db, user_id)
+    hpd = hours_per_day(db, user_id)
     stored, usages = load_usages(db, user_id)
     entries = [
         {
@@ -48,10 +62,18 @@ def _payload(db: Session, user_id: int, today: date | None = None) -> dict:
             "kind": entry.kind,
             "notes": entry.notes,
             "charges": usage_charges_payload(usage),
+            "bucket": entry.bucket,
+            "hours": fmt_hours(usage.days * hpd),
         }
         for entry, usage in zip(stored, usages, strict=True)
     ]
-    return {"policy": snapshot_pto(policy, usages, today), "entries": entries}
+    return {
+        "policy": snapshot_pto(policy, usages, today),
+        "entries": entries,
+        "hours_per_day": hours_per_day_text(db, user_id),
+        "pto_sick_prompt_dismissed": sick_prompt_dismissed(db, user_id),
+        "buckets": {name: bucket_state(db, user_id, name, usages, today, hpd) for name in _BUCKETS},
+    }
 
 
 @router.get("/pto")
@@ -82,6 +104,19 @@ def save_policy(
     row.annual_cap_days = (
         store_days(_quantize(body.annual_cap_days)) if body.annual_cap_days is not None else None
     )
+    inexact = legacy_policy_field_errors(row)
+    if inexact:
+        raise RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("body", field),
+                    "msg": f"Value error, {text}",
+                    "input": None,
+                }
+                for field, text in inexact.items()
+            ]
+        )
     mirror_legacy_policy(db, row)
     db.flush()
     return _payload(db, principal.id)
@@ -107,6 +142,7 @@ def create_entry(
         label=body.label,
         kind="manual",
         notes=body.notes,
+        bucket=body.bucket,
     )
     db.add(row)
     db.flush()
@@ -134,13 +170,19 @@ def preview(
     start: date,
     end: date,
     days: Decimal | None = None,
+    bucket: str = "pto",
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
-    policy = policy_from_row(_policy_row(db, principal.id))
+    if bucket not in _BUCKETS:
+        raise HTTPException(status_code=404, detail=_MISSING)
+    policy = policy_for_bucket(db, principal.id, bucket)
     _stored, usages = load_usages(db, principal.id)
+    chosen = [usage for usage in usages if usage.bucket == bucket]
     try:
         parsed = parse_days(days) if days is not None else None
-        return preview_take(policy, usages, start, end, parsed)
+        body = preview_take(policy, chosen, start, end, parsed)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    body["bucket"] = bucket
+    return body

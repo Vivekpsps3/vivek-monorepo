@@ -7,11 +7,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from apps.server.database import get_db
-from apps.travel.backend.routers import board, integrations, pto, trips
+from apps.travel.backend.routers import board, integrations, leave, pto, trips
 
 
 def validation_response(exc: RequestValidationError) -> JSONResponse:
     messages = []
+    field_errors: dict[str, str] = {}
     for err in exc.errors():
         msg = err.get("msg", "Check this field.")
         prefix = "Value error, "
@@ -19,8 +20,13 @@ def validation_response(exc: RequestValidationError) -> JSONResponse:
             msg = msg[len(prefix) :]
         loc = [str(item) for item in err.get("loc", []) if item not in ("body", "query")]
         messages.append(f"{' / '.join(loc)}: {msg}" if loc else str(msg))
+        if loc:
+            field_errors.setdefault(loc[-1], msg)
     detail = " ".join(messages) or "Check the form and try again."
-    return JSONResponse(status_code=422, content={"detail": detail})
+    return JSONResponse(
+        status_code=422,
+        content={"detail": detail, "code": "validation_error", "field_errors": field_errors},
+    )
 
 
 def register_travel(application: FastAPI) -> None:
@@ -36,4 +42,5 @@ def register_travel(application: FastAPI) -> None:
     application.include_router(board.router, prefix="/travel/api")
     application.include_router(trips.router, prefix="/travel/api")
     application.include_router(pto.router, prefix="/travel/api")
+    application.include_router(leave.router, prefix="/travel/api")
     application.include_router(integrations.router, prefix="/travel/api")

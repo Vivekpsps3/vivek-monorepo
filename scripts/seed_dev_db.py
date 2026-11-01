@@ -373,6 +373,32 @@ def seed_legacy_pto(client: httpx.Client, user_index: int) -> None:
     require(client.put("/travel/api/pto/policy", json=body), "pto policy")
 
 
+def seed_sick_example(client: httpx.Client, user_index: int) -> None:
+    """Sick policy plus one Sick and one PTO entry. Later users leave Sick unset."""
+    if user_index != 0:
+        return
+    sick = {
+        "start_balance_hours": "24",
+        "balance_as_of": "2026-01-01",
+        "accrual_hours": "4",
+        "accrual_cadence": "monthly",
+        "year_start": "01-01",
+    }
+    saved = client.put("/travel/api/pto/policies/sick", json=sick)
+    if saved.status_code in (404, 405):
+        return
+    require(saved, "sick policy")
+    entry = {"start_date": "2026-02-02", "end_date": "2026-02-02", "days": "1"}
+    require(
+        client.post("/travel/api/pto/entries", json={**entry, "label": "Clinic", "bucket": "sick"}),
+        "sick entry",
+    )
+    require(
+        client.post("/travel/api/pto/entries", json={**entry, "label": "Errand", "days": "0.5"}),
+        "pto entry",
+    )
+
+
 def seed(base_url: str, args: argparse.Namespace) -> None:
     totals = {"users": 0, "record_indexes": 0}
     admin_cookie = ""
@@ -386,6 +412,7 @@ def seed(base_url: str, args: argparse.Namespace) -> None:
         totals["record_indexes"] += seed_records(client, index, args.records_per_user)
         seed_trips(client, index, args.trips_per_user)
         seed_legacy_pto(client, index)
+        seed_sick_example(client, index)
         seed_media(client, index, args.entries_per_user)
         totals["users"] += 1
         print(f"seeded {username}", flush=True)

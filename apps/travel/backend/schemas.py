@@ -595,6 +595,14 @@ class PtoEntryIn(BaseModel):
     end_date: date
     days: Decimal | None = None
     notes: str | None = None
+    bucket: Literal["pto", "sick"] = "pto"
+
+    @field_validator("bucket", mode="before")
+    @classmethod
+    def bucket_ok(cls, value: object) -> object:
+        if value in ("pto", "sick"):
+            return value
+        raise ValueError("Pick PTO or Sick.")
 
     @field_validator("label")
     @classmethod
@@ -625,6 +633,22 @@ class PtoEntryIn(BaseModel):
         if self.days is not None and (self.days < 0 or self.days > 366):
             raise ValueError("Days have to be between 0 and 366.")
         return self
+
+
+class LeavePolicyIn(BaseModel):
+    """Raw numbers. The route validates them so Pydantic does not invent copy."""
+
+    start_balance_hours: str | int | float | None = None
+    balance_as_of: str | int | float | None = None
+    accrual_hours: str | int | float | None = None
+    accrual_cadence: str | None = None
+    cap_hours: str | int | float | None = None
+    year_start: str | None = None
+
+
+class PtoSettingsIn(BaseModel):
+    hours_per_day: str | int | float | None = None
+    sick_prompt_dismissed: bool | None = None
 
 
 class FlightLookupIn(BaseModel):

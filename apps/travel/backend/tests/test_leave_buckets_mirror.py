@@ -47,7 +47,18 @@ def test_legacy_put_mirrors_pto_and_preserves_year_start(client):
     }
     saved = client.put("/api/pto/policy", json=body)
     assert saved.status_code == 200, saved.text
-    assert set(saved.json()) == {"policy", "entries"}
+    saved_body = saved.json()
+    assert set(saved_body) == {
+        "policy",
+        "entries",
+        "hours_per_day",
+        "pto_sick_prompt_dismissed",
+        "buckets",
+    }
+    assert saved_body["hours_per_day"] == "7.5"
+    assert saved_body["pto_sick_prompt_dismissed"] is False
+    assert saved_body["buckets"]["pto"]["start_balance_hours"] == "75"
+    assert saved_body["buckets"]["sick"] is None
     db = _session(client)
     try:
         row = db.query(LeavePolicy).filter(LeavePolicy.user_id == 1).one()

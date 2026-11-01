@@ -46,6 +46,7 @@ TRIP_COLUMNS = (
     "id, user_id, title, start_date, end_date, status, origin_label, notes, "
     "counts_as_pto, pto_days, created_at, updated_at"
 )
+PTO_ENTRY_COLUMNS = "id, user_id, trip_id, start_date, end_date, days, label, kind, notes"
 
 
 def test_pto_day_amount_and_date_are_bounded():
@@ -391,7 +392,9 @@ def test_revision_backfill_downgrades_cleanly(tmp_path):
             "VALUES (1, NULL, '2026-02-02', '2026-02-02', '1.0000', 'Appointment', 'manual')"
         )
         before_trips = db.execute(f"SELECT {TRIP_COLUMNS} FROM trips ORDER BY id").fetchall()
-        before_entries = db.execute("SELECT * FROM pto_entries ORDER BY id").fetchall()
+        before_entries = db.execute(
+            f"SELECT {PTO_ENTRY_COLUMNS} FROM pto_entries ORDER BY id"
+        ).fetchall()
         db.commit()
 
     command.upgrade(cfg, "head")
@@ -401,7 +404,10 @@ def test_revision_backfill_downgrades_cleanly(tmp_path):
         assert (
             db.execute(f"SELECT {TRIP_COLUMNS} FROM trips ORDER BY id").fetchall() == before_trips
         )
-        assert db.execute("SELECT * FROM pto_entries ORDER BY id").fetchall() == before_entries
+        assert (
+            db.execute(f"SELECT {PTO_ENTRY_COLUMNS} FROM pto_entries ORDER BY id").fetchall()
+            == before_entries
+        )
         assert db.execute(
             "SELECT on_date, amount, provenance, migration_source FROM trip_pto_days WHERE trip_id = 1 ORDER BY on_date"
         ).fetchall() == [
@@ -431,7 +437,10 @@ def test_revision_backfill_downgrades_cleanly(tmp_path):
         assert (
             db.execute(f"SELECT {TRIP_COLUMNS} FROM trips ORDER BY id").fetchall() == before_trips
         )
-        assert db.execute("SELECT * FROM pto_entries ORDER BY id").fetchall() == before_entries
+        assert (
+            db.execute(f"SELECT {PTO_ENTRY_COLUMNS} FROM pto_entries ORDER BY id").fetchall()
+            == before_entries
+        )
         tables = {
             row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }

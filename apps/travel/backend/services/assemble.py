@@ -8,7 +8,6 @@ from apps.travel.backend.models import (
     Note,
     Parking,
     PlanItem,
-    PtoPolicy,
     Reminder,
     Stay,
     Transport,
@@ -22,11 +21,11 @@ from apps.travel.backend.services.budget import (
     rollup,
 )
 from apps.travel.backend.services.dates import iter_dates, nights_away, phase_for, span_days
+from apps.travel.backend.services.leave_buckets import policy_for_read
 from apps.travel.backend.services.money import fmt_days, fmt_money, store_days
 from apps.travel.backend.services.pto import (
     counted_pto_dates,
     load_usages,
-    policy_from_row,
     pto_conflicts,
     pto_dates_payload,
     stored_pto_total,
@@ -458,11 +457,10 @@ def build_trip(trip: Trip, policy, usages, today: date | None = None) -> dict:
 
 
 def pto_context(db, user_id: int):
-    owner = user_id
-    row = db.query(PtoPolicy).filter(PtoPolicy.user_id == owner).one_or_none()
-    policy = policy_from_row(row)
-    _entries, usages = load_usages(db, owner)
-    return row, policy, usages
+    """PTO policy from the leave row. Usages stay complete so conflicts stay cross-bucket."""
+    policy = policy_for_read(db, user_id)
+    _entries, usages = load_usages(db, user_id)
+    return None, policy, usages
 
 
 def snapshot_pto(policy, usages, today: date) -> dict:
@@ -482,7 +480,8 @@ def snapshot_pto(policy, usages, today: date) -> dict:
             "today_before_balance_date": False,
             "conflicts": [],
         }
-    walked = walk(policy, usages, today)
+    counted = [usage for usage in usages if getattr(usage, "bucket", "pto") == "pto"]
+    walked = walk(policy, counted, today)
     return {
         "configured": True,
         "balance_as_of": policy.balance_as_of,
