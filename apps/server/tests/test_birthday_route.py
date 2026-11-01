@@ -1,14 +1,16 @@
 """Owner-only birthday route: validation, CSRF, privacy, and audit."""
 
 import asyncio
+import json
 import logging
+import logging.config
 import os
 import re
 import time
 import traceback
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
@@ -760,17 +762,18 @@ def test_commit_failure_frame_omits_the_submitted_birthday(
 
 
 def test_debug_root_does_not_log_a_birthday_query(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
 ) -> None:
     sqlalchemy_log = logging.getLogger("sqlalchemy")
     engine_log = logging.getLogger("sqlalchemy.engine")
     previous = (sqlalchemy_log.level, engine_log.level)
     sqlalchemy_log.setLevel(logging.DEBUG)
     engine_log.setLevel(logging.DEBUG)
+    logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.DEBUG)
     caplog.set_level(logging.DEBUG)
+    database = None
     try:
         _application, database = _app(tmp_path)
-        assert engine_log.getEffectiveLevel() >= logging.WARNING
         assert database.engine.echo is False
         assert database.engine.hide_parameters is True
         _user(database, 1, "token-a", "csrf-a")
@@ -784,12 +787,37 @@ def test_debug_root_does_not_log_a_birthday_query(
             assert loaded.birthday.isoformat() == SECRET
         finally:
             db.close()
-        assert SECRET not in caplog.text
-        for record in caplog.records:
-            assert SECRET not in record.getMessage()
+        logged = _captured_logs(caplog, capsys)
+        assert SECRET not in logged and "1919" not in logged
+        assert any(token in logged for token in ("SELECT", "UPDATE", "INSERT"))
+
+        def again() -> None:
+            caplog.clear()
+            session = database.sessionmaker()
+            try:
+                row = session.query(User).filter(User.id == 1).one()
+                assert row.birthday is not None and row.birthday.isoformat() == SECRET
+            finally:
+                session.close()
+            text_out = _captured_logs(caplog, capsys)
+            assert SECRET not in text_out and "1919" not in text_out
+            assert any(token in text_out for token in ("SELECT", "UPDATE", "INSERT"))
+
+        database.engine.echo, database.engine.hide_parameters = "debug", False
+        again()
+        cfg: dict[str, Any] = {"version": 1, "incremental": True}
+        cfg["loggers"] = {"sqlalchemy.engine": {"level": "DEBUG"}}
+        logging.config.dictConfig(cfg)
+        logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.DEBUG)
+        again()
     finally:
         sqlalchemy_log.setLevel(previous[0])
         engine_log.setLevel(previous[1])
+        logging.getLogger("sqlalchemy.engine.Engine").handlers.clear()
+        logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.NOTSET)
+        if database is not None:
+            database.engine.echo, database.engine.hide_parameters = False, True
+            database.engine.dispose()
 
 
 def test_engine_hides_bound_parameters(tmp_path: Path) -> None:
@@ -928,6 +956,23 @@ def test_bodies_over_4kb_are_413_before_parsing(
         )
         assert huge.status_code == 413
         assert huge.content == b""
+        core = b'{"birthday":null,"show_age":false}'
+        exact = core + b" " * (4096 - len(core))
+
+        def post(content: object, length: str | None = None) -> int:
+            headers = {"Content-Type": "application/json"}
+            if length is not None:
+                headers["Content-Length"] = length
+            args = (client, "patch", "/api/account/birthday", "token-a", "csrf-a")
+            return _call(*args, content=content, headers=headers).status_code
+
+        def one(payload: bytes):
+            yield payload
+
+        assert post(exact) == 200 and post(one(exact)) == 200
+        assert post(one(exact + b" ")) == 413
+        assert post(b"{}", "4096") == 422 and post(b"{}", "0000004096") == 422
+        assert post(b"{}", "00000004096") == 413
         current = _call(client, "get", "/api/account/birthday", "token-a")
         assert current.json() == {"birthday": None, "show_age": False}
 
@@ -1040,3 +1085,89 @@ def test_parser_rejects_nested_and_huge_numbers_as_422(
     assert "Traceback" not in logged
     assert digits.decode() not in logged
     assert SECRET not in logged
+
+
+def _client_error(body: bytes) -> HTTPException:
+    class _Request:
+        def __init__(self, payload: bytes) -> None:
+            self.headers = {"content-length": str(len(payload))}
+            self._pending: bytes | None = payload
+
+        async def stream(self):
+            pending, self._pending = self._pending, None
+            if pending:
+                yield pending
+
+    request = cast(birthday_route.Request, _Request(body))
+    session, user = cast(Session, object()), cast(User, object())
+    del body
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(birthday_route.update_birthday(request, session, user))
+    return caught.value
+
+
+def test_client_error_frames_omit_birthday_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    secret = SECRET.encode()
+
+    def check(body: bytes, today: date, detail: str, *frames: str) -> HTTPException:
+        monkeypatch.setattr(birthday_route, "server_today", lambda: today)
+        error = _client_error(body)
+        assert error.detail == detail
+        _assert_birthday_is_detached(error, SECRET, *frames)
+        return error
+
+    past = date(1900, 1, 1)
+    prefix = b'{"birthday":"' + secret
+    for show_age in (json.dumps(SECRET), json.dumps({"n": SECRET}), "true"):
+        body = prefix + b'","show_age":' + show_age.encode() + b"}"
+        error = check(body, past, MSG_FUTURE, "_parse_body", "_parse_birthday")
+        frame = error.__traceback__
+        while frame is not None:
+            if frame.tb_frame.f_code.co_name == "_parse_body":
+                assert "show_age" not in frame.tb_frame.f_locals
+            frame = frame.tb_next
+    check(prefix + b'x","show_age":true}', TODAY, MSG_FULL_DATE, "_parse_birthday")
+    check(b'{"note":"' + secret + b'"}', TODAY, MSG_FULL_DATE, "_parse_body")
+    check(prefix + b'","show_age":"' + secret + b'"}', TODAY, MSG_SHOW_AGE, "_parse_body")
+    check(prefix + b'","show_age":true,"n":"' + secret + b'"}', TODAY, MSG_UNKNOWN, "_parse_body")
+    raw_error = check(prefix, TODAY, MSG_FULL_DATE, "update_birthday")
+    frame = raw_error.__traceback__
+    while frame is not None:
+        if frame.tb_frame.f_code.co_name == "update_birthday":
+            assert frame.tb_frame.f_locals["raw"] == b""
+        frame = frame.tb_next
+
+
+def test_commit_and_rollback_failure_log_omits_birthday_context(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _watch_logs(caplog)
+    database = open_database(f"sqlite:///{tmp_path / 'reset.db'}")
+    dialect = database.engine.dialect
+    state = {"n": 0}
+    real_rollback = dialect.do_rollback
+
+    def do_commit(_connection: object) -> None:
+        raise _driver_error()
+
+    def do_rollback(connection) -> None:
+        state["n"] += 1
+        if state["n"] == 1:
+            return real_rollback(connection)
+        raise OperationalError("ROLLBACK", {}, Exception("reset failed"))
+
+    dialect.__dict__.update(do_commit=do_commit, do_rollback=do_rollback)
+    db = database.sessionmaker()
+    try:
+        db.execute(text("select 1"))
+        caplog.clear()
+        with pytest.raises(APIError) as caught:
+            _commit(db)
+        error = caught.value
+        assert error.__context__ is None and error.__cause__ is None
+        logged = _captured_logs(caplog, capsys)
+        assert "Exception during reset" in logged and SECRET not in logged
+        assert state["n"] >= 2
+    finally:
+        db.close()
+        database.engine.dispose()

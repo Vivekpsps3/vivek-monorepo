@@ -430,3 +430,25 @@ def test_csp_report_logs_at_most_five_entries_per_request(client, caplog):
         ]
     finally:
         reset_report_logs()
+
+
+def test_csp_declared_length_is_4xx_not_500():
+    import asyncio
+    from typing import cast
+
+    class _Request:
+        client = None
+
+        def __init__(self, declared: str) -> None:
+            self.headers = {"content-length": declared}
+
+        async def stream(self):
+            yield b"{}"
+
+    async def status(declared: str) -> int:
+        return (await csp_report(cast(Request, _Request(declared)))).status_code
+
+    pairs = [("²", 400), ("9" * 11, 413), ("0000016385", 413)]
+    pairs += [("00000016384", 413), ("0000016384", 204), ("abc", 204)]
+    for declared, code in pairs:
+        assert asyncio.run(status(declared)) == code

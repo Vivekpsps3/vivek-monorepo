@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from sqlalchemy import text
+from starlette.requests import ClientDisconnect
 from starlette.responses import Response
 
 from apps.server.api_key import ApiKeyMiddleware
@@ -204,6 +205,9 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
         started = time.monotonic()
         try:
             response = await call_next(request)
+        except ClientDisconnect:
+            logger.info("client_disconnect request_id=%s", request_id)
+            response = Response(status_code=499)
         except Exception:
             logger.exception("request_failed request_id=%s", request_id)
             response = JSONResponse(

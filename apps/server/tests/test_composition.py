@@ -546,3 +546,40 @@ def test_create_app_warms_each_included_route_matcher(tmp_path):
             assert route.effective_candidates() is route._effective_candidates
     finally:
         database.engine.dispose()
+
+
+def test_client_disconnect_during_body_read_is_not_a_500(tmp_path, caplog):
+    import asyncio
+    from typing import Any
+
+    from apps.server.main import REQUESTS
+
+    application, _database = _app(tmp_path)
+    caplog.set_level("DEBUG")
+    before = REQUESTS.labels("POST", "500")._value.get()
+    sent: list[dict] = []
+    calls = {"n": 0}
+
+    async def receive():
+        calls["n"] += 1
+        request = {"type": "http.request", "body": b"", "more_body": True}
+        return request if calls["n"] == 1 else {"type": "http.disconnect"}
+
+    scope: Any = {"type": "http", "method": "POST", "path": "/csp-report", "scheme": "http"}
+    scope.update(asgi={"version": "3.0"}, http_version="1.1", query_string=b"")
+    scope["raw_path"] = b"/csp-report"
+    scope["headers"] = [(b"content-type", b"application/csp-report")]
+    scope["client"], scope["server"] = ("127.0.0.1", 1234), ("testserver", 80)
+
+    async def send(message):
+        sent.append(message)
+
+    async def run():
+        async with application.router.lifespan_context(application):
+            await application(scope, receive, send)
+
+    asyncio.run(run())
+    assert "client_disconnect" in caplog.text and "Traceback" not in caplog.text
+    assert all(not record.exc_info for record in caplog.records)
+    assert REQUESTS.labels("POST", "500")._value.get() == before
+    assert next(item["status"] for item in sent if item["type"] == "http.response.start") == 499

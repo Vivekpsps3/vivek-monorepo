@@ -95,9 +95,14 @@ def _parse_body(payload: object, today: date) -> tuple[date | None, bool]:
     if "birthday" not in payload:
         payload.clear()
         _reject(MSG_FULL_DATE)
-    show_age = payload.get("show_age")
+    held = [payload.get("show_age")]
     unknown = bool(set(payload) - _FIELDS)
-    birthday = _parse_birthday(_pop_birthday(payload), today)
+    try:
+        birthday = _parse_birthday(_pop_birthday(payload), today)
+    except HTTPException:
+        held.clear()
+        raise
+    show_age = held.pop()
     if not isinstance(show_age, bool):
         del birthday
         del show_age
@@ -114,11 +119,11 @@ def _commit(db: Session) -> None:
         db.commit()
     except SQLAlchemyError:
         failed = True
-        with suppress(SQLAlchemyError):
-            db.rollback()
     # Raised outside the handler so the driver error, which can carry the
     # birthday, is not attached as __context__.
     if failed:
+        with suppress(SQLAlchemyError):
+            db.rollback()
         raise APIError(500, "internal", "Internal server error") from None
 
 
