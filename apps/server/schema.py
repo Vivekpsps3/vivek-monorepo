@@ -18,6 +18,7 @@ FINANCE_REVISION = "e0f6a2b3c4d5"
 OWNER_TABLES = {
     "trips",
     "pto_policy",
+    "leave_policies",
     "pto_entries",
     "user_entries",
     "experiences",

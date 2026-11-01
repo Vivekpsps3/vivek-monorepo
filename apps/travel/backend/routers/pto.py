@@ -12,6 +12,7 @@ from apps.travel.backend.models import PtoEntry, PtoPolicy
 from apps.travel.backend.schemas import PtoEntryIn, PtoPolicyIn
 from apps.travel.backend.services.assemble import snapshot_pto
 from apps.travel.backend.services.dates import weekday_count
+from apps.travel.backend.services.leave_buckets import mirror_legacy_policy
 from apps.travel.backend.services.money import DAY_STEP, parse_days, store_days
 from apps.travel.backend.services.pto import (
     load_usages,
@@ -81,6 +82,7 @@ def save_policy(
     row.annual_cap_days = (
         store_days(_quantize(body.annual_cap_days)) if body.annual_cap_days is not None else None
     )
+    mirror_legacy_policy(db, row)
     db.flush()
     return _payload(db, principal.id)
 

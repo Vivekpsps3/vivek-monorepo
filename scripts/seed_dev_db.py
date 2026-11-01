@@ -349,6 +349,30 @@ def cookie_header(client: httpx.Client) -> str:
     return "; ".join(f"{name}={value}" for name, value in client.cookies.items())
 
 
+def seed_legacy_pto(client: httpx.Client, user_index: int) -> None:
+    """Legacy PTO policy so a later rehearsal exercises the hours backfill."""
+    if user_index % 2 == 0:
+        body: dict = {
+            "accrual_amount": "15",
+            "accrual_unit": "day",
+            "accrual_cadence": "yearly",
+            "hours_per_day": "8",
+            "balance_days": "10",
+            "balance_as_of": "2026-01-01",
+            "annual_cap_days": "20",
+        }
+    else:
+        body = {
+            "accrual_amount": "3.25",
+            "accrual_unit": "hour",
+            "accrual_cadence": "biweekly",
+            "hours_per_day": "7.5",
+            "balance_days": "5.5",
+            "balance_as_of": "2026-01-15",
+        }
+    require(client.put("/travel/api/pto/policy", json=body), "pto policy")
+
+
 def seed(base_url: str, args: argparse.Namespace) -> None:
     totals = {"users": 0, "record_indexes": 0}
     admin_cookie = ""
@@ -361,6 +385,7 @@ def seed(base_url: str, args: argparse.Namespace) -> None:
             admin_csrf = csrf
         totals["record_indexes"] += seed_records(client, index, args.records_per_user)
         seed_trips(client, index, args.trips_per_user)
+        seed_legacy_pto(client, index)
         seed_media(client, index, args.entries_per_user)
         totals["users"] += 1
         print(f"seeded {username}", flush=True)
