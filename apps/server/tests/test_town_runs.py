@@ -65,21 +65,21 @@ def test_runs_equal_day_lists_and_owner_scoping(tmp_path):
                 for uid, day in [(2, date(1900, 1, 1)), (1, today + timedelta(days=1))]
             ],
         )
-        for target in range(1, 8):
-            ids = [hid for hid in expected if (hid % 7) + 1 == target]
-            grouped: dict[int, list[tuple[int, int]]] = {hid: [] for hid in ids}
-            for hid, start, length in _runs(db, 1, ids, today, target):
-                grouped[hid].append((start, length))
-            for hid in ids:
-                habit = db.get(Habit, hid)
-                assert habit is not None and habit.archived_on is not None
-                streak = expected[hid]
-                assert _run_streak(grouped[hid], target, habit.archived_on, today) == (
-                    streak.current,
-                    streak.best_days,
-                    streak.best_weeks,
-                    streak.streak7_count,
-                )
+        groups: dict[int, list[int]] = {target: [] for target in range(1, 8)}
+        for hid in expected:
+            groups[(hid % 7) + 1].append(hid)
+        got: dict[int, list[tuple[int, int]]] = {hid: [] for hid in expected}
+        for hid, start, length in _runs(db, 1, groups, today):
+            got[hid].append((start, length))
+        for hid, streak in expected.items():
+            habit = db.get(Habit, hid)
+            assert habit is not None and habit.archived_on is not None
+            assert _run_streak(got[hid], (hid % 7) + 1, habit.archived_on, today) == (
+                streak.current,
+                streak.best_days,
+                streak.best_weeks,
+                streak.streak7_count,
+            )
         town = read_town(db, 1, today, "UTC")
         assert town["town"]["xp"] == points
         for view in town["archived"]:
