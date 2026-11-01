@@ -682,11 +682,8 @@ export class FinanceService {
     const lock = readLockEpoch();
     return new Observable(subscriber => {
       void this.encStore.getAssets().then(rows => {
-        if (epoch !== this.dataEpoch(['assets']) || lock !== readLockEpoch() || !hasDek()) {
-          subscriber.complete();
-          return;
-        }
-        this._assets.next(rows);
+        if (lock !== readLockEpoch() || !hasDek()) return subscriber.complete();
+        if (epoch === this.dataEpoch(['assets'])) this._assets.next(rows);
         subscriber.next(rows);
         subscriber.complete();
       }, (error: unknown) => subscriber.error(error));

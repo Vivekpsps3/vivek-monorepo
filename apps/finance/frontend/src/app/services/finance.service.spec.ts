@@ -1,10 +1,11 @@
 import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
-import { firstValueFrom, Subject } from 'rxjs';
+import { firstValueFrom, Observable, of, Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { holdDek, wipeDek } from '../crypto/dek-holder';
 import { lockFinance, lockLoad } from '../crypto/lock-finance';
+import { loadFinanceHubSnapshot } from '../hub/finance-hub-facade';
 import { FinanceService } from './finance.service';
 import { VaultService } from '../crypto/vault.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
@@ -129,7 +130,7 @@ describe('FinanceService', () => {
     let token = 4;
     Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
     (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
-    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => { wipeDek(); };
     const seen: Asset[][] = [];
     let completed = false;
     service.getAssets().subscribe({ next: rows => seen.push(rows), complete: () => { completed = true; } });
@@ -364,5 +365,138 @@ describe('FinanceService', () => {
       },
       error: done.fail,
     });
+  });
+
+  it('does not replay a completed dashboard after the vault locks', async () => {
+    const asset = { id: 1, name: 'Savings', current_value: 40 } as Asset;
+    encStore.getTransactions.and.resolveTo([]);
+    encStore.getHoldings.and.resolveTo([]);
+    encStore.getAssets.and.resolveTo([asset]);
+    encStore.getLiabilities.and.resolveTo([]);
+    encStore.getJobIncomes.and.resolveTo([]);
+    encStore.getFixedExpenses.and.resolveTo([]);
+    encStore.getSubscriptions.and.resolveTo([]);
+    encStore.getNetWorth.and.resolveTo({ total: 40 } as never);
+    encStore.getCashflowSummary.and.resolveTo({} as never);
+    (encStore as unknown as { clear(): void }).clear = () => undefined;
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    expect((await firstValueFrom(service.loadDashboard()))[2]).toEqual([asset]);
+    service.clearSessionState();
+    const seen: Asset[][] = [];
+    service.loadDashboard().subscribe(result => seen.push(result[2]));
+    expect(seen).toEqual([]);
+  });
+});
+
+describe('FinanceService with EncryptedStoreService', () => {
+  interface Row {
+    collection: string;
+    client_id: string;
+    ciphertext_b64: string;
+    schema_version: number;
+    key_version: number;
+    revision: number;
+    updated_at: string;
+  }
+  interface AssetSeed { id: number; name: string; category: string; current_value: number; as_of_date: string }
+
+  afterEach(() => {
+    wipeDek();
+    TestBed.inject(HttpTestingController).verify();
+    TestBed.resetTestingModule();
+  });
+
+  function harness(seed: { schema_version: number; data: AssetSeed }[], holdFirst = false) {
+    const rows: Row[] = [];
+    const payloads = new Map<string, AssetSeed>();
+    let cipher = 0;
+    let reads = 0;
+    let pending: ((next: Row[]) => void) | null = null;
+    const listed = (collection?: string) => rows
+      .filter(row => !collection || row.collection === collection)
+      .map(row => ({ ...row }));
+    const vault = {
+      isUnlocked: true,
+      whenReady: () => Promise.resolve(),
+      lock: () => wipeDek(),
+      reportFallbackFailure: () => undefined,
+      blindIndex: async () => 'index',
+      deleteRecords: () => of({ ok: true }),
+      listRecords: (collection?: string) => {
+        if (holdFirst && reads++ === 0) {
+          return new Observable<Row[]>(subscriber => {
+            pending = next => { subscriber.next(next); subscriber.complete(); };
+          });
+        }
+        return of(listed(collection));
+      },
+      decryptPayload: async (value: string) => JSON.parse(JSON.stringify(payloads.get(value))) as AssetSeed,
+      encryptPayload: async (payload: AssetSeed) => {
+        const key = `c${cipher++}`;
+        payloads.set(key, JSON.parse(JSON.stringify(payload)) as AssetSeed);
+        return key;
+      },
+      upsertRecords: (incoming: Row[]) => {
+        const saved = incoming.map(record => {
+          const index = rows.findIndex(row => row.collection === record.collection && row.client_id === record.client_id);
+          const next = { ...record, revision: (index < 0 ? 0 : rows[index].revision) + 1, updated_at: '' };
+          if (index < 0) rows.push(next);
+          else rows[index] = next;
+          return next;
+        });
+        return of(saved);
+      },
+    };
+    for (const item of seed) {
+      const key = `c${cipher++}`;
+      payloads.set(key, item.data);
+      rows.push({
+        collection: 'assets', client_id: `asset-${rows.length}`, ciphertext_b64: key,
+        schema_version: item.schema_version, key_version: 1, revision: 1, updated_at: '',
+      });
+    }
+    const typed = vault as unknown as VaultService;
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [FinanceService, EncryptedStoreService, { provide: VaultService, useValue: typed }],
+    });
+    holdDek({} as CryptoKey);
+    return {
+      service: TestBed.inject(FinanceService),
+      other: new EncryptedStoreService(typed),
+      release: () => {
+        if (!pending) throw new Error('asset read is not in flight');
+        const next = pending;
+        pending = null;
+        next(rows.map(row => ({ ...row })));
+      },
+    };
+  }
+
+  const cash = (name: string, current_value: number): AssetSeed => ({
+    id: 1, name, category: 'cash', current_value, as_of_date: '2026-10-01',
+  });
+
+  it('keeps a schema-1 asset rewrite on the first dashboard and hub load', async () => {
+    const { service } = harness([{ schema_version: 1, data: cash('Cash', 40) }]);
+    const result = await firstValueFrom(service.loadDashboard());
+    expect(result[2]).toEqual([jasmine.objectContaining({ name: 'Cash', current_value: 40 })]);
+    expect(result[3].total).toBe(40);
+    const hub = await loadFinanceHubSnapshot(TestBed.inject(Injector), new AbortController().signal);
+    expect(hub.status).toBe('ready');
+    if (hub.status === 'ready') expect(hub.snapshot.netWorth.total).toBe(40);
+  });
+
+  it('emits the dashboard when another tab writes an asset during the read', async () => {
+    const { service, other, release } = harness([], true);
+    const pending = firstValueFrom(service.loadDashboard());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await other.addAsset({ name: 'Other tab', category: 'cash', current_value: 25, as_of_date: '2026-10-02' });
+    const refresh = service.refreshCollectionsFromAnotherTab(['assets']);
+    release();
+    const result = await pending;
+    await refresh;
+    expect(result[2]).toEqual([jasmine.objectContaining({ name: 'Other tab', current_value: 25 })]);
+    expect(result[3].total).toBe(25);
   });
 });

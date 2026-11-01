@@ -15,11 +15,12 @@ export function bindLockSnapshots(drop: () => void): () => void {
   return () => { if (dropSnapshots === drop) dropSnapshots = () => undefined as void; };
 }
 
-function postLock(userId: number, originTabId?: string): void {
-  if (typeof BroadcastChannel === 'undefined') return;
+function postLock(userId: number, originTabId?: string): boolean {
+  if (typeof BroadcastChannel === 'undefined') return false;
   const channel = new BroadcastChannel(VAULT_CHANNEL);
   try { channel.postMessage({ version: 1, userId, kind: 'lock', tabId: originTabId ?? financeTabId() }); }
   finally { channel.close(); }
+  return true;
 }
 
 export async function lockFinance(injector: Injector, originTabId?: string): Promise<void> {
@@ -27,11 +28,11 @@ export async function lockFinance(injector: Injector, originTabId?: string): Pro
   try {
     dropSnapshots();
     const load = lockLoad.modules, userId = injector.get(SESSION_CONTEXT, null, { optional: true })?.currentUser?.id;
-    if (typeof userId === 'number') postLock(userId, originTabId);
+    const posted = typeof userId === 'number' && postLock(userId, originTabId);
     await import('../services/finance.service').then(m => injector.get(m.FinanceService).clearSessionState()).catch(() => undefined);
     const [{ VaultService }, , { MarketRefreshCoordinatorService }] = await load();
     const market = injector.get(MarketRefreshCoordinatorService);
-    market.broadcastLock(originTabId);
+    if (!posted) market.broadcastLock(originTabId);
     market.endSession();
     injector.get(VaultService).lock();
   } catch {

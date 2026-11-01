@@ -105,4 +105,35 @@ describe('lockFinance', () => {
     expect(cleared).toHaveBeenCalled();
     expect(lock).toHaveBeenCalled();
   });
+
+  it('broadcasts a local lock once when postLock reaches the other tab', async () => {
+    const messages: unknown[] = [];
+    const other = new BroadcastChannel('finance-vault-sync-v1');
+    other.onmessage = (event: MessageEvent) => {
+      if ((event.data as { kind?: string } | null)?.kind === 'lock') messages.push(event.data);
+    };
+    const broadcast = jasmine.createSpy('broadcastLock').and.callFake(() => {
+      const channel = new BroadcastChannel('finance-vault-sync-v1');
+      try { channel.postMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'coordinator' }); }
+      finally { channel.close(); }
+    });
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [
+        { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 7 } } as unknown as SessionPort },
+        { provide: FinanceService, useValue: { clearSessionState: () => undefined } },
+        { provide: MarketRefreshCoordinatorService, useValue: { broadcastLock: broadcast, endSession: () => undefined } },
+      ],
+    });
+    const vault = TestBed.inject(VaultService);
+    await vault.whenReady();
+    holdDek({} as CryptoKey);
+    vault['unlockedSubject'].next(true);
+    try {
+      await lockFinance(TestBed.inject(Injector));
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(messages.length).toBe(1);
+      expect(broadcast).not.toHaveBeenCalled();
+    } finally { other.close(); }
+  });
 });
