@@ -1,6 +1,7 @@
 """TPTO1B bucket routes: balances, limits, dual-write, entries, ownership."""
 
 import random
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
@@ -593,3 +594,365 @@ def test_unknown_bucket_is_404_and_unset_policy_is_a_short_body(client):
     body = client.get("/api/pto/policies/sick").json()
     assert body == {"bucket": "sick", "configured": False}
     assert client.put("/api/pto/policies/vacation", json=_policy()).status_code == 404
+
+
+def _reject(client, field, value, copy, *, settings=False):
+    if settings:
+        saved = client.put("/api/settings/pto", json={field: value})
+    else:
+        saved = client.put("/api/pto/policies/pto", json=_policy(**{field: value}))
+    label = value if not isinstance(value, str) or len(value) < 40 else f"{len(value)} chars"
+    assert saved.status_code == 422, (label, saved.text)
+    assert saved.json()["field_errors"][field] == copy
+    return saved
+
+
+def test_overlong_and_non_ascii_hours_are_rejected(client, monkeypatch):
+    pin(monkeypatch)
+    started = time.perf_counter()
+    _reject(client, "start_balance_hours", "1." + "0" * 40 + "1", START_COPY)
+    _reject(client, "hours_per_day", "7.25" + "0" * 40 + "1", HPD_COPY, settings=True)
+    huge = "9" * 20000
+    began = time.perf_counter()
+    _reject(client, "start_balance_hours", huge, START_COPY)
+    assert time.perf_counter() - began < 1
+    assert time.perf_counter() - started < 1
+    _reject(client, "start_balance_hours", "1_000", START_COPY)
+    _reject(client, "start_balance_hours", "\uff18", START_COPY)
+    # Inside the 32-character cap, but past 28 significant digits. normalize() would pass it.
+    _reject(client, "start_balance_hours", "1." + "0" * 27 + "1", START_COPY)
+    _reject(client, "hours_per_day", "7." + "0" * 28 + "1", HPD_COPY, settings=True)
+
+
+def test_six_decimal_start_is_accepted_and_seven_is_not(client, monkeypatch):
+    pin(monkeypatch)
+    saved = client.put("/api/pto/policies/sick", json=_policy(start_balance_hours="1.000001"))
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["buckets"]["sick"]["start_balance_hours"] == "1.000001"
+    _reject(client, "start_balance_hours", "1.0000001", START_COPY)
+
+
+def test_json_floats_still_save_as_numbers(client, monkeypatch):
+    pin(monkeypatch)
+    saved = client.put(
+        "/api/pto/policies/pto",
+        json=_policy(start_balance_hours=1.5, accrual_hours=0.0, cap_hours=2.0),
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["buckets"]["pto"]["start_balance_hours"] == "1.5"
+    hours = client.put("/api/settings/pto", json={"hours_per_day": 7.5})
+    assert hours.status_code == 200, hours.text
+    assert hours.json()["hours_per_day"] == "7.5"
+
+
+def test_wrong_type_keys_field_errors_by_the_field(client, monkeypatch):
+    pin(monkeypatch)
+    wrong_types: tuple[list[str], dict[str, str]] = ([], {})
+    for bad in wrong_types:
+        saved = client.put("/api/pto/policies/pto", json=_policy(start_balance_hours=bad))
+        assert saved.status_code == 422, saved.text
+        assert saved.json()["field_errors"] == {"start_balance_hours": START_COPY}
+
+
+def test_hours_per_day_rejects_25_and_keeps_24(client, monkeypatch):
+    pin(monkeypatch)
+    assert client.put("/api/settings/pto", json={"hours_per_day": "24"}).status_code == 200
+    _reject(client, "hours_per_day", "25", HPD_COPY, settings=True)
+
+
+def test_grandfather_keeps_an_out_of_range_stored_hours_per_day(client, monkeypatch):
+    pin(monkeypatch)
+    db = _db(client)
+    try:
+        db.add(Setting(key=hpd_setting_key(1), value="30"))
+        db.commit()
+    finally:
+        db.close()
+    again = client.put("/api/settings/pto", json={"hours_per_day": "30"})
+    assert again.status_code == 200, again.text
+    assert again.json()["hours_per_day"] == "30"
+    changed = client.put("/api/settings/pto", json={"hours_per_day": "25"})
+    assert changed.status_code == 422, changed.text
+    assert changed.json()["field_errors"] == {"hours_per_day": HPD_COPY}
+    assert client.get("/api/settings").json()["pto"]["hours_per_day"] == "30"
+
+
+@pytest.mark.parametrize("value", ["yes", 1, "true"])
+def test_sick_prompt_dismissed_rejects_lax_bools(client, value):
+    saved = client.put("/api/settings/pto", json={"sick_prompt_dismissed": value})
+    assert saved.status_code == 422, saved.text
+    assert "sick_prompt_dismissed" in saved.json()["field_errors"]
+    assert client.get("/api/settings").json()["pto"]["sick_prompt_dismissed"] is False
+
+
+def test_other_users_pto_save_leaves_the_first_policy_byte_identical(client, monkeypatch):
+    pin(monkeypatch)
+    assert (
+        client.put("/api/pto/policies/pto", json=_policy(start_balance_hours="80")).status_code
+        == 200
+    )
+    db = _db(client)
+    try:
+        row = db.query(PtoPolicy).filter(PtoPolicy.user_id == 1).one()
+        before = tuple(
+            (column.name, getattr(row, column.name)) for column in PtoPolicy.__table__.columns
+        )
+    finally:
+        db.close()
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
+    saved = client.put(
+        "/api/pto/policies/pto",
+        json=_policy(start_balance_hours="10", accrual_hours="1", balance_as_of="2026-02-01"),
+    )
+    assert saved.status_code == 200, saved.text
+    client.app.dependency_overrides[require_principal] = lambda: Principal(1, "tester", "Tester")
+    db = _db(client)
+    try:
+        row = db.query(PtoPolicy).filter(PtoPolicy.user_id == 1).one()
+        after = tuple(
+            (column.name, getattr(row, column.name)) for column in PtoPolicy.__table__.columns
+        )
+        assert after == before
+        assert db.query(PtoPolicy).count() == 2
+    finally:
+        db.close()
+
+
+def test_one_sick_weekday_reduces_a_40_hour_balance_to_32(client, monkeypatch):
+    pin(monkeypatch)
+    assert (
+        client.put(
+            "/api/pto/policies/sick",
+            json=_policy(start_balance_hours="40", accrual_hours="0"),
+        ).status_code
+        == 200
+    )
+    taken = client.post(
+        "/api/pto/entries",
+        json={
+            "label": "Clinic",
+            "start_date": "2026-06-12",
+            "end_date": "2026-06-12",
+            "days": "1",
+            "bucket": "sick",
+        },
+    )
+    assert taken.status_code == 201, taken.text
+    state = client.get("/api/pto/policies/sick").json()
+    assert state["balance_today_hours"] == "32"
+
+
+def test_balance_equal_to_the_cap_is_at_cap(client, monkeypatch):
+    pin(monkeypatch)
+    saved = client.put(
+        "/api/pto/policies/sick",
+        json=_policy(start_balance_hours="40", cap_hours="40", balance_as_of="2026-06-15"),
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["buckets"]["sick"]["at_cap"] is True
+    below = client.put(
+        "/api/pto/policies/sick",
+        json=_policy(start_balance_hours="39", cap_hours="40", balance_as_of="2026-06-15"),
+    )
+    assert below.json()["buckets"]["sick"]["at_cap"] is False
+
+
+def test_the_balance_date_itself_is_not_before_the_balance_date(client, monkeypatch):
+    pin(monkeypatch)
+    on_date = client.put(
+        "/api/pto/policies/sick",
+        json=_policy(balance_as_of="2026-06-15", start_balance_hours="10"),
+    )
+    assert on_date.status_code == 200, on_date.text
+    assert on_date.json()["buckets"]["sick"]["today_before_balance_date"] is False
+    later = client.put(
+        "/api/pto/policies/sick",
+        json=_policy(balance_as_of="2026-06-16", start_balance_hours="10"),
+    )
+    assert later.json()["buckets"]["sick"]["today_before_balance_date"] is True
+
+
+def test_preview_uses_only_the_requested_bucket(client, monkeypatch):
+    pin(monkeypatch)
+    assert (
+        client.put("/api/pto/policies/pto", json=_policy(start_balance_hours="80")).status_code
+        == 200
+    )
+    assert (
+        client.put("/api/pto/policies/sick", json=_policy(start_balance_hours="40")).status_code
+        == 200
+    )
+    sick = client.post(
+        "/api/pto/entries",
+        json={
+            "label": "Clinic",
+            "start_date": "2026-03-02",
+            "end_date": "2026-03-02",
+            "days": "2",
+            "bucket": "sick",
+        },
+    )
+    assert sick.status_code == 201, sick.text
+    pto = client.post(
+        "/api/pto/entries",
+        json={
+            "label": "Errand",
+            "start_date": "2026-03-03",
+            "end_date": "2026-03-03",
+            "days": "1",
+            "bucket": "pto",
+        },
+    )
+    assert pto.status_code == 201, pto.text
+    params = {"start": "2026-06-01", "end": "2026-06-01", "days": "1"}
+    pto_preview = client.get("/api/pto/preview", params={**params, "bucket": "pto"})
+    sick_preview = client.get("/api/pto/preview", params={**params, "bucket": "sick"})
+    assert pto_preview.status_code == 200, pto_preview.text
+    assert sick_preview.status_code == 200, sick_preview.text
+    assert pto_preview.json()["leftover_after"] == "8"
+    assert sick_preview.json()["leftover_after"] == "2"
+
+
+def _pto_policy_snapshot(client):
+    saved = client.get("/api/pto").json()["policy"]
+    return saved
+
+
+def _seed_divergent_legacy(client, **overrides):
+    values = {
+        "setting_hpd": "8",
+        "legacy_hpd": "8.0000",
+        "legacy_balance": "5.0000",
+        "legacy_accrual": "16.0000",
+        "legacy_unit": "hour",
+        "legacy_cadence": "yearly",
+        "legacy_as_of": date(2026, 1, 1),
+        "legacy_cap": None,
+        "legacy_configured": True,
+        "leave_start": "40",
+        "leave_accrual": "16",
+        "leave_cadence": "yearly",
+        "leave_as_of": date(2026, 1, 1),
+        "leave_cap": None,
+        "leave_configured": True,
+    }
+    values.update(overrides)
+    db = _db(client)
+    try:
+        db.add(Setting(key=hpd_setting_key(1), value=values["setting_hpd"]))
+        db.add(
+            PtoPolicy(
+                user_id=1,
+                configured=values["legacy_configured"],
+                accrual_amount=values["legacy_accrual"],
+                accrual_unit=values["legacy_unit"],
+                accrual_cadence=values["legacy_cadence"],
+                hours_per_day=values["legacy_hpd"],
+                balance_days=values["legacy_balance"],
+                balance_as_of=values["legacy_as_of"],
+                annual_cap_days=values["legacy_cap"],
+            )
+        )
+        db.add(
+            LeavePolicy(
+                user_id=1,
+                bucket="pto",
+                configured=values["leave_configured"],
+                start_balance_hours=values["leave_start"],
+                balance_as_of=values["leave_as_of"],
+                accrual_hours=values["leave_accrual"],
+                accrual_cadence=values["leave_cadence"],
+                cap_hours=values["leave_cap"],
+                year_start="01-01",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_preimage_hours_per_day_mismatch_uses_the_hour_policy(client, monkeypatch):
+    pin(monkeypatch)
+    _seed_divergent_legacy(client, legacy_hpd="10.0000")
+    policy = _pto_policy_snapshot(client)
+    assert policy["hours_per_day"] == "8.0000"
+    assert policy["accrual_unit"] == "hour"
+
+
+def test_preimage_as_of_mismatch_uses_the_leave_date(client, monkeypatch):
+    pin(monkeypatch)
+    _seed_divergent_legacy(client, leave_as_of=date(2026, 2, 1))
+    policy = _pto_policy_snapshot(client)
+    assert policy["balance_as_of"] == "2026-02-01"
+    assert policy["accrual_unit"] == "hour"
+
+
+def test_preimage_cap_mismatch_uses_the_leave_cap(client, monkeypatch):
+    pin(monkeypatch)
+    _seed_divergent_legacy(client, legacy_cap="10.0000", leave_cap="40")
+    policy = _pto_policy_snapshot(client)
+    assert policy["annual_cap_days"] == "5.0000"
+    assert policy["accrual_unit"] == "hour"
+
+
+def test_preimage_cadence_mismatch_uses_the_leave_cadence(client, monkeypatch):
+    pin(monkeypatch)
+    _seed_divergent_legacy(client, leave_cadence="monthly")
+    policy = _pto_policy_snapshot(client)
+    assert policy["accrual_cadence"] == "monthly"
+    assert policy["accrual_unit"] == "hour"
+
+
+def test_preimage_start_mismatch_does_not_keep_the_legacy_policy(client, monkeypatch):
+    pin(monkeypatch)
+    _seed_divergent_legacy(
+        client,
+        leave_start="80",
+        legacy_unit="day",
+        legacy_accrual="2.0000",
+    )
+    policy = _pto_policy_snapshot(client)
+    assert policy["accrual_unit"] == "hour"
+    assert policy["accrual_amount"] == "16.0000"
+    assert policy["balance_saved"] == "10.0000"
+
+
+def test_preimage_accrual_mismatch_uses_the_leave_hours(client, monkeypatch):
+    pin(monkeypatch)
+    _seed_divergent_legacy(client, leave_accrual="32")
+    policy = _pto_policy_snapshot(client)
+    assert policy["accrual_amount"] == "32.0000"
+    assert policy["accrual_unit"] == "hour"
+
+
+def test_unconfigured_legacy_row_does_not_hide_the_leave_policy(client, monkeypatch):
+    pin(monkeypatch)
+    _seed_divergent_legacy(client, legacy_configured=False)
+    policy = _pto_policy_snapshot(client)
+    assert policy["configured"] is True
+    assert policy["accrual_unit"] == "hour"
+    assert policy["balance_saved"] == "5.0000"
+
+
+def test_unconfigured_leave_row_stays_unconfigured(client, monkeypatch):
+    pin(monkeypatch)
+    db = _db(client)
+    try:
+        db.add(
+            LeavePolicy(
+                user_id=1,
+                bucket="pto",
+                configured=False,
+                start_balance_hours="80",
+                balance_as_of=date(2026, 1, 1),
+                accrual_hours="16",
+                accrual_cadence="yearly",
+                year_start="01-01",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    policy = _pto_policy_snapshot(client)
+    assert policy["configured"] is False
+    assert client.get("/api/pto").json()["buckets"]["pto"] is None

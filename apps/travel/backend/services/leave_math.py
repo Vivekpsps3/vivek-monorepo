@@ -6,6 +6,7 @@ Balances stay Fractions until a response is formatted.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -25,6 +26,11 @@ CADENCE_COPY = "Pick how often you earn time off."
 CAP_COPY = "Cap has to be more than 0 and up to 8784 hours, or blank."
 YEAR_COPY = "Pick a valid date."
 HPD_COPY = "Hours in a workday has to be more than 0 and up to 24, with at most 2 decimals."
+
+# ASCII only. Integer part is at most 6 digits; the length cap stops a long fraction
+# before Decimal() parses it. Default-context normalize() is never used for the dp count.
+_HOUR_TEXT_MAX = 32
+_HOUR_TOKEN = re.compile(r"^[+-]?[0-9]{1,6}(\.[0-9]+)?$", re.ASCII)
 
 
 @dataclass(frozen=True)
@@ -89,14 +95,44 @@ def _decimal(value: Fraction) -> Decimal:
     return Decimal(value.numerator) / Decimal(value.denominator)
 
 
+def fractional_digits(value: Decimal) -> int:
+    """Fractional digits after trailing zeros are removed.
+
+    Counted from the coefficient. Context.normalize() rounds at prec 28 first,
+    so a long numeral looks like it has no fraction.
+    """
+    _sign, digits, exponent = value.as_tuple()
+    if not isinstance(exponent, int):
+        return _HOUR_TEXT_MAX + 1
+    index = len(digits)
+    while index > 0 and digits[index - 1] == 0:
+        index -= 1
+        exponent += 1
+    if index == 0 or exponent >= 0:
+        return 0
+    return -exponent
+
+
+def parse_hour_token(raw: str) -> Decimal | None:
+    """Shared hours text gate. Rejects long, non-ASCII, and underscore numerals."""
+    text = raw.strip()
+    if len(text) > _HOUR_TEXT_MAX or _HOUR_TOKEN.fullmatch(text) is None:
+        return None
+    try:
+        value = Decimal(text)
+    except InvalidOperation:
+        return None
+    if not value.is_finite():
+        return None
+    return value
+
+
 def parse_loose(raw: object) -> Decimal | None:
     if isinstance(raw, bool) or raw is None:
         return None
     if isinstance(raw, str):
-        text = raw.strip()
-        if not text or "," in text or "e" in text.lower():
-            return None
-    elif isinstance(raw, int):
+        return parse_hour_token(raw)
+    if isinstance(raw, int):
         text = str(raw)
     elif isinstance(raw, float):
         if not math.isfinite(raw):
@@ -116,8 +152,7 @@ def parse_loose(raw: object) -> Decimal | None:
 
 
 def _too_precise(value: Decimal, places: int) -> bool:
-    exponent = value.normalize().as_tuple().exponent
-    return isinstance(exponent, int) and exponent < -places
+    return fractional_digits(value) > places
 
 
 def _same(value: Decimal, stored: str | None) -> bool:

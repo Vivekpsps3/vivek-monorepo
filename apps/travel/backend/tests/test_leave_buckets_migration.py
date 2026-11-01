@@ -23,6 +23,7 @@ from apps.travel.backend.models import LeavePolicy, Setting
 from apps.travel.backend.routers.pto import _payload
 from apps.travel.backend.services.assemble import snapshot_pto
 from apps.travel.backend.services.leave_buckets import hpd_setting_key, sick_prompt_setting_key
+from apps.travel.backend.services.money import store_days
 from apps.travel.backend.services.pto import Policy, Usage
 
 PARENT = "site_user_birthday_v1"
@@ -110,12 +111,14 @@ def _insert_user(db: sqlite3.Connection, email: str) -> None:
     )
 
 
-def _insert_policy(db, user_id, hpd, balance, accrual, unit, cadence, cap, as_of="2026-01-01"):
+def _insert_policy(
+    db, user_id, hpd, balance, accrual, unit, cadence, cap, as_of="2026-01-01", configured=1
+):
     db.execute(
         "INSERT INTO pto_policy (user_id, configured, accrual_amount, accrual_unit, "
         "accrual_cadence, hours_per_day, balance_days, balance_as_of, annual_cap_days) "
-        "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)",
-        (user_id, accrual, unit, cadence, hpd, balance, as_of, cap),
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, configured, accrual, unit, cadence, hpd, balance, as_of, cap),
     )
 
 
@@ -540,3 +543,132 @@ def test_delete_user_removes_leave_rows_and_both_settings(tmp_path):
     finally:
         db.close()
         opened.engine.dispose()
+
+
+def test_hours_per_day_of_24_migrates_and_25_aborts(tmp_path):
+    accepted = tmp_path / "day.db"
+    _parent(accepted)
+    with sqlite3.connect(accepted) as db:
+        _insert_user(db, "day@example.com")
+        _insert_policy(db, 1, "24", "1", "1", "hour", "yearly", None)
+        db.commit()
+    command.upgrade(_cfg(accepted), REVISION)
+    with sqlite3.connect(accepted) as db:
+        assert (
+            db.execute(
+                "SELECT value FROM settings WHERE key = 'user:1:pto_hours_per_day'"
+            ).fetchone()[0]
+            == "24"
+        )
+    rejected = tmp_path / "over.db"
+    _parent(rejected)
+    with sqlite3.connect(rejected) as db:
+        _insert_user(db, "over@example.com")
+        _insert_policy(db, 1, "25", "1", "1", "hour", "yearly", None)
+        db.commit()
+    before = _dump(rejected)
+    with pytest.raises(Exception) as caught:
+        command.upgrade(_cfg(rejected), REVISION)
+    assert "pto_policy id=1: hours_per_day does not convert exactly" in _chain(caught.value)
+    assert _dump(rejected) == before
+    assert current_revision(rejected) == PARENT
+
+
+def test_null_accrual_unit_aborts_without_writes(tmp_path):
+    database = tmp_path / "site.db"
+    _parent(database)
+    with sqlite3.connect(database) as db:
+        _insert_user(db, "a@example.com")
+        _insert_policy(db, 1, "8", "1", "1", "day", "yearly", None)
+        db.execute("CREATE TABLE pto_policy_open AS SELECT * FROM pto_policy")
+        db.execute("DROP TABLE pto_policy")
+        db.execute("ALTER TABLE pto_policy_open RENAME TO pto_policy")
+        db.execute("UPDATE pto_policy SET accrual_unit = NULL")
+        db.commit()
+        assert db.execute("SELECT accrual_unit FROM pto_policy").fetchone()[0] is None
+    before = _dump(database)
+    with pytest.raises(Exception) as caught:
+        command.upgrade(_cfg(database), REVISION)
+    assert "pto_policy id=1: accrual_unit does not convert exactly" in _chain(caught.value)
+    assert _dump(database) == before
+    assert current_revision(database) == PARENT
+
+
+def test_unconfigured_legacy_row_migrates_as_not_configured(tmp_path):
+    database = tmp_path / "site.db"
+    _parent(database)
+    with sqlite3.connect(database) as db:
+        _insert_user(db, "a@example.com")
+        _insert_policy(db, 1, "8", "1", "1", "day", "yearly", None, configured=0)
+        db.commit()
+    command.upgrade(_cfg(database), REVISION)
+    with sqlite3.connect(database) as db:
+        row = db.execute(
+            "SELECT configured FROM leave_policies WHERE user_id = 1 AND bucket = 'pto'"
+        ).fetchone()
+    assert row is not None and row[0] == 0
+
+
+def test_downgrade_guard_refuses_sick_entries_alone(tmp_path, monkeypatch):
+    database = tmp_path / "site.db"
+    _parent(database)
+    with sqlite3.connect(database) as db:
+        _insert_user(db, "a@example.com")
+        _insert_policy(db, 1, "8", "1", "1", "day", "yearly", None)
+        db.commit()
+    command.upgrade(_cfg(database), REVISION)
+    with sqlite3.connect(database) as db:
+        db.execute(
+            "INSERT INTO pto_entries (user_id, trip_id, start_date, end_date, days, label, kind, bucket) "
+            "VALUES (1, NULL, '2026-05-01', '2026-05-01', '1.0000', 'Sick day', 'manual', 'sick')"
+        )
+        db.commit()
+    before = _dump(database)
+    monkeypatch.delenv("TPTO1_DOWNGRADE_DROP_SICK", raising=False)
+    with pytest.raises(Exception) as caught:
+        command.downgrade(_cfg(database), PARENT)
+    assert "1 sick entries and 0 sick policies exist" in _chain(caught.value)
+    assert _dump(database) == before
+    assert current_revision(database) == REVISION
+
+
+def test_downgrade_guard_refuses_sick_policies_alone(tmp_path, monkeypatch):
+    database = tmp_path / "site.db"
+    _parent(database)
+    with sqlite3.connect(database) as db:
+        _insert_user(db, "a@example.com")
+        _insert_policy(db, 1, "8", "1", "1", "day", "yearly", None)
+        db.commit()
+    command.upgrade(_cfg(database), REVISION)
+    with sqlite3.connect(database) as db:
+        db.execute(
+            "INSERT INTO leave_policies (user_id, bucket, configured, start_balance_hours, "
+            "balance_as_of, accrual_hours, accrual_cadence, year_start) "
+            "VALUES (1, 'sick', 1, '8', '2026-01-01', '0', 'yearly', '01-01')"
+        )
+        db.commit()
+    before = _dump(database)
+    monkeypatch.delenv("TPTO1_DOWNGRADE_DROP_SICK", raising=False)
+    with pytest.raises(Exception) as caught:
+        command.downgrade(_cfg(database), PARENT)
+    assert "0 sick entries and 1 sick policies exist" in _chain(caught.value)
+    assert _dump(database) == before
+    assert current_revision(database) == REVISION
+
+
+def test_downgrade_writes_accrual_amount_at_day_precision(tmp_path):
+    database = tmp_path / "site.db"
+    _parent(database)
+    with sqlite3.connect(database) as db:
+        _insert_user(db, "a@example.com")
+        _insert_policy(db, 1, "8", "1", "1", "hour", "yearly", None)
+        db.commit()
+    command.upgrade(_cfg(database), REVISION)
+    with sqlite3.connect(database) as db:
+        db.execute("UPDATE leave_policies SET accrual_hours = '1.234567' WHERE bucket = 'pto'")
+        db.commit()
+    command.downgrade(_cfg(database), PARENT)
+    with sqlite3.connect(database) as db:
+        stored = db.execute("SELECT accrual_amount FROM pto_policy WHERE user_id = 1").fetchone()[0]
+    assert stored == store_days(Decimal("1.234567"))
+    assert stored == "1.2346"
