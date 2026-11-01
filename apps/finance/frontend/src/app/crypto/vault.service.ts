@@ -80,7 +80,7 @@ export class VaultService {
   readonly unlocked$ = this.unlockedSubject.asObservable();
 
   constructor(private http: HttpClient) {
-    this.sessionPort?.cleared$?.pipe(takeUntilDestroyed()).subscribe(() => this.lock());
+    this.sessionPort?.cleared$?.pipe(takeUntilDestroyed()).subscribe(() => { void this.lock().catch(() => undefined); });
     this.boot = this.hydrate();
   }
 
@@ -172,25 +172,28 @@ export class VaultService {
     }
     this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
     // The hub reads presence before it will load vault code. Store the key before unlock returns.
-    await this.persistProgress(epoch, lockAt, userId);
+    await this.persistProgress(epoch, lockAt, userId, generation);
     if (!this.sameSession(epoch, lockAt, userId, generation)) return;
     // Publish unlock before the batch. Navigation must not wait on re-index.
     this.unlockedSubject.next(true);
     if (this.versionNumber < 2) this.startBlindIndexes();
   }
 
-  private async persistProgress(epoch: number, lockAt: number, userId: number | null): Promise<void> {
+  private async persistProgress(epoch: number, lockAt: number, userId: number | null, generation: number): Promise<void> {
     const dek = this.dek;
-    if (!dek || !this.sameSession(epoch, lockAt, userId)) return;
+    if (!dek || !this.sameSession(epoch, lockAt, userId, generation)) return;
     const progress = { blind_index_version: this.versionNumber, reindexed: [...this.reindexed] };
-    await persistVaultKeys({ dek, ...progress }, userId, () => this.sameSession(epoch, lockAt, userId));
+    await persistVaultKeys({ dek, ...progress }, userId, () => this.sameSession(epoch, lockAt, userId, generation));
     // A lock or a user switch wins over an in-flight hold. A newer hold of this session does not.
     if (this.sessionMoved(epoch, lockAt, userId)) {
-      if (this.dek === dek) { this.dek = null; this.unlockedSubject.next(false); }
-      await clearDekLocal();
+      // Same rule as replaced: a stale batch must not wipe the key a later hold stored.
+      if (generation === this.holdGeneration) {
+        if (this.dek === dek) { this.dek = null; this.unlockedSubject.next(false); }
+        await clearDekLocal();
+      }
       return;
     }
-    if (this.dek !== dek || userId == null || this.ownerId() !== userId) return;
+    if (this.dek !== dek || generation !== this.holdGeneration || userId == null || this.ownerId() !== userId) return;
     await writeBlindIndexProgress(userId, progress);
   }
 
@@ -485,12 +488,12 @@ export class VaultService {
       if (record.collection === 'transactions') await this.reindexTransaction(record, epoch, lockAt, userId);
       if (await this.replaced(epoch, lockAt, userId, generation)) return;
       this.reindexed.add(visited);
-      await this.persistProgress(epoch, lockAt, userId);
+      await this.persistProgress(epoch, lockAt, userId, generation);
     }
     if (await this.replaced(epoch, lockAt, userId, generation)) return;
     this.versionNumber = 2;
     this.reindexed.clear();
-    await this.persistProgress(epoch, lockAt, userId);
+    await this.persistProgress(epoch, lockAt, userId, generation);
   }
 
   /** null: this session no longer owns the key. undefined: skip the row. string: index of the ciphertext just read. */

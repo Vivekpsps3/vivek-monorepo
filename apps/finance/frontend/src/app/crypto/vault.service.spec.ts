@@ -7,8 +7,42 @@ import { apiUrl } from '../core/api-url';
 import { SESSION_CONTEXT, SILENT_ERROR_TOAST, ToastService, type SessionPort } from '@vivek/ui';
 import { hasDek, holdDek } from './dek-holder';
 import { LOCK_SIGNAL, VAULT_KEY_ID, VAULT_PRESENCE, deleteFinanceVaultDb, financeVaultPresent, withVaultStore } from './dek-store';
-import { createVaultMaterial, encryptJson, hmacBlindIndex, importVaultKeys, indexedDbHoldsDek, legacyDekBlindIndex, recordAad } from './vault-crypto';
+import { createVaultMaterial, decryptJson, encryptJson, hmacBlindIndex, importVaultKeys, indexedDbHoldsDek, legacyDekBlindIndex, recordAad, restoreVaultKeys } from './vault-crypto';
 import { VaultService, type EncryptedRecordDto } from './vault.service';
+
+function pauseNextOpen(): { ready: Promise<void>; release: () => void; restore: () => void } {
+  const realOpen = indexedDB.open.bind(indexedDB);
+  let release!: () => void;
+  let markReady!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const ready = new Promise<void>(resolve => { markReady = resolve; });
+  let armed = true;
+  spyOn(indexedDB, 'open').and.callFake((name: string, version?: number) => {
+    if (!armed) return realOpen(name, version);
+    armed = false;
+    const real = realOpen(name, version);
+    let db: IDBDatabase | null = null;
+    let failure: DOMException | null = null;
+    let onsuccess: ((ev: Event) => void) | null = null;
+    let onerror: ((ev: Event) => void) | null = null;
+    let onupgradeneeded: ((ev: Event) => void) | null = null;
+    let upgrade: Event | null = null;
+    const fake = {} as IDBOpenDBRequest;
+    const replayUpgrade = () => { if (upgrade && onupgradeneeded) onupgradeneeded.call(fake, upgrade); };
+    Object.defineProperties(fake, {
+      result: { configurable: true, get: () => db },
+      error: { configurable: true, get: () => failure },
+      onsuccess: { configurable: true, get: () => onsuccess, set: (fn: (ev: Event) => void) => { onsuccess = fn; } },
+      onerror: { configurable: true, get: () => onerror, set: (fn: (ev: Event) => void) => { onerror = fn; } },
+      onupgradeneeded: { configurable: true, get: () => onupgradeneeded, set: (fn: (ev: Event) => void) => { onupgradeneeded = fn; replayUpgrade(); } },
+    });
+    real.onupgradeneeded = ev => { db = real.result; upgrade = ev; replayUpgrade(); };
+    real.onsuccess = () => { db = real.result; markReady(); void gate.then(() => onsuccess?.call(fake, new Event('success'))); };
+    real.onerror = () => { failure = real.error; markReady(); void gate.then(() => onerror?.call(fake, new Event('error'))); };
+    return fake;
+  });
+  return { ready, release, restore: () => { delete (indexedDB as unknown as { open?: unknown }).open; } };
+}
 
 function sessionProvider(id = 1) {
   const who = { id };
@@ -410,7 +444,7 @@ describe('VaultService blind-index upgrade', () => {
     const firstUpsert = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(firstUpsert).records.map(row => row.client_id)).toEqual(['txn_aaaaaaaa']);
     expect(bodyOf(firstUpsert).records[0].indexes?.[0].index_value_b64).toBe(await hmacBlindIndex(service.requireDek(), 'dedupe-one'));
-    firstUpsert.flush([{ ...tx1, revision: 2 }]);
+    firstUpsert.flush({ records: [{ ...tx1, revision: 2 }], skipped: [] });
     (await requestFor(txUrl)).flush([tx1, tx2]);
     const secondUpsert = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(secondUpsert).records[0].client_id).toBe('txn_bbbbbbbb');
@@ -422,7 +456,7 @@ describe('VaultService blind-index upgrade', () => {
     (await requestFor(txUrl)).flush([tx2]);
     const resumed = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(resumed).records.map(row => row.client_id)).toEqual(['txn_bbbbbbbb']);
-    resumed.flush([{ ...tx2, revision: 2 }]);
+    resumed.flush({ records: [{ ...tx2, revision: 2 }], skipped: [] });
     await secondPass;
     expect(service.blindIndexVersion).toBe(2);
     expect(await service.decryptPayload(health.ciphertext_b64, 'health_stats', 'hlt_stats0001', 2, 1)).toEqual(healthPlain);
@@ -491,6 +525,36 @@ describe('VaultService blind-index upgrade', () => {
     expect(financeVaultPresent()).toBeFalse();
   });
 
+  it('keeps a hold that commits after lock when a stale persist finishes', async () => {
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const service = await boot(4);
+    const fresh = (await importVaultKeys(new Uint8Array(32).fill(8))).dek;
+    const secret = await encryptJson(fresh, { marker: 'fresh-hold' });
+    const tx = await sealed(service.requireDek(), 'transactions', 'txn_aaaaaaaa', { dedupe_key: 'dedupe-one' });
+    (VaultService.prototype.ensureBlindIndexes as jasmine.Spy).and.callThrough();
+    const paused = pauseNextOpen();
+    try {
+      // Re-index is off the hold queue, so this persist overlaps the next hold.
+      const pass = service.ensureBlindIndexes();
+      (await requestFor(apiUrl('/vault/records'))).flush([tx]);
+      (await requestFor(txUrl)).flush([tx]);
+      (await requestFor(apiUrl('/vault/records/reindex'))).flush({ records: [{ ...tx, revision: 2 }], skipped: [] });
+      await paused.ready;
+      await service.lock();
+      await service['hold'](fresh, 2);
+      paused.release();
+      await pass.catch(() => undefined);
+      expect(service.isUnlocked).toBeTrue();
+      expect(service.requireDek()).toBe(fresh);
+      expect(financeVaultPresent()).toBeTrue();
+      const stored = await restoreVaultKeys(1);
+      expect(await decryptJson(stored!.dek, secret)).toEqual({ marker: 'fresh-hold' });
+    } finally {
+      paused.release();
+      paused.restore();
+    }
+  });
+
   it('posts nothing under a new session when the user changes during re-index', async () => {
     const who = { id: 1 };
     const session = { get currentUser() { return { id: who.id }; }, user$: EMPTY, cleared$: EMPTY } as unknown as SessionPort;
@@ -524,7 +588,7 @@ describe('VaultService blind-index upgrade', () => {
     const pass = first.ensureBlindIndexes();
     (await requestFor(apiUrl('/vault/records'))).flush([tx1, tx2]);
     (await requestFor(txUrl)).flush([tx1, tx2]);
-    (await requestFor(apiUrl('/vault/records/reindex'))).flush([{ ...tx1, revision: 2 }]);
+    (await requestFor(apiUrl('/vault/records/reindex'))).flush({ records: [{ ...tx1, revision: 2 }], skipped: [] });
     (await requestFor(txUrl)).flush([tx1, tx2]);
     (await requestFor(apiUrl('/vault/records/reindex'))).flush({ detail: 'interrupted' }, { status: 500, statusText: 'Error' });
     await expectAsync(pass).toBeRejected();
@@ -540,7 +604,7 @@ describe('VaultService blind-index upgrade', () => {
     (await requestFor(txUrl)).flush([tx2]);
     const only = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(only).records.map(row => row.client_id)).toEqual(['txn_bbbbbbbb']);
-    only.flush([{ ...tx2, revision: 2 }]);
+    only.flush({ records: [{ ...tx2, revision: 2 }], skipped: [] });
     await batch;
     expect(reloaded.blindIndexVersion).toBe(2);
   });
@@ -583,7 +647,7 @@ describe('VaultService blind-index upgrade', () => {
     expect(bodyOf(retried).records[0].expected_revision).toBe(4);
     expect(bodyOf(retried).records[0].ciphertext_b64).toBe(revised.ciphertext_b64);
     expect(bodyOf(retried).records[0].indexes?.[0].index_value_b64).toBe(await hmacBlindIndex(service.requireDek(), 'revised-dedupe'));
-    retried.flush([{ ...revised, revision: 5 }]);
+    retried.flush({ records: [{ ...revised, revision: 5 }], skipped: [] });
     (await requestFor(txUrl)).flush([revised]);
     await pass;
     expect(service.blindIndexVersion).toBe(2);
@@ -635,7 +699,7 @@ describe('VaultService blind-index upgrade', () => {
     expect(bodyOf(posted).records[0].ciphertext_b64).toBe(newer.ciphertext_b64);
     expect(bodyOf(posted).records[0].expected_revision).toBe(3);
     expect(bodyOf(posted).records[0].indexes?.[0].index_value_b64).toBe(await hmacBlindIndex(material.dek, 'newer-dedupe'));
-    posted.flush([{ ...newer, revision: 4 }]);
+    posted.flush({ records: [{ ...newer, revision: 4 }], skipped: [] });
     await batch;
     expect(service.blindIndexVersion).toBe(2);
   });
@@ -732,6 +796,29 @@ describe('VaultService blind-index upgrade', () => {
     await pass;
     expect(service.blindIndexVersion).toBe(2);
     expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+  });
+
+  it('reaches version 2 when a duplicate dedupe index is skipped', async () => {
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const service = await boot(9);
+    const tx1 = await sealed(service.requireDek(), 'transactions', 'txn_same0001', { dedupe_key: 'same-dedupe' });
+    const tx2 = await sealed(service.requireDek(), 'transactions', 'txn_same0002', { dedupe_key: 'same-dedupe' });
+    (VaultService.prototype.ensureBlindIndexes as jasmine.Spy).and.callThrough();
+    const pass = service.ensureBlindIndexes();
+    (await requestFor(apiUrl('/vault/records'))).flush([tx1, tx2]);
+    (await requestFor(txUrl)).flush([tx1, tx2]);
+    const first = await requestFor(apiUrl('/vault/records/reindex'));
+    expect(bodyOf(first).records[0].client_id).toBe('txn_same0001');
+    first.flush({ records: [{ ...tx1, revision: 2 }], skipped: [] });
+    (await requestFor(txUrl)).flush([tx1, tx2]);
+    const second = await requestFor(apiUrl('/vault/records/reindex'));
+    expect(bodyOf(second).records[0].client_id).toBe('txn_same0002');
+    second.flush({ records: [], skipped: [tx2.client_id] });
+    await pass;
+    expect(service.blindIndexVersion).toBe(2);
+    const again = service.ensureBlindIndexes();
+    await again;
+    expect(http.match(request => request.url.includes('/vault/records')).length).toBe(0);
   });
 
   it('does not touch a stored key before the session resolves', async () => {
