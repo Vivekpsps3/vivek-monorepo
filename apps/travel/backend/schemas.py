@@ -6,7 +6,7 @@ from decimal import Decimal
 from math import isfinite
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from apps.travel.backend.services.money import clean_currency, parse_money
 
@@ -595,6 +595,14 @@ class PtoEntryIn(BaseModel):
     end_date: date
     days: Decimal | None = None
     notes: str | None = None
+    bucket: Literal["pto", "sick"] = "pto"
+
+    @field_validator("bucket", mode="before")
+    @classmethod
+    def bucket_ok(cls, value: object) -> object:
+        if value in ("pto", "sick"):
+            return value
+        raise ValueError("Pick PTO or Sick.")
 
     @field_validator("label")
     @classmethod
@@ -625,6 +633,26 @@ class PtoEntryIn(BaseModel):
         if self.days is not None and (self.days < 0 or self.days > 366):
             raise ValueError("Days have to be between 0 and 366.")
         return self
+
+
+class LeavePolicyIn(BaseModel):
+    """Raw numbers. The route validates them so Pydantic does not invent copy.
+
+    bool comes before int so JSON true and false stay booleans on 2.14.
+    """
+
+    start_balance_hours: bool | str | int | float | None = None
+    balance_as_of: str | int | float | None = None
+    accrual_hours: bool | str | int | float | None = None
+    accrual_cadence: bool | str | int | float | None = None
+    cap_hours: bool | str | int | float | None = None
+    year_start: bool | str | int | float | None = None
+
+
+class PtoSettingsIn(BaseModel):
+    # bool precedes int so JSON true/false are not saved as 1/0.
+    hours_per_day: bool | str | int | float | None = None
+    sick_prompt_dismissed: StrictBool | None = None
 
 
 class FlightLookupIn(BaseModel):

@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -273,6 +274,27 @@ class PtoPolicy(Base):
     annual_cap_days: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
+class LeavePolicy(Base):
+    """Hours policy for one leave bucket. user_id has no FK here, like PtoPolicy."""
+
+    __tablename__ = "leave_policies"
+    __table_args__ = (
+        UniqueConstraint("user_id", "bucket", name="uq_leave_policies_user_bucket"),
+        CheckConstraint("bucket IN ('pto','sick')", name="ck_leave_policies_bucket"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    bucket: Mapped[str] = mapped_column(String(10), nullable=False)
+    configured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    start_balance_hours: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    balance_as_of: Mapped[date] = mapped_column(Date, nullable=False)
+    accrual_hours: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    accrual_cadence: Mapped[str] = mapped_column(String(20), nullable=False, default="yearly")
+    cap_hours: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    year_start: Mapped[str] = mapped_column(String(5), nullable=False, default="01-01")
+
+
 class TripPtoDay(Base):
     """One PTO amount for one trip date. The trip owns the row."""
 
@@ -293,6 +315,7 @@ class TripPtoDay(Base):
 
 class PtoEntry(Base):
     __tablename__ = "pto_entries"
+    __table_args__ = (CheckConstraint("bucket IN ('pto','sick')", name="ck_pto_entries_bucket"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -305,6 +328,9 @@ class PtoEntry(Base):
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")  # trip, manual
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bucket: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="pto", server_default="pto"
+    )
 
 
 class Setting(Base):

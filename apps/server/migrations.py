@@ -419,11 +419,25 @@ def _offline_sql(url: str, start: str, end: str) -> str:
     # database starts empty; never create it merely to print SQL.
     path = database_path(url)
     rows = []
+    pto_rows: list = []
+    hpd_rows: list = []
     if path.is_file() and path.stat().st_size:
         with connect(path, readonly=True) as db:
             if db.execute("SELECT 1 FROM sqlite_master WHERE name='catalog_items'").fetchone():
                 rows = db.execute("SELECT id, title FROM catalog_items").fetchall()
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='pto_policy'").fetchone():
+                pto_rows = db.execute(
+                    "SELECT id, user_id, configured, accrual_amount, accrual_unit, "
+                    "accrual_cadence, hours_per_day, balance_days, balance_as_of, annual_cap_days "
+                    "FROM pto_policy ORDER BY id"
+                ).fetchall()
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='settings'").fetchone():
+                hpd_rows = db.execute(
+                    "SELECT key, value FROM settings WHERE key LIKE 'user:%:pto_hours_per_day'"
+                ).fetchall()
     cfg.attributes["catalog_title_rows"] = rows
+    cfg.attributes["pto_policy_rows"] = pto_rows
+    cfg.attributes["pto_hpd_settings"] = hpd_rows
     command.upgrade(cfg, f"{start}:{end}", sql=True)
     return buffer.getvalue()
 
