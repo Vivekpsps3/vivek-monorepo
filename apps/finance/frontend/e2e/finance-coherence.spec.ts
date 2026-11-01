@@ -1,10 +1,10 @@
 import { chooseColorTheme, openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { createHash } from 'node:crypto';
-import { test, expect } from '@playwright/test';
+import { test, expect, frozenNow, frozenToday } from './frozen-clock';
 import { moneyText } from './money-text';
 import { field, syntheticVault } from './synthetic-vault';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = frozenToday;
 
 function legacyChaseDedupeKey(date: string, amount: number, description: string): string {
   const normalizedDescription = description.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -501,7 +501,7 @@ test('import account mapping refreshes the exact account label in another mounte
 });
 
 test('receipt coverage is saved and undo refreshes mounted Activity and Home tabs', async ({ page }) => {
-  const now = new Date();
+  const now = frozenNow();
   const coverageStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1)).toISOString().slice(0, 10);
   const transactionDate = today();
   const coverageEnd = today();

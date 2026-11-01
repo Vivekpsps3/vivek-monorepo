@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './frozen-clock';
 import { moneyText } from './money-text';
 import { syntheticVault } from './synthetic-vault';
 

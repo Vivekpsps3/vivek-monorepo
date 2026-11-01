@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { test, expect } from '@playwright/test';
+import { test, expect, frozenNow, frozenToday } from './frozen-clock';
 import { moneyText } from './money-text';
 import { field, syntheticVault } from './synthetic-vault';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = frozenToday;
 const nativeHoverTitleSelector = 'ui-card[title], ui-page-header[title], ui-empty-state[title], nav [title], ui-button[title], button[title], a[title]';
 const expectQuoteRequests = async (vault: Awaited<ReturnType<typeof syntheticVault>>, symbols: string[]) => {
   await expect.poll(() => vault.quoteRequests.map(symbol => symbol.toUpperCase()).sort()).toEqual([...symbols].sort());
@@ -26,7 +26,7 @@ const seed = () => ({
 });
 
 function spendingPlanSeed(gap = false) {
-  const now = new Date();
+  const now = frozenNow();
   const periods = Array.from({ length: 3 }, (_, index) => {
     const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3 + index, 1));
     const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0));
@@ -150,7 +150,7 @@ test('Spending opens on Activity without review controls and Home has no review 
 });
 
 test('Charts show one cashflow and do not change financial records', async ({ page }) => {
-  const now = new Date();
+  const now = frozenNow();
   const monthStart = dateAtOffset(now, 0, 1);
   const vault = await syntheticVault(page, {
     ...seed(),
