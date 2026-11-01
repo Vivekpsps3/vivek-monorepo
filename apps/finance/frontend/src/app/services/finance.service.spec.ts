@@ -1,9 +1,14 @@
+import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { firstValueFrom, Subject } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { holdDek, wipeDek } from '../crypto/dek-holder';
+import { lockFinance, lockLoad } from '../crypto/lock-finance';
 import { FinanceService } from './finance.service';
 import { VaultService } from '../crypto/vault.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
+import { Asset } from '../models/transaction.model';
 
 describe('FinanceService', () => {
   let service: FinanceService;
@@ -47,9 +52,11 @@ describe('FinanceService', () => {
     });
     service = TestBed.inject(FinanceService);
     http = TestBed.inject(HttpTestingController);
+    holdDek({} as CryptoKey);
   });
 
   afterEach(() => http.verify());
+  afterEach(() => wipeDek());
 
   it('refreshes the complete transaction stream after an import instead of truncating it', async () => {
     const transactions = Array.from({ length: 5001 }, (_, id) => ({
@@ -113,6 +120,80 @@ describe('FinanceService', () => {
     expect((service as any)._liabilities.value).toEqual([liability]);
     expect(events).toContain(jasmine.objectContaining({ collections: ['assets'], source: 'remote' }));
     expect(events).toContain(jasmine.objectContaining({ collections: ['liabilities'], source: 'remote' }));
+  });
+
+  it('does not deliver decrypted assets after a lock', async () => {
+    const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
+    let release: (rows: Asset[]) => void = () => undefined;
+    encStore.getAssets.and.returnValue(new Promise<Asset[]>(resolve => { release = resolve; }));
+    let token = 4;
+    Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
+    (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    const seen: Asset[][] = [];
+    let completed = false;
+    service.getAssets().subscribe({ next: rows => seen.push(rows), complete: () => { completed = true; } });
+    service.clearSessionState();
+    release([secret]);
+    await Promise.resolve();
+    expect([seen, completed]).toEqual([[], true]);
+    wipeDek(); const worth: unknown[] = []; encStore.getNetWorth.and.resolveTo({ total: 9 } as never);
+    service.getNetWorth().subscribe(value => worth.push(value)); await Promise.resolve();
+    expect([worth, (service as unknown as { _netWorth: { value: unknown } })._netWorth.value]).toEqual([[], null]);
+  });
+
+  it('does not replay cached plaintext or apply an in-flight refresh once lockFinance starts', async () => {
+    const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
+    const subjects = service as unknown as Record<string, { next(value: unknown): void }>;
+    for (const name of ['_transactions', '_dashboardTransactions', '_holdings', '_assets', '_liabilities', '_jobIncomes', '_fixedExpenses', '_subscriptions']) subjects[name].next([secret]);
+    subjects['_netWorth'].next({ total: 40 });
+    subjects['_cashflowSummary'].next({ total: 40 });
+    let token = 1;
+    Object.defineProperty(encStore, 'sessionToken', { configurable: true, get: () => token });
+    (encStore as unknown as { clear(): void }).clear = () => { token += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    let release: (rows: Asset[]) => void = () => undefined;
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getAssets.and.returnValue(new Promise<Asset[]>(resolve => { release = resolve; }));
+    encStore.getNetWorth.and.resolveTo({ total: 1 } as never);
+    const refresh = service.refreshCollectionsFromAnotherTab(['assets']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const epoch = (service as unknown as { snapshotEpoch: number }).snapshotEpoch;
+    const real = lockLoad.modules;
+    lockLoad.modules = (() => new Promise(() => undefined)) as typeof lockLoad.modules;
+    const replay: unknown[] = [];
+    try {
+      void lockFinance(TestBed.inject(Injector));
+      for (const stream of [service.transactions$, service.dashboardTransactions$, service.holdings$, service.assets$, service.liabilities$, service.jobIncomes$, service.fixedExpenses$, service.subscriptions$, service.netWorth$, service.cashflowSummary$] as Array<{ subscribe(next: (value: unknown) => void): unknown }>) stream.subscribe(value => replay.push(value));
+      expect(replay).toEqual([[], [], [], [], [], [], [], [], null, null]);
+      expect([(service as unknown as { snapshotEpoch: number }).snapshotEpoch, token]).toEqual([epoch + 1, 2]);
+      release([secret]);
+      await refresh.catch(() => undefined);
+      const after: Asset[][] = [];
+      service.assets$.subscribe(rows => after.push(rows));
+      expect(after).toEqual([[]]);
+    } finally { lockLoad.modules = real; }
+  });
+
+  it('does not deliver asset rows deferred across lockFinance', async () => {
+    const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
+    let release: (rows: Asset[]) => void = () => undefined;
+    const hang = () => encStore.getAssets.and.returnValue(new Promise<Asset[]>(resolve => { release = resolve; }));
+    const seen: Asset[][] = [];
+    let cleared = 0;
+    (encStore as unknown as { clear(): void }).clear = () => { cleared += 1; };
+    (TestBed.inject(VaultService) as unknown as { lock(): void }).lock = () => undefined;
+    spyOn(TestBed.inject(ToastService), 'error');
+    const real = lockLoad.modules;
+    try {
+      hang(); service.getAssets().subscribe(rows => seen.push(rows));
+      lockLoad.modules = (() => new Promise(() => undefined)) as typeof lockLoad.modules;
+      void lockFinance(TestBed.inject(Injector)); release([secret]); await Promise.resolve();
+      hang(); service.getAssets().subscribe(rows => seen.push(rows));
+      lockLoad.modules = (() => Promise.reject(new Error('chunk'))) as typeof lockLoad.modules;
+      await lockFinance(TestBed.inject(Injector)); release([secret]); await Promise.resolve();
+      expect([seen, cleared]).toEqual([[], 5]);
+    } finally { lockLoad.modules = real; }
   });
 
   it('continues refreshing valid collections when one member of a multi-collection snapshot goes stale', async () => {

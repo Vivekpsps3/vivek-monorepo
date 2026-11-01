@@ -101,7 +101,7 @@ import {
           [(ngModel)]="sort"
           (ngModelChange)="filter()"
         >
-          <option value="activity">Recent activity</option>
+          <option value="activity">Recent</option>
           <option value="title">Title</option>
           <option value="added">Recently added</option>
           <option value="rating">Rating</option>
