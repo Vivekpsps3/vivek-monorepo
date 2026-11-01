@@ -255,9 +255,8 @@ export class AuthService {
     this.session.resetDomainState();
     this.session.acceptUser(response.user);
     try {
-      // DEK wraps are session-only. Fetch them after the signature check, then unlock.
-      await (await this.financeVault()).refreshStatus();
-      await (await this.financeVault()).unlock(vaultPassphrase);
+      // DEK wraps are session-only. Fetch them after the signature check; unlock records the epoch first.
+      await (await this.financeVault()).unlock(vaultPassphrase, true);
     } catch {
       this.clearLocalSession();
       throw new Error('Vault authentication succeeded, but this passphrase cannot unlock the vault.');

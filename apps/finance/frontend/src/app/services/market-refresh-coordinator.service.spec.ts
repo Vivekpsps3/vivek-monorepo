@@ -1,8 +1,10 @@
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
-import { SESSION_CONTEXT } from '@vivek/ui';
-import { financeTabId, holdDek, wipeDek } from '../crypto/dek-holder';
+import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
+import { financeTabId, hasDek, holdDek, readLockEpoch, wipeDek } from '../crypto/dek-holder';
+import { createVaultMaterial } from '../crypto/vault-crypto';
 import { VaultService } from '../crypto/vault.service';
 import { FinanceService } from './finance.service';
 import { MarketRefreshCoordinatorService } from './market-refresh-coordinator.service';
@@ -229,5 +231,46 @@ describe('MarketRefreshCoordinatorService', () => {
     wipeDek();
     await receive('other-tab');
     expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('advances the lock epoch when a lock broadcast arrives while this tab is locked', async () => {
+    wipeDek();
+    const epoch = readLockEpoch();
+    await (coordinator as unknown as { receiveTabMessage(message: object): Promise<void> }).receiveTabMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'other-tab' });
+    expect(readLockEpoch()).toBe(epoch + 1);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(finance.clearSessionState).not.toHaveBeenCalled();
+  });
+});
+
+describe('cross-tab lock during unlock', () => {
+  afterEach(() => { localStorage.removeItem('finance-dek'); TestBed.resetTestingModule(); });
+
+  it('discards an in-progress unlock when another tab broadcasts a lock', async () => {
+    const users = new BehaviorSubject<{ id: number } | null>({ id: 7 });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [
+      MarketRefreshCoordinatorService, provideRouter([]),
+      { provide: SESSION_CONTEXT, useValue: { user$: users, currentUser: { id: 7 } } as unknown as SessionPort },
+      { provide: FinanceService, useValue: { sessionToken: 1, dataChanges$: new Subject<unknown>(), clearSessionState(): void { /* already locked */ } } as unknown as FinanceService },
+    ] });
+    const vault = TestBed.inject(VaultService);
+    const coordinator = TestBed.inject(MarketRefreshCoordinatorService);
+    await vault.whenReady();
+    const payload = (await createVaultMaterial('correct-horse-battery', 1000)).setupPayload;
+    vault.loadPublicStatus({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 });
+    wipeDek();
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { open = () => resolve(); });
+    let parked = false;
+    const real = crypto.subtle.deriveKey.bind(crypto.subtle) as (...args: never[]) => Promise<unknown>;
+    spyOn(crypto.subtle, 'deriveKey').and.callFake(((...args: never[]) => real(...args).then(async result => { parked = true; await gate; return result; })) as never);
+    const pending = vault.unlock('correct-horse-battery');
+    while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
+    const epoch = readLockEpoch();
+    await (coordinator as unknown as { receiveTabMessage(message: object): Promise<void> }).receiveTabMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'other-tab' });
+    expect(readLockEpoch()).toBe(epoch + 1);
+    open();
+    expect(await pending).toBeFalse();
+    expect([localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked]).toEqual([null, false, false]);
   });
 });

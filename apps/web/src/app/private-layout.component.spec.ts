@@ -61,7 +61,7 @@ describe('Shared private shell', () => {
     expect(fixture.nativeElement.querySelectorAll('a[href="/settings"]').length).toBe(1);
     expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();
     expect(fixture.nativeElement.querySelector('a[href="/travel/settings"]')).toBeNull();
-    expect(fixture.nativeElement.querySelectorAll('select#suite-theme').length).toBe(1);
+    expect(fixture.nativeElement.querySelectorAll('select#suite-theme').length).toBe(0);
     expect(fixture.nativeElement.querySelector('a[href="/hub/admin"]')).toBeNull();
   });
   it('shows administration only for an administrator and signs out through the suite session', async () => {

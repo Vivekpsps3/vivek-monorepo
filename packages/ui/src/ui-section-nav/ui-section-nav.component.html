@@ -3,15 +3,19 @@
     @for (item of items(); track item.link) {
       <a
         class="ui-section-nav__link"
-        [routerLink]="item.link"
-        routerLinkActive="is-current"
-        ariaCurrentWhenActive="page"
-        [routerLinkActiveOptions]="{ exact: !!item.exact }">
+        [class.is-current]="current(item)"
+        [attr.aria-current]="current(item) ? 'page' : null"
+        [attr.aria-label]="item.ariaLabel ?? null"
+        [routerLink]="item.link">
         <span class="ui-section-nav__full">{{ item.label }}</span>
         @if (item.shortLabel) {
           <span class="ui-section-nav__short">{{ item.shortLabel }}</span>
         }
       </a>
+      <span hidden tabindex="-1" [routerLink]="item.link" routerLinkActive [routerLinkActiveOptions]="item.exact ? exactMatch : subsetMatch" (isActiveChange)="setActive(item.link, $event)"></span>
+      @for (extra of item.also ?? []; track extra) {
+        <span hidden tabindex="-1" [routerLink]="extra" routerLinkActive [routerLinkActiveOptions]="subsetMatch" (isActiveChange)="setActive(extra, $event)"></span>
+      }
     }
   </div>
 </nav>

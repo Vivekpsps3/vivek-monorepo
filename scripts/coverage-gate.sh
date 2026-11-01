@@ -45,7 +45,7 @@ floor=$(read_field floor) || { echo "quality/coverage.txt has no $suite floor" >
 report=$(mktemp)
 trap 'rm -f "$report"' EXIT
 set +e
-"$py" -m pytest -q "$tests" \
+"$py" -m pytest -q "$tests" -m "not perf" \
   "${coverage_args[@]}" \
   --cov-report=term \
   --cov-fail-under="$floor" | tee "$report"
@@ -69,6 +69,10 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     grep -E '^(Name|TOTAL|---|apps/)' "$report" || true
     echo '```'
   } >> "$GITHUB_STEP_SUMMARY"
+fi
+
+if [[ "$status" == 0 && "$suite" == server ]]; then
+  "$root/scripts/perf-gate.sh"
 fi
 
 exit "$status"

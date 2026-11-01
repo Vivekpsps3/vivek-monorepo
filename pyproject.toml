@@ -51,3 +51,6 @@ omit = [
 precision = 2
 show_missing = false
 skip_empty = true
+
+[tool.pytest.ini_options]
+markers = ["perf: wall-clock budget, run without coverage instrumentation"]

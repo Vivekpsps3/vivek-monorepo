@@ -250,9 +250,10 @@ for (const width of [390, 1280]) {
             const mask = style.maskImage && style.maskImage !== 'none' ? style.maskImage : style.webkitMaskImage;
             const faded = (el.classList.contains('is-fade-start') || el.classList.contains('is-fade-end'))
               && /gradient/i.test(mask);
-            if (!(el.scrollWidth - el.clientWidth > 1 && el.scrollLeft > 1 && inView && faded)) {
-              return `scroll ${el.scrollLeft} overflow ${el.scrollWidth - el.clientWidth} inView ${inView} fade ${el.className} mask ${mask}`;
-            }
+            const overflow = el.scrollWidth - el.clientWidth;
+            const detail = `scroll ${el.scrollLeft} overflow ${overflow} inView ${inView} fade ${el.className} mask ${mask}`;
+            if (!inView) return detail;
+            if (overflow > 1 && !(el.scrollLeft > 1 && faded)) return detail;
             return 'ok';
           })).toBe('ok');
         }

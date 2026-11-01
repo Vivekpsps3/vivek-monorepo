@@ -29,6 +29,7 @@ from apps.server.frontend import register_frontend
 from apps.server.rate_limit import RateLimitMiddleware
 from apps.server.schema import assert_ready
 from apps.server.security_headers import SecurityHeadersMiddleware, csp_report
+from apps.server.town import router as town_router
 
 logger = logging.getLogger("site")
 # Module-level so a second create_app does not re-register the same series.
@@ -258,6 +259,7 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     register_finance(application)
     register_travel(application)
     register_media(application)
+    application.include_router(town_router.router, prefix="/api")
     if dependencies.test_router is not None:
         application.include_router(dependencies.test_router)
 

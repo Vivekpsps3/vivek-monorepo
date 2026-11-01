@@ -37,11 +37,6 @@
           <nav id="user-dropdown" class="user-dropdown" aria-label="User options" (click)="onMenuAction($event)">
             <a class="btn btn-ghost user-menu-item" routerLink="/settings">Settings</a>
             @if (session.isAdmin()) { <a class="btn btn-ghost user-menu-item" routerLink="/hub/admin">Account stats · Admin</a> }
-            <label class="user-menu-theme" for="suite-theme">Color theme
-              <select id="suite-theme" [ngModel]="theme.current" (ngModelChange)="setTheme($event)">
-                <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
-              </select>
-            </label>
             @if (featureMenu.template(); as actions) { <div class="user-menu-feature"><ng-container [ngTemplateOutlet]="actions" /></div> }
             <button class="btn btn-ghost user-menu-item" type="button" (click)="session.logout()">Sign out</button>
           </nav>
