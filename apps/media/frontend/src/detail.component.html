@@ -236,6 +236,7 @@
             Next: S{{ next.season_number }} E{{ next.episode_number }} ·
             {{ next.title }}
           </p>
+          <ui-button variant="ghost" [disabled]="busy()" (click)="action('/episodes/next', { expected_episode_id: next.id })">Mark next watched</ui-button>
         }
         <label class="check-label"
           ><input type="checkbox" [(ngModel)]="includeSpecials" /> Include aired

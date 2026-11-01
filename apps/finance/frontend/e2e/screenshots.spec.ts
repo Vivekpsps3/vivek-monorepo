@@ -75,6 +75,21 @@ async function chooseTheme(page: Page, vault: Awaited<ReturnType<typeof syntheti
   await assertTheme(page, theme);
 }
 
+async function expectSkipLinkFocused(page: Page) {
+  const skip = page.locator('.skip-link');
+  // toBeFocused reports "inactive" when the document lacks focus or the skip
+  // link is not the active element. Home has no h1, so the arrival loop waits
+  // out a 400ms performance.now() budget and then focuses #workspace-content
+  // once. A full-page shot can return before that move, and one focus() then
+  // stays inactive. Bring the page forward and re-focus until it holds.
+  await expect.poll(async () => {
+    await page.bringToFront();
+    await skip.focus();
+    return skip.evaluate(el => document.hasFocus() && document.activeElement === el);
+  }).toBe(true);
+  await expect(skip).toBeFocused();
+}
+
 test.describe('finance F1 screenshot matrix', () => {
   test.use({ reducedMotion: 'reduce' });
 
@@ -124,8 +139,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await freezeCharts(page);
         await shot('donuts-home', width, theme);
         await thawCharts(page);
-        await page.locator('.skip-link').focus();
-        await expect(page.locator('.skip-link')).toBeFocused();
+        await expectSkipLinkFocused(page);
         await shot('skip-link', width, theme);
 
         await vault.open('/have?t=assets');

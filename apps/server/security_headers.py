@@ -46,6 +46,7 @@ PERMISSIONS_POLICY = (
 # its body, so a reflected script cannot pick up the nonce.
 SHELL_HEADER = "x-csp-shell"
 _MAX_REPORT_BYTES = 16384
+_MAX_DECLARED_DIGITS = 10
 _DIRECTIVE_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 _KNOWN_DIRECTIVES = frozenset(
     {
@@ -566,10 +567,19 @@ def _log_report(ip: str, **fields: str) -> None:
     logger.info(json.dumps({"event": "csp_report", "ip": ip, **fields}))
 
 
+def _declared_report_status(declared: str) -> int | None:
+    if any(not character.isascii() and character.isdigit() for character in declared):
+        return 400
+    if not declared.isascii() or not declared.isdigit():
+        return None
+    return (
+        413 if len(declared) > _MAX_DECLARED_DIGITS or int(declared) > _MAX_REPORT_BYTES else None
+    )
+
+
 async def _read_report_body(request: Request) -> bytes | None:
     """Read at most _MAX_REPORT_BYTES. None means the body exceeded the cap."""
-    declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > _MAX_REPORT_BYTES:
+    if _declared_report_status(request.headers.get("content-length", "")) is not None:
         return None
     body = bytearray()
     async for chunk in request.stream():
@@ -581,6 +591,9 @@ async def _read_report_body(request: Request) -> bytes | None:
 
 async def csp_report(request: Request) -> Response:
     """Accept browser CSP reports. The body is not stored or reflected."""
+    declared = _declared_report_status(request.headers.get("content-length", ""))
+    if declared is not None:
+        return Response(status_code=declared)
     body = await _read_report_body(request)
     if body is None:
         return Response(status_code=413)
