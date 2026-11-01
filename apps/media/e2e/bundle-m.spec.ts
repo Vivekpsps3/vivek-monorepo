@@ -184,6 +184,20 @@ test('broken photo candidates are disabled and a failed selection preserves the 
 
 test('the main Media screens pass accessibility in both themes at phone and desktop widths', async ({ page, request }) => {
   test.setTimeout(180_000);
+  // .ui-badge fades color/background over 200ms. Axe was sampling that blend
+  // (contrast 2.91 and 2.69) before the dark theme finished.
+  await page.addInitScript(() => {
+    const apply = () => {
+      const root = document.documentElement;
+      if (!root || root.querySelector('style[data-ci2-motion]')) return;
+      const style = document.createElement('style');
+      style.setAttribute('data-ci2-motion', 'off');
+      style.textContent = '*,*::before,*::after{animation:none !important;transition:none !important;}';
+      root.appendChild(style);
+    };
+    apply();
+    document.addEventListener('DOMContentLoaded', apply);
+  });
   const artist = await addItem(request, { kind: 'artist', title: 'A very long synthetic artist name that must wrap', status: 'following' });
   const routes = ['/media', '/media/library', '/media/search', '/media/calendar', '/media/add', '/media/item/' + artist.id];
   for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
@@ -193,7 +207,22 @@ test('the main Media screens pass accessibility in both themes at phone and desk
       await expect(page.locator('main h1')).toBeVisible();
       await chooseColorTheme(page, theme);
       await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(246, 241, 234)' : 'rgb(28, 25, 22)');
-      await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+      await page.evaluate(async () => {
+        const finiteRunning = () => document.getAnimations().filter(animation => {
+          const iterations = animation.effect?.getComputedTiming()?.iterations;
+          return animation.playState === 'running' && iterations !== Infinity;
+        });
+        const started = performance.now();
+        while (performance.now() - started < 1000) {
+          await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+          const pending = finiteRunning();
+          if (pending.length === 0) return;
+          await Promise.race([
+            Promise.all(pending.map(animation => animation.finished.catch(() => undefined))),
+            new Promise(resolve => setTimeout(resolve, 250)),
+          ]);
+        }
+      });
       const result = await new AxeBuilder({ page }).analyze();
       expect(result.violations.filter(item => ['serious', 'critical'].includes(item.impact)), route + ' ' + width + ' ' + theme).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
