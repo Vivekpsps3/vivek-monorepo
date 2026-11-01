@@ -24,6 +24,6 @@ export interface SessionPort {
   readonly revision: number;
   isAdmin(): boolean;
   loadSession(): Observable<SessionUser | null>;
-  clearLocalSession(): void;
+  clearLocalSession(): Promise<void>;
   logout(): void;
 }

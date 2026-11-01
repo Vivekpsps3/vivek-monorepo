@@ -1,7 +1,10 @@
+import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { HttpClientTestingModule, HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { firstValueFrom } from 'rxjs';
 import type { SessionUser } from '@vivek/auth';
-import { authNavigation } from '@vivek/ui';
+import { SESSION_CONTEXT, authNavigation } from '@vivek/ui';
+import { authInterceptor } from './auth/auth.interceptor';
 import { SessionService } from './session.service';
 
 function pauseNextOpen(): { ready: Promise<void>; release: () => void; restore: () => void } {
@@ -202,4 +205,43 @@ describe('Suite session isolation', () => {
     http.expectNone('/api/auth/me');
     expect(service.currentUser).toBeNull();
   });
+});
+
+describe('401 navigation waits for the IndexedDB delete', () => {
+  afterEach(() => {
+    localStorage.removeItem('suite-session-ended');
+    localStorage.removeItem('finance-dek');
+    localStorage.removeItem('finance-vault-present');
+  });
+
+  for (const url of ['/api/auth/me', '/api/auth/logout']) {
+    it(`does not call goToLogin until the delete is released for a 401 from ${url}`, async () => {
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: SESSION_CONTEXT, useExisting: SessionService },
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+      const http = TestBed.inject(HttpClient);
+      const backend = TestBed.inject(HttpTestingController);
+      const goToLogin = spyOn(authNavigation, 'goToLogin');
+      const paused = pauseNextOpen();
+      const pending = firstValueFrom(url.endsWith('/logout') ? http.post(url, {}) : http.get(url));
+      try {
+        backend.expectOne(url).flush({}, { status: 401, statusText: 'Unauthorized' });
+        await paused.ready;
+        await new Promise(resolve => setTimeout(resolve, 30));
+        expect(localStorage.getItem('suite-session-ended')).not.toBeNull();
+        expect(goToLogin).not.toHaveBeenCalled();
+        paused.release();
+        await expectAsync(pending).toBeRejected();
+        expect(goToLogin).toHaveBeenCalledTimes(1);
+      } finally {
+        paused.release();
+        paused.restore();
+        backend.verify();
+      }
+    });
+  }
 });

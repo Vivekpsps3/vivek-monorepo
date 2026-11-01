@@ -294,5 +294,5 @@ export class AuthService {
   }
 
   logout(): void { void this.session.logout().catch(() => undefined); }
-  clearLocalSession(): void { this.session.clearLocalSession(); }
+  clearLocalSession(): Promise<void> { return this.session.clearLocalSession(); }
 }
