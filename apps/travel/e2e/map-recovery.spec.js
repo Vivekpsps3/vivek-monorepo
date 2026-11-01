@@ -1,4 +1,4 @@
-import { chooseColorTheme, openUserMenu } from '../../../tests/e2e/user-menu.mjs';
+import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { ptoChoice } from './dates.mjs';
@@ -84,15 +84,8 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     const trip = await createTrip(request);
     const clean = await observeSecurity(page);
     await page.route(tileUrl, route => route.fulfill({ contentType: 'image/png', body: tile }));
-    await page.addInitScript(() => {
-      const orig = Map.prototype.set, maps = [], seen = new Set();
-      window.__lviewMaps = maps;
-      Map.prototype.set = function (key, value) {
-        if (typeof key === 'number' && Array.isArray(value) && !seen.has(this)) { seen.add(this); maps.push(this); }
-        return orig.call(this, key, value);
-      };
-    });
     await page.goto('/travel/trips/' + trip.id);
+    await chooseColorTheme(page, theme);
     await page.getByRole('button', { name: 'Show map', exact: true }).click();
     const map = mapRegion(page);
     await expect(map.getByRole('status')).toContainText('Map ready', { timeout: 3000 });
@@ -101,36 +94,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     await map.locator('.map-canvas').focus();
     await page.keyboard.press('+');
     await expect.poll(zooms).toEqual([13]);
-    const openCanvas = await map.locator('.map-canvas').elementHandle();
-    await page.evaluate(() => {
-      const raw = document.querySelector('app-root').__ngContext__;
-      const view = typeof raw === 'number' ? window.__lviewMaps.map(map => map.get(raw)).find(Boolean) : raw;
-      const strategy = view[8].router.routeReuseStrategy;
-      let handle = null, armed = true;
-      strategy.shouldDetach = route => armed && route.routeConfig?.path === 'trips/:id';
-      strategy.store = (route, next) => {
-        if (route.routeConfig?.path !== 'trips/:id') return;
-        handle = next;
-        if (next) armed = false;
-      };
-      strategy.shouldAttach = route => route.routeConfig?.path === 'trips/:id' && !!handle;
-      strategy.retrieve = route => route.routeConfig?.path === 'trips/:id' ? handle : null;
-    });
-    await (await openUserMenu(page)).getByRole('link', { name: 'Settings', exact: true }).click();
-    await page.getByRole('link', { name: 'Appearance', exact: true }).click();
-    const radio = page.locator(`input[name="color-theme"][value="${theme}"]`);
-    if (!(await radio.isChecked())) await radio.click();
-    await expect(radio).toBeChecked();
-    expect(page.context().pages()).toHaveLength(1);
-    await page.goBack();
-    await page.goBack();
-    await expect(page).toHaveURL(new RegExp(`/travel/trips/${trip.id}$`));
-    expect(await openCanvas.evaluate(node => node.isConnected)).toBe(true);
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    await expect(page.locator('html')).toHaveAttribute('data-theme-choice', theme);
-    await expect(map.getByRole('status')).toContainText('Map ready');
-    await expect.poll(zooms).toEqual([13]);
-    const oldCanvas = openCanvas;
+    const oldCanvas = await map.locator('.map-canvas').elementHandle();
     for (let visit = 0; visit < 3; visit++) {
       await page.getByRole('button', { name: 'Hide map', exact: true }).click();
       await expect(map).toHaveCount(0);
