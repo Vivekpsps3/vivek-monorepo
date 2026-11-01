@@ -65,9 +65,9 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await expect(dialog).toBeVisible();
   await expect.poll(() => dialog.evaluate(el => getComputedStyle(el).transform)).toBe('none');
   const dialogBox = await dialog.boundingBox();
-  // boundingBox() can sit a fraction of a pixel past the viewport.
-  expect(Math.round(dialogBox?.width ?? 999)).toBeLessThanOrEqual(390);
-  expect(Math.round((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0))).toBeLessThanOrEqual(844);
+  // Subpixel layout can put boundingBox() a fraction past the viewport; allow up to 0.5px.
+  expect(dialogBox?.width ?? 999).toBeLessThanOrEqual(390 + 0.5);
+  expect((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0)).toBeLessThanOrEqual(844 + 0.5);
   await page.keyboard.press('Escape');
 
   await page.locator('.mobile-tab', { hasText: 'Spend' }).click();
@@ -105,8 +105,9 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   const tutorial = page.locator('.tutorial-panel');
   await expect(tutorial).toBeVisible();
   const tutorialBox = await tutorial.boundingBox();
-  expect(Math.round(tutorialBox?.width ?? 999)).toBeLessThanOrEqual(390);
-  expect(Math.round(tutorialBox?.height ?? 999)).toBeLessThanOrEqual(844);
+  // Subpixel layout can put boundingBox() a fraction past the viewport; allow up to 0.5px.
+  expect(tutorialBox?.width ?? 999).toBeLessThanOrEqual(390 + 0.5);
+  expect(tutorialBox?.height ?? 999).toBeLessThanOrEqual(844 + 0.5);
   await expect(tutorial).toContainText('Only ticker symbols are sent for market quotes');
   await page.getByRole('button', { name: 'Close' }).click();
 
