@@ -10,6 +10,7 @@
     "auth/(?:login|signup)",
     "hub(?:/admin)?",
     "account",
+    "town(?:/(?:world|clinic|gym))?",
     "settings(?:/(?:account|appearance|travel|finance|about))?",
     "finance(?:/(?:have|spending|recurring|planning|embed|vault/(?:setup|unlock)|balance-sheet|portfolio|transactions|calendar|income|fixed-expenses|subscriptions|investment-insights|stock-lab|charts))?",
     "travel(?:/(?:trips/(?:new|[0-9]+)|calendar|pto|settings))?",

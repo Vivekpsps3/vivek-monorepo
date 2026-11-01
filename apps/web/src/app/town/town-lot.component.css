@@ -1,0 +1,17 @@
+:host { display: block; min-width: 0; }
+.tile { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 160px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit; text-decoration: none; gap: 2px; }
+a.tile, button.tile { cursor: pointer; }
+.tile:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.sprites { position: relative; width: 96px; height: 96px; }
+.town-sprite { display: block; width: 96px; height: 96px; image-rendering: pixelated; }
+.swap .town-sprite { position: absolute; inset: 0; }
+.swap .new { animation: town-swap var(--motion-slow) steps(4, end) both; }
+@keyframes town-swap { from { opacity: 0; transform: translateY(4px) scale(.92); } to { opacity: 1; transform: none; } }
+.label { box-sizing: border-box; max-width: 100%; padding: 2px 6px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--surface) 96%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name { font-weight: 600; }
+.sub-label { color: var(--text-muted); font-size: .75rem; }
+ui-skeleton { width: 80%; }
+@media (min-width: 1024px) {
+  .tile { min-height: 196px; }
+  .sprites, .town-sprite { width: 128px; height: 128px; }
+}

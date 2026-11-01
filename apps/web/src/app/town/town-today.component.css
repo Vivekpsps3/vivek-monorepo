@@ -1,0 +1,10 @@
+.habits { list-style: none; margin: 0; padding: 0; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.copy { display: flex; flex-direction: column; min-width: 0; }
+.habit-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.muted, .rest { color: var(--text-muted); }
+.passive { border-top: 1px solid var(--border); margin-top: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.check { width: 44px; height: 44px; flex: none; }
+:host ::ng-deep .check button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; }
+footer { margin-top: 8px; }
