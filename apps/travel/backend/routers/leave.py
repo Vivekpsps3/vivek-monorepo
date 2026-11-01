@@ -1,7 +1,4 @@
-"""Leave-bucket policies and PTO settings.
-
-GET /pto/series and the segment walk are parked for the stacked series change.
-"""
+"""Leave-bucket policies and PTO settings."""
 
 from datetime import date
 from decimal import Decimal

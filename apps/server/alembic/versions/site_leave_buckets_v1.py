@@ -143,7 +143,11 @@ def _plans(policies, settings) -> tuple[list, list]:
                 if current != hpd:
                     _fail(row_id, "hours_per_day")
             else:
-                setting_rows.append({"key": key, "value": _store_hours(hpd)})
+                try:
+                    stored_hpd = _store_hours(hpd)
+                except ValueError:
+                    _fail(row_id, "hours_per_day")
+                setting_rows.append({"key": key, "value": stored_hpd})
             leave_rows.append(
                 {
                     "user_id": user_id,
@@ -183,6 +187,7 @@ def upgrade() -> None:
     op.create_index("ix_leave_policies_user_id", "leave_policies", ["user_id"])
     # Offline --sql cannot reflect SQLite. copy_from is the pre-bucket table.
     # Online passes None and reflects, so the recreated table keeps real FKs.
+    # Explicit Index objects: batch recreate skips index=True on a column.
     copy_from = None
     if op.get_context().as_sql:
         copy_from = sa.Table(
@@ -200,6 +205,8 @@ def upgrade() -> None:
             sa.UniqueConstraint("trip_id"),
             sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
             sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
+            sa.Index("ix_pto_entries_user_id", "user_id"),
+            sa.Index("ix_pto_entries_start_date", "start_date"),
         )
     with op.batch_alter_table("pto_entries", copy_from=copy_from) as batch:
         batch.add_column(

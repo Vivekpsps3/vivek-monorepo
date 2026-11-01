@@ -636,18 +636,22 @@ class PtoEntryIn(BaseModel):
 
 
 class LeavePolicyIn(BaseModel):
-    """Raw numbers. The route validates them so Pydantic does not invent copy."""
+    """Raw numbers. The route validates them so Pydantic does not invent copy.
 
-    start_balance_hours: str | int | float | None = None
+    bool comes before int so JSON true and false stay booleans on 2.14.
+    """
+
+    start_balance_hours: bool | str | int | float | None = None
     balance_as_of: str | int | float | None = None
-    accrual_hours: str | int | float | None = None
-    accrual_cadence: str | None = None
-    cap_hours: str | int | float | None = None
-    year_start: str | None = None
+    accrual_hours: bool | str | int | float | None = None
+    accrual_cadence: bool | str | int | float | None = None
+    cap_hours: bool | str | int | float | None = None
+    year_start: bool | str | int | float | None = None
 
 
 class PtoSettingsIn(BaseModel):
-    hours_per_day: str | int | float | None = None
+    # bool precedes int so JSON true/false are not saved as 1/0.
+    hours_per_day: bool | str | int | float | None = None
     sick_prompt_dismissed: bool | None = None
 
 

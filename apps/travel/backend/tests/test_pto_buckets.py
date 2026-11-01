@@ -4,6 +4,7 @@ import random
 from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 from fastapi.encoders import jsonable_encoder
@@ -268,6 +269,68 @@ def test_one_step_past_the_limit_uses_the_painter_copy(client, monkeypatch, fiel
     assert body["message"] == "Check the highlighted fields."
     assert body["detail"] == body["message"]
     assert body["field_errors"][field] == copy
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "copy"),
+    [
+        ("start_balance_hours", True, START_COPY),
+        ("start_balance_hours", False, START_COPY),
+        ("accrual_hours", True, ACCRUAL_COPY),
+        ("accrual_hours", False, ACCRUAL_COPY),
+        ("cap_hours", True, CAP_COPY),
+        ("cap_hours", False, CAP_COPY),
+        ("accrual_cadence", True, CADENCE_COPY),
+        ("accrual_cadence", False, CADENCE_COPY),
+        ("accrual_cadence", 1, CADENCE_COPY),
+        ("accrual_cadence", 1.5, CADENCE_COPY),
+        ("year_start", True, YEAR_COPY),
+        ("year_start", False, YEAR_COPY),
+        ("year_start", 101, YEAR_COPY),
+        ("year_start", 1.5, YEAR_COPY),
+    ],
+)
+def test_bool_and_non_string_fields_use_the_painter_copy(client, monkeypatch, field, value, copy):
+    pin(monkeypatch)
+    saved = client.put("/api/pto/policies/pto", json=_policy(**{field: value}))
+    assert saved.status_code == 422, saved.text
+    body = saved.json()
+    assert body["code"] == "validation_error"
+    assert body["message"] == "Check the highlighted fields."
+    assert body["detail"] == body["message"]
+    assert body["field_errors"][field] == copy
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_bool_hours_per_day_uses_the_painter_copy(client, monkeypatch, value):
+    pin(monkeypatch)
+    saved = client.put("/api/settings/pto", json={"hours_per_day": value})
+    assert saved.status_code == 422, saved.text
+    body = saved.json()
+    assert body["code"] == "validation_error"
+    assert body["message"] == "Check the highlighted fields."
+    assert body["field_errors"] == {"hours_per_day": HPD_COPY}
+    assert client.get("/api/settings").json()["pto"]["hours_per_day"] == "8"
+
+
+def test_json_integers_still_save_as_numbers(client, monkeypatch):
+    pin(monkeypatch)
+    saved = client.put(
+        "/api/pto/policies/pto",
+        json=_policy(start_balance_hours=1, accrual_hours=0, cap_hours=2),
+    )
+    assert saved.status_code == 200, saved.text
+    hours = client.put("/api/settings/pto", json={"hours_per_day": 8})
+    assert hours.status_code == 200, hours.text
+    assert hours.json()["hours_per_day"] == "8"
+
+
+def test_leave_docstrings_omit_the_series_split():
+    root = Path(__file__).resolve().parents[1]
+    for name in ("services/leave_math.py", "routers/leave.py"):
+        text = (root / name).read_text()
+        assert "stacked series change" not in text
+        assert "GET /pto/series" not in text
 
 
 def test_hours_per_day_limits_and_combined_field_errors(client, monkeypatch):

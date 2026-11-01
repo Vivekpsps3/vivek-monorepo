@@ -1,7 +1,6 @@
 """Hours walk and leave-policy field checks.
 
-Balances stay Fractions until a response is formatted. The chart segment walk
-lives with GET /pto/series in the stacked series change.
+Balances stay Fractions until a response is formatted.
 """
 
 from __future__ import annotations

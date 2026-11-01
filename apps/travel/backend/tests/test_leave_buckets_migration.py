@@ -19,7 +19,6 @@ from apps.server.migrations import (
     plan,
     sqlite_url,
 )
-from apps.server.schema import OWNER_TABLES
 from apps.travel.backend.models import LeavePolicy, Setting
 from apps.travel.backend.routers.pto import _payload
 from apps.travel.backend.services.assemble import snapshot_pto
@@ -58,6 +57,34 @@ def _cfg(database):
 def _dump(database) -> str:
     with sqlite3.connect(database) as db:
         return "\n".join(db.iterdump())
+
+
+def _owner_tables(database) -> set[str]:
+    """Tables whose user_id column references users.id after the upgrade."""
+    with sqlite3.connect(database) as db:
+        owners: set[str] = set()
+        names = db.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        for (name,) in names:
+            quoted = '"' + name.replace('"', '""') + '"'
+            keys = db.execute(f"PRAGMA foreign_key_list({quoted})").fetchall()
+            for fk in keys:
+                if fk[2] == "users" and fk[3] == "user_id" and fk[4] == "id":
+                    owners.add(name)
+                    break
+        return owners
+
+
+def _runtime_error(exc: BaseException, text: str) -> bool:
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if type(current) is RuntimeError and str(current) == text:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def _chain(exc: BaseException) -> str:
@@ -280,6 +307,30 @@ def test_conflicting_hours_setting_aborts_without_writes(tmp_path):
     assert current_revision(database) == PARENT
 
 
+def test_overprecise_hours_per_day_raises_the_named_runtime_error(tmp_path):
+    """Products that store must still abort hpd of more than 6 dp as RuntimeError.
+
+    balance 0, hour-unit accrual 0, and no cap all store. The setting insert is
+    the call that used to raise ValueError("more than 6 dp") before any DDL.
+    """
+    database = tmp_path / "site.db"
+    _parent(database)
+    with sqlite3.connect(database) as db:
+        _insert_user(db, "a@example.com")
+        _insert_policy(db, 1, "8.0000001", "0", "0", "hour", "yearly", None)
+        db.commit()
+    before = _dump(database)
+    with pytest.raises(Exception) as caught:
+        command.upgrade(_cfg(database), REVISION)
+    assert _runtime_error(
+        caught.value,
+        "site_leave_buckets_v1: pto_policy id=1: hours_per_day "
+        "does not convert exactly; no changes made.",
+    )
+    assert _dump(database) == before
+    assert current_revision(database) == PARENT
+
+
 def test_downgrade_round_trip_restores_pto_output(tmp_path):
     database = tmp_path / "site.db"
     _parent(database)
@@ -415,6 +466,8 @@ def test_offline_plan_renders_the_backfill_and_downgrade_refuses(tmp_path):
     rendered = stdout.getvalue()
     assert "CREATE TABLE leave_policies" in rendered
     assert "INSERT INTO leave_policies" in rendered
+    assert "CREATE INDEX ix_pto_entries_user_id ON pto_entries (user_id)" in rendered
+    assert "CREATE INDEX ix_pto_entries_start_date ON pto_entries (start_date)" in rendered
     assert "'80'" in rendered or "'80.000000'" in rendered or "80" in rendered
     assert f"'{REVISION}', 'site_user_birthday_v1'" in rendered
     assert _dump(database) == before
@@ -432,9 +485,9 @@ def test_offline_plan_renders_the_backfill_and_downgrade_refuses(tmp_path):
 
 
 def test_delete_user_removes_leave_rows_and_both_settings(tmp_path):
-    assert "leave_policies" in OWNER_TABLES
     database = tmp_path / "site.db"
     command.upgrade(_cfg(database), "head")
+    assert "leave_policies" in _owner_tables(database)
     opened = open_database(f"sqlite:///{database}")
     db = opened.sessionmaker()
     try:
