@@ -1,9 +1,17 @@
 /** Legacy localStorage name. The key itself lives in IndexedDB. */
 export const DEK_STORE = 'finance-dek';
 export const VAULT_PRESENCE = 'finance-vault-present';
+/** Other tabs lock when this appears. Migration does not write it. */
+export const LOCK_SIGNAL = 'finance-vault-lock';
 export const VAULT_DB_NAME = 'finance-vault';
 export const VAULT_KEY_STORE = 'keys';
 export const VAULT_KEY_ID = 'dek';
+
+function presenceOwner(value: string | null): number | null {
+  if (!value || !/^[1-9]\d*$/.test(value)) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) ? id : null;
+}
 
 /** Clear the persisted key without loading the vault implementation. localStorage is cleared before the promise resolves. */
 export function clearFinanceSessionStorage(): Promise<void> {
@@ -15,18 +23,20 @@ export function clearFinanceSessionStorage(): Promise<void> {
 /** True when this browser still has a saved vault key. Does not import vault crypto. */
 export function financeVaultPresent(): boolean {
   try {
-    return !!localStorage.getItem(DEK_STORE) || localStorage.getItem(VAULT_PRESENCE) === '1';
+    return !!localStorage.getItem(DEK_STORE) || presenceOwner(localStorage.getItem(VAULT_PRESENCE)) != null;
   } catch {
     return false;
   }
 }
 
-export function markVaultPresent(): void {
-  try { localStorage.setItem(VAULT_PRESENCE, '1'); } catch { /* private mode */ }
+/** Presence value is the owning user id. A null or non-user value is not present for anyone. */
+export function markVaultPresent(ownerId: number): void {
+  if (!Number.isInteger(ownerId) || ownerId <= 0) return;
+  try { localStorage.setItem(VAULT_PRESENCE, String(ownerId)); } catch { /* private mode */ }
 }
 
-export function vaultMarkedPresent(): boolean {
-  try { return localStorage.getItem(VAULT_PRESENCE) === '1'; } catch { return false; }
+export function vaultMarkedPresent(ownerId: number): boolean {
+  try { return presenceOwner(localStorage.getItem(VAULT_PRESENCE)) === ownerId; } catch { return false; }
 }
 
 let removingKey: Promise<void> | null = null;
@@ -76,7 +86,8 @@ export function deleteFinanceVaultDb(): Promise<void> {
   droppingDb = new Promise(resolve => {
     const finish = () => { droppingDb = null; resolve(); };
     const request = factory.deleteDatabase(VAULT_DB_NAME);
-    request.onsuccess = request.onerror = request.onblocked = finish;
+    // onblocked means a connection is still open. Wait for onsuccess so a late delete cannot erase the next test's key.
+    request.onsuccess = request.onerror = finish;
   });
   return droppingDb;
 }

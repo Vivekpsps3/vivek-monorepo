@@ -9,7 +9,7 @@ import {
   DEFAULT_PBKDF2_ITERATIONS,
 } from '@vivek/browser';
 import {
-  DEK_STORE, VAULT_KEY_ID, clearFinanceSessionStorage, deleteFinanceVaultKey, markVaultPresent, vaultMarkedPresent, withVaultStore,
+  DEK_STORE, VAULT_KEY_ID, clearFinanceSessionStorage, markVaultPresent, vaultMarkedPresent, withVaultStore,
 } from './dek-store';
 import { migrateLegacyDek } from './dek-holder';
 
@@ -152,35 +152,53 @@ export interface StoredVaultKeys {
   reindexed: string[];
 }
 
-type DekRecord = StoredVaultKeys & { id: string; blindKey: CryptoKey; legacyBlindKey: CryptoKey | null };
+type DekRecord = StoredVaultKeys & { id: string; owner_id: number | null; blindKey: CryptoKey; legacyBlindKey: CryptoKey | null };
 type Progress = { blind_index_version: number; reindexed: string[] };
+type ProgressRecord = Progress & { id: string; owner_id: number | null };
 
-function progressId(userId: number | null): string {
-  return `progress:${userId ?? 'none'}`;
+function concreteOwner(ownerId: number | null): ownerId is number {
+  return typeof ownerId === 'number' && Number.isInteger(ownerId) && ownerId > 0;
 }
 
-/** Store the key, then drop the legacy localStorage item through dek-holder's migrate path. */
-export async function persistVaultKeys(keys: StoredVaultKeys, stillCurrent: () => boolean = () => true): Promise<boolean> {
+function progressId(userId: number): string {
+  return `progress:${userId}`;
+}
+
+/** Store the key for this user, then drop the legacy localStorage item through dek-holder's migrate path. */
+export async function persistVaultKeys(keys: StoredVaultKeys, ownerId: number | null, stillCurrent: () => boolean = () => true): Promise<boolean> {
+  if (!concreteOwner(ownerId)) return false;
   const extra = requireAttached(keys.dek);
   if (!stillCurrent()) return false;
   await withVaultStore('readwrite', store => store.put({
-    id: VAULT_KEY_ID, ...keys, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey,
+    id: VAULT_KEY_ID, ...keys, owner_id: ownerId, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey,
   } satisfies DekRecord));
   if (!stillCurrent()) return false;
-  markVaultPresent();
+  markVaultPresent(ownerId);
   if (!stillCurrent()) return false;
   migrateLegacyDek();
   return stillCurrent();
 }
 
-export async function writeBlindIndexProgress(userId: number | null, progress: Progress): Promise<void> {
-  await withVaultStore('readwrite', store => store.put({ id: progressId(userId), ...progress }));
+export async function writeBlindIndexProgress(userId: number, progress: Progress): Promise<void> {
+  if (!concreteOwner(userId)) return;
+  await withVaultStore('readwrite', store => store.put({ id: progressId(userId), owner_id: userId, ...progress }));
 }
-export async function readBlindIndexProgress(userId: number | null): Promise<Progress | null> {
-  const record = await withVaultStore<Progress | undefined>('readonly', store => store.get(progressId(userId)));
-  return record ? { blind_index_version: record.blind_index_version || 1, reindexed: record.reindexed ?? [] } : null;
+export async function readBlindIndexProgress(userId: number): Promise<Progress | null> {
+  if (!concreteOwner(userId)) return null;
+  const record = await withVaultStore<ProgressRecord | undefined>('readonly', store => store.get(progressId(userId)));
+  if (!record) return null;
+  // A null owner matches nobody, including this user.
+  if (record.owner_id == null || record.owner_id !== userId) {
+    await withVaultStore('readwrite', store => store.delete(progressId(userId)));
+    return null;
+  }
+  return { blind_index_version: record.blind_index_version || 1, reindexed: record.reindexed ?? [] };
 }
-export async function restoreVaultKeys(stillCurrent: () => boolean = () => true): Promise<StoredVaultKeys | null> {
+export async function restoreVaultKeys(ownerId: number | null, stillCurrent: () => boolean = () => true): Promise<StoredVaultKeys | null> {
+  if (!concreteOwner(ownerId)) {
+    await clearFinanceSessionStorage();
+    return null;
+  }
   let legacy: string | null = null;
   try { legacy = localStorage.getItem(DEK_STORE); } catch { legacy = null; }
   if (legacy) {
@@ -194,7 +212,7 @@ export async function restoreVaultKeys(stillCurrent: () => boolean = () => true)
       return null;
     }
     const stored: StoredVaultKeys = { dek: imported.dek, blind_index_version: 1, reindexed: [] };
-    const kept = await persistVaultKeys(stored, stillCurrent);
+    const kept = await persistVaultKeys(stored, ownerId, stillCurrent);
     if (!kept || !stillCurrent()) {
       await clearFinanceSessionStorage();
       return null;
@@ -202,13 +220,13 @@ export async function restoreVaultKeys(stillCurrent: () => boolean = () => true)
     return stored;
   }
   if (!stillCurrent()) return null;
-  if (!vaultMarkedPresent()) {
-    await deleteFinanceVaultKey();
+  if (!vaultMarkedPresent(ownerId)) {
+    await clearFinanceSessionStorage();
     return null;
   }
   const record = await withVaultStore<DekRecord | undefined>('readonly', store => store.get(VAULT_KEY_ID));
-  if (!stillCurrent() || !record?.dek || !record.blindKey) {
-    if (!stillCurrent()) return null;
+  if (!stillCurrent()) return null;
+  if (!record?.dek || !record.blindKey || record.owner_id == null || record.owner_id !== ownerId) {
     await clearFinanceSessionStorage();
     return null;
   }
@@ -216,8 +234,8 @@ export async function restoreVaultKeys(stillCurrent: () => boolean = () => true)
   return { dek: record.dek, blind_index_version: record.blind_index_version || 1, reindexed: record.reindexed ?? [] };
 }
 
-export async function restoreDekLocal(): Promise<CryptoKey | null> {
-  return (await restoreVaultKeys())?.dek ?? null;
+export async function restoreDekLocal(ownerId: number | null): Promise<CryptoKey | null> {
+  return (await restoreVaultKeys(ownerId))?.dek ?? null;
 }
 export function clearDekLocal(): Promise<void> {
   return clearFinanceSessionStorage();

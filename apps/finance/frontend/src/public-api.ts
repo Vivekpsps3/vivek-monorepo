@@ -1,7 +1,7 @@
 import type { Injector } from '@angular/core';
 import type { Routes } from '@angular/router';
 import { loadFinanceBudgetKeptGuarded } from './app/budget/budget-kept-import';
-export { DEK_STORE, financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
+export { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE, financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
 export { lockFinance } from './app/crypto/lock-finance';
 export { financeTabId } from './app/crypto/dek-holder';
 export async function loadMarketRefreshCoordinatorService() { return (await import('./app/services/market-refresh-coordinator.service')).MarketRefreshCoordinatorService; }

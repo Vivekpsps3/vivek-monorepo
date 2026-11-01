@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { hasDek, holdDek } from './dek-holder';
+import { LOCK_SIGNAL, VAULT_PRESENCE } from './dek-store';
 import { lockFinance, lockLoad } from './lock-finance';
 import { VaultService } from './vault.service';
 const realLoad = lockLoad.modules;
@@ -11,7 +12,10 @@ const realLoad = lockLoad.modules;
 describe('lockFinance', () => {
   afterEach(() => {
     localStorage.removeItem('finance-dek');
+    localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem(LOCK_SIGNAL);
     lockLoad.modules = realLoad;
+    TestBed.resetTestingModule();
   });
 
   it('broadcasts, ends refresh, clears caches, then locks storage and memory', async () => {

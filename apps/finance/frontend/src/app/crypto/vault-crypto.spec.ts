@@ -16,7 +16,7 @@ import {
   unlockWithPassphrase,
 } from './vault-crypto';
 import { encodeBase64 } from '@vivek/browser';
-import { VAULT_PRESENCE, deleteFinanceVaultDb, deleteFinanceVaultKey, financeVaultPresent } from './dek-store';
+import { LOCK_SIGNAL, VAULT_PRESENCE, deleteFinanceVaultDb, deleteFinanceVaultKey, financeVaultPresent } from './dek-store';
 
 describe('vault-crypto', () => {
   const fastIterations = 120_000;
@@ -24,6 +24,7 @@ describe('vault-crypto', () => {
   afterEach(async () => {
     localStorage.removeItem('finance-dek');
     localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem(LOCK_SIGNAL);
     await deleteFinanceVaultKey();
     await deleteFinanceVaultDb();
   });
@@ -44,7 +45,7 @@ describe('vault-crypto', () => {
     const payload = { ok: true, scope: 'finance' };
     const ct = await encryptJson((await importVaultKeys(raw)).dek, payload);
     localStorage.setItem('finance-dek', encodeBase64(raw));
-    const restored = await restoreDekLocal();
+    const restored = await restoreDekLocal(1);
     expect(localStorage.getItem('finance-dek')).toBeNull();
     expect(financeVaultPresent()).toBeTrue();
     expect(restored?.extractable).toBeFalse();
@@ -55,13 +56,13 @@ describe('vault-crypto', () => {
 
   it('removes the IndexedDB key on wipe', async () => {
     localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(3)));
-    expect(await restoreDekLocal()).toBeTruthy();
+    expect(await restoreDekLocal(1)).toBeTruthy();
     clearDekLocal();
     await deleteFinanceVaultKey();
     expect(localStorage.getItem('finance-dek')).toBeNull();
     expect(financeVaultPresent()).toBeFalse();
     expect(await indexedDbHoldsDek()).toBeFalse();
-    expect(await restoreDekLocal()).toBeNull();
+    expect(await restoreDekLocal(1)).toBeNull();
   });
 
   it('derives an HKDF blind-index subkey that differs from the DEK', async () => {
@@ -80,7 +81,7 @@ describe('vault-crypto', () => {
     clearDekLocal();
     localStorage.setItem('finance-dek', btoa('short'));
 
-    await expectAsync(restoreDekLocal()).toBeResolvedTo(null);
+    await expectAsync(restoreDekLocal(1)).toBeResolvedTo(null);
 
     clearDekLocal();
   });

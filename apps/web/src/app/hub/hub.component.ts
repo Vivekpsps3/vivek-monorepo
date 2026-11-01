@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
 import { todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
-import { DEK_STORE, financeTabId, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
+import { LOCK_SIGNAL, VAULT_PRESENCE, financeTabId, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
 import { AppDatePipe } from '@vivek/ui';
 import { MoneyPipe } from '@vivek/ui';
@@ -283,7 +283,9 @@ export class HubComponent implements OnInit {
 
   private watchVaultLock(): void {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === DEK_STORE && event.newValue === null) this.applyExternalLock();
+      // Migration removes finance-dek and must not lock the other tab. A lock writes the signal and drops presence.
+      if (event.key === LOCK_SIGNAL && event.newValue !== null) this.applyExternalLock();
+      if (event.key === VAULT_PRESENCE && event.newValue === null) this.applyExternalLock();
     };
     window.addEventListener('storage', onStorage);
     let channel: BroadcastChannel | null = null;

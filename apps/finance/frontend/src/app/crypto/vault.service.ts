@@ -89,10 +89,31 @@ export class VaultService {
   }
 
   private ownerId(): number | null {
-    return this.sessionPort?.currentUser?.id ?? null;
+    const id = this.sessionPort?.currentUser?.id;
+    return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null;
   }
 
-  /** Service epoch and dek-holder lock epoch must match. A known user id must still be that user. A newer hold supersedes this one. */
+  /** Wait until the session has a concrete user. A missing port is already resolved to nobody. Null matches nobody. */
+  private async resolvedOwner(): Promise<number | null> {
+    const port = this.sessionPort;
+    if (!port) return null;
+    const ready = this.ownerId();
+    if (ready != null) return ready;
+    if (typeof port.loadSession !== 'function') return null;
+    try {
+      const user = await firstValueFrom(port.loadSession());
+      const id = user?.id;
+      return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** A null owner matches nobody. A newer hold supersedes this one when generation is passed. */
+  private ownerMatches(userId: number | null): boolean {
+    return userId != null && this.ownerId() === userId;
+  }
+
   private owns(epoch: number, lockAt: number, userId: number | null, generation?: number): boolean {
     return !!this.dek && this.sameSession(epoch, lockAt, userId, generation);
   }
@@ -100,12 +121,12 @@ export class VaultService {
   private sameSession(epoch: number, lockAt: number, userId: number | null, generation?: number): boolean {
     if (epoch !== this.epoch || lockAt !== readLockEpoch()) return false;
     if (generation !== undefined && generation !== this.holdGeneration) return false;
-    return userId == null || this.ownerId() === userId;
+    return this.ownerMatches(userId);
   }
 
-  /** Session changed. A newer hold of the same session does not count. */
+  /** Session changed. A newer hold of the same session does not count. A null user is not this session. */
   private sessionMoved(epoch: number, lockAt: number, userId: number | null): boolean {
-    return epoch !== this.epoch || lockAt !== readLockEpoch() || (userId != null && this.ownerId() !== userId);
+    return epoch !== this.epoch || lockAt !== readLockEpoch() || !this.ownerMatches(userId);
   }
 
   private enqueue(run: () => Promise<void>): Promise<void> {
@@ -117,9 +138,14 @@ export class VaultService {
   private async hydrate(): Promise<void> {
     const epoch = this.epoch;
     const lockAt = readLockEpoch();
-    const userId = this.ownerId();
+    const userId = await this.resolvedOwner();
+    if (epoch !== this.epoch || lockAt !== readLockEpoch()) return;
+    if (userId == null) {
+      await clearDekLocal();
+      return;
+    }
     let stored: StoredVaultKeys | null = null;
-    try { stored = await restoreVaultKeys(() => this.sameSession(epoch, lockAt, userId)); } catch { stored = null; }
+    try { stored = await restoreVaultKeys(userId, () => this.sameSession(epoch, lockAt, userId)); } catch { stored = null; }
     if (!stored || !this.sameSession(epoch, lockAt, userId)) {
       // A newer hold owns the key once it has started. This path only deletes a key this restore just wrote.
       if (stored && this.holdGeneration === 0 && !this.dek) await clearDekLocal();
@@ -139,29 +165,32 @@ export class VaultService {
   private async applyHold(dek: CryptoKey, version: number, reindexed: string[], epoch: number, lockAt: number, userId: number | null, generation: number): Promise<void> {
     if (!this.sameSession(epoch, lockAt, userId, generation)) return;
     this.dek = dek;
-    this.versionNumber = version;
-    this.reindexed = new Set(reindexed);
+    // A second unlock joins the in-flight batch and must not rewind its progress.
+    if (!this.reindexTask) {
+      this.versionNumber = version;
+      this.reindexed = new Set(reindexed);
+    }
     this.unlockedWrap = this.statusSubject.value?.wrapped_dek_b64 ?? null;
     // The hub reads presence before it will load vault code. Store the key before unlock returns.
-    await this.persistProgress(epoch, lockAt, userId, generation);
+    await this.persistProgress(epoch, lockAt, userId);
     if (!this.sameSession(epoch, lockAt, userId, generation)) return;
     // Publish unlock before the batch. Navigation must not wait on re-index.
     this.unlockedSubject.next(true);
     if (this.versionNumber < 2) this.startBlindIndexes();
   }
 
-  private async persistProgress(epoch: number, lockAt: number, userId: number | null, generation: number): Promise<void> {
+  private async persistProgress(epoch: number, lockAt: number, userId: number | null): Promise<void> {
     const dek = this.dek;
-    if (!dek || !this.sameSession(epoch, lockAt, userId, generation)) return;
+    if (!dek || !this.sameSession(epoch, lockAt, userId)) return;
     const progress = { blind_index_version: this.versionNumber, reindexed: [...this.reindexed] };
-    await persistVaultKeys({ dek, ...progress }, () => this.sameSession(epoch, lockAt, userId, generation));
+    await persistVaultKeys({ dek, ...progress }, userId, () => this.sameSession(epoch, lockAt, userId));
     // A lock or a user switch wins over an in-flight hold. A newer hold of this session does not.
     if (this.sessionMoved(epoch, lockAt, userId)) {
       if (this.dek === dek) { this.dek = null; this.unlockedSubject.next(false); }
       await clearDekLocal();
       return;
     }
-    if (generation !== this.holdGeneration || userId == null) return;
+    if (this.dek !== dek || userId == null || this.ownerId() !== userId) return;
     await writeBlindIndexProgress(userId, progress);
   }
 
@@ -243,7 +272,7 @@ export class VaultService {
   async setup(passphrase: string): Promise<void> {
     const epoch = this.epoch;
     const lockAt = readLockEpoch();
-    const userId = this.ownerId();
+    const userId = await this.resolvedOwner();
     const material = await createVaultMaterial(passphrase);
     if (!this.sameSession(epoch, lockAt, userId)) return;
     const status = await firstValueFrom(
@@ -258,7 +287,7 @@ export class VaultService {
   async adoptBootstrapVault(dek: CryptoKey): Promise<void> {
     const epoch = this.epoch;
     const lockAt = readLockEpoch();
-    const userId = this.ownerId();
+    const userId = await this.resolvedOwner();
     await this.refreshStatus();
     if (!this.sameSession(epoch, lockAt, userId)) return;
     await this.hold(dek, 2);
@@ -326,14 +355,14 @@ export class VaultService {
   async unlock(passphrase: string): Promise<boolean> {
     const epoch = this.epoch;
     const lockAt = readLockEpoch();
-    const userId = this.ownerId();
+    const userId = await this.resolvedOwner();
     const status = this.statusSubject.value ?? (await this.refreshStatus());
     if (!this.sameSession(epoch, lockAt, userId)) return false;
     if (!status.exists || !status.kdf_salt_b64 || !status.wrapped_dek_b64 || !status.kdf_iterations) {
       throw new Error('Vault is not set up');
     }
     const dek = await unlockWithPassphrase(passphrase, status.kdf_salt_b64, status.kdf_iterations, status.wrapped_dek_b64);
-    if (!this.sameSession(epoch, lockAt, userId)) return false;
+    if (!this.sameSession(epoch, lockAt, userId) || userId == null) return false;
     const progress = await readBlindIndexProgress(userId).catch(() => null);
     if (!this.sameSession(epoch, lockAt, userId)) return false;
     await this.hold(dek, progress?.blind_index_version ?? 1, progress?.reindexed ?? []);
@@ -411,10 +440,11 @@ export class VaultService {
   ensureBlindIndexes(): Promise<void> {
     if (this.versionNumber >= 2 || !this.dek) return Promise.resolve();
     if (this.reindexTask) return this.reindexTask;
+    const userId = this.ownerId();
+    if (userId == null) return Promise.resolve();
     const token = ++this.reindexGeneration;
     const epoch = this.epoch;
     const lockAt = readLockEpoch();
-    const userId = this.ownerId();
     const generation = this.holdGeneration;
     const run = this.reindexTail.then(() => this.runReindex(epoch, lockAt, userId, generation));
     this.reindexTail = run.then(() => undefined, () => undefined);
@@ -434,8 +464,9 @@ export class VaultService {
     if (isDevMode()) console.debug('vault re-index stopped before version 2');
   }
 
+  /** Stop this batch on a lock or user switch. A second hold of the same session does not abandon it, and a stale batch must not wipe that hold's key. */
   private async replaced(epoch: number, lockAt: number, userId: number | null, generation: number): Promise<boolean> {
-    if (this.owns(epoch, lockAt, userId, generation)) return false;
+    if (this.owns(epoch, lockAt, userId)) return false;
     if (generation === this.holdGeneration && this.sessionMoved(epoch, lockAt, userId)) {
       this.dek = null;
       this.unlockedSubject.next(false);
@@ -451,44 +482,55 @@ export class VaultService {
       if (await this.replaced(epoch, lockAt, userId, generation)) return;
       const visited = `${record.collection}/${record.client_id}`;
       if (this.reindexed.has(visited)) continue;
-      if (record.collection === 'transactions') await this.reindexTransaction(record, epoch, lockAt, userId, generation);
+      if (record.collection === 'transactions') await this.reindexTransaction(record, epoch, lockAt, userId);
       if (await this.replaced(epoch, lockAt, userId, generation)) return;
       this.reindexed.add(visited);
-      await this.persistProgress(epoch, lockAt, userId, generation);
+      await this.persistProgress(epoch, lockAt, userId);
     }
     if (await this.replaced(epoch, lockAt, userId, generation)) return;
     this.versionNumber = 2;
     this.reindexed.clear();
-    await this.persistProgress(epoch, lockAt, userId, generation);
+    await this.persistProgress(epoch, lockAt, userId);
   }
 
-  private async reindexTransaction(record: EncryptedRecordDto, epoch: number, lockAt: number, userId: number | null, generation: number): Promise<void> {
-    const dek = this.dek;
-    if (!dek || !this.sameSession(epoch, lockAt, userId, generation)) return;
+  /** null: this session no longer owns the key. undefined: skip the row. string: index of the ciphertext just read. */
+  private async dedupeIndex(dek: CryptoKey, record: EncryptedRecordDto, epoch: number, lockAt: number, userId: number | null): Promise<string | null | undefined> {
+    if (!this.owns(epoch, lockAt, userId)) return null;
     let dedupe = '';
     try {
       const data = await this.decryptPayload<{ dedupe_key?: unknown }>(record.ciphertext_b64, record.collection, record.client_id, record.schema_version, record.key_version);
       dedupe = typeof data?.dedupe_key === 'string' ? data.dedupe_key : '';
     } catch {
-      if (!this.owns(epoch, lockAt, userId, generation)) return;
+      if (!this.owns(epoch, lockAt, userId)) return null;
       this.noteUndecryptable();
-      return;
+      return undefined;
     }
-    if (!dedupe || !this.owns(epoch, lockAt, userId, generation)) return;
+    if (!this.owns(epoch, lockAt, userId)) return null;
+    if (!dedupe) return undefined;
     const indexValue = await hmacBlindIndex(dek, dedupe);
-    if (!this.owns(epoch, lockAt, userId, generation)) return;
+    if (!this.owns(epoch, lockAt, userId)) return null;
+    return indexValue;
+  }
+
+  private async reindexTransaction(record: EncryptedRecordDto, epoch: number, lockAt: number, userId: number | null): Promise<void> {
+    const dek = this.dek;
+    if (!dek || !this.sameSession(epoch, lockAt, userId)) return;
+    const initial = await this.dedupeIndex(dek, record, epoch, lockAt, userId);
+    if (initial === null || initial === undefined) return;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      if (!this.owns(epoch, lockAt, userId, generation)) return;
+      if (!this.owns(epoch, lockAt, userId)) return;
       const fresh = (await firstValueFrom(this.listRecords('transactions', { silent: true }))).find(row => row.client_id === record.client_id);
-      // Gone means deleted. Upsert would insert it again, so skip. The gap after this response stays open.
-      if (!fresh || !this.owns(epoch, lockAt, userId, generation)) return;
+      // Missing after the refetch means deleted. The update-only endpoint also reports a skip if it vanishes after that.
+      if (!fresh || !this.owns(epoch, lockAt, userId)) return;
+      const indexValue = await this.dedupeIndex(dek, fresh, epoch, lockAt, userId);
+      if (indexValue === null || indexValue === undefined) return;
       try {
-        // Fresh ciphertext and revision, so a save made while this batch runs is not replaced by the snapshot.
-        await firstValueFrom(this.upsertRecords([{
+        const result = await firstValueFrom(this.reindexRecords([{
           collection: fresh.collection, client_id: fresh.client_id, ciphertext_b64: fresh.ciphertext_b64,
           schema_version: fresh.schema_version, key_version: fresh.key_version, expected_revision: fresh.revision,
           indexes: [{ index_name: 'dedupe_key', index_value_b64: indexValue }],
         }], { silent: true }));
+        if (result?.skipped?.includes(fresh.client_id)) return;
         return;
       } catch (error) {
         const status = typeof error === 'object' && error && 'status' in error ? Number((error as { status?: unknown }).status) : 0;
@@ -511,6 +553,23 @@ export class VaultService {
    * Dialog saves and other callers that show their own error pass `{ silent: true }`
    * on that call. A concurrent upsert or delete keeps the interceptor toast.
    */
+  reindexRecords(
+    records: Array<{
+      collection: string;
+      client_id: string;
+      ciphertext_b64: string;
+      schema_version?: number;
+      key_version?: number;
+      expected_revision?: number | null;
+      indexes?: Array<{ index_name: string; index_value_b64: string }>;
+    }>,
+    options?: VaultWriteOptions,
+  ): Observable<{ records: EncryptedRecordDto[]; skipped: string[] }> {
+    return this.http.post<{ records: EncryptedRecordDto[]; skipped: string[] }>(
+      apiUrl('/vault/records/reindex'), { records }, this.requestOptions(options),
+    );
+  }
+
   upsertRecords(
     records: Array<{
       collection: string;

@@ -1,14 +1,20 @@
 import { HttpClientTestingModule, HttpTestingController, type TestRequest } from '@angular/common/http/testing';
-import { EMPTY, firstValueFrom } from 'rxjs';
+import { EMPTY, firstValueFrom, Observable } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { encodeBase64 } from '@vivek/browser';
 import { WrappedSigningKey } from '@vivek/auth';
 import { apiUrl } from '../core/api-url';
 import { SESSION_CONTEXT, SILENT_ERROR_TOAST, ToastService, type SessionPort } from '@vivek/ui';
 import { hasDek, holdDek } from './dek-holder';
-import { VAULT_KEY_ID, VAULT_PRESENCE, deleteFinanceVaultDb } from './dek-store';
+import { LOCK_SIGNAL, VAULT_KEY_ID, VAULT_PRESENCE, deleteFinanceVaultDb, financeVaultPresent, withVaultStore } from './dek-store';
 import { createVaultMaterial, encryptJson, hmacBlindIndex, importVaultKeys, indexedDbHoldsDek, legacyDekBlindIndex, recordAad } from './vault-crypto';
 import { VaultService, type EncryptedRecordDto } from './vault.service';
+
+function sessionProvider(id = 1) {
+  const who = { id };
+  const session = { get currentUser() { return who; }, user$: EMPTY, cleared$: EMPTY } as unknown as SessionPort;
+  return { provide: SESSION_CONTEXT, useValue: session };
+}
 
 describe('VaultService KDF upgrade', () => {
   let service: VaultService;
@@ -174,7 +180,7 @@ describe('VaultService unlock epoch', () => {
 
   async function lockDuringDerive(): Promise<void> {
     localStorage.removeItem('finance-dek');
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     await service.whenReady();
     const payload = (await createVaultMaterial(passphrase, 1000)).setupPayload;
@@ -203,7 +209,7 @@ describe('VaultService unlock epoch', () => {
 
   it('discards the key when a lock lands before the finance-dek write', async () => {
     localStorage.removeItem('finance-dek');
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     await service.whenReady();
     const payload = (await createVaultMaterial(passphrase, 1000)).setupPayload;
@@ -234,7 +240,7 @@ describe('VaultService unlock epoch', () => {
       await gate;
       return result;
     })) as never);
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
     service.lock();
@@ -285,12 +291,24 @@ describe('VaultService blind-index upgrade', () => {
 
   const txUrl = apiUrl('/vault/records?collection=transactions');
 
-  beforeEach(async () => { localStorage.removeItem('finance-dek'); await deleteFinanceVaultDb(); });
-  afterEach(async () => { http?.verify(); localStorage.removeItem('finance-dek'); TestBed.resetTestingModule(); await deleteFinanceVaultDb(); });
+  beforeEach(async () => {
+    localStorage.removeItem('finance-dek');
+    localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem(LOCK_SIGNAL);
+    await deleteFinanceVaultDb();
+  });
+  afterEach(async () => {
+    http?.verify();
+    localStorage.removeItem('finance-dek');
+    localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem(LOCK_SIGNAL);
+    TestBed.resetTestingModule();
+    await deleteFinanceVaultDb();
+  });
 
-  async function boot(byte: number): Promise<VaultService> {
+  async function boot(byte: number, userId = 1): Promise<VaultService> {
     localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(byte)));
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider(userId)] });
     const service = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
     await service.whenReady();
@@ -324,7 +342,7 @@ describe('VaultService blind-index upgrade', () => {
     const tx2 = await sealed(seeded.dek, 'transactions', 'txn_bbbbbbbb', { id: 2, dedupe_key: 'dedupe-two' });
     const pause = spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
     localStorage.setItem('finance-dek', encodeBase64(raw));
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
     await service.whenReady();
@@ -334,12 +352,12 @@ describe('VaultService blind-index upgrade', () => {
     const firstPass = service.ensureBlindIndexes();
     (await requestFor(apiUrl('/vault/records'))).flush([tx1, health, tx2, pr]);
     (await requestFor(txUrl)).flush([tx1, tx2]);
-    const firstUpsert = await requestFor(apiUrl('/vault/records/upsert'));
+    const firstUpsert = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(firstUpsert).records.map(row => row.client_id)).toEqual(['txn_aaaaaaaa']);
     expect(bodyOf(firstUpsert).records[0].indexes?.[0].index_value_b64).toBe(await hmacBlindIndex(service.requireDek(), 'dedupe-one'));
     firstUpsert.flush([{ ...tx1, revision: 2 }]);
     (await requestFor(txUrl)).flush([tx1, tx2]);
-    const secondUpsert = await requestFor(apiUrl('/vault/records/upsert'));
+    const secondUpsert = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(secondUpsert).records[0].client_id).toBe('txn_bbbbbbbb');
     secondUpsert.flush({ detail: 'interrupted' }, { status: 500, statusText: 'Error' });
     await expectAsync(firstPass).toBeRejected();
@@ -347,7 +365,7 @@ describe('VaultService blind-index upgrade', () => {
     const secondPass = service.ensureBlindIndexes();
     (await requestFor(apiUrl('/vault/records'))).flush([tx1, health, tx2, pr]);
     (await requestFor(txUrl)).flush([tx2]);
-    const resumed = await requestFor(apiUrl('/vault/records/upsert'));
+    const resumed = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(resumed).records.map(row => row.client_id)).toEqual(['txn_bbbbbbbb']);
     resumed.flush([{ ...tx2, revision: 2 }]);
     await secondPass;
@@ -384,7 +402,7 @@ describe('VaultService blind-index upgrade', () => {
       setItem(key, value);
       if (key === VAULT_PRESENCE) gate.service?.lock();
     });
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     gate.service = service;
     http = TestBed.inject(HttpTestingController);
@@ -393,6 +411,29 @@ describe('VaultService blind-index upgrade', () => {
     expect(localStorage.getItem('finance-dek')).toBeNull();
     expect(localStorage.getItem(VAULT_PRESENCE)).toBeNull();
     expect(await indexedDbHoldsDek()).toBeFalse();
+  });
+
+  it('overlapping holds followed by lock leave no key or presence flag', async () => {
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const service = await boot(4);
+    const dek = service.requireDek();
+    const put = IDBObjectStore.prototype.put;
+    let newerHold: Promise<void> = Promise.resolve();
+    let overlap = true;
+    spyOn(IDBObjectStore.prototype, 'put').and.callFake(function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      const request = put.call(this, value, key);
+      if (overlap) {
+        overlap = false;
+        newerHold = service['hold'](dek, 2);
+        service.lock();
+      }
+      return request;
+    });
+    await service['hold'](dek, 2);
+    await newerHold;
+    expect(service.isUnlocked).toBeFalse();
+    expect(await indexedDbHoldsDek()).toBeFalse();
+    expect(financeVaultPresent()).toBeFalse();
   });
 
   it('posts nothing under a new session when the user changes during re-index', async () => {
@@ -415,7 +456,7 @@ describe('VaultService blind-index upgrade', () => {
     who.id = 2;
     verify.flush([tx]);
     await pass;
-    expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+    expect(http.match(request => request.url.includes('upsert') || request.url.includes('reindex')).length).toBe(0);
     expect(service.blindIndexVersion).toBe(1);
   });
 
@@ -428,12 +469,12 @@ describe('VaultService blind-index upgrade', () => {
     const pass = first.ensureBlindIndexes();
     (await requestFor(apiUrl('/vault/records'))).flush([tx1, tx2]);
     (await requestFor(txUrl)).flush([tx1, tx2]);
-    (await requestFor(apiUrl('/vault/records/upsert'))).flush([{ ...tx1, revision: 2 }]);
+    (await requestFor(apiUrl('/vault/records/reindex'))).flush([{ ...tx1, revision: 2 }]);
     (await requestFor(txUrl)).flush([tx1, tx2]);
-    (await requestFor(apiUrl('/vault/records/upsert'))).flush({ detail: 'interrupted' }, { status: 500, statusText: 'Error' });
+    (await requestFor(apiUrl('/vault/records/reindex'))).flush({ detail: 'interrupted' }, { status: 500, statusText: 'Error' });
     await expectAsync(pass).toBeRejected();
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const reloaded = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
     await reloaded.whenReady();
@@ -442,7 +483,7 @@ describe('VaultService blind-index upgrade', () => {
     const batch = reloaded.ensureBlindIndexes();
     (await requestFor(apiUrl('/vault/records'))).flush([tx1, tx2]);
     (await requestFor(txUrl)).flush([tx2]);
-    const only = await requestFor(apiUrl('/vault/records/upsert'));
+    const only = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(only).records.map(row => row.client_id)).toEqual(['txn_bbbbbbbb']);
     only.flush([{ ...tx2, revision: 2 }]);
     await batch;
@@ -458,7 +499,7 @@ describe('VaultService blind-index upgrade', () => {
     await pass;
     expect(first.blindIndexVersion).toBe(2);
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const reloaded = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
     await reloaded.whenReady();
@@ -476,21 +517,22 @@ describe('VaultService blind-index upgrade', () => {
     const pass = service.ensureBlindIndexes();
     (await requestFor(apiUrl('/vault/records'))).flush([tx, gone]);
     (await requestFor(txUrl)).flush([tx, gone]);
-    const conflict = await requestFor(apiUrl('/vault/records/upsert'));
+    const conflict = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(conflict).records[0].client_id).toBe('txn_cccccccc');
     expect(bodyOf(conflict).records[0].expected_revision).toBe(1);
     expect(bodyOf(conflict).records[0].ciphertext_b64).toBe(tx.ciphertext_b64);
     conflict.flush({ detail: 'conflict' }, { status: 409, statusText: 'Conflict' });
-    const revised = { ...tx, revision: 4, ciphertext_b64: 'Y2lwaGVyLXJldmlzZWQ=' };
+    const revised = { ...await sealed(service.requireDek(), 'transactions', tx.client_id, { dedupe_key: 'revised-dedupe' }), revision: 4 };
     (await requestFor(txUrl)).flush([revised, gone]);
-    const retried = await requestFor(apiUrl('/vault/records/upsert'));
+    const retried = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(retried).records[0].expected_revision).toBe(4);
     expect(bodyOf(retried).records[0].ciphertext_b64).toBe(revised.ciphertext_b64);
+    expect(bodyOf(retried).records[0].indexes?.[0].index_value_b64).toBe(await hmacBlindIndex(service.requireDek(), 'revised-dedupe'));
     retried.flush([{ ...revised, revision: 5 }]);
     (await requestFor(txUrl)).flush([revised]);
     await pass;
     expect(service.blindIndexVersion).toBe(2);
-    expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+    expect(http.match(request => request.url.includes('upsert') || request.url.includes('reindex')).length).toBe(0);
   });
 
   it('counts an undecryptable row without logging its id', async () => {
@@ -507,13 +549,13 @@ describe('VaultService blind-index upgrade', () => {
     const text = debug.calls.allArgs().map(args => args.map(String).join(' ')).join('\n');
     expect(text).toContain('undecryptable rows: 1');
     expect(text).not.toContain('txn_poison00');
-    expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+    expect(http.match(request => request.url.includes('upsert') || request.url.includes('reindex')).length).toBe(0);
   });
 
   it('resolves unlock before the re-index batch finishes', async () => {
     const passphrase = 'correct horse battery staple';
     const material = await createVaultMaterial(passphrase, 1_000);
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
     await service.whenReady();
@@ -531,12 +573,13 @@ describe('VaultService blind-index upgrade', () => {
     const batch = service.ensureBlindIndexes();
     expect(service.isUnlocked).toBeTrue();
     expect(service.blindIndexVersion).toBe(1);
-    const newer = { ...tx, revision: 3, ciphertext_b64: 'bmV3ZXItY2lwaGVy' };
+    const newer = { ...await sealed(material.dek, 'transactions', tx.client_id, { dedupe_key: 'newer-dedupe' }), revision: 3 };
     listed.flush([tx]);
     (await requestFor(txUrl)).flush([newer]);
-    const posted = await requestFor(apiUrl('/vault/records/upsert'));
+    const posted = await requestFor(apiUrl('/vault/records/reindex'));
     expect(bodyOf(posted).records[0].ciphertext_b64).toBe(newer.ciphertext_b64);
     expect(bodyOf(posted).records[0].expected_revision).toBe(3);
+    expect(bodyOf(posted).records[0].indexes?.[0].index_value_b64).toBe(await hmacBlindIndex(material.dek, 'newer-dedupe'));
     posted.flush([{ ...newer, revision: 4 }]);
     await batch;
     expect(service.blindIndexVersion).toBe(2);
@@ -555,13 +598,14 @@ describe('VaultService blind-index upgrade', () => {
     expect(service.isUnlocked).toBeFalse();
     expect(service.blindIndexVersion).toBe(1);
     expect(await indexedDbHoldsDek()).toBeFalse();
-    expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+    expect(http.match(request => request.url.includes('upsert') || request.url.includes('reindex')).length).toBe(0);
   });
 
-  it('does not list a second batch until the stopped one finishes', async () => {
+  for (const lockFirst of [true, false]) {
+  it(`restarts after ${lockFirst ? 'lock and unlock' : 'a second unlock'}, waiting for the old batch`, async () => {
     const passphrase = 'correct horse battery staple';
     const material = await createVaultMaterial(passphrase, 1_000);
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
     await service.whenReady();
@@ -575,9 +619,11 @@ describe('VaultService blind-index upgrade', () => {
     const pending = service.unlock(passphrase);
     const firstList = await requestFor(apiUrl('/vault/records'));
     await pending;
-    service.lock();
+    const flight = service.ensureBlindIndexes();
+    if (lockFirst) service.lock();
     await service.unlock(passphrase);
     const batch = service.ensureBlindIndexes();
+    if (!lockFirst) expect(batch).toBe(flight);
     let startedEarly = false;
     for (let attempt = 0; attempt < 5 && !startedEarly; attempt += 1) {
       startedEarly = http.match(request => request.url === apiUrl('/vault/records')).length > 0;
@@ -585,15 +631,17 @@ describe('VaultService blind-index upgrade', () => {
     }
     expect(startedEarly).toBeFalse();
     firstList.flush([]);
-    (await requestFor(apiUrl('/vault/records'))).flush([]);
+    if (lockFirst) (await requestFor(apiUrl('/vault/records'))).flush([]);
     await batch;
+    expect(http.match(request => request.url === apiUrl('/vault/records')).length).toBe(0);
     expect(service.blindIndexVersion).toBe(2);
     expect(service.isUnlocked).toBeTrue();
   });
+  }
 
   it('logs a background re-index failure without ids', async () => {
     localStorage.setItem('finance-dek', encodeBase64(new Uint8Array(32).fill(12)));
-    TestBed.configureTestingModule({ imports: [HttpClientTestingModule] });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
     const service = TestBed.inject(VaultService);
     http = TestBed.inject(HttpTestingController);
     const debug = spyOn(console, 'debug');
@@ -603,12 +651,133 @@ describe('VaultService blind-index upgrade', () => {
     const tx = await sealed(service.requireDek(), 'transactions', 'txn_logme0001', { dedupe_key: 'dedupe-log' });
     (await requestFor(apiUrl('/vault/records'))).flush([tx]);
     (await requestFor(txUrl)).flush([tx]);
-    (await requestFor(apiUrl('/vault/records/upsert'))).flush({ detail: 'txn_logme0001 failed' }, { status: 500, statusText: 'Error' });
+    (await requestFor(apiUrl('/vault/records/reindex'))).flush({ detail: 'txn_logme0001 failed' }, { status: 500, statusText: 'Error' });
     await batch.catch(() => undefined);
     const text = debug.calls.allArgs().map(args => args.map(String).join(' ')).join('\n');
     expect(text).toContain('vault re-index stopped before version 2');
     expect(text).not.toContain('txn_logme0001');
     expect(service.blindIndexVersion).toBe(1);
     expect(service.isUnlocked).toBeTrue();
+  });
+
+  it('does not insert a row the re-index endpoint skipped after the refetch', async () => {
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const service = await boot(13);
+    const tx = await sealed(service.requireDek(), 'transactions', 'txn_eeeeeeee', { dedupe_key: 'dedupe-five' });
+    (VaultService.prototype.ensureBlindIndexes as jasmine.Spy).and.callThrough();
+    const pass = service.ensureBlindIndexes();
+    (await requestFor(apiUrl('/vault/records'))).flush([tx]);
+    (await requestFor(txUrl)).flush([tx]);
+    const posted = await requestFor(apiUrl('/vault/records/reindex'));
+    expect(posted.request.url).toBe(apiUrl('/vault/records/reindex'));
+    expect(bodyOf(posted).records[0].client_id).toBe(tx.client_id);
+    expect(bodyOf(posted).records[0].expected_revision).toBe(tx.revision);
+    expect(bodyOf(posted).records[0].indexes?.[0].index_value_b64).toBe(await hmacBlindIndex(service.requireDek(), 'dedupe-five'));
+    posted.flush({ records: [], skipped: [tx.client_id] });
+    await pass;
+    expect(service.blindIndexVersion).toBe(2);
+    expect(http.match(request => request.url.includes('upsert')).length).toBe(0);
+  });
+
+  it('does not touch a stored key before the session resolves', async () => {
+    const raw = encodeBase64(new Uint8Array(32).fill(9));
+    localStorage.setItem('finance-dek', raw);
+    let current: { id: number } | null = null;
+    let resolveUser: (user: { id: number } | null) => void = () => undefined;
+    const pendingUser = new Promise<{ id: number } | null>(resolve => { resolveUser = resolve; });
+    const session = {
+      get currentUser() { return current; },
+      user$: EMPTY,
+      cleared$: EMPTY,
+      loadSession: () => new Observable(subscriber => {
+        void pendingUser.then(user => {
+          current = user;
+          subscriber.next(user);
+          subscriber.complete();
+        });
+      }),
+    } as unknown as SessionPort;
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const opened = spyOn(indexedDB, 'open').and.callThrough();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{ provide: SESSION_CONTEXT, useValue: session }],
+    });
+    const service = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(opened).not.toHaveBeenCalled();
+    expect(localStorage.getItem('finance-dek')).toBe(raw);
+    expect(localStorage.getItem(VAULT_PRESENCE)).toBeNull();
+    expect(localStorage.getItem(LOCK_SIGNAL)).toBeNull();
+    resolveUser({ id: 1 });
+    await service.whenReady();
+    expect(service.isUnlocked).toBeTrue();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(localStorage.getItem(LOCK_SIGNAL)).toBeNull();
+    expect(await indexedDbHoldsDek()).toBeTrue();
+  });
+
+  it('never uses user A stored key for user B', async () => {
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const first = await boot(8, 1);
+    expect(first.isUnlocked).toBeTrue();
+    expect(localStorage.getItem(VAULT_PRESENCE)).toBe('1');
+    holdDek(null);
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider(2)] });
+    const second = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+    await second.whenReady();
+    expect(second.isUnlocked).toBeFalse();
+    expect(hasDek()).toBeFalse();
+    expect(await indexedDbHoldsDek()).toBeFalse();
+    expect(localStorage.getItem(VAULT_PRESENCE)).toBeNull();
+  });
+
+  it('discards a stored key and progress whose owner is null', async () => {
+    const imported = await importVaultKeys(new Uint8Array(32).fill(4));
+    await withVaultStore('readwrite', store => store.put({
+      id: VAULT_KEY_ID,
+      owner_id: null,
+      dek: imported.dek,
+      blindKey: imported.blindKey,
+      legacyBlindKey: imported.legacyBlindKey,
+      blind_index_version: 2,
+      reindexed: [],
+    }));
+    await withVaultStore('readwrite', store => store.put({
+      id: 'progress:1', owner_id: null, blind_index_version: 2, reindexed: ['transactions/txn_aaaaaaaa'],
+    }));
+    localStorage.setItem(VAULT_PRESENCE, '1');
+    const passphrase = 'correct horse battery staple';
+    const material = await createVaultMaterial(passphrase, 1_000);
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [sessionProvider()] });
+    const service = TestBed.inject(VaultService);
+    http = TestBed.inject(HttpTestingController);
+    await service.whenReady();
+    expect(service.isUnlocked).toBeFalse();
+    expect(await indexedDbHoldsDek()).toBeFalse();
+    expect(localStorage.getItem(VAULT_PRESENCE)).toBeNull();
+    service.loadPublicStatus({
+      exists: true,
+      kdf_salt_b64: material.setupPayload.kdf_salt_b64,
+      kdf_iterations: material.setupPayload.kdf_iterations,
+      wrapped_dek_b64: material.setupPayload.wrapped_dek_b64,
+      key_version: 1,
+    });
+    expect(await service.unlock(passphrase)).toBeTrue();
+    expect(service.blindIndexVersion).toBe(1);
+  });
+
+  it('migrates a legacy key without a lock signal so another tab keeps it', async () => {
+    spyOn(VaultService.prototype, 'ensureBlindIndexes').and.resolveTo();
+    const service = await boot(9);
+    expect(service.isUnlocked).toBeTrue();
+    expect(localStorage.getItem('finance-dek')).toBeNull();
+    expect(localStorage.getItem(LOCK_SIGNAL)).toBeNull();
+    expect(await indexedDbHoldsDek()).toBeTrue();
+    expect(financeVaultPresent()).toBeTrue();
   });
 });
