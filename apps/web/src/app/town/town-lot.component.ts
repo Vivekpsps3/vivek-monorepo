@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { UiSkeletonComponent } from '@vivek/ui';
@@ -18,7 +18,30 @@ export class TownLotComponent {
   lot = input<TownResponse['lots'][number]>();
   habit = input<Habit>();
   vaultPresent = input(false);
+  /** Previous stage while the 240ms swap plays. Null skips the old sprite, including reduced motion. */
+  swapFrom = input<1 | 2 | 3 | null>(null);
   openHabit = output<void>();
+  readonly oldStage = signal<1 | 2 | 3 | null>(null);
+  constructor() {
+    effect(onCleanup => {
+      const from = this.swapFrom();
+      if (from == null || prefersReducedMotion()) {
+        this.oldStage.set(null);
+        return;
+      }
+      this.oldStage.set(from);
+      const id = window.setTimeout(() => this.oldStage.set(null), 240);
+      onCleanup(() => window.clearTimeout(id));
+    });
+  }
+  oldSrc(): string | null {
+    const old = this.oldStage();
+    if (old == null) return null;
+    const kind = this.kind();
+    if (kind === 'library' || kind === 'inn') return townSpriteUrl(buildingSprite(kind, old));
+    const style = this.habit()?.building_style;
+    return style ? townSpriteUrl(buildingSprite(style, old)) : null;
+  }
   readonly view = computed(() => {
     const kind = this.kind(), habit = this.habit(), lot = this.lot(), building = this.building();
     let name: string, label: string, sprite: TownSpriteId, link = '';
@@ -42,4 +65,8 @@ export class TownLotComponent {
     }
     return { name, label, src: townSpriteUrl(sprite), link };
   });
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 }

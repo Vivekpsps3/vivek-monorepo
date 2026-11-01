@@ -1,10 +1,12 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Subject } from 'rxjs';
-import { TownApiService } from './town.api';
+import { ToastService } from '@vivek/ui';
+import { SessionService } from '../platform/session.service';
+import { TownApiService, type CheckinResult } from './town.api';
 import { TownComponent } from './town.component';
 import { LOT_UNLOCK_LV } from './town.constants';
-import type { TownResponse } from './town.types';
+import type { Habit, TownResponse } from './town.types';
 
 function localDay(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -20,11 +22,19 @@ function snapshot(): TownResponse {
 }
 describe('Town page', () => {
   let response: Subject<TownResponse>;
-  let api: { getTown: jasmine.Spy };
+  let api: { getTown: jasmine.Spy; checkin: jasmine.Spy };
   beforeEach(() => {
+    localStorage.clear();
     response = new Subject();
-    api = { getTown: jasmine.createSpy().and.callFake(() => response) };
-    TestBed.configureTestingModule({ imports: [TownComponent], providers: [provideRouter([]), { provide: TownApiService, useValue: api }] });
+    api = { getTown: jasmine.createSpy().and.callFake(() => response), checkin: jasmine.createSpy() };
+    TestBed.configureTestingModule({
+      imports: [TownComponent],
+      providers: [
+        provideRouter([]),
+        { provide: TownApiService, useValue: api },
+        { provide: SessionService, useValue: { currentUser: { id: 7 } } },
+      ],
+    });
   });
   function render(data?: TownResponse) {
     const fixture = TestBed.createComponent(TownComponent);
@@ -142,6 +152,52 @@ describe('Town page', () => {
     fixture.destroy(); tick(300_000); document.dispatchEvent(new Event('visibilitychange'));
     expect(api.getTown).toHaveBeenCalledTimes(2);
   }));
+  it('writes seen levels silently, then toasts once and swaps a stage', () => {
+    const toast = TestBed.inject(ToastService);
+    const success = spyOn(toast, 'success');
+    const data = snapshot();
+    const { fixture, el } = render(data);
+    expect(success).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem('town.seen.v1.7')!)).toEqual({ town: 3, b: { library: 1, inn: 1 } });
+    data.town.level = 5; data.town.xp = 900; data.town.level_xp_start = 900; data.town.next_level_xp = 1400;
+    data.buildings.library = { ...data.buildings.library, level: 4, stage: 3 };
+    response.next(data); fixture.detectChanges();
+    expect(success).toHaveBeenCalledOnceWith('Level up! Terraria-on-Sea Lv 5 · Library Lv 4 · New lot unlocked');
+    expect(el.querySelector('.swap img.old')?.getAttribute('src')).toBe('/town/library-1.svg');
+    expect(el.querySelector('.swap img.new')?.getAttribute('src')).toBe('/town/library-3.svg');
+    data.buildings.library.source = 'unavailable';
+    response.next(data); fixture.detectChanges();
+    expect(success).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem('town.seen.v1.7')!).town).toBe(5);
+  });
+  it('announces a check-in without the XP clause when the refetch toasts', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'success');
+    const read = {
+      id: 12, name: 'Read 20 pages', slot: 0, building_style: 'forge',
+      cadence: { per_week: 7, kind: 'daily', pending: null }, created_on: '2026-10-05', archived_on: null,
+      xp: 80, level: 2, stage: 2, level_xp_start: 50, next_level_xp: 150,
+      streak: { unit: 'days', current: 3, best: 3, best_days: 3, best_weeks: 0, rest_day_available: true, rest_used_on: null },
+      week: null, checked_today: false, checked_yesterday: true, can_check_yesterday: false, last7: [],
+    } as Habit;
+    const data = snapshot(); data.habits = [read];
+    const checkin = new Subject<CheckinResult>();
+    api.checkin = jasmine.createSpy().and.returnValue(checkin);
+    const { fixture, el } = render(data);
+    el.querySelector<HTMLButtonElement>('ui-card button')!.click();
+    expect(api.checkin).toHaveBeenCalledWith(12, '2026-10-29');
+    const result: CheckinResult = {
+      day: '2026-10-29', checked: true,
+      habit: { ...read, checked_today: true, streak: { ...read.streak, current: 4 } },
+      town: { xp: 500, level: 4, level_xp_start: 500, next_level_xp: 900 },
+    };
+    checkin.next(result);
+    data.town = { ...data.town, ...result.town };
+    data.habits = [result.habit];
+    response.next(data); fixture.detectChanges();
+    expect(toast.success).toHaveBeenCalledOnceWith('Terraria-on-Sea reached Lv 4!');
+    expect(el.querySelector('[aria-live="polite"]')?.textContent).toBe('Read 20 pages checked. 4-day streak.');
+  });
   it('reflows to two columns below the minimum tile width using the scene container', () => {
     const { el } = render(snapshot());
     const scene = el.querySelector<HTMLElement>('.scene')!;

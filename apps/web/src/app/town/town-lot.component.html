@@ -1,5 +1,8 @@
 <ng-template #contents>
-  <img class="town-sprite" [src]="view().src" alt="" width="96" height="96" decoding="async">
+  <span class="sprites" [class.swap]="oldStage() !== null">
+    @if (oldSrc(); as old) { <img class="town-sprite old" [src]="old" alt="" width="96" height="96" decoding="async"> }
+    <img class="town-sprite" [class.new]="oldStage() !== null" [src]="view().src" alt="" width="96" height="96" decoding="async">
+  </span>
   <span class="label name" [title]="view().name">{{ view().name }}</span>
   @if (kind() === 'treasury' && vaultPresent()) {
     <ui-skeleton variant="lines" [lines]="1" />

@@ -36,21 +36,18 @@
   <div class="town-layout">
     <div class="scene">
       <ul aria-label="Town buildings">
-        <li><app-town-lot kind="library" [building]="data.buildings.library" /></li>
-        <li><app-town-lot kind="inn" [building]="data.buildings.inn" /></li>
+        <li><app-town-lot kind="library" [building]="data.buildings.library" [swapFrom]="swapFrom('library')" /></li>
+        <li><app-town-lot kind="inn" [building]="data.buildings.inn" [swapFrom]="swapFrom('inn')" /></li>
         <li><app-town-lot kind="treasury" [vaultPresent]="financeVaultPresent()" /></li>
         @for (lot of data.lots; track lot.slot) {
-          <li><app-town-lot [lot]="lot" [habit]="habit(lot.habit_id)" (openHabit)="openHabitDialog(lot.slot, lot.habit_id)" /></li>
+          <li><app-town-lot [lot]="lot" [habit]="habit(lot.habit_id)" [swapFrom]="swapFrom('h' + lot.habit_id)" (openHabit)="openHabitDialog(lot.slot, lot.habit_id)" /></li>
         }
       </ul>
     </div>
     <ui-card><h2>Today</h2>
-      @if (data.habits.length === 0) {
-        <ui-empty-state title="No active habits" message="">
-          <ui-button [disabled]="!!noFreeLot()" (clicked)="openHabitDialog(null, null)">+ New habit</ui-button>
-        </ui-empty-state>
-      }
-      @if (noFreeLot()) { <footer>{{ noFreeLot() }}</footer> }
+      <app-town-today [data]="data" [live]="live()" [vaultPresent]="financeVaultPresent()"
+        (newHabit)="openHabitDialog(null, null)" (history)="openHistory()"
+        (settled)="onSettled($event)" (dayChanged)="reload()" />
     </ui-card>
   </div>
 }

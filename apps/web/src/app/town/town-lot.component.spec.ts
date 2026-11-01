@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TownLotComponent } from './town-lot.component';
 import type { Habit } from './town.types';
@@ -58,5 +58,25 @@ describe('Town tiles', () => {
     expect(el.textContent).toContain('Lv 2 · 2-week streak');
     const open = jasmine.createSpy(); fixture.componentInstance.openHabit.subscribe(open);
     el.querySelector<HTMLButtonElement>('button')!.click(); expect(open).toHaveBeenCalledTimes(1);
+  });
+  it('stacks the old sprite for 240ms and skips it under reduced motion', fakeAsync(() => {
+    const habit = { name: 'Read', level: 2, stage: 2, building_style: 'forge', streak: { current: 1, unit: 'days' } } as Habit;
+    const { fixture, el } = render({ lot: { state: 'occupied' }, habit, swapFrom: 1 });
+    expect(el.querySelector('.swap')).not.toBeNull();
+    expect(el.querySelectorAll('img').length).toBe(2);
+    expect(el.querySelector('img.old')?.getAttribute('src')).toBe('/town/forge-1.svg');
+    expect(el.querySelector('img.new')?.getAttribute('src')).toBe('/town/forge-2.svg');
+    tick(240); fixture.detectChanges();
+    expect(el.querySelectorAll('img').length).toBe(1);
+    expect(el.querySelector('.swap')).toBeNull();
+    fixture.destroy();
+  }));
+  it('renders only the new sprite when motion is reduced', () => {
+    spyOn(window, 'matchMedia').and.returnValue({ matches: true } as MediaQueryList);
+    const habit = { name: 'Read', level: 2, stage: 2, building_style: 'forge', streak: { current: 1, unit: 'days' } } as Habit;
+    const { el } = render({ lot: { state: 'occupied' }, habit, swapFrom: 1 });
+    expect(el.querySelectorAll('img').length).toBe(1);
+    expect(el.querySelector('.swap')).toBeNull();
+    expect(el.querySelector('img')?.getAttribute('src')).toBe('/town/forge-2.svg');
   });
 });
