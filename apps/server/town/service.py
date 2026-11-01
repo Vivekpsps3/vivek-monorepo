@@ -43,8 +43,8 @@ def passive_days(
     return PassiveDays({}, {}, {}, {}, True, True)
 
 
-# Existing uniqueness index; COUNT(*) counts distinct habit days by construction.
-_CHECKS = """FROM habits h JOIN habit_checkins c INDEXED BY sqlite_autoindex_habit_checkins_1
+# (habit_id, day) is unique, so COUNT(*) is one row per check-in day.
+_CHECKS = """FROM habits h JOIN habit_checkins c
     ON c.habit_id = h.id WHERE h.id IN :ids AND h.user_id = :uid AND c.user_id = :uid
     AND c.day >= h.created_on AND c.day <= min(:today, coalesce(h.archived_on, :today))"""
 
@@ -313,7 +313,7 @@ def read_checkins(db: Session, user_id: int, habit_id: int, start: date, end: da
         raise _not_found()
     rows = db.execute(
         text(
-            """SELECT day FROM habit_checkins INDEXED BY sqlite_autoindex_habit_checkins_1
+            """SELECT day FROM habit_checkins
             WHERE habit_id = :habit_id AND user_id = :uid
             AND day >= :start AND day <= :end ORDER BY day"""
         ),
@@ -331,7 +331,7 @@ def read_checkins(db: Session, user_id: int, habit_id: int, start: date, end: da
 # memory. Weekly islands keep streak totals; only the archive week and last7
 # are read as days. A multi-segment history may load that habit's day list.
 _WINDOW = """SELECT c.habit_id, c.day FROM habits h
-    JOIN habit_checkins c INDEXED BY sqlite_autoindex_habit_checkins_1
+    JOIN habit_checkins c
     ON c.habit_id = h.id WHERE h.id IN :ids AND h.user_id = :uid AND c.user_id = :uid
     AND c.day >= h.created_on AND c.day <= min(:today, coalesce(h.archived_on, :today))
     AND c.day >= min(date(coalesce(h.archived_on, :today), printf('-%d days',

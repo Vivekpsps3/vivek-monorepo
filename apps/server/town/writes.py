@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import Request
@@ -333,6 +333,13 @@ async def patch_habit(
     return _view(db, user_id, today, tz, owned_id)
 
 
+def _server_day(now: datetime) -> date:
+    """CHECKIN_WINDOW anchor. The client picks tz, so the server clock decides."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    return now.astimezone(UTC).date()
+
+
 def create_checkin_day(
     db: Session,
     user_id: int,
@@ -345,8 +352,9 @@ def create_checkin_day(
     habit = _owned(db, user_id, habit_id)
     # Archived wins over the window. The window wins over day_before_habit.
     _active(habit)
-    start = today + timedelta(days=CHECKIN_WINDOW[0])
-    end = today + timedelta(days=CHECKIN_WINDOW[1])
+    server_today = _server_day(now)
+    start = server_today + timedelta(days=CHECKIN_WINDOW[0])
+    end = server_today + timedelta(days=CHECKIN_WINDOW[1])
     if day < start or day > end:
         raise APIError(422, "day_out_of_window", _WINDOW)
     if day < habit.created_on:
@@ -380,13 +388,20 @@ async def create_checkin(
 
 
 def delete_checkin(
-    db: Session, user_id: int, habit_id: int, raw_day: str, today: date, tz: str
+    db: Session,
+    user_id: int,
+    habit_id: int,
+    raw_day: str,
+    today: date,
+    tz: str,
+    now: datetime,
 ) -> dict[str, Any]:
     # A bad date is 422 before the habit lookup.
     day = _path_day(raw_day)
     habit = _owned(db, user_id, habit_id)
     _active(habit)
-    if day < today or day > today + timedelta(days=CHECKIN_WINDOW[1]):
+    server_today = _server_day(now)
+    if day < server_today or day > server_today + timedelta(days=CHECKIN_WINDOW[1]):
         raise APIError(409, "checkin_locked", _UNDO)
     owned_id = habit.id
     row = existing_checkin(db, user_id, owned_id, day)

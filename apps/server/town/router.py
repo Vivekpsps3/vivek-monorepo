@@ -153,5 +153,5 @@ def delete_checkin(
     now: datetime = Depends(get_town_clock),
 ) -> CheckinResult:
     zone, today = _zone(tz, now)
-    payload = writes.delete_checkin(db, user.id, habit_id, day, today, zone)
+    payload = writes.delete_checkin(db, user.id, habit_id, day, today, zone, now)
     return CheckinResult.model_validate(payload)

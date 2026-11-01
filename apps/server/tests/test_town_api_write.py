@@ -499,3 +499,41 @@ def test_csrf_and_anonymous_writes(tmp_path, monkeypatch):
         seen = _call(client, "get", "/api/town", token="tok", params={"tz": TZ})
         assert seen.status_code == 200
     database.engine.dispose()
+
+
+def test_checkin_window_follows_server_time_at_both_edges(api):
+    """tz can move the client's today. CHECKIN_WINDOW stays on the server clock."""
+    client, database, application = api
+    ahead = _plant(database, "Ahead", 0, 7, date(2026, 10, 1))
+    behind = _plant(database, "Behind", 1, 7, date(2026, 10, 1))
+    out = "You can only check in for today or yesterday."
+    locked = "Only today's check-in can be undone."
+
+    # 12:00Z is 2026-10-30 in Pacific/Kiritimati and 2026-10-29 on the server.
+    application.dependency_overrides[get_town_clock] = lambda: datetime(
+        2026, 10, 29, 12, 0, tzinfo=UTC
+    )
+    zone = "Pacific/Kiritimati"
+    _err(_check(client, ahead, "2026-10-27", zone), 422, "day_out_of_window", out)
+    _err(_check(client, ahead, "2026-10-31", zone), 422, "day_out_of_window", out)
+    lower = _check(client, ahead, "2026-10-28", zone)
+    upper = _check(client, ahead, "2026-10-30", zone)
+    assert lower.status_code == 201 and lower.json()["checked"] is True
+    assert upper.status_code == 201 and upper.json()["day"] == "2026-10-30"
+
+    # 02:00Z is 2026-10-29 in Los Angeles and 2026-10-30 on the server.
+    application.dependency_overrides[get_town_clock] = lambda: datetime(
+        2026, 10, 30, 2, 0, tzinfo=UTC
+    )
+    _err(_check(client, behind, "2026-10-28"), 422, "day_out_of_window", out)
+    _err(_check(client, behind, "2026-11-01"), 422, "day_out_of_window", out)
+    lower = _check(client, behind, "2026-10-29")
+    upper = _check(client, behind, "2026-10-31")
+    server_today = _check(client, behind, "2026-10-30")
+    assert lower.status_code == 201 and upper.status_code == 201
+    assert server_today.status_code == 201
+    undone = _undo(client, behind, "2026-10-31")
+    assert undone.status_code == 200 and undone.json()["checked"] is False
+    undone = _undo(client, behind, "2026-10-30")
+    assert undone.status_code == 200 and undone.json()["checked"] is False
+    _err(_undo(client, behind, "2026-10-29"), 409, "checkin_locked", locked)
