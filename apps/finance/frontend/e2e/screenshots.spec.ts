@@ -1,7 +1,7 @@
 import { chooseColorTheme } from '../../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from './frozen-clock';
 import { moneyText } from './money-text';
 import { syntheticVault } from './synthetic-vault';
 
