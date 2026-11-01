@@ -42,9 +42,10 @@ def passive_days(
     return PassiveDays({}, {}, {}, {}, True, True)
 
 
-# +c.user_id stays a filter so each habit seeks (habit_id, day). No INDEXED BY.
-_SPAN = "h.user_id = :uid AND +c.user_id = :uid AND c.day >= h.created_on AND c.day <= min(:today, coalesce(h.archived_on, :today))"
-_CHECKS = f"FROM habits h JOIN habit_checkins c ON c.habit_id = h.id WHERE h.id IN :ids AND {_SPAN}"
+# Existing uniqueness index; COUNT(*) counts distinct habit days by construction.
+_CHECKS = """FROM habits h JOIN habit_checkins c INDEXED BY sqlite_autoindex_habit_checkins_1
+    ON c.habit_id = h.id WHERE h.id IN :ids AND h.user_id = :uid AND c.user_id = :uid
+    AND c.day >= h.created_on AND c.day <= min(:today, coalesce(h.archived_on, :today))"""
 
 
 def _query(db: Session, sql: str, user_id: int, ids: list[int], today: date, **params):
@@ -56,26 +57,24 @@ def _query(db: Session, sql: str, user_id: int, ids: list[int], today: date, **p
     ).all()
 
 
-def _runs(db: Session, user_id: int, grouped: dict[int, list[int]], today: date):
-    ids = [i for g in grouped.values() for i in g]
-    if not ids:
-        return []
+def _runs(db: Session, user_id: int, ids: list[int], today: date, per_week: int):
     ordinal = "CAST(julianday(c.day) - 1721424.5 AS INTEGER)"
-    targets = " ".join(f"WHEN {int(i)} THEN {int(t)}" for t, g in grouped.items() for i in g)
+    units = f"SELECT c.habit_id, {ordinal} AS day_ord {_CHECKS}"
+    if per_week != 7:
+        units = f"""SELECT c.habit_id, ({ordinal} - 1) / 7 AS day_ord {_CHECKS}
+            GROUP BY c.habit_id, day_ord HAVING COUNT(*) >= :target"""
     return _query(
         db,
-        f"""WITH raw AS MATERIALIZED (
-        SELECT c.habit_id, CASE c.habit_id {targets} END AS per_week, {ordinal} AS ord {_CHECKS}),
-        units AS (SELECT habit_id, ord AS day_ord FROM raw WHERE per_week = 7 UNION ALL
-        SELECT habit_id, (ord - 1) / 7 AS day_ord FROM raw WHERE per_week <> 7
-        GROUP BY habit_id, per_week, day_ord HAVING COUNT(*) >= per_week),
-        islands AS (SELECT habit_id, day_ord, day_ord - ROW_NUMBER() OVER (
-        PARTITION BY habit_id ORDER BY day_ord) AS grp FROM units)
+        f"""WITH units AS ({units}), islands AS (
+            SELECT habit_id, day_ord,
+                day_ord - ROW_NUMBER() OVER (PARTITION BY habit_id ORDER BY day_ord) AS grp
+            FROM units)
         SELECT habit_id, min(day_ord), count(*) FROM islands
         GROUP BY habit_id, grp ORDER BY habit_id, min(day_ord)""",
         user_id,
         ids,
         today,
+        target=per_week,
     )
 
 
@@ -220,15 +219,16 @@ def read_town(db: Session, user_id: int, today: date, tz: str) -> dict:
         for h in habits
         if h.id in detailed
     }
+    summaries: dict[int, tuple[int, int, int, int]] = {}
     by_id = {h.id: h for h in archived}
-    found: dict[int, list[tuple[int, int]]] = defaultdict(list)
-    for hid, start, length in _runs(db, user_id, grouped, today):
-        found[hid].append((start, length))
-    summaries: dict[int, tuple[int, int, int, int]] = {
-        hid: _run_streak(found[hid], target, min(today, by_id[hid].archived_on or today), today)
-        for target, group in grouped.items()
-        for hid in group
-    }
+    for target, group in grouped.items():
+        runs: dict[int, list[tuple[int, int]]] = defaultdict(list)
+        for hid, start, length in _runs(db, user_id, group, today, target):
+            runs[hid].append((start, length))
+        for hid in group:
+            summaries[hid] = _run_streak(
+                runs[hid], target, min(today, by_id[hid].archived_on or today), today
+            )
     archive_views: list[dict] = []
     for h in archived:
         if h.id in summaries:

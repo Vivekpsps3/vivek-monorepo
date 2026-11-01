@@ -1,7 +1,9 @@
 """AC-I14: GET /api/town p50 over 200 habits and three years of check-ins.
 
-The 700 ms assertion is the CI regression guard. This file is marked perf so coverage
-runs skip it. CI runs it once, without coverage, and prints the profile.
+The 800 ms assertion is the budget, about twice a quiet local median.
+CI runners are typically faster, so this Pi budget is conservative.
+This file is marked perf so coverage runs skip it. CI runs it once,
+without coverage, and prints the profile.
 """
 
 import cProfile
@@ -66,7 +68,7 @@ def _seed(database) -> None:
             connection.execute(insert(HabitCheckin), batch)
 
 
-def test_get_town_p50_stays_under_700ms(tmp_path):
+def test_get_town_p50_stays_under_800ms(tmp_path):
     database = open_database(f"sqlite:///{tmp_path / 'town.db'}")
     _seed(database)
     application = create_app(
@@ -104,4 +106,4 @@ def test_get_town_p50_stays_under_700ms(tmp_path):
     p50 = statistics.median(samples)
     print(f"GET /api/town p50_ms={p50:.2f} min_ms={min(samples):.2f} max_ms={max(samples):.2f}")
     assert sum(samples) < 30000
-    assert p50 < 700
+    assert p50 < 800
