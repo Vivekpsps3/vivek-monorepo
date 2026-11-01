@@ -579,7 +579,10 @@ def test_client_disconnect_during_body_read_is_not_a_500(tmp_path, caplog):
             await application(scope, receive, send)
 
     asyncio.run(run())
-    assert "client_disconnect" in caplog.text and "Traceback" not in caplog.text
-    assert all(not record.exc_info for record in caplog.records)
+    assert "client_disconnect" in caplog.text
+    assert "Traceback" not in caplog.text
+    for record in caplog.records:
+        assert not record.exc_info
     assert REQUESTS.labels("POST", "500")._value.get() == before
-    assert next(item["status"] for item in sent if item["type"] == "http.response.start") == 499
+    status = next(item["status"] for item in sent if item["type"] == "http.response.start")
+    assert status == 499

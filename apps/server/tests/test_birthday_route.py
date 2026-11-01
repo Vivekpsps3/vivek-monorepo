@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from apps.server.database import open_database
+from apps.server.database import _EngineParameterFilter, open_database
 from apps.server.errors import APIError
 from apps.server.identity import birthday as birthday_route
 from apps.server.identity.birthday import (
@@ -766,16 +766,38 @@ def test_debug_root_does_not_log_a_birthday_query(
 ) -> None:
     sqlalchemy_log = logging.getLogger("sqlalchemy")
     engine_log = logging.getLogger("sqlalchemy.engine")
+    engine_logger = logging.getLogger("sqlalchemy.engine.Engine")
     previous = (sqlalchemy_log.level, engine_log.level)
+
+    class _Capture(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__()
+            self.messages: list[str] = []
+
+        def emit(self, record: logging.LogRecord) -> None:
+            self.messages.append(record.getMessage())
+
+    # Parent handler installed before open_database, so the propagate walk
+    # attaches the parameter filter to the handler itself.
+    propagation = _Capture()
+    propagation.setLevel(logging.DEBUG)
+    sqlalchemy_log.addHandler(propagation)
     sqlalchemy_log.setLevel(logging.DEBUG)
     engine_log.setLevel(logging.DEBUG)
-    logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.DEBUG)
+    engine_logger.setLevel(logging.DEBUG)
     caplog.set_level(logging.DEBUG)
     database = None
     try:
         _application, database = _app(tmp_path)
+        assert engine_logger.getEffectiveLevel() == logging.DEBUG
         assert database.engine.echo is False
         assert database.engine.hide_parameters is True
+        assert any(isinstance(item, _EngineParameterFilter) for item in engine_log.filters)
+        assert any(isinstance(item, _EngineParameterFilter) for item in engine_logger.filters)
+        assert any(isinstance(item, _EngineParameterFilter) for item in propagation.filters)
+        assert not any(
+            isinstance(item, _EngineParameterFilter) for item in logging.getLogger().filters
+        )
         _user(database, 1, "token-a", "csrf-a")
         db = database.sessionmaker()
         try:
@@ -787,36 +809,70 @@ def test_debug_root_does_not_log_a_birthday_query(
             assert loaded.birthday.isoformat() == SECRET
         finally:
             db.close()
-        logged = _captured_logs(caplog, capsys)
-        assert SECRET not in logged and "1919" not in logged
-        assert any(token in logged for token in ("SELECT", "UPDATE", "INSERT"))
+
+        def clean(text_out: str) -> None:
+            assert SECRET not in text_out
+            assert "1919" not in text_out
+            assert any(token in text_out for token in ("SELECT", "UPDATE", "INSERT"))
+            for record in caplog.records:
+                assert SECRET not in record.getMessage()
+
+        clean(_captured_logs(caplog, capsys))
+
+        # Logger filters off: only handlers on the propagate walk can drop parameters.
+        saved_filters = [(logger, list(logger.filters)) for logger in (engine_log, engine_logger)]
+        for logger, _filters in saved_filters:
+            logger.filters.clear()
+        propagation.messages.clear()
+        try:
+            engine_logger.debug("[%s] %r", "SELECT", {"birthday": SECRET})
+            engine_logger.debug("Row %r", SECRET)
+            engine_logger.debug("[raw sql] %s", SECRET)
+            engine_logger.debug("SELECT users")
+            for message in propagation.messages:
+                assert SECRET not in message
+                assert "1919" not in message
+            assert "SELECT users" in propagation.messages
+        finally:
+            for logger, filters in saved_filters:
+                logger.filters[:] = filters
+            caplog.clear()
 
         def again() -> None:
             caplog.clear()
             session = database.sessionmaker()
             try:
                 row = session.query(User).filter(User.id == 1).one()
-                assert row.birthday is not None and row.birthday.isoformat() == SECRET
+                assert row.birthday is not None
+                assert row.birthday.isoformat() == SECRET
             finally:
                 session.close()
             text_out = _captured_logs(caplog, capsys)
-            assert SECRET not in text_out and "1919" not in text_out
+            assert SECRET not in text_out
+            assert "1919" not in text_out
             assert any(token in text_out for token in ("SELECT", "UPDATE", "INSERT"))
+            for record in caplog.records:
+                assert SECRET not in record.getMessage()
 
-        database.engine.echo, database.engine.hide_parameters = "debug", False
+        database.engine.echo = "debug"
+        database.engine.hide_parameters = False
+        assert database.engine.echo == "debug"
         again()
         cfg: dict[str, Any] = {"version": 1, "incremental": True}
         cfg["loggers"] = {"sqlalchemy.engine": {"level": "DEBUG"}}
         logging.config.dictConfig(cfg)
-        logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.DEBUG)
+        engine_logger.setLevel(logging.DEBUG)
+        assert engine_log.getEffectiveLevel() == logging.DEBUG
         again()
     finally:
+        sqlalchemy_log.removeHandler(propagation)
         sqlalchemy_log.setLevel(previous[0])
         engine_log.setLevel(previous[1])
-        logging.getLogger("sqlalchemy.engine.Engine").handlers.clear()
-        logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.NOTSET)
+        engine_logger.handlers.clear()
+        engine_logger.setLevel(logging.NOTSET)
         if database is not None:
-            database.engine.echo, database.engine.hide_parameters = False, True
+            database.engine.echo = False
+            database.engine.hide_parameters = True
             database.engine.dispose()
 
 
@@ -969,9 +1025,14 @@ def test_bodies_over_4kb_are_413_before_parsing(
         def one(payload: bytes):
             yield payload
 
-        assert post(exact) == 200 and post(one(exact)) == 200
+        assert post(exact) == 200
+        assert post(one(exact)) == 200
+        assert post(exact + b" ") == 413
         assert post(one(exact + b" ")) == 413
-        assert post(b"{}", "4096") == 422 and post(b"{}", "0000004096") == 422
+        assert post(b"{}", "4096") == 422
+        assert post(b"{}", "4097") == 413
+        assert post(b"{}", "0000004096") == 422
+        assert post(b"{}", "0000004097") == 413
         assert post(b"{}", "00000004096") == 413
         current = _call(client, "get", "/api/account/birthday", "token-a")
         assert current.json() == {"birthday": None, "show_age": False}
@@ -1116,26 +1177,40 @@ def test_client_error_frames_omit_birthday_input(monkeypatch: pytest.MonkeyPatch
         _assert_birthday_is_detached(error, SECRET, *frames)
         return error
 
+    def frame_locals(error: HTTPException, name: str) -> dict[str, Any]:
+        frame = error.__traceback__
+        while frame is not None:
+            if frame.tb_frame.f_code.co_name == name:
+                return frame.tb_frame.f_locals
+            frame = frame.tb_next
+        raise AssertionError(name)
+
     past = date(1900, 1, 1)
     prefix = b'{"birthday":"' + secret
     for show_age in (json.dumps(SECRET), json.dumps({"n": SECRET}), "true"):
         body = prefix + b'","show_age":' + show_age.encode() + b"}"
         error = check(body, past, MSG_FUTURE, "_parse_body", "_parse_birthday")
-        frame = error.__traceback__
-        while frame is not None:
-            if frame.tb_frame.f_code.co_name == "_parse_body":
-                assert "show_age" not in frame.tb_frame.f_locals
-            frame = frame.tb_next
-    check(prefix + b'x","show_age":true}', TODAY, MSG_FULL_DATE, "_parse_birthday")
-    check(b'{"note":"' + secret + b'"}', TODAY, MSG_FULL_DATE, "_parse_body")
-    check(prefix + b'","show_age":"' + secret + b'"}', TODAY, MSG_SHOW_AGE, "_parse_body")
-    check(prefix + b'","show_age":true,"n":"' + secret + b'"}', TODAY, MSG_UNKNOWN, "_parse_body")
+        assert "show_age" not in frame_locals(error, "_parse_body")
+    regex_error = check(prefix + b'x","show_age":true}', TODAY, MSG_FULL_DATE, "_parse_birthday")
+    assert "value" not in frame_locals(regex_error, "_parse_birthday")
+    missing = check(b'{"note":"' + secret + b'"}', TODAY, MSG_FULL_DATE, "_parse_body")
+    assert frame_locals(missing, "_parse_body")["payload"] == {}
+    assert frame_locals(missing, "update_birthday")["parsed"] == {}
+    show_age_error = check(
+        prefix + b'","show_age":"' + secret + b'"}', TODAY, MSG_SHOW_AGE, "_parse_body"
+    )
+    show_age_locals = frame_locals(show_age_error, "_parse_body")
+    assert "birthday" not in show_age_locals
+    assert "show_age" not in show_age_locals
+    unknown_error = check(
+        prefix + b'","show_age":true,"n":"' + secret + b'"}',
+        TODAY,
+        MSG_UNKNOWN,
+        "_parse_body",
+    )
+    assert "birthday" not in frame_locals(unknown_error, "_parse_body")
     raw_error = check(prefix, TODAY, MSG_FULL_DATE, "update_birthday")
-    frame = raw_error.__traceback__
-    while frame is not None:
-        if frame.tb_frame.f_code.co_name == "update_birthday":
-            assert frame.tb_frame.f_locals["raw"] == b""
-        frame = frame.tb_next
+    assert frame_locals(raw_error, "update_birthday")["raw"] == b""
 
 
 def test_commit_and_rollback_failure_log_omits_birthday_context(
@@ -1164,9 +1239,19 @@ def test_commit_and_rollback_failure_log_omits_birthday_context(
         with pytest.raises(APIError) as caught:
             _commit(db)
         error = caught.value
-        assert error.__context__ is None and error.__cause__ is None
+        assert caplog.handler.level == logging.DEBUG
+        assert error.__context__ is None
+        assert error.__cause__ is None
+        chained: BaseException | None = error
+        seen: set[int] = set()
+        while chained is not None and id(chained) not in seen:
+            seen.add(id(chained))
+            assert SECRET not in str(chained)
+            assert SECRET not in repr(chained)
+            chained = chained.__context__
         logged = _captured_logs(caplog, capsys)
-        assert "Exception during reset" in logged and SECRET not in logged
+        assert "Exception during reset" in logged
+        assert SECRET not in logged
         assert state["n"] >= 2
     finally:
         db.close()
