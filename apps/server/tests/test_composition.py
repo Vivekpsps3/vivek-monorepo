@@ -427,6 +427,12 @@ def test_startup_checks_schema_frontend_and_static_files(tmp_path):
         assert client.get("/settings/profile").status_code == 404
         assert client.get("/account").status_code == 200
         assert client.get("/travel/trips/42").status_code == 200
+        _user(application.state.database, 1, "town-token", "town-csrf")
+        for route in ("/town", "/town/world", "/town/clinic", "/town/gym"):
+            town = _call(client, "get", route, "town-token", "town-csrf")
+            assert town.status_code == 200
+            assert "<app-root" in town.text
+        assert _call(client, "get", "/townx", "town-token", "town-csrf").status_code == 404
         assert client.get("/media/api/missing").status_code == 404
         assert client.get("/travel/no-such-page").status_code == 404
         assert client.get("/finance/no-such-page").status_code == 404

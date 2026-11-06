@@ -1,0 +1,44 @@
+@if (data().habits.length === 0) {
+  <ui-empty-state title="No active habits" message="">
+    <ui-button variant="secondary" [disabled]="!!helper()" [tooltip]="helper() ? 'No free lots' : undefined" (clicked)="newHabit.emit()">+ New habit</ui-button>
+  </ui-empty-state>
+} @else {
+  <ul class="habits">
+    @for (habit of habits(); track habit.id) {
+      <li class="row">
+        <div class="copy">
+          <span class="habit-name">{{ habit.name }}</span>
+          <span class="muted">{{ styleName(habit) }}</span>
+          <span>{{ streakText(habit) }}</span>
+          @if (habit.cadence.kind === 'weekly' && habit.week) {
+            <span class="muted">{{ habit.week.done }}/{{ habit.week.target }} this week</span>
+          }
+        </div>
+        <ui-button class="check" [attr.data-check]="habit.id" [pressed]="pressed(habit)" [ariaLabel]="checkLabel(habit)" (clicked)="toggle(habit)">✓</ui-button>
+      </li>
+    }
+  </ul>
+}
+<div class="passive">
+  <div class="row">
+    <span>{{ autoLabel('library', data().buildings.library) }}</span>
+    @if (data().buildings.library.source === 'ok') { <ui-badge>Auto ✓</ui-badge> }
+  </div>
+  <div class="row">
+    <span>{{ autoLabel('inn', data().buildings.inn) }}</span>
+    @if (data().buildings.inn.source === 'ok') { <ui-badge>Auto ✓</ui-badge> }
+  </div>
+  <div class="row treasury">
+    <span>Treasury</span>
+    @if (!vaultPresent()) { <ui-badge>Locked</ui-badge> } @else { <ui-skeleton variant="lines" [lines]="1" /> }
+  </div>
+</div>
+@if (restNote()) { <p class="rest">{{ restNote() }}</p> }
+<div class="actions">
+  @if (data().habits.length) {
+    <ui-button variant="secondary" [disabled]="!!helper()" [tooltip]="helper() ? 'No free lots' : undefined" (clicked)="newHabit.emit()">+ New habit</ui-button>
+  }
+  <ui-button variant="secondary" (clicked)="history.emit()">History</ui-button>
+</div>
+@if (helper()) { <footer>{{ helper() }}</footer> }
+<p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ live() }}</p>
