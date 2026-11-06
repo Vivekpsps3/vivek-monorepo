@@ -1,8 +1,45 @@
+import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { HttpClientTestingModule, HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { firstValueFrom } from 'rxjs';
 import type { SessionUser } from '@vivek/auth';
-import { authNavigation } from '@vivek/ui';
+import { SESSION_CONTEXT, authNavigation } from '@vivek/ui';
+import { authInterceptor } from './auth/auth.interceptor';
 import { SessionService } from './session.service';
+
+function pauseNextOpen(): { ready: Promise<void>; release: () => void; restore: () => void } {
+  const realOpen = indexedDB.open.bind(indexedDB);
+  let release!: () => void;
+  let markReady!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const ready = new Promise<void>(resolve => { markReady = resolve; });
+  let armed = true;
+  spyOn(indexedDB, 'open').and.callFake((name: string, version?: number) => {
+    if (!armed) return realOpen(name, version);
+    armed = false;
+    const real = realOpen(name, version);
+    let db: IDBDatabase | null = null;
+    let failure: DOMException | null = null;
+    let onsuccess: ((ev: Event) => void) | null = null;
+    let onerror: ((ev: Event) => void) | null = null;
+    let onupgradeneeded: ((ev: Event) => void) | null = null;
+    let upgrade: Event | null = null;
+    const fake = {} as IDBOpenDBRequest;
+    const replayUpgrade = () => { if (upgrade && onupgradeneeded) onupgradeneeded.call(fake, upgrade); };
+    Object.defineProperties(fake, {
+      result: { configurable: true, get: () => db },
+      error: { configurable: true, get: () => failure },
+      onsuccess: { configurable: true, get: () => onsuccess, set: (fn: (ev: Event) => void) => { onsuccess = fn; } },
+      onerror: { configurable: true, get: () => onerror, set: (fn: (ev: Event) => void) => { onerror = fn; } },
+      onupgradeneeded: { configurable: true, get: () => onupgradeneeded, set: (fn: (ev: Event) => void) => { onupgradeneeded = fn; replayUpgrade(); } },
+    });
+    real.onupgradeneeded = ev => { db = real.result; upgrade = ev; replayUpgrade(); };
+    real.onsuccess = () => { db = real.result; markReady(); void gate.then(() => onsuccess?.call(fake, new Event('success'))); };
+    real.onerror = () => { failure = real.error; markReady(); void gate.then(() => onerror?.call(fake, new Event('error'))); };
+    return fake;
+  });
+  return { ready, release, restore: () => { delete (indexedDB as unknown as { open?: unknown }).open; } };
+}
 
 function person(id: number): SessionUser {
   return { id, username: `user${id}`, email: `user${id}@example.test`, display_name: `User ${id}`, role: 'user', is_active: true, must_change_password: false, created_at: '2026-01-01', updated_at: '2026-01-01' };
@@ -72,7 +109,7 @@ describe('Suite session isolation', () => {
   });
   for (const previousMarker of [null, 'previous-sign-out']) {
     const storageState = previousMarker ? 'an existing marker' : 'empty storage';
-    it(`accepts sign-out from another tab without rebroadcasting it with ${storageState}`, () => {
+    it(`accepts sign-out from another tab without rebroadcasting it with ${storageState}`, async () => {
       if (previousMarker) localStorage.setItem('suite-session-ended', previousMarker);
       const writes = spyOn(Storage.prototype, 'setItem').and.callThrough();
       const navigate = spyOn(authNavigation, 'assignPath');
@@ -82,28 +119,70 @@ describe('Suite session isolation', () => {
       expect(localStorage.getItem('finance-dek')).toBeNull();
       expect(localStorage.getItem('suite-session-ended')).toBe(previousMarker);
       expect(writes).not.toHaveBeenCalled();
+      const started = Date.now();
+      while (!navigate.calls.any() && Date.now() - started < 5000) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
       expect(navigate).toHaveBeenCalledOnceWith('/auth/login');
     });
   }
-  it('clears local state even when the sign-out request fails', () => {
+  it('clears local state even when the sign-out request fails', async () => {
     const navigate = spyOn(authNavigation, 'assignPath');
     service.acceptUser(person(1));
-    service.logout();
+    const pending = service.logout();
     http.expectOne('/api/auth/logout').flush({}, { status: 503, statusText: 'Unavailable' });
     expect(service.currentUser).toBeNull();
     expect(localStorage.getItem('finance-dek')).toBeNull();
+    await pending;
     expect(navigate).toHaveBeenCalledWith('/auth/login');
   });
-  it('clears private state immediately and ignores a logout finishing after a new sign-in', () => {
+  it('clears private state immediately and ignores a logout finishing after a new sign-in', async () => {
     const navigate = spyOn(authNavigation, 'assignPath');
     service.acceptUser(person(1));
-    service.logout();
+    const pending = service.logout();
     expect(service.currentUser).toBeNull();
     expect(localStorage.getItem('finance-dek')).toBeNull();
     service.acceptUser(person(2));
     http.expectOne('/api/auth/logout').flush({});
+    await pending;
     expect(service.currentUser?.id).toBe(2);
     expect(navigate).not.toHaveBeenCalled();
+  });
+  it('waits for the IndexedDB delete before leaving for login', async () => {
+    const navigate = spyOn(authNavigation, 'assignPath');
+    service.acceptUser(person(1));
+    const paused = pauseNextOpen();
+    try {
+      const pending = service.logout();
+      http.expectOne('/api/auth/logout').flush({}, { status: 503, statusText: 'Unavailable' });
+      await paused.ready;
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(navigate).not.toHaveBeenCalled();
+      paused.release();
+      await pending;
+      expect(navigate).toHaveBeenCalledOnceWith('/auth/login');
+    } finally {
+      paused.release();
+      paused.restore();
+    }
+  });
+  it('does not leave for login when the IndexedDB delete fails', async () => {
+    const navigate = spyOn(authNavigation, 'assignPath');
+    service.acceptUser(person(1));
+    const del = IDBObjectStore.prototype.delete;
+    const spy = spyOn(IDBObjectStore.prototype, 'delete').and.callFake(function (this: IDBObjectStore, query?: IDBValidKey | IDBKeyRange) {
+      const request = del.call(this, query as IDBValidKey);
+      setTimeout(() => { try { this.transaction.abort(); } catch { /* already finished */ } }, 0);
+      return request;
+    });
+    try {
+      const pending = service.logout();
+      http.expectOne('/api/auth/logout').flush({}, { status: 503, statusText: 'Unavailable' });
+      await expectAsync(pending).toBeRejected();
+      expect(navigate).not.toHaveBeenCalled();
+    } finally {
+      spy.and.callThrough();
+    }
   });
   it('does not publish a profile response from the previous account', async () => {
     service.acceptUser(person(1));
@@ -126,4 +205,43 @@ describe('Suite session isolation', () => {
     http.expectNone('/api/auth/me');
     expect(service.currentUser).toBeNull();
   });
+});
+
+describe('401 navigation waits for the IndexedDB delete', () => {
+  afterEach(() => {
+    localStorage.removeItem('suite-session-ended');
+    localStorage.removeItem('finance-dek');
+    localStorage.removeItem('finance-vault-present');
+  });
+
+  for (const url of ['/api/auth/me', '/api/auth/logout']) {
+    it(`does not call goToLogin until the delete is released for a 401 from ${url}`, async () => {
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: SESSION_CONTEXT, useExisting: SessionService },
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+      const http = TestBed.inject(HttpClient);
+      const backend = TestBed.inject(HttpTestingController);
+      const goToLogin = spyOn(authNavigation, 'goToLogin');
+      const paused = pauseNextOpen();
+      const pending = firstValueFrom(url.endsWith('/logout') ? http.post(url, {}) : http.get(url));
+      try {
+        backend.expectOne(url).flush({}, { status: 401, statusText: 'Unauthorized' });
+        await paused.ready;
+        await new Promise(resolve => setTimeout(resolve, 30));
+        expect(localStorage.getItem('suite-session-ended')).not.toBeNull();
+        expect(goToLogin).not.toHaveBeenCalled();
+        paused.release();
+        await expectAsync(pending).toBeRejected();
+        expect(goToLogin).toHaveBeenCalledTimes(1);
+      } finally {
+        paused.release();
+        paused.restore();
+        backend.verify();
+      }
+    });
+  }
 });

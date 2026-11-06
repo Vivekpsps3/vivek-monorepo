@@ -26,8 +26,7 @@ export class SessionService {
     if (typeof window === 'undefined') return;
     const ended = (event: StorageEvent) => {
       if (event.key === 'suite-session-ended' && event.newValue) {
-        this.clearLocalSession(false);
-        authNavigation.goToLogin(false);
+        void this.clearLocalSession(false).then(() => authNavigation.goToLogin(false)).catch(() => undefined);
       }
     };
     window.addEventListener('storage', ended);
@@ -68,28 +67,36 @@ export class SessionService {
     this.checkedSession = true;
     this.userSubject.next(user);
   }
-  resetDomainState(): void {
+  resetDomainState(): Promise<void> {
     clearFinanceSessionStorage();
     this.cleared.next();
+    // The cleared subscriber may queue another delete. Wait for that one too.
+    return clearFinanceSessionStorage();
   }
-  clearLocalSession(announce = true): void {
+  clearLocalSession(announce = true): Promise<void> {
     this.epoch += 1;
     this.checkedSession = true;
-    this.resetDomainState();
+    const wipe = this.resetDomainState();
     this.userSubject.next(null);
     if (announce) {
       try { localStorage.setItem('suite-session-ended', `${Date.now()}:${Math.random()}`); } catch { /* private mode */ }
     }
+    return wipe;
   }
-  logout(): void {
-    this.clearLocalSession();
+  logout(): Promise<void> {
+    const wipe = this.clearLocalSession();
     const epoch = this.epoch;
-    const finish = () => {
-      if (this.epoch === epoch) authNavigation.goToLogin(false);
-    };
-    this.http.post('/api/auth/logout', {}, { withCredentials: true }).subscribe({
-      next: finish,
-      error: finish,
+    return new Promise((resolve, reject) => {
+      const finish = () => {
+        wipe.then(() => {
+          if (this.epoch === epoch) authNavigation.goToLogin(false);
+          resolve();
+        }).catch(reject);
+      };
+      this.http.post('/api/auth/logout', {}, { withCredentials: true }).subscribe({
+        next: finish,
+        error: finish,
+      });
     });
   }
   async updateDisplayName(displayName: string): Promise<AuthUser> {

@@ -74,6 +74,11 @@ class EncryptedRecordResponse(BaseModel):
     updated_at: str
 
 
+class EncryptedRecordReindexResponse(BaseModel):
+    records: list[EncryptedRecordResponse]
+    skipped: list[str]
+
+
 class BlindIndexLookupRequest(BaseModel):
     collection: str
     index_name: str

@@ -442,4 +442,47 @@ describe('AuthService passwordless login', () => {
     expect([localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked]).toEqual([null, false, false]);
     (await nextRequest(http, '/api/auth/passwordless/wraps')).flush({}); localStorage.removeItem('suite-session-ended'); http.verify();
   });
+
+  const enrolled = {
+    id: 9,
+    email: 'new.user@pending.local',
+    username: 'new.user',
+    display_name: 'New User',
+    role: 'user' as const,
+    is_active: true,
+    must_change_password: false,
+    created_at: '2026-10-14T00:00:00',
+    updated_at: '2026-10-14T00:00:00',
+  };
+  const passphrase = 'correct horse battery staple';
+  for (const flow of [
+    { label: 'bootstrap', url: `${api}/auth/bootstrap/passwordless`, run: (auth: AuthService) => auth.bootstrapPasswordless('new.user', 'New User', passphrase) },
+    { label: 'signup', url: `${api}/auth/signup/passwordless`, run: (auth: AuthService) => auth.signupPasswordless('new.user', passphrase, 'New User') },
+    { label: 'invitation enroll', url: `${api}/auth/invitations/invite-token/enroll`, run: (auth: AuthService) => auth.enrollInvitation('invite-token', passphrase) },
+  ]) {
+    it(`adopts the ${flow.label} vault only after reset and the user is accepted`, async () => {
+      const derive = spyOn(crypto.subtle, 'deriveKey').and.callFake((() => crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])) as never);
+      let releaseReset!: () => void;
+      const resetGate = new Promise<void>(resolve => { releaseReset = resolve; });
+      (sessionState.resetDomainState as jasmine.Spy).and.returnValue(resetGate);
+      vault.adoptBootstrapVault.and.callFake(async () => {
+        expect(sessionState.currentUser?.id).toBe(enrolled.id);
+        expect(sessionState.checkedSession).toBeTrue();
+      });
+      try {
+        const pending = flow.run(service);
+        (await nextRequest(http, flow.url)).flush({ user: enrolled, csrf_token: 'csrf-token' });
+        await new Promise(resolve => setTimeout(resolve, 30));
+        expect(vault.adoptBootstrapVault).not.toHaveBeenCalled();
+        expect(sessionState.checkedSession).toBeTrue();
+        expect(sessionState.currentUser).toBeNull();
+        releaseReset();
+        await pending;
+        expect(vault.adoptBootstrapVault).toHaveBeenCalled();
+      } finally {
+        releaseReset();
+        derive.and.callThrough();
+      }
+    });
+  }
 });
