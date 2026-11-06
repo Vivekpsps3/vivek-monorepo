@@ -5,6 +5,7 @@ import { SESSION_CONTEXT, ToastService, type SessionPort } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { hasDek, holdDek } from './dek-holder';
+import { LOCK_SIGNAL, VAULT_PRESENCE } from './dek-store';
 import { lockFinance, lockLoad } from './lock-finance';
 import { VaultService } from './vault.service';
 const realLoad = lockLoad.modules;
@@ -12,7 +13,10 @@ const realLoad = lockLoad.modules;
 describe('lockFinance', () => {
   afterEach(() => {
     localStorage.removeItem('finance-dek');
+    localStorage.removeItem(VAULT_PRESENCE);
+    localStorage.removeItem(LOCK_SIGNAL);
     lockLoad.modules = realLoad;
+    TestBed.resetTestingModule();
   });
 
   it('broadcasts, ends refresh, clears caches, then locks storage and memory', async () => {
@@ -41,7 +45,7 @@ describe('lockFinance', () => {
     const lock = VaultService.prototype.lock;
     spyOn(vault, 'lock').and.callFake(() => {
       order.push('lock');
-      lock.call(vault);
+      return lock.call(vault);
     });
     await lockFinance(TestBed.inject(Injector));
     expect(order).toEqual(['caches', 'broadcast', 'end', 'lock']);
@@ -81,7 +85,11 @@ describe('lockFinance', () => {
     expect(cleared).toHaveBeenCalled();
     const before = cleared.calls.count();
     (toast.error as jasmine.Spy).calls.mostRecent().args[1].run();
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // The retry awaits the IndexedDB delete before it toasts again.
+    const started = Date.now();
+    while ((toast.error as jasmine.Spy).calls.count() < 2 && Date.now() - started < 5000) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
     expect(cleared.calls.count()).toBeGreaterThan(before);
     expect((toast.error as jasmine.Spy).calls.count()).toBe(2);
   });

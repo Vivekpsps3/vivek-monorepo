@@ -4,7 +4,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angul
 import { BehaviorSubject, from, of, throwError } from 'rxjs';
 import { SessionService as AuthService } from '../platform/session.service';
 import { AuthUser } from '../platform/auth/auth.models';
-import { DEK_STORE } from '../../../../finance/frontend/src/testing';
+import { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE } from '../../../../finance/frontend/src/testing';
 import { VaultService } from '../../../../finance/frontend/src/testing';
 import { Asset, Holding, Liability } from '../../../../finance/frontend/src/testing';
 import { FinanceService } from '../../../../finance/frontend/src/testing';
@@ -486,9 +486,9 @@ describe('HubComponent', () => {
     expect(vaultLocks).toBe(1);
   });
 
-  it('clears a loaded card when finance-dek is removed in another tab', async () => {
+  it('clears a loaded card when another tab signals a vault lock', async () => {
     await showHarbor();
-    window.dispatchEvent(new StorageEvent('storage', { key: DEK_STORE, newValue: null, oldValue: 'present' }));
+    window.dispatchEvent(new StorageEvent('storage', { key: LOCK_SIGNAL, newValue: '1', oldValue: null }));
     fixture.detectChanges();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Finance is locked.');
@@ -500,6 +500,35 @@ describe('HubComponent', () => {
     expect(fixture.componentInstance['financeGeneration']).toBe(1);
     await waitForVaultLock();
     expect(vaultLocks).toBe(1);
+  });
+
+  it('clears a loaded card when another tab removes finance-vault-present', async () => {
+    await showHarbor();
+    window.dispatchEvent(new StorageEvent('storage', { key: VAULT_PRESENCE, newValue: null, oldValue: '1' }));
+    fixture.detectChanges();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Finance is locked.');
+    expect(text).not.toMatch(/\$[\s]*\d/);
+    expect(text).not.toContain('Harbor');
+    expect(fixture.componentInstance.netWorth).toBeNull();
+    expect(fixture.componentInstance.accounts).toEqual([]);
+    expect(fixture.componentInstance.positions).toEqual([]);
+    expect(fixture.componentInstance['financeGeneration']).toBe(1);
+    await waitForVaultLock();
+    expect(vaultLocks).toBe(1);
+  });
+
+  it('does not lock when another tab migrates finance-dek', async () => {
+    await showHarbor();
+    window.dispatchEvent(new StorageEvent('storage', { key: DEK_STORE, newValue: null, oldValue: 'present' }));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    fixture.detectChanges();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('HBRX');
+    expect(text).not.toContain('Finance is locked.');
+    expect(fixture.componentInstance.netWorth).not.toBeNull();
+    expect(vaultLocks).toBe(0);
+    expect(fixture.componentInstance['financeGeneration']).toBe(0);
   });
 
   it('drops an in-flight finance load that resolves after a lock', async () => {

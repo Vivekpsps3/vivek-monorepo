@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from apps.travel.backend.deps import settings_key
 from apps.travel.backend.models import LeavePolicy, PtoPolicy, Setting
+from apps.travel.backend.services.leave_math import fractional_digits
 from apps.travel.backend.services.money import store_days
 from apps.travel.backend.services.pto import Policy, policy_from_row
 
@@ -31,8 +32,7 @@ def store_hours(value: Decimal) -> str:
         raise ValueError("Enter a finite number of hours.")
     if amount == 0:
         return "0"
-    exponent = amount.normalize().as_tuple().exponent
-    if isinstance(exponent, int) and exponent < -6:
+    if fractional_digits(amount) > 6:
         raise ValueError("Hours can have at most 6 decimal places.")
     text = format(amount, "f")
     if "." in text:

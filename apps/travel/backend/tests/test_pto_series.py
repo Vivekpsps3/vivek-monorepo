@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from fractions import Fraction
 from itertools import pairwise
 
+import pytest
 from sqlalchemy.orm import sessionmaker
 
 from apps.travel.backend.models import PtoEntry
@@ -142,6 +143,9 @@ def test_segments_interpolate_to_the_walk():
                 assert walked == line
 
 
+# Wall-clock budget: marked perf so coverage runs skip it (coverage-gate.sh
+# filters `-m "not perf"`, same as test_town_perf.py); plain runs still gate it.
+@pytest.mark.perf
 def test_series_p50_stays_under_the_local_guard(client, monkeypatch):
     pin(monkeypatch, date(2026, 11, 2))
     _put(

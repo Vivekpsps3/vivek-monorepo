@@ -34,6 +34,8 @@ def test_js_keys_are_tokenized_without_rewriting_strings():
     }
     with pytest.raises((ValueError, SyntaxError)):
         parse_js_literal("{key: execute()}")
+    with pytest.raises((ValueError, SyntaxError)):
+        parse_js_literal("{ok: true}")
 
 
 @pytest.mark.parametrize("server_name", SHARED_NAMES)

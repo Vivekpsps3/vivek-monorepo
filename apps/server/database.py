@@ -58,6 +58,27 @@ def configure_engine(engine: Engine) -> Engine:
     return engine
 
 
+class _EngineParameterFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.msg
+        if not isinstance(message, str):
+            return True
+        return message != "[%s] %r" and not message.startswith(("Row ", "[raw sql]"))
+
+
+def _silence_engine_parameters() -> None:
+    drop = _EngineParameterFilter()
+    logger: logging.Logger | None = logging.getLogger("sqlalchemy.engine.Engine")
+    names = {"sqlalchemy.engine", "sqlalchemy.engine.Engine"}
+    while isinstance(logger, logging.Logger):
+        chosen = [logger] if logger.name in names else []
+        for target in [*chosen, *logger.handlers]:
+            if not any(isinstance(item, _EngineParameterFilter) for item in target.filters):
+                target.addFilter(drop)
+        parent = logger.parent
+        logger = parent if logger.propagate and isinstance(parent, logging.Logger) else None
+
+
 def _memory(database: str | None) -> bool:
     name = database or ""
     return name == ":memory:" or name.endswith(":memory:")
@@ -71,13 +92,7 @@ def open_database(url: str) -> Database:
     memory = _memory(parsed.database)
     if not memory and (not parsed.database or not Path(parsed.database).is_absolute()):
         raise RuntimeError("SITE_DATABASE_URL must name an absolute local SQLite file")
-    # hide_parameters keeps bound values (including a birthday) out of engine
-    # logs and SQLAlchemy exception text for every site connection.
-    # Result rows are still logged when sqlalchemy.engine is DEBUG, so the
-    # engine logger stays at WARNING or higher whatever the app level is.
-    engine_log = logging.getLogger("sqlalchemy.engine")
-    if engine_log.level < logging.WARNING:
-        engine_log.setLevel(logging.WARNING)
+    _silence_engine_parameters()
     kwargs: dict = {
         "connect_args": {"check_same_thread": False},
         "hide_parameters": True,

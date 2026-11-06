@@ -1,6 +1,6 @@
 import { HttpBackend, HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Observable, catchError, finalize, shareReplay, switchMap, throwError } from 'rxjs';
+import { Observable, catchError, finalize, from, shareReplay, switchMap, throwError } from 'rxjs';
 import { authNavigation, SESSION_CONTEXT } from '@vivek/ui';
 import { rememberSessionEnded } from './session-ended';
 
@@ -40,6 +40,16 @@ function skipsSessionProbe(url: string): boolean {
 
 let sessionProbe: { revision: number; body: Observable<unknown> } | null = null;
 
+// location.assign unloads the document and aborts an IndexedDB delete that has not committed.
+function rejectAfterClear(clear: () => Promise<void>, err: HttpErrorResponse): Observable<never> {
+  return from(
+    Promise.resolve()
+      .then(() => clear())
+      .then(() => { authNavigation.goToLogin(); })
+      .catch(() => undefined),
+  ).pipe(switchMap(() => throwError(() => err)));
+}
+
 function sessionCheck(backend: HttpBackend, revision: number): Observable<unknown> {
   // `sessionProbe?.revision === undefined` is true when there is no probe yet.
   if (sessionProbe !== null && sessionProbe.revision === revision) return sessionProbe.body;
@@ -65,9 +75,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       if (err.status !== 401 || revision !== auth.revision) return throwError(() => err);
       // /auth/me is 401 when nobody is signed in. Logout already redirects. Neither gets the ended-session toast.
       if (isAuthMe(req.url) || isLogout(req.url)) {
-        auth.clearLocalSession();
-        authNavigation.goToLogin();
-        return throwError(() => err);
+        return rejectAfterClear(() => auth.clearLocalSession(), err);
       }
       if (skipsSessionProbe(req.url)) return throwError(() => err);
       // One probe per session revision, bypassing this interceptor. A dead session signs in with the ended copy.
@@ -77,8 +85,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           const status = probeErr instanceof HttpErrorResponse ? probeErr.status : 0;
           if (status === 401 && revision === auth.revision) {
             rememberSessionEnded();
-            auth.clearLocalSession();
-            authNavigation.goToLogin();
+            return rejectAfterClear(() => auth.clearLocalSession(), err);
           }
           return throwError(() => err);
         }),

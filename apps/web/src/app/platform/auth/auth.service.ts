@@ -66,9 +66,9 @@ export class AuthService {
     }, { withCredentials: true }).toPromise();
     if (!response) throw new Error('Unable to create passwordless account');
     this.checkedSession = true;
-    this.session.resetDomainState();
-    await (await this.financeVault()).adoptBootstrapVault(vaultMaterial.dek);
+    await this.session.resetDomainState();
     this.session.acceptUser(response.user);
+    await (await this.financeVault()).adoptBootstrapVault(vaultMaterial.dek);
     return response.user;
   }
 
@@ -107,9 +107,9 @@ export class AuthService {
       .toPromise();
     if (!response) throw new Error('Unable to create account');
     this.checkedSession = true;
-    this.session.resetDomainState();
-    await (await this.financeVault()).adoptBootstrapVault(vaultMaterial.dek);
+    await this.session.resetDomainState();
     this.session.acceptUser(response.user);
+    await (await this.financeVault()).adoptBootstrapVault(vaultMaterial.dek);
     return response.user;
   }
 
@@ -142,9 +142,9 @@ export class AuthService {
     );
     if (!response) throw new Error('Unable to finish enrollment');
     this.checkedSession = true;
-    this.session.resetDomainState();
-    await (await this.financeVault()).adoptBootstrapVault(vaultMaterial.dek);
+    await this.session.resetDomainState();
     this.session.acceptUser(response.user);
+    await (await this.financeVault()).adoptBootstrapVault(vaultMaterial.dek);
     return response.user;
   }
 
@@ -293,6 +293,6 @@ export class AuthService {
     return challenge;
   }
 
-  logout(): void { this.session.logout(); }
-  clearLocalSession(): void { this.session.clearLocalSession(); }
+  logout(): void { void this.session.logout().catch(() => undefined); }
+  clearLocalSession(): Promise<void> { return this.session.clearLocalSession(); }
 }

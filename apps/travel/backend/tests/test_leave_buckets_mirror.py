@@ -25,6 +25,11 @@ def test_store_hours_trims_and_rejects_a_seventh_decimal():
     assert "e" not in store_hours(Decimal("1E+3")).lower()
     with pytest.raises(ValueError):
         store_hours(Decimal("1.2345678"))
+    # 29 significant digits. Default-context normalize() rounds this to 1.
+    poisoned = Decimal("1." + "0" * 27 + "1")
+    assert poisoned.normalize() == Decimal("1")
+    with pytest.raises(ValueError):
+        store_hours(poisoned)
     assert parse_hours("1.5") == Decimal("1.5")
     assert parse_hours(store_hours(Decimal("8"))) == Decimal("8")
     with pytest.raises(ValueError):
@@ -105,5 +110,24 @@ def test_legacy_put_mirrors_pto_and_preserves_year_start(client):
         assert second.user_id == 2
         assert db.get(Setting, hpd_setting_key(2)).value == "8.0000"
         assert db.get(Setting, hpd_setting_key(1)).value == "7.5000"
+    finally:
+        db.close()
+
+
+def test_legacy_put_updates_an_existing_hours_setting(client):
+    body = {
+        "accrual_amount": "1",
+        "accrual_unit": "hour",
+        "accrual_cadence": "yearly",
+        "hours_per_day": "7.5",
+        "balance_days": "1",
+        "balance_as_of": "2026-01-01",
+    }
+    assert client.put("/api/pto/policy", json=body).status_code == 200
+    changed = client.put("/api/pto/policy", json={**body, "hours_per_day": "6"})
+    assert changed.status_code == 200, changed.text
+    db = _session(client)
+    try:
+        assert db.get(Setting, hpd_setting_key(1)).value == "6.0000"
     finally:
         db.close()

@@ -8,7 +8,10 @@ import {
   toArrayBuffer,
   DEFAULT_PBKDF2_ITERATIONS,
 } from '@vivek/browser';
-import { DEK_STORE } from './dek-store';
+import {
+  DEK_STORE, VAULT_KEY_ID, VAULT_PRESENCE, clearFinanceSessionStorage, markVaultPresent, vaultMarkedPresent, withVaultStore,
+} from './dek-store';
+import { migrateLegacyDek } from './dek-holder';
 
 export { DEFAULT_PBKDF2_ITERATIONS, randomBytes };
 
@@ -20,6 +23,7 @@ export { DEFAULT_PBKDF2_ITERATIONS, randomBytes };
 
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
+const BLIND_INDEX_INFO = textEncoder.encode('finance-blind-index-v1');
 
 export function recordAad(
   collection: string,
@@ -35,53 +39,64 @@ export function randomClientId(prefix = 'rec'): string {
   return `${prefix}_${id}`;
 }
 
+interface AttachedKeys { blindKey: CryptoKey; legacyBlindKey: CryptoKey | null }
+const attached = new WeakMap<CryptoKey, AttachedKeys>();
+
+function remember(dek: CryptoKey, blindKey: CryptoKey, legacyBlindKey: CryptoKey | null): void {
+  attached.set(dek, { blindKey, legacyBlindKey });
+}
+function requireAttached(dek: CryptoKey): AttachedKeys {
+  const keys = attached.get(dek);
+  if (!keys?.blindKey) throw new Error('Vault key is missing blind-index material');
+  return keys;
+}
+export async function importVaultKeys(raw: Uint8Array): Promise<{ dek: CryptoKey; blindKey: CryptoKey; legacyBlindKey: CryptoKey }> {
+  const bytes = toArrayBuffer(raw);
+  try {
+    const dek = await crypto.subtle.importKey('raw', bytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    const hkdf = await crypto.subtle.importKey('raw', bytes, 'HKDF', false, ['deriveKey']);
+    const blindKey = await crypto.subtle.deriveKey(
+      { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(), info: toArrayBuffer(BLIND_INDEX_INFO) },
+      hkdf, { name: 'HMAC', hash: 'SHA-256', length: 256 }, false, ['sign'],
+    );
+    const legacyBlindKey = await crypto.subtle.importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    remember(dek, blindKey, legacyBlindKey);
+    return { dek, blindKey, legacyBlindKey };
+  } finally {
+    new Uint8Array(bytes).fill(0);
+  }
+}
+
 export async function generateDataKey(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
-    'encrypt',
-    'decrypt',
-  ]);
+  const raw = randomBytes(32);
+  try { return (await importVaultKeys(raw)).dek; } finally { raw.fill(0); }
 }
-
-async function importAesKey(raw: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
-  const material = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
-  return crypto.subtle.importKey('raw', toArrayBuffer(material), { name: 'AES-GCM' }, true, [
-    'encrypt',
-    'decrypt',
-  ]);
-}
-
-async function exportRawKey(key: CryptoKey): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.exportKey('raw', key));
-}
-
-/** Wrap format: base64(iv || ciphertext) where iv is 12 bytes. */
-async function wrapKey(dek: CryptoKey, wrapKeyMaterial: CryptoKey): Promise<string> {
-  const raw = await exportRawKey(dek);
-  return encryptPackedAesGcm(raw, wrapKeyMaterial);
+export async function createVaultMaterial(passphrase: string, iterations = DEFAULT_PBKDF2_ITERATIONS) {
+  const raw = randomBytes(32);
+  try {
+    const { dek } = await importVaultKeys(raw);
+    const salt = randomBytes(16);
+    const passKey = await derivePbkdf2AesGcmKey(passphrase, salt, iterations);
+    return {
+      dek,
+      setupPayload: {
+        kdf_algorithm: 'PBKDF2' as const,
+        kdf_salt_b64: bufToB64(salt),
+        kdf_iterations: iterations,
+        wrapped_dek_b64: await encryptPackedAesGcm(raw, passKey),
+        // Legacy column; recovery-key path removed. Empty means unused.
+        recovery_wrapped_dek_b64: '',
+        key_version: 1,
+      },
+    };
+  } finally {
+    raw.fill(0);
+  }
 }
 
 async function unwrapKey(wrappedB64: string, wrapKeyMaterial: CryptoKey): Promise<CryptoKey> {
-  const raw = await decryptPackedAesGcm(wrappedB64, wrapKeyMaterial);
-  return importAesKey(raw);
-}
-
-export async function createVaultMaterial(passphrase: string, iterations = DEFAULT_PBKDF2_ITERATIONS) {
-  const dek = await generateDataKey();
-  const salt = randomBytes(16);
-  const passKey = await derivePbkdf2AesGcmKey(passphrase, salt, iterations);
-  const wrappedDek = await wrapKey(dek, passKey);
-  return {
-    dek,
-    setupPayload: {
-      kdf_algorithm: 'PBKDF2' as const,
-      kdf_salt_b64: bufToB64(salt),
-      kdf_iterations: iterations,
-      wrapped_dek_b64: wrappedDek,
-      // Legacy column; recovery-key path removed. Empty means unused.
-      recovery_wrapped_dek_b64: '',
-      key_version: 1,
-    },
-  };
+  const raw = new Uint8Array(await decryptPackedAesGcm(wrappedB64, wrapKeyMaterial));
+  try { return (await importVaultKeys(raw)).dek; } finally { raw.fill(0); }
 }
 
 export async function unlockWithPassphrase(
@@ -96,17 +111,20 @@ export async function unlockWithPassphrase(
 }
 
 export async function rewrapDekWithPassphrase(
-  dek: CryptoKey,
-  passphrase: string,
-  iterations = DEFAULT_PBKDF2_ITERATIONS
+  currentPassphrase: string,
+  wrapped: { kdf_salt_b64: string; kdf_iterations: number; wrapped_dek_b64: string },
+  nextPassphrase: string,
+  iterations = DEFAULT_PBKDF2_ITERATIONS,
 ) {
-  const salt = randomBytes(16);
-  const passKey = await derivePbkdf2AesGcmKey(passphrase, salt, iterations);
-  return {
-    kdf_salt_b64: bufToB64(salt),
-    kdf_iterations: iterations,
-    wrapped_dek_b64: await wrapKey(dek, passKey),
-  };
+  const currentKey = await derivePbkdf2AesGcmKey(currentPassphrase, b64ToBuf(wrapped.kdf_salt_b64), wrapped.kdf_iterations);
+  const raw = new Uint8Array(await decryptPackedAesGcm(wrapped.wrapped_dek_b64, currentKey));
+  try {
+    const salt = randomBytes(16);
+    const nextKey = await derivePbkdf2AesGcmKey(nextPassphrase, salt, iterations);
+    return { kdf_salt_b64: bufToB64(salt), kdf_iterations: iterations, wrapped_dek_b64: await encryptPackedAesGcm(raw, nextKey) };
+  } finally {
+    raw.fill(0);
+  }
 }
 
 /** Encrypt JSON-serializable payload. Output base64(iv || ciphertext). */
@@ -128,34 +146,155 @@ export async function decryptJson<T>(
   return JSON.parse(textDecoder.decode(plain)) as T;
 }
 
-export async function persistDekLocal(dek: CryptoKey, stillCurrent?: () => boolean): Promise<void> {
-  try {
-    const raw = bufToB64(await exportRawKey(dek));
-    if (stillCurrent && !stillCurrent()) return;
-    localStorage.setItem(DEK_STORE, raw);
-  } catch { /* private */ }
+export interface StoredVaultKeys {
+  dek: CryptoKey;
+  blind_index_version: number;
+  reindexed: string[];
 }
 
-export async function restoreDekLocal(): Promise<CryptoKey | null> {
+type DekRecord = StoredVaultKeys & {
+  id: string; owner_id: number | null; blindKey: CryptoKey; legacyBlindKey: CryptoKey | null; write_token?: string;
+};
+type Progress = { blind_index_version: number; reindexed: string[] };
+type ProgressRecord = Progress & { id: string; owner_id: number | null };
+
+function concreteOwner(ownerId: number | null): ownerId is number {
+  return typeof ownerId === 'number' && Number.isInteger(ownerId) && ownerId > 0;
+}
+
+function progressId(userId: number): string {
+  return `progress:${userId}`;
+}
+
+/** Remove this write only. A newer hold's record has a different token and stays. */
+async function dropStaleVaultWrite(token: string, ownerId: number): Promise<void> {
+  let removed = false;
+  await withVaultStore('readwrite', store => {
+    const request = store.get(VAULT_KEY_ID);
+    request.onsuccess = () => {
+      const row = request.result as { write_token?: string } | undefined;
+      if (row?.write_token === token) {
+        store.delete(VAULT_KEY_ID);
+        removed = true;
+      }
+    };
+    return request;
+  });
+  if (!removed) return;
   try {
-    const raw = localStorage.getItem(DEK_STORE);
-    if (!raw) return null;
-    return await importAesKey(b64ToBuf(raw));
-  } catch {
+    if (localStorage.getItem(VAULT_PRESENCE) === String(ownerId)) localStorage.removeItem(VAULT_PRESENCE);
+  } catch { /* private mode */ }
+}
+
+/** Store the key for this user, then drop the legacy localStorage item through dek-holder's migrate path. */
+export async function persistVaultKeys(keys: StoredVaultKeys, ownerId: number | null, stillCurrent: () => boolean = () => true): Promise<boolean> {
+  if (!concreteOwner(ownerId)) return false;
+  const extra = requireAttached(keys.dek);
+  if (!stillCurrent()) return false;
+  const writeToken = bufToB64(randomBytes(8));
+  let wrote = false;
+  await withVaultStore('readwrite', store => {
+    if (!stillCurrent()) return store.get(VAULT_KEY_ID);
+    wrote = true;
+    return store.put({
+      id: VAULT_KEY_ID, ...keys, owner_id: ownerId, blindKey: extra.blindKey, legacyBlindKey: extra.legacyBlindKey, write_token: writeToken,
+    } satisfies DekRecord);
+  });
+  if (!wrote || !stillCurrent()) {
+    if (wrote) await dropStaleVaultWrite(writeToken, ownerId);
+    return false;
+  }
+  markVaultPresent(ownerId);
+  if (!stillCurrent()) {
+    await dropStaleVaultWrite(writeToken, ownerId);
+    return false;
+  }
+  migrateLegacyDek();
+  if (!stillCurrent()) {
+    await dropStaleVaultWrite(writeToken, ownerId);
+    return false;
+  }
+  return true;
+}
+
+export async function writeBlindIndexProgress(userId: number, progress: Progress): Promise<void> {
+  if (!concreteOwner(userId)) return;
+  await withVaultStore('readwrite', store => store.put({ id: progressId(userId), owner_id: userId, ...progress }));
+}
+export async function readBlindIndexProgress(userId: number): Promise<Progress | null> {
+  if (!concreteOwner(userId)) return null;
+  const record = await withVaultStore<ProgressRecord | undefined>('readonly', store => store.get(progressId(userId)));
+  if (!record) return null;
+  // A null owner matches nobody, including this user.
+  if (record.owner_id == null || record.owner_id !== userId) {
+    await withVaultStore('readwrite', store => store.delete(progressId(userId)));
     return null;
   }
+  return { blind_index_version: record.blind_index_version || 1, reindexed: record.reindexed ?? [] };
+}
+export async function restoreVaultKeys(ownerId: number | null, stillCurrent: () => boolean = () => true): Promise<StoredVaultKeys | null> {
+  if (!concreteOwner(ownerId)) {
+    await clearFinanceSessionStorage();
+    return null;
+  }
+  let legacy: string | null = null;
+  try { legacy = localStorage.getItem(DEK_STORE); } catch { legacy = null; }
+  if (legacy) {
+    let raw: Uint8Array | null = null;
+    try { raw = b64ToBuf(legacy); } catch { raw = null; }
+    // An unusable legacy value must not keep finance-dek or the presence flag.
+    if (!raw || raw.byteLength !== 32) {
+      await clearFinanceSessionStorage();
+      return null;
+    }
+    const imported = await importVaultKeys(raw);
+    raw.fill(0);
+    if (!stillCurrent()) {
+      migrateLegacyDek();
+      return null;
+    }
+    const stored: StoredVaultKeys = { dek: imported.dek, blind_index_version: 1, reindexed: [] };
+    const kept = await persistVaultKeys(stored, ownerId, stillCurrent);
+    if (!kept || !stillCurrent()) {
+      migrateLegacyDek();
+      return null;
+    }
+    return stored;
+  }
+  if (!stillCurrent()) return null;
+  if (!vaultMarkedPresent(ownerId)) {
+    await clearFinanceSessionStorage();
+    return null;
+  }
+  const record = await withVaultStore<DekRecord | undefined>('readonly', store => store.get(VAULT_KEY_ID));
+  if (!stillCurrent()) return null;
+  if (!record?.dek || !record.blindKey || record.owner_id == null || record.owner_id !== ownerId) {
+    await clearFinanceSessionStorage();
+    return null;
+  }
+  remember(record.dek, record.blindKey, record.legacyBlindKey ?? null);
+  return { dek: record.dek, blind_index_version: record.blind_index_version || 1, reindexed: record.reindexed ?? [] };
 }
 
-export function clearDekLocal(): void {
-  try { localStorage.removeItem(DEK_STORE); } catch { /* private */ }
+export async function restoreDekLocal(ownerId: number | null): Promise<CryptoKey | null> {
+  return (await restoreVaultKeys(ownerId))?.dek ?? null;
 }
-
-export async function hmacBlindIndex(dek: CryptoKey, value: string): Promise<string> {
-  // Derive a non-extractable HMAC key from DEK raw material via HKDF-like digest.
-  const raw = await exportRawKey(dek);
-  const keyMaterial = await crypto.subtle.importKey('raw', toArrayBuffer(raw), { name: 'HMAC', hash: 'SHA-256' }, false, [
-    'sign',
-  ]);
-  const sig = await crypto.subtle.sign('HMAC', keyMaterial, toArrayBuffer(textEncoder.encode(value)));
-  return bufToB64(sig);
+export function clearDekLocal(): Promise<void> {
+  return clearFinanceSessionStorage();
+}
+export async function indexedDbHoldsDek(): Promise<boolean> {
+  if (!globalThis.indexedDB) return false;
+  try { return !!(await withVaultStore<DekRecord | undefined>('readonly', store => store.get(VAULT_KEY_ID)))?.dek; }
+  catch { return false; }
+}
+function signIndex(key: CryptoKey, value: string): Promise<string> {
+  return crypto.subtle.sign('HMAC', key, toArrayBuffer(textEncoder.encode(value))).then(sig => bufToB64(sig));
+}
+export function hmacBlindIndex(dek: CryptoKey, value: string): Promise<string> {
+  return signIndex(requireAttached(dek).blindKey, value);
+}
+export function legacyDekBlindIndex(dek: CryptoKey, value: string): Promise<string> {
+  const legacy = requireAttached(dek).legacyBlindKey;
+  if (!legacy) throw new Error('Legacy blind index is unavailable');
+  return signIndex(legacy, value);
 }

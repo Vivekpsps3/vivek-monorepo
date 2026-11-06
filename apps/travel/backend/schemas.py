@@ -6,7 +6,7 @@ from decimal import Decimal
 from math import isfinite
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from apps.travel.backend.services.money import clean_currency, parse_money
 
@@ -652,7 +652,7 @@ class LeavePolicyIn(BaseModel):
 class PtoSettingsIn(BaseModel):
     # bool precedes int so JSON true/false are not saved as 1/0.
     hours_per_day: bool | str | int | float | None = None
-    sick_prompt_dismissed: bool | None = None
+    sick_prompt_dismissed: StrictBool | None = None
 
 
 class FlightLookupIn(BaseModel):

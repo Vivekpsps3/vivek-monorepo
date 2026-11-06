@@ -14,6 +14,7 @@ export const routes: Routes = [
     { path: 'settings', loadChildren: () => import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES) },
   { path: 'hub/admin', title: 'Account administration', canActivate: [authGuard, adminGuard], loadComponent: () => import('./account/suite-admin.component').then(m => m.SuiteAdminComponent) },
   { path: 'hub', title: 'Workspace', pathMatch: 'full', canActivate: [authGuard], loadComponent: () => import('./hub/hub.component').then(m => m.HubComponent) },
+  { path: 'town', title: 'Town', children: [{ path: '', loadComponent: () => import('./town/town.component').then(m => m.TownComponent) }] },
   { path: 'finance', loadChildren: () => import('../../../finance/frontend/src/public-api').then(m => m.loadFinanceRoutes()) },
   { path: 'travel', canActivate: [authGuard], loadChildren: () => import('../../../travel/frontend/src/public-api').then(m => m.routes) },
   { path: 'media', canActivate: [authGuard], loadChildren: () => import('../../../media/frontend/src/public-api').then(m => m.routes) },

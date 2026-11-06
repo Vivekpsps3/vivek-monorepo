@@ -184,6 +184,13 @@ def test_downgrade_removes_town_schema_and_upgrade_again(tmp_path: Path) -> None
         assert "ix_habit_checkins_user_day" in _index_names(db, "habit_checkins")
 
 
+def test_habit_checkins_unique_index_keeps_hinted_name(tmp_path: Path) -> None:
+    """INDEXED BY names sqlite_autoindex_habit_checkins_1. A rename fails here."""
+    database = _upgrade(tmp_path)
+    with sqlite3.connect(database) as db:
+        assert "sqlite_autoindex_habit_checkins_1" in _index_names(db, "habit_checkins")
+
+
 def test_partial_unique_indexes_keep_one_active_row(tmp_path: Path) -> None:
     database = _upgrade(tmp_path)
     with sqlite3.connect(database) as db:

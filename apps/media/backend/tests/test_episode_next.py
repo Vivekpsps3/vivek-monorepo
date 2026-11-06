@@ -673,6 +673,14 @@ def test_integrity_error_conflict_has_no_context(client, monkeypatch):
         session.add(EpisodeProgress(user_id=row.user_id, episode_id=row.episode_id, watched=True))
 
     event.listen(db, "before_flush", plant_duplicate)
+    calls: list[bool] = []
+    rollback = db.rollback
+
+    def spy(*_a, **_k):
+        calls.append(True)
+        rollback()
+
+    monkeypatch.setattr(db, "rollback", spy)
     try:
         entry = _entry(db, saved["id"])
         with pytest.raises(HTTPException) as caught:
@@ -682,8 +690,28 @@ def test_integrity_error_conflict_has_no_context(client, monkeypatch):
         assert error.detail == "That episode is no longer next. Refresh to see your progress."
         assert error.__context__ is None
         assert error.__cause__ is None
+        assert calls
     finally:
         event.remove(db, "before_flush", plant_duplicate)
         db.close()
     with _session(client) as fresh:
         assert fresh.query(EpisodeProgress).count() == 0
+
+
+def test_next_refuses_an_unreleased_episode(client, monkeypatch):
+    monkeypatch.setenv("MEDIA_TODAY", TODAY)
+    later = {"season_number": 1, "episode_number": 2, "title": "Later", "air_date": "2026-12-01"}
+    saved = _show(client, [*_aired(1), later])
+    future_id = next(ep["id"] for ep in saved["show"]["episodes"] if ep["episode_number"] == 2)
+    real_state = records.episode_state
+
+    def force_future(db, user_id, catalog):
+        state = real_state(db, user_id, catalog)
+        state["next_episode"] = {"id": future_id}
+        return state
+
+    monkeypatch.setattr(records, "episode_state", force_future)
+    response = client.post(f"/api/entries/{saved['id']}/episodes/next")
+    assert response.status_code == 422
+    assert response.json()["detail"] == "This episode has not aired yet."
+    assert client.get(f"/api/entries/{saved['id']}").json()["show"]["watched_count"] == 0

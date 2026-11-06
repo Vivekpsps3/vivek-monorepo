@@ -44,7 +44,7 @@ function requireDeadlineMs(deadlineMs: number | undefined, fallback: number): nu
   return value;
 }
 
-// Strict end of input: JavaScript $ also matches before a trailing newline.
+// JS $ without the m flag matches only at the end of input, not before a trailing newline.
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?![\s\S])/;
 
 function weeklyPlanFor(annualPlan: number): number {

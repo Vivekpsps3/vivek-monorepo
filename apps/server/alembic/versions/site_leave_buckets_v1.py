@@ -288,7 +288,7 @@ def downgrade() -> None:
         params = {
             "user_id": user_id,
             "configured": configured,
-            "accrual_amount": accrual,
+            "accrual_amount": _store_days(Decimal(accrual)),
             "accrual_unit": "hour",
             "accrual_cadence": cadence,
             "hours_per_day": hpd,
