@@ -160,6 +160,11 @@ async function showMap(page) {
   const canvas = map.locator('.map-canvas');
   await expect(map.getByRole('status')).toContainText('Map ready');
   await expect(canvas.locator('.leaflet-tile-loaded').first()).toBeVisible();
+  // Leaflet marks tiles loaded before its requestAnimationFrame fade finishes.
+  // Contrast measurements must sample the final tile colour.
+  await expect.poll(() => canvas.locator('.leaflet-tile-loaded').evaluateAll(tiles =>
+    tiles.length > 0 && tiles.every(tile => getComputedStyle(tile).opacity === '1'),
+  )).toBe(true);
   return { map, canvas };
 }
 
@@ -209,10 +214,11 @@ async function samplePinAndTile(canvas, source) {
 
 function readRing(element) {
   return element.evaluate((node) => {
+    const matches = node.matches(':focus-visible');
     const style = getComputedStyle(node);
     const active = document.activeElement;
     return {
-      matches: node.matches(':focus-visible'),
+      matches,
       active: active === node,
       activeClass: active instanceof Element ? String(active.className).slice(0, 160) : '',
       inline: node.style.outlineStyle,
@@ -225,23 +231,19 @@ function readRing(element) {
   });
 }
 
-// Pointer clicks leave Chrome in pointer modality, and focus({focusVisible:true})
-// is a no-op when the node is already focused. Either one reports the initial
-// outline-width (medium, 3px) because :focus-visible does not match. Tab from
-// Hide map so the control receives a real keyboard focus.
+// Exercise keyboard modality directly; forced programmatic focus does not
+// consistently invalidate :focus-visible styles across Chromium versions.
 async function focusRing(page, element) {
-  await element.evaluate((node) => {
-    node.blur();
-    node.focus({ focusVisible: true });
-  });
-  let ring = await readRing(element);
-  if (ring.matches && ring.active && ring.width === '2px' && ring.outlineStyle === 'solid') return ring;
   await page.getByRole('button', { name: 'Hide map', exact: true }).focus();
   for (let step = 0; step < 12; step += 1) {
-    ring = await readRing(element);
+    const ring = await readRing(element);
     if (ring.active) break;
     await page.keyboard.press('Tab');
   }
+  await expect.poll(async () => {
+    const ring = await readRing(element);
+    return { active: ring.active, matches: ring.matches, width: ring.width, outlineStyle: ring.outlineStyle };
+  }).toEqual({ active: true, matches: true, width: '2px', outlineStyle: 'solid' });
   return readRing(element);
 }
 

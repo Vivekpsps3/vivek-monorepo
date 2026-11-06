@@ -14,7 +14,15 @@ def test_health(client):
     assert client.get("/api/health").json()["app"] == "travel"
 
 
-def test_trip_flow_home_calendar_budget_and_pto(client):
+def test_trip_flow_home_calendar_budget_and_pto(client, monkeypatch):
+    from apps.travel.backend.services import assemble
+
+    class FixtureDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 11, 1)
+
+    monkeypatch.setattr(assemble, "date", FixtureDate)
     start = monday_on_or_after(date(2026, 11, 2))
     end = start + timedelta(days=4)
     created = client.post(

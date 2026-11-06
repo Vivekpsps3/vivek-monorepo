@@ -14,3 +14,13 @@ export function tripHeader(page, title) {
     has: page.getByRole('heading', { level: 1, name: title, exact: true }),
   });
 }
+
+/** Fixed-date fixtures can move into the collapsed past-trip list over time. */
+export async function openTripFromList(page, title) {
+  const heading = page.getByRole('heading', { name: title, exact: true, includeHidden: true });
+  await heading.waitFor({ state: 'attached' });
+  if (!(await heading.isVisible())) {
+    await page.locator('details').filter({ has: heading }).locator('summary').click();
+  }
+  await heading.click();
+}

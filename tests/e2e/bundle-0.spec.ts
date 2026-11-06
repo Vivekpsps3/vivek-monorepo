@@ -346,7 +346,7 @@ test('a locked Finance card drops money, counts, and names loaded while unlocked
   });
   const menu = await openUserMenu(page);
   await menu.getByRole('link', { name: 'Settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings\/account$/);
   await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Finance', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/finance$/);
   await page.getByRole('button', { name: 'Lock now' }).click();

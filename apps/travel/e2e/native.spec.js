@@ -1,6 +1,6 @@
 import {expect,test} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import {ptoChoice} from './dates.mjs';
+import {openTripFromList,ptoChoice} from './dates.mjs';
 
 test.beforeEach(async({request})=>{expect((await request.post('/e2e/reset')).ok()).toBeTruthy();});
 
@@ -45,7 +45,7 @@ test('map works after Hub navigation with origin-only tile referrer and no CSP f
  const referrers=[];const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript(()=>{window.cspFailures=[];document.addEventListener('securitypolicyviolation',event=>window.cspFailures.push(event.violatedDirective));});
  await page.route('https://tile.openstreetmap.org/**',route=>{referrers.push(route.request().headers()['referer']);return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64')});});
- await page.goto('/hub');await page.getByRole('link',{name:'Open Travel',exact:true}).click();await page.getByRole('heading',{name:'Map trip',exact:true}).click();
+ await page.goto('/hub');await page.getByRole('link',{name:'Open Travel',exact:true}).click();await openTripFromList(page,'Map trip');
  await page.getByRole('button',{name:'Show map',exact:true}).click();await expect(page.locator('.leaflet-marker-icon,.leaflet-interactive').first()).toBeVisible();await expect.poll(()=>referrers.length).toBeGreaterThan(0);
  expect(referrers.every(ref=>ref===new URL(page.url()).origin+'/')).toBe(true);expect(await page.evaluate(()=>window.cspFailures)).toEqual([]);expect(errors).toEqual([]);
  await page.getByRole('button',{name:'Zoom in',exact:true}).click();await expect(page.getByRole('link',{name:'OpenStreetMap contributors'})).toBeVisible();

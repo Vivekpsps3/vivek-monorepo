@@ -88,7 +88,8 @@ test('changing PTO cadence keeps a typed balance and native dates ignore unrelat
   await page.getByText('PTO policy and starting balance', { exact: true }).click();
   const balance = page.getByLabel('Known balance (days)');
   await balance.fill('12.5');
-  await page.getByLabel('Accrual cadence').selectOption('monthly');
+  const policy = page.locator('form').filter({ has: balance });
+  await policy.getByLabel('Accrual cadence').selectOption('monthly');
   await expect(balance).toHaveValue('12.5');
   await page.getByLabel('Start date', { exact: true }).fill('2026-12-01');
   await page.mouse.click(2, 400);
@@ -100,7 +101,7 @@ test('changing PTO cadence keeps a typed balance and native dates ignore unrelat
   await page.reload();
   await page.getByText('PTO policy and starting balance', { exact: true }).click();
   await expect(balance).toHaveValue('12.5');
-  await expect(page.getByLabel('Accrual cadence')).toHaveValue('monthly');
+  await expect(policy.getByLabel('Accrual cadence')).toHaveValue('monthly');
 });
 
 test('delete cancellation preserves a trip, failure is local, and success closes the dialog', async ({ page, request }) => {

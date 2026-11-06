@@ -1,7 +1,8 @@
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { ptoChoice } from './dates.mjs';
+import { openTripFromList, ptoChoice } from './dates.mjs';
 import AxeBuilder from '@axe-core/playwright';
 
 const tile = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
@@ -106,7 +107,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     expect(await oldCanvas.evaluate(node => node.isConnected)).toBe(false);
     await page.getByRole('navigation', { name: 'Travel sections', exact: true }).getByRole('link', { name: 'Trips', exact: true }).click();
     await expect(page.locator('.leaflet-container')).toHaveCount(0);
-    await page.getByRole('heading', { name: 'Map recovery trip', exact: true }).click();
+    await openTripFromList(page, 'Map recovery trip');
     await expect(page.getByRole('button', { name: 'Show map', exact: true })).toBeVisible();
     await expect(page.locator('.leaflet-container')).toHaveCount(0);
     await clean();
@@ -239,8 +240,8 @@ test('multiple places retain literal labels and selected-place focus after resiz
 });
 
 test('missing map module reload protects unsaved PTO and works after the module becomes available', async ({ page, request }) => {
-  const build = new URL('../../../dist/web/browser/', import.meta.url);
-  const chunks = fs.readdirSync(build).filter(name => name.endsWith('.js') && fs.readFileSync(new URL(name, build), 'utf8').includes('1.9.4'));
+  const build = path.resolve(path.dirname(test.info().file), '../../../dist/web/browser');
+  const chunks = fs.readdirSync(build).filter(name => name.endsWith('.js') && fs.readFileSync(path.join(build, name), 'utf8').includes('1.9.4'));
   expect(chunks).toHaveLength(1);
   const trip = await createTrip(request);
   let missing = true;
