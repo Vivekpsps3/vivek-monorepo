@@ -20,6 +20,28 @@ COMPATIBLE_HEADS = {
     "site_town_v1",
 }
 INDEX = "ix_episode_progress_user_watched_on"
+# model_diff against current models. These tests stop at this revision, so the
+# later leave-bucket objects are the whole drift. Head tests still require [].
+LATER_THAN_BIRTHDAY = {
+    "add_table:leave_policies",
+    "add_index:ix_leave_policies_user_id",
+    "add_column:pto_entries.bucket",
+}
+
+
+def _drift_names(diff) -> set[str]:
+    names = set()
+    for item in diff:
+        kind = item[0]
+        if kind == "add_table":
+            names.add(f"add_table:{item[1].name}")
+        elif kind == "add_index":
+            names.add(f"add_index:{item[1].name}")
+        elif kind == "add_column":
+            names.add(f"add_column:{item[2]}.{item[3].name}")
+        else:
+            names.add(f"{kind}:{item!r}")
+    return names
 
 
 def _upgrade_to(database: Path, revision: str) -> None:
@@ -54,9 +76,9 @@ def test_upgrade_adds_columns_index_and_compatibility_rows(tmp_path: Path) -> No
             "('kept@example.invalid', 'Kept', 'user', 1, 0, '2026-01-01', '2026-01-01')"
         )
         db.commit()
-    _upgrade_to(database, "head")
+    _upgrade_to(database, REVISION)
     assert current_revision(database) == REVISION
-    assert model_diff(database) == []
+    assert _drift_names(model_diff(database)) == LATER_THAN_BIRTHDAY
     with sqlite3.connect(database) as db:
         columns = _columns(db, "users")
         birthday = columns["birthday"]
@@ -91,9 +113,9 @@ def test_upgrade_adds_columns_index_and_compatibility_rows(tmp_path: Path) -> No
 
 def test_downgrade_drops_only_this_revision_and_upgrade_again(tmp_path: Path) -> None:
     database = tmp_path / "site.db"
-    _upgrade_to(database, "head")
+    _upgrade_to(database, REVISION)
     config = make_config(sqlite_url(database))
-    command.downgrade(config, "-1")
+    command.downgrade(config, PREVIOUS)
     assert current_revision(database) == PREVIOUS
     with sqlite3.connect(database) as db:
         columns = _columns(db, "users")
@@ -108,9 +130,9 @@ def test_downgrade_drops_only_this_revision_and_upgrade_again(tmp_path: Path) ->
             row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
         assert "ix_habit_checkins_user_day" in _index_names(db, "habit_checkins")
-    command.upgrade(config, "head")
+    command.upgrade(config, REVISION)
     assert current_revision(database) == REVISION
-    assert model_diff(database) == []
+    assert _drift_names(model_diff(database)) == LATER_THAN_BIRTHDAY
     with sqlite3.connect(database) as db:
         assert "birthday" in _columns(db, "users")
         assert INDEX in _index_names(db, "episode_progress")

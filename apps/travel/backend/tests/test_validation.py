@@ -7,9 +7,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from apps.travel.backend.models import LeavePolicy, PtoPolicy
 from apps.travel.backend.services.money import fmt_days, parse_days, parse_money, store_days
 
 
@@ -129,7 +131,7 @@ def test_pto_values_keep_full_precision_and_display_rounds(client):
             "accrual_amount": "1.6667",
             "accrual_unit": "day",
             "accrual_cadence": "monthly",
-            "hours_per_day": "7.333",
+            "hours_per_day": "7.25",
             "balance_days": "10.125",
             "balance_as_of": "2026-01-01",
             "annual_cap_days": "20.005",
@@ -138,7 +140,7 @@ def test_pto_values_keep_full_precision_and_display_rounds(client):
     assert saved.status_code == 200, saved.text
     policy = saved.json()["policy"]
     assert policy["accrual_amount"] == "1.6667"
-    assert policy["hours_per_day"] == "7.3330"
+    assert policy["hours_per_day"] == "7.2500"
     assert policy["balance_saved"] == "10.1250"
     assert policy["annual_cap_days"] == "20.0050"
     entry = client.post(
@@ -186,6 +188,45 @@ def test_blank_titles_match_on_create_and_patch(client):
         assert patched.status_code == 422, (title, patched.text)
         assert made.json()["detail"] == patched.json()["detail"]
         assert made.json()["detail"] == "title: Give the trip a name."
+
+
+def test_legacy_policy_rejects_hours_past_six_decimals(client):
+    saved = client.put(
+        "/api/pto/policy",
+        json={
+            "accrual_amount": "1.6667",
+            "accrual_unit": "day",
+            "accrual_cadence": "monthly",
+            "hours_per_day": "7.333",
+            "balance_days": "10.125",
+            "balance_as_of": "2026-01-01",
+            "annual_cap_days": "20.005",
+        },
+    )
+    assert saved.status_code == 422, saved.text
+    body = saved.json()
+    assert body["code"] == "validation_error"
+    assert body["field_errors"] == {"accrual_amount": "Hours can have at most 6 decimal places."}
+    assert body["detail"] == "accrual_amount: Hours can have at most 6 decimal places."
+    assert client.get("/api/pto").json()["policy"]["configured"] is False
+    db = sessionmaker(bind=client.app.state.database.engine)()
+    try:
+        assert db.query(PtoPolicy).count() == 0
+        assert db.query(LeavePolicy).count() == 0
+    finally:
+        db.close()
+
+
+def test_validation_response_keeps_detail_and_adds_field_errors(client):
+    response = client.post(
+        "/api/trips",
+        json={"title": "   ", "start_date": "2026-11-02", "end_date": "2026-11-03"},
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["detail"] == "title: Give the trip a name."
+    assert body["code"] == "validation_error"
+    assert body["field_errors"] == {"title": "Give the trip a name."}
 
 
 def test_pto_preview_rejects_unbounded_days_as_422(client):

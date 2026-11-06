@@ -16,6 +16,7 @@ from apps.travel.backend.deps import (
 from apps.travel.backend.models import Setting
 from apps.travel.backend.schemas import FlightAwareKeyIn, FlightLookupIn
 from apps.travel.backend.services.flights import FlightAwareError, normalize_ident
+from apps.travel.backend.services.leave_buckets import hours_per_day_text, sick_prompt_dismissed
 from apps.travel.backend.services.places import cached_search
 
 router = APIRouter()
@@ -47,6 +48,10 @@ def read_settings(
         "map": {
             "provider": "openstreetmap",
             "search": "nominatim",
+        },
+        "pto": {
+            "hours_per_day": hours_per_day_text(db, principal.id),
+            "sick_prompt_dismissed": sick_prompt_dismissed(db, principal.id),
         },
     }
 

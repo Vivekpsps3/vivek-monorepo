@@ -45,6 +45,19 @@ class PreservationTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "Original values"):
             verify(self.before, self.db)
 
+    def test_pto_hour_settings_are_the_only_new_settings(self):
+        self.db.executescript(
+            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); "
+            "INSERT INTO settings VALUES ('user:1:flightaware_api_key', 'keep');"
+        )
+        before = snapshot(self.db, prune_cache_keys=["tmdb:movie:query"])
+        self.db.execute("INSERT INTO settings VALUES ('user:1:pto_hours_per_day', '8')")
+        report = verify(before, self.db)
+        self.assertEqual(report["new_pto_hour_settings"], 1)
+        self.db.execute("INSERT INTO settings VALUES ('user:1:other', 'no')")
+        with self.assertRaisesRegex(AssertionError, "Unexplained added"):
+            verify(before, self.db)
+
     def test_search_cache_must_actually_be_pruned(self):
         self.db.execute("INSERT INTO provider_cache VALUES ('tmdb:movie:query', 'transient')")
         with self.assertRaisesRegex(AssertionError, "Unexplained added"):
