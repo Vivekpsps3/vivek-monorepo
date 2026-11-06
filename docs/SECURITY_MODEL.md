@@ -31,9 +31,57 @@ the operator controls the code delivered to browsers.
 3. The backend stores the signing public key, encrypted wraps, and a hash of each short-lived, single-use login challenge.
 4. Vault passphrases, signing private keys, and unwrapped data keys never reach the backend.
 5. Browser signs an account-bound challenge locally; only the public-key verification result creates a session.
-6. The session is an HttpOnly cookie (plus a readable CSRF cookie), not the vault passphrase. `SESSION_DAYS` is the lifetime, and each authenticated request slides that lifetime forward. The unwrapped data key stays in this browser's local storage so a reload stays unlocked. Lock vault and sign out delete that key. The passphrase is never written to a cookie, token, or the server.
+6. The session is an HttpOnly cookie (plus a readable CSRF cookie), not the vault passphrase. `SESSION_DAYS` is the lifetime, and each authenticated request slides that lifetime forward. The unwrapped data key persists in this browser as a non-extractable `CryptoKey` in IndexedDB (see Browser vault key storage below) so a reload stays unlocked. Lock vault and sign out delete that stored key. The passphrase is never written to a cookie, token, or the server.
 7. Browser encrypts finance records before upload and decrypts them after download.
 8. Backend stores ciphertext, non-sensitive sync metadata, and optional blind indexes only; it never computes over private plaintext.
+
+## Browser vault key storage
+
+The data encryption key is generated in the browser from 32 random bytes and
+imported as a non-extractable AES-GCM `CryptoKey` (`extractable: false`,
+usages encrypt and decrypt only) in
+`apps/finance/frontend/src/app/crypto/vault-crypto.ts`. The same raw bytes are
+wrapped with the passphrase-derived key for server storage; the `CryptoKey`
+itself is never exported.
+
+For reload persistence the key is stored as a `CryptoKey` object in IndexedDB:
+database `finance-vault` (version 1), object store `keys`, record id `dek`
+(constants in `apps/finance/frontend/src/app/crypto/dek-store.ts`). The record
+also carries the owning user id, the blind-index keys below, and the
+blind-index progress fields. A `localStorage` presence flag,
+`finance-vault-present`, holds only the owning user id; a restore succeeds
+only when the flag and the record owner both match the signed-in user.
+`localStorage` no longer holds the key itself.
+
+Legacy migration: browsers that still hold the pre-FK1 design — the raw key,
+base64-encoded, in `localStorage` under `finance-dek` — import that item on
+the first restore, persist it to IndexedDB with `blind_index_version` 1, and
+then delete the `localStorage` item. An unusable legacy value (not 32 bytes)
+clears both stores and leaves the vault locked.
+
+Blind indexes use an HMAC subkey derived from the data key with HKDF-SHA256
+(empty salt, info `finance-blind-index-v1`): a 256-bit, non-extractable,
+sign-only HMAC key. The pre-upgrade index, computed with an HMAC key imported
+directly from the raw data-key bytes, is kept as the legacy index. Both
+subkeys are attached to the data key object with a `WeakMap`, so callers keep
+using `hmacBlindIndex(dek)` and `adoptBootstrapVault(dek)` unchanged. New
+writes use the HKDF index immediately. Lookups always union the HKDF index
+and the legacy index, including after the migration below completes.
+
+A background batch migrates stored blind indexes: `blind_index_version` stays
+at the integer 1 until the batch finishes, then becomes 2. Visited records are
+tracked as `${collection}/${client_id}` tokens, persisted in `progress:<userId>`
+records in the same IndexedDB store, and a second unlock joins an in-flight
+batch rather than rewinding it. New and bootstrapped vaults start at version 2.
+
+Re-wrap (passphrase or KDF-iteration change) decrypts the stored passphrase
+wrap to the raw bytes and re-wraps them under the new passphrase-derived key.
+It does not export the in-memory key, which is non-extractable in any case.
+
+Lock and sign out delete the IndexedDB `dek` record, the
+`finance-vault-present` flag, and any legacy `finance-dek` item. They leave
+the blind-index progress records in place; deleting the whole
+`finance-vault` database is test-only cleanup.
 
 ## Plaintext allowed on the backend
 
@@ -153,12 +201,13 @@ data reset.
 
 The site is one origin behind the edge proxy in
 [ops/nginx/site.conf](../ops/nginx/site.conf). Finance, Travel, Media, the
-portfolio, and `/api` share that origin. The unwrapped finance data key is
-stored in `localStorage` under `finance-dek` (`persistDekLocal` in
-`apps/finance/frontend/src/app/crypto/vault-crypto.ts`). The vault passphrase
-is typed into the finance document and is not stored. Any script that runs on
-this origin can read that key and can hook the passphrase field. A path such
-as `/travel` is not a security boundary.
+portfolio, and `/api` share that origin. The unwrapped finance data key is a
+non-extractable `CryptoKey` stored in IndexedDB (database `finance-vault`,
+record `dek`; see Browser vault key storage above), so no script can read its
+raw bytes or export it. The vault passphrase is typed into the finance
+document and is not stored. Any script that runs on this origin can still
+retrieve and use that stored key handle and can hook the passphrase field. A
+path such as `/travel` is not a security boundary.
 
 The application (not the edge proxy) sends an **enforced**
 `Content-Security-Policy`. A second policy on the proxy would be enforced as
@@ -226,9 +275,12 @@ The global Referrer-Policy stays `same-origin`; only Leaflet tile image requests
 
 ### Separating the finance origin
 
-CSP does not stop script that is already allowed from reading `finance-dek`
-or the passphrase field. That requires a different origin (scheme, host, and
-port). Doing it now, before DNS exists, would break production, so this image
+CSP does not stop script that is already allowed from retrieving and using
+the stored IndexedDB key handle, or from hooking the passphrase field. The key
+is non-extractable, so such script cannot copy its raw bytes, but use is
+enough to decrypt records it can reach. Separating the key from other
+features requires a different origin (scheme, host, and port). Doing it now,
+before DNS exists, would break production, so this image
 does not switch hosts.
 
 `finance.vivekpanchagnula.com` and the apex are schemeful same-site. A CNAME
@@ -262,7 +314,9 @@ them back in the vault's origin.
    after editing the host copy, run `nginx -t && nginx -s reload` on nginx-edge.
    After the finance host serves the app, redirect apex `/finance`, `/hub`,
    `/auth`, and `/api` to the finance host and send `Clear-Site-Data: "storage"`
-   on those redirects so the apex copy of `finance-dek` is deleted. That header
+   on those redirects so the apex vault key storage (the IndexedDB
+   `finance-vault` database, its presence flag, and any legacy `finance-dek`
+   item) is deleted. That header
    clears every apex site store, including Travel and Media preferences, the
    first time a browser hits a retired finance URL. Do not publish the DNS name
    before this cutover.
@@ -330,11 +384,15 @@ server {
      apex script cannot plant `Domain=vivekpanchagnula.com` over the session
      or shadow `finance_csrf`. `__Host-` requires HTTPS. Local HTTP dev keeps
      the current names until the split.
-   - On the apex shells that remain, call `localStorage.removeItem('finance-dek')`
-     once at startup so a browser that never hits the redirect still drops the
-     old key. Do that only at cutover. Doing it while finance still shares the
-     apex origin would delete the live vault key. `Clear-Site-Data: "storage"`
-     on the apex redirects covers browsers that never load those shells again.
+   - On the apex shells that remain, clear the stored vault key once at
+     startup — delete the IndexedDB `dek` record and the
+     `finance-vault-present` flag and remove any legacy
+     `localStorage` `finance-dek` item (`clearFinanceSessionStorage` in
+     `dek-store.ts` does all three) — so a browser that never hits the
+     redirect still drops the old key. Do that only at cutover. Doing it while
+     finance still shares the apex origin would delete the live vault key.
+     `Clear-Site-Data: "storage"` on the apex redirects covers browsers that
+     never load those shells again.
    - Preserve the root build `<base href="/">` and review all public/private route ownership at host cutover.
    - Point hub links at `https://finance.vivekpanchagnula.com/hub`.
    - Set `CORS_ORIGINS` to `https://finance.vivekpanchagnula.com` only.
