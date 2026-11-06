@@ -464,6 +464,19 @@ def test_building_style_failure_uses_the_town_validation_shape(tmp_path: Path):
     _assert_field_validation(tmp_path, caught.value, "building_style", BUILDING_STYLE_ERROR)
 
 
+def test_rest_day_used_one_week_is_available_the_next():
+    days = [
+        date(2026, 10, 12),
+        *_span("2026-10-14", "2026-10-18"),
+        date(2026, 10, 19),
+        date(2026, 10, 20),
+    ]
+    got = _habit("2026-10-12", "2026-10-21", days)
+    assert got.rest_day_available is True and got.rest_used_on is None
+    earlier = _habit("2026-10-12", "2026-10-14", [date(2026, 10, 12)])
+    assert earlier.rest_used_on == date(2026, 10, 13) and earlier.rest_day_available is False
+
+
 def test_checkin_ordinals_match_the_date_path():
     created, today = date(2026, 10, 1), date(2026, 10, 29)
     days = _span("2026-10-01", "2026-10-18")

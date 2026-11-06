@@ -1,7 +1,9 @@
 """AC-I14: GET /api/town p50 over 200 habits and three years of check-ins.
 
-The 600 ms assertion is the budget, about twice the CI median (p50 261.66 ms on GitHub runners).
-The Pi median is about 358 ms, still under the budget.
+The 600 ms assertion is the budget, about twice the earlier CI median
+(p50 261.66 ms). Check-in reads force INDEXED BY
+sqlite_autoindex_habit_checkins_1. Without the hint the planner picks the
+wrong index and CI p50 was 889 ms. The gate stays 600 ms.
 This file is marked perf so coverage runs skip it. CI runs it once,
 without coverage, and prints the profile.
 """
