@@ -26,6 +26,10 @@ interface Settings {
     source: string;
     last4: string | null;
   };
+  pto: {
+    hours_per_day: string;
+    sick_prompt_dismissed: boolean;
+  };
 }
 @Component({
   standalone: true,
@@ -91,6 +95,41 @@ interface Settings {
       }
     </ui-card>
     <ui-card>
+      <h2>Time off</h2>
+      <p class="muted">
+        Leave buckets track hours. This rate converts them to days on the
+        Time off page.
+      </p>
+      <form class="travel-form" #ptoForm="ngForm" (ngSubmit)="savePto()">
+        <ui-field label="Hours per day" [required]="true"
+          ><input
+            uiFieldControl
+            required
+            type="number"
+            min="0.01"
+            max="24"
+            step="0.01"
+            name="hoursPerDay"
+            [(ngModel)]="hoursPerDay"
+        /></ui-field>
+        <div class="button-row">
+          <ui-button
+            variant="primary"
+            type="submit"
+            [disabled]="saving() || !ptoForm.valid || !ptoDirty"
+          >
+            Save hours per day
+          </ui-button>
+        </div>
+      </form>
+      @if (ptoError()) {
+        <p class="local-error" role="alert">{{ ptoError() }}</p>
+      }
+      @if (ptoMessage()) {
+        <p role="status">{{ ptoMessage() }}</p>
+      }
+    </ui-card>
+    <ui-card>
       <h2>Maps</h2>
       <p>
         OpenStreetMap tiles and explicit Nominatim location search. Choose each
@@ -117,6 +156,13 @@ export class SettingsComponent {
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
   key = "";
+  hoursPerDay = "";
+  private savedHoursPerDay = "";
+  readonly ptoError = signal("");
+  readonly ptoMessage = signal("");
+  get ptoDirty(): boolean {
+    return this.hoursPerDay !== this.savedHoursPerDay;
+  }
   readonly data = signal<Settings | null>(null);
   readonly error = signal("");
   readonly saving = signal(false);
@@ -124,7 +170,7 @@ export class SettingsComponent {
   canLeave(): boolean | Promise<boolean> {
     return (
       !this.ownsSession ||
-      (!this.key && !this.saving()) ||
+      (!this.key && !this.ptoDirty && !this.saving()) ||
       this.confirm.ask(
         "Leave this key draft?",
         "Your new API key has not been saved. A pending save may still finish.",
@@ -135,7 +181,7 @@ export class SettingsComponent {
   }
   @HostListener("window:beforeunload", ["$event"])
   unload(event: BeforeUnloadEvent): void {
-    if (this.ownsSession && (this.key || this.saving())) {
+    if (this.ownsSession && (this.key || this.ptoDirty || this.saving())) {
       event.preventDefault();
       event.returnValue = "";
     }
@@ -149,8 +195,43 @@ export class SettingsComponent {
       .get<Settings>("/travel/api/settings")
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
-        next: (d) => this.data.set(d),
+        next: (d) => {
+          this.data.set(d);
+          if (!this.ptoDirty && d.pto) {
+            this.hoursPerDay = d.pto.hours_per_day;
+            this.savedHoursPerDay = d.pto.hours_per_day;
+          }
+        },
         error: (e) => this.error.set(travelError(e)),
+      });
+  }
+  savePto(): void {
+    if (this.saving() || !this.ptoDirty || !this.ownsSession) return;
+    const submitted = this.hoursPerDay;
+    this.saving.set(true);
+    this.ptoError.set("");
+    this.ptoMessage.set("");
+    this.http
+      .put<{ hours_per_day: string; sick_prompt_dismissed: boolean }>(
+        "/travel/api/settings/pto",
+        { hours_per_day: submitted },
+      )
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (d) => {
+          this.savedHoursPerDay = d.hours_per_day;
+          if (this.hoursPerDay === submitted) this.hoursPerDay = d.hours_per_day;
+          this.saving.set(false);
+          this.ptoMessage.set(
+            this.ptoDirty
+              ? "Hours per day saved. Your newer edit still needs saving."
+              : "Hours per day saved.",
+          );
+        },
+        error: (e) => {
+          this.ptoError.set(travelError(e));
+          this.saving.set(false);
+        },
       });
   }
   save(): void {
