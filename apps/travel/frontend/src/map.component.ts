@@ -126,6 +126,21 @@ export interface TravelPlace {
           height: 17rem;
         }
       }
+      /* 0.4 rather than the spec's .6: .6 leaves the accent fill under 3:1 on filtered land, water and park. */
+      :host-context([data-theme="dark"]) ::ng-deep .leaflet-tile-pane {
+        filter: brightness(0.4) contrast(1.1) saturate(0.8);
+      }
+      :host-context([data-theme="dark"]) ::ng-deep .leaflet-tile {
+        filter: none;
+      }
+      :host-context([data-theme="dark"]) .map-canvas:focus-visible,
+      :host-context([data-theme="dark"]) .map-toolbar ::ng-deep .ui-btn:focus-visible,
+      :host-context([data-theme="dark"]) ::ng-deep .leaflet-bar a:focus,
+      :host-context([data-theme="dark"]) ::ng-deep .leaflet-bar a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 2px var(--surface-2);
+      }
     `,
   ],
 })
@@ -264,12 +279,30 @@ export class MapComponent implements OnChanges {
     if (!map) return;
     const dark = this.theme.resolved === "dark";
     const styles = getComputedStyle(document.documentElement);
-    const surface = dark ? styles.getPropertyValue("--surface-2").trim() : "";
-    const accent = dark ? styles.getPropertyValue("--accent").trim() : "#3388ff";
-    this.canvas.nativeElement.style.backgroundColor = surface;
+    const surface = styles.getPropertyValue("--surface-2").trim();
+    const accent = styles.getPropertyValue("--accent").trim();
+    this.canvas.nativeElement.style.backgroundColor = dark ? surface : "";
     const tiles = map.getPane("tilePane");
-    if (tiles) tiles.style.backgroundColor = surface;
-    this.pins.forEach((pin) => pin.setStyle({ color: accent, fillColor: accent }));
+    if (tiles) tiles.style.backgroundColor = dark ? surface : "";
+    this.pins.forEach((pin) =>
+      pin.setStyle(
+        dark
+          ? {
+              color: surface,
+              weight: 2,
+              opacity: 1,
+              fillColor: accent,
+              fillOpacity: 0.9,
+            }
+          : {
+              color: "#3388ff",
+              weight: 3,
+              opacity: 1,
+              fillColor: "#3388ff",
+              fillOpacity: 0.2,
+            },
+      ),
+    );
   }
   show(index: number): void {
     const pin = this.pins.get(index);
