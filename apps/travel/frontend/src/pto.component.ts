@@ -20,6 +20,7 @@ import {
 } from "@vivek/ui";
 import { Subscription } from "rxjs";
 import { showDay, showRange } from "./display";
+import { PtoChartComponent, type PtoSeriesPoint } from "./pto-chart.component";
 import { travelError } from "./travel.models";
 interface Policy {
   configured: boolean;
@@ -37,6 +38,47 @@ interface Policy {
     labels: string[];
   }[];
 }
+interface BucketState {
+  bucket: string;
+  configured: boolean;
+  start_balance_hours: string;
+  balance_as_of: string;
+  accrual_hours: string;
+  accrual_cadence: string;
+  cap_hours: string | null;
+  year_start: string;
+  balance_today_hours: string;
+  balance_today_days: string;
+  at_cap: boolean;
+  today_before_balance_date: boolean;
+}
+interface SeriesBucket {
+  bucket: string;
+  cap_hours: string | null;
+  at_cap_today: boolean;
+  balance_today_hours: string;
+  balance_today_days: string;
+  balance_horizon_hours: string;
+  balance_horizon_days: string;
+  first_negative: {
+    on: string;
+    hours: string;
+    days: string;
+    projected: boolean;
+  } | null;
+  points: PtoSeriesPoint[];
+}
+interface Series {
+  today: string;
+  hours_per_day: string;
+  horizon_end: string;
+  policy_year_end: string;
+  rolled_over: boolean;
+  days_left_in_policy_year: number;
+  year_start_bucket: string | null;
+  pto: SeriesBucket | null;
+  sick: SeriesBucket | null;
+}
 interface Pto {
   policy: Policy;
   entries: {
@@ -48,11 +90,28 @@ interface Pto {
     label: string;
     kind: string;
     notes: string | null;
+    bucket: string;
+    hours: string;
     charges: {
       on_date: string;
       amount: string;
     }[];
   }[];
+  hours_per_day: string;
+  pto_sick_prompt_dismissed: boolean;
+  buckets: {
+    pto: BucketState | null;
+    sick: BucketState | null;
+  };
+}
+type BucketName = "pto" | "sick";
+interface BucketForm {
+  start_balance_hours: string;
+  balance_as_of: string;
+  accrual_hours: string;
+  accrual_cadence: string;
+  cap_hours: string;
+  year_start: string;
 }
 @Component({
   standalone: true,
@@ -64,6 +123,7 @@ interface Pto {
     UiFieldControlDirective,
     UiCardComponent,
     UiPageHeaderComponent,
+    PtoChartComponent,
   ],
   template: `<main class="page travel-page">
     <ui-page-header
@@ -196,6 +256,173 @@ interface Pto {
           </form>
         </details>
       </ui-card>
+      @if (series(); as s) {
+        <ui-card>
+          <h2>Forecast</h2>
+          <p class="muted">
+            Policy year ends {{ showDay(s.policy_year_end) }} ·
+            {{ s.days_left_in_policy_year }} days left
+            @if (s.rolled_over) {
+              · Chart runs to {{ showDay(s.horizon_end) }} so the next year
+              stays visible
+            }
+          </p>
+          @if (s.pto; as bucket) {
+            <h3>PTO</h3>
+            <travel-pto-chart [points]="bucket.points" label="PTO balance" />
+            <p>
+              Today {{ bucket.balance_today_days }} days · By
+              {{ showDay(s.horizon_end) }} {{ bucket.balance_horizon_days }}
+              days
+              @if (bucket.at_cap_today) {
+                · At cap
+              }
+            </p>
+            @if (bucket.first_negative; as dip) {
+              <p class="local-error">
+                Balance first goes negative on {{ showDay(dip.on) }} ({{
+                  dip.days
+                }}
+                days).
+              </p>
+            }
+          }
+          @if (s.sick; as bucket) {
+            <h3>Sick</h3>
+            <travel-pto-chart [points]="bucket.points" label="Sick balance" />
+            <p>
+              Today {{ bucket.balance_today_days }} days · By
+              {{ showDay(s.horizon_end) }} {{ bucket.balance_horizon_days }}
+              days
+              @if (bucket.at_cap_today) {
+                · At cap
+              }
+            </p>
+            @if (bucket.first_negative; as dip) {
+              <p class="local-error">
+                Balance first goes negative on {{ showDay(dip.on) }} ({{
+                  dip.days
+                }}
+                days).
+              </p>
+            }
+          }
+        </ui-card>
+      }
+      <ui-card>
+        <h2>Leave buckets</h2>
+        <p class="muted">
+          Balances in hours, converted at {{ pto.hours_per_day }} hours per
+          day. Change the rate in Travel settings.
+        </p>
+        @for (name of bucketNames; track name) {
+          @let state = pto.buckets[name];
+          <details [open]="!state">
+            <summary>
+              {{ bucketLabel(name) }}
+              @if (state) {
+                — {{ state.balance_today_hours }} hours ({{
+                  state.balance_today_days
+                }}
+                days) today
+                @if (state.at_cap) {
+                  · At cap
+                }
+              } @else {
+                — not set up yet
+              }
+            </summary>
+            <form
+              class="travel-form"
+              #bucketForm="ngForm"
+              (ngSubmit)="saveBucket(name)"
+            >
+              <div class="form-row">
+                <ui-field label="Starting balance (hours)" [required]="true"
+                  ><input
+                    uiFieldControl
+                    required
+                    type="text"
+                    inputmode="decimal"
+                    name="{{ name }}-start"
+                    [(ngModel)]="bucketForms[name].start_balance_hours" /></ui-field
+                ><ui-field label="Balance date" [required]="true"
+                  ><input
+                    uiFieldControl
+                    required
+                    type="date"
+                    name="{{ name }}-asof"
+                    [(ngModel)]="bucketForms[name].balance_as_of"
+                /></ui-field>
+              </div>
+              <div class="form-row">
+                <ui-field label="Accrual (hours)" [required]="true"
+                  ><input
+                    uiFieldControl
+                    required
+                    type="text"
+                    inputmode="decimal"
+                    name="{{ name }}-accrual"
+                    [(ngModel)]="bucketForms[name].accrual_hours" /></ui-field
+                ><ui-field label="Accrual cadence"
+                  ><select
+                    uiFieldControl
+                    name="{{ name }}-cadence"
+                    [(ngModel)]="bucketForms[name].accrual_cadence"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Every two weeks</option>
+                    <option value="semimonthly">Twice a month</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select></ui-field
+                >
+              </div>
+              <div class="form-row">
+                <ui-field label="Cap (hours, optional)"
+                  ><input
+                    uiFieldControl
+                    type="text"
+                    inputmode="decimal"
+                    name="{{ name }}-cap"
+                    [(ngModel)]="bucketForms[name].cap_hours" /></ui-field
+                ><ui-field label="Policy year starts (MM-DD)" [required]="true"
+                  ><input
+                    uiFieldControl
+                    required
+                    type="text"
+                    pattern="[0-9]{2}-[0-9]{2}"
+                    placeholder="01-01"
+                    name="{{ name }}-year"
+                    [(ngModel)]="bucketForms[name].year_start"
+                /></ui-field>
+              </div>
+              <ui-button
+                variant="primary"
+                type="submit"
+                [disabled]="saving() || !bucketForm.valid"
+              >
+                Save {{ bucketLabel(name) }} bucket
+              </ui-button>
+            </form>
+          </details>
+        }
+        @if (
+          pto.buckets.pto &&
+          !pto.buckets.sick &&
+          !pto.pto_sick_prompt_dismissed
+        ) {
+          <p>
+            Track sick time in its own bucket?
+            <ui-button variant="ghost" size="sm" (click)="dismissSickPrompt()">
+              Dismiss
+            </ui-button>
+          </p>
+          <p class="muted">
+            Use the Sick form above to set it up, or dismiss this prompt.
+          </p>
+        }
+      </ui-card>
       <ui-card>
         <h2>Planned time away</h2>
         @for (entry of pto.entries; track entry.id) {
@@ -212,7 +439,8 @@ interface Pto {
               </h3>
               <p>
                 {{ showRange(entry.start_date, entry.end_date) }} ·
-                {{ entry.days }} days
+                {{ entry.days }} days · {{ bucketLabel(entry.bucket) }} ·
+                {{ entry.hours }} hours
               </p>
             </div>
             @if (!entry.trip_id) {
@@ -292,6 +520,12 @@ interface Pto {
                 [(ngModel)]="leave.label"
                 maxlength="200"
             /></ui-field>
+            <ui-field label="Bucket"
+              ><select uiFieldControl name="bucket" [(ngModel)]="leave.bucket">
+                <option value="pto">PTO</option>
+                <option value="sick">Sick</option>
+              </select></ui-field
+            >
             <p class="muted">
               Uses the dates above and counts weekdays unless a day total is
               entered.
@@ -332,10 +566,39 @@ export class PtoComponent {
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
   readonly data = signal<Pto | null>(null);
+  readonly series = signal<Series | null>(null);
   readonly error = signal("");
   readonly saving = signal(false);
   readonly message = signal("");
   readonly forecast = signal<Record<string, unknown> | null>(null);
+  readonly bucketNames: BucketName[] = ["pto", "sick"];
+  bucketForms: Record<BucketName, BucketForm> = {
+    pto: this.emptyBucketForm(),
+    sick: this.emptyBucketForm(),
+  };
+  private bucketSaved: Record<BucketName, string> = {
+    pto: JSON.stringify(this.bucketForms.pto),
+    sick: JSON.stringify(this.bucketForms.sick),
+  };
+  bucketLabel(name: string): string {
+    return name === "sick" ? "Sick" : "PTO";
+  }
+  private emptyBucketForm(): BucketForm {
+    return {
+      start_balance_hours: "",
+      balance_as_of: new Date().toISOString().slice(0, 10),
+      accrual_hours: "",
+      accrual_cadence: "monthly",
+      cap_hours: "",
+      year_start: "01-01",
+    };
+  }
+  get bucketsDirty(): boolean {
+    return this.bucketNames.some(
+      (name) =>
+        JSON.stringify(this.bucketForms[name]) !== this.bucketSaved[name],
+    );
+  }
   policy = {
     balance_days: 0,
     balance_as_of: new Date().toISOString().slice(0, 10),
@@ -351,6 +614,7 @@ export class PtoComponent {
     end_date: "",
     days: null as number | null,
     notes: "",
+    bucket: "pto",
   };
   private policySaved = JSON.stringify(this.policy);
   private readonly emptyLeave = JSON.stringify(this.leave);
@@ -359,7 +623,11 @@ export class PtoComponent {
     return JSON.stringify(this.policy) !== this.policySaved;
   }
   get dirty(): boolean {
-    return this.policyDirty || JSON.stringify(this.leave) !== this.emptyLeave;
+    return (
+      this.policyDirty ||
+      this.bucketsDirty ||
+      JSON.stringify(this.leave) !== this.emptyLeave
+    );
   }
   canLeave(): boolean | Promise<boolean> {
     return (
@@ -394,8 +662,24 @@ export class PtoComponent {
         next: (d) => this.adopt(d),
         error: (e) => this.error.set(travelError(e)),
       });
+    this.loadSeries();
   }
-  private adopt(d: Pto, submittedPolicy?: string): void {
+  loadSeries(): void {
+    this.http
+      .get<Series>("/travel/api/pto/series")
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (d) => {
+          if (this.ownsSession) this.series.set(d);
+        },
+        error: () => this.series.set(null),
+      });
+  }
+  private adopt(
+    d: Pto,
+    submittedPolicy?: string,
+    submittedBucket?: { name: BucketName; body: string },
+  ): void {
     if (!this.ownsSession) return;
     const replacePolicy =
       !this.policyDirty || JSON.stringify(this.policy) === submittedPolicy;
@@ -412,10 +696,97 @@ export class PtoComponent {
     };
     this.policySaved = JSON.stringify(saved);
     if (replacePolicy) this.policy = saved;
+    this.adoptBuckets(d, submittedBucket);
     this.data.set(d);
+  }
+  private adoptBuckets(
+    d: Pto,
+    submitted?: { name: BucketName; body: string },
+  ): void {
+    for (const name of this.bucketNames) {
+      const state = d.buckets?.[name];
+      const form: BucketForm = state
+        ? {
+            start_balance_hours: state.start_balance_hours,
+            balance_as_of: state.balance_as_of,
+            accrual_hours: state.accrual_hours,
+            accrual_cadence: state.accrual_cadence,
+            cap_hours: state.cap_hours ?? "",
+            year_start: state.year_start,
+          }
+        : this.emptyBucketForm();
+      // Mirror adopt(): keep in-progress edits unless this form was just
+      // submitted unchanged, in which case take the server's normalized copy.
+      const current = JSON.stringify(this.bucketForms[name]);
+      const keepEdits =
+        current !== this.bucketSaved[name] &&
+        !(submitted?.name === name && submitted.body === current);
+      this.bucketSaved[name] = JSON.stringify(form);
+      if (!keepEdits) this.bucketForms[name] = form;
+    }
   }
   savePolicy(): void {
     this.save("/pto/policy", { ...this.policy }, "put");
+  }
+  saveBucket(name: BucketName): void {
+    if (this.saving() || !this.ownsSession) return;
+    const form = this.bucketForms[name];
+    const body = {
+      start_balance_hours: form.start_balance_hours.trim(),
+      balance_as_of: form.balance_as_of,
+      accrual_hours: form.accrual_hours.trim(),
+      accrual_cadence: form.accrual_cadence,
+      cap_hours: form.cap_hours.trim() === "" ? null : form.cap_hours.trim(),
+      year_start: form.year_start.trim(),
+    };
+    const submitted = JSON.stringify(form);
+    this.loading?.unsubscribe();
+    this.saving.set(true);
+    this.error.set("");
+    this.message.set("");
+    this.http
+      .put<Pto>(`/travel/api/pto/policies/${name}`, body)
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (d) => {
+          this.adopt(d, undefined, { name, body: submitted });
+          this.saving.set(false);
+          this.message.set(
+            this.dirty
+              ? `${this.bucketLabel(name)} bucket saved. Your other edits still need saving.`
+              : `${this.bucketLabel(name)} bucket saved.`,
+          );
+          this.loadSeries();
+        },
+        error: (e) => {
+          this.error.set(travelError(e));
+          this.saving.set(false);
+        },
+      });
+  }
+  dismissSickPrompt(): void {
+    if (this.saving() || !this.ownsSession) return;
+    this.saving.set(true);
+    this.error.set("");
+    this.http
+      .put<{ hours_per_day: string; sick_prompt_dismissed: boolean }>(
+        "/travel/api/settings/pto",
+        { sick_prompt_dismissed: true },
+      )
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: () => {
+          const current = this.data();
+          if (current) {
+            this.data.set({ ...current, pto_sick_prompt_dismissed: true });
+          }
+          this.saving.set(false);
+        },
+        error: (e) => {
+          this.error.set(travelError(e));
+          this.saving.set(false);
+        },
+      });
   }
   saveLeave(): void {
     this.save("/pto/entries", { ...this.leave });
@@ -440,9 +811,11 @@ export class PtoComponent {
               end_date: "",
               days: null,
               notes: "",
+              bucket: "pto",
             };
             this.forecast.set(null);
           }
+          this.loadSeries();
           this.saving.set(false);
           this.message.set(
             this.dirty
