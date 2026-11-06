@@ -501,39 +501,89 @@ def test_csrf_and_anonymous_writes(tmp_path, monkeypatch):
     database.engine.dispose()
 
 
-def test_checkin_window_follows_server_time_at_both_edges(api):
-    """tz can move the client's today. CHECKIN_WINDOW stays on the server clock."""
+def test_checkin_window_follows_local_today_at_both_edges(api):
+    """CHECKIN_WINDOW anchors on the client's local day (their tz), not UTC."""
     client, database, application = api
     ahead = _plant(database, "Ahead", 0, 7, date(2026, 10, 1))
     behind = _plant(database, "Behind", 1, 7, date(2026, 10, 1))
+    evening = _plant(database, "Evening", 2, 7, date(2026, 10, 1))
     out = "You can only check in for today or yesterday."
     locked = "Only today's check-in can be undone."
 
-    # 12:00Z is 2026-10-30 in Pacific/Kiritimati and 2026-10-29 on the server.
+    # 12:00Z is already 2026-10-30 in Pacific/Kiritimati: window 10-29..10-31.
     application.dependency_overrides[get_town_clock] = lambda: datetime(
         2026, 10, 29, 12, 0, tzinfo=UTC
     )
     zone = "Pacific/Kiritimati"
-    _err(_check(client, ahead, "2026-10-27", zone), 422, "day_out_of_window", out)
-    _err(_check(client, ahead, "2026-10-31", zone), 422, "day_out_of_window", out)
-    lower = _check(client, ahead, "2026-10-28", zone)
-    upper = _check(client, ahead, "2026-10-30", zone)
+    _err(_check(client, ahead, "2026-10-28", zone), 422, "day_out_of_window", out)
+    _err(_check(client, ahead, "2026-11-01", zone), 422, "day_out_of_window", out)
+    lower = _check(client, ahead, "2026-10-29", zone)
+    upper = _check(client, ahead, "2026-10-31", zone)
     assert lower.status_code == 201 and lower.json()["checked"] is True
-    assert upper.status_code == 201 and upper.json()["day"] == "2026-10-30"
+    assert upper.status_code == 201 and upper.json()["day"] == "2026-10-31"
 
-    # 02:00Z is 2026-10-29 in Los Angeles and 2026-10-30 on the server.
+    # 00:30Z is still 2026-10-29 in Los Angeles (17:30 the evening before):
+    # the LA window is 10-28..10-30 even though UTC has rolled to the 30th.
     application.dependency_overrides[get_town_clock] = lambda: datetime(
-        2026, 10, 30, 2, 0, tzinfo=UTC
+        2026, 10, 30, 0, 30, tzinfo=UTC
     )
-    _err(_check(client, behind, "2026-10-28"), 422, "day_out_of_window", out)
-    _err(_check(client, behind, "2026-11-01"), 422, "day_out_of_window", out)
-    lower = _check(client, behind, "2026-10-29")
-    upper = _check(client, behind, "2026-10-31")
-    server_today = _check(client, behind, "2026-10-30")
-    assert lower.status_code == 201 and upper.status_code == 201
-    assert server_today.status_code == 201
-    undone = _undo(client, behind, "2026-10-31")
+    _err(_check(client, behind, "2026-10-27"), 422, "day_out_of_window", out)
+    # 10-31 is today+1 in UTC but today+2 locally, so it stays out.
+    _err(_check(client, behind, "2026-10-31"), 422, "day_out_of_window", out)
+    yesterday = _check(client, behind, "2026-10-28")
+    upper = _check(client, behind, "2026-10-30")
+    assert yesterday.status_code == 201 and yesterday.json()["checked"] is True
+    assert upper.status_code == 201 and upper.json()["day"] == "2026-10-30"
+    # The DELETE window is local too: today+2 is locked, yesterday is locked,
+    # and local today (still yesterday in UTC terms) can be undone.
+    _err(_undo(client, behind, "2026-10-31"), 409, "checkin_locked", locked)
+    _err(_undo(client, behind, "2026-10-28"), 409, "checkin_locked", locked)
+    undone = _undo(client, behind, "2026-10-29")
     assert undone.status_code == 200 and undone.json()["checked"] is False
-    undone = _undo(client, behind, "2026-10-30")
+
+    # 02:00Z after the fall-back is 18:00 PST on 2026-11-01: a Pacific
+    # evening where UTC (11-02) and local (11-01) disagree for hours.
+    application.dependency_overrides[get_town_clock] = lambda: datetime(
+        2026, 11, 2, 2, 0, tzinfo=UTC
+    )
+    _err(_check(client, evening, "2026-10-30"), 422, "day_out_of_window", out)
+    _err(_check(client, evening, "2026-11-03"), 422, "day_out_of_window", out)
+    yesterday = _check(client, evening, "2026-10-31")
+    today = _check(client, evening, "2026-11-01")
+    assert yesterday.status_code == 201 and today.status_code == 201
+    undone = _undo(client, evening, "2026-11-01")
     assert undone.status_code == 200 and undone.json()["checked"] is False
-    _err(_undo(client, behind, "2026-10-29"), 409, "checkin_locked", locked)
+    _err(_undo(client, evening, "2026-10-31"), 409, "checkin_locked", locked)
+
+
+def test_crafted_input_is_422_not_500(api):
+    client, database, _ = api
+    habit_id = _plant(database, "Crafted", 0, 7, date(2026, 10, 1))
+    assert habit_id > 0
+    big = 10**20  # beyond SQLite's signed 64-bit INTEGER
+    assert _patch(client, big, {"name": "Nope"}).status_code == 422
+    assert _check(client, big, "2026-10-29").status_code == 422
+    assert _undo(client, big, "2026-10-29").status_code == 422
+    history = client.get(
+        f"/api/town/habits/{big}/checkins",
+        params={"from": "2026-10-01", "to": "2026-10-29", "tz": TZ},
+    )
+    assert history.status_code == 422
+
+    def raw(payload: bytes):
+        return client.post(
+            "/api/town/habits",
+            params={"tz": TZ},
+            content=payload,
+            headers={"content-type": "application/json"},
+        )
+
+    # A 5000-digit int token trips Python's int conversion limit (ValueError).
+    huge = raw(b'{"name": "Big", "slot": ' + b"9" * 5000 + b', "per_week": 7}')
+    _err(huge, 422, "validation_error", _CHECK, None)
+    # Deeply nested JSON hits the parser's recursion limit (RecursionError).
+    nested = raw(b'{"name": ' + b"[" * 2000 + b"]" * 2000 + b"}")
+    _err(nested, 422, "validation_error", _CHECK, None)
+    # An invalid UTF-8 byte in the body fails decoding (UnicodeDecodeError).
+    bad_utf8 = raw(b'{"name": "Bad \xff name", "slot": 0, "per_week": 7}')
+    _err(bad_utf8, 422, "validation_error", _CHECK, None)

@@ -4,7 +4,7 @@ import re
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
@@ -22,6 +22,9 @@ router = APIRouter(prefix="/town", tags=["town"])
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _CHECK_FIELDS = "Check the highlighted fields."
+
+# SQLite INTEGER is signed 64-bit. Ids outside it are 422, not a 500 overflow.
+HabitId = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 
 def _reject() -> APIError:
@@ -85,7 +88,7 @@ def get_habits(
 
 @router.get("/habits/{habit_id}/checkins", response_model=CheckinDays)
 def get_checkins(
-    habit_id: int,
+    habit_id: HabitId,
     start: Annotated[str | None, Query(alias="from")] = None,
     end: Annotated[str | None, Query(alias="to")] = None,
     tz: str | None = None,
@@ -115,7 +118,7 @@ async def post_habit(
 
 @router.patch("/habits/{habit_id}", response_model=Habit)
 async def patch_habit(
-    habit_id: int,
+    habit_id: HabitId,
     request: Request,
     tz: str | None = None,
     db: Session = Depends(get_db, scope="function"),
@@ -129,7 +132,7 @@ async def patch_habit(
 
 @router.post("/habits/{habit_id}/checkins", response_model=CheckinResult)
 async def post_checkin(
-    habit_id: int,
+    habit_id: HabitId,
     request: Request,
     response: Response,
     tz: str | None = None,
@@ -145,7 +148,7 @@ async def post_checkin(
 
 @router.delete("/habits/{habit_id}/checkins/{day}", response_model=CheckinResult)
 def delete_checkin(
-    habit_id: int,
+    habit_id: HabitId,
     day: str,
     tz: str | None = None,
     db: Session = Depends(get_db, scope="function"),

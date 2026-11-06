@@ -450,4 +450,63 @@ def test_wrong_owner_checkin_inside_the_range_is_ignored(tmp_path):
             streak.best_weeks,
             habit_xp(len(owner_days), streak.streak7_count),
         )
+        # GET checkins reads the same rows: the foreign days inside the
+        # range stay out of the owner's history.
+        assert read_checkins(db, 1, 1, created, today)["days"] == list(owner_days)
+    database.engine.dispose()
+
+
+def test_wrong_owner_checkin_is_ignored_for_archived_weekly_week_and_last7(tmp_path):
+    database = open_database(f"sqlite:///{tmp_path / 'owner-weekly.db'}")
+    TownBase.metadata.create_all(database.engine)
+    today = date(2026, 10, 29)
+    created = date(2026, 9, 30)
+    archived_on = date(2026, 10, 14)
+    now = datetime(2026, 10, 29, tzinfo=UTC)
+    owner_days = (
+        date(2026, 9, 30),
+        date(2026, 10, 5),
+        date(2026, 10, 7),
+        date(2026, 10, 9),
+        date(2026, 10, 12),
+        date(2026, 10, 14),
+    )
+    # Inside the archive week and the last7 window: counted, week.done and
+    # last7 would both change.
+    foreign_days = (date(2026, 10, 8), date(2026, 10, 10), date(2026, 10, 13))
+    with Session(database.engine) as db:
+        db.execute(
+            insert(Habit),
+            dict(
+                id=1,
+                user_id=1,
+                name="Weekly",
+                name_key="weekly",
+                slot=0,
+                building_style="cottage",
+                per_week=3,
+                created_on=created,
+                created_at=now,
+                archived_on=archived_on,
+                archived_at=now,
+            ),
+        )
+        db.execute(
+            insert(HabitCheckin),
+            [
+                dict(habit_id=1, user_id=user_id, day=day, created_at=now)
+                for user_id, days in ((1, owner_days), (2, foreign_days))
+                for day in days
+            ],
+        )
+        view = next(
+            item
+            for item in read_habits(db, 1, today, "UTC", include_archived=True)["items"]
+            if item["id"] == 1
+        )
+        streak = evaluate_streak(created, today, owner_days, 3, archived_on=archived_on)
+        assert streak.week is not None
+        assert view["week"] == {"done": streak.week.done, "target": streak.week.target}
+        assert view["last7"] == list(streak.last7)
+        assert view["xp"] == habit_xp(len(owner_days), streak.streak7_count)
     database.engine.dispose()
