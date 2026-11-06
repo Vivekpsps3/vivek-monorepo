@@ -198,6 +198,21 @@ describe('Town page', () => {
     expect(toast.success).toHaveBeenCalledOnceWith('Terraria-on-Sea reached Lv 4!');
     expect(el.querySelector('[aria-live="polite"]')?.textContent).toBe('Read 20 pages checked. 4-day streak.');
   });
+  it('leaves the skeletons behind when the snapshot lots are malformed', () => {
+    const data = snapshot();
+    Object.assign(data, { lots: null });
+    const { fixture, el } = render(data);
+    expect(fixture.componentInstance.state()).toBe('ready');
+    expect(el.querySelector('[aria-label="Loading Town"]')).toBeNull();
+    expect(el.textContent).toContain('Lv 3 · 340 / 500 XP');
+  });
+  it('renders even when localStorage throws', () => {
+    spyOn(Storage.prototype, 'getItem').and.throwError(new Error('blocked'));
+    spyOn(Storage.prototype, 'setItem').and.throwError(new Error('blocked'));
+    const { fixture, el } = render(snapshot());
+    expect(fixture.componentInstance.state()).toBe('ready');
+    expect(el.textContent).toContain('Lv 3 · 340 / 500 XP');
+  });
   it('reflows to two columns below the minimum tile width using the scene container', () => {
     const { el } = render(snapshot());
     const scene = el.querySelector<HTMLElement>('.scene')!;

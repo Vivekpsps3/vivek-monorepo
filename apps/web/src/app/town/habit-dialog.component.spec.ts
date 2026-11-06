@@ -77,6 +77,20 @@ describe('Habit dialog', () => {
     expect(toast).toHaveBeenCalledWith('You already have a habit with that name.');
   });
 
+  it('shows the slot it was opened from and posts the slot the user picks', () => {
+    const data = snapshot();
+    data.lots.forEach(lot => { if (lot.slot <= 2) lot.state = 'empty'; });
+    const { fixture, el } = render(data, { slot: 2, prefill: 'Read 20 pages' });
+    const select = el.querySelector<HTMLSelectElement>('#habit-lot')!;
+    expect(select.value).toBe('2');
+    expect(select.options[select.selectedIndex]?.textContent?.trim()).toBe('Slot 2');
+    select.value = '1';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    expect(api.createHabit).toHaveBeenCalledWith(jasmine.objectContaining({ slot: 1 }));
+  });
+
   it('blocks 41 characters and bidi marks before posting', () => {
     const { fixture, el } = render(snapshot(), { slot: 2 });
     const input = el.querySelector<HTMLInputElement>('#habit-name')!;

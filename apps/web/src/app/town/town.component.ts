@@ -85,7 +85,8 @@ export class TownComponent {
     return this.swapping()[key] ?? null;
   }
   private show(data: TownResponse): void {
-    const sorted = { ...data, lots: [...data.lots].sort((a, b) => a.slot - b.slot) };
+    const lots = Array.isArray(data.lots) ? [...data.lots].sort((a, b) => a.slot - b.slot) : [];
+    const sorted = { ...data, lots };
     const toasted = this.observe(sorted);
     this.data.set(sorted);
     this.state.set('ready');
@@ -98,18 +99,23 @@ export class TownComponent {
   private observe(data: TownResponse): boolean {
     const userId = this.session.currentUser?.id;
     if (userId == null) return false;
-    const previous = readSeen(localStorage, userId);
-    const outcome = applySeen(localStorage, userId, data);
-    if (outcome.toast) this.toast.success(outcome.toast);
-    const from: Record<string, 1 | 2 | 3> = {};
-    if (previous) {
-      for (const swap of outcome.swaps) {
-        const seen = previous.b[swap.key];
-        if (typeof seen === 'number') from[swap.key] = stage(seen);
+    try {
+      const previous = readSeen(localStorage, userId);
+      const outcome = applySeen(localStorage, userId, data);
+      if (outcome.toast) this.toast.success(outcome.toast);
+      const from: Record<string, 1 | 2 | 3> = {};
+      if (previous) {
+        for (const swap of outcome.swaps) {
+          const seen = previous.b[swap.key];
+          if (typeof seen === 'number') from[swap.key] = stage(seen);
+        }
       }
+      this.swapping.set(from);
+      return outcome.toast != null;
+    } catch {
+      // A throwing localStorage (blocked or full) must not leave the page stuck on skeletons.
+      return false;
     }
-    this.swapping.set(from);
-    return outcome.toast != null;
   }
   private refreshDay(): void {
     if (this.document.visibilityState !== 'visible' || this.state() !== 'ready') return;

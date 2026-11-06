@@ -35,6 +35,13 @@ describe('town text', () => {
     expect(labels.get('2026-10-26')?.text).toBe('done');
   });
 
+  it('returns no labels instead of looping on a malformed date', () => {
+    const labels = labelRange({ created: '2026-10-05', today: 'not-a-date', from: '2026-10-05', to: '2026-10-15', daily: true, checked: new Set() });
+    expect(labels.size).toBe(0);
+    const nanWindow = labelRange({ created: '2026-10-05', today: '2026-10-15', from: 'NaN-NaN-NaN', to: 'NaN-NaN-NaN', daily: true, checked: new Set() });
+    expect(nanWindow.size).toBe(0);
+  });
+
   it('phrases a pending cadence from the calendar date', () => {
     const habit = { cadence: { per_week: 3, kind: 'weekly', pending: { per_week: 4, effective_from: '2026-11-02' } } } as Habit;
     expect(pendingHint(habit)).toBe('Changes to 4× a week from Mon 2 Nov');

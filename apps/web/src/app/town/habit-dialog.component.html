@@ -7,8 +7,8 @@
     @if (nameError() || fieldErrors()['name']; as message) { <p id="habit-name-error" role="alert">{{ message }}</p> }
     @if (!editing()) {
       <label for="habit-lot">Lot</label>
-      <select id="habit-lot" [value]="chosenSlot()" (change)="onSlot($event)">
-        @for (slot of slotChoices(); track slot) { <option [value]="slot">Slot {{ slot }}</option> }
+      <select id="habit-lot" (change)="onSlot($event)">
+        @for (slot of slotChoices(); track slot) { <option [value]="slot" [selected]="slot === chosenSlot()">Slot {{ slot }}</option> }
       </select>
     }
     <fieldset>

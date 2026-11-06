@@ -49,6 +49,10 @@ export interface HistoryCell {
   kind: 'done' | 'rest' | 'miss' | 'pending' | 'empty';
 }
 
+const DATE_TEXT = /^\d{4}-\d{2}-\d{2}$/;
+/** The fetched window is at most ~120 days. The cap is a backstop so a bad range can never walk forever. */
+const MAX_RANGE_DAYS = 366;
+
 /** Walk §6.1 inside the fetched window. Weekly days are done or blank; slack replaces rest. */
 export function labelRange(args: {
   created: string;
@@ -59,9 +63,13 @@ export function labelRange(args: {
   checked: ReadonlySet<string>;
 }): Map<string, HistoryCell> {
   const out = new Map<string, HistoryCell>();
+  // A malformed date makes addDays return the same string forever, so reject anything that is not YYYY-MM-DD.
+  if (![args.created, args.today, args.from, args.to].every(value => DATE_TEXT.test(value))) return out;
   const rests = new Set<string>();
   let streak = 0;
+  let steps = 0;
   for (let day = args.from; day <= args.to; day = addDays(day, 1)) {
+    if (++steps > MAX_RANGE_DAYS) break;
     if (day < args.created) continue;
     if (args.checked.has(day)) {
       if (args.daily) streak += 1;
