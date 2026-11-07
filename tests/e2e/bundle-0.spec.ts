@@ -382,8 +382,8 @@ test('a locked Finance card drops money, counts, and names loaded while unlocked
   await expect(page).toHaveURL(/\/settings\/account$/);
   await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Finance', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/finance$/);
-  await page.getByRole('button', { name: 'Lock now' }).click();
-  await expect(page.getByText('Finance is locked. Unlock to see settings.')).toBeVisible();
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await expect(page.getByText('Finance is locked. Unlock to see settings.', { exact: true })).toBeVisible();
   await page.locator('.app-switcher__bar').getByRole('link', { name: 'Hub', exact: true }).click();
   await expect(page).toHaveURL(/\/hub$/);
   await expect.poll(async () => page.evaluate(() => (window as Window & { __bundle0Document?: string }).__bundle0Document)).toBe(documentId);
@@ -439,12 +439,12 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
   const menu = await openUserMenu(page);
   await menu.getByRole('link', { name: 'Settings', exact: true }).click();
   await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Finance', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Lock now' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Lock Finance', exact: true })).toBeVisible();
   await finance.evaluate(() => { (window as Window & { __f6?: string }).__f6 = 'finance'; });
   await hub.evaluate(() => { (window as Window & { __f6?: string }).__f6 = 'hub'; });
-  await page.getByRole('button', { name: 'Lock now' }).click();
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
   await Promise.all([
-    expect(finance).toHaveURL(/\/finance\/vault\/unlock$/, { timeout: 1000 }),
+    expect.poll(() => new URL(finance.url()).pathname, { timeout: 1000 }).toBe('/finance/vault/unlock'),
     expect(finance.getByText('Harbor Checking')).toHaveCount(0, { timeout: 1000 }),
     expect(hub).toHaveURL(/\/hub$/, { timeout: 1000 }),
     expect.poll(async () => {
@@ -455,6 +455,7 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
         && !text.includes('HBRX');
     }, { timeout: 1000 }).toBe(true),
   ]);
+  expect(new URL(finance.url()).searchParams.get('next')).toBe('/finance/have?t=assets');
   expect(await finance.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('finance');
   expect(await hub.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('hub');
   await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/settings(\/|$)/);
