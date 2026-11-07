@@ -261,6 +261,36 @@ describe('vault load silence', () => {
     await Promise.all([first, second]);
   });
 
+  it('a silent cross-tab reload that fails does not toast', async () => {
+    const reload = store.reloadCollections(['assets'], { silent: true }).then(() => 'ok', () => 'failed');
+    const request = await whenRequest(fullLoad);
+    expect(request.request.context.get(SILENT_ERROR_TOAST)).toBeTrue();
+    request.flush({ detail: 'Synthetic reload failed' }, { status: 500, statusText: 'Server Error' });
+    expect(await reload).toBe('failed');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('a 409 on a silent save reloads with silent and saves no extra toast', async () => {
+    const preload = store.getAssets();
+    const list = await whenRequest(fullLoad);
+    list.flush([assetRow(3)]);
+    await preload;
+
+    const changes: Array<{ collection: string; source: string }> = [];
+    const subscription = store.changes$.subscribe(change => changes.push(change));
+    const save = store.updateAsset(1, { name: 'Changed' }, { silent: true }).then(() => 'ok', () => 'failed');
+    const upsert = await whenRequest(req => req.method === 'POST' && req.url.includes('/vault/records/upsert'));
+    expect(upsert.request.context.get(SILENT_ERROR_TOAST)).withContext('silent save').toBeTrue();
+    upsert.flush({ detail: 'conflict' }, { status: 409, statusText: 'Conflict' });
+    const reload = await whenRequest(req => req.method === 'GET' && req.url.includes('collection=assets'));
+    expect(reload.request.context.get(SILENT_ERROR_TOAST)).withContext('409 reload stays silent').toBeTrue();
+    reload.flush([assetRow(4)]);
+    expect(await save).toBe('failed');
+    subscription.unsubscribe();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(changes.filter(change => change.collection === 'assets' && change.source === 'remote').length).toBe(1);
+  });
+
   it('keeps a silent save quiet when the 409 reload also fails', async () => {
     const preload = store.getAssets();
     const list = await whenRequest(req => req.method === 'GET' && req.url.includes('/vault/records') && !req.url.includes('collection='));

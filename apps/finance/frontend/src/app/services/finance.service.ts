@@ -192,7 +192,7 @@ export class FinanceService {
     unique.forEach(collection => this.bumpCollectionEpoch(collection));
     const epochs = new Map<EncryptedCollection, string>(unique.map(collection => [collection, this.dataEpoch([collection])]));
     const sessionToken = this.encStore.sessionToken;
-    await this.encStore.reloadCollections(unique);
+    await this.encStore.reloadCollections(unique, { silent: true });
     if (sessionToken !== this.encStore.sessionToken) return;
     await this.refreshCollectionViewsFromStore(unique, sessionToken, epochs);
     if (sessionToken !== this.encStore.sessionToken) return;
