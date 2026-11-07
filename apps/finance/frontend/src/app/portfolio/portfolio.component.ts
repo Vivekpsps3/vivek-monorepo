@@ -21,7 +21,7 @@ import {
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ConfirmService } from '@vivek/ui';
-import { downloadCsv, formatDate, formatMoney, fromDollars, plural, todayIsoDate } from '@vivek/browser';
+import { downloadCsv, formatDate, formatMoney, fromDollars, isoDateInZone, plural, todayIsoDate } from '@vivek/browser';
 import { unitPriceToNumber, validateHolding, validateUnitPrice, type FieldIssue } from '../utils/validators';
 import { failureCopy, successCopy } from '@vivek/ui';
 import { dialogSaveAlert, focusDialogAlert, focusFirstInvalid } from '../shared/form-validation';
@@ -251,7 +251,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(quoteDate) ? new Date(`${quoteDate}T00:00:00Z`) : null;
         const validDate = !!parsedDate && !Number.isNaN(parsedDate.getTime())
           && parsedDate.toISOString().slice(0, 10) === quoteDate
-          && quoteDate <= new Date().toISOString().slice(0, 10);
+          && quoteDate <= isoDateInZone(new Date(), 'America/Los_Angeles');
         const usable = quote.valid
           && quote.symbol?.trim().toUpperCase() === symbol
           && Number.isFinite(quote.price)

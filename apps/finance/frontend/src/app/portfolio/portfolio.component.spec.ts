@@ -45,6 +45,43 @@ describe('PortfolioComponent', () => {
     expect(finance.lookupSharePrice).not.toHaveBeenCalled();
   });
 
+  it('rejects a price-check quote dated the day after the Los Angeles day during the Los Angeles evening', () => {
+    // Monday 2026-10-12 17:30 in Los Angeles: Los Angeles is on 2026-10-12
+    // while UTC is already on 2026-10-13, so a quote dated 2026-10-13 is a
+    // future trading date even though it matches the UTC day.
+    const { component, finance, toast } = componentWithFinance();
+    finance.lookupSharePrice.and.returnValue(of({
+      symbol: 'AAPL', price: 125, price_source: 'live_eod', quote_date: '2026-10-13', valid: true,
+    }));
+    component.newHolding.symbol = 'AAPL';
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
+      component.checkSharePrice();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+    expect(toast.error).toHaveBeenCalledWith(jasmine.stringContaining('invalid quote'));
+    expect(component.newHolding.purchase_price).toBe(0);
+  });
+
+  it('accepts a price-check quote dated the Los Angeles day during the Los Angeles evening', () => {
+    const { component, finance, toast } = componentWithFinance();
+    finance.lookupSharePrice.and.returnValue(of({
+      symbol: 'AAPL', price: 125, price_source: 'live_eod', quote_date: '2026-10-12', valid: true,
+    }));
+    component.newHolding.symbol = 'AAPL';
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
+      component.checkSharePrice();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(component.newHolding.purchase_price).toBe(125);
+  });
+
   it('shows a load error instead of the empty-vault state when holdings fail to load', () => {
     const { component, finance } = componentWithFinance();
     finance.holdings$ = of([]);

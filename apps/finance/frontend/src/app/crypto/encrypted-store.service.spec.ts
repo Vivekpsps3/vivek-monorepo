@@ -244,33 +244,28 @@ describe('EncryptedStoreService', () => {
     expect(saved.quote_date).toBeUndefined();
   });
 
-  // CI3: the future-quote guard must read the Los Angeles calendar day (the
-  // decided day semantics), not the UTC day. At 17:30 PDT on Thursday
-  // 2026-10-15, Los Angeles is on 2026-10-15 while UTC is on 2026-10-16.
-  describe('quote-date guard at the Los Angeles evening boundary (CI3)', () => {
-    beforeEach(() => {
-      jasmine.clock().install();
-      jasmine.clock().mockDate(new Date('2026-10-15T17:30:00-07:00'));
-    });
-
-    afterEach(() => jasmine.clock().uninstall());
-
-    it('accepts a quote dated the Los Angeles day', async () => {
+  it('reads the future-quote guard on the Los Angeles day, not the UTC day', async () => {
+    // Monday 2026-10-12 17:30 in Los Angeles: Los Angeles is on 2026-10-12
+    // while UTC is already on 2026-10-13, so a quote dated 2026-10-13 is a
+    // future trading date even though it matches the UTC day.
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
       const { store } = createStoreHarness();
       const holding = await store.addHolding({ symbol: 'MSFT', shares: 10, purchase_price: 50, purchase_date: '2024-01-02' });
-      const saved = await store.updateHoldingPrice(holding.id, {
-        symbol: 'MSFT', price: 125, price_source: 'live_eod', quote_date: '2026-10-15',
-      });
-      expect(saved.quote_date).toBe('2026-10-15');
-    });
 
-    it('rejects a quote dated after the Los Angeles day', async () => {
-      const { store } = createStoreHarness();
-      const holding = await store.addHolding({ symbol: 'MSFT', shares: 10, purchase_price: 50, purchase_date: '2024-01-02' });
       await expectAsync(store.updateHoldingPrice(holding.id, {
-        symbol: 'MSFT', price: 125, price_source: 'live_eod', quote_date: '2026-10-17',
+        symbol: 'MSFT', price: 125, price_source: 'live_eod', quote_date: '2026-10-13',
       })).toBeRejectedWithError(/invalid or future trading date/);
-    });
+
+      await store.updateHoldingPrice(holding.id, {
+        symbol: 'MSFT', price: 125, price_source: 'live_eod', quote_date: '2026-10-12',
+      });
+      const [saved] = await store.getHoldings();
+      expect(saved.quote_date).toBe('2026-10-12');
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 
   it('does not apply a manual update read before the vault session changes', async () => {

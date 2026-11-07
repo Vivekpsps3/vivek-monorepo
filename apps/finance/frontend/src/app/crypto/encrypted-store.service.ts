@@ -11,6 +11,7 @@ import {
   Subscription,
   Transaction,
 } from '../models/transaction.model';
+import { isoDateInZone } from '@vivek/browser';
 import { StockLabScenario } from '../models/stock-lab.model';
 import type { BrokerageAccountRecord, FidelityStageRecord, FidelityStageRow } from '../utils/fidelity-import.util';
 import type { FidelityCommitResult } from '../models/transaction.model';
@@ -474,7 +475,7 @@ export class EncryptedStoreService {
     if (!/^[A-Z][A-Z0-9.-]*$/.test(this.normalizeSymbol(quote?.symbol || ''))) throw new Error('Invalid market ticker.');
     if (!Number.isFinite(quote?.price) || quote.price <= 0) throw new Error('Market quote price must be a positive finite number.');
     const date = quote.quote_date ?? '';
-    if (!this.isValidDate(date) || date > new Date().toISOString().slice(0, 10)) throw new Error('Market quote has an invalid or future trading date.');
+    if (!this.isValidDate(date) || date > isoDateInZone(new Date(), 'America/Los_Angeles')) throw new Error('Market quote has an invalid or future trading date.');
   }
 
   private normalizeSymbol(value: string): string { return value.trim().toUpperCase(); }
