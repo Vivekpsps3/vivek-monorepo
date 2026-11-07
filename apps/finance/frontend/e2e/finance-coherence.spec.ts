@@ -260,6 +260,7 @@ test('Activity exact account filters keep full matching totals through paginatio
     transactions: [...matching, ...otherAccount],
   });
   await vault.open('/spending?t=activity&v=spending&month=all');
+  await page.getByRole('button', { name: 'Filters' }).click();
   await expect(page.getByLabel('Account', { exact: true }).locator('option[value="card-a"]')).toHaveCount(1);
   await page.getByLabel('Account', { exact: true }).selectOption('card-a');
   await page.locator('#tx-category-filter').selectOption('food');
@@ -272,8 +273,8 @@ test('Activity exact account filters keep full matching totals through paginatio
   await expect(page.locator('.month-total--expense')).toContainText('110 purchases');
   const tableRows = page.getByRole('table', { name: 'Transactions history' }).getByRole('row');
   await expect(tableRows).toHaveCount(101);
-  await expect(page.getByRole('button', { name: 'Load more', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Load more', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Show 100 more', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Show 100 more', exact: true }).click();
   await expect(tableRows).toHaveCount(111);
   await expect(page.locator('.month-total--expense')).toContainText(moneyText('$110.00'));
 
@@ -478,7 +479,7 @@ test('import account mapping refreshes the exact account label in another mounte
   const secondRow = second.getByRole('row').filter({ hasText: description });
   await expect(secondRow).toContainText('—');
 
-  await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   const csv = Buffer.from([
     'Transaction Date,Post Date,Description,Category,Type,Amount,Memo',
@@ -515,7 +516,7 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
   await vault.open('/', homeTab);
   const homeMonth = homeTab.locator('.home-tile').filter({ hasText: 'This month' });
 
-  await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({
     name: 'confirmed-coverage.csv', mimeType: 'text/csv', buffer: Buffer.from(

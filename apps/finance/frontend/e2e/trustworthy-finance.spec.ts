@@ -383,7 +383,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   ].join('\n'));
   await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
 
-  const importButton = page.getByRole('button', { name: 'Import from bank', exact: true });
+  const importButton = page.getByRole('button', { name: 'Import', exact: true });
   await importButton.click();
   let dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({ name: 'legacy.csv', mimeType: 'text/csv', buffer: csv });
@@ -444,7 +444,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
 test('bank imports require account identity, resume one receipt, and undo retains edited records', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
-  await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({
     name: 'statement.csv', mimeType: 'text/csv', buffer: Buffer.from(
