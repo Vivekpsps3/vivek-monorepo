@@ -1,6 +1,8 @@
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { IncomeComponent } from '../income/income.component';
 import { BehaviorSubject, of } from 'rxjs';
 import { RecurringHubComponent, CommitmentRow } from './recurring-hub.component';
 import { FinanceService } from '../services/finance.service';
@@ -111,3 +113,39 @@ function componentRow(kind: 'bill' | 'subscription', record: FixedExpense | Subs
   const item = record as Subscription;
   return { id: item.id, kind, name: item.name, category: item.category, date: item.next_due_date, account: item.payment_account || null, autopay: null, frequency: item.frequency, amount: item.amount, monthlyAmount: item.monthly_amount, active: item.is_active, subscription: item };
 }
+
+describe('canonical tab links', () => {
+  it('the default link href has no t=, labels match, exactly one link is current', async () => {
+    const harnessFinance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
+      fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]),
+      subscriptions$: new BehaviorSubject<Subscription[]>([]),
+    });
+    harnessFinance.getFixedExpenses.and.returnValue(of([]));
+    harnessFinance.getSubscriptions.and.returnValue(of([]));
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'finance/recurring', component: RecurringHubComponent }]),
+        { provide: FinanceService, useValue: harnessFinance },
+      ],
+    });
+    const { CompensationReportComponent } = await import('../income/compensation-report.component');
+    const { FixedExpensesComponent } = await import('../fixed-expenses/fixed-expenses.component');
+    const { SubscriptionsComponent } = await import('../subscriptions/subscriptions.component');
+    TestBed.overrideComponent(RecurringHubComponent, {
+      remove: { imports: [IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent] },
+      add: { schemas: [NO_ERRORS_SCHEMA] },
+    });
+    await TestBed.compileComponents();
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/finance/recurring', RecurringHubComponent);
+    harness.detectChanges();
+    const links = [...harness.routeNativeElement!.querySelectorAll('.hub-tabs a')] as HTMLAnchorElement[];
+    expect(links.map(link => link.textContent?.trim())).toEqual(['Pay', 'Bills and subscriptions']);
+    expect(links[0].getAttribute('href')).not.toContain('t=');
+    expect(links[1].getAttribute('href')).toContain('t=spend');
+    const current = links.filter(link => link.getAttribute('aria-current') === 'page');
+    expect(current.length).toBe(1);
+    expect(current[0].textContent?.trim()).toBe('Pay');
+    expect(harness.routeNativeElement!.querySelector('.hub-tabs')?.getAttribute('aria-label')).toBe('Recurring sections');
+  });
+});
