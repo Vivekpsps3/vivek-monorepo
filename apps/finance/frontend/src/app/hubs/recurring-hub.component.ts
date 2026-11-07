@@ -9,7 +9,7 @@ import { CompensationReportComponent } from '../income/compensation-report.compo
 import { FixedExpensesComponent } from '../fixed-expenses/fixed-expenses.component';
 import { SubscriptionsComponent } from '../subscriptions/subscriptions.component';
 import { FinanceService } from '../services/finance.service';
-import { UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
+import { UiButtonComponent, UiEmptyStateComponent, UiPageHeaderComponent } from '@vivek/ui';
 import { FixedExpense, Subscription } from '../models/transaction.model';
 import { dollarsFromCountedCents } from '@vivek/browser';
 import { countableCents, needsFixing } from '../utils/validators';
@@ -39,9 +39,10 @@ export interface CommitmentRow {
   standalone: true,
   imports: [
     AppDatePipe,
-    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
+    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, UiPageHeaderComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
   template: `
     <div class="page recurring-page">
+      <ui-page-header title="Recurring" />
       <nav class="hub-tabs" aria-label="Recurring">
         <a [routerLink]="[]" [queryParams]="{ t: 'pay' }" queryParamsHandling="merge" [class.on]="tab === 'pay'">Jobs &amp; pay</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'spend' }" queryParamsHandling="merge" [class.on]="tab === 'spend'">Bills &amp; subscriptions</a>

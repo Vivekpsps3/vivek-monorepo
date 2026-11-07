@@ -2,13 +2,15 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject }
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AssetsLiabilitiesComponent } from '../assets-liabilities/assets-liabilities.component';
 import { PortfolioComponent } from '../portfolio/portfolio.component';
+import { UiPageHeaderComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-have-hub',
   standalone: true,
-  imports: [RouterLink, AssetsLiabilitiesComponent, PortfolioComponent],
+  imports: [RouterLink, AssetsLiabilitiesComponent, PortfolioComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
+      <ui-page-header title="What you have" />
       <nav class="hub-tabs" aria-label="What you have">
         <a [routerLink]="[]" [queryParams]="{ t: 'assets' }" [class.on]="tab === 'assets'">Assets and debts</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'holdings' }" [class.on]="tab === 'holdings'">Holdings</a>
@@ -29,11 +31,6 @@ import { PortfolioComponent } from '../portfolio/portfolio.component';
 
     .page {
       min-width: 0;
-    }
-
-    h1 {
-      margin: 0;
-      letter-spacing: -0.03em;
     }
 
     app-assets-liabilities,

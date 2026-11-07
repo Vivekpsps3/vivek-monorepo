@@ -218,7 +218,8 @@ ui-button {
 
 .input-with-unit:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .input-with-unit input {

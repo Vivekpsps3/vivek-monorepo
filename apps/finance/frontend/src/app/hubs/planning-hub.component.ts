@@ -5,13 +5,15 @@ import { PlanningComponent } from '../planning/planning.component';
 import { InvestmentInsightsComponent } from '../investment-insights/investment-insights.component';
 import { StockLabComponent } from '../stock-lab/stock-lab.component';
 import { PlanningToolId } from '../models/planning.model';
+import { UiPageHeaderComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-planning-hub',
   standalone: true,
-  imports: [RouterLink, PlanningComponent, InvestmentInsightsComponent, StockLabComponent],
+  imports: [RouterLink, PlanningComponent, InvestmentInsightsComponent, StockLabComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
+      <ui-page-header title="Planning" />
       <nav class="hub-tabs" aria-label="Planning">
         <a [routerLink]="[]" [queryParams]="{ t: 'path' }" [class.on]="tab === 'path'">Retirement &amp; goals</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'growth' }" [class.on]="tab === 'growth'">Portfolio projection</a>
