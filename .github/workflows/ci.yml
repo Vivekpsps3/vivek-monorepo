@@ -208,7 +208,7 @@ jobs:
   unified:
     # deploy.yml "Require the seeded schema rehearsal" matches this name.
     name: Unified Site Release
-    runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted", "linux", "x64", "monorepo-ci"]' || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted", "linux", "x64", "monorepo-ci-release"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

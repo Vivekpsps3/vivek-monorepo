@@ -1,4 +1,21 @@
 name: monorepo-ci
+x-runner: &runner
+  build: .
+  image: monorepo-ci-runner:local
+  restart: unless-stopped
+  shm_size: 2g
+  environment:
+    NG_BUILD_MAX_WORKERS: "2"
+    NODE_OPTIONS: --max-old-space-size=2560
+  volumes:
+    - runner:/opt/runner
+    - work:/opt/runner/_work
+    - home:/home/runner
+    - tools:/opt/hostedtoolcache
+    - temp:/tmp
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
 services:
   docker:
     image: docker:29-dind@sha256:fafc2949724b06fd4e4bc53c446a09149b750693f0abe7f444e9eec1e138fe65
@@ -17,20 +34,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    mem_limit: 12g
-    cpus: 4
+    mem_limit: 6g
+    cpus: 1.5
+    cpu_shares: 128
     logging:
       driver: json-file
       options: {max-size: 10m, max-file: "3"}
   runner:
-    build: .
-    image: monorepo-ci-runner:local
-    restart: unless-stopped
+    <<: *runner
     depends_on:
       docker: {condition: service_healthy}
-    # The tests probe nested Compose's loopback-published HTTP ports.
+    # The release tests probe nested Compose's loopback-published HTTP ports.
     network_mode: service:docker
-    shm_size: 2g
     volumes:
       - runner:/opt/runner
       - work:/opt/runner/_work
@@ -38,11 +53,17 @@ services:
       - tools:/opt/hostedtoolcache
       - docker-socket:/run/ci-docker
       - temp:/tmp
-    mem_limit: 12g
-    cpus: 4
-    logging:
-      driver: json-file
-      options: {max-size: 10m, max-file: "3"}
+    mem_limit: 6g
+    cpus: 1.5
+    cpu_shares: 128
+  worker:
+    <<: *runner
+    profiles: [worker]
+    # Each worker runs in its own Compose project: no shared workspaces or ports.
+    # Test jobs have no Docker socket, host mounts, or privileged sidecar.
+    mem_limit: 4g
+    cpus: 0.75
+    cpu_shares: 128
 volumes:
   runner:
   work:
