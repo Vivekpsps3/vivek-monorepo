@@ -3,6 +3,7 @@ x-runner: &runner
   build: .
   image: monorepo-ci-runner:local
   restart: unless-stopped
+  stop_grace_period: 2m
   shm_size: 2g
   environment:
     NG_BUILD_MAX_WORKERS: "2"

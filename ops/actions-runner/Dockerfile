@@ -2,7 +2,7 @@ FROM docker:29-cli@sha256:b0d99f37f463c88cae2082083f705210296186c06632d22f6952ed
 FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl git jq sudo unzip zip make build-essential \
+    ca-certificates curl git jq sudo unzip zip make build-essential lsb-release \
     python3 python3-venv libicu74 libssl3t64 zlib1g libkrb5-3 liblttng-ust1t64 \
     && curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o /tmp/chrome.deb \
     && apt-get install -y /tmp/chrome.deb \

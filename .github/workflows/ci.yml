@@ -390,12 +390,15 @@ jobs:
             docker compose --env-file /tmp/site-ci.env logs --tail 30 || true
             docker compose --env-file /tmp/site-ci.env --profile ops down -v || true
           fi
+      # Only main push artifacts are consumed by Deploy; PR images are disposable.
       - name: Package tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           docker save personal-site:${{ github.sha }} | gzip > image.tar.gz
           echo "${{ github.sha }}" > release.sha
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
           name: personal-site-release
           path: |
