@@ -8,7 +8,8 @@ CI jobs concurrently on amd7600-server:
 - One release runner, `amd7600-ci`, has labels `self-hosted`, `linux`, `x64`,
   and `monorepo-ci-release`. Only Unified Site Release targets this runner.
 - Fork pull requests continue to use GitHub-hosted runners. The separate
-  `finance-prod` runner handles production deployment only.
+  `amd7600-prod` runner has the `monorepo-prod` label and handles production
+  deployment only.
 
 Each registered runner executes one job at a time. The nine test jobs and one
 release job can all start together. Additional workflow runs queue until slots
