@@ -410,13 +410,13 @@
   </ui-card>
 
   <details class="import-history ledger-receipts" [open]="receiptsDetailsOpen" (toggle)="onReceiptsToggle($event)">
-    <summary>Import receipts ({{ importReceipts.length }})</summary>
+    <summary>Import history ({{ importReceipts.length }})</summary>
     @if (importReceipts.length) {
       @for (receipt of importReceipts; track receipt.id) {
         <article class="import-history-row">
           <div>
             <strong>{{ receipt.filenames.join(', ') || 'Bank CSV import' }}</strong>
-            <span>{{ receipt.started_at | appDate:'timestamp' }} · {{ receipt.status }} · {{ receipt.inserted_count || 0 }} saved · {{ receipt.unresolved.length || 0 }} unresolved</span>
+            <span>{{ importWorkflow.receiptLineFor(receipt) }}</span>
             <span>Account outcome: {{ receipt.account_displays.join(', ') || 'No account confirmed' }}</span>
             @if (receiptParseIssueCount(receipt)) {
               <span class="import-error">{{ receiptParseIssueCount(receipt) | plural:'CSV row' }} could not be parsed. Correct the file and reattach it to this receipt.</span>
@@ -445,7 +445,10 @@
               <ui-button variant="secondary" size="sm" (clicked)="resumeImport(receipt)">{{ receipt.status === 'undoing' ? 'Resume undo' : 'Resume' }}</ui-button>
             }
             @if (receipt.status !== 'withdrawn') {
-              <ui-button variant="danger" size="sm" (clicked)="undoImport(receipt)">Undo</ui-button>
+              <ui-button variant="secondary" size="sm" (clicked)="undoImport(receipt)">Undo</ui-button>
+              }
+              @if (receipt.status === 'withdrawn') {
+                <ui-button variant="ghost" size="sm" (clicked)="importWorkflow.deleteImportReceipt(receipt)">Delete receipt</ui-button>
             }
           </div>
         </article>
@@ -473,7 +476,7 @@
         <p class="import-hint" role="status">Replacing the parse attempt for {{ importWorkflow.reattachReceiptFilename }} in receipt #{{ importWorkflow.activeImportReceiptId }}. Valid rows from other files in that receipt will be kept; choose the same bank and account for the corrected file.</p>
       }
       <div class="form-group">
-        <label for="import-file">Add CSV files</label>
+        <label for="import-file">Choose CSV files</label>
         <input id="import-file" type="file" accept=".csv" multiple [disabled]="importWorkflow.importParsing" (change)="onImportFileSelected($event)" />
       </div>
       <div class="import-file-list">
@@ -490,6 +493,7 @@
               [options]="importBankSelectOptions"
               [disabled]="importWorkflow.importParsing"
               (valueChange)="importWorkflow.onImportBankSelectionChange(entry, $event)" />
+            <p class="import-hint">{{ importWorkflow.importBankHelp(entry.bank_slug) }}</p>
             @if (importWorkflow.importBank(entry.bank_slug); as bank) {
 
               <label class="form-group import-account-picker">
@@ -539,16 +543,10 @@
         <ui-button variant="secondary" (clicked)="importWorkflow.closeImportModal()">Cancel</ui-button>
       </div>
     } @else {
-      <p class="import-summary">
-        {{ importWorkflow.importFiles.length | plural:'file' }} · {{ importWorkflow.importSummary.new }} new,
-        {{ importWorkflow.importSummary.duplicate }} duplicate ({{ importWorkflow.importSummary.total_parsed }} parsed).
-        {{ importWorkflow.importSummary.skipped }} skipped; {{ importWorkflow.importSummary.errors | plural:'row' }} need fixing.
-        Selected {{ importWorkflow.selectedImportCount }} · {{ importWorkflow.selectedImportExpenseTotal | money }}.
-
-      </p>
+      <p class="import-summary">{{ importWorkflow.importSummaryText }} Selected {{ importWorkflow.selectedImportCount }} · {{ importWorkflow.selectedImportExpenseTotal | money }}.</p>
       @if (importReceipts.length > 0) {
         <details class="import-history">
-          <summary>Import receipts ({{ importReceipts.length }})</summary>
+          <summary>Import history ({{ importReceipts.length }})</summary>
           @for (receipt of importReceipts; track receipt.id) {
             <div class="import-history-row">
               <div>
@@ -565,7 +563,10 @@
                   <ui-button variant="secondary" size="sm" (clicked)="importWorkflow.resumeImport(receipt)">Resume</ui-button>
                 }
                 @if (receipt.status !== 'withdrawn') {
-                  <ui-button variant="danger" size="sm" (clicked)="importWorkflow.undoImport(receipt)">Undo</ui-button>
+                  <ui-button variant="secondary" size="sm" (clicked)="importWorkflow.undoImport(receipt)">Undo</ui-button>
+                }
+                @if (receipt.status === 'withdrawn') {
+                  <ui-button variant="ghost" size="sm" (clicked)="importWorkflow.deleteImportReceipt(receipt)">Delete receipt</ui-button>
                 }
               </div>
             </div>
@@ -583,22 +584,21 @@
         <section class="import-file-preview" [attr.aria-label]="entry.filename + ' preview'">
           <h4>{{ entry.filename }} · {{ importWorkflow.importBank(entry.bank_slug)?.name }}</h4>
           @if (entry.error) {
-            <p class="import-error" role="alert">{{ entry.error }}</p>
+            <p class="import-error" role="alert">{{ importWorkflow.importFileError(entry.error) }}</p>
           }
           @if (entry.preview; as preview) {
-            <p class="import-summary">{{ preview.summary.new }} new · {{ preview.summary.duplicate }} duplicate · {{ preview.summary.skipped }} skipped · {{ preview.summary.errors }} need fixing</p>
+            <p class="import-summary">{{ importWorkflow.importSummaryText }}</p>
             <div class="import-table-scroll">
               <ui-data-table ariaLabel="Import preview">
                 <thead>
                   <tr>
                     <th></th>
                     <th>Date</th>
-                    <th>Account</th>
+                    <th>Description</th>
                     <th>Category</th>
-                    <th>Merchant</th>
-                    <th>Source description</th>
                     <th>Amount</th>
                     <th>Status</th>
+                    <th>Account</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -610,15 +610,14 @@
                         }
                       </td>
                       <td>{{ row.date | appDate }}</td>
-                      <td>{{ row.account_display }}</td>
-                      <td>{{ row.category }}</td>
                       <td>
+                        {{ row.description }}
                         <input type="text" [(ngModel)]="row.merchant" [name]="'merchant-' + entry.id + '-' + $index" placeholder="Merchant" aria-label="Merchant name" (click)="$event.stopPropagation()" />
                         @if (!row.merchant && row.merchant_suggestion) {
                           <button type="button" class="suggestion-button" (click)="$event.stopPropagation(); importWorkflow.useMerchantSuggestion(row)">Use {{ row.merchant_suggestion }}</button>
                         }
                       </td>
-                      <td>{{ row.description }}</td>
+                      <td>{{ row.category }}</td>
                       <td>{{ row.amount | money }}</td>
                       <td>
                         @if (row.status === 'review') {
@@ -634,10 +633,11 @@
                             </select>
                           </label>
                         } @else {
-                          <ui-badge [variant]="row.status === 'duplicate' ? 'default' : row.kind === 'refund' ? 'warning' : 'success'">{{ row.kind || row.status }}</ui-badge>
+                          <ui-badge [variant]="row.status === 'duplicate' ? 'default' : row.kind === 'refund' ? 'warning' : 'success'">{{ importWorkflow.importStatusLabel(row) }}</ui-badge>
                           @if (row.review_reason) { <span class="import-hint">{{ row.review_reason }}</span> }
                         }
                       </td>
+                      <td>{{ row.account_display }}</td>
                     </tr>
                   }
                 </tbody>
