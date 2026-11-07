@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { TransactionsComponent } from '../transactions/transactions.component';
 import { CalendarComponent } from '../calendar/calendar.component';
+import { UiPageHeaderComponent } from '@vivek/ui';
 
 export type SpendingTab = 'activity' | 'calendar';
 export type SpendingActivityView = 'all' | 'spending' | 'income';
@@ -59,9 +60,10 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
 @Component({
   selector: 'app-spending-hub',
   standalone: true,
-  imports: [RouterLink, TransactionsComponent, CalendarComponent],
+  imports: [RouterLink, TransactionsComponent, CalendarComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
+      <ui-page-header title="Spending" />
       <nav class="hub-tabs" aria-label="Spending sections">
         <a [routerLink]="[]" [queryParams]="{ t: 'activity', v: activityView }" [class.on]="tab === 'activity'">Activity</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'calendar' }" [class.on]="tab === 'calendar'">Calendar</a>

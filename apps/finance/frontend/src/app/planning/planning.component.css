@@ -418,13 +418,13 @@ ui-button {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  outline: none;
 }
 
-.mc-field input:focus,
-.mc-field select:focus {
+.mc-field input:focus-visible,
+.mc-field select:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 75%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .mc-field input:disabled,

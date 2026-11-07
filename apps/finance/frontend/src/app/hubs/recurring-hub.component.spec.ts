@@ -103,6 +103,37 @@ describe('RecurringHubComponent', () => {
   });
 });
 
+describe('RecurringHubComponent heading (F1)', () => {
+  it('renders one h1 "Recurring" and keeps the Bills h2', async () => {
+    const params = new BehaviorSubject({ get: (key: string) => ({ t: 'spend' } as Record<string, string>)[key] ?? null, keys: ['t'] });
+    const finance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
+      fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]).asObservable(),
+      subscriptions$: new BehaviorSubject<Subscription[]>([]).asObservable(),
+    });
+    finance.getFixedExpenses.and.returnValue(of([]));
+    finance.getSubscriptions.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [RecurringHubComponent],
+      providers: [
+        { provide: ActivatedRoute, useValue: { queryParamMap: params.asObservable() } },
+        { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
+        { provide: FinanceService, useValue: finance },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(RecurringHubComponent);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const headings = el.querySelectorAll('h1');
+    expect(headings.length).toBe(1);
+    expect(headings[0].textContent?.trim()).toBe('Recurring');
+    const bills = el.querySelector('h2#commitments-title');
+    expect(bills).not.toBeNull();
+    expect(bills!.textContent?.trim()).toBe('Bills & subscriptions');
+    fixture.destroy();
+  });
+});
+
+
 function componentRow(kind: 'bill' | 'subscription', record: FixedExpense | Subscription): CommitmentRow {
   if (kind === 'bill') {
     const item = record as FixedExpense;

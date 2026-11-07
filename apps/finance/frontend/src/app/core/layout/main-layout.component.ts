@@ -156,7 +156,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     queueMicrotask(() => {
       const main = document.getElementById('main-content');
       if (!main) return;
-      const heading = main.querySelector<HTMLElement>('h1, h2, .ui-page-header h1, .ui-page-header h2');
+      const heading = main.querySelector<HTMLElement>('h1');
       const target = heading ?? main;
       if (!target.hasAttribute('tabindex')) {
         target.tabIndex = -1;
