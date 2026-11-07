@@ -1,3 +1,4 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { ConfirmService } from '@vivek/ui';
 import { Asset, Liability } from '../models/transaction.model';
@@ -97,5 +98,44 @@ describe('AssetsLiabilitiesComponent balance editing', () => {
     expect(finance.addLiability).not.toHaveBeenCalled();
     expect(finance.updateLiability).not.toHaveBeenCalled();
     expect(component.saving).toBeFalse();
+  });
+});
+
+describe('AssetsLiabilitiesComponent delete copy (F16)', () => {
+  function makeComponent() {
+    const finance = jasmine.createSpyObj('FinanceService', ['deleteAsset', 'deleteLiability']);
+    finance.deleteAsset.and.returnValue(of({}));
+    finance.deleteLiability.and.returnValue(of({}));
+    const toast = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
+    const confirm = { ask: jasmine.createSpy('ask').and.resolveTo(true) } as unknown as ConfirmService;
+    const cdr = { markForCheck: () => {} } as unknown as ChangeDetectorRef;
+    const component = new AssetsLiabilitiesComponent(finance, toast, confirm, cdr);
+    return { component, finance, toast, confirm };
+  }
+
+  it('asset delete asks with the row name and toasts it back', async () => {
+    const { component, toast, confirm } = makeComponent();
+    const row = { id: 1, name: 'Checking' } as Asset;
+    await component.deleteAsset(row);
+    expect(confirm.ask).toHaveBeenCalledWith(
+      'Delete Checking?',
+      "This removes it from your net worth. Past activity isn't affected.",
+      'Delete',
+      'Cancel',
+    );
+    expect(toast.success).toHaveBeenCalledWith('Checking deleted');
+  });
+
+  it('debt delete uses the same copy', async () => {
+    const { component, toast, confirm } = makeComponent();
+    const row = { id: 2, name: 'Card' } as Liability;
+    await component.deleteLiability(row);
+    expect(confirm.ask).toHaveBeenCalledWith(
+      'Delete Card?',
+      "This removes it from your net worth. Past activity isn't affected.",
+      'Delete',
+      'Cancel',
+    );
+    expect(toast.success).toHaveBeenCalledWith('Card deleted');
   });
 });

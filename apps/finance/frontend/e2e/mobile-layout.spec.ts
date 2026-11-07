@@ -60,7 +60,7 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await page.getByRole('link', { name: 'Holdings' }).click();
   await expect(page.locator('td[data-label="Shares"]').first()).toBeVisible();
   await expectFits(page, 'holdings');
-  await page.getByRole('button', { name: 'Add Holding' }).click();
+  await page.getByRole('button', { name: 'Add holding' }).click();
   const dialog = page.locator('.ui-dialog-panel');
   await expect(dialog).toBeVisible();
   await expect.poll(() => dialog.evaluate(el => getComputedStyle(el).transform)).toBe('none');
