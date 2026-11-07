@@ -9,6 +9,7 @@ export type UiIconName =
   | 'chevron-left'
   | 'chevron-right'
   | 'chevron-down'
+  | 'close'
   | 'grid'
   | 'plus'
   | 'upload'
@@ -35,6 +36,7 @@ const PATHS: Record<UiIconName, string> = {
   'chevron-left': 'M15 18l-6-6 6-6',
   'chevron-right': 'M9 18l6-6-6-6',
   'chevron-down': 'M6 9l6 6 6-6',
+  close: 'M6 6l12 12M18 6L6 18',
   grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   plus: 'M12 5v14M5 12h14',
   upload: 'M12 3v12M8 7l4-4 4 4M4 21h16',

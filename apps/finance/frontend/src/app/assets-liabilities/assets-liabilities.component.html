@@ -3,13 +3,15 @@
     [embedded]="embedded"
     [title]="'Assets and debts'">
 
-    <div uiPageActions class="header-actions">
-      <ui-button variant="secondary" (clicked)="openAddLiability()">Add liability</ui-button>
-      <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
-    </div>
+    @if (assets.length || liabilities.length) {
+      <div uiPageActions class="header-actions">
+        <ui-button variant="secondary" (clicked)="openAddLiability()">Add liability</ui-button>
+        <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
+      </div>
+    }
   </ui-page-header>
 
-  @if (netWorth) {
+  @if (netWorth && hasBalanceSheet) {
     <ui-card class="summary-card net-worth-hero">
       <p class="section-eyebrow">Net worth</p>
       <div class="stat-display money" aria-live="polite">{{ netWorth.total | money }}</div>
@@ -87,8 +89,8 @@
         </tbody>
       </ui-data-table>
     } @else {
-      <ui-empty-state icon="wallet" message="Add checking, savings, property, or other asset balances.">
-        <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
+      <ui-empty-state [title]="'No assets yet'" message="Add checking, savings, property, or anything else you own.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button></div>
       </ui-empty-state>
     }
   </ui-card>
@@ -132,8 +134,8 @@
         </tbody>
       </ui-data-table>
     } @else {
-      <ui-empty-state icon="credit-card" message="Add mortgages, loans, or credit card balances you owe.">
-        <ui-button variant="primary" (clicked)="openAddLiability()">Add liability</ui-button>
+      <ui-empty-state [title]="'No debts recorded'" message="Add a mortgage, loan, or card balance you owe.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddLiability()">Add debt</ui-button></div>
       </ui-empty-state>
     }
   </ui-card>
