@@ -1,8 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { ChartsComponent } from '../charts/charts.component';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import {
   Asset,
   CashflowSummary,
@@ -15,7 +17,11 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
-import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '@vivek/ui';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { monthlyCashflowSeries } from '../crypto/client-finance';
+import { monthDelta, type MonthDelta } from '../utils/category-spend';
+import { FinanceGuideService } from '../core/finance-guide.service';
+import { UiButtonComponent, UiCardComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
   actualQuoteDate,
   hasUnvaluedPositions,
@@ -39,6 +45,7 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiButtonComponent,
     UiCardComponent,
     UiIconComponent,
+    UiPageHeaderComponent,
     UiSkeletonComponent,
   ],
   templateUrl: './dashboard.component.html',
@@ -57,8 +64,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
   subscriptions: Subscription[] = [];
   isLoading = true;
   error: string | null = null;
+  /** One-time ticker-privacy notice, shown after the first automatic check. */
+  priceNoticeVisible = false;
+  /** True when the user turned automatic price checks off. */
+  autoPricesOff = false;
+
+  protected readonly guide = inject(FinanceGuideService);
 
   private destroy$ = new Subject<void>();
+  private readonly marketRefresh = inject(MarketRefreshCoordinatorService, { optional: true });
+  private readonly pricePrefs = inject(FinancePricePrefsService, { optional: true });
+  private readonly session = inject(SESSION_CONTEXT, { optional: true });
 
   constructor(
     private finance: FinanceService,
@@ -90,7 +106,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.subscriptions = subscriptions;
         this.cdr.markForCheck();
       });
+    const userId = this.session?.currentUser?.id;
+    if (userId != null && this.pricePrefs) this.autoPricesOff = !this.pricePrefs.autoCheck(userId);
+    this.marketRefresh?.firstAutoCheck$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      const id = this.session?.currentUser?.id;
+      if (id != null && this.pricePrefs && !this.pricePrefs.noticeSeen(id)) {
+        this.priceNoticeVisible = true;
+        this.cdr.markForCheck();
+      }
+    });
     this.load();
+  }
+
+  dismissPriceNotice(): void {
+    const userId = this.session?.currentUser?.id;
+    if (userId != null) this.pricePrefs?.markNoticeSeen(userId);
+    this.priceNoticeVisible = false;
+    this.cdr.markForCheck();
+  }
+
+  refreshPrices(): void {
+    void this.marketRefresh?.refreshNow();
   }
 
   ngOnDestroy(): void {
@@ -106,12 +142,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.cashflow?.total_income ?? 0;
   }
 
-  get incomeOccurrences() {
-    return this.cashflow?.income_occurrences ?? [];
+  /** Current month key, e.g. '2026-11'. */
+  get currentMonth(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
 
+  get monthName(): string {
+    const now = new Date();
+    return now.toLocaleString('en-US', { month: 'long' });
+  }
+
+  /** Posted spend this month (recorded view; scheduled bills excluded). */
   get monthSpend(): number {
-    return this.cashflow?.total_expenses ?? 0;
+    return monthlyCashflowSeries([this.currentMonth], this.transactions, this.jobIncomes, this.fixedExpenses, this.subscriptions, 'recorded')[0]?.expense ?? 0;
+  }
+
+  /** Scheduled spend still to come this month, reported separately. */
+  get monthScheduled(): number {
+    return monthlyCashflowSeries([this.currentMonth], this.transactions, this.jobIncomes, this.fixedExpenses, this.subscriptions, 'scheduled')[0]?.expense ?? 0;
+  }
+
+  /** Like-for-like delta against the same window last month. */
+  get spendDelta(): MonthDelta {
+    return monthDelta(this.transactions, this.currentMonth);
+  }
+
+  get incomeOccurrences() {
+    return this.cashflow?.income_occurrences ?? [];
   }
 
   get monthNet(): number {

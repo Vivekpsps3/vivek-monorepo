@@ -85,6 +85,21 @@ class TownSummary(_Shape):
     next_level_xp: int | None
 
 
+class HubTownSummary(_Shape):
+    """The Hub card's slice of the town payload (TF5 §10)."""
+
+    name: str
+    founded_on: date | None
+    level: int
+    xp: int
+    level_xp_start: int
+    next_level_xp: int | None
+    today_done: int
+    today_total: int
+    longest_streak: int
+    longest_streak_unit: StreakUnit | None
+
+
 class Lot(_Shape):
     slot: int
     unlock_level: int

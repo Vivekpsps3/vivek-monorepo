@@ -17,7 +17,9 @@ export interface SpendPurchaseRow {
 
 export interface MonthSpendSummary {
   monthKey: string;
+  /** Posted spend only; repeating rows are reported as scheduledTotal. */
   expenseTotal: number;
+  scheduledTotal: number;
   incomeTotal: number;
   net: number;
   activeDays: number;
@@ -47,16 +49,14 @@ export function summarizeMonthSpend(
   const extras = monthKey ? repeating.filter(row => inMonth(row.date, monthKey)) : repeating;
   const expenses = rows.filter(tx => transactionEffects(tx as Transaction).spending !== 0);
   const incomeTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).income, 0);
-  const expenseTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).spending, 0)
-    + extras.reduce((sum, row) => sum + row.amount, 0);
+  // Posted-only (F8): repeating rows no longer inflate the spend total or
+  // the category mix; they surface separately as scheduledTotal.
+  const expenseTotal = rows.reduce((sum, tx) => sum + transactionEffects(tx as Transaction).spending, 0);
+  const scheduledTotal = extras.reduce((sum, row) => sum + row.amount, 0);
   const byCategory = new Map<string, number>();
   for (const tx of expenses) {
     const label = tx.category.trim() || 'Uncategorized';
     byCategory.set(label, (byCategory.get(label) || 0) + transactionEffects(tx as Transaction).spending);
-  }
-  for (const row of extras) {
-    const label = row.category.trim() || 'Uncategorized';
-    byCategory.set(label, (byCategory.get(label) || 0) + row.amount);
   }
   const categories = [...byCategory.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -78,6 +78,7 @@ export function summarizeMonthSpend(
   return {
     monthKey,
     expenseTotal,
+    scheduledTotal,
     incomeTotal,
     net: incomeTotal - expenseTotal,
     activeDays: new Set([...rows.map(tx => tx.date), ...extras.map(row => row.date)]).size,

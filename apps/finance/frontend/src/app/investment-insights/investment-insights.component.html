@@ -9,27 +9,21 @@
     </ui-card>
   } @else if (portfolioValue <= 0) {
     <ui-card>
-      <ui-empty-state message="Add holdings or import a portfolio to see investment insights.">
-        <ui-icon name="portfolio" size="lg" style="display:block; margin: 0 auto 8px; opacity:.5;" />
+      <ui-empty-state [title]="'No holdings to project'" message="Add holdings or import from Fidelity to project growth.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="addHolding()">Add holding</ui-button></div>
       </ui-empty-state>
     </ui-card>
   } @else {
     <section class="insights-answer">
       <div class="answer-copy">
         <p class="section-eyebrow">Projection answer</p>
-        <h2>Projected portfolio </h2>
-        <strong class="answer-value money">{{ projectedValue | money:'whole':'auto':true }}</strong>
-        <p>
-          In {{ projectionYears }} years, starting from
-          <strong class="money">{{ portfolioValue | money:'whole':'auto':true }}</strong>, assuming
-          <strong>{{ annualGrowthRate | number: '1.1-1' }}%</strong> annual growth and
-          <strong class="money">{{ monthlyContribution | money:'whole':'auto':true }}</strong> monthly contributions.
-        </p>
+        <h2>{{ answerTitle }}</h2>
+        <p class="answer-detail">{{ answerDetail }}</p>
       </div>
 
       <div class="answer-metrics" aria-label="Projection answer details">
         <div>
-          <span>Today's-dollar value</span>
+          <span>In today's dollars</span>
           <strong class="money">{{ projectedRealValue | money:'whole':'auto':true }}</strong>
           <small>After {{ inflationRate | number: '1.1-1' }}% inflation</small>
         </div>
@@ -39,7 +33,7 @@
           <small>{{ withdrawalRate | number: '1.1-1' }}% rule on projected value</small>
         </div>
         <div>
-          <span>Spending power / month</span>
+          <span>Spending power</span>
           <strong class="money">{{ projectedRealMonthlyWithdrawalIncome | money:'whole':'auto':true }}</strong>
           <small>In today's dollars</small>
         </div>
@@ -59,8 +53,10 @@
               <span>Growth preset</span>
               <ui-button variant="ghost" size="sm" (clicked)="resetAssumptions()">Reset defaults</ui-button>
             </div>
+            <!-- K1 seam: this row becomes a ui-segmented control (with a
+                 Custom option) when @vivek/ui gains it; buttons stand in. -->
             <div class="preset-row" aria-label="Annual growth presets">
-              @for (rate of [5, 7, 10, 12]; track rate) {
+              @for (rate of growthOptions; track rate) {
                 <ui-button
                   variant="secondary"
                   size="sm"
@@ -70,33 +66,41 @@
                   {{ rate }}%
                 </ui-button>
               }
+              <ui-button
+                variant="secondary"
+                size="sm"
+                [ariaLabel]="'Custom annual growth'"
+                [pressed]="isCustomGrowth"
+                (clicked)="onGrowthOption('custom')">
+                Custom
+              </ui-button>
             </div>
           </div>
 
           <div class="controls-grid compact-controls">
             <label class="control-field">
               <span>Annual growth</span>
-              <div class="input-with-unit"><input type="number" min="-20" max="30" step="0.25" [(ngModel)]="annualGrowthRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
+              <div class="input-with-unit"><input #growthInput id="growthInput" name="annualGrowthRate" type="number" min="-20" max="30" step="0.25" [(ngModel)]="annualGrowthRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
             </label>
             <label class="control-field">
               <span>Withdrawal rate</span>
-              <div class="input-with-unit"><input type="number" min="0" max="12" step="0.25" [(ngModel)]="withdrawalRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
+              <div class="input-with-unit"><input name="withdrawalRate" type="number" min="0" max="12" step="0.25" [(ngModel)]="withdrawalRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
             </label>
             <label class="control-field">
               <span>Inflation</span>
-              <div class="input-with-unit"><input type="number" min="0" max="15" step="0.25" [(ngModel)]="inflationRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
+              <div class="input-with-unit"><input name="inflationRate" type="number" min="0" max="15" step="0.25" [(ngModel)]="inflationRate" (ngModelChange)="onAssumptionChange()" /><em>%</em></div>
             </label>
             <label class="control-field">
               <span>Monthly contribution</span>
-              <div class="input-with-unit"><b>$</b><input type="number" min="0" step="50" [(ngModel)]="monthlyContribution" (ngModelChange)="onAssumptionChange()" /></div>
+              <div class="input-with-unit"><b>$</b><input name="monthlyContribution" type="number" min="0" step="50" [(ngModel)]="monthlyContribution" (ngModelChange)="onAssumptionChange()" /></div>
             </label>
             <label class="control-field">
               <span>Monthly contribution increase</span>
-              <div class="input-with-unit"><b>$</b><input aria-label="Monthly contribution increase" type="number" min="0" step="50" [(ngModel)]="monthlyContributionIncrease" (ngModelChange)="onAssumptionChange()" /></div>
+              <div class="input-with-unit"><b>$</b><input name="monthlyContributionIncrease" aria-label="Monthly contribution increase" type="number" min="0" step="50" [(ngModel)]="monthlyContributionIncrease" (ngModelChange)="onAssumptionChange()" /></div>
             </label>
             <label class="control-field">
               <span>Projection length</span>
-              <div class="input-with-unit"><input type="number" min="1" max="60" step="1" [(ngModel)]="projectionYears" (ngModelChange)="onAssumptionChange()" /><em>yrs</em></div>
+              <div class="input-with-unit"><input name="projectionYears" type="number" min="1" max="60" step="1" [(ngModel)]="projectionYears" (ngModelChange)="onAssumptionChange()" /><em>yrs</em></div>
             </label>
           </div>
         </ui-card>
@@ -105,8 +109,41 @@
       <div class="insights-main">
         <ui-card [title]="'Projection path'">
           <div class="projection-chart-wrap">
-            <canvas #projectionChart aria-label="Projected portfolio growth chart"></canvas>
+            <canvas #projectionChart [attr.aria-label]="projectionSummary"></canvas>
           </div>
+
+          <div class="chart-legend" role="group" aria-label="Chart series">
+            @for (item of legendItems; track item.label) {
+              <button
+                type="button"
+                class="chart-legend__item"
+                [class.chart-legend__item--off]="item.hidden"
+                [attr.aria-pressed]="!item.hidden"
+                (click)="toggleSeries(item.label)">
+                <span class="chart-legend__swatch" [style.borderTopColor]="item.color" [style.borderTopStyle]="item.dash.length ? 'dashed' : 'solid'" aria-hidden="true"></span>
+                {{ item.label }}
+              </button>
+            }
+          </div>
+
+          <ui-button variant="ghost" size="sm" [attr.aria-expanded]="tableOpen" (clicked)="toggleTable()">Show as table</ui-button>
+          @if (tableOpen) {
+            <div class="chart-fallback">
+              <ui-data-table ariaLabel="Projection by year">
+                <thead><tr><th>Year</th><th>Projected</th><th>In today's dollars</th><th>You put in</th></tr></thead>
+                <tbody>
+                  @for (row of yearRows; track row.year) {
+                    <tr>
+                      <td>{{ row.year }}</td>
+                      <td class="money">{{ row.value | money:'whole' }}</td>
+                      <td class="money">{{ row.realValue | money:'whole' }}</td>
+                      <td class="money">{{ row.contributions | money:'whole' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </ui-data-table>
+            </div>
+          }
 
           <div class="projection-summary">
             <div>

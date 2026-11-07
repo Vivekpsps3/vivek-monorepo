@@ -45,6 +45,43 @@ describe('PortfolioComponent', () => {
     expect(finance.lookupSharePrice).not.toHaveBeenCalled();
   });
 
+  it('rejects a price-check quote dated the day after the Los Angeles day during the Los Angeles evening', () => {
+    // Monday 2026-10-12 17:30 in Los Angeles: Los Angeles is on 2026-10-12
+    // while UTC is already on 2026-10-13, so a quote dated 2026-10-13 is a
+    // future trading date even though it matches the UTC day.
+    const { component, finance, toast } = componentWithFinance();
+    finance.lookupSharePrice.and.returnValue(of({
+      symbol: 'AAPL', price: 125, price_source: 'live_eod', quote_date: '2026-10-13', valid: true,
+    }));
+    component.newHolding.symbol = 'AAPL';
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
+      component.checkSharePrice();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+    expect(toast.error).toHaveBeenCalledWith(jasmine.stringContaining('invalid quote'));
+    expect(component.newHolding.purchase_price).toBe(0);
+  });
+
+  it('accepts a price-check quote dated the Los Angeles day during the Los Angeles evening', () => {
+    const { component, finance, toast } = componentWithFinance();
+    finance.lookupSharePrice.and.returnValue(of({
+      symbol: 'AAPL', price: 125, price_source: 'live_eod', quote_date: '2026-10-12', valid: true,
+    }));
+    component.newHolding.symbol = 'AAPL';
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
+      component.checkSharePrice();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(component.newHolding.purchase_price).toBe(125);
+  });
+
   it('shows a load error instead of the empty-vault state when holdings fail to load', () => {
     const { component, finance } = componentWithFinance();
     finance.holdings$ = of([]);
@@ -329,5 +366,109 @@ describe('PortfolioComponent', () => {
       expect(finance.commitFidelityImport).not.toHaveBeenCalled();
       expect(component.fidelityImportPreview).not.toBeNull();
     });
+  });
+});
+
+import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { BehaviorSubject, Subject } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { FinanceService } from '../services/finance.service';
+
+describe('empty states (F10)', () => {
+  let fixture: ComponentFixture<PortfolioComponent>;
+
+  beforeEach(async () => {
+    const idle: MarketRefreshState = {
+      phase: 'idle', automatic: false, totalSymbols: 0, completedSymbols: 0,
+      updatedHoldings: 0, updatedEmployerValuations: 0, failures: [], startedAt: null, finishedAt: null,
+    };
+    const financeStub = {
+      holdings$: new BehaviorSubject<Holding[]>([]),
+      netWorth$: new BehaviorSubject<unknown>(null),
+      isLoading$: new BehaviorSubject<boolean>(false),
+      dataChanges$: new Subject<unknown>(),
+      getHoldings: () => of([]),
+      getNetWorth: () => of(null),
+      getHoldingImportStages: () => of([]),
+    };
+    const marketStub = {
+      status$: new BehaviorSubject<MarketRefreshState>(idle),
+      refreshNow: () => Promise.resolve(idle),
+      refreshSymbol: () => Promise.resolve({ symbol: 'VOO', holdingsUpdated: 0, employerValuationsUpdated: 0, failedRecords: [] }),
+    };
+    await TestBed.configureTestingModule({
+      imports: [PortfolioComponent],
+      providers: [
+        { provide: FinanceService, useValue: financeStub },
+        { provide: MarketRefreshCoordinatorService, useValue: marketStub },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        { provide: ConfirmService, useValue: { ask: () => Promise.resolve(true) } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(PortfolioComponent);
+    fixture.detectChanges();
+  });
+
+  it('no holdings → No holdings yet with Add holding then Import from Fidelity', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('No holdings yet');
+    expect(text).toContain('Add a position by hand or import a Fidelity positions file.');
+    const buttons = [...fixture.nativeElement.querySelectorAll('.empty-actions button')]
+      .map((el: Element) => el.textContent?.trim());
+    expect(buttons).toEqual(['Add holding', 'Import from Fidelity']);
+    expect(text).not.toContain('Add your first');
+  });
+});
+
+describe('PortfolioComponent row copy (F16)', () => {
+  it('names the holding source from its brokerage link', () => {
+    const { component } = componentWithFinance();
+    expect(component.holdingSource({ brokerage_account_id: 4 } as Holding)).toBe('Fidelity');
+    expect(component.holdingSource({ brokerage_account_id: null } as Holding)).toBe('Manual');
+    expect(component.holdingSource({} as Holding)).toBe('Manual');
+  });
+
+  it('delete asks with the symbol and toasts it back with undo', async () => {
+    const { component, finance, toast, confirm } = componentWithFinance();
+    finance.deleteHolding = jasmine.createSpy('deleteHolding').and.returnValue(of({}));
+    const holding = {
+      id: 9, symbol: 'VOO', shares: 2, purchase_price: 100, purchase_date: '2026-01-15',
+    } as Holding;
+    await component.deleteHolding(holding);
+    expect(confirm.ask).toHaveBeenCalledWith(
+      'Delete VOO?',
+      'This removes it from your portfolio. You can undo right after.',
+      'Delete',
+      'Cancel',
+    );
+    expect(toast.success).toHaveBeenCalledWith('VOO deleted', jasmine.any(Function));
+  });
+});
+
+describe('PortfolioComponent F7 shared quotes', () => {
+  it('exposes the saved quote for the form symbol from the shared book', () => {
+    const { component } = componentWithFinance();
+    component.holdings = [{
+      id: 1, symbol: 'VOO', shares: 1, purchase_price: 90, current_price: 111,
+      price_source: 'manual', price_as_of: '2026-10-30T20:24:00Z',
+    } as Holding];
+    component.newHolding.symbol = 'voo';
+    expect(component.checkPrice()).toEqual({ price: 111, asOfText: 'Oct 30, 1:24 PM PT' });
+    expect(component.asOfText(component.holdings[0])).toBe('Oct 30, 1:24 PM PT');
+    component.newHolding.symbol = 'MSFT';
+    expect(component.checkPrice()).toBeNull();
+  });
+
+  it('routes Check price for a held symbol through the coordinator, not a direct lookup', async () => {
+    const { component, finance, market } = componentWithFinance();
+    component.holdings = [{
+      id: 1, symbol: 'VOO', shares: 1, purchase_price: 90, current_price: 111,
+      price_source: 'manual', price_as_of: '2026-10-30T20:24:00Z',
+    } as Holding];
+    component.newHolding.symbol = 'VOO';
+    component.checkSharePrice();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(market.refreshSymbol).toHaveBeenCalledWith('VOO');
+    expect(finance.lookupSharePrice).not.toHaveBeenCalled();
   });
 });

@@ -46,3 +46,47 @@ app-suite-hub {
   width: 100%;
   min-height: 44px;
 }
+
+/* F5 §4.7 unlock screen */
+.vault-unlock__error {
+  /* The wrong-passphrase sentence wraps to two lines in the 26.5rem card,
+     so reserve two lines: showing an error never moves the Unlock button
+     (vault-return.spec.ts asserts the button's bounding box is stable). */
+  line-height: 1.45;
+  min-height: 2.9em;
+  margin: var(--space-1) 0 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.vault-unlock__help,
+.vault-unlock__recovery,
+.vault-unlock__who {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.vault-unlock__notice {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.vault-unlock__link {
+  color: var(--accent);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.vault-unlock__recovery {
+  margin: var(--space-4) 0 0;
+}
+
+:host ::ng-deep .vault-page .ui-btn {
+  white-space: normal;
+}

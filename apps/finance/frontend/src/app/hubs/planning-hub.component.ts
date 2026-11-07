@@ -5,17 +5,19 @@ import { PlanningComponent } from '../planning/planning.component';
 import { InvestmentInsightsComponent } from '../investment-insights/investment-insights.component';
 import { StockLabComponent } from '../stock-lab/stock-lab.component';
 import { PlanningToolId } from '../models/planning.model';
+import { UiPageHeaderComponent } from '@vivek/ui';
 
 @Component({
   selector: 'app-planning-hub',
   standalone: true,
-  imports: [RouterLink, PlanningComponent, InvestmentInsightsComponent, StockLabComponent],
+  imports: [RouterLink, PlanningComponent, InvestmentInsightsComponent, StockLabComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <nav class="hub-tabs" aria-label="Planning">
-        <a [routerLink]="[]" [queryParams]="{ t: 'path' }" [class.on]="tab === 'path'">Retirement &amp; goals</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'growth' }" [class.on]="tab === 'growth'">Portfolio projection</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'stocks' }" [class.on]="tab === 'stocks'">Stock research</a>
+      <ui-page-header title="Planning" />
+      <nav class="hub-tabs" aria-label="Planning sections">
+        <a [routerLink]="[]" [queryParams]="{ t: null }" [class.on]="tab === 'path'" [attr.aria-current]="tab === 'path' ? 'page' : null">Retirement and goals</a>
+        <a [routerLink]="[]" [queryParams]="{ t: 'growth' }" [class.on]="tab === 'growth'" [attr.aria-current]="tab === 'growth' ? 'page' : null">Portfolio projection</a>
+        <a [routerLink]="[]" [queryParams]="{ t: 'stocks' }" [class.on]="tab === 'stocks'" [attr.aria-current]="tab === 'stocks' ? 'page' : null">Stock research</a>
       </nav>
       @switch (tab) {
         @case ('growth') { <app-investment-insights [embedded]="true" /> }

@@ -1,0 +1,27 @@
+<div
+  class="ui-segmented"
+  [class.ui-segmented--compact]="size() === 'compact'"
+  [class.ui-segmented--nowrap]="!wrap()"
+  role="radiogroup"
+  [attr.aria-label]="labelledBy() ? null : label()"
+  [attr.aria-labelledby]="labelledBy() ?? null"
+  (keydown)="onGroupKeydown($event)"
+  (focusout)="onGroupFocusOut($event)"
+>
+  @for (option of options(); track option.value; let i = $index) {
+    <button
+      #optionBtn
+      type="button"
+      class="ui-segmented__option"
+      [class.ui-segmented__option--checked]="isChecked(option)"
+      role="radio"
+      [attr.aria-checked]="isChecked(option)"
+      [attr.aria-label]="option.ariaLabel ?? null"
+      [attr.aria-disabled]="isDisabled() ? 'true' : null"
+      [tabIndex]="tabIndexFor(i)"
+      (click)="select(option)"
+    >
+      {{ option.label }}
+    </button>
+  }
+</div>

@@ -11,6 +11,8 @@
   --surface-2: #efeae3;
   --surface: var(--surface-2);
   --surface-hover: #e7e0d6;
+  --skeleton-bg: var(--surface-2);
+  --skeleton-shine: var(--surface-hover);
   --text: #1c1916;
   --text-secondary: #5c564c;
   --text-tertiary: #655e53;
@@ -113,6 +115,8 @@
     --surface-2: #28251f;
     --surface: var(--surface-2);
     --surface-hover: #332f28;
+    --skeleton-bg: #302c25;
+    --skeleton-shine: #3d372d;
     --surface-soft: #221f1c;
     --text: #f6f1ea;
     --text-secondary: #d4cabb;

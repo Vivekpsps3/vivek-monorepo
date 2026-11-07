@@ -318,3 +318,30 @@
   gap: 0.5rem;
   min-width: 0;
 }
+
+/* M3 next-episode + now */
+.media-page .next-episode-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0 0;
+}
+.media-page .next-episode-wait,
+.media-page .next-line {
+  margin: var(--space-2) 0;
+}
+.media-page .media-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.media-page .episode-row media-next-episode {
+  display: block;
+  margin-top: var(--space-2);
+}
+@media (max-width: 640px) {
+  .media-page media-next-episode ui-button,
+  .media-page media-next-episode ui-button .ui-btn {
+    min-height: 44px;
+  }
+}

@@ -25,3 +25,11 @@ export async function reloadDraft(page: Page) {
   page.once('dialog', dialog => dialog.accept());
   await page.reload();
 }
+export async function openFilters(page: Page) {
+  await page.getByRole('button', { name: /^Filters/ }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+}
+export async function closeFilters(page: Page) {
+  await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}

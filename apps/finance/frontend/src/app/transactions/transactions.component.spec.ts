@@ -5,10 +5,10 @@ import { BehaviorSubject, from, of, Subject, throwError } from 'rxjs';
 import { TransactionsComponent } from './transactions.component';
 import { TransactionsEditorWorkflow } from './transactions-editor-workflow';
 import { TransactionsImportWorkflow } from './transactions-import-workflow';
-import { FinanceService } from '../services/finance.service';
+import { FinanceService, type FinanceDataChange } from '../services/finance.service';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
-import { BankImportFilePreview, ImportReceipt } from '../models/transaction.model';
+import { BankAccountRecord, BankImportFilePreview, ImportReceipt, Transaction } from '../models/transaction.model';
 import { buildBankImportPreview, buildBankImportPreviews, listClientBankImports } from '../utils/bank-import.util';
 
 describe('Transactions multi-file import UI', () => {
@@ -493,7 +493,7 @@ describe('Transactions multi-file import UI', () => {
     router.navigate.calls.reset();
     component.openImportModal();
     expect(router.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
-      queryParams: { t: 'activity', receipts: '1', add: '1' },
+      queryParams: { t: null, receipts: '1', add: '1' },
       queryParamsHandling: 'merge',
     }));
 
@@ -512,7 +512,7 @@ describe('Transactions multi-file import UI', () => {
     router.navigate.calls.reset();
     component.viewImportedTransactions(receipt({ id: 4 }));
     expect(router.navigate).toHaveBeenCalledWith(['/finance/spending'], jasmine.objectContaining({
-      queryParams: jasmine.objectContaining({ t: 'activity', v: 'all', receipt: 4, receipts: null }),
+      queryParams: jasmine.objectContaining({ t: null, v: 'all', receipt: 4, receipts: null }),
     }));
 
     router.navigate.calls.reset();
@@ -522,7 +522,7 @@ describe('Transactions multi-file import UI', () => {
       unresolved: [{ line: 1, filename: 'statement.csv', reason: 'bad row' }],
     }));
     expect(router.navigate).toHaveBeenCalledWith(['/finance/spending'], jasmine.objectContaining({
-      queryParams: jasmine.objectContaining({ t: 'activity', receipts: '1', add: '1', reattach: 9, reattach_file: 'statement.csv' }),
+      queryParams: jasmine.objectContaining({ t: null, receipts: '1', add: '1', reattach: 9, reattach_file: 'statement.csv' }),
     }));
 
     component.showImportModal = false;
@@ -588,5 +588,242 @@ describe('Transactions delete and undo errors', () => {
     retry();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(finance.addTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
+  });
+});
+
+describe('Activity layout (F12)', () => {
+  let fixture: ComponentFixture<TransactionsComponent>;
+  let component: TransactionsComponent;
+  let finance: jasmine.SpyObj<FinanceService>;
+  let routeQuery: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
+  let dataChanges$: Subject<{ collections: string[]; source: string }>;
+
+  const tx = (overrides: Record<string, unknown> = {}): Transaction => ({
+    id: 1, date: '2026-10-05', type: 'expense', kind: 'purchase', category: 'Food and Drink',
+    amount: 10, description: 'Corner Cafe', merchant: 'Corner Cafe', account_display: 'Daily card',
+    ...overrides,
+  } as unknown as Transaction);
+
+  beforeEach(async () => {
+    dataChanges$ = new Subject<{ collections: string[]; source: string }>();
+    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getJobIncomes', 'getImportReceipts', 'getBankAccounts', 'getImportBanks'], { isLoading$: of(false), transactions$: of([]), jobIncomes$: of([]), dataChanges$ });
+    finance.getTransactions.and.returnValue(of([]));
+    finance.getAllTransactions.and.returnValue(of([]));
+    finance.getJobIncomes.and.returnValue(of([]));
+    finance.getImportReceipts.and.returnValue(of([]));
+    finance.getBankAccounts.and.returnValue(of([]));
+    finance.getImportBanks.and.returnValue(of([]));
+    routeQuery = new BehaviorSubject(convertToParamMap({}));
+    await TestBed.configureTestingModule({
+      imports: [TransactionsComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        { provide: ConfirmService, useValue: {} },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) }, queryParamMap: routeQuery.asObservable() } },
+        { provide: Router, useValue: { events: new Subject(), navigate: () => Promise.resolve(true), createUrlTree: () => ({}), serializeUrl: () => '/finance/spending?t=activity' } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(TransactionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  const host = (): HTMLElement => fixture.nativeElement;
+
+  function seed(rows: Transaction[], month = '2026-10') {
+    component.allTransactions = rows;
+    component.transactions = rows;
+    component.summaryMonth = month;
+    component.applyFilterAndSort();
+    fixture.detectChanges();
+  }
+
+  it('header shows Add transaction then Import', () => {
+    const buttons = Array.from(host().querySelectorAll<HTMLElement>('.header-actions button'))
+      .map(node => node.textContent.trim());
+    expect(buttons).toEqual(['Add transaction', 'Import']);
+  });
+
+  it('eyebrow: month, All time, filtered', () => {
+    component.summaryMonth = '2026-10';
+    expect(component.periodEyebrow).toBe('October 2026');
+    component.summaryMonth = '';
+    expect(component.periodEyebrow).toBe('All time');
+    component.summaryMonth = '2026-10';
+    component.categoryFilter = 'Food';
+    expect(component.periodEyebrow).toBe('October 2026 · filtered');
+    component.categoryFilter = '';
+    expect(component.periodEyebrow).toBe('October 2026');
+  });
+
+  it('spent count label', () => {
+    component.purchaseCount = 2; component.refundCount = 1;
+    expect(component.spentCountLabel).toBe('2 purchases, 1 refund');
+    component.purchaseCount = 1; component.refundCount = 0;
+    expect(component.spentCountLabel).toBe('1 purchase');
+    component.purchaseCount = 0;
+    expect(component.spentCountLabel).toBe('No purchases');
+    component.refundCount = 2;
+    expect(component.spentCountLabel).toBe('2 refunds');
+  });
+
+  it('income count label', () => {
+    component.incomeCount = 1;
+    expect(component.incomeCountLabel).toBe('1 deposit');
+    component.incomeCount = 0;
+    expect(component.incomeCountLabel).toBe('No income');
+  });
+
+  it('no rows in month with data elsewhere → No activity in October. and no month-totals', () => {
+    seed([tx({ date: '2026-07-04', category: 'Travel', amount: 120 })]);
+    const empty = fixture.nativeElement.querySelector('.period-empty');
+    expect(empty?.textContent.trim()).toBe('No activity in October.');
+    expect(fixture.nativeElement.querySelector('.month-totals')).toBeNull();
+  });
+
+  it('Filters (n) counts category, merchant, account, from, through; not sort or search', () => {
+    component.categoryFilter = 'food';
+    component.merchantFilter = 'cafe';
+    component.accountFilter = 'card-a';
+    component.fromDate = '2026-10-01';
+    component.throughDate = '2026-10-31';
+    component.searchTerm = 'cafe';
+    expect(component.panelFilterCount).toBe(5);
+    fixture.detectChanges();
+    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector('.filter-toggle');
+    expect(toggle.textContent.trim()).toBe('Filters (5)');
+  });
+
+  it('chips render in order and removeChip clears only that filter', () => {
+    component.categoryFilter = 'Food';
+    component.fromDate = '2026-10-01';
+    fixture.detectChanges();
+    const labels = Array.from(host().querySelectorAll<HTMLElement>('.filter-chip'))
+      .map(node => node.getAttribute('aria-label'));
+    expect(labels).toEqual(['Remove filter Category: Food', 'Remove filter From: Oct 1']);
+    component.removeChip('category');
+    fixture.detectChanges();
+    expect(component.categoryFilter).toBe('');
+    const remaining = Array.from(host().querySelectorAll<HTMLElement>('.filter-chip'))
+      .map(node => node.getAttribute('aria-label'));
+    expect(remaining).toEqual(['Remove filter From: Oct 1']);
+  });
+
+  it('panel closed by default but deep-linked account still binds', async () => {
+    const accounts = [{ id: 1, account_key: 'card-a', display_name: 'Primary card', confirmed: true, bank_slug: 'chase' }];
+    finance.getBankAccounts.and.returnValue(of(accounts as unknown as BankAccountRecord[]));
+    routeQuery.next(convertToParamMap({ account: 'card-a' }));
+    dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
+    await new Promise(resolve => setTimeout(resolve, 160));
+    fixture.detectChanges();
+    expect(component.filtersOpen).toBeFalse();
+    const accountSelect: HTMLSelectElement = fixture.nativeElement.querySelector('#tx-account-filter');
+    expect(accountSelect.value).toBe('card-a');
+  });
+
+  it('Escape in panel closes it and focuses the Filters button', () => {
+    document.body.appendChild(fixture.nativeElement);
+    component.filtersOpen = true;
+    fixture.detectChanges();
+    const panel: HTMLElement = fixture.nativeElement.querySelector('#activity-filters');
+    panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(component.filtersOpen).toBeFalse();
+    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector('.filter-toggle');
+    expect(document.activeElement).toBe(toggle);
+    fixture.nativeElement.remove();
+  });
+
+  it('table has four columns: Date, Description, Amount, Actions', () => {
+    seed([tx()]);
+    const headers = Array.from(host().querySelectorAll<HTMLElement>('.tx-table-wrap thead th'))
+      .map(node => node.textContent.trim());
+    expect(headers.length).toBe(4);
+    expect(headers[0]).toContain('Date');
+    expect(headers[1]).toBe('Description');
+    expect(headers[2]).toContain('Amount');
+    expect(headers[3]).toBe('Actions');
+  });
+
+  it('row description line and badges', () => {
+    seed([
+      tx({ id: 1, kind: 'refund', amount: 5, source: 'import', description: 'CAFE REFUND' }),
+      tx({ id: 2, date: '2026-10-06', description: 'Bakery', merchant: 'Bakery' }),
+    ]);
+    const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('.tx-table-wrap tbody tr'));
+    expect(rows.length).toBe(2);
+    const refundRow = rows.find(row => row.textContent.includes('Refund'));
+    expect(refundRow).toBeTruthy();
+    expect(refundRow?.querySelector('.tx-desc__name')?.textContent?.trim()).toBe('Corner Cafe');
+    expect(refundRow?.querySelector('.tx-desc__meta')?.textContent?.trim()).toBe('Food and Drink · Daily card');
+    const badges = Array.from(refundRow?.querySelectorAll<HTMLElement>('.tx-desc__badges ui-badge') ?? [])
+      .map(node => node.textContent.trim());
+    expect(badges).toEqual(['Refund', 'Imported']);
+    const purchaseRow = rows.find(row => row.textContent.includes('Bakery'));
+    expect(purchaseRow?.querySelector('.tx-desc__badges')).toBeNull();
+  });
+
+  it('Show 100 more replaces Load more', () => {
+    const rows = Array.from({ length: 101 }, (_, i) => tx({ id: i + 1, date: `2026-10-${String((i % 28) + 1).padStart(2, '0')}` }));
+    seed(rows);
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector('.load-more-row button');
+    expect(button.textContent.trim()).toBe('Show 100 more');
+  });
+});
+
+describe('empty states (F10)', () => {
+  let fixture: ComponentFixture<TransactionsComponent>;
+  let component: TransactionsComponent;
+  let finance: jasmine.SpyObj<FinanceService>;
+
+  beforeEach(async () => {
+    const dataChanges$ = new Subject<FinanceDataChange>();
+    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getJobIncomes', 'getImportReceipts', 'getBankAccounts', 'getImportBanks'], { isLoading$: of(false), transactions$: of([]), jobIncomes$: of([]), dataChanges$ });
+    finance.getTransactions.and.returnValue(of([]));
+    finance.getAllTransactions.and.returnValue(of([]));
+    finance.getJobIncomes.and.returnValue(of([]));
+    finance.getImportReceipts.and.returnValue(of([]));
+    finance.getBankAccounts.and.returnValue(of([]));
+    finance.getImportBanks.and.returnValue(of(listClientBankImports()));
+    await TestBed.configureTestingModule({
+      imports: [TransactionsComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        { provide: ConfirmService, useValue: {} },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) }, queryParamMap: of(convertToParamMap({})) } },
+        { provide: Router, useValue: { events: new Subject(), navigate: () => Promise.resolve(true), createUrlTree: () => ({}), serializeUrl: () => '/finance/spending' } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(TransactionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  function text(): string { return (fixture.nativeElement as HTMLElement).textContent ?? ''; }
+
+  it('empty ledger → No transactions yet with Import then Add transaction', () => {
+    component.allTransactions = [];
+    (component as unknown as { allTransactionsLoaded: boolean }).allTransactionsLoaded = true;
+    component.summaryMonth = '';
+    component.applyFilterAndSort();
+    fixture.detectChanges();
+    expect(text()).toContain('No transactions yet');
+    expect(text()).toContain('Import a card statement or add one by hand.');
+    const buttons = [...fixture.nativeElement.querySelectorAll('.empty-actions button')].map(b => b.textContent?.trim());
+    expect(buttons).toEqual(['Import', 'Add transaction']);
+  });
+
+  it('filtered empty → one-line message with Clear filters and no title', () => {
+    const coffee: Transaction = { id: 1, date: '2026-11-01', type: 'expense', description: 'Coffee', category: 'Food', merchant: 'Cafe', amount: -4 };
+    component.transactions = [coffee];
+    component.allTransactions = component.transactions;
+    component.searchTerm = 'zzz-no-match';
+    component.applyFilterAndSort();
+    fixture.detectChanges();
+    expect(text()).toContain('Nothing matches these filters');
+    expect(text()).not.toContain('No transactions yet');
+    expect(text()).not.toContain('No data yet.');
   });
 });

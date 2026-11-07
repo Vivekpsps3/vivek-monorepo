@@ -111,6 +111,7 @@ def _app(tmp_path, *, principal=None, openapi=False):
     from apps.finance.backend.models import Base as FinanceBase
     from apps.media.backend.models import Base as MediaBase
     from apps.server.main import Dependencies, Settings, create_app
+    from apps.server.world.models import WorldBase
     from apps.travel.backend.models import Base as TravelBase
 
     url = f"sqlite:///{tmp_path / 'site.db'}"
@@ -119,6 +120,7 @@ def _app(tmp_path, *, principal=None, openapi=False):
     FinanceBase.metadata.create_all(database.engine)
     TravelBase.metadata.create_all(database.engine)
     MediaBase.metadata.create_all(database.engine)
+    WorldBase.metadata.create_all(database.engine)
     application = create_app(
         Settings(
             database_url=url,

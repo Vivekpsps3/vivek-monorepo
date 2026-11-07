@@ -149,6 +149,22 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.town-bar {
+  grid-column: 1 / -1;
+}
+
+.town-open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.town-progress {
+  width: 100%;
+  margin: var(--space-3) 0;
+  accent-color: var(--accent);
+}
+
 .finance-more {
   margin-top: var(--space-5);
 }
@@ -368,5 +384,32 @@ dd {
 @media (prefers-reduced-motion: reduce) {
   :host {
     background: var(--bg);
+  }
+}
+
+/* M4 */
+.side-panel li media-next-episode {
+  display: block;
+  margin-top: var(--space-2);
+}
+
+.side-panel li:has(media-next-episode) {
+  flex-wrap: wrap;
+}
+
+.side-panel li .next-episode-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0 0;
+}
+
+@media (max-width: 640px) {
+  .side-panel li media-next-episode {
+    flex: 1 1 100%;
+  }
+
+  .side-panel li media-next-episode ui-button,
+  .side-panel li media-next-episode ui-button .ui-btn {
+    width: 100%;
   }
 }

@@ -20,6 +20,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     loadComponent: () => import('./account-section.component').then(m => m.AccountSectionComponent),
   },
   {
+    path: 'profile',
+    label: 'Profile',
+    loadComponent: () => import('./profile/profile-settings.component').then(m => m.ProfileSettingsComponent),
+  },
+  {
     path: 'appearance',
     label: 'Appearance',
     loadComponent: () => import('./appearance-section.component').then(m => m.AppearanceSectionComponent),
