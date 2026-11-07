@@ -1,15 +1,16 @@
 """Owner-scoped tag filter over the JSON text stored on UserEntry.tags.
 
 Tags stay compact JSON (``json.dumps`` with the default ``ensure_ascii``).
-Each requested tag is matched as a whole JSON string, anchored on the
-brackets and commas around it, so a shorter tag cannot hit a neighbour
-and LIKE wildcards stay literal.
+SQLite compares decoded, casefolded whole strings through a deterministic
+connection-local function. Escaped and literal Unicode have identical matching
+semantics without rewriting existing records. SQL still owns filtering and paging.
 """
 
 import json
+import sqlite3
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func, true
 from sqlalchemy.orm import Session
 
 from apps.media.backend.models import UserEntry
@@ -45,25 +46,38 @@ def parse_tag_params(values: list[str]) -> list[str]:
     return chosen
 
 
-def tags_clause(tags: list[str]):
-    """AND of anchored JSON tokens. ASCII case is folded; ``%`` and ``_`` are literal."""
-    clauses = []
-    for tag in tags:
-        tok = json.dumps(tag.lower())
-        clauses.append(
-            or_(
-                *(
-                    func.lower(UserEntry.tags).contains(pattern, autoescape=True)
-                    for pattern in (
-                        "[" + tok + "]",
-                        "[" + tok + ",",
-                        "," + tok + ",",
-                        "," + tok + "]",
-                    )
-                )
-            )
-        )
-    return and_(*clauses)
+def _tag_keys(raw: object) -> set[str] | None:
+    if not isinstance(raw, str):
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(parsed, list):
+        return None
+    return {tag.casefold() for tag in parsed if isinstance(tag, str)}
+
+
+def _media_tags_match(stored_json: object, requested_json: object) -> int:
+    """Pure SQLite callback: malformed rows do not abort an owner-scoped query."""
+    stored = _tag_keys(stored_json)
+    requested = _tag_keys(requested_json)
+    return int(stored is not None and requested is not None and requested <= stored)
+
+
+def tags_clause(tags: list[str], db: Session):
+    """AND of casefolded whole tags; ``%`` and ``_`` are ordinary characters."""
+    if not tags:
+        return true()
+    connection = db.connection()
+    if not connection.info.get("media_tags_match_registered"):
+        driver = connection.connection.driver_connection
+        if not isinstance(driver, sqlite3.Connection):
+            raise RuntimeError("Media tag filtering requires SQLite")
+        driver.create_function("media_tags_match", 2, _media_tags_match, deterministic=True)
+        connection.info["media_tags_match_registered"] = True
+    requested = json.dumps([tag.casefold() for tag in tags], separators=(",", ":"))
+    return func.media_tags_match(UserEntry.tags, requested) == 1
 
 
 def available_tags(db: Session, user_id: int) -> list[str]:

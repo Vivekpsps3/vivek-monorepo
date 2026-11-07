@@ -5,13 +5,17 @@ import { DEK_STORE } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
 import { spendingModeInference } from '../planning/spending-mode';
 import type { Transaction } from '../models/transaction.model';
-import { loadFinanceBudgetKeptGuarded } from './budget-kept-import';
+import { loadFinanceBudgetKeptDaysGuarded, loadFinanceBudgetKeptGuarded } from './budget-kept-import';
 import {
   budgetKeptCryptoImports,
+  budgetKeptDays,
   budgetKeptWeeks,
   firstTransactionDate,
   loadFinanceBudgetKept,
+  loadFinanceBudgetKeptDays,
   resolveAnnualPlan,
+  type BudgetKeptDay,
+  type BudgetKeptDaysResult,
   type BudgetKeptResult,
   type BudgetKeptWeek,
 } from './budget-kept';
@@ -58,6 +62,13 @@ function tx(row: Partial<Transaction> & Pick<Transaction, 'id' | 'date' | 'amoun
 
 function week(weekStart: string, spend: number | null, kept: boolean | null, weeklyPlan = WEEKLY): BudgetKeptWeek {
   return { weekStart, spend, weeklyPlan, kept };
+}
+
+/** Annual 1200 is exactly 100 per month, so pace arithmetic stays in whole dollars at month end. */
+const PLAN_DAYS = 1200;
+
+function dayRow(date: string, spend: number | null, pace: number, kept: boolean | null): BudgetKeptDay {
+  return { date, spend, pace, kept };
 }
 
 /** ISO week number of a Monday, used to pin 2026-12-28 as week 53. */
@@ -253,6 +264,85 @@ describe('budget kept pure core', () => {
       week('2026-09-21', null, null),
       week('2026-09-28', 0, true),
     ]);
+  });
+
+  it('keeps a day exactly at the monthly pace and not one cent over', () => {
+    const atPace = budgetKeptDays([
+      tx({ id: 1, date: '2026-10-05', amount: 60, kind: 'purchase' }),
+      tx({ id: 2, date: '2026-10-20', amount: 40, kind: 'purchase' }),
+    ], PLAN_DAYS, ['2026-10-31']);
+    expect(atPace).toEqual([dayRow('2026-10-31', 100, 100, true)]);
+
+    const over = budgetKeptDays([
+      tx({ id: 1, date: '2026-10-05', amount: 60, kind: 'purchase' }),
+      tx({ id: 2, date: '2026-10-20', amount: 40, kind: 'purchase' }),
+      tx({ id: 3, date: '2026-10-21', amount: 0.01, kind: 'purchase' }),
+    ], PLAN_DAYS, ['2026-10-31']);
+    expect(over).toEqual([dayRow('2026-10-31', 100.01, 100, false)]);
+  });
+
+  it('scales the pace by day of month at month start and month end', () => {
+    const days = budgetKeptDays([
+      tx({ id: 1, date: '2026-09-15', amount: 1, kind: 'purchase' }),
+    ], PLAN_DAYS, ['2026-10-01', '2026-10-31']);
+    expect(days[0].date).toBe('2026-10-01');
+    expect(days[0].spend).toBe(0);
+    expect(days[0].pace).toBeCloseTo(100 / 31, 10);
+    expect(days[0].kept).toBeTrue();
+    expect(days[1]).toEqual(dayRow('2026-10-31', 0, 100, true));
+  });
+
+  it('uses 29 days for leap February and 28 for a plain February', () => {
+    const leap = budgetKeptDays([
+      tx({ id: 1, date: '2024-02-01', amount: 100, kind: 'purchase' }),
+    ], PLAN_DAYS, ['2024-02-28', '2024-02-29']);
+    expect(leap[0].pace).toBeCloseTo(100 * 28 / 29, 10);
+    expect(leap[0].kept).toBeFalse();
+    expect(leap[1]).toEqual(dayRow('2024-02-29', 100, 100, true));
+
+    const plain = budgetKeptDays([
+      tx({ id: 1, date: '2026-02-01', amount: 100, kind: 'purchase' }),
+    ], PLAN_DAYS, ['2026-02-28']);
+    expect(plain).toEqual([dayRow('2026-02-28', 100, 100, true)]);
+  });
+
+  it('marks days before the first transaction unknown and zero-spend days after it kept', () => {
+    const days = budgetKeptDays([
+      tx({ id: 1, date: '2026-10-14', amount: 10, kind: 'purchase' }),
+    ], PLAN_DAYS, ['2026-09-30', '2026-10-13', '2026-10-14', '2026-10-20', '2026-11-02']);
+    expect(days[0].spend).toBeNull();
+    expect(days[0].kept).toBeNull();
+    expect(days[1].spend).toBeNull();
+    expect(days[1].kept).toBeNull();
+    expect(days[2].spend).toBe(10);
+    expect(days[2].kept).toBeTrue();
+    expect(days[3].spend).toBe(10);
+    expect(days[4]).toEqual(dayRow('2026-11-02', 0, 100 * 2 / 30, true));
+  });
+
+  it('counts month-to-date spend through transactionEffects, so refunds lower it and transfers do not count', () => {
+    const days = budgetKeptDays([
+      tx({ id: 1, date: '2026-10-02', amount: 120, kind: 'purchase' }),
+      tx({ id: 2, date: '2026-10-03', amount: 20, type: 'expense', kind: 'refund' }),
+      tx({ id: 3, date: '2026-10-03', amount: 400, type: 'expense', kind: 'transfer' }),
+      tx({ id: 4, date: '2026-10-04', amount: 500, type: 'income' }),
+    ], PLAN_DAYS, ['2026-10-31']);
+    expect(days).toEqual([dayRow('2026-10-31', 100, 100, true)]);
+  });
+
+  it('does not leak one month of spend into the next month', () => {
+    const days = budgetKeptDays([
+      tx({ id: 1, date: '2026-09-30', amount: 500, kind: 'purchase' }),
+    ], PLAN_DAYS, ['2026-09-30', '2026-10-15']);
+    expect(days[0].spend).toBe(500);
+    expect(days[0].kept).toBeFalse();
+    expect(days[1].spend).toBe(0);
+    expect(days[1].kept).toBeTrue();
+  });
+
+  it('marks every day unknown when there are no transactions', () => {
+    const days = budgetKeptDays([], PLAN_DAYS, ['2026-10-01', '2026-10-02']);
+    expect(days.map(row => [row.spend, row.kept])).toEqual([[null, null], [null, null]]);
   });
 });
 
@@ -696,6 +786,182 @@ describe('loadFinanceBudgetKept', () => {
   });
 });
 
+describe('loadFinanceBudgetKeptDays', () => {
+  const manualDays = profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: PLAN_DAYS });
+  const planInputs = inputs(undefined, 0);
+
+  afterEach(() => localStorage.removeItem(DEK_STORE));
+
+  function unlock(options: {
+    profiles?: PlanningProfile[];
+    planInputs?: PlanInputs;
+    txs?: Transaction[];
+    getTransactions?: () => Promise<Transaction[]>;
+    isUnlocked?: boolean;
+    whenReady?: () => Promise<void>;
+  }) {
+    localStorage.setItem(DEK_STORE, 'synthetic-budget-kept-days');
+    class VaultToken {}
+    class PlanningToken {}
+    class StoreToken {}
+    const listProfiles = jasmine.createSpy('listProfiles').and.callFake(() => of(options.profiles ?? []));
+    const getInputs = jasmine.createSpy('getInputs').and.callFake(() => of(options.planInputs ?? planInputs));
+    const getTransactions = jasmine.createSpy('getTransactions').and.callFake(
+      options.getTransactions ?? (() => Promise.resolve(options.txs ?? [])),
+    );
+    const vault = {
+      whenReady: options.whenReady ?? (() => Promise.resolve()),
+      get isUnlocked() {
+        return options.isUnlocked ?? true;
+      },
+    };
+    const modules = {
+      VaultService: VaultToken,
+      PlanningService: PlanningToken,
+      EncryptedStoreService: StoreToken,
+    } as unknown as Awaited<ReturnType<typeof budgetKeptCryptoImports.load>>;
+    const load = jasmine.isSpy(budgetKeptCryptoImports.load)
+      ? budgetKeptCryptoImports.load as jasmine.Spy
+      : spyOn(budgetKeptCryptoImports, 'load');
+    load.and.resolveTo(modules);
+    const get = jasmine.createSpy('get').and.callFake((token: unknown) => {
+      if (token === VaultToken) return vault;
+      if (token === PlanningToken) return { listProfiles, getInputs };
+      if (token === StoreToken) return { getTransactions };
+      throw new Error('unexpected token');
+    });
+    return { injector: { get } as unknown as Injector, listProfiles, getInputs, getTransactions, load, get };
+  }
+
+  function askDays(
+    injector: Injector,
+    extra: { from?: string; to?: string; deadlineMs?: number; signal?: AbortSignal } = {},
+  ): Promise<BudgetKeptDaysResult> {
+    return loadFinanceBudgetKeptDays(injector, extra.signal ?? new AbortController().signal, {
+      from: extra.from ?? '2026-10-01',
+      to: extra.to ?? '2026-10-03',
+      deadlineMs: extra.deadlineMs ?? 1000,
+    });
+  }
+
+  it('returns locked and does not import crypto or call the vault when the key is absent', async () => {
+    localStorage.removeItem(DEK_STORE);
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const get = jasmine.createSpy('get').and.throwError('vault should not be read');
+    expect(await askDays({ get } as unknown as Injector)).toEqual({ status: 'locked' });
+    expect(load).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('returns cancelled without importing crypto when the signal is already aborted', async () => {
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const ctrl = new AbortController();
+    ctrl.abort();
+    const unread = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    expect(await askDays(unread, { signal: ctrl.signal })).toEqual({ status: 'cancelled' });
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('ranks locked above no_plan above no_data above ready', async () => {
+    const purchase = [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })];
+    expect(await askDays(unlock({ profiles: [], txs: [] }).injector)).toEqual({ status: 'no_plan' });
+    expect(await askDays(unlock({ profiles: [manualDays], txs: [] }).injector)).toEqual({ status: 'no_data' });
+    const ready = await askDays(unlock({ profiles: [manualDays], txs: purchase }).injector);
+    expect(ready.status).toBe('ready');
+  });
+
+  it('returns no_plan for a plan of 0 even when transactions exist', async () => {
+    const zero = unlock({
+      profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: 0 })],
+      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
+    });
+    expect(await askDays(zero.injector)).toEqual({ status: 'no_plan' });
+    const negative = unlock({
+      profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'manual', annual: -50 })],
+      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
+    });
+    expect(await askDays(negative.injector)).toEqual({ status: 'no_plan' });
+  });
+
+  it('returns ready with one row per day in the inclusive range', async () => {
+    const { injector } = unlock({
+      profiles: [manualDays],
+      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
+    });
+    const result = await askDays(injector);
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.annualPlan).toBe(PLAN_DAYS);
+    expect(result.monthlyPlan).toBe(100);
+    expect(result.mode).toBe('manual');
+    expect(result.days.map(row => row.date)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03']);
+    expect(result.days[0].spend).toBeNull();
+    expect(result.days[0].kept).toBeNull();
+    expect(result.days[1].spend).toBe(5);
+    expect(result.days[1].kept).toBeTrue();
+    expect(result.days[2].spend).toBe(5);
+    expect(Object.keys(result).sort()).toEqual(['annualPlan', 'days', 'mode', 'monthlyPlan', 'status']);
+    expect(Object.keys(result.days[0]).sort()).toEqual(['date', 'kept', 'pace', 'spend']);
+  });
+
+  it('resolves a recurring plan through resolveAnnualPlan', async () => {
+    const { injector } = unlock({
+      profiles: [profile({ id: 1, updated_at: '2026-08-01T00:00:00.000Z', mode: 'recurring', annual: 99999 })],
+      planInputs: inputs(4800, 100),
+      txs: [tx({ id: 1, date: '2026-10-02', amount: 5, kind: 'purchase' })],
+    });
+    const result = await askDays(injector);
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.annualPlan).toBe(4800);
+    expect(result.monthlyPlan).toBe(400);
+    expect(result.mode).toBe('recurring');
+  });
+
+  it('returns unavailable when the read passes the deadline', async () => {
+    const { injector } = unlock({
+      profiles: [manualDays],
+      getTransactions: () => new Promise(() => undefined),
+    });
+    expect(await askDays(injector, { deadlineMs: 30 })).toEqual({ status: 'unavailable' });
+  });
+
+  it('returns cancelled when the signal aborts during the read', async () => {
+    let markStarted!: () => void;
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const { injector } = unlock({
+      profiles: [manualDays],
+      getTransactions: () => {
+        markStarted();
+        return new Promise(() => undefined);
+      },
+    });
+    const ctrl = new AbortController();
+    const pending = askDays(injector, { signal: ctrl.signal, deadlineMs: 5000 });
+    await started;
+    ctrl.abort();
+    expect(await pending).toEqual({ status: 'cancelled' });
+  });
+
+  it('returns expired when the vault read is a 401', async () => {
+    const { injector } = unlock({
+      profiles: [manualDays],
+      getTransactions: () => Promise.reject(new HttpErrorResponse({ status: 401 })),
+    });
+    expect(await askDays(injector)).toEqual({ status: 'expired' });
+  });
+
+  it('throws RangeError synchronously for a bad range and does not import', () => {
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    expect(() => askDays(injector, { from: 'not-a-date' })).toThrowError(RangeError, /from and to/);
+    expect(() => askDays(injector, { to: '2026-02-31' })).toThrowError(RangeError, /from and to/);
+    expect(() => askDays(injector, { from: '2026-10-03', to: '2026-10-01' })).toThrowError(RangeError, /from must not be after to/);
+    expect(() => askDays(injector, { from: '2016-01-01', to: '2026-12-31' })).toThrowError(RangeError, /at most/);
+    expect(load).not.toHaveBeenCalled();
+  });
+});
+
 describe('loadFinanceBudgetKeptGuarded', () => {
   const opts = { today: '2026-10-14', weeks: 1, deadlineMs: 1000 };
   const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
@@ -824,6 +1090,48 @@ describe('loadFinanceBudgetKeptGuarded', () => {
       loadFinanceBudgetKept: () => Promise.resolve({ status: 'no_plan' }),
     });
     expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
+      .toEqual({ status: 'no_plan' });
+    expect(load).toHaveBeenCalled();
+  });
+});
+
+describe('loadFinanceBudgetKeptDaysGuarded', () => {
+  const dayOpts = { from: '2026-10-01', to: '2026-10-03', deadlineMs: 1000 };
+  const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+
+  it('returns cancelled and does not import when the signal is already aborted', async () => {
+    const load = jasmine.createSpy('load').and.returnValue(new Promise(() => undefined));
+    const ctrl = new AbortController();
+    ctrl.abort();
+    expect(await loadFinanceBudgetKeptDaysGuarded(injector, ctrl.signal, dayOpts, load)).toEqual({ status: 'cancelled' });
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('throws RangeError synchronously for a bad range or deadline and does not import', () => {
+    const load = jasmine.createSpy('load').and.returnValue(new Promise(() => undefined));
+    const signal = new AbortController().signal;
+    expect(() => loadFinanceBudgetKeptDaysGuarded(injector, signal, { ...dayOpts, from: 'not-a-date' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptDaysGuarded(injector, signal, { ...dayOpts, to: '2026-02-31' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptDaysGuarded(injector, signal, { ...dayOpts, from: '2026-10-03', to: '2026-10-01' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptDaysGuarded(injector, signal, { ...dayOpts, deadlineMs: Number.NaN }, load))
+      .toThrowError(RangeError);
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable when the import fails', async () => {
+    const load = jasmine.createSpy('load').and.rejectWith(new Error('chunk failed'));
+    expect(await loadFinanceBudgetKeptDaysGuarded(injector, new AbortController().signal, dayOpts, load))
+      .toEqual({ status: 'unavailable' });
+  });
+
+  it('returns the loaded module result when the import succeeds', async () => {
+    const load = jasmine.createSpy('load').and.resolveTo({
+      loadFinanceBudgetKeptDays: () => Promise.resolve({ status: 'no_plan' }),
+    });
+    expect(await loadFinanceBudgetKeptDaysGuarded(injector, new AbortController().signal, dayOpts, load))
       .toEqual({ status: 'no_plan' });
     expect(load).toHaveBeenCalled();
   });

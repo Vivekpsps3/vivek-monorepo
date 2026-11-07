@@ -43,6 +43,7 @@ class PlatformBoundaryTests(unittest.TestCase):
 
     def test_domain_uses_only_declared_platform_contracts(self):
         source = Path("apps/travel/backend/routers/integrations.py")
+        self.assertTrue(self.allowed(source, "apps.server.path_ids"))
         for module in ("apps.server.auth", "apps.server.database", "apps.server.errors"):
             self.assertTrue(self.allowed(source, module), module)
         for module in (

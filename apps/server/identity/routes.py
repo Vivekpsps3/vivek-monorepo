@@ -6,6 +6,7 @@ import hashlib
 import logging
 import secrets
 from datetime import timedelta
+from typing import Annotated
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -72,6 +73,7 @@ from apps.server.identity.signup_gate import (
     username_allowlisted,
 )
 from apps.server.identity.username_policy import stored_username
+from apps.server.path_ids import bounded_path_id
 from apps.server.rate_limit import (
     enforce_account_rate_limit,
     enforce_login_pair_limit,
@@ -620,7 +622,7 @@ def _ensure_not_last_admin(
 
 @router.patch("/admin/users/{user_id}", response_model=UserPublic)
 def admin_update_user(
-    user_id: int,
+    user_id: Annotated[int, bounded_path_id("User not found")],
     body: AdminUserUpdate,
     db: Session = Depends(get_db, scope="function"),
     admin: User = Depends(get_current_admin),
@@ -648,7 +650,7 @@ def admin_update_user(
 
 @router.delete("/admin/users/{user_id}")
 def admin_delete_user(
-    user_id: int,
+    user_id: Annotated[int, bounded_path_id("User not found")],
     db: Session = Depends(get_db, scope="function"),
     admin: User = Depends(get_current_admin),
 ):
@@ -665,7 +667,7 @@ def admin_delete_user(
 
 @router.post("/admin/users/{user_id}/reset-contents")
 def admin_reset_user_contents(
-    user_id: int,
+    user_id: Annotated[int, bounded_path_id("User not found")],
     body: AdminUserContentReset,
     db: Session = Depends(get_db, scope="function"),
     admin: User = Depends(get_current_admin),
@@ -702,7 +704,7 @@ def _issue_enrollment(db: Session, user: User, admin: User) -> str:
 
 @router.post("/admin/users/{user_id}/revoke-sessions")
 def admin_revoke_sessions(
-    user_id: int,
+    user_id: Annotated[int, bounded_path_id("User not found")],
     request: Request,
     db: Session = Depends(get_db, scope="function"),
     admin: User = Depends(get_current_admin),
@@ -725,7 +727,7 @@ def admin_revoke_sessions(
 
 @router.post("/admin/users/{user_id}/enrollment", response_model=AdminInvitationResponse)
 def admin_reissue_enrollment(
-    user_id: int,
+    user_id: Annotated[int, bounded_path_id("User not found")],
     db: Session = Depends(get_db, scope="function"),
     admin: User = Depends(get_current_admin),
 ):

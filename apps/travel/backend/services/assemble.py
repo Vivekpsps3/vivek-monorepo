@@ -577,6 +577,9 @@ def build_home(db, today: date | None = None, *, user_id: int) -> dict:
     for item in in_progress + upcoming:
         item["days_until"] = _days_until(item["start_date"], today)
         item["next_action"] = _next_action(item["phase"], item["days_until"])
+    for item in past:
+        item["days_until"] = None
+        item["next_action"] = None
     attention = []
     for item in in_progress + upcoming:
         attention.extend(attention_for(item))

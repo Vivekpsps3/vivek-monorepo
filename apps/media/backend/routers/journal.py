@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -22,6 +22,7 @@ from apps.media.backend.services.summary import build_summary
 from apps.media.backend.services.validate import clean_text
 from apps.server.auth import Principal, require_principal
 from apps.server.database import release_for_provider_io
+from apps.server.path_ids import bounded_path_id
 
 router = APIRouter()
 
@@ -144,7 +145,7 @@ def create_from_provider(
 
 @router.get("/entries/{entry_id}")
 def read_entry(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -167,7 +168,7 @@ def _discography_artist(db: Session, user_id: int, entry_id: int):
 
 @router.get("/entries/{entry_id}/discography")
 def discography(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     group_offset: int = Query(0, ge=0, le=10000),
     release_offset: int = Query(0, ge=0, le=10000),
     release: str = "studio",
@@ -256,7 +257,7 @@ def discography(
 
 @router.post("/entries/{entry_id}/discography")
 def save_discography_item(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -271,7 +272,7 @@ def save_discography_item(
 
 @router.patch("/entries/{entry_id}")
 def patch_entry(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -283,7 +284,7 @@ def patch_entry(
 
 @router.get("/entries/{entry_id}/portraits")
 def portrait_search(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     q: str,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -294,7 +295,7 @@ def portrait_search(
 
 @router.put("/entries/{entry_id}/portrait")
 def portrait_select(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -306,7 +307,7 @@ def portrait_select(
 
 @router.delete("/entries/{entry_id}/portrait")
 def portrait_reset(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -317,7 +318,7 @@ def portrait_reset(
 
 @router.post("/entries/{entry_id}/refresh")
 def refresh_metadata(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -328,7 +329,7 @@ def refresh_metadata(
 
 @router.post("/entries/{entry_id}/link-metadata")
 def link_metadata(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -342,7 +343,7 @@ def link_metadata(
 
 @router.post("/entries/{entry_id}/caught-up")
 def catch_up(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -354,7 +355,7 @@ def catch_up(
 
 @router.post("/entries/{entry_id}/caught-up/{token}/undo")
 def undo_catch_up(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     token: str,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -366,7 +367,7 @@ def undo_catch_up(
 
 @router.delete("/entries/{entry_id}")
 def delete_entry(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -402,7 +403,7 @@ def delete_entry(
 
 @router.post("/entries/{entry_id}/albums")
 def add_album(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -418,8 +419,8 @@ def add_album(
 
 @router.post("/entries/{entry_id}/albums/{album_id}/tracks")
 def add_track(
-    entry_id: int,
-    album_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
+    album_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -435,8 +436,8 @@ def add_track(
 
 @router.post("/entries/{entry_id}/albums/{album_id}/rating")
 def rate_album(
-    entry_id: int,
-    album_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
+    album_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -452,8 +453,8 @@ def rate_album(
 
 @router.post("/entries/{entry_id}/tracks/{track_id}/rating")
 def rate_track(
-    entry_id: int,
-    track_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
+    track_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -469,7 +470,7 @@ def rate_track(
 
 @router.post("/entries/{entry_id}/seasons")
 def save_season(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -485,7 +486,7 @@ def save_season(
 
 @router.post("/entries/{entry_id}/episodes")
 def add_episode(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -499,8 +500,8 @@ def add_episode(
 
 @router.post("/entries/{entry_id}/episodes/{episode_id}/watched")
 def watched(
-    entry_id: int,
-    episode_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
+    episode_id: Annotated[int, bounded_path_id("That episode is not on this show.")],
     body: dict,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -545,7 +546,7 @@ def _expected_episode_id(payload: object) -> int | None:
 
 @router.post("/entries/{entry_id}/episodes/next")
 def next_episode(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     # Any, not dict: a typed body is validated before this function, which would
     # turn a foreign id plus a JSON scalar into 422 instead of the library 404.
     body: Any = Body(default=None),
@@ -563,7 +564,7 @@ def next_episode(
 
 @router.get("/entries/{entry_id}/web")
 def entry_web(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That item is not in your library.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):

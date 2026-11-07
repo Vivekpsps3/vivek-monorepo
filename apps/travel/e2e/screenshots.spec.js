@@ -99,13 +99,12 @@ for (const width of widths) for (const theme of themes) {
     await expect(page.getByText('Tea garden', { exact: false })).toBeVisible();
     await shot('calendar-populated');
     await page.goto('/travel/pto');
-    const policy = page.locator('form').filter({ has: page.getByLabel('Known balance (days)') });
-    await policy.getByLabel('Known balance (days)').fill('12.5');
-    await policy.getByLabel('Balance date').fill('2026-10-01');
-    await policy.getByLabel('Accrual amount').fill('1.25');
+    await page.getByLabel('Starting balance').fill('12.5');
+    await page.getByLabel('Balance as of').fill('2026-10-01');
+    await page.getByLabel('You earn').fill('1.25');
     await shot('pto-filled');
-    await page.getByRole('button', { name: 'Save PTO policy' }).click();
-    await expect(page.locator('main [role=status]')).toContainText('PTO saved');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
     await shot('pto-success');
     await page.goto('/travel/settings');
     await page.getByLabel('New FlightAware API key').fill('synthetic-key-1234');
