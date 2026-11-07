@@ -3,9 +3,9 @@
 set -euo pipefail
 umask 077
 root="$(cd "$(dirname "$0")/.." && pwd)"
-release="${1:?Usage: deploy-site.sh <tested-sha> <image.tar.gz>}"
-archive="${2:?Image artifact required}"
+release="${1:?Usage: deploy-site.sh <tested-sha>}"
 [[ "$release" =~ ^[0-9a-f]{40}$ ]]
+test "$(git -C "$root" rev-parse HEAD)" = "$release"
 read -r -a docker_cmd <<< "${DOCKER_COMMAND:-docker}"
 env_file="${SITE_ENV_FILE:-/dev/null}"
 exec 9>/tmp/personal-site-deploy.lock
@@ -16,8 +16,8 @@ previous="$("${docker_cmd[@]}" inspect personal-site-site-1 --format '{{.Image}}
 if [[ -n "$previous" ]]; then
   "${docker_cmd[@]}" run --rm --network none "$previous" cat /app/compose.yml > "$scratch/previous.yml"
 fi
-gzip -dc "$archive" | "${docker_cmd[@]}" load
 image="personal-site:$release"
+"${docker_cmd[@]}" build --build-arg "SITE_RELEASE=$release" --tag "$image" "$root"
 actual="$("${docker_cmd[@]}" image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
 test "$actual" = "$release"
 printf 'SITE_IMAGE=%s\n' "$image" > "$scratch/image.env"

@@ -21,7 +21,16 @@ export type UiIconName =
   | 'users'
   | 'shield'
   | 'alert'
-  | 'lock';
+  | 'lock'
+  | 'more'
+  | 'check'
+  | 'close'
+  | 'film'
+  | 'tv'
+  | 'book'
+  | 'music'
+  | 'game'
+  | 'search';
 
 /** Lucide-style 24×24 stroke icons (currentColor). */
 const PATHS: Record<UiIconName, string> = {
@@ -48,6 +57,15 @@ const PATHS: Record<UiIconName, string> = {
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   alert: 'M12 8v5M12 17h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
   lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z',
+  more: 'M5 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M17 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
+  close: 'M6 6l12 12M18 6L6 18',
+  film: 'M4 5h16v14H4zM8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4',
+  tv: 'M3 7h18v12H3zM8 3l4 4 4-4',
+  book: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 21H20',
+  music: 'M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0',
+  game: 'M6 9h12a4 4 0 0 1 4 4v1a3 3 0 0 1 4 4v1a3 3 0 0 1-5.4 1.8L15 14H9l-1.6 1.8A3 3 0 0 1 2 14v-1a4 4 0 0 1 4-4zM7 11.5v3M5.5 13h3M16 12h.01M18 14h.01',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16M21 21l-4.3-4.3',
 };
 
 @Component({

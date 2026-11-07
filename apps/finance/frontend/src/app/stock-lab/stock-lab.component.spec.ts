@@ -1,4 +1,8 @@
-import { Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { Holding } from '../models/transaction.model';
+import { MarketResearchResponse } from '../models/stock-lab.model';
+import { FinanceService } from '../services/finance.service';
 import { StockLabComponent } from './stock-lab.component';
 
 describe('StockLabComponent', () => {
@@ -68,7 +72,7 @@ describe('StockLabComponent', () => {
     const { component, toast } = lab({ market });
     component.loadMarketData(false);
     failed.error({ error: { detail: 'Unexpected synthetic endpoint /api/market/research/batch' }, message: 'Http failure' });
-    expect(component.error).toBe("Couldn't load market data. Try again.");
+    expect(component.error).toBe("Market data couldn't be loaded. Check your connection and try again.");
     expect(component.error).not.toContain('Unexpected');
     expect(component.error).not.toContain('Http failure');
     expect(toast.error).not.toHaveBeenCalled();
@@ -81,7 +85,7 @@ describe('StockLabComponent', () => {
     const { component, toast } = lab({ market });
     component.loadMarketData(false);
     batch.next({ results: [], failed: [{ symbol: 'VOO', error: 'Unexpected synthetic endpoint' }] });
-    expect(component.error).toBe("Couldn't load market data. Try again.");
+    expect(component.error).toBe("Market data couldn't be loaded. Check your connection and try again.");
     expect(String(component.error)).not.toContain('Unexpected');
     expect(toast.error).not.toHaveBeenCalled();
   });
@@ -108,5 +112,54 @@ describe('StockLabComponent', () => {
     await component.deleteScenario();
     expect(component.error).toBe("Couldn't delete this scenario.");
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('StockLabComponent F7 no-fetch behaviour', () => {
+  function labWithHoldings() {
+    const market = jasmine.createSpyObj('MarketResearchService', ['getBatch']);
+    const scenarios = jasmine.createSpyObj('StockLabScenarioService', ['createDefaultScenario', 'list']);
+    scenarios.createDefaultScenario.and.returnValue({
+      id: 0, primary_symbol: 'VOO', comparison_symbols: [], selected_owned_symbols: [], include_owned_symbols: false,
+    });
+    scenarios.list.and.resolveTo([]);
+    const finance = {
+      holdings$: new Subject<Holding[]>(),
+      getHoldings: () => of<Holding[]>([]),
+    } as unknown as FinanceService;
+    const toast = {} as unknown as ToastService;
+    const component = new StockLabComponent(
+      market, scenarios, finance, toast,
+      jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck'])
+    );
+    return { market, scenarios, component };
+  }
+
+  it('does not fetch market data on init', async () => {
+    const { market, component } = labWithHoldings();
+    component.ngOnInit();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(market.getBatch).not.toHaveBeenCalled();
+    component.ngOnDestroy();
+  });
+
+  it('renders the saved-quote line from a saved holding and feeds the saved price to the purchase plan', () => {
+    const { component } = labWithHoldings();
+    component.holdings = [{
+      id: 1, symbol: 'VOO', shares: 2, purchase_price: 90, purchase_date: null, current_price: 111,
+      price_source: 'manual', price_as_of: '2026-10-30T20:24:00Z',
+    }];
+    expect(component.savedQuoteLine).toBe('Saved price for VOO: 111 · Oct 30, 1:24 PM PT');
+    component.research = [{
+      symbol: 'VOO', valid: true, source: 'synthetic', fetched_at: '', cache_status: 'hit',
+      warnings: [], profile: null, quote: null, history: [], dividends: [], splits: [], fundamentals: null,
+      etf: null, analyst: null,
+    } satisfies MarketResearchResponse];
+    component.scenario = {
+      ...component.scenario, purchase_mode: 'shares', shares: 2, budget: 0, target_price: 0,
+      projection_years: 0, base_growth_rate: 0, custom_growth_rate: null,
+      dividend_growth_rate: 0, reinvest_dividends: false, tax_drag: 0, fee_drag: 0, inflation_rate: 0,
+    };
+    expect(component.purchasePlan?.position_value).toBe(222);
   });
 });

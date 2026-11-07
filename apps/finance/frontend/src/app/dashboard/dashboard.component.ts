@@ -3,7 +3,9 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { RouterLink } from '@angular/router';
 import { formatDate, formatDay, formatRelativeDay, todayIsoDate } from '@vivek/browser';
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { ChartsComponent } from '../charts/charts.component';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import {
   Asset,
   CashflowSummary,
@@ -16,7 +18,6 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
-import { SESSION_CONTEXT, UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
   dueSoon as dueSoonItems,
   firstSteps as firstStepsFor,
@@ -24,6 +25,11 @@ import {
   type DueItem,
   type FirstStep,
 } from '../utils/home-summary';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { monthlyCashflowSeries } from '../crypto/client-finance';
+import { monthDelta, type MonthDelta } from '../utils/category-spend';
+import { FinanceGuideService } from '../core/finance-guide.service';
+import { UiButtonComponent, UiCardComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
   actualQuoteDate,
   hasUnvaluedPositions,
@@ -47,6 +53,7 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiButtonComponent,
     UiCardComponent,
     UiIconComponent,
+    UiPageHeaderComponent,
     UiSkeletonComponent,
   ],
   templateUrl: './dashboard.component.html',
@@ -67,10 +74,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
   error: string | null = null;
   showSkeleton = false;
   firstStepsHidden = false;
+  /** One-time ticker-privacy notice, shown after the first automatic check. */
+  priceNoticeVisible = false;
+  /** True when the user turned automatic price checks off. */
+  autoPricesOff = false;
 
-  private readonly session = inject(SESSION_CONTEXT, { optional: true });
+  protected readonly guide = inject(FinanceGuideService);
+
   private skeletonTimer: ReturnType<typeof setTimeout> | null = null;
   private destroy$ = new Subject<void>();
+  private readonly marketRefresh = inject(MarketRefreshCoordinatorService, { optional: true });
+  private readonly pricePrefs = inject(FinancePricePrefsService, { optional: true });
+  private readonly session = inject(SESSION_CONTEXT, { optional: true });
 
   constructor(
     private finance: FinanceService,
@@ -102,8 +117,28 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.subscriptions = subscriptions;
         this.cdr.markForCheck();
       });
+    const userId = this.session?.currentUser?.id;
+    if (userId != null && this.pricePrefs) this.autoPricesOff = !this.pricePrefs.autoCheck(userId);
+    this.marketRefresh?.firstAutoCheck$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      const id = this.session?.currentUser?.id;
+      if (id != null && this.pricePrefs && !this.pricePrefs.noticeSeen(id)) {
+        this.priceNoticeVisible = true;
+        this.cdr.markForCheck();
+      }
+    });
     this.load();
     this.readFirstStepsHidden();
+  }
+
+  dismissPriceNotice(): void {
+    const userId = this.session?.currentUser?.id;
+    if (userId != null) this.pricePrefs?.markNoticeSeen(userId);
+    this.priceNoticeVisible = false;
+    this.cdr.markForCheck();
+  }
+
+  refreshPrices(): void {
+    void this.marketRefresh?.refreshNow();
   }
 
   ngOnDestroy(): void {
@@ -123,12 +158,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.cashflow?.total_income ?? 0;
   }
 
-  get incomeOccurrences() {
-    return this.cashflow?.income_occurrences ?? [];
+  /** Current month key, e.g. '2026-11'. */
+  get currentMonth(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
 
+  get monthName(): string {
+    const now = new Date();
+    return now.toLocaleString('en-US', { month: 'long' });
+  }
+
+  /** Posted spend this month (recorded view; scheduled bills excluded). */
   get monthSpend(): number {
-    return this.cashflow?.total_expenses ?? 0;
+    return monthlyCashflowSeries([this.currentMonth], this.transactions, this.jobIncomes, this.fixedExpenses, this.subscriptions, 'recorded')[0]?.expense ?? 0;
+  }
+
+  /** Scheduled spend still to come this month, reported separately. */
+  get monthScheduled(): number {
+    return monthlyCashflowSeries([this.currentMonth], this.transactions, this.jobIncomes, this.fixedExpenses, this.subscriptions, 'scheduled')[0]?.expense ?? 0;
+  }
+
+  /** Like-for-like delta against the same window last month. */
+  get spendDelta(): MonthDelta {
+    return monthDelta(this.transactions, this.currentMonth);
+  }
+
+  get incomeOccurrences() {
+    return this.cashflow?.income_occurrences ?? [];
   }
 
   get monthNet(): number {
@@ -215,8 +272,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get showFirstSteps(): boolean {
     if (this.isStarterState) return true;
-    // F6 seam: `|| this.guide.firstStepsRequested()` once FinanceGuideService lands on main.
-    return !this.firstStepsHidden && this.firstStepsDoneCount < 4;
+    return this.guide.firstStepsRequested() || (!this.firstStepsHidden && this.firstStepsDoneCount < 4);
   }
 
   get today(): string {
@@ -234,7 +290,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } catch {
       // Private mode: hide for this page session only.
     }
-    // F6 seam: this.guide.clear() once FinanceGuideService lands on main.
+    this.guide.clear();
     this.cdr.markForCheck();
   }
 

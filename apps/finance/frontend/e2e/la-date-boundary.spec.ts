@@ -29,17 +29,17 @@ test('today and default dates stay on the Los Angeles day when UTC is already th
   await expect(page.locator('.day.today')).toHaveAttribute('aria-label', LA_TODAY);
 
   await vault.open('/spending?t=activity');
-  await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await page.locator('ui-page-header').getByRole('button', { name: 'Add transaction', exact: true }).click();
   const transaction = page.getByRole('dialog', { name: 'Add transaction' });
   await expect(transaction.getByLabel('Date', { exact: true })).toHaveValue(LA_TODAY);
 
   await vault.open('/have?t=holdings');
-  await page.getByRole('button', { name: 'Add Holding', exact: true }).click();
+  await page.getByRole('button', { name: 'Add holding', exact: true }).click();
   const holding = page.getByRole('dialog', { name: 'Add holding' });
   await expect(holding.getByLabel('Purchase date', { exact: true })).toHaveValue(LA_TODAY);
 
   await vault.open('/have?t=assets');
-  await page.locator('ui-page-header').getByRole('button', { name: 'Add asset', exact: true }).click();
+  await page.getByRole('button', { name: 'Add asset', exact: true }).click();
   const asset = page.getByRole('dialog', { name: 'Add asset' });
   await expect(asset.getByLabel(/^As of\b/)).toHaveValue(LA_TODAY);
 });

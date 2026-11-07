@@ -3,13 +3,14 @@ import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
-import { UiIconComponent, UserMenuContent } from '@vivek/ui';
+import { UiIconComponent, UiStateComponent, UserMenuContent, safeNextPathFrom } from '@vivek/ui';
 import { SessionService } from './platform/session.service';
+import { SearchDialogComponent } from './search/search-dialog.component';
 
 @Component({
   selector: 'suite-private-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, AsyncPipe, NgTemplateOutlet, UiIconComponent],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, AsyncPipe, NgTemplateOutlet, UiIconComponent, SearchDialogComponent, UiStateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './private-layout.component.html',
   styleUrl: './private-layout.component.css',
@@ -19,6 +20,32 @@ export class PrivateLayoutComponent {
   readonly featureMenu = inject(UserMenuContent);
   readonly menuOpen = signal(false);
   readonly switcherOpen = signal(false);
+  readonly searchOpen = signal(false);
+  readonly isMac = typeof navigator !== 'undefined'
+    && /mac/i.test(navigator.platform || navigator.userAgent);
+  readonly searchShortcutTitle = this.isMac ? 'Search (⌘ K)' : 'Search (Ctrl K)';
+
+  @ViewChild(SearchDialogComponent) private searchDialog?: SearchDialogComponent;
+
+  /** Ctrl-K / ⌘-K opens search from anywhere in the layout, fields included. */
+  @HostListener('document:keydown', ['$event'])
+  onSearchShortcut(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.openSearch();
+    }
+  }
+
+  openSearch(): void {
+    this.closeMenu(false);
+    this.closeSwitcher(false);
+    this.searchOpen.set(true);
+    this.searchDialog?.onOpened();
+  }
+
+  closeSearch(): void {
+    this.searchOpen.set(false);
+  }
   readonly apps = [
     { label: 'Hub', href: '/hub', exact: true },
     { label: 'Finance', href: '/finance', exact: false },
@@ -184,5 +211,14 @@ export class PrivateLayoutComponent {
 
   get home(): string {
     return this.appName === 'Apps' || this.appName === 'Hub' ? '/hub' : `/${this.appName.toLowerCase()}/`;
+  }
+
+  /**
+   * Return path for the session-ended sign-in: the current URL when it is a
+   * safe same-origin relative path (the login page's own validation),
+   * otherwise the Hub.
+   */
+  get sessionEndedNext(): string {
+    return safeNextPathFrom(this.router.url) ?? '/hub';
   }
 }

@@ -1,5 +1,5 @@
 self-hosted-runner:
   labels:
-    - finance-prod
+    - monorepo-prod
     - monorepo-ci
     - monorepo-ci-release

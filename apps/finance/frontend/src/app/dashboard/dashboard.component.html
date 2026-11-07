@@ -1,4 +1,11 @@
 <div class="page dashboard">
+  <ui-page-header title="Home" />
+  @if (!isLoading && !error && priceNoticeVisible) {
+    <div class="price-notice" role="status">
+      <p>Prices checked automatically. Only ticker symbols are sent.</p>
+      <ui-button variant="ghost" size="sm" (clicked)="dismissPriceNotice()">Got it</ui-button>
+    </div>
+  }
   @if (!isLoading && !error && netWorth && isStarterState && !incomeOccurrences.length) {
     <section class="home-empty" aria-labelledby="home-empty-title">
       <h2 id="home-empty-title">Start with one number</h2>
@@ -16,6 +23,7 @@
         <a routerLink="/finance/have" class="home-tile home-tile--balance">
           <span class="home-tile__topline">Net worth <span class="home-tile__arrow" aria-hidden="true">→</span></span>
           <span class="home-tile__value money">{{ have | money }}</span>
+          @if (autoPricesOff) { <span class="home-status">Automatic price checks are off</span> }
 
           <dl class="balance-breakdown">
             <div>
@@ -49,9 +57,12 @@
         </div>
       }
 
+      @if (autoPricesOff) {
+        <ui-button variant="secondary" size="sm" class="home-refresh-prices" (clicked)="refreshPrices()">Refresh prices</ui-button>
+      }
       @if (hasMonthActivity) {
         <a routerLink="/finance/spending" class="home-tile home-tile--activity">
-          <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+          <span class="home-tile__topline">{{ monthName }} <span class="home-tile__arrow" aria-hidden="true">→</span></span>
           <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
           <span class="home-split">
             <span>
@@ -59,10 +70,17 @@
               <strong class="money">{{ monthPay | money }}</strong>
             </span>
             <span>
-              <small>Spending</small>
-              <strong class="money negative">{{ monthSpend | money }}</strong>
+              <small>Spent</small>
+              <strong class="money">{{ monthSpend | money }}</strong>
+            </span>
+            <span>
+              <small>Scheduled</small>
+              <strong class="money">{{ monthScheduled | money }}</strong>
             </span>
           </span>
+          @if (spendDelta; as delta) {
+            <span class="home-status">{{ delta.delta >= 0 ? '+' : '−' }}{{ (delta.delta >= 0 ? delta.delta : -delta.delta) | money }} {{ delta.label }}</span>
+          }
         </a>
       } @else {
         <div class="home-tile home-tile--activity home-tile--empty">
