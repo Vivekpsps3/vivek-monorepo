@@ -222,6 +222,44 @@ describe('MarketRefreshCoordinatorService', () => {
     expect(finance.applyMarketQuoteForSymbol).not.toHaveBeenCalled();
   });
 
+  // CI3: at 17:30 PDT on Thursday 2026-10-15, Los Angeles is on 2026-10-15
+  // while UTC is on 2026-10-16. The future-quote guard must read the Los
+  // Angeles calendar day (the decided day semantics), not the UTC day.
+  it('applies a quote dated the Los Angeles day during the Los Angeles evening', async () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-15T17:30:00-07:00'));
+    try {
+      finance.getConfiguredMarketSymbols.and.resolveTo(['AAPL']);
+      finance.lookupSharePrice.and.returnValue(of(quote('AAPL', { quote_date: '2026-10-15' })));
+      const finished = waitForFinished();
+      coordinator.startForSession(7, 11);
+      const state = await finished;
+
+      expect(state.phase).toBe('complete');
+      expect(finance.applyMarketQuoteForSymbol).toHaveBeenCalledTimes(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('rejects a quote dated after the Los Angeles day during the Los Angeles evening', async () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-15T17:30:00-07:00'));
+    try {
+      finance.getConfiguredMarketSymbols.and.resolveTo(['AAPL']);
+      finance.lookupSharePrice.and.returnValue(of(quote('AAPL', { quote_date: '2026-10-17' })));
+      const finished = waitForFinished();
+      coordinator.startForSession(7, 11);
+      const state = await finished;
+
+      expect(state.phase).toBe('failed');
+      expect(state.failures[0].message).toContain('future trading date');
+      expect(finance.applyMarketQuoteForSymbol).not.toHaveBeenCalled();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('does not apply a quote after the vault session changes while the request is pending', async () => {
     finance.getConfiguredMarketSymbols.and.resolveTo(['AAPL']);
     const pending = new Subject<any>();
