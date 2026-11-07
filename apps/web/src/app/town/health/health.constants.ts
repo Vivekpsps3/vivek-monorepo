@@ -1,8 +1,8 @@
-export const HEALTH_XP = Object.freeze({ statEntry: 5, labEntry: 5, checkup: 10, prEntry: 5, newPr: 15 });
-export const HEALTH_DAILY_CAP = Object.freeze({ clinic: 15, gym: 30 });
+export const HEALTH_XP = Object.freeze({ statEntry: 5, labEntry: 5, checkup: 10, prEntry: 5, newPr: 15 } as const);
+export const HEALTH_DAILY_CAP = Object.freeze({ clinic: 15, gym: 30 } as const);
 // Historical contract name: this is kilograms per pound, multiplied by lb input.
-export const LB_PER_KG = Object.freeze(0.45359237);
-export const METRES_PER_MILE = Object.freeze(1609.344);
+export const LB_PER_KG = Object.freeze(0.45359237 as const);
+export const METRES_PER_MILE = Object.freeze(1609.344 as const);
 export const HEALTH_LIMITS = Object.freeze({
   weight: Object.freeze([20, 400] as const), rhr: Object.freeze([25, 220] as const),
   sys: Object.freeze([60, 260] as const), dia: Object.freeze([30, 160] as const),
@@ -11,13 +11,13 @@ export const HEALTH_LIMITS = Object.freeze({
   liftKg: Object.freeze([0, 600] as const), reps: Object.freeze([1, 50] as const),
   prRepsMax: 12, distanceM: Object.freeze([100, 400000] as const),
   seconds: Object.freeze([1, 259200] as const), measuredOnMin: '1900-01-01',
-});
-export const RUN_DISTANCES = Object.freeze({ '5k': 5000, '10k': 10000, half: 21097.5, full: 42195 });
-export const RUN_TOLERANCE = Object.freeze(1.02);
-export const PLATE_THRESHOLDS = Object.freeze({ 135: 61.235, 225: 102.058, 315: 142.882, 405: 183.705 });
+} as const);
+export const RUN_DISTANCES = Object.freeze({ '5k': 5000, '10k': 10000, half: 21097.5, full: 42195 } as const);
+export const RUN_TOLERANCE = Object.freeze(1.02 as const);
+export const PLATE_THRESHOLDS = Object.freeze({ 135: 61.235, 225: 102.058, 315: 142.882, 405: 183.705 } as const);
 export const PR_BEATEN_THRESHOLDS = Object.freeze([1, 5, 10, 25, 50] as const);
 export const LOGGED_WEEK_THRESHOLDS = Object.freeze([4, 12, 26, 52] as const);
-export const HEALTH_BADGE_NAMES = Object.freeze({
+export const HEALTH_BADGES = Object.freeze({
   first_pr_lift: 'First lift PR',
   first_pr_run: 'first_pr_run', // TODO(design): name
   first_pr_other: 'first_pr_other', // TODO(design): name
@@ -38,4 +38,4 @@ export const HEALTH_BADGE_NAMES = Object.freeze({
   logged_weeks_12: '12-week logger',
   logged_weeks_26: 'logged_weeks_26', // TODO(design): name
   logged_weeks_52: 'logged_weeks_52', // TODO(design): name
-});
+} as const);
