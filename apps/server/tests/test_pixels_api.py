@@ -10,9 +10,9 @@ from sqlalchemy import text
 
 from apps.server.pixels import router as pixels_router
 from apps.server.pixels.schemas import PixelsResponse
-from apps.server.town.models import TownBase
 from apps.server.tests.test_birthday_route import _call, _user
 from apps.server.tests.test_composition import _app
+from apps.server.town.models import TownBase
 
 
 def _open(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -198,14 +198,20 @@ def test_profile_only_with_profile_1(tmp_path: Path, monkeypatch: pytest.MonkeyP
     db.close()
     with TestClient(application) as client:
         plain = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31", "token-a")
-        zero = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31&profile=0", "token-a")
-        with_profile = _call(client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31&profile=1", "token-a")
+        zero = _call(
+            client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31&profile=0", "token-a"
+        )
+        with_profile = _call(
+            client, "get", "/api/pixels?from=2026-01-01&to=2026-01-31&profile=1", "token-a"
+        )
     assert "profile" not in plain.json()
     assert "profile" not in zero.json()
     assert with_profile.json()["profile"] == {"birthday": "1990-05-04", "show_age": True}
 
 
-def test_absent_town_table_leaves_other_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_absent_town_table_leaves_other_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     application, database = _seeded(tmp_path, monkeypatch)
     db = database.sessionmaker()
     db.execute(text("DROP TABLE habit_checkins"))
@@ -225,7 +231,9 @@ def test_absent_town_table_leaves_other_sources(tmp_path: Path, monkeypatch: pyt
     assert body["first_activity_on"] == "2026-01-03"
 
 
-def test_unavailable_media_leaves_other_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unavailable_media_leaves_other_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     application, _database = _seeded(tmp_path, monkeypatch)
 
     def boom(*args, **kwargs):
