@@ -404,7 +404,7 @@ jobs:
           path: |
             image.tar.gz
             release.sha
-          retention-days: 14
+          retention-days: 3
 
   e2e:
     name: Finance Playwright
@@ -448,4 +448,4 @@ jobs:
           path: |
             apps/finance/frontend/test-results
             apps/finance/frontend/playwright-report
-          retention-days: 7
+          retention-days: 3

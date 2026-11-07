@@ -94,7 +94,10 @@ use GitHub storage. The first local release job passed its build, seeded schema
 rehearsals, and browser checks, then GitHub rejected the release artifact because
 its storage quota was full. Release images are now packaged and uploaded only
 for main pushes, the only artifacts Deploy consumes; PR builds still run all
-release checks. Old archives were cleaned up separately, retaining the newest
+release checks. Release images and Playwright traces expire after three days
+using artifact-specific retention; log and check-history retention is unchanged.
+This applies to newly uploaded artifacts; existing archives keep their original
+expiry dates. Old archives were cleaned up separately, retaining the newest
 three main releases. GitHub storage accounting can take 6–12 hours to reflect
 deletion. Runner parallelism does not remove storage quotas. No tests or
 deployment verification gates are disabled by this setup.
