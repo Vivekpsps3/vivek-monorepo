@@ -9,28 +9,17 @@
   </ui-page-header>
 
   @if (!compensationTracking) {
-  <section class="income-summary">
-    <div>
-      <p class="section-eyebrow">Yearly pay</p>
-      <div class="stat-display money">{{ activeAnnualNet | money }}</div>
-      <p class="summary-caption">
-        {{ activeMonthlyTotal | money }} each month
-      </p>
-    </div>
-    <div class="income-summary-metrics">
-      <div class="summary-pill">
-        <span>Gross</span>
-        <strong class="money">{{ activeAnnualTotal | money }}</strong>
-      </div>
-      <div class="summary-pill">
-        <span>Taxes/deductions</span>
-        <strong class="money">−{{ activeAnnualAdjustments | money }}</strong>
-      </div>
-      <div class="summary-pill">
-        <ui-icon name="wallet" size="sm" />
-        <span>{{ incomes.length }} {{ incomes.length === 1 ? 'job' : 'jobs' }}</span>
-      </div>
-    </div>
+  <section class="income-summary" aria-label="Pay summary">
+    <p class="income-summary__headline">Yearly pay <strong class="money">{{ activeAnnualTotal | money }}</strong> before taxes</p>
+    <p class="summary-caption">about {{ activeMonthlyGross | money }} a month</p>
+    @if (activeHasTaxes) {
+      <dl class="income-summary__metrics">
+        <div><dt>Take-home</dt><dd class="money">{{ activeAnnualNet | money }}</dd></div>
+        <div><dt>Taxes and deductions</dt><dd class="money">{{ activeAnnualAdjustments | money }}</dd></div>
+      </dl>
+    } @else {
+      <p class="income-summary__unset">Take-home: not set · <button type="button" class="link-button" (click)="addTaxes()">Add taxes and deductions</button></p>
+    }
   </section>
   }
 

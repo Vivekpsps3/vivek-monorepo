@@ -28,16 +28,9 @@
     <div class="stock-actions-row">
       <ui-button variant="primary" (clicked)="loadMarketData(false)" [disabled]="loading">Analyze</ui-button>
       <ui-button variant="secondary" (clicked)="loadMarketData(true)" [disabled]="loading">Refresh market data</ui-button>
-      <ui-button variant="secondary" (clicked)="saveScenario()" [disabled]="saving">Save encrypted scenario</ui-button>
-      <ui-button
-        variant="ghost"
-        (clicked)="deleteScenario()"
-        [ariaDisabled]="!scenario.id"
-        [describedBy]="!scenario.id ? 'delete-scenario-hint' : undefined">
-        Delete scenario
-      </ui-button>
-      @if (!scenario.id) {
-        <small id="delete-scenario-hint" class="stock-lock-hint">Save this scenario first to delete it.</small>
+      <ui-button variant="secondary" (clicked)="saveScenario()" [disabled]="saving">Save scenario</ui-button>
+      @if (scenario.id) {
+        <ui-button variant="ghost" (clicked)="deleteScenario()">Delete scenario</ui-button>
       }
     </div>
   </ui-card>
@@ -49,7 +42,7 @@
         <p class="stock-name">{{ item.profile?.name || 'Unavailable' }}</p>
         <strong class="stock-price">{{ formatMoney(item.quote?.current_price) }}</strong>
         <p>1Y price / total: {{ formatPct(calculateReturnPeriods(item).at(2)?.price_return_pct) }} / {{ formatPct(calculateReturnPeriods(item).at(2)?.total_return_pct) }}</p>
-        <small>{{ cachePhrase(item.cache_status) }} · {{ item.fetched_at | appDate:'table' }}</small>
+        <small>{{ priceAsOf(item.fetched_at) }}</small>
       </ui-card>
     }
   </section>
@@ -67,6 +60,7 @@
   </ui-card>
 
   @if (primaryResearch; as primary) {
+    <p class="result-line">{{ primary.symbol }} {{ formatMoney(primary.quote?.current_price) }} · {{ priceAsOf(primary.fetched_at) }}</p>
     <section class="stock-main-grid">
       <ui-card [title]="'Headline snapshot'">
         <div class="metric-grid">

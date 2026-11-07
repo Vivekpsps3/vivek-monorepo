@@ -24,6 +24,8 @@ import {
 } from '../utils/portfolio.util';
 import { MoneyPipe } from '@vivek/ui';
 import { AppDatePipe } from '@vivek/ui';
+import { formatDate } from '@vivek/browser';
+import { incomeRowSubtitle, incomeRowTitle } from '../utils/income-row-copy';
 import { PluralPipe } from '../shared/pipes/plural.pipe';
 
 @Component({
@@ -108,6 +110,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get incomeOccurrences() {
     return this.cashflow?.income_occurrences ?? [];
+  }
+
+  /** F18: Home rows read "<Employer> paycheck" with a cadence subtitle. */
+  get incomeRows() {
+    return this.incomeOccurrences.map(row => ({
+      ...row,
+      title: incomeRowTitle(row),
+      subtitle: [row.date ? formatDate(row.date, 'table') : 'No date', incomeRowSubtitle(row)].join(' · '),
+    }));
   }
 
   get monthSpend(): number {

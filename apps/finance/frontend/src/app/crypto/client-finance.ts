@@ -444,9 +444,15 @@ export function computeCashflowSummary(
     name: string,
     detail: string,
     amount: number,
+    paydayFrequency?: string,
   ) => {
     const rounded = money(amount);
-    if (rounded !== 0) income_occurrences.push({ id, date, kind, label, name, detail, amount: rounded });
+    if (rounded !== 0) {
+      income_occurrences.push({
+        id, date, kind, label, name, detail, amount: rounded,
+        ...(paydayFrequency ? { payday_frequency: paydayFrequency } : {}),
+      });
+    }
   };
   for (const tx of transactions) {
     if (tx.date < start || tx.date > end) continue;
@@ -489,6 +495,7 @@ export function computeCashflowSummary(
             employer,
             `${row.payday_frequency} pay schedule · estimated net`,
             estimatedPaycheckNet(row, date),
+            row.payday_frequency ?? undefined,
           );
         });
         const proratedDays = employmentDays / 365.25;

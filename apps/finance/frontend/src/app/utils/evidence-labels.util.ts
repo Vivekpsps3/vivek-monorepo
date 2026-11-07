@@ -42,14 +42,15 @@ export function planningEvidenceCards(opts: {
 export function stockLabEvidenceCards(opts: {
   primarySymbol: string;
   hasQuote: boolean;
-  cacheStatus?: string | null;
+  /** F18: "as of …" phrase for the loaded quote; no cache vocabulary. */
+  asOf?: string | null;
 }): EvidenceCard[] {
   return [
     {
       kind: 'fact',
       label: 'Public market data',
       detail: opts.hasQuote
-        ? `Quote/history for ${opts.primarySymbol || 'ticker'} from public research (${opts.cacheStatus || 'fetched'}). Ticker symbols are disclosed to the backend.`
+        ? `Quote/history for ${opts.primarySymbol || 'ticker'} from public research${opts.asOf ? ` (${opts.asOf})` : ''}. Ticker symbols are disclosed to the backend.`
         : 'No quote loaded yet. Analyze to fetch public market data (discloses ticker symbols).',
     },
     {

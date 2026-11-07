@@ -36,9 +36,9 @@
     <ui-card class="api-banner-card" padding="none">
       <div class="api-banner" role="alert">
         <ui-icon name="spark" size="sm" />
-        <strong class="api-banner__title">Can't reach Finance right now</strong>
-        <span class="api-banner__detail">Your records stay in this browser. Retry the connection when you are ready.</span>
-        <ui-button variant="secondary" size="sm" [disabled]="apiRetrying" (clicked)="retryConnection()">{{ apiRetrying ? 'Retrying…' : 'Retry' }}</ui-button>
+        <strong class="api-banner__title">Can't reach Finance right now.</strong>
+        <span class="api-banner__detail">Check your connection and try again.</span>
+        <ui-button variant="secondary" size="sm" [disabled]="apiRetrying" (clicked)="retryConnection()">{{ apiRetrying ? 'Trying again…' : 'Try again' }}</ui-button>
       </div>
     </ui-card>
   </div>

@@ -1,4 +1,5 @@
 import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { IncomeComponent } from './income.component';
 import { FinanceService } from '../services/finance.service';
@@ -105,5 +106,64 @@ describe('IncomeComponent compensation editing', () => {
     expect(component.manualPriceNotice[3]).toContain('Manual price could not be saved');
     expect(component.manualPriceNotice[3]).not.toContain('Synthetic');
     expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.any(Object), true);
+  });
+});
+
+describe('IncomeComponent pay summary (F18)', () => {
+  const job = (overrides: Partial<JobIncome> = {}): JobIncome => ({
+    id: 1, employer: 'Acme', pay_frequency: 'monthly', base_pay: 10000,
+    effective_date: '2026-01-01', end_date: null, is_active: true,
+    annual_gross: 120000, annual_net: 90000, annual_taxes: 25000, annual_deductions: 5000,
+    ...overrides,
+  } as JobIncome);
+
+  async function render(rows: JobIncome[]): Promise<{ component: IncomeComponent; el: HTMLElement }> {
+    const finance = jasmine.createSpyObj('FinanceService', ['getJobIncomes'], {
+      jobIncomes$: of(rows),
+    });
+    finance.getJobIncomes.and.returnValue(of(rows));
+    const market = jasmine.createSpyObj('MarketRefreshCoordinatorService', ['refreshSymbol']);
+    const toast = jasmine.createSpyObj('ToastService', ['error', 'success']);
+    await TestBed.configureTestingModule({
+      imports: [IncomeComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: MarketRefreshCoordinatorService, useValue: market },
+        { provide: ConfirmService, useValue: {} },
+        { provide: ToastService, useValue: toast },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(IncomeComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return { component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
+  }
+
+  it('renders gross first with the take-home pair', async () => {
+    const { el } = await render([job()]);
+    // Money formatting inserts a word joiner after the currency symbol.
+    const text = (el.querySelector('.income-summary')?.textContent ?? '').replace(/⁠/g, '');
+    expect(text).toContain('Yearly pay');
+    expect(text).toContain('$120,000.00');
+    expect(text).toContain('before taxes');
+    expect(text).toContain('about $10,000.00 a month');
+    expect(text).toContain('Take-home');
+    expect(text).toContain('$90,000.00');
+    expect(text).toContain('Taxes and deductions');
+    expect(text).toContain('$30,000.00');
+    expect(text).not.toContain('Gross');
+    expect(text).not.toContain('each month');
+  });
+
+  it('zero taxes render the not-set line and addTaxes opens the first untaxed current job', async () => {
+    const { component, el } = await render([
+      job({ id: 1, annual_taxes: 0, annual_deductions: 0, annual_net: 120000 }),
+    ]);
+    const text = el.querySelector('.income-summary')?.textContent ?? '';
+    expect(text).toContain('Take-home: not set');
+    const openSpy = spyOn(component, 'openEditModal');
+    component.addTaxes();
+    expect(openSpy).toHaveBeenCalledWith(jasmine.objectContaining({ id: 1 }));
   });
 });

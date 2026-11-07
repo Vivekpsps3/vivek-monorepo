@@ -8,10 +8,9 @@ import { UiButtonComponent, UiCardComponent, UiPageHeaderComponent } from '@vive
   imports: [RouterLink, UiButtonComponent, UiCardComponent, UiPageHeaderComponent],
   template: `
     <div class="page not-found-page">
-      <ui-page-header [title]="'Page not found'" subtitle="This location is not available in your finance workspace." />
+      <ui-page-header [title]="'Page not found'" subtitle="This page isn't part of Finance." />
       <ui-card>
-        <p>Return to Home to see current balances and this month's cashflow.</p>
-        <ui-button routerLink="/finance/">Go to dashboard</ui-button>
+        <ui-button routerLink="/finance/">Go to Home</ui-button>
       </ui-card>
     </div>
   `,
