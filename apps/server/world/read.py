@@ -11,11 +11,12 @@ import re
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from apps.server.errors import APIError
 from apps.server.town.models import Habit, HabitCheckin
+from apps.server.world.models import WorldConcept
 
 INVALID_TZ_MESSAGE = "Your time zone wasn't recognized."
 INVALID_RANGE_MESSAGE = "That range of weeks isn't available."
@@ -30,6 +31,7 @@ START_WEEK_FLOOR_WEEKS = 519
 
 _habits = Habit.__table__
 _checkins = HabitCheckin.__table__
+_concepts = WorldConcept.__table__
 
 
 def monday_of(day: date) -> date:
@@ -80,14 +82,50 @@ def start_week_from_candidates(candidates: list[date], today: date, current_week
     return max(monday_of(earliest), floor)
 
 
+def _has_concepts_table(db: Session) -> bool:
+    """One probe statement: a partially built database (a single-domain
+    test fixture) may not carry world_concepts yet; it reads as empty."""
+    names = db.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'")).scalars()
+    return "world_concepts" in set(names)
+
+
+def read_concepts(db: Session, user_id: int, from_: date, to_end: date) -> list:
+    """Understood concepts in range, ordered (understood_on, id).
+
+    Archived-but-understood concepts still appear; deleted ones are gone.
+    """
+    return list(
+        db.execute(
+            select(_concepts.c.id, _concepts.c.name, _concepts.c.understood_on)
+            .where(
+                _concepts.c.user_id == user_id,
+                _concepts.c.understood_on.is_not(None),
+                _concepts.c.understood_on >= from_,
+                _concepts.c.understood_on <= to_end,
+            )
+            .order_by(_concepts.c.understood_on, _concepts.c.id)
+        ).all()
+    )
+
+
 def read_world(db: Session, user_id: int, today: date, from_: date, to: date) -> dict:
     """Build the WorldResponse payload (as plain dicts) for one owner."""
     current_week = monday_of(today)
 
+    has_concepts = _has_concepts_table(db)
     earliest_created = db.execute(
         select(func.min(_habits.c.created_on)).where(_habits.c.user_id == user_id)
     ).scalar_one()
     candidates = [earliest_created] if earliest_created is not None else []
+    if has_concepts:
+        earliest_understood = db.execute(
+            select(func.min(_concepts.c.understood_on)).where(
+                _concepts.c.user_id == user_id,
+                _concepts.c.understood_on.is_not(None),
+            )
+        ).scalar_one()
+        if earliest_understood is not None:
+            candidates.append(earliest_understood)
     start_week = start_week_from_candidates(candidates, today, current_week)
 
     meta = {
@@ -114,18 +152,20 @@ def read_world(db: Session, user_id: int, today: date, from_: date, to: date) ->
         )
         .order_by(_checkins.c.habit_id, _checkins.c.day)
     ).all()
-    if not rows:
-        return {"meta": meta, "weeks": []}
 
     habit_ids = sorted({row.habit_id for row in rows})
-    habit_rows = db.execute(
-        select(
-            _habits.c.id,
-            _habits.c.name,
-            _habits.c.building_style,
-            _habits.c.archived_at,
-        ).where(_habits.c.id.in_(habit_ids))
-    ).all()
+    habit_rows = (
+        db.execute(
+            select(
+                _habits.c.id,
+                _habits.c.name,
+                _habits.c.building_style,
+                _habits.c.archived_at,
+            ).where(_habits.c.id.in_(habit_ids))
+        ).all()
+        if habit_ids
+        else []
+    )
     habits_by_id = {
         row.id: {
             "habit_id": row.id,
@@ -141,12 +181,27 @@ def read_world(db: Session, user_id: int, today: date, from_: date, to: date) ->
         week = monday_of(row.day)
         days_by_week_habit.setdefault(week, {}).setdefault(row.habit_id, []).append(row.day)
 
+    concepts_by_week: dict[date, list[dict]] = {}
+    if has_concepts:
+        for row in read_concepts(db, user_id, from_, min(to_end, today)):
+            concepts_by_week.setdefault(monday_of(row.understood_on), []).append(
+                {"id": row.id, "name": row.name, "on": row.understood_on}
+            )
+
     weeks = []
-    for week in sorted(days_by_week_habit):
+    for week in sorted(set(days_by_week_habit) | set(concepts_by_week)):
         habits = [
             {**habits_by_id[habit_id], "days": days_by_week_habit[week][habit_id]}
-            for habit_id in sorted(days_by_week_habit[week])
+            for habit_id in sorted(days_by_week_habit.get(week, {}))
             if habit_id in habits_by_id
         ]
-        weeks.append({"week": week, "trips": [], "finished": [], "habits": habits, "concepts": []})
+        weeks.append(
+            {
+                "week": week,
+                "trips": [],
+                "finished": [],
+                "habits": habits,
+                "concepts": concepts_by_week.get(week, []),
+            }
+        )
     return {"meta": meta, "weeks": weeks}
