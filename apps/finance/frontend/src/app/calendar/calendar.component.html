@@ -5,7 +5,7 @@
 
   <div class="calendar-toolbar">
     <ui-button variant="secondary" size="sm" ariaLabel="Previous month" (clicked)="prevMonth()"><ui-icon name="chevron-left" size="sm" /></ui-button>
-    <h2 class="calendar-month">{{ getMonthName() }}</h2>
+    <h2 class="calendar-month" aria-live="polite">{{ getMonthName() }}</h2>
     <ui-button variant="secondary" size="sm" ariaLabel="Next month" (clicked)="nextMonth()"><ui-icon name="chevron-right" size="sm" /></ui-button>
     <ui-button variant="secondary" size="sm" (clicked)="goToday()">Today</ui-button>
   </div>
@@ -30,11 +30,8 @@
         <strong>{{ monthSummary.activeDays }}</strong>
       </div>
     </div>
-    @if (undatedEstimateTotal || cashflowSummary?.income_overlap_adjustment) {
+    @if (cashflowSummary?.income_overlap_adjustment) {
     <p class="month-income-note">
-      @if (undatedEstimateTotal) {
-        Undated job estimates: {{ undatedEstimateTotal | money }}.
-      }
       @if (cashflowSummary?.income_overlap_adjustment) {
         The monthly total includes an aggregate possible-overlap adjustment of
         {{ cashflowSummary!.income_overlap_adjustment < 0 ? '−' : '+' }}{{ (cashflowSummary!.income_overlap_adjustment < 0 ? -cashflowSummary!.income_overlap_adjustment : cashflowSummary!.income_overlap_adjustment) | money }}; it is not assigned to a specific date.
@@ -58,6 +55,106 @@
       </details>
     }
   </section>
+
+  <div class="calendar-layout" [class.calendar-layout--open]="selectedDate">
+  <div class="calendar-grid" role="grid" [attr.aria-label]="getMonthName()">
+    <div class="cal-row" role="row">
+      @for (day of weekdays; track day; let i = $index) {
+        <div class="weekday" role="columnheader" [attr.aria-label]="weekdayNames[i]">{{ day }}</div>
+      }
+    </div>
+
+    @for (week of weeks; track $index) {
+      <div class="cal-row" role="row">
+        @for (day of week; track $index) {
+          @if (!day.date) {
+            <div class="day empty-day" role="gridcell" aria-hidden="true"></div>
+          } @else {
+            <button
+              type="button"
+              class="day day-btn"
+              role="gridcell"
+              [attr.data-date]="day.date"
+              [class.has-tx]="day.hasTransactions"
+              [class.selected]="day.date === selectedDate"
+              [class.today]="day.isToday"
+              [attr.tabindex]="day.date === rovingDate ? 0 : -1"
+              [attr.aria-label]="dayAriaLabel(day)"
+              [attr.aria-selected]="day.date === selectedDate"
+              [attr.aria-current]="day.isToday ? 'date' : null"
+              (click)="selectDay(day)"
+              (keydown)="onDayKeydown($event, day)"
+            >
+              <span class="day-number">{{ +day.date.slice(8) }}</span>
+              @if (dayNet(day) !== 0) {
+                <span class="day-amt" [class.day-amt--income]="dayNet(day) > 0">{{ dayNet(day) | money:'whole':'always' }}</span>
+              }
+              @if (dayScheduled(day) > 0) {
+                <span class="cal-scheduled-dot" aria-hidden="true"></span>
+              }
+            </button>
+          }
+        }
+      </div>
+    }
+  </div>
+
+  <section class="day-detail" aria-labelledby="day-detail-heading" #dayDetail [class.day-detail--empty]="!selectedDate">
+    @if (selectedDate) {
+      <h3 id="day-detail-heading" class="day-detail__heading" tabindex="-1" #dayHeading>{{ selectedHeading }}</h3>
+      @if (hasDayItems) {
+        @if (selectedTransactions.length) {
+          <h4 class="day-detail__section">Posted</h4>
+          @for (tx of selectedTransactions; track tx.id) {
+            <a class="tx-item tx-item-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.description || tx.category || 'transaction') + ' from ' + selectedShortDate">
+              @if (transactionEffects(tx).spending < 0) {
+                <ui-badge variant="success">Refund</ui-badge>
+              } @else if (transactionEffects(tx).income > 0) {
+                <ui-badge variant="success">Income</ui-badge>
+              }
+              <span class="desc-main">{{ tx.merchant || tx.description }}</span>
+              <span class="category">{{ tx.category }}</span>
+              <span class="amount" [class.positive]="transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0">{{ transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0 ? '+' : transactionEffects(tx).spending > 0 ? '−' : '' }}{{ tx.amount | money }}</span>
+              <span class="calendar-edit-hint">Edit</span>
+            </a>
+          }
+        }
+        @if (selectedPlans.length) {
+          <h4 class="day-detail__section">Scheduled</h4>
+          @for (item of selectedPlans; track item.name + item.date + item.amount) {
+            <a class="tx-item tx-item-link" [routerLink]="['/finance/recurring']" [queryParams]="{ t: 'spend' }" [attr.aria-label]="'Edit repeating ' + item.name">
+              <ui-badge variant="default">Not posted</ui-badge>
+              <span class="desc-main">{{ item.name }}</span>
+              <span class="category">{{ item.category }}</span>
+              <span class="amount">−{{ item.amount | money }}</span>
+              <span class="calendar-edit-hint">Edit</span>
+            </a>
+          }
+        }
+        @if (selectedIncomeOccurrences.length) {
+          <h4 class="day-detail__section">Income</h4>
+          @for (item of selectedIncomeOccurrences; track item.id) {
+            <div class="tx-item income-event">
+              <ui-badge variant="success">{{ item.label }}</ui-badge>
+              <span class="category">{{ item.name }}</span>
+              <span class="amount" [class.positive]="item.amount > 0" [class.negative]="item.amount < 0">{{ item.amount | money:'standard':'always' }}</span>
+              <span class="desc">{{ item.detail }}</span>
+            </div>
+          }
+        }
+      } @else {
+        <p class="day-detail__empty">Nothing on {{ selectedShortDate }}.</p>
+      }
+      <a class="calendar-cta" [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction on {{ selectedShortDate }}</a>
+    } @else {
+      <p class="day-detail__hint">Select a day to see what posted, what's scheduled and what came in.</p>
+    }
+  </section>
+  </div>
+
+  @if (undatedEstimateTotal) {
+    <p class="calendar-undated-note">{{ undatedEstimateTotal | money }} of estimated pay has no date, so it isn't on the calendar.</p>
+  }
 
   <div class="month-charts">
     <ui-card [title]="'Category breakdown'">
@@ -103,92 +200,8 @@
           }
         </ol>
       } @else {
-        <ui-empty-state message="No purchases this month." />
+        <ui-empty-state [message]="'No purchases in ' + monthOnlyName + '.'" />
       }
     </ui-card>
   </div>
-
-  <div class="calendar-grid" role="grid" aria-label="Calendar month view">
-    @for (day of weekdays; track day) {
-      <div class="weekday" role="columnheader">{{ day }}</div>
-    }
-
-    @for (day of daysInMonth; track $index; let i = $index) {
-      @if (!day.date) {
-        <div class="day empty-day" role="gridcell"></div>
-      } @else {
-        <button
-          type="button"
-          class="day day-btn"
-          role="gridcell"
-          [class.has-tx]="day.hasTransactions"
-          [class.selected]="day.date === selectedDate"
-          [class.today]="day.isToday"
-          [attr.aria-label]="day.date + (day.hasTransactions ? ', has income or spending activity' : '')"
-          [attr.aria-selected]="day.date === selectedDate"
-          (click)="selectDay(day)"
-          (keydown)="onDayKeydown($event, day, i)"
-        >
-          <span class="day-number">{{ day.date.split('-')[2] }}</span>
-          @if (day.income !== 0) {
-            <span class="day-amt" [class.day-amt--income]="day.income > 0" [class.day-amt--negative]="day.income < 0">{{ day.income | money:'standard':'always' }}</span>
-          }
-          @if (day.expense > 0) {
-            <span class="day-amt day-amt--expense">−{{ day.expense | money }}</span>
-          } @else if (day.hasTransactions && day.income === 0) {
-            <span class="dot" aria-hidden="true"></span>
-          }
-        </button>
-      }
-    }
-  </div>
-
-  @if (selectedDate) {
-    <ui-card>
-      <div class="selected-header">
-        <h3>{{ selectedDate }}</h3>
-        <a class="calendar-cta" [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction</a>
-      </div>
-      @if (selectedTransactions.length || selectedPlans.length || selectedIncomeOccurrences.length) {
-        <p class="day-net">
-          Source net for day, before monthly overlap adjustment:
-          <span [class.positive]="dayTotal() >= 0" [class.negative]="dayTotal() < 0">
-            {{ dayTotal() >= 0 ? '+' : '' }}{{ dayTotal() | money }}
-          </span>
-        </p>
-      }
-      @if (selectedTransactions.length || selectedPlans.length || selectedIncomeOccurrences.length) {
-        @for (item of selectedIncomeOccurrences; track item.id) {
-          <div class="tx-item income-event">
-            <ui-badge variant="success">{{ item.label }}</ui-badge>
-            <span class="category">{{ item.name }}</span>
-            <span class="amount" [class.positive]="item.amount > 0" [class.negative]="item.amount < 0">{{ item.amount | money:'standard':'always' }}</span>
-            <span class="desc">{{ item.detail }}</span>
-          </div>
-        }
-        @for (tx of selectedTransactions; track tx.id) {
-          <a class="tx-item tx-item-link" [routerLink]="['/finance/spending']" [queryParams]="transactionActivityQuery(tx.id)" [attr.aria-label]="'Edit ' + (tx.merchant || tx.category || 'transaction') + ' from ' + tx.date">
-            <ui-badge [variant]="transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ tx.kind || tx.type }}</ui-badge>
-            <span class="category">{{ tx.category }}</span>
-            <span class="amount" [class.positive]="transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0">
-              {{ transactionEffects(tx).income > 0 || transactionEffects(tx).spending < 0 ? '+' : transactionEffects(tx).spending > 0 ? '−' : '' }}{{ tx.amount | money }}
-            </span>
-            <span class="desc">{{ tx.description }}</span>
-            <span class="calendar-edit-hint">Edit</span>
-          </a>
-        }
-        @for (item of selectedPlans; track item.name + item.date + item.amount) {
-          <a class="tx-item tx-item-link" [routerLink]="['/finance/recurring']" [queryParams]="{ t: 'spend' }" [attr.aria-label]="'Edit repeating ' + item.name">
-            <ui-badge variant="default">Repeats</ui-badge>
-            <span class="category">{{ item.category }}</span>
-            <span class="amount">−{{ item.amount | money }}</span>
-            <span class="desc">{{ item.name }}</span>
-            <span class="calendar-edit-hint">Edit</span>
-          </a>
-        }
-      } @else {
-        <ui-empty-state message="Nothing on this day." />
-      }
-    </ui-card>
-  }
 </div>
