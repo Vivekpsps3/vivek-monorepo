@@ -10,7 +10,7 @@
       <div>
         <span>Current net worth</span>
         <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
-        <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }">Open assets and debts</a>
+        <a routerLink="/finance/have">Open assets and debts</a>
         <small>Oldest valid balance date: {{ inputs?.oldest_balance_as_of | appDate }}</small>
       </div>
       <div>
@@ -25,7 +25,7 @@
       <div>
         <span>Annual take-home pay</span>
         <strong>{{ formatMoney((inputs?.avg_monthly_income || 0) * 12) }}</strong>
-        <a routerLink="/finance/recurring" [queryParams]="{ t: 'pay' }">Open jobs and pay</a>
+        <a routerLink="/finance/recurring">Open jobs and pay</a>
         <small>Active job-income schedules</small>
       </div>
       <div>
@@ -64,7 +64,7 @@
   <div class="planning-question">
     <label class="mc-field">
       <span>What are you trying to decide?</span>
-      <select aria-label="Planning question" [ngModel]="activeTool" (ngModelChange)="setTool($event)">
+      <select name="activeTool" aria-label="Planning question" [ngModel]="activeTool" (ngModelChange)="setTool($event)">
         <option value="overview">See my current picture</option>
         <option value="simulation">Try a what-if scenario</option>
         <option value="retirement-target">Can I retire or take time off?</option>
@@ -96,7 +96,7 @@
       <div class="mc-control-grid">
         <label class="mc-field">
           <span>Spending basis</span>
-          <select aria-label="Spending basis" [ngModel]="spendingMode" (ngModelChange)="onSpendingModeChange($event)">
+          <select name="spendingMode" aria-label="Spending basis" [ngModel]="spendingMode" (ngModelChange)="onSpendingModeChange($event)">
             <option value="recurring">Active recurring schedules</option>
             <option value="components">Fixed + variable + irregular components</option>
             <option value="manual">One manual annual total</option>
@@ -107,22 +107,22 @@
         <div class="mc-control-grid">
           <label class="mc-field">
             <span>Fixed annual spending </span>
-            <input aria-label="Fixed annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.fixed_annual" (ngModelChange)="setSpendingComponent('fixed_annual', $event)" />
+            <input name="fixed_annual" aria-label="Fixed annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.fixed_annual" (ngModelChange)="setSpendingComponent('fixed_annual', $event)" />
           </label>
           <label class="mc-field">
             <span>Variable annual spending</span>
-            <input aria-label="Variable annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.variable_annual" (ngModelChange)="setSpendingComponent('variable_annual', $event)" />
+            <input name="variable_annual" aria-label="Variable annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.variable_annual" (ngModelChange)="setSpendingComponent('variable_annual', $event)" />
           </label>
           <label class="mc-field">
             <span>Irregular annual spending </span>
-            <input aria-label="Irregular annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.irregular_annual" (ngModelChange)="setSpendingComponent('irregular_annual', $event)" />
+            <input name="irregular_annual" aria-label="Irregular annual spending" type="number" min="0" step="100" [ngModel]="effectiveSpendingComponents.irregular_annual" (ngModelChange)="setSpendingComponent('irregular_annual', $event)" />
           </label>
         </div>
         <p class="tool-metric" aria-label="Composed annual spending">Composed annual spending: {{ formatMoney(componentAnnualSpending) }}</p>
       } @else if (spendingMode === 'manual') {
         <label class="mc-field">
           <span>Manual annual spending</span>
-          <input aria-label="Manual annual spending" type="number" min="0" step="100" [(ngModel)]="assumptions.annual_spending" />
+          <input name="annual_spending" aria-label="Manual annual spending" type="number" min="0" step="100" [(ngModel)]="assumptions.annual_spending" />
         </label>
       }
 
@@ -135,7 +135,7 @@
           }
           @for (account of spendingAccounts; track account.account_key) {
             <label class="mc-check">
-              <input type="checkbox" [attr.aria-label]="'Select account ' + account.display_name" [checked]="isSelected(selectedSpendingAccountKeys, account.account_key)" (change)="toggleSpendingAccount(account.account_key, $any($event.target).checked)" />
+              <input name="togglespendingaccount" type="checkbox" [attr.aria-label]="'Select account ' + account.display_name" [checked]="isSelected(selectedSpendingAccountKeys, account.account_key)" (change)="toggleSpendingAccount(account.account_key, $any($event.target).checked)" />
               <span>{{ account.display_name }} · {{ account.account_mask }}</span>
             </label>
           }
@@ -144,7 +144,7 @@
           <legend>Categories</legend>
           @for (category of availableSpendingCategories; track category) {
             <label class="mc-check">
-              <input type="checkbox" [attr.aria-label]="'Select category ' + (category === '*' ? 'All spending categories' : category)" [checked]="isSelected(selectedSpendingCategories, category)" (change)="toggleSpendingCategory(category, $any($event.target).checked)" />
+              <input name="togglespendingcategory" type="checkbox" [attr.aria-label]="'Select category ' + (category === '*' ? 'All spending categories' : category)" [checked]="isSelected(selectedSpendingCategories, category)" (change)="toggleSpendingCategory(category, $any($event.target).checked)" />
               <span>{{ category === '*' ? 'All spending categories' : category }}</span>
             </label>
           }
@@ -154,7 +154,7 @@
             <legend>Exclude charges already represented in recurring schedules</legend>
             @for (tx of recurringExclusionCandidates; track tx.id) {
               <label class="mc-check">
-                <input type="checkbox" [checked]="isSelected(excludedRecurringTransactionIds, tx.id)" (change)="toggleRecurringExclusion(tx.id, $any($event.target).checked)" />
+                <input name="togglerecurringexclusion" type="checkbox" [checked]="isSelected(excludedRecurringTransactionIds, tx.id)" (change)="toggleRecurringExclusion(tx.id, $any($event.target).checked)" />
                 <span>{{ tx.date | appDate }} · {{ tx.merchant || tx.description || tx.category }} · {{ formatMoney(tx.amount) }}</span>
               </label>
             }
@@ -229,7 +229,7 @@
       <div class="mc-profiles-row">
         <label class="mc-field">
           <span>Load saved inputs</span>
-          <select [value]="selectedProfileId ?? ''" (change)="onProfileSelected($any($event.target).value)">
+          <select name="selectedprofileid" [value]="selectedProfileId ?? ''" (change)="onProfileSelected($any($event.target).value)">
             <option value="">None (custom session)</option>
             @for (p of profiles; track p.id) {
               <option [value]="p.id">{{ p.name }}</option>
@@ -238,7 +238,7 @@
         </label>
         <label class="mc-field mc-field--grow">
           <span>Name</span>
-          <input type="text" [(ngModel)]="savedInputName" placeholder="e.g. Retirement baseline" maxlength="120" [attr.aria-invalid]="savedInputError ? true : null" />
+          <input name="savedInputName" type="text" [(ngModel)]="savedInputName" placeholder="e.g. Retirement baseline" maxlength="120" [attr.aria-invalid]="savedInputError ? true : null" />
           @if (savedInputError) {
             <span class="mc-field-error">{{ savedInputError }}</span>
           }
@@ -299,11 +299,11 @@
           <div class="mc-control-grid">
             <label class="mc-field">
               <span>Horizon</span>
-              <input type="number" min="1" max="80" [(ngModel)]="horizonYears" />
+              <input name="horizonYears" type="number" min="1" max="80" [(ngModel)]="horizonYears" />
             </label>
             <label class="mc-field">
               <span>Paths </span>
-              <input
+              <input name="nPaths"
                 type="number"
                 [min]="mcNPathsMin"
                 [max]="mcNPathsMax"
@@ -314,18 +314,18 @@
             <label class="mc-field mc-field--seed">
               <span>Seed</span>
               <div class="mc-seed-row">
-                <input type="number" [(ngModel)]="seed" />
+                <input name="seed" type="number" [(ngModel)]="seed" />
                 <ui-button variant="secondary" (clicked)="randomizeSeed()">Randomize</ui-button>
               </div>
             </label>
           </div>
           <label class="mc-check">
-            <input type="checkbox" [(ngModel)]="useLedgerStartingNetWorth" />
+            <input name="useLedgerStartingNetWorth" type="checkbox" [(ngModel)]="useLedgerStartingNetWorth" />
             <span>Use ledger net worth at start</span>
           </label>
           <label class="mc-field">
             <span>Starting net worth </span>
-            <input
+            <input name="net-worth-total-startingnetworth"
               type="number"
               step="1000"
               [readonly]="useLedgerStartingNetWorth"
@@ -354,11 +354,11 @@
                 <div class="mc-editor-row">
                   <label class="mc-field mc-field--wide">
                     <span>Name</span>
-                    <input type="text" [(ngModel)]="event.label" />
+                    <input name="label" type="text" [(ngModel)]="event.label" />
                   </label>
                   <label class="mc-field">
                     <span>Amount (each time)</span>
-                    <input type="number" step="1000" [(ngModel)]="event.amount" />
+                    <input name="amount" type="number" step="1000" [(ngModel)]="event.amount" />
                   </label>
                   <div class="mc-row-action">
                     <ui-button variant="danger" size="sm" (clicked)="removeEvent($index)">Remove</ui-button>
@@ -373,12 +373,12 @@
           <summary>Advanced assumptions and event details</summary>
         <ui-card [title]="'Cash flow'">
           <label class="mc-check">
-            <input type="checkbox" [ngModel]="useTxIncome" (ngModelChange)="setUseTxIncome($event)" />
+            <input name="useTxIncome" type="checkbox" [ngModel]="useTxIncome" (ngModelChange)="setUseTxIncome($event)" />
             <span>Use active job-income estimate</span>
           </label>
           <label class="mc-field">
             <span>Monthly income</span>
-            <input
+            <input name="monthly_income"
               type="number"
               min="0"
               step="500"
@@ -393,12 +393,12 @@
           </label>
 
           <label class="mc-check">
-            <input type="checkbox" [(ngModel)]="useNetCashflowOverride" />
+            <input name="useNetCashflowOverride" type="checkbox" [(ngModel)]="useNetCashflowOverride" />
             <span>Use one total annual cashflow instead</span>
           </label>
           <label class="mc-field">
             <span>Total annual cashflow </span>
-            <input
+            <input name="net-annual-cashflow-override-effectivenetcashflow"
               type="number"
               step="1000"
               [readonly]="!useNetCashflowOverride"
@@ -412,17 +412,17 @@
           </label>
           <label class="mc-field">
             <span>Additional annual contribution </span>
-            <input type="number" step="1000" [(ngModel)]="assumptions.extra_contributions.annual_contribution" />
+            <input name="annual_contribution" type="number" step="1000" [(ngModel)]="assumptions.extra_contributions.annual_contribution" />
           </label>
 
           <div class="mc-control-grid">
             <label class="mc-field">
               <span>Inflation (%)</span>
-              <input type="number" step="0.25" [ngModel]="asPercent(assumptions.inflation_cpi)" (ngModelChange)="assumptions.inflation_cpi = fromPercent($event)" />
+              <input name="inflation-cpi" type="number" step="0.25" [ngModel]="asPercent(assumptions.inflation_cpi)" (ngModelChange)="assumptions.inflation_cpi = fromPercent($event)" />
             </label>
             <label class="mc-field">
               <span>Income growth (%)</span>
-              <input
+              <input name="annual-income-growth"
                 type="number"
                 step="0.25"
                 [ngModel]="asPercent(assumptions.annual_income_growth)"
@@ -434,12 +434,12 @@
 
         <ui-card [title]="'Market model'">
           <label class="mc-check">
-            <input type="checkbox" [ngModel]="useInferredAllocation" (ngModelChange)="setUseInferredAllocation($event)" />
+            <input name="useInferredAllocation" type="checkbox" [ngModel]="useInferredAllocation" (ngModelChange)="setUseInferredAllocation($event)" />
             <span>Infer growth allocation</span>
           </label>
           <label class="mc-field">
             <span>Growth allocation (%)</span>
-            <input
+            <input name="portfolio-allocation"
               type="number"
               min="0"
               max="100"
@@ -457,23 +457,23 @@
           <div class="mc-control-grid">
             <label class="mc-field">
               <span>Return mean (%)</span>
-              <input type="number" step="0.25" [ngModel]="asPercent(assumptions.nominal_return_mean)" (ngModelChange)="assumptions.nominal_return_mean = fromPercent($event)" />
+              <input name="nominal-return-mean" type="number" step="0.25" [ngModel]="asPercent(assumptions.nominal_return_mean)" (ngModelChange)="assumptions.nominal_return_mean = fromPercent($event)" />
             </label>
             <label class="mc-field">
               <span>Volatility (%)</span>
-              <input type="number" min="0" step="0.25" [ngModel]="asPercent(assumptions.nominal_return_std)" (ngModelChange)="assumptions.nominal_return_std = fromPercent($event)" />
+              <input name="nominal-return-std" type="number" min="0" step="0.25" [ngModel]="asPercent(assumptions.nominal_return_std)" (ngModelChange)="assumptions.nominal_return_std = fromPercent($event)" />
             </label>
             <label class="mc-field">
               <span>Stable return (%)</span>
-              <input type="number" step="0.25" [ngModel]="asPercent(assumptions.stable_return_mean)" (ngModelChange)="assumptions.stable_return_mean = fromPercent($event)" />
+              <input name="stable-return-mean" type="number" step="0.25" [ngModel]="asPercent(assumptions.stable_return_mean)" (ngModelChange)="assumptions.stable_return_mean = fromPercent($event)" />
             </label>
             <label class="mc-field">
               <span>Tax drag (%)</span>
-              <input type="number" min="0" step="0.25" [ngModel]="asPercent(assumptions.tax_drag)" (ngModelChange)="assumptions.tax_drag = fromPercent($event)" />
+              <input name="tax-drag" type="number" min="0" step="0.25" [ngModel]="asPercent(assumptions.tax_drag)" (ngModelChange)="assumptions.tax_drag = fromPercent($event)" />
             </label>
             <label class="mc-field">
               <span>Fee drag (%)</span>
-              <input
+              <input name="annual-fee-drag"
                 type="number"
                 min="0"
                 step="0.25"
@@ -483,7 +483,7 @@
             </label>
             <label class="mc-field">
               <span>Shock chance (%)</span>
-              <input
+              <input name="shock-probability"
                 type="number"
                 min="0"
                 max="100"
@@ -494,7 +494,7 @@
             </label>
             <label class="mc-field">
               <span>Shock loss (%)</span>
-              <input
+              <input name="shock-mean-loss"
                 type="number"
                 min="0"
                 max="90"
@@ -505,7 +505,7 @@
             </label>
             <label class="mc-field">
               <span>Shock spread (%)</span>
-              <input
+              <input name="shock-loss-std"
                 type="number"
                 min="0"
                 max="50"
@@ -526,23 +526,23 @@
               <div class="mc-editor-row">
                 <label class="mc-field mc-field--wide">
                   <span>Name</span>
-                  <input type="text" [(ngModel)]="checkpoint.label" />
+                  <input name="label" type="text" [(ngModel)]="checkpoint.label" />
                 </label>
                 <label class="mc-field">
                   <span>Year</span>
-                  <input type="number" min="0" max="80" [(ngModel)]="checkpoint.year" />
+                  <input name="year" type="number" min="0" max="80" [(ngModel)]="checkpoint.year" />
                 </label>
                 <label class="mc-field">
                   <span>Target date</span>
-                  <input type="date" [(ngModel)]="checkpoint.target_date" />
+                  <input name="target_date" type="date" [(ngModel)]="checkpoint.target_date" />
                 </label>
                 <label class="mc-field">
                   <span>Net worth goal</span>
-                  <input type="number" min="0" step="10000" [(ngModel)]="checkpoint.target_net_worth" />
+                  <input name="target_net_worth" type="number" min="0" step="10000" [(ngModel)]="checkpoint.target_net_worth" />
                 </label>
                 <label class="mc-field">
                   <span>Required odds (%)</span>
-                  <input
+                  <input name="min-success-probability"
                     type="number"
                     min="0"
                     max="100"
@@ -569,25 +569,25 @@
               <div class="mc-editor-row">
                 <label class="mc-field">
                   <span>Include in</span>
-                  <select aria-label="Annual event applies to" [ngModel]="event.applies_to || 'both'" (ngModelChange)="toggleAnnualEventScope(event, $event)">
+                  <select name="applies-to-both" aria-label="Annual event applies to" [ngModel]="event.applies_to || 'both'" (ngModelChange)="toggleAnnualEventScope(event, $event)">
                     <option value="baseline">Baseline only</option>
                     <option value="scenario">Scenario only</option>
                     <option value="both">Baseline and scenario</option>
                   </select>
                 </label>
                 <label class="mc-check mc-check--compact">
-                  <input type="checkbox" [(ngModel)]="event.recurring" />
+                  <input name="recurring" type="checkbox" [(ngModel)]="event.recurring" />
                   <span>Repeating schedule</span>
                 </label>
                 @if (!event.recurring) {
                   <label class="mc-field">
                     <span>One-time in year</span>
-                    <input type="number" min="1" [max]="horizonYears" [(ngModel)]="event.year" />
+                    <input name="year" type="number" min="1" [max]="horizonYears" [(ngModel)]="event.year" />
                   </label>
                 } @else {
                   <label class="mc-field">
                     <span>From year</span>
-                    <input
+                    <input name="year"
                       type="number"
                       min="1"
                       [max]="horizonYears"
@@ -597,7 +597,7 @@
                   </label>
                   <label class="mc-field">
                     <span>Through year </span>
-                    <input
+                    <input name="end_year"
                       type="number"
                       min="1"
                       [max]="horizonYears"
@@ -607,7 +607,7 @@
                   </label>
                   <label class="mc-field">
                     <span>Every N years </span>
-                    <input
+                    <input name="interval_years"
                       type="number"
                       min="0.25"
                       max="80"
@@ -617,7 +617,7 @@
                   </label>
                 }
                 <label class="mc-check mc-check--compact">
-                  <input type="checkbox" [(ngModel)]="event.inflation_adjusted" />
+                  <input name="inflation_adjusted" type="checkbox" [(ngModel)]="event.inflation_adjusted" />
                   <span>Inflation</span>
                 </label>
               </div>

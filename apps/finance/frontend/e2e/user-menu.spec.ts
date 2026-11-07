@@ -13,7 +13,7 @@ test('Finance actions live in the username dropdown and preserve clear-data conf
   let menu = await openUserMenu(page);
   await expect(menu.getByRole('link', { name: 'Account stats · Admin', exact: true })).toBeVisible();
   await menu.getByRole('button', { name: 'Guide', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'How to start' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'How Finance works' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
   await expect(trigger).toBeFocused();
   const resets: unknown[] = [];

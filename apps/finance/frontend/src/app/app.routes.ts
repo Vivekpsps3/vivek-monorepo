@@ -28,7 +28,7 @@ export const routes: Routes = [
       },
       {
         path: 'have',
-        title: 'What you have · Finance',
+        title: 'Net worth · Finance',
         loadComponent: () => import('./hubs/have-hub.component').then(m => m.HaveHubComponent),
       },
       {

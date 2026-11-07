@@ -1,6 +1,10 @@
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { convertToParamMap, provideRouter } from '@angular/router';
-import { normalizeSpendingHubRoute, SpendingHubComponent } from './spending-hub.component';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { CalendarComponent } from '../calendar/calendar.component';
+import { TransactionsComponent } from '../transactions/transactions.component';
+import { SpendingHubComponent, normalizeSpendingHubRoute } from './spending-hub.component';
 
 describe('SpendingHub route compatibility', () => {
   it('opens Activity by default', () => {
@@ -153,6 +157,30 @@ describe('SpendingHub route compatibility', () => {
       receiptsOpen: true,
       queryParams: null,
     });
+  });
+});
+
+describe('canonical tab links', () => {
+  it('the default link href has no t=, labels match, exactly one link is current', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([{ path: 'finance/spending', component: SpendingHubComponent }])],
+    });
+    TestBed.overrideComponent(SpendingHubComponent, {
+      remove: { imports: [TransactionsComponent, CalendarComponent] },
+      add: { schemas: [NO_ERRORS_SCHEMA] },
+    });
+    await TestBed.compileComponents();
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/finance/spending', SpendingHubComponent);
+    harness.detectChanges();
+    const links = [...harness.routeNativeElement!.querySelectorAll('.hub-tabs a')] as HTMLAnchorElement[];
+    expect(links.map(link => link.textContent?.trim())).toEqual(['Activity', 'Calendar']);
+    expect(links[0].getAttribute('href')).not.toContain('t=');
+    expect(links[1].getAttribute('href')).toContain('t=calendar');
+    const current = links.filter(link => link.getAttribute('aria-current') === 'page');
+    expect(current.length).toBe(1);
+    expect(current[0].textContent?.trim()).toBe('Activity');
+    expect(harness.routeNativeElement!.querySelector('.hub-tabs')?.getAttribute('aria-label')).toBe('Spending sections');
   });
 });
 

@@ -1,19 +1,6 @@
-<nav class="navbar" aria-label="Main navigation">
+<nav class="navbar" aria-label="Finance sections">
   <div class="nav-content">
-    <div class="nav-tabs" aria-label="Finance sections">
-      @for (group of visibleNavGroups; track group.label) {
-        <a
-          [routerLink]="group.items[0].path"
-          class="nav-tab"
-          [class.active]="isActiveGroup(group)"
-          [attr.aria-current]="isActiveGroup(group) ? 'page' : null"
-          [attr.aria-label]="group.label">
-          <ui-icon [name]="group.icon" size="sm" />
-          <span class="nav-link__label">{{ group.label }}</span>
-          <span class="nav-link__short">{{ group.shortLabel }}</span>
-        </a>
-      }
-    </div>
+    <ui-section-nav label="Finance sections" [items]="sectionNavItems" />
   </div>
 </nav>
 
@@ -23,10 +10,9 @@
       [routerLink]="group.items[0].path"
       class="mobile-tab"
       [class.active]="isActiveGroup(group)"
-      [attr.aria-current]="isActiveGroup(group) ? 'page' : null"
-      [attr.aria-label]="group.label">
-      <ui-icon [name]="group.icon" size="sm" />
-      <span aria-hidden="true">{{ group.shortLabel }}</span>
+      [attr.aria-current]="isActiveGroup(group) ? 'page' : null">
+      <ui-icon [name]="group.icon" size="md" />
+      <span class="mobile-tab__label">{{ group.label }}</span>
     </a>
   }
 </nav>
@@ -72,49 +58,48 @@
 
 <ui-dialog [open]="showTutorial" labelledBy="tutorial-title" panelClass="tutorial-panel ui-dialog-panel--wide" (closed)="closeTutorial()">
   <div class="tutorial-header">
-    <div>
-      <p class="section-eyebrow">Guide</p>
-      <h2 id="tutorial-title" tabindex="-1" data-dialog-initial-focus>How to start</h2>
-      <p>Add the records you need. Each area keeps its own job.</p>
-      <p>Finance records are encrypted in your browser. Only ticker symbols are sent for market quotes.</p>
-    </div>
-    <ui-button variant="ghost" size="sm" (clicked)="closeTutorial()">Close</ui-button>
+    <h2 id="tutorial-title" tabindex="-1" data-dialog-initial-focus>How Finance works</h2>
+    <button type="button" class="tutorial-close" aria-label="Close guide" (click)="closeTutorial()">
+      <ui-icon name="close" size="sm" />
+    </button>
   </div>
 
   <div class="tutorial-grid">
     <article class="tutorial-step">
-      <span class="tutorial-step__number">1</span>
-      <h3>What you have</h3>
-      <p>Enter current balances and positions. Holdings have their own list.</p>
-      <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }" (click)="closeTutorial()">Add assets and debts</a>
-      <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }" (click)="closeTutorial()">Add holdings</a>
+      <span class="tutorial-step__number" aria-hidden="true">1</span>
+      <h3>Net worth</h3>
+      <p>Enter today's balances, debts and holdings.</p>
+      <a routerLink="/finance/have" (click)="closeTutorial()">Open Net worth</a>
     </article>
     <article class="tutorial-step">
-      <span class="tutorial-step__number">2</span>
+      <span class="tutorial-step__number" aria-hidden="true">2</span>
       <h3>Spending</h3>
-      <p>Import CSVs or view and edit card activity. Transactions do not change net worth.</p>
-      <a routerLink="/finance/spending" [queryParams]="{ t: 'imports' }" (click)="closeTutorial()">Import bank CSVs</a>
-      <a routerLink="/finance/spending" [queryParams]="{ t: 'activity' }" (click)="closeTutorial()">Open Activity</a>
+      <p>Import bank CSVs or add card activity by hand.</p>
+      <a routerLink="/finance/spending" (click)="closeTutorial()">Open Spending</a>
     </article>
     <article class="tutorial-step">
-      <span class="tutorial-step__number">3</span>
+      <span class="tutorial-step__number" aria-hidden="true">3</span>
       <h3>Recurring</h3>
-      <p>Keep job income separate from scheduled bills and subscriptions.</p>
-      <a routerLink="/finance/recurring" [queryParams]="{ t: 'pay' }" (click)="closeTutorial()">Add jobs and pay</a>
-      <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }" (click)="closeTutorial()">Add bills and subscriptions</a>
+      <p>Keep job pay separate from bills and subscriptions.</p>
+      <a routerLink="/finance/recurring" (click)="closeTutorial()">Open Recurring</a>
     </article>
     <article class="tutorial-step">
-      <span class="tutorial-step__number">4</span>
+      <span class="tutorial-step__number" aria-hidden="true">4</span>
       <h3>Planning</h3>
-      <p>Try what-if numbers. This does not change real balances.</p>
+      <p>Try what-if numbers without touching your balances.</p>
       <a routerLink="/finance/planning" (click)="closeTutorial()">Open Planning</a>
     </article>
   </div>
 
-  <div class="tutorial-rules" aria-label="Rules">
-    <span>Card activity does not change net worth</span>
-    <span>Planning does not change real balances</span>
-    <span>Do not enter the same cash twice</span>
+  <ul class="tutorial-rules" aria-label="Rules">
+    <li>Card activity doesn't change net worth.</li>
+    <li>Planning doesn't change your balances.</li>
+    <li>Don't enter the same cash twice.</li>
+  </ul>
+
+  <div class="tutorial-footer">
+    <ui-button variant="secondary" (clicked)="showFirstStepsOnHome()">Show first steps on Home</ui-button>
+    <ui-button variant="primary" (clicked)="closeTutorial()">Close</ui-button>
   </div>
 </ui-dialog>
 

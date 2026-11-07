@@ -48,7 +48,7 @@ test('unlock refreshes each unique holding and former-employer ticker once, appl
   await expect.poll(() => vault.data('job_incomes')[0]?.stock_valuations?.some((row: any) => row.price_per_share === 125 && row.symbol === 'VOO'))
     .toBe(true);
   await expect(page.locator('.market-banner')).toHaveCount(0);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,275.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,275.00'));
 
   expect(vault.quoteRequestDetails).toEqual([{ symbol: 'VOO', refresh: true }]);
   expect(vault.data('holdings')).toHaveLength(2);
@@ -83,7 +83,7 @@ test('a partial quote failure retains saved prices and position facts while Home
   await expect.poll(() => vault.data('holdings').find(row => row.symbol === 'VOO')?.current_price).toBe(125);
   await expect(page.locator('.market-banner')).toContainText('AAPL');
   await expect(page.locator('.market-banner')).toContainText('Saved prices remain available');
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,125.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,125.00'));
 
   expect(vault.data('holdings').find(row => row.symbol === 'AAPL')).toMatchObject({
     shares: 2, purchase_price: 20, current_price: 50, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-11',
@@ -145,7 +145,7 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
   expect(url.searchParams.get('history')).toBe('1');
   expect(url.searchParams.get('start')).toBe('2024-01-01');
   expect(url.searchParams.get('end')).toBe('2024-12-31');
-  await expect(page.getByRole('link', { name: 'Jobs & pay', exact: true })).toHaveClass(/on/);
+  await expect(page.getByRole('link', { name: 'Pay', exact: true })).toHaveClass(/on/);
   await expect(page.locator('app-income').getByRole('heading', { name: 'Jobs and pay', exact: true })).toBeVisible();
   await expect(page.locator('app-income')).toHaveCount(1);
   await expect(page.locator('app-income').getByRole('button', { name: 'Add job', exact: true })).toBeVisible();
@@ -560,7 +560,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   });
   await vault.open('/');
   await expectQuoteRequests(vault, ['VOO']);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,125.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,125.00'));
   const holdingsCanvas = page.locator('canvas[aria-label="Portfolio allocation by symbol"]');
   const nontransparentChartPixels = () => holdingsCanvas.evaluate(node => {
     const canvas = node as HTMLCanvasElement;
@@ -604,7 +604,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
 test('phone navigation keeps every section in view and supports keyboard Plan navigation', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/');
-  const desktopNav = page.locator('.nav-tabs');
+  const desktopNav = page.locator('ui-section-nav');
   await expect(desktopNav.getByRole('link')).toHaveCount(5);
   const hub = page.getByRole('navigation', { name: 'Apps' }).getByRole('link', { name: 'Hub', exact: true });
   await expect(hub).toHaveAttribute('href', '/hub');

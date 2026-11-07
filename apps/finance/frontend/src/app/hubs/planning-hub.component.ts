@@ -14,10 +14,10 @@ import { UiPageHeaderComponent } from '@vivek/ui';
   template: `
     <div class="page">
       <ui-page-header title="Planning" />
-      <nav class="hub-tabs" aria-label="Planning">
-        <a [routerLink]="[]" [queryParams]="{ t: 'path' }" [class.on]="tab === 'path'">Retirement &amp; goals</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'growth' }" [class.on]="tab === 'growth'">Portfolio projection</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'stocks' }" [class.on]="tab === 'stocks'">Stock research</a>
+      <nav class="hub-tabs" aria-label="Planning sections">
+        <a [routerLink]="[]" [queryParams]="{ t: null }" [class.on]="tab === 'path'" [attr.aria-current]="tab === 'path' ? 'page' : null">Retirement and goals</a>
+        <a [routerLink]="[]" [queryParams]="{ t: 'growth' }" [class.on]="tab === 'growth'" [attr.aria-current]="tab === 'growth' ? 'page' : null">Portfolio projection</a>
+        <a [routerLink]="[]" [queryParams]="{ t: 'stocks' }" [class.on]="tab === 'stocks'" [attr.aria-current]="tab === 'stocks' ? 'page' : null">Stock research</a>
       </nav>
       @switch (tab) {
         @case ('growth') { <app-investment-insights [embedded]="true" /> }

@@ -66,13 +66,13 @@ describe('ChartsComponent', () => {
 
     component.openMonthlyDrilldown(0, 1);
     expect(router.navigate.calls.mostRecent().args).toEqual([
-      ['/finance/spending'], { queryParams: { t: 'activity', v: 'spending', month: '2026-09' } },
+      ['/finance/spending'], { queryParams: { t: null, v: 'spending', month: '2026-09' } },
     ]);
     expect(component.monthlyRowQuery(component.monthlyRows[0], 0)).toEqual({
-      t: 'activity', v: 'income', month: '2026-09',
+      t: null, v: 'income', month: '2026-09',
     });
     expect(component.monthlyRowQuery(component.monthlyRows[0], 1)).toEqual({
-      t: 'activity', v: 'spending', month: '2026-09',
+      t: null, v: 'spending', month: '2026-09',
     });
   });
 
@@ -88,7 +88,7 @@ describe('ChartsComponent', () => {
     expect(rows[6]).toEqual(jasmine.objectContaining({ label: 'Other', synthetic: true }));
     component.openCategoryDrilldown(0);
     expect(router.navigate.calls.mostRecent().args).toEqual([
-      ['/finance/spending'], { queryParams: { t: 'activity', v: 'spending', month: 'all', category: 'Other' } },
+      ['/finance/spending'], { queryParams: { t: null, v: 'spending', month: 'all', category: 'Other' } },
     ]);
     router.navigate.calls.reset();
     component.openCategoryDrilldown(6);

@@ -65,8 +65,8 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
     <div class="page">
       <ui-page-header title="Spending" />
       <nav class="hub-tabs" aria-label="Spending sections">
-        <a [routerLink]="[]" [queryParams]="{ t: 'activity', v: activityView }" [class.on]="tab === 'activity'">Activity</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'calendar' }" [class.on]="tab === 'calendar'">Calendar</a>
+        <a [routerLink]="[]" [queryParams]="{ t: null, v: activityView === 'all' ? null : activityView }" [class.on]="tab === 'activity'" [attr.aria-current]="tab === 'activity' ? 'page' : null">Activity</a>
+        <a [routerLink]="[]" [queryParams]="{ t: 'calendar' }" [class.on]="tab === 'calendar'" [attr.aria-current]="tab === 'calendar' ? 'page' : null">Calendar</a>
       </nav>
       @switch (tab) {
         @case ('calendar') { <app-calendar [embedded]="true" /> }

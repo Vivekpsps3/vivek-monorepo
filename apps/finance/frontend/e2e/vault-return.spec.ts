@@ -26,10 +26,7 @@ for (const viewport of VIEWPORTS) {
         await page.getByRole('textbox', { name: 'Vault passphrase', exact: true }).fill(PASSPHRASE);
         await page.getByRole('button', { name: 'Unlock', exact: true }).click();
         await expect(page).toHaveURL(/\/finance\/spending\?t=calendar$/);
-        // The Calendar tab is the active one. (aria-current="page" on hub
-        // tabs is F6's change; this branch asserts the active state F5
-        // ships, and the F6 branch upgrades this to aria-current.)
-        await expect(page.getByRole('link', { name: 'Calendar', exact: true })).toHaveClass(/on/);
+        await expect(page.getByRole('link', { name: 'Calendar', exact: true })).toHaveAttribute('aria-current', 'page');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       });
 

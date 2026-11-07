@@ -322,7 +322,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!row) return;
     const view = datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all';
     void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: 'activity', v: view, month: row.month },
+      queryParams: { t: null, v: view, month: row.month },
     });
   }
 
@@ -336,16 +336,16 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: 'activity', v: 'spending', month: 'all', category: row.label },
+      queryParams: { t: null, v: 'spending', month: 'all', category: row.label },
     });
   }
 
-  monthlyRowQuery(row: { month: string }, datasetIndex = 0): { [key: string]: string } {
-    return { t: 'activity', v: datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all', month: row.month };
+  monthlyRowQuery(row: { month: string }, datasetIndex = 0): { [key: string]: string | null } {
+    return { t: null, v: datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all', month: row.month };
   }
 
-  categoryRowQuery(row: { label: string; synthetic?: boolean }): { [key: string]: string } | null {
-    return row.synthetic ? null : { t: 'activity', v: 'spending', month: 'all', category: row.label };
+  categoryRowQuery(row: { label: string; synthetic?: boolean }): { [key: string]: string | null } | null {
+    return row.synthetic ? null : { t: null, v: 'spending', month: 'all', category: row.label };
   }
 
   private computeDerived() {
