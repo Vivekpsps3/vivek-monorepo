@@ -792,7 +792,6 @@ def test_debug_root_does_not_log_a_birthday_query(
         assert engine_logger.getEffectiveLevel() == logging.DEBUG
         assert database.engine.echo is False
         assert database.engine.hide_parameters is True
-        assert any(isinstance(item, _EngineParameterFilter) for item in engine_log.filters)
         assert any(isinstance(item, _EngineParameterFilter) for item in engine_logger.filters)
         assert any(isinstance(item, _EngineParameterFilter) for item in propagation.filters)
         assert not any(
@@ -829,10 +828,12 @@ def test_debug_root_does_not_log_a_birthday_query(
             engine_logger.debug("Row %r", SECRET)
             engine_logger.debug("[raw sql] %s", SECRET)
             engine_logger.debug("SELECT users")
+            engine_logger.info("SELECT users (info)")
             for message in propagation.messages:
                 assert SECRET not in message
                 assert "1919" not in message
-            assert "SELECT users" in propagation.messages
+            assert "SELECT users" not in propagation.messages
+            assert "SELECT users (info)" in propagation.messages
         finally:
             for logger, filters in saved_filters:
                 logger.filters[:] = filters

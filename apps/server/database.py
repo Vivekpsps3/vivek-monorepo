@@ -60,18 +60,34 @@ def configure_engine(engine: Engine) -> Engine:
 
 class _EngineParameterFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        # Handler filters also see application logs propagated to root. Logger
+        # filters alone do not cover records emitted by named Engine children.
+        name = "sqlalchemy.engine.Engine"
+        if record.name != name and not record.name.startswith(name + "."):
+            return True
+        # Result rows may have a logging_token prefix or a non-string payload.
+        # No Engine DEBUG output is safe to retain, regardless of its format.
+        if record.levelno <= logging.DEBUG:
+            return False
         message = record.msg
         if not isinstance(message, str):
             return True
-        return message != "[%s] %r" and not message.startswith(("Row ", "[raw sql]"))
+        # SQLAlchemy prefixes parameter templates with [logging_token] when set.
+        return not (
+            message.endswith(("[%s] %r", "[raw sql] %r")) or message.startswith("[raw sql]")
+        )
 
 
-def _silence_engine_parameters() -> None:
+def _silence_engine_parameters(engine: Engine) -> None:
     drop = _EngineParameterFilter()
-    logger: logging.Logger | None = logging.getLogger("sqlalchemy.engine.Engine")
-    names = {"sqlalchemy.engine", "sqlalchemy.engine.Engine"}
+    name = "sqlalchemy.engine.Engine"
+    if engine.logging_name:
+        name += f".{engine.logging_name}"
+    logger: logging.Logger | None = logging.getLogger(name)
     while isinstance(logger, logging.Logger):
-        chosen = [logger] if logger.name in names else []
+        chosen = (
+            [logger] if logger.name == name or logger.name == "sqlalchemy.engine.Engine" else []
+        )
         for target in [*chosen, *logger.handlers]:
             if not any(isinstance(item, _EngineParameterFilter) for item in target.filters):
                 target.addFilter(drop)
@@ -92,7 +108,6 @@ def open_database(url: str) -> Database:
     memory = _memory(parsed.database)
     if not memory and (not parsed.database or not Path(parsed.database).is_absolute()):
         raise RuntimeError("SITE_DATABASE_URL must name an absolute local SQLite file")
-    _silence_engine_parameters()
     kwargs: dict = {
         "connect_args": {"check_same_thread": False},
         "hide_parameters": True,
@@ -101,6 +116,7 @@ def open_database(url: str) -> Database:
     if memory:
         kwargs["poolclass"] = StaticPool
     engine = configure_engine(create_engine(url, **kwargs))
+    _silence_engine_parameters(engine)
     factory = sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
     return Database(url=url, engine=engine, sessionmaker=factory)
 
