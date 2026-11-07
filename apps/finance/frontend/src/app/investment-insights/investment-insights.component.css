@@ -426,3 +426,46 @@ ui-button {
     white-space: normal;
   }
 }
+
+/* F20: HTML legend + yearly table */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+.chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.chart-legend__item--off {
+  opacity: 0.45;
+}
+.chart-legend__swatch {
+  width: 22px;
+  border-top: 3px solid;
+}
+.chart-fallback {
+  max-height: 360px;
+  overflow: auto;
+  margin-top: var(--space-3);
+}
+.chart-fallback thead th {
+  position: sticky;
+  top: 0;
+  background: var(--card-bg);
+}
+.answer-detail {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
