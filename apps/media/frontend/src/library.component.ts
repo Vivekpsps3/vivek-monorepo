@@ -1,5 +1,5 @@
 import { Component, DestroyRef, inject, signal } from "@angular/core";
-import { HttpClient } from "@angular/common/http";
+import { HttpClient, HttpParams } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import {
   ActivatedRoute,
@@ -20,6 +20,7 @@ import {
 import { MediaCardComponent } from "./media-card.component";
 import {
   UiButtonComponent,
+  UiDialogComponent,
   UiEmptyStateComponent,
   UiFieldComponent,
   UiFieldControlDirective,
@@ -32,6 +33,15 @@ import {
   Detail,
   MediaCard,
 } from "./media.models";
+import {
+  filterCount,
+  filterLabel,
+  isFiltered,
+  readFilters,
+  tagOptions,
+  toQueryParams,
+  type LibraryFilters,
+} from "./library-filters.mjs";
 @Component({
   standalone: true,
   imports: [
@@ -39,11 +49,13 @@ import {
     RouterLink,
     MediaCardComponent,
     UiButtonComponent,
+    UiDialogComponent,
     UiFieldComponent,
     UiFieldControlDirective,
     UiPageHeaderComponent,
     UiEmptyStateComponent,
   ],
+  styleUrl: "./library-filters.css",
   template: `<main class="page media-page">
     <ui-page-header
       eyebrow="Your collection"
@@ -51,29 +63,44 @@ import {
       titleId="library-heading"
       [titleTabIndex]="-1"
       subtitle="Only what you saved. Every story, sound, and favorite."
-    >
-      <ui-button
-        uiPageActions
-        variant="primary"
-        href="/media/search"
-        label="Find something new"
-      />
-    </ui-page-header>
-    <form class="media-filters" (ngSubmit)="filter()">
-      <ui-field label="In your library"
-        ><input
-          uiFieldControl
+    />
+    <div class="library-toolbar">
+      <form class="library-search" role="search" (ngSubmit)="searchNow()">
+        <label for="library-q" class="visually-hidden"
+          >Search your library</label
+        >
+        <input
+          id="library-q"
+          type="search"
           name="q"
           [(ngModel)]="q"
-          type="search"
-          placeholder="Filter titles or creators"
-      /></ui-field>
+          (ngModelChange)="searchSoon()"
+          placeholder="Search your library"
+          autocomplete="off"
+        />
+      </form>
+      <button
+        type="button"
+        class="btn"
+        aria-haspopup="dialog"
+        aria-controls="library-filters"
+        (click)="openFilters()"
+      >
+        {{ label }}
+      </button>
+    </div>
+    <ui-dialog
+      id="library-filters"
+      [open]="filtersOpen()"
+      labelledBy="filters-title"
+      (closed)="closeFilters()"
+    >
+      <h2 id="filters-title">Filters</h2>
       <ui-field label="Type"
         ><select
           uiFieldControl
-          name="kind"
           [(ngModel)]="kind"
-          (ngModelChange)="filter()"
+          (ngModelChange)="applySoon()"
         >
           <option value="">All types</option>
           @for (k of kinds; track k.value) {
@@ -84,9 +111,8 @@ import {
       <ui-field label="State"
         ><select
           uiFieldControl
-          name="status"
           [(ngModel)]="status"
-          (ngModelChange)="filter()"
+          (ngModelChange)="applySoon()"
         >
           <option value="">All states</option>
           @for (s of states; track s) {
@@ -97,9 +123,8 @@ import {
       <ui-field label="Sort"
         ><select
           uiFieldControl
-          name="sort"
           [(ngModel)]="sort"
-          (ngModelChange)="filter()"
+          (ngModelChange)="applySoon()"
         >
           <option value="activity">Recent</option>
           <option value="title">Title</option>
@@ -110,12 +135,51 @@ import {
       ><label class="check-label"
         ><input
           type="checkbox"
-          name="favorite"
           [(ngModel)]="favorite"
-          (ngModelChange)="filter()"
+          (ngModelChange)="applySoon()"
         />Favorites only</label
-      ><ui-button variant="ghost" type="submit">Apply</ui-button>
-    </form>
+      >
+      <fieldset class="tags-fieldset">
+        <legend>Tags</legend>
+        @if (tagOptionsList.length) {
+          <div class="tags-grid">
+            @for (tag of tagOptionsList; track tag) {
+              <label class="check-label"
+                ><input
+                  type="checkbox"
+                  [checked]="tags.includes(tag)"
+                  [disabled]="!tags.includes(tag) && tags.length >= 10"
+                  (change)="toggleTag(tag, $any($event.target).checked)"
+                />{{ tag }}</label
+              >
+            }
+          </div>
+          @if (tags.length >= 10) {
+            <p class="muted">You can filter by up to 10 tags.</p>
+          }
+        } @else {
+          <p class="muted">No tags yet. Add tags from an item's page.</p>
+        }
+      </fieldset>
+      <div class="button-row">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          [disabled]="!count"
+          (click)="clearFilters()"
+        >
+          Clear filters
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-dialog-initial-focus
+          (click)="closeFilters()"
+        >
+          Done
+        </button>
+      </div>
+    </ui-dialog>
     @if (error()) {
       <div class="local-error" role="alert">
         {{ error() }}
@@ -129,7 +193,7 @@ import {
       <p class="muted">
         {{ library.total }} saved {{ library.total === 1 ? "item" : "items" }}
       </p>
-      <div class="media-grid">
+      <div class="media-grid" [attr.aria-busy]="refreshing()">
         @for (item of library.items; track item.id) {
           <section>
             <media-card [item]="item" />
@@ -172,16 +236,21 @@ import {
         } @empty {
           <ui-empty-state
             [title]="
-              q || kind || status || favorite
+              filtered
                 ? 'No saved items match these filters'
                 : 'Your next favorite starts here'
             "
             [message]="
-              q || kind || status || favorite
+              filtered
                 ? 'Try clearing a filter.'
                 : 'Search for a title, follow an artist, or add something of your own.'
             "
           >
+            @if (filtered) {
+              <ui-button variant="ghost" (click)="clearAllFilters()">
+                Clear filters
+              </ui-button>
+            }
             <ui-button
               variant="primary"
               href="/media/search"
@@ -242,16 +311,46 @@ export class LibraryComponent {
   status = "";
   favorite = false;
   sort = "activity";
+  tags: string[] = [];
   offset = 0;
+  private filterTimer: ReturnType<typeof setTimeout> | undefined;
   readonly data = signal<LibraryResponse | null>(null);
   readonly error = signal("");
   readonly loading = signal(true);
+  readonly refreshing = signal(false);
+  readonly filtersOpen = signal(false);
+  readonly availableTags = signal<string[]>([]);
+  private currentFilters(): LibraryFilters {
+    return {
+      q: this.q,
+      kind: this.kind,
+      status: this.status,
+      sort: this.sort,
+      favorite: this.favorite,
+      tags: this.tags,
+    };
+  }
+  get count(): number {
+    return filterCount(this.currentFilters());
+  }
+  get label(): string {
+    return filterLabel(this.count);
+  }
+  get filtered(): boolean {
+    return isFiltered(this.currentFilters());
+  }
+  get tagOptionsList(): string[] {
+    return tagOptions(this.availableTags(), this.tags);
+  }
   readonly expanded = signal<number | null>(null);
   readonly children = signal<MediaCard[]>([]);
   readonly childrenError = signal("");
   readonly childrenLoading = signal(false);
   constructor() {
-    this.destroy.onDestroy(() => (this.active = false));
+    this.destroy.onDestroy(() => {
+      this.active = false;
+      clearTimeout(this.filterTimer);
+    });
     this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
       if (
         event instanceof NavigationStart &&
@@ -272,41 +371,45 @@ export class LibraryComponent {
     combineLatest([this.route.queryParamMap, this.reload])
       .pipe(
         tap(([p]) => {
-          this.q = p.get("q") || "";
-          this.kind = p.get("kind") || "";
-          this.status = p.get("status") || "";
-          this.sort = p.get("sort") || "activity";
-          this.favorite = p.get("fav") === "1";
+          const filters = readFilters(p);
+          this.q = filters.q;
+          this.kind = filters.kind;
+          this.status = filters.status;
+          this.sort = filters.sort;
+          this.favorite = filters.favorite;
+          this.tags = filters.tags;
           this.offset = Math.max(0, Number(p.get("offset")) || 0);
           this.expanded.set(Number(p.get("expanded")) || null);
-          this.loading.set(true);
+          if (!this.data()) this.loading.set(true);
+          this.refreshing.set(true);
           this.error.set("");
         }),
-        switchMap(() =>
-          this.http
-            .get<LibraryResponse>("/media/api/library", {
-              params: {
-                q: this.q,
-                kind: this.kind,
-                status: this.status,
-                sort: this.sort,
-                offset: this.offset,
-                limit: 24,
-                favorite: this.favorite,
-              },
-            })
+        switchMap(() => {
+          let params = new HttpParams()
+            .set("q", this.q)
+            .set("kind", this.kind)
+            .set("status", this.status)
+            .set("sort", this.sort)
+            .set("offset", this.offset)
+            .set("limit", 24)
+            .set("favorite", this.favorite);
+          for (const tag of this.tags) params = params.append("tags", tag);
+          return this.http
+            .get<LibraryResponse>("/media/api/library", { params })
             .pipe(
               catchError((e) => {
                 this.error.set(errorCopy(e));
                 return of(null);
               }),
-            ),
-        ),
+            );
+        }),
         takeUntilDestroyed(),
       )
       .subscribe((data) => {
         this.data.set(data);
+        if (data?.available_tags) this.availableTags.set(data.available_tags);
         this.loading.set(false);
+        this.refreshing.set(false);
         const expanded = data?.items.find(
           (item) => item.id === this.expanded(),
         );
@@ -318,20 +421,48 @@ export class LibraryComponent {
     document.getElementById("library-heading")?.focus();
     this.reload.next(this.reload.value + 1);
   }
-  filter(): void {
+  applyNow(): void {
+    clearTimeout(this.filterTimer);
+    this.filterTimer = undefined;
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: {
-        q: this.q || null,
-        kind: this.kind || null,
-        status: this.status || null,
-        sort: this.sort,
-        fav: this.favorite ? 1 : null,
-        offset: null,
-        expanded: null,
-      },
+      queryParams: toQueryParams(this.currentFilters()),
       onSameUrlNavigation: "reload",
     });
+  }
+  applySoon(): void {
+    clearTimeout(this.filterTimer);
+    this.filterTimer = setTimeout(() => this.applyNow(), 250);
+  }
+  searchSoon(): void {
+    this.applySoon();
+  }
+  searchNow(): void {
+    this.applyNow();
+  }
+  openFilters(): void {
+    this.filtersOpen.set(true);
+  }
+  closeFilters(): void {
+    if (this.filterTimer !== undefined) this.applyNow();
+    this.filtersOpen.set(false);
+  }
+  clearFilters(): void {
+    this.kind = "";
+    this.status = "";
+    this.favorite = false;
+    this.tags = [];
+    this.applyNow();
+  }
+  clearAllFilters(): void {
+    this.q = "";
+    this.clearFilters();
+  }
+  toggleTag(tag: string, checked: boolean): void {
+    this.tags = checked
+      ? [...this.tags, tag]
+      : this.tags.filter((t) => t !== tag);
+    this.applySoon();
   }
   page(direction: number): void {
     this.router.navigate([], {
