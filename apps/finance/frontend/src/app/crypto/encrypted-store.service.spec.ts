@@ -244,6 +244,30 @@ describe('EncryptedStoreService', () => {
     expect(saved.quote_date).toBeUndefined();
   });
 
+  it('reads the future-quote guard on the Los Angeles day, not the UTC day', async () => {
+    // Monday 2026-10-12 17:30 in Los Angeles: Los Angeles is on 2026-10-12
+    // while UTC is already on 2026-10-13, so a quote dated 2026-10-13 is a
+    // future trading date even though it matches the UTC day.
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
+      const { store } = createStoreHarness();
+      const holding = await store.addHolding({ symbol: 'MSFT', shares: 10, purchase_price: 50, purchase_date: '2024-01-02' });
+
+      await expectAsync(store.updateHoldingPrice(holding.id, {
+        symbol: 'MSFT', price: 125, price_source: 'live_eod', quote_date: '2026-10-13',
+      })).toBeRejectedWithError(/invalid or future trading date/);
+
+      await store.updateHoldingPrice(holding.id, {
+        symbol: 'MSFT', price: 125, price_source: 'live_eod', quote_date: '2026-10-12',
+      });
+      const [saved] = await store.getHoldings();
+      expect(saved.quote_date).toBe('2026-10-12');
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('does not apply a manual update read before the vault session changes', async () => {
     const harness = createStoreHarness();
     const oldAsset = await harness.store.addAsset({ name: 'Old user cash', category: 'cash', current_value: 100 });
