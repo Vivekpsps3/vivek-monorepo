@@ -30,7 +30,11 @@ export function domainConfig(domain: 'finance' | 'travel' | 'media') {
     webServer: domain === 'finance' && process.env.E2E_SKIP_WEB_SERVER ? undefined : {
       command: `"${python}" tests/e2e/server.py --suite ${domain} --port ${port}`,
       cwd: root, url: `http://127.0.0.1:${port}/${domain === 'finance' ? '' : domain + '/'}api/health`,
-      reuseExistingServer: false, timeout: 60_000,
+      // Local runs reuse a server already listening on the domain port (e.g.
+      // a `make dev` stack) instead of booting a second disposable one.
+      // CI always boots its own: reuse there could mask a broken server
+      // startup, so it stays off when CI is set.
+      reuseExistingServer: !process.env.CI, timeout: 60_000,
       env: { ...process.env, PYTHONPATH: root },
     },
   });

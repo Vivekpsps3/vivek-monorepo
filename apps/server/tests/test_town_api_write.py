@@ -231,10 +231,12 @@ def test_route_field_errors_and_unknown_json(api):
     _err(missing, 422, "validation_error", _CHECK, None)
     _err(_undo(client, 999, "nope"), 422, "validation_error", _CHECK, None)
     _err(_undo(client, 999, "2026-02-31"), 422, "validation_error", _CHECK, None)
+    # T1F: a non-integer habit id gets the identical unknown-id 404 as
+    # habit 999, not FastAPI's default 422.
     nope = client.post(
         "/api/town/habits/abc/checkins", params={"tz": TZ}, json={"day": "2026-10-29"}
     )
-    assert nope.status_code == 422 and "habit_not_found" not in nope.text
+    _err(nope, 404, "habit_not_found", "That habit doesn't exist.")
 
 
 def test_conflicts_limit_and_names(api):
@@ -630,15 +632,17 @@ def test_crafted_input_is_422_not_500(api):
     client, database, _ = api
     habit_id = _plant(database, "Crafted", 0, 7, date(2026, 10, 1))
     assert habit_id > 0
+    # T1F supersedes the #52 bounds ruling for path ids: an id beyond
+    # SQLite's signed 64-bit INTEGER reads as an unknown habit (404).
     big = 10**20  # beyond SQLite's signed 64-bit INTEGER
-    assert _patch(client, big, {"name": "Nope"}).status_code == 422
-    assert _check(client, big, "2026-10-29").status_code == 422
-    assert _undo(client, big, "2026-10-29").status_code == 422
+    _err(_patch(client, big, {"name": "Nope"}), 404, "habit_not_found", "That habit doesn't exist.")
+    _err(_check(client, big, "2026-10-29"), 404, "habit_not_found", "That habit doesn't exist.")
+    _err(_undo(client, big, "2026-10-29"), 404, "habit_not_found", "That habit doesn't exist.")
     history = client.get(
         f"/api/town/habits/{big}/checkins",
         params={"from": "2026-10-01", "to": "2026-10-29", "tz": TZ},
     )
-    assert history.status_code == 422
+    _err(history, 404, "habit_not_found", "That habit doesn't exist.")
 
     def raw(payload: bytes):
         return client.post(
@@ -767,9 +771,11 @@ def test_checkin_window_clamps_today_to_utc_plus_or_minus_two(api, monkeypatch):
     )
 
 
-def test_habit_id_outside_sqlite_integer_is_422(api):
+def test_habit_id_outside_sqlite_integer_is_unknown(api):
     client, _, _ = api
-    # 10**20 used to raise SQLite OverflowError (500). 0, -1, and 2**63 are outside 1..2**63-1.
+    # T1F supersedes the #52 bounds ruling: 10**20 used to raise SQLite
+    # OverflowError (500), and 0, -1, and 2**63 were 422 under Path bounds.
+    # All of them now read as an unknown habit (404 habit_not_found).
     for habit_id in (str(10**20), str(2**63), "0", "-1"):
         routes = (
             (
@@ -795,7 +801,7 @@ def test_habit_id_outside_sqlite_integer_is_422(api):
         )
         for method, url, kwargs in routes:
             response = getattr(client, method)(url, **kwargs)
-            assert response.status_code == 422, (habit_id, method, response.status_code)
+            _err(response, 404, "habit_not_found", "That habit doesn't exist.")
             assert "Internal server error" not in response.text
 
 

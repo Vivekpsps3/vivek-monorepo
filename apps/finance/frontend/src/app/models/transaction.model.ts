@@ -140,6 +140,8 @@ export interface ImportReceipt {
   coverage?: Array<{ account_display: string; account_key?: string; bank_account_id?: number | null; start_date: string; end_date: string; confirmed: true }>;
   undo_summary?: { removed: number; edited: number; missing: number } | null;
   undo_progress?: { removed: number; edited: number; missing: number; expected_count?: number; pending_ids?: number[] } | null;
+  /** Set when an Undo completes; the receipt record may then be deleted. */
+  undone_at?: string | null;
 }
 
 export interface ImportReceiptRows {
@@ -382,6 +384,8 @@ export interface IncomeCashflowOccurrence {
   name: string;
   detail: string;
   amount: number;
+  /** F18: job pay frequency, carried so Home rows can name the cadence. */
+  payday_frequency?: string;
 }
 
 export interface CashflowSummary {

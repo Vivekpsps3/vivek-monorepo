@@ -10,6 +10,7 @@ export interface EncryptedBankImportPort {
   getImportRows<T>(): T[];
   allocateId(): number;
   upsertImportRecord<T extends { id?: number }>(payload: T, clientId?: string, generation?: number): Promise<T>;
+  removeImportRecord(id: number): Promise<void>;
   savePreparedRecords<T extends { id: number }>(records: T[], replaceExisting?: boolean): Promise<T[]>;
   getTransactions(): Promise<Transaction[]>;
   deleteTransactions(ids: number[]): Promise<void>;
@@ -140,6 +141,28 @@ export class EncryptedBankImportStore {
     });
   }
 
+  /** Counts an Undo would produce, without changing anything (F9). */
+  async previewUndoImportReceipt(id: number): Promise<{ removable: number; editedKept: number; alreadyGone: number }> {
+    const receipt = await this.getImportReceipt(id);
+    if (!receipt) throw new Error('Import receipt not found');
+    const linked = (await this.port.getTransactions()).filter(row => row.import_receipt_id === id);
+    const removable = linked.filter(row => !row.import_edited && matchesImportSnapshot(row)).length;
+    return {
+      removable,
+      editedKept: linked.length - removable,
+      alreadyGone: Math.max(0, (receipt.inserted_count || 0) - linked.length),
+    };
+  }
+
+  /** Delete only the receipt record (and its staged row chunks). Transactions stay. */
+  async deleteImportReceipt(id: number): Promise<void> {
+    await this.port.ensureLoaded();
+    const chunks = this.port.getImportRows<ImportReceiptRows>()
+      .filter(row => row.record_type === 'bank_receipt_rows' && Number(row.receipt_id) === id);
+    for (const chunk of chunks) await this.port.removeImportRecord(chunk.id);
+    await this.port.removeImportRecord(id);
+  }
+
   async undoImportReceipt(id: number): Promise<{ removed: number; edited: number; missing: number }> {
     let receipt = (await this.getImportReceipts()).find(row => row.id === id);
     if (!receipt) throw new Error('Import receipt not found');
@@ -193,6 +216,7 @@ export class EncryptedBankImportStore {
     const summary = { removed: progress.removed, edited, missing };
     await this.updateImportReceipt(id, {
       status: 'withdrawn',
+      undone_at: new Date().toISOString(),
       coverage_start: null,
       coverage_end: null,
       coverage: [],

@@ -59,6 +59,12 @@ ui-button {
   overflow-wrap: anywhere;
 }
 
+.stock-saved-quote {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
 .stock-error {
   border-color: var(--danger);
   color: var(--danger);
@@ -308,4 +314,13 @@ ui-button {
     min-height: 44px;
     white-space: normal;
   }
+}
+
+/* F18: lookup result line */
+.result-line {
+  margin: 0 0 var(--space-4);
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
 }

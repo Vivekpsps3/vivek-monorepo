@@ -3,34 +3,25 @@
     [embedded]="embedded"
     [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'">
 
-    <div uiPageActions class="header-actions">
-      <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
-    </div>
+    @if (incomes.length || compensationTracking) {
+      <div uiPageActions class="header-actions">
+        <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
+      </div>
+    }
   </ui-page-header>
 
-  @if (!compensationTracking) {
-  <section class="income-summary">
-    <div>
-      <p class="section-eyebrow">Yearly pay</p>
-      <div class="stat-display money">{{ activeAnnualNet | money }}</div>
-      <p class="summary-caption">
-        {{ activeMonthlyTotal | money }} each month
-      </p>
-    </div>
-    <div class="income-summary-metrics">
-      <div class="summary-pill">
-        <span>Gross</span>
-        <strong class="money">{{ activeAnnualTotal | money }}</strong>
-      </div>
-      <div class="summary-pill">
-        <span>Taxes/deductions</span>
-        <strong class="money">−{{ activeAnnualAdjustments | money }}</strong>
-      </div>
-      <div class="summary-pill">
-        <ui-icon name="wallet" size="sm" />
-        <span>{{ incomes.length }} {{ incomes.length === 1 ? 'job' : 'jobs' }}</span>
-      </div>
-    </div>
+  @if (!compensationTracking && incomes.length) {
+  <section class="income-summary" aria-label="Pay summary">
+    <p class="income-summary__headline">Yearly pay <strong class="money">{{ activeAnnualTotal | money }}</strong> before taxes</p>
+    <p class="summary-caption">about {{ activeMonthlyGross | money }} a month</p>
+    @if (activeHasTaxes) {
+      <dl class="income-summary__metrics">
+        <div><dt>Take-home</dt><dd class="money">{{ activeAnnualNet | money }}</dd></div>
+        <div><dt>Taxes and deductions</dt><dd class="money">{{ activeAnnualAdjustments | money }}</dd></div>
+      </dl>
+    } @else {
+      <p class="income-summary__unset">Take-home: not set · <button type="button" class="link-button" (click)="addTaxes()">Add taxes and deductions</button></p>
+    }
   </section>
   }
 
@@ -173,9 +164,8 @@
         </tbody>
       </ui-data-table>
     } @else {
-      <ui-empty-state message="Add your salary and pay schedule.">
-        <ui-icon name="wallet" size="lg" style="display:block; margin: 0 auto 8px; opacity:.5;" />
-        <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
+      <ui-empty-state [title]="'No jobs yet'" message="Add your salary and pay schedule to project income.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button></div>
       </ui-empty-state>
     }
   </ui-card>
@@ -292,7 +282,7 @@
         </div>
 
         <details class="pay-disclosure">
-          <summary>Annual pay estimates, taxes, and take-home estimate </summary>
+          <summary>Taxes and deductions (optional)</summary>
         <div class="form-row">
           <label class="form-group">
             <span>Annual bonus</span>
@@ -395,7 +385,7 @@
         </details>
 
         <details class="pay-disclosure pay-disclosure--history">
-          <summary>Promotions, dated payments, stock, and ESPP history</summary>
+          <summary>Bonus, stock and history (optional)</summary>
         <section class="compensation-history" aria-labelledby="promotions-title">
           <div class="history-heading">
             <h4 id="promotions-title">Promotions and pay changes </h4>

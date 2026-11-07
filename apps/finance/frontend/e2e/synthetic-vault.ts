@@ -60,12 +60,44 @@ type RecordRow = {
   schema_version: number; key_version: number; revision: number; updated_at: string;
 };
 
-function lastCompletedTradingDate(now = frozenNow()): string {
-  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const day = date.getUTCDay();
-  const daysBack = day === 0 ? 2 : day === 1 ? 3 : day === 6 ? 1 : 0;
+/**
+ * Last completed trading day on the market's calendar, America/Los_Angeles.
+ * The UTC day is the wrong calendar here: at 17:30 in Los Angeles UTC is
+ * already tomorrow, but tomorrow's session has not happened yet (CI3).
+ * Weekday mapping matches the session model the suite already uses:
+ * Monday reads Friday's close, Saturday and Sunday read Friday's.
+ */
+function lastCompletedTradingDate(now: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const pick = (type: string) => parts.find(part => part.type === type)?.value ?? '';
+  const date = new Date(Date.UTC(Number(pick('year')), Number(pick('month')) - 1, Number(pick('day'))));
+  const weekday = pick('weekday');
+  const daysBack = weekday === 'Sun' ? 2 : weekday === 'Mon' ? 3 : weekday === 'Sat' ? 1 : 0;
   date.setUTCDate(date.getUTCDate() - daysBack);
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The quote mock answers from the requesting page's clock, not from this
+ * Node process: a test that moves the page to a trading-date boundary must
+ * move the mock with it, or a quote_date assertion can pass at noon and
+ * prove nothing about the boundary (CI3). Falls back to the frozen instant
+ * when the requesting page is already gone.
+ */
+async function pageClockNow(request: { frame: () => { page: () => Page } }): Promise<Date> {
+  try {
+    const epoch = await request.frame().page().evaluate(() => Date.now());
+    if (Number.isFinite(epoch)) return new Date(epoch);
+  } catch {
+    /* the requesting page closed mid-flight */
+  }
+  return frozenNow();
 }
 
 /** Each test uses a fresh key and an in-memory ciphertext server; no real API or vault. */
@@ -248,8 +280,9 @@ export async function syntheticVault(
       quoteRequestDetails.push({ symbol: upperSymbol, refresh: new URL(request.url()).searchParams.get('refresh') === 'true' });
       const quote = quoteResponses.get(upperSymbol);
       if (quote?.status && quote.status >= 400) return respond({ detail: `Synthetic ${upperSymbol} quote failure` }, quote.status);
+      const now = await pageClockNow(request);
       return respond({ symbol: upperSymbol, price: 125, price_source: 'live_eod', source: 'yfinance', valid: true,
-        price_as_of: frozenNow().toISOString(), quote_date: lastCompletedTradingDate(), ...quote });
+        price_as_of: now.toISOString(), quote_date: lastCompletedTradingDate(now), ...quote });
     }
     return respond({ detail: `Unexpected synthetic endpoint ${path}` }, 404);
   });
@@ -270,9 +303,9 @@ export async function syntheticVault(
     } catch (error) {
       if (!(error instanceof errors.TimeoutError)) throw error;
     }
-    // No next= param, so unlock lands on /hub. /login is signed out, not unlocked.
-    await expect(target).toHaveURL(/\/hub$/);
-    await expect(target.locator('app-hub')).toBeVisible();
+    // No next= param, so unlock lands on Finance Home. /login is signed out, not unlocked.
+    await expect(target).toHaveURL(/\/finance\/?$/);
+    await expect(target.locator('app-dashboard')).toBeVisible();
     enteredPages.add(target);
   }
   async function navigate(pushPath: string, target: Page, expected: string | RegExp) {

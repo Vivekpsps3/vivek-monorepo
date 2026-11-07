@@ -77,16 +77,11 @@ async function chooseTheme(page: Page, vault: Awaited<ReturnType<typeof syntheti
 
 async function expectSkipLinkFocused(page: Page) {
   const skip = page.locator('.skip-link');
-  // toBeFocused reports "inactive" when the document lacks focus or the skip
-  // link is not the active element. Home has no h1, so the arrival loop waits
-  // out a 400ms performance.now() budget and then focuses #workspace-content
-  // once. A full-page shot can return before that move, and one focus() then
-  // stays inactive. Bring the page forward and re-focus until it holds.
-  await expect.poll(async () => {
-    await page.bringToFront();
-    await skip.focus();
-    return skip.evaluate(el => document.hasFocus() && document.activeElement === el);
-  }).toBe(true);
+  // Home has no main h1. Wait for route-arrival focus to reach its fallback
+  // before focusing the skip link, so that delayed move cannot steal focus.
+  await page.bringToFront();
+  await expect(page.locator('#workspace-content')).toBeFocused();
+  await skip.focus();
   await expect(skip).toBeFocused();
 }
 
@@ -227,7 +222,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await asset.getByLabel('Name', { exact: true }).fill('Savings');
         await asset.getByLabel('Value', { exact: true }).fill('250');
         vault.failNextWrites(1);
-        await asset.getByRole('button', { name: 'Save' }).click();
+        await asset.getByRole('button', { name: 'Save asset' }).click();
         await expect(asset.getByRole('alert')).toBeVisible();
         await shot('asset-save-failure', width, theme);
         await asset.getByRole('button', { name: 'Cancel' }).click();
@@ -274,7 +269,7 @@ test.describe('finance F1 screenshot matrix', () => {
         const added = page.getByRole('dialog', { name: 'Add asset' });
         await added.getByLabel('Name', { exact: true }).fill('Cash');
         await added.getByLabel('Value', { exact: true }).fill('10');
-        await added.getByRole('button', { name: 'Save' }).click();
+        await added.getByRole('button', { name: 'Save asset' }).click();
         await expect(page.getByText('Asset added')).toBeVisible();
         await expect(page.locator('.toast')).toHaveCount(3);
         await page.mouse.move(0, 0);

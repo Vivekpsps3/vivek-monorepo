@@ -17,9 +17,10 @@ describe('evidence-labels.util', () => {
     const cards = stockLabEvidenceCards({
       primarySymbol: 'VTI',
       hasQuote: true,
-      cacheStatus: 'fresh',
+      asOf: 'as of Oct 22',
     });
     expect(cards[0].detail).toContain('VTI');
     expect(cards[0].detail).toContain('disclosed');
+    expect(cards[0].detail).toContain('as of Oct 22');
   });
 });

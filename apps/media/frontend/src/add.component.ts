@@ -1,7 +1,9 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   HostListener,
+  ViewChild,
   inject,
   signal,
 } from "@angular/core";
@@ -16,9 +18,15 @@ import {
   UiCardComponent,
   UiFieldComponent,
   UiFieldControlDirective,
+  UiIconComponent,
   UiPageHeaderComponent,
 } from "@vivek/ui";
 import { Detail, Kind, kinds, errorCopy } from "./media.models";
+import {
+  FIELD_ORDER,
+  validateAdd,
+  type AddErrors,
+} from "./add-validate.mjs";
 @Component({
   standalone: true,
   imports: [
@@ -28,34 +36,78 @@ import { Detail, Kind, kinds, errorCopy } from "./media.models";
     UiCardComponent,
     UiFieldComponent,
     UiFieldControlDirective,
+    UiIconComponent,
     UiPageHeaderComponent,
   ],
+  styles: `
+    .required-legend {
+      margin: 0 0 var(--space-3);
+    }
+    .field-error {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      color: var(--danger);
+      font-size: var(--text-sm);
+      margin: var(--space-1) 0 var(--space-3);
+    }
+  `,
   template: `<main class="page media-page">
     <ui-page-header
       backLabel="← Search"
       backLink="/media/search"
       eyebrow="Make room for a favorite"
       title="Add manually"
-      subtitle="Title and type are required. Add the rest when you're ready."
+      subtitle="Add the rest when you're ready."
     />
     <ui-card
-      ><form class="media-form" #form="ngForm" (ngSubmit)="save()">
+      ><form class="media-form" #form="ngForm" novalidate (ngSubmit)="save()">
+        <p class="muted required-legend">
+          <span aria-hidden="true">*</span> Required
+        </p>
         <ui-field label="Title" [required]="true"
           ><input
             uiFieldControl
             required
+            id="add-title"
             name="title"
             maxlength="300"
             [(ngModel)]="title"
+            (ngModelChange)="revalidate()"
+            [attr.aria-invalid]="errors()['title'] ? true : null"
+            [attr.aria-describedby]="
+              errors()['title'] ? 'add-title-error' : null
+            "
         /></ui-field>
+        @if (errors()["title"]) {
+          <p class="field-error" id="add-title-error">
+            <ui-icon name="alert" size="sm" /> {{ errors()["title"] }}
+          </p>
+        }
         <ui-field label="Type" [required]="true"
-          ><select uiFieldControl required name="kind" [(ngModel)]="kind">
+          ><select
+            uiFieldControl
+            required
+            id="add-kind"
+            name="kind"
+            [(ngModel)]="kind"
+            (ngModelChange)="revalidate()"
+            [attr.aria-invalid]="errors()['kind'] ? true : null"
+            [attr.aria-describedby]="
+              errors()['kind'] ? 'add-kind-error' : null
+            "
+          >
             @for (k of kinds; track k.value) {
               <option [value]="k.value">{{ k.label }}</option>
             }
           </select></ui-field
         >
-        <details>
+        @if (errors()["kind"]) {
+          <p class="field-error" id="add-kind-error">
+            <ui-icon name="alert" size="sm" /> {{ errors()["kind"] }}
+          </p>
+        }
+        <details #optionalDetails>
           <summary>Optional details</summary>
           <ui-field label="Creator"
             ><input
@@ -69,9 +121,21 @@ import { Detail, Kind, kinds, errorCopy } from "./media.models";
               type="number"
               min="1000"
               max="3000"
+              id="add-year"
               name="year"
-              [(ngModel)]="year" /></ui-field
-          ><ui-field label="Note">
+              [(ngModel)]="year"
+              (ngModelChange)="revalidate()"
+              [attr.aria-invalid]="errors()['year'] ? true : null"
+              [attr.aria-describedby]="
+                errors()['year'] ? 'add-year-error' : null
+              " /></ui-field
+          >
+          @if (errors()["year"]) {
+            <p class="field-error" id="add-year-error">
+              <ui-icon name="alert" size="sm" /> {{ errors()["year"] }}
+            </p>
+          }
+          <ui-field label="Note">
             <textarea
               uiFieldControl
               name="review"
@@ -84,11 +148,7 @@ import { Detail, Kind, kinds, errorCopy } from "./media.models";
           <p class="local-error" role="alert">{{ error() }}</p>
         }
         <div class="button-row">
-          <ui-button
-            variant="primary"
-            type="submit"
-            [disabled]="!form.valid || busy()"
-          >
+          <ui-button variant="primary" type="submit" [disabled]="busy()">
             {{
               busy()
                 ? "Adding…"
@@ -120,7 +180,27 @@ export class AddComponent {
   review = "";
   readonly error = signal("");
   readonly busy = signal(false);
+  readonly errors = signal<AddErrors>({});
+  submitted = false;
+  @ViewChild("optionalDetails")
+  private optionalDetails?: ElementRef<HTMLDetailsElement>;
   private saved = false;
+  revalidate(): void {
+    if (this.submitted)
+      this.errors.set(
+        validateAdd({ title: this.title, kind: this.kind, year: this.year }),
+      );
+  }
+  focusFirstInvalid(): void {
+    const current = this.errors();
+    for (const key of FIELD_ORDER) {
+      if (!current[key as keyof AddErrors]) continue;
+      if (key === "year" && this.optionalDetails)
+        this.optionalDetails.nativeElement.open = true;
+      document.getElementById("add-" + key)?.focus();
+      return;
+    }
+  }
   canLeave(): boolean | Promise<boolean> {
     return (
       !this.ownsSession ||
@@ -143,6 +223,14 @@ export class AddComponent {
   }
   save(): void {
     if (this.busy()) return;
+    this.submitted = true;
+    this.errors.set(
+      validateAdd({ title: this.title, kind: this.kind, year: this.year }),
+    );
+    if (Object.keys(this.errors()).length) {
+      this.focusFirstInvalid();
+      return;
+    }
     this.error.set("");
     this.busy.set(true);
     this.http

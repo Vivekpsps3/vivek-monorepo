@@ -145,6 +145,7 @@ export interface LibraryResponse {
   offset: number;
   limit: number;
   has_more: boolean;
+  available_tags?: string[];
 }
 export interface NextEpisode {
   entry_id: number;

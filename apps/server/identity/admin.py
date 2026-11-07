@@ -147,6 +147,7 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
             "habit_checkins",
             "habit_cadences",
             "habits",
+            "world_concepts",
             "album_ratings",
             "track_ratings",
             "season_progress",

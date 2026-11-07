@@ -5,6 +5,13 @@ export type { HubCardState };
 export const HUB_SUMMARY_DEADLINE_MS = 8_000;
 export const TRAVEL_SUMMARY_URL = '/travel/api/summary';
 export const MEDIA_SUMMARY_URL = '/media/api/summary';
+export const TOWN_SUMMARY_URL = '/api/town/summary';
+
+/** Town "today" depends on the viewer's zone, like every other town read. */
+export function townSummaryUrl(): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return `${TOWN_SUMMARY_URL}?tz=${encodeURIComponent(tz)}`;
+}
 
 export type HubFetch<T> =
   | { status: 'ok'; body: T }

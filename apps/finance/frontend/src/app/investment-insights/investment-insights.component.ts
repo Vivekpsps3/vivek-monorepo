@@ -8,10 +8,12 @@ import {
   OnDestroy,
   OnInit,
   ViewChild,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { formatCompactMoney as formatCompactCents, fromDollars } from '@vivek/browser';
+import { formatCompactMoney as formatCompactCents, formatMoney, fromDollars } from '@vivek/browser';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { Holding, NetWorth } from '../models/transaction.model';
@@ -28,8 +30,9 @@ import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import {
   chartAccentColor,
   chartCartesianScales,
-  chartLegendBottom,
   chartSuccessColor,
+  chartTextMuted,
+  chartTooltipTheme,
 } from '@vivek/ui';
 import { MoneyPipe } from '@vivek/ui';
 
@@ -83,6 +86,8 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   @Input() embedded = false;
   private _projectionChartCanvas?: ElementRef<HTMLCanvasElement>;
 
+  @ViewChild('growthInput') growthInput?: ElementRef<HTMLInputElement>;
+
   @ViewChild('projectionChart')
   set projectionChartCanvas(canvas: ElementRef<HTMLCanvasElement> | undefined) {
     this._projectionChartCanvas = canvas;
@@ -108,12 +113,19 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   private projectionChart?: ChartInstance;
   private viewReady = false;
 
+  private readonly router = inject(Router, { optional: true });
+
   constructor(
     private financeService: FinanceService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
   ) {}
 
+  addHolding(): void {
+    void this.router?.navigate(['/finance/have'], { queryParams: { t: 'holdings' } });
+  }
+
   ngOnInit(): void {
+    this.tableOpen = readTablePref();
     this.financeService.netWorth$.pipe(takeUntil(this.destroy$)).subscribe(data => {
       this.netWorth = data;
       void this.renderProjectionChart();
@@ -183,6 +195,84 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
 
   get projectedRealValue(): number {
     return this.projection.at(-1)?.realValue ?? this.portfolioValue;
+  }
+
+  // ---- F20: answer copy, presets, legend, yearly table ----
+
+  readonly growthOptions: readonly number[] = [5, 7, 10, 12];
+
+  tableOpen = false;
+  readonly hiddenSeries = new Set<string>();
+
+  get answerTitle(): string {
+    const approx = formatMoney(fromDollars(this.projectedValue), { style: 'whole', approx: true });
+    return `${approx.charAt(0).toUpperCase()}${approx.slice(1)} in ${this.projectionYears} years`;
+  }
+
+  get answerDetail(): string {
+    const rate = Number(this.annualGrowthRate.toFixed(2));
+    return `Starting from ${formatMoney(fromDollars(this.portfolioValue))} · ${rate}% a year · ${formatMoney(fromDollars(this.monthlyContribution))} a month`;
+  }
+
+  get isCustomGrowth(): boolean {
+    return !this.growthOptions.includes(this.annualGrowthRate);
+  }
+
+  onGrowthOption(value: string): void {
+    if (value === 'custom') {
+      this.selectCustomGrowth();
+      return;
+    }
+    this.setGrowthPreset(Number(value));
+  }
+
+  selectCustomGrowth(): void {
+    this.growthInput?.nativeElement.focus();
+    this.growthInput?.nativeElement.select();
+  }
+
+  get yearRows(): { year: number; value: number; realValue: number; contributions: number }[] {
+    return this.projection
+      .filter(point => point.year > 0)
+      .map(point => ({
+        year: point.year,
+        value: point.value,
+        realValue: point.realValue,
+        contributions: this.portfolioValue + this.monthlyContribution * 12 * point.year,
+      }));
+  }
+
+  get projectionSummary(): string {
+    const whole = (value: number): string => formatMoney(fromDollars(value), { style: 'whole' });
+    return `In ${this.projectionYears} years: projected ${whole(this.projectedValue)} · ${whole(this.projectedRealValue)} in today's dollars · ${whole(this.projectedMonthlyWithdrawalIncome)} a month future income`;
+  }
+
+  toggleTable(): void {
+    this.tableOpen = !this.tableOpen;
+    writeTablePref(this.tableOpen);
+    this.cdr.markForCheck();
+  }
+
+  /** Legend mirrors the chart datasets (the chart.js legend is off). */
+  get legendItems(): { label: string; color: string; dash: number[]; hidden: boolean }[] {
+    const items = [
+      { label: 'Projected value', color: chartAccentColor(), dash: [] as number[] },
+      { label: "In today's dollars", color: chartTextMuted(), dash: [6, 4] },
+    ];
+    if (this.monthlyContribution > 0) {
+      items.push({ label: 'Contributions only', color: warningColor(), dash: [6, 6] });
+    }
+    if (this.monthlyContributionIncrease > 0) {
+      items.push({ label: 'With higher contribution', color: chartSuccessColor(), dash: [3, 4] });
+    }
+    return items.map(item => ({ ...item, hidden: this.hiddenSeries.has(item.label) }));
+  }
+
+  toggleSeries(label: string): void {
+    if (this.hiddenSeries.has(label)) this.hiddenSeries.delete(label);
+    else this.hiddenSeries.add(label);
+    void this.renderProjectionChart();
+    this.cdr.markForCheck();
   }
 
   get scenarioMonthlyContribution(): number {
@@ -390,12 +480,13 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
       year: point.year,
       value: this.portfolioValue + this.monthlyContribution * 12 * point.year,
     }));
-    const labels = this.projection.map(point => `${point.year}y`);
+    const labels = this.projection.map(point => `${point.year}`);
     const compact = (value: number) => this.formatCompactMoney(value);
+    const hidden = (label: string): boolean => this.hiddenSeries.has(label);
 
     const datasets = [
       {
-        label: 'Nominal projected value',
+        label: 'Projected value',
         data: this.projection.map(point => point.value),
         borderColor: chartAccentColor(),
         backgroundColor: chartAccentColor(),
@@ -403,36 +494,39 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
         pointHoverRadius: 4,
         borderWidth: 2,
         tension: 0.28,
+        hidden: hidden('Projected value'),
       },
       {
-        label: 'Inflation-adjusted value',
+        label: "In today's dollars",
         data: this.projection.map(point => point.realValue),
-        borderColor: chartSuccessColor(),
-        backgroundColor: chartSuccessColor(),
+        borderColor: chartTextMuted(),
+        backgroundColor: chartTextMuted(),
         pointRadius: 0,
         pointHoverRadius: 4,
-        borderDash: [8, 4],
+        borderDash: [6, 4],
         borderWidth: 2,
         tension: 0.28,
+        hidden: hidden("In today's dollars"),
       },
       ...(this.monthlyContribution > 0
         ? [
             {
               label: 'Contributions only',
               data: contributionOnly.map(point => point.value),
-              borderColor: '#f59e0b',
-              backgroundColor: '#f59e0b',
+              borderColor: warningColor(),
+              backgroundColor: warningColor(),
               pointRadius: 0,
               pointHoverRadius: 4,
               borderDash: [6, 6],
               borderWidth: 2,
               tension: 0,
+              hidden: hidden('Contributions only'),
             },
           ]
         : []),
       ...(this.monthlyContributionIncrease > 0
         ? [{
-            label: 'Contribution increase scenario',
+            label: 'With higher contribution',
             data: this.scenarioProjection.map(point => point.value),
             borderColor: chartSuccessColor(),
             backgroundColor: chartSuccessColor(),
@@ -441,6 +535,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
             borderDash: [3, 4],
             borderWidth: 2,
             tension: 0.28,
+            hidden: hidden('With higher contribution'),
           }]
         : []),
     ];
@@ -451,10 +546,22 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: prefersReducedMotion() ? (false as const) : undefined,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: chartLegendBottom(),
-          tooltip: { enabled: false },
+          // F20: the HTML legend beside the chart replaces the chart.js one.
+          legend: { display: false },
+          // F11 seam: F11's `financeTooltip` spread lands with
+          // utils/chart-options.ts; until then the same theme + callbacks
+          // are inlined here.
+          tooltip: {
+            ...chartTooltipTheme(),
+            callbacks: {
+              title: (items: { label?: string }[]) => `Year ${items[0]?.label ?? ''}`,
+              label: (item: { dataset: { label?: string }; parsed: { y: number | null } }) =>
+                `${item.dataset.label ?? ''} ${formatMoney(fromDollars(Number(item.parsed.y ?? 0)), { style: 'whole', approx: true })}`,
+            },
+          },
         },
         scales: {
           ...chartCartesianScales(),
@@ -463,7 +570,7 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
             ticks: {
               ...chartCartesianScales().y.ticks,
               callback: (value: string | number) => compact(Number(value)),
-              maxTicksLimit: 6,
+              maxTicksLimit: isNarrowViewport() ? 4 : 8,
             },
           },
           x: {
@@ -490,4 +597,45 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   private formatCompactMoney(value: number): string {
     return formatCompactCents(fromDollars(value));
   }
+}
+
+// F11 seam: these mirror F11's utils/chart-options.ts helpers (same
+// localStorage contract) until that file lands on main.
+/** F11's chart-table preference key/format: '1' = table open, '0' = closed. */
+const TABLE_PREF_KEY = 'finance.chartTable.projection';
+const NARROW_QUERY = '(max-width: 640px)';
+
+function readTablePref(): boolean {
+  try {
+    return localStorage.getItem(TABLE_PREF_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeTablePref(open: boolean): void {
+  try {
+    localStorage.setItem(TABLE_PREF_KEY, open ? '1' : '0');
+  } catch {
+    // Preference persistence is best-effort.
+  }
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
+}
+
+function isNarrowViewport(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia(NARROW_QUERY).matches
+    : false;
+}
+
+/** --warning has no chart-theme export yet; read the token like chart-theme does. */
+function warningColor(): string {
+  if (typeof document === 'undefined') return '#f59e0b';
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--warning').trim();
+  return value || '#f59e0b';
 }
