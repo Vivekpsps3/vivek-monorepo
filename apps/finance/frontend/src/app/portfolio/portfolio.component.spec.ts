@@ -198,3 +198,31 @@ describe('PortfolioComponent', () => {
   });
 
 });
+
+describe('PortfolioComponent F7 shared quotes', () => {
+  it('exposes the saved quote for the form symbol from the shared book', () => {
+    const { component } = componentWithFinance();
+    component.holdings = [{
+      id: 1, symbol: 'VOO', shares: 1, purchase_price: 90, current_price: 111,
+      price_source: 'manual', price_as_of: '2026-10-30T20:24:00Z',
+    } as Holding];
+    component.newHolding.symbol = 'voo';
+    expect(component.checkPrice()).toEqual({ price: 111, asOfText: 'Oct 30, 1:24 PM PT' });
+    expect(component.asOfText(component.holdings[0])).toBe('Oct 30, 1:24 PM PT');
+    component.newHolding.symbol = 'MSFT';
+    expect(component.checkPrice()).toBeNull();
+  });
+
+  it('routes Check price for a held symbol through the coordinator, not a direct lookup', async () => {
+    const { component, finance, market } = componentWithFinance();
+    component.holdings = [{
+      id: 1, symbol: 'VOO', shares: 1, purchase_price: 90, current_price: 111,
+      price_source: 'manual', price_as_of: '2026-10-30T20:24:00Z',
+    } as Holding];
+    component.newHolding.symbol = 'VOO';
+    component.checkSharePrice();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(market.refreshSymbol).toHaveBeenCalledWith('VOO');
+    expect(finance.lookupSharePrice).not.toHaveBeenCalled();
+  });
+});
