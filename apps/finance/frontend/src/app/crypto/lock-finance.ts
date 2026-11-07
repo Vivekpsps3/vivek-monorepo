@@ -1,5 +1,5 @@
 import type { Injector } from '@angular/core';
-import { SESSION_CONTEXT, ToastService, failureCopy } from '@vivek/ui';
+import { SESSION_CONTEXT, ToastService } from '@vivek/ui';
 import { financeTabId, wipeDek } from './dek-holder';
 
 export const lockLoad = { modules: () => Promise.all([
@@ -28,11 +28,14 @@ export async function lockFinance(injector: Injector, originTabId?: string): Pro
   try {
     dropSnapshots();
     const load = lockLoad.modules, userId = injector.get(SESSION_CONTEXT, null, { optional: true })?.currentUser?.id;
-    const posted = typeof userId === 'number' && postLock(userId, originTabId);
+    // No coordinator fallback when postLock cannot post: the coordinator's
+    // channel is open under exactly the same conditions (a signed-in user and
+    // BroadcastChannel support), so the fallback could never reach a tab that
+    // postLock missed (B0F2).
+    if (typeof userId === 'number') postLock(userId, originTabId);
     await import('../services/finance.service').then(m => injector.get(m.FinanceService).clearSessionState()).catch(() => undefined);
     const [{ VaultService }, , { MarketRefreshCoordinatorService }] = await load();
     const market = injector.get(MarketRefreshCoordinatorService);
-    if (!posted) market.broadcastLock(originTabId);
     market.endSession();
     await injector.get(VaultService).lock();
   } catch {
@@ -40,7 +43,9 @@ export async function lockFinance(injector: Injector, originTabId?: string): Pro
     catch { /* store module failed; the key is already wiped */ }
     try { await injector.get((await import('./vault.service')).VaultService).lock(); }
     catch { /* the key is already wiped */ }
-    injector.get(ToastService).error(failureCopy('lock', 'this vault'), {
+    // wipeDek() already ran, so this tab is locked even when a later step
+    // failed; only the other tabs may still be open (B0F2 P1).
+    injector.get(ToastService).error('Locked here, but other tabs may still be open.', {
       label: 'Try again', run: () => { void lockFinance(injector, originTabId); },
     });
   }
