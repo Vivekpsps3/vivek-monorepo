@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
+import { isoDateInZone } from '@vivek/browser';
 import { authNavigation } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
@@ -280,7 +281,7 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     if (!quote?.valid || quote.symbol?.trim().toUpperCase() !== symbol) throw new Error('Market service returned a different or unavailable ticker.');
     if (!Number.isFinite(quote.price) || quote.price <= 0) throw new Error('Market service returned an invalid price.');
     const date = quote.quote_date || '';
-    if (!isValidDate(date) || date > new Date().toISOString().slice(0, 10)) throw new Error('Market service returned an invalid or future trading date.');
+    if (!isValidDate(date) || date > isoDateInZone(new Date(), 'America/Los_Angeles')) throw new Error('Market service returned an invalid or future trading date.');
   }
 
   private publishProgress(operation: number, result: MarketSymbolRefreshResult, total: number): void {

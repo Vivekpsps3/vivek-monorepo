@@ -1,3 +1,4 @@
+import { isoDateInZone } from '@vivek/browser';
 import type { Holding, JobIncome, MarketPriceQuote } from '../models/transaction.model';
 import type { EncryptedCollection } from '../crypto/encrypted-store.persistence';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
@@ -100,7 +101,7 @@ export class FinanceMarketCoordinator {
     if (!Number.isFinite(quote.price) || quote.price <= 0) {
       throw new Error('Market quote price must be a positive finite number.');
     }
-    if (!isValidMarketDate(date) || date > new Date().toISOString().slice(0, 10)) {
+    if (!isValidMarketDate(date) || date > isoDateInZone(new Date(), 'America/Los_Angeles')) {
       throw new Error('Market quote has an invalid or future trading date.');
     }
   }
