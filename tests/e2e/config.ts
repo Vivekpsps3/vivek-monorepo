@@ -21,6 +21,7 @@ export function domainConfig(domain: 'finance' | 'travel' | 'media') {
     retries: 0,
     reporter: [['list'], ['html', { open: 'never', outputFolder: path.join(root, 'playwright-report', domain) }]],
     use: {
+      ...(domain === 'finance' ? { timezoneId: 'America/Los_Angeles' } : {}),
       baseURL: domain === 'finance' && process.env.E2E_BASE_URL ? process.env.E2E_BASE_URL : `http://127.0.0.1:${port}${domain === 'travel' ? '/travel/' : ''}`,
       trace: 'retain-on-failure', screenshot: 'only-on-failure',
       ...(domain === 'travel' ? { reducedMotion: 'reduce' as const, actionTimeout: 10_000, navigationTimeout: 15_000 } : {}),

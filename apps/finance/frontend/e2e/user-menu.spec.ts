@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './frozen-clock';
 import { openUserMenu } from '../../../../tests/e2e/user-menu.mjs';
 import { syntheticVault } from './synthetic-vault';
 

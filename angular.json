@@ -104,6 +104,7 @@
             "scripts": [],
             "include": [
               "**/*.spec.ts",
+              "../../travel/frontend/src/**/*.spec.ts",
               "../../../packages/ui/src/**/*.spec.ts"
             ]
           }

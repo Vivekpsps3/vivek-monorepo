@@ -3,6 +3,7 @@ import { Injector } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import { DEK_STORE } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
+import { spendingModeInference } from '../planning/spending-mode';
 import type { Transaction } from '../models/transaction.model';
 import { loadFinanceBudgetKeptGuarded } from './budget-kept-import';
 import {
@@ -94,6 +95,21 @@ describe('budget kept pure core', () => {
     expect(resolveAnnualPlan([], inputs(4800, 100))).toBeNull();
   });
 
+  it('infers a missing spending mode through the shared helper', () => {
+    const infer = spyOn(spendingModeInference, 'inferMissing').and.callThrough();
+    const parts = { fixed_annual: 1000, variable_annual: 2000, irregular_annual: 650 };
+    expect(resolveAnnualPlan([
+      profile({ id: 1, updated_at: at, annual: 1, components: parts }),
+    ], inputs(9, 9))).toEqual({ annualPlan: PLAN, mode: 'components' });
+    expect(resolveAnnualPlan([
+      profile({ id: 2, updated_at: at, annual: 1800 }),
+    ], inputs(9, 9))).toEqual({ annualPlan: 1800, mode: 'manual' });
+    expect(resolveAnnualPlan([
+      profile({ id: 3, updated_at: at }),
+    ], inputs(4800, 100))).toEqual({ annualPlan: 4800, mode: 'recurring' });
+    expect(infer.calls.all().map(call => call.returnValue)).toEqual(['components', 'manual', 'recurring']);
+  });
+
   it('treats a missing or null spending_mode as manual', () => {
     const legacy = profile({ id: 1, updated_at: at, annual: 1800 });
     expect(legacy.payload.spending_mode).toBeUndefined();
@@ -101,6 +117,18 @@ describe('budget kept pure core', () => {
     const explicitNull = profile({ id: 2, updated_at: at, annual: 1800 });
     explicitNull.payload.spending_mode = null as unknown as ProfilePayload['spending_mode'];
     expect(resolveAnnualPlan([explicitNull], inputs(9999, 9999))).toEqual({ annualPlan: 1800, mode: 'manual' });
+  });
+
+  it('infers every spending mode when the saved mode is empty', () => {
+    const rows = [
+      [profile({ id: 1, updated_at: at, annual: 9, components: { fixed_annual: 1, variable_annual: 2, irregular_annual: 3 } }), 6, 'components'],
+      [profile({ id: 2, updated_at: at, annual: 9 }), 9, 'manual'],
+      [profile({ id: 3, updated_at: at }), 4800, 'recurring'],
+    ] as const;
+    for (const [row, annualPlan, mode] of rows) {
+      row.payload.spending_mode = '' as ProfilePayload['spending_mode'];
+      expect(resolveAnnualPlan([row], inputs(4800, 100))).toEqual({ annualPlan, mode });
+    }
   });
 
   it('does not resolve an unrecognized spending_mode to a plan', () => {
@@ -148,6 +176,21 @@ describe('budget kept pure core', () => {
     ], PLAN, ['2026-10-05', '2026-10-12']);
     expect(weeks[0]).toEqual(week('2026-10-05', 70, true));
     expect(weeks[1]).toEqual(week('2026-10-12', 70.01, false));
+  });
+
+  it('returns null kept when cents conversion fails', () => {
+    const tiny = budgetKeptWeeks([
+      tx({ id: 1, date: '2026-10-06', amount: 1, kind: 'purchase' }),
+    ], 1e-6, ['2026-10-05']);
+    expect(tiny[0].spend).toBe(1);
+    expect(tiny[0].kept).toBeNull();
+    const amount = 999_999_999_999.99;
+    const huge = budgetKeptWeeks([
+      tx({ id: 1, date: '2026-10-06', amount, kind: 'purchase' }),
+      tx({ id: 2, date: '2026-10-07', amount, kind: 'purchase' }),
+    ], PLAN, ['2026-10-05']);
+    expect(huge[0].spend).not.toBeNull();
+    expect(huge[0].kept).toBeNull();
   });
 
   it('lowers spend by a refund and ignores transfers, payments, credits, and excluded rows', () => {
@@ -434,6 +477,79 @@ describe('loadFinanceBudgetKept', () => {
     expect(await ask(injector)).toEqual({ status: 'expired' });
   });
 
+  it('returns expired for a 401 from initialization even while locked', async () => {
+    for (const isUnlocked of [true, false]) {
+      const { injector } = unlock({
+        isUnlocked, whenReady: () => Promise.reject(new HttpErrorResponse({ status: 401 })),
+      });
+      expect(await ask(injector)).toEqual({ status: 'expired' });
+    }
+  });
+
+  it('returns expired for a 401 from either planning read', async () => {
+    for (const source of ['listProfiles', 'getInputs'] as const) {
+      const { injector } = unlock({
+        [source]: () => throwError(() => new HttpErrorResponse({ status: 401 })),
+      });
+      expect(await ask(injector)).toEqual({ status: 'expired' });
+    }
+  });
+
+  it('returns cancelled for a 401 after abort during initialization or a read', async () => {
+    for (const source of ['whenReady', 'getTransactions'] as const) {
+      const ctrl = new AbortController();
+      const { injector } = unlock({
+        [source]: () => {
+          ctrl.abort();
+          return Promise.reject(new HttpErrorResponse({ status: 401 }));
+        },
+      });
+      expect(await ask(injector, { signal: ctrl.signal })).toEqual({ status: 'cancelled' });
+    }
+  });
+
+  it('returns expired for a 401 when the vault locks during the read', async () => {
+    const { injector } = unlock({
+      lockDuringTransactions: true,
+      getTransactions: () => Promise.reject(new HttpErrorResponse({ status: 401 })),
+    });
+    expect(await ask(injector)).toEqual({ status: 'expired' });
+  });
+
+  it('maps Vault locked errors from initialization and reads to locked', async () => {
+    for (const source of ['whenReady', 'getTransactions'] as const) {
+      const { injector } = unlock({ [source]: () => Promise.reject(new Error('Vault locked')) });
+      expect(await ask(injector)).toEqual({ status: 'locked' });
+    }
+  });
+
+  it('accepts the largest timer deadline', async () => {
+    expect(await ask(unlock({}).injector, { deadlineMs: 2 ** 31 - 1 })).toEqual({ status: 'no_plan' });
+  });
+
+  it('returns unavailable for 403, 404, and 429, and for a plain 401 object', async () => {
+    for (const status of [403, 404, 429]) {
+      const { injector } = unlock({
+        getTransactions: () => Promise.reject(new HttpErrorResponse({ status })),
+      });
+      expect(await ask(injector)).toEqual({ status: 'unavailable' });
+    }
+    const plain = unlock({
+      getTransactions: () => Promise.reject({ status: 401 }),
+    });
+    expect(await ask(plain.injector)).toEqual({ status: 'unavailable' });
+  });
+
+  it('returns locked when the vault locks during the read and the plan is valid', async () => {
+    const { injector, getTransactions } = unlock({
+      profiles: [manual],
+      txs: [tx({ id: 1, date: '2026-09-01', amount: 10, kind: 'purchase' })],
+      lockDuringTransactions: true,
+    });
+    expect(await ask(injector)).toEqual({ status: 'locked' });
+    expect(getTransactions).toHaveBeenCalled();
+  });
+
   it('returns unavailable when the vault read fails', async () => {
     const failed = unlock({
       listProfiles: () => throwError(() => new HttpErrorResponse({ status: 503 })),
@@ -472,16 +588,46 @@ describe('loadFinanceBudgetKept', () => {
     expect(await ask(unlock({ profiles: [older, newer], txs: purchase }).injector)).toEqual({ status: 'unavailable' });
   });
 
-  it('throws RangeError when today or weeks is outside the allowed window', async () => {
+  it('throws RangeError synchronously when today or weeks is outside the allowed window', () => {
     const load = spyOn(budgetKeptCryptoImports, 'load');
     const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
-    await expectAsync(ask(injector, { weeks: 0 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { weeks: -1 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { weeks: 1.5 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { weeks: 521 })).toBeRejectedWithError(RangeError, /weeks/);
-    await expectAsync(ask(injector, { today: '2026-02-31' })).toBeRejectedWithError(RangeError, /today/);
-    await expectAsync(ask(injector, { today: 'not-a-date' })).toBeRejectedWithError(RangeError, /today/);
+    expect(() => ask(injector, { weeks: 0 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { weeks: -1 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { weeks: 1.5 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { weeks: 521 })).toThrowError(RangeError, /weeks/);
+    expect(() => ask(injector, { today: '2026-02-31' })).toThrowError(RangeError, /today/);
+    expect(() => ask(injector, { today: 'not-a-date' })).toThrowError(RangeError, /today/);
     expect(load).not.toHaveBeenCalled();
+  });
+
+  it('throws RangeError when today is not a YYYY-MM-DD string', () => {
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    for (const today of ['2026-10-1', '2026-1-14', '2026-10-14 ', ' 2026-10-14', '2026-10-14\n']) {
+      expect(() => ask(injector, { today })).toThrowError(RangeError, /today/);
+    }
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('throws RangeError synchronously when deadlineMs is NaN, infinite, or not positive', () => {
+    const load = spyOn(budgetKeptCryptoImports, 'load');
+    const injector = { get: () => { throw new Error('unread'); } } as unknown as Injector;
+    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, 2 ** 31, Number.MAX_VALUE]) {
+      expect(() => ask(injector, { deadlineMs })).toThrowError(RangeError, /deadlineMs/);
+    }
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable when listProfiles or getTransactions throws RangeError', async () => {
+    const profiles = unlock({
+      listProfiles: () => throwError(() => new RangeError('profiles')),
+    });
+    expect(await ask(profiles.injector)).toEqual({ status: 'unavailable' });
+    const transactions = unlock({
+      profiles: [manual],
+      getTransactions: () => Promise.reject(new RangeError('transactions')),
+    });
+    expect(await ask(transactions.injector)).toEqual({ status: 'unavailable' });
   });
 
   it('accepts the upper bound of 520 completed weeks', async () => {
@@ -608,16 +754,59 @@ describe('loadFinanceBudgetKeptGuarded', () => {
     expect(elapsed).toBeLessThan(deadlineMs + 150);
   });
 
+  it('throws RangeError synchronously for a bad today, weeks, or deadline and does not import', () => {
+    const load = jasmine.createSpy('load').and.returnValue(new Promise(() => undefined));
+    const signal = new AbortController().signal;
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: 'not-a-date' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-02-31' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-10-14\n' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, today: '2026-10-1' }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 0 }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 1.5 }, load))
+      .toThrowError(RangeError);
+    expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, weeks: 521 }, load))
+      .toThrowError(RangeError);
+    for (const deadlineMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, 2 ** 31, Number.MAX_VALUE]) {
+      expect(() => loadFinanceBudgetKeptGuarded(injector, signal, { ...opts, deadlineMs }, load))
+        .toThrowError(RangeError);
+    }
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('accepts the largest timer deadline before importing', async () => {
+    const read = jasmine.createSpy('read').and.resolveTo({ status: 'no_plan' });
+    const load = () => Promise.resolve({ loadFinanceBudgetKept: read });
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal,
+      { ...opts, deadlineMs: 2 ** 31 - 1 }, load)).toEqual({ status: 'no_plan' });
+    expect(read).toHaveBeenCalled();
+  });
+
   it('returns unavailable without calling the module when the import uses the whole deadline', async () => {
     const read = jasmine.createSpy('loadFinanceBudgetKept').and.resolveTo({ status: 'ready' });
     const load = () => Promise.resolve({ loadFinanceBudgetKept: read });
-    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs: 0 }, load))
+    let ticks = 0;
+    spyOn(performance, 'now').and.callFake(() => {
+      ticks += 1;
+      return ticks * 1_000;
+    });
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs: 50 }, load))
       .toEqual({ status: 'unavailable' });
     expect(read).not.toHaveBeenCalled();
   });
 
   it('returns unavailable when the import fails', async () => {
     const load = jasmine.createSpy('load').and.rejectWith(new Error('chunk failed'));
+    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
+      .toEqual({ status: 'unavailable' });
+  });
+
+  it('returns unavailable when the import throws RangeError', async () => {
+    const load = jasmine.createSpy('load').and.rejectWith(new RangeError('chunk'));
     expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, opts, load))
       .toEqual({ status: 'unavailable' });
   });

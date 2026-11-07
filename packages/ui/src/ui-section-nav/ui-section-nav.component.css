@@ -1,0 +1,82 @@
+:host {
+  display: block;
+  position: sticky;
+  top: var(--header-h);
+  z-index: 30;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+:host([hidden]) {
+  display: none;
+}
+
+.ui-section-nav__scroller {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  /* The 48px row stays. The extra block padding keeps the 2px ring and its offset inside the scrollport. */
+  min-height: calc(48px + 2 * (var(--focus-ring-width) + var(--focus-ring-offset)));
+  padding-block: calc(var(--focus-ring-width) + var(--focus-ring-offset));
+  padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right));
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: calc(var(--focus-ring-width) + var(--focus-ring-offset));
+  scrollbar-width: none;
+}
+
+.ui-section-nav__scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.ui-section-nav__scroller.is-fade-end {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+
+.ui-section-nav__scroller.is-fade-start {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 24px);
+  mask-image: linear-gradient(to right, transparent, #000 24px);
+}
+
+.ui-section-nav__scroller.is-fade-start.is-fade-end {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+
+.ui-section-nav__link {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  scroll-margin-inline: calc(var(--focus-ring-width) + var(--focus-ring-offset));
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ui-section-nav__link.is-current {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.ui-section-nav__short {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .ui-section-nav__link:has(.ui-section-nav__short) .ui-section-nav__full {
+    display: none;
+  }
+
+  .ui-section-nav__short {
+    display: inline;
+  }
+}

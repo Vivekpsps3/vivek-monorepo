@@ -13,7 +13,7 @@
   --surface-hover: #e7e0d6;
   --text: #1c1916;
   --text-secondary: #5c564c;
-  --text-tertiary: #6e675c;
+  --text-tertiary: #655e53;
   --accent: #0f6e6a;
   --accent-hover: #0c5b58;
   --accent-glow: rgba(15, 110, 106, 0.1);
@@ -27,7 +27,7 @@
   --danger: #8d433c;
   --danger-tint: #f1e6e1;
   --danger-hover: #74362f;
-  --warning: #8a6232;
+  --warning: #7d5829;
   --on-accent: #ffffff;
   --border-strong: #c2b8aa;
   --backdrop-blur: 8px;
@@ -60,6 +60,23 @@
   --radius-pill: 999px;
 
   --focus-ring: var(--accent);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --info: var(--accent);
+  --danger-soft-bg: color-mix(in srgb, var(--danger) 14%, var(--card-bg));
+  --danger-soft-text: var(--danger);
+  --success-soft-bg: color-mix(in srgb, var(--success) 14%, var(--card-bg));
+  --warning-soft-bg: color-mix(in srgb, var(--warning) 14%, var(--card-bg));
+  --info-soft-bg: color-mix(in srgb, var(--info) 14%, var(--card-bg));
+  --content-max: 1160px;
+  --gutter: clamp(16px, 4vw, 32px);
+  --header-h: 72px;
+  --suite-header-height: var(--header-h);
+  --control-h: 40px;
+  --control-h-sm: 36px;
+  --leading-tight: 1.2;
+  --leading-body: 1.47;
+  --weight-strong: 650;
   --event-episode: var(--accent);
   --event-anticipated: var(--warning);
   --event-sequel: var(--text-secondary);
@@ -80,6 +97,7 @@
   --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --motion-fast: 120ms;
   --motion-base: 180ms;
+  --motion-slow: 240ms;
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
@@ -132,10 +150,18 @@
     --chart-6: #7d8794;
 }
 
+@media (max-width: 640px) {
+  :root {
+    --header-h: 64px;
+    --control-h: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-fast: 0ms;
     --motion-base: 0ms;
+    --motion-slow: 0ms;
   }
 }
 

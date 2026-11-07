@@ -12,5 +12,5 @@ export function formatDate(
   now?: Date,
   timeZone?: string,
 ): string;
-export function formatDateRange(start: string | null | undefined, end?: string | null): string;
+export function formatOpenEndedRange(start: string | null | undefined, end?: string | null): string;
 export function todayIsoDate(): string;

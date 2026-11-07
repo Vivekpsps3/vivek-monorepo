@@ -7,7 +7,7 @@ export {
   browserTimeZone,
   daysBetweenDateOnly,
   formatDate,
-  formatDateRange,
+  formatOpenEndedRange,
   isoDateInZone,
   isOnOrBeforeToday,
   localTodayIso,

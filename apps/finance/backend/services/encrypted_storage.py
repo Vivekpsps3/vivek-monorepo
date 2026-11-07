@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.finance.backend.kdf_policy import MAX_PBKDF2_ITERATIONS, MIN_PBKDF2_ITERATIONS
@@ -235,6 +236,98 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
         out.append(row)
     db.flush()
     return out
+
+
+def reindex_records(
+    db: Session, user_id: int, items: list[dict[str, Any]]
+) -> tuple[list[EncryptedRecord], list[str]]:
+    """Update blind indexes in place. A missing row is skipped and never inserted."""
+    if not items:
+        raise HTTPException(status_code=400, detail="No records provided")
+    if len(items) > MAX_BATCH:
+        raise HTTPException(status_code=400, detail=f"Batch too large (max {MAX_BATCH})")
+    updated: list[EncryptedRecord] = []
+    skipped: list[str] = []
+    for item in items:
+        collection = validate_collection(str(item.get("collection", "")))
+        client_id = validate_client_id(str(item.get("client_id", "")))
+        ciphertext_b64 = str(item.get("ciphertext_b64", ""))
+        if not ciphertext_b64 or _b64_len(ciphertext_b64) > MAX_CIPHERTEXT_BYTES:
+            raise HTTPException(status_code=400, detail="Invalid ciphertext")
+        schema_version = int(item.get("schema_version", 1))
+        key_version = int(item.get("key_version", 1))
+        if schema_version not in {1, CURRENT_RECORD_SCHEMA_VERSION} or key_version < 1:
+            raise HTTPException(status_code=400, detail="Invalid version fields")
+        row = (
+            db.query(EncryptedRecord)
+            .filter(
+                EncryptedRecord.user_id == user_id,
+                EncryptedRecord.collection == collection,
+                EncryptedRecord.client_id == client_id,
+            )
+            .one_or_none()
+        )
+        if row is None:
+            skipped.append(client_id)
+            continue
+        expected_revision = item.get("expected_revision")
+        if expected_revision is None:
+            raise HTTPException(status_code=400, detail="expected_revision is required for updates")
+        expected = int(expected_revision)
+        if expected != row.revision:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Revision conflict for {collection}/{client_id}",
+            )
+        indexes = item.get("indexes") or []
+        if not isinstance(indexes, list):
+            raise HTTPException(status_code=400, detail="indexes must be a list")
+        parsed: list[tuple[str, str]] = []
+        for idx in indexes:
+            name = str(idx.get("index_name", ""))
+            value = str(idx.get("index_value_b64", ""))
+            if not name or not value:
+                raise HTTPException(status_code=400, detail="Invalid blind index")
+            if _b64_len(value) > 128:
+                raise HTTPException(status_code=400, detail="Blind index too long")
+            parsed.append((name[:64], value))
+        # Same dedupe_key hashes to one HKDF value. The unique index cannot store
+        # the second row. Skip it so re-index can finish instead of retrying forever.
+        savepoint = db.begin_nested()
+        try:
+            row.ciphertext_b64 = ciphertext_b64
+            row.schema_version = schema_version
+            row.key_version = key_version
+            row.revision = row.revision + 1
+            row.updated_at = utc_now()
+            db.query(EncryptedRecordIndex).filter(
+                EncryptedRecordIndex.user_id == user_id,
+                EncryptedRecordIndex.collection == collection,
+                EncryptedRecordIndex.client_id == client_id,
+            ).delete(synchronize_session=False)
+            for name, value in parsed:
+                db.add(
+                    EncryptedRecordIndex(
+                        user_id=user_id,
+                        collection=collection,
+                        client_id=client_id,
+                        index_name=name,
+                        index_value_b64=value,
+                    )
+                )
+            db.flush()
+        except IntegrityError as exc:
+            savepoint.rollback()
+            db.expire(row)
+            if "unique" not in str(getattr(exc, "orig", exc)).lower():
+                raise
+            skipped.append(client_id)
+            continue
+        else:
+            savepoint.commit()
+        updated.append(row)
+    db.flush()
+    return updated, skipped
 
 
 def delete_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> int:

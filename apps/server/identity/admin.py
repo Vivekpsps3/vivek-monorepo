@@ -155,6 +155,7 @@ def delete_user_account(db: Session, user: User, *, actor_user_id: int) -> None:
             "user_entries",
             "pto_entries",
             "pto_policy",
+            "leave_policies",
             "trips",
         ):
             db.execute(text(f'DELETE FROM "{table}" WHERE user_id=:owner'), {"owner": user.id})

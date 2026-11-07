@@ -20,7 +20,7 @@ measure() {
   report=$(mktemp)
   # Pytest's report stays off stdout. The caller redirects stdout into
   # quality/coverage.txt and only wants the suite line.
-  "$py" -m pytest -q "$tests" --cov="$cov" --cov-report=term >"$report"
+  "$py" -m pytest -q "$tests" -m "not perf" --cov="$cov" --cov-report=term >"$report"
   cat "$report" >&2
   measured=$(awk '/^TOTAL / { gsub(/%/, "", $NF); print $NF }' "$report")
   rm -f "$report"

@@ -1,0 +1,36 @@
+<div class="ui-state" [attr.aria-busy]="state() === 'loading' ? 'true' : null">
+  @if (state() === 'loading') {
+    @if (showSkeleton()) {
+      <ui-skeleton variant="lines" [lines]="3" />
+    }
+  } @else if (state() === 'empty') {
+    <ui-empty-state [title]="emptyTitle()" [message]="emptyMessage()" [icon]="emptyIcon()">
+      @if (emptyAction() && emptyLink()) {
+        <ui-button variant="primary" [href]="emptyLink()" [label]="emptyAction()" />
+      }
+    </ui-empty-state>
+  } @else if (state() === 'unavailable') {
+    <div class="ui-state__banner ui-state__banner--warning" role="status">
+      <p class="ui-state__line"><ui-icon name="alert" /><span>{{ unavailableCopy() }}</span></p>
+      <ui-button variant="secondary" size="sm" [busy]="pending()" [disabled]="pending()" (clicked)="onRetry()">Retry</ui-button>
+    </div>
+  } @else if (state() === 'expired') {
+    <div class="ui-state__banner ui-state__banner--warning" role="status">
+      <p class="ui-state__line"><ui-icon name="alert" /><span>{{ expiredCopy() }}</span></p>
+      <ui-button variant="primary" href="/auth/login" [queryParams]="signInParams()" label="Sign in" />
+    </div>
+  } @else if (state() === 'locked') {
+    <div class="ui-state__banner ui-state__banner--info" role="status">
+      <p class="ui-state__line"><ui-icon name="lock" /><span>{{ lockedCopy() }}</span></p>
+      <ui-button variant="primary" href="/finance/vault/unlock" [queryParams]="signInParams()" label="Unlock" />
+    </div>
+  } @else {
+    <ng-content />
+    @if (state() === 'stale') {
+      <p class="ui-state__meta" role="status">
+        Updated {{ relative() }} ·
+        <ui-button variant="ghost" size="sm" [busy]="pending()" [disabled]="pending()" (clicked)="onRetry()">Retry</ui-button>
+      </p>
+    }
+  }
+</div>

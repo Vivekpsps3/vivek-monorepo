@@ -1,0 +1,21 @@
+<h1>Appearance</h1>
+<ui-card>
+  <fieldset class="theme-choices">
+    <legend>Color theme</legend>
+    @for (choice of choices; track choice.value) {
+      <label class="theme-choice">
+        <input
+          type="radio"
+          name="color-theme"
+          [value]="choice.value"
+          [checked]="theme.current === choice.value"
+          (change)="choose(choice.value)" />
+        <span class="theme-swatch" aria-hidden="true" [attr.data-theme]="choice.preview">
+          <span class="theme-swatch__sample">Aa</span>
+          <span class="theme-swatch__accent"></span>
+        </span>
+        <span>{{ choice.label }}</span>
+      </label>
+    }
+  </fieldset>
+</ui-card>

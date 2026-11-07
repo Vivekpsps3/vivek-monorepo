@@ -1,3 +1,7 @@
+import type { HubCardState } from '@vivek/ui';
+
+export type { HubCardState };
+
 export const HUB_SUMMARY_DEADLINE_MS = 8_000;
 export const TRAVEL_SUMMARY_URL = '/travel/api/summary';
 export const MEDIA_SUMMARY_URL = '/media/api/summary';
@@ -5,8 +9,6 @@ export const MEDIA_SUMMARY_URL = '/media/api/summary';
 export type HubFetch<T> =
   | { status: 'ok'; body: T }
   | { status: 'unavailable' | 'expired' | 'cancelled' };
-
-export type HubCardState = 'loading' | 'ready' | 'empty' | 'unavailable' | 'expired' | 'stale';
 
 export async function fetchHubSummary<T>(
   url: string,
@@ -43,7 +45,7 @@ export function settleHubCard<T>(
   previous: T | null,
   result: HubFetch<T>,
   isEmpty: (body: T) => boolean,
-): { state: Exclude<HubCardState, 'loading'>; data: T | null } | null {
+): { state: Exclude<HubCardState, 'loading' | 'locked'>; data: T | null } | null {
   if (result.status === 'cancelled') return null;
   if (result.status === 'ok') {
     return { state: isEmpty(result.body) ? 'empty' : 'ready', data: result.body };

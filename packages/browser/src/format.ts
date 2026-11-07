@@ -9,6 +9,7 @@ export const MAX_CENTS = 99_999_999_999_999;
 export const MAX_AMOUNT_MESSAGE = 'Enter an amount up to $999,999,999,999.99.';
 export const DEFAULT_MONEY_LOCALE = 'en-US';
 export const MINUS_SIGN = '\u2212';
+const WORD_JOINER = '\u2060';
 
 /**
  * Decision pending Vivek. true: plural(0) is "No X" (spec §5).
@@ -159,7 +160,7 @@ export function formatMoney(
     if (value < 0 && sign !== 'never') prefix = MINUS_SIGN;
     else if (value > 0 && sign === 'always') prefix = '+';
   }
-  const text = `${prefix}${body}`;
+  const text = prefix ? `${prefix}${WORD_JOINER}${body}` : body;
   return opts.approx ? `about ${text}` : text;
 }
 
@@ -175,7 +176,7 @@ export function moneyAriaLabel(
   value: Cents | null | undefined,
   opts: FormatMoneyOptions = {},
 ): string | null {
-  const visible = formatMoney(value, opts);
+  const visible = formatMoney(value, opts).replaceAll(WORD_JOINER, '');
   if (visible === '—') return 'not available';
   if (value != null && value < 0 && visible.startsWith(MINUS_SIGN)) {
     return `minus ${visible.slice(MINUS_SIGN.length)}`;
@@ -237,8 +238,33 @@ function currencyBody(
     minimumFractionDigits: compact ? 0 : digits,
     maximumFractionDigits: compact ? 1 : digits,
   }).formatToParts(amount);
-  return parts
-    .filter(part => part.type !== 'minusSign' && part.type !== 'plusSign')
-    .map(part => part.value)
-    .join('');
+  const visible = parts.filter(part => part.type !== 'minusSign' && part.type !== 'plusSign');
+  let text = '';
+  for (let index = 0; index < visible.length; index += 1) {
+    const part = visible[index];
+    if (!part) continue;
+    if (part.type !== 'currency') {
+      text += part.value;
+      continue;
+    }
+    const previous = visible[index - 1];
+    const next = visible[index + 1];
+    if (previous && sticksToCurrency(previous.type)) text += WORD_JOINER;
+    text += part.value;
+    if (next && sticksToCurrency(next.type)) text += WORD_JOINER;
+  }
+  return text;
 }
+
+function sticksToCurrency(type: Intl.NumberFormatPartTypes): boolean {
+  return (
+    type === 'integer' ||
+    type === 'group' ||
+    type === 'decimal' ||
+    type === 'fraction' ||
+    type === 'compact' ||
+    type === 'literal'
+  );
+}
+
+export { formatDay, formatDateRange, formatRelativeDay } from '../runtime/calendar-format.mjs';

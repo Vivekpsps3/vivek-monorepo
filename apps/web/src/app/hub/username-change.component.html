@@ -2,6 +2,7 @@
   <ui-input
     label="New username"
     autocomplete="off"
+    hint="3–64 characters: a–z, 0–9, . _ -"
     [required]="true"
     [invalid]="errorStatus === 400 || errorStatus === 409"
     [describedBy]="error ? 'username-change-error' : undefined"

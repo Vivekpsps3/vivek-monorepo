@@ -1,4 +1,4 @@
-import { addDays, biomeFor, dayIndex, inputKey, normalizeWeek } from './normalize';
+import { addDays, biomeFor, dayIndex, inputKey, normalizeWeek, placeKey } from './normalize';
 import { worldSeed } from './seed';
 import type { ApiTrip, ApiWeek } from './types';
 
@@ -7,6 +7,30 @@ describe('normalize', () => {
     expect(addDays('2026-10-26', 6)).toBe('2026-11-01');
     expect(addDays('2024-02-28', 1)).toBe('2024-02-29');
     expect(dayIndex('2026-10-26', '2026-10-29')).toBe(3);
+  });
+
+  it('normalizes precomposed and decomposed Reykjavík to the same place key', () => {
+    const precomposed = 'Reykjavík';
+    const decomposed = 'Reykjavi\u0301k';
+    expect(decomposed).not.toBe(precomposed);
+    expect(placeKey(decomposed)).toBe(placeKey(precomposed));
+    expect(placeKey(precomposed)).toBe('place|reykjavík');
+  });
+
+  it('keeps habit days inside the target week', () => {
+    const input = normalizeWeek({
+      week: '2026-10-26',
+      trips: [],
+      finished: [],
+      concepts: [],
+      habits: [
+        { habit_id: 4, style: 'cottage', days: ['2026-10-20', '2026-10-28', '2026-11-02'] },
+        { habit_id: 9, style: 'forge', days: ['2026-10-19', '2026-11-02'] },
+      ],
+    });
+    expect(dayIndex('2026-10-26', '2026-10-20')).toBe(-6);
+    expect(input.habits).toEqual([{ id: 4, style: 'cottage', n: 1, first: 2 }]);
+    expect(input.days.map((day) => day.lit)).toEqual([false, false, true, false, false, false, false]);
   });
 
   it('maps latitude thresholds and a missing place', () => {

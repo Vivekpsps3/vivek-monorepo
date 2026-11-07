@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './frozen-clock';
 import { syntheticVault } from './synthetic-vault';
 
 test('a selected growth preset stays pressed with a heavier inset style', async ({ page }) => {

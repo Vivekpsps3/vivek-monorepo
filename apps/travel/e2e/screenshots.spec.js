@@ -99,9 +99,10 @@ for (const width of widths) for (const theme of themes) {
     await expect(page.getByText('Tea garden', { exact: false })).toBeVisible();
     await shot('calendar-populated');
     await page.goto('/travel/pto');
-    await page.getByLabel('Known balance (days)').fill('12.5');
-    await page.getByLabel('Balance date').fill('2026-10-01');
-    await page.getByLabel('Accrual amount').fill('1.25');
+    const policy = page.locator('form').filter({ has: page.getByLabel('Known balance (days)') });
+    await policy.getByLabel('Known balance (days)').fill('12.5');
+    await policy.getByLabel('Balance date').fill('2026-10-01');
+    await policy.getByLabel('Accrual amount').fill('1.25');
     await shot('pto-filled');
     await page.getByRole('button', { name: 'Save PTO policy' }).click();
     await expect(page.locator('main [role=status]')).toContainText('PTO saved');

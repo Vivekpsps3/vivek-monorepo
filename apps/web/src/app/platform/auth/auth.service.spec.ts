@@ -1,10 +1,11 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { createSigningKey } from '@vivek/auth';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { AuthService } from './auth.service';
 import { UsernameChangeError } from './username-change';
 import { SessionService } from '../session.service';
-import { VaultService } from '../../../../../finance/frontend/src/testing';
+import { createVaultMaterial, hasDek, VaultService } from '../../../../../finance/frontend/src/testing';
 import { environment } from '../../../environments/environment';
 
 async function nextRequest(http: HttpTestingController, url: string) {
@@ -421,4 +422,67 @@ describe('AuthService passwordless login', () => {
     http.expectNone(`${api}/auth/passwordless/lookup`);
     http.expectNone(`${api}/auth/me`);
   });
+
+  it('does not store a key when login locks during the status fetch', async () => {
+    const passphrase = 'correct horse battery staple';
+    const signing = await createSigningKey(passphrase, 1000);
+    const wraps = (await createVaultMaterial(passphrase, 1000)).setupPayload;
+    const user = { id: 4, email: 'v@pending.local', username: 'vivek', display_name: 'V', role: 'user', is_active: true, must_change_password: false, created_at: '2026-10-14T00:00:00', updated_at: '2026-10-14T00:00:00' };
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [AuthService, { provide: SESSION_CONTEXT, useExisting: SessionService }] });
+    const http = TestBed.inject(HttpTestingController), vault = TestBed.inject(VaultService);
+    await vault.whenReady(); const unlock = spyOn(vault, 'unlock').and.callThrough();
+    const pending = TestBed.inject(AuthService).loginWithVault('vivek', passphrase);
+    http.expectOne('/api/auth/passwordless/lookup').flush({ auth: signing.wrapped });
+    (await nextRequest(http, '/api/auth/passwordless/challenge')).flush({ challenge_id: 'c1', challenge: 'raw', message: 'vault-auth-v1\nhttp://localhost\nlogin' });
+    (await nextRequest(http, '/api/auth/passwordless/verify')).flush({ user });
+    const status = await nextRequest(http, '/api/vault/status'); TestBed.inject(SessionService).clearLocalSession();
+    status.flush({ exists: true, kdf_salt_b64: wraps.kdf_salt_b64, kdf_iterations: wraps.kdf_iterations, wrapped_dek_b64: wraps.wrapped_dek_b64 });
+    await pending; expect(await unlock.calls.mostRecent().returnValue).toBeFalse();
+    expect([localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked]).toEqual([null, false, false]);
+    (await nextRequest(http, '/api/auth/passwordless/wraps')).flush({}); localStorage.removeItem('suite-session-ended'); http.verify();
+  });
+
+  const enrolled = {
+    id: 9,
+    email: 'new.user@pending.local',
+    username: 'new.user',
+    display_name: 'New User',
+    role: 'user' as const,
+    is_active: true,
+    must_change_password: false,
+    created_at: '2026-10-14T00:00:00',
+    updated_at: '2026-10-14T00:00:00',
+  };
+  const passphrase = 'correct horse battery staple';
+  for (const flow of [
+    { label: 'bootstrap', url: `${api}/auth/bootstrap/passwordless`, run: (auth: AuthService) => auth.bootstrapPasswordless('new.user', 'New User', passphrase) },
+    { label: 'signup', url: `${api}/auth/signup/passwordless`, run: (auth: AuthService) => auth.signupPasswordless('new.user', passphrase, 'New User') },
+    { label: 'invitation enroll', url: `${api}/auth/invitations/invite-token/enroll`, run: (auth: AuthService) => auth.enrollInvitation('invite-token', passphrase) },
+  ]) {
+    it(`adopts the ${flow.label} vault only after reset and the user is accepted`, async () => {
+      const derive = spyOn(crypto.subtle, 'deriveKey').and.callFake((() => crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])) as never);
+      let releaseReset!: () => void;
+      const resetGate = new Promise<void>(resolve => { releaseReset = resolve; });
+      (sessionState.resetDomainState as jasmine.Spy).and.returnValue(resetGate);
+      vault.adoptBootstrapVault.and.callFake(async () => {
+        expect(sessionState.currentUser?.id).toBe(enrolled.id);
+        expect(sessionState.checkedSession).toBeTrue();
+      });
+      try {
+        const pending = flow.run(service);
+        (await nextRequest(http, flow.url)).flush({ user: enrolled, csrf_token: 'csrf-token' });
+        await new Promise(resolve => setTimeout(resolve, 30));
+        expect(vault.adoptBootstrapVault).not.toHaveBeenCalled();
+        expect(sessionState.checkedSession).toBeTrue();
+        expect(sessionState.currentUser).toBeNull();
+        releaseReset();
+        await pending;
+        expect(vault.adoptBootstrapVault).toHaveBeenCalled();
+      } finally {
+        releaseReset();
+        derive.and.callThrough();
+      }
+    });
+  }
 });

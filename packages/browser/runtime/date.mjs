@@ -117,7 +117,8 @@ function formatInstant(instant, style, now, timeZone) {
   return `${dateText}, ${time} ${label}`;
 }
 
-export function formatDateRange(start, end) {
+/** Finance income ranges stay open-ended ("Oct 1, 2024 → Present"). Trip copy uses formatDateRange. */
+export function formatOpenEndedRange(start, end) {
   const opening = formatDate(start, "range");
   if (opening === "No date") return opening;
   if (end == null || end === "" || end === "present" || end === "Present") return `${opening} → Present`;

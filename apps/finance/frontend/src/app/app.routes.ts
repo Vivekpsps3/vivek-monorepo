@@ -1,11 +1,13 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import type { Routes } from '@angular/router';
 import { MainLayoutComponent } from './core/layout/main-layout.component';
 import { authGuard } from '@vivek/ui';
 import { vaultGuard } from './crypto/vault.guard';
+import { MarketRefreshCoordinatorService } from './services/market-refresh-coordinator.service';
 
 export const routes: Routes = [
   { path: 'vault/setup', title: 'Create vault · Finance', canActivate: [authGuard], loadComponent: () => import('./vault/vault-setup.component').then(m => m.VaultSetupComponent) },
-  { path: 'vault/unlock', title: 'Unlock vault · Finance', canActivate: [authGuard], loadComponent: () => import('./vault/vault-unlock.component').then(m => m.VaultUnlockComponent) },
+  { path: 'vault/unlock', title: 'Unlock vault · Finance', canActivate: [authGuard, () => { inject(MarketRefreshCoordinatorService); return true; }], loadComponent: () => import('./vault/vault-unlock.component').then(m => m.VaultUnlockComponent) },
   {
     path: 'embed',
     title: 'Net worth · Finance',

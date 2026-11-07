@@ -5,6 +5,7 @@ import {
   WEEK_STARTS_ON,
   daysBetweenDateOnly,
   formatDate,
+  formatOpenEndedRange,
   isOnOrBeforeToday,
   parseDateOnly,
   weekStartIndex,
@@ -70,4 +71,9 @@ test('Tokyo evening is the next local date and planning uses that today', () => 
   );
   assert.equal(isOnOrBeforeToday('2026-10-22', '2026-10-22'), true);
   assert.equal(isOnOrBeforeToday('2026-10-23', '2026-10-22'), false);
+});
+
+test('open-ended finance ranges keep the arrow and Present', () => {
+  assert.equal(formatOpenEndedRange('2024-10-01', null), 'Oct 1, 2024 → Present');
+  assert.equal(formatOpenEndedRange('2024-10-01', '2025-01-02'), 'Oct 1, 2024 → Jan 2, 2025');
 });

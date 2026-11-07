@@ -8,6 +8,8 @@ export type UiIconName =
   | 'calendar'
   | 'chevron-left'
   | 'chevron-right'
+  | 'chevron-down'
+  | 'grid'
   | 'plus'
   | 'upload'
   | 'wallet'
@@ -18,7 +20,8 @@ export type UiIconName =
   | 'spark'
   | 'users'
   | 'shield'
-  | 'alert';
+  | 'alert'
+  | 'lock';
 
 /** Lucide-style 24×24 stroke icons (currentColor). */
 const PATHS: Record<UiIconName, string> = {
@@ -31,6 +34,8 @@ const PATHS: Record<UiIconName, string> = {
     'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   'chevron-left': 'M15 18l-6-6 6-6',
   'chevron-right': 'M9 18l6-6-6-6',
+  'chevron-down': 'M6 9l6 6 6-6',
+  grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   plus: 'M12 5v14M5 12h14',
   upload: 'M12 3v12M8 7l4-4 4 4M4 21h16',
   wallet: 'M19 7H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 14h.01',
@@ -42,6 +47,7 @@ const PATHS: Record<UiIconName, string> = {
   users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   alert: 'M12 8v5M12 17h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+  lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z',
 };
 
 @Component({
