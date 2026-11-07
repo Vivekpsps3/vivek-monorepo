@@ -1,118 +1,182 @@
 <div class="page dashboard">
   <ui-page-header title="Home" />
-  @if (!isLoading && !error && netWorth) {
-    @if (priceNoticeVisible) {
-      <div class="price-notice" role="status">
-        <p>Prices checked automatically. Only ticker symbols are sent.</p>
-        <ui-button variant="ghost" size="sm" (clicked)="dismissPriceNotice()">Got it</ui-button>
+  @if (!isLoading && !error && priceNoticeVisible) {
+    <div class="price-notice" role="status">
+      <p>Prices checked automatically. Only ticker symbols are sent.</p>
+      <ui-button variant="ghost" size="sm" (clicked)="dismissPriceNotice()">Got it</ui-button>
+    </div>
+  }
+  @if (!isLoading && !error && netWorth && isStarterState && !incomeOccurrences.length) {
+    <section class="home-empty" aria-labelledby="home-empty-title">
+      <h2 id="home-empty-title">Start with one number</h2>
+      <p>Add a balance, a holding, or this month's card activity. Home fills in as you go.</p>
+      <div class="home-empty__actions">
+        <a class="home-empty__primary" routerLink="/finance/have">Add a balance</a>
+        <a class="home-empty__secondary" routerLink="/finance/spending" [queryParams]="{ add: '1' }">Import card activity</a>
       </div>
-    }
+    </section>
+
+    <ng-container *ngTemplateOutlet="firstStepsTpl" />
+  } @else if (!isLoading && !error && netWorth) {
     <nav class="home-overview" aria-label="Home overview">
-      <a routerLink="/finance/have" class="home-tile home-tile--balance">
-        <span class="home-tile__topline">Net worth <span class="home-tile__arrow" aria-hidden="true">→</span></span>
-        <span class="home-tile__value money">{{ have | money }}</span>
-        @if (autoPricesOff) {
-          <span class="home-status">Automatic price checks are off</span>
-        }
+      @if (hasBalances) {
+        <a routerLink="/finance/have" class="home-tile home-tile--balance">
+          <span class="home-tile__topline">Net worth <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+          <span class="home-tile__value money">{{ have | money }}</span>
+          @if (autoPricesOff) { <span class="home-status">Automatic price checks are off</span> }
 
-        <dl class="balance-breakdown">
-          <div>
-            <dt>{{ portfolioValueIncomplete ? 'Known holdings' : 'Holdings' }}</dt>
-            <dd class="money">{{ netWorth.portfolio | money }}</dd>
-          </div>
-          <div>
-            <dt>Other assets</dt>
-            <dd class="money">{{ netWorth.other_assets | money }}</dd>
-          </div>
-          <div>
-            <dt>Debts</dt>
-            <dd class="money">{{ (-netWorth.liabilities) | money }}</dd>
-          </div>
-        </dl>
+          <dl class="balance-breakdown">
+            <div>
+              <dt>{{ portfolioValueIncomplete ? 'Known holdings' : 'Holdings' }}</dt>
+              <dd class="money">{{ netWorth.portfolio | money }}</dd>
+            </div>
+            <div>
+              <dt>Other assets</dt>
+              <dd class="money">{{ netWorth.other_assets | money }}</dd>
+            </div>
+            <div>
+              <dt>Debts</dt>
+              <dd class="money">{{ (-netWorth.liabilities) | money }}</dd>
+            </div>
+          </dl>
 
-        @if (portfolioValueIncomplete) {
-          <span class="home-status">Portfolio value incomplete · {{ unvaluedPositionCount | plural:'unvalued position' }}</span>
-        }
-        @if (provisionalPositionCount) {
-          <span class="home-status">{{ provisionalPositionCount | plural:'position' }} {{ provisionalPositionCount === 1 ? 'uses' : 'use' }} provisional values</span>
-        }
-      </a>
+          @if (portfolioValueIncomplete) {
+            <span class="home-status">Portfolio value incomplete · {{ unvaluedPositionCount | plural:'unvalued position' }}</span>
+          }
+          @if (provisionalPositionCount) {
+            <span class="home-status">{{ provisionalPositionCount | plural:'position' }} {{ provisionalPositionCount === 1 ? 'uses' : 'use' }} provisional values</span>
+          }
+          @if (asOfLine) {
+            <span class="home-asof">{{ asOfLine }}</span>
+          }
+        </a>
+      } @else {
+        <div class="home-tile home-tile--balance home-tile--empty">
+          <span class="home-tile__topline">Net worth</span>
+          <p class="home-empty__line">No balances yet. <a routerLink="/finance/have">Add a balance</a></p>
+        </div>
+      }
+
       @if (autoPricesOff) {
         <ui-button variant="secondary" size="sm" class="home-refresh-prices" (clicked)="refreshPrices()">Refresh prices</ui-button>
       }
-
-      <a routerLink="/finance/spending" class="home-tile home-tile--activity">
-        <span class="home-tile__topline">{{ monthName }} <span class="home-tile__arrow" aria-hidden="true">→</span></span>
-        <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
-        <span class="home-split">
-          <span>
-            <small>Income</small>
-            <strong class="money">{{ monthPay | money }}</strong>
+      @if (hasMonthActivity) {
+        <a routerLink="/finance/spending" class="home-tile home-tile--activity">
+          <span class="home-tile__topline">{{ monthName }} <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+          <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
+          <span class="home-split">
+            <span>
+              <small>Income</small>
+              <strong class="money">{{ monthPay | money }}</strong>
+            </span>
+            <span>
+              <small>Spent</small>
+              <strong class="money">{{ monthSpend | money }}</strong>
+            </span>
+            <span>
+              <small>Scheduled</small>
+              <strong class="money">{{ monthScheduled | money }}</strong>
+            </span>
           </span>
-          <span>
-            <small>Spent</small>
-            <strong class="money">{{ monthSpend | money }}</strong>
-          </span>
-          <span>
-            <small>Scheduled</small>
-            <strong class="money">{{ monthScheduled | money }}</strong>
-          </span>
-        </span>
-        @if (spendDelta; as delta) {
-          <span class="home-status">{{ delta.delta >= 0 ? '+' : '−' }}{{ (delta.delta >= 0 ? delta.delta : -delta.delta) | money }} {{ delta.label }}</span>
-        }
-      </a>
+          @if (spendDelta; as delta) {
+            <span class="home-status">{{ delta.delta >= 0 ? '+' : '−' }}{{ (delta.delta >= 0 ? delta.delta : -delta.delta) | money }} {{ delta.label }}</span>
+          }
+        </a>
+      } @else {
+        <div class="home-tile home-tile--activity home-tile--empty">
+          <span class="home-tile__topline">{{ monthOnlyName }}</span>
+          <p class="home-empty__line">No activity in {{ monthOnlyName }}. <a routerLink="/finance/spending" [queryParams]="{ date: today, add: '1' }">Add a transaction</a></p>
+        </div>
+      }
     </nav>
 
-    @if (cashflow) {
-      <ui-card [title]="'Monthly income sources'">
-
-        @if (incomeOccurrences.length) {
-          <div class="income-breakdown" aria-label="Monthly income breakdown">
-            @for (item of incomeOccurrences; track item.id) {
-              <div class="income-breakdown__row">
-                <div class="income-breakdown__source">
-                  <strong>{{ item.label }} · {{ item.name }}</strong>
-                  <span>{{ item.date | appDate }} · {{ item.detail }}</span>
-                </div>
-                <strong class="money" [class.negative]="item.amount < 0">
-                  {{ item.amount | money }}
-                </strong>
-              </div>
+    @if (hasRecurring) {
+      <ui-card class="due-soon" [title]="'Due soon'">
+        <a uiCardActions class="due-soon__all" routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">Bills and subscriptions</a>
+        @if (dueSoon.length) {
+          <p class="due-soon__summary">Next 14 days · <span class="money">{{ dueSoonTotal | money }}</span></p>
+          <ul class="due-soon__list">
+            @for (item of dueSoon.slice(0, 5); track item.date + item.name) {
+              <li class="due-soon__row">
+                <span class="due-soon__date">{{ dueLabel(item.date) }}</span>
+                <span class="due-soon__name">{{ item.name }}</span>
+                <span class="money">{{ item.amount | money }}</span>
+              </li>
             }
-          </div>
+          </ul>
+          @if (dueSoon.length > 5) {
+            <a class="due-soon__more" routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">{{ dueSoon.length - 5 }} more due soon</a>
+          }
         } @else {
-          <p class="muted">No income sources were recorded or estimated for this month.</p>
+          <p class="muted">No bills due in the next two weeks.</p>
         }
       </ui-card>
     }
 
-    @if (isStarterState || guide.firstStepsRequested()) {
-      <section class="starter-card" aria-labelledby="starter-title">
-        <div class="starter-card__heading">
-          <h2 id="starter-title">First steps</h2>
-          <p>Add the parts you track, in any order.</p>
+    @if (cashflow && incomeOccurrences.length) {
+      <ui-card [title]="'Monthly income sources'">
+        <div class="income-breakdown" aria-label="Monthly income breakdown">
+          @for (item of incomeOccurrences; track item.id) {
+            <div class="income-breakdown__row">
+              <div class="income-breakdown__source">
+                <strong>{{ item.label }} · {{ item.name }}</strong>
+                <span>{{ item.date | appDate }} · {{ item.detail }}</span>
+              </div>
+              <strong class="money" [class.negative]="item.amount < 0">
+                {{ item.amount | money }}
+              </strong>
+            </div>
+          }
         </div>
-        <nav class="starter-links" aria-label="Finance setup">
-          <a routerLink="/finance/have"><ui-icon name="wallet" size="sm" />Add assets and debts<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }"><ui-icon name="portfolio" size="sm" />Add holdings<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/finance/spending" [queryParams]="{ receipts: '1' }"><ui-icon name="upload" size="sm" />Import bank CSVs<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/finance/recurring"><ui-icon name="building" size="sm" />Add jobs and pay<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }"><ui-icon name="calendar" size="sm" />Add bills and subscriptions<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/finance/planning"><ui-icon name="trending" size="sm" />Build a plan<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-        </nav>
-      </section>
+      </ui-card>
+    }
+
+    @if (showFirstSteps) {
+      <ng-container *ngTemplateOutlet="firstStepsTpl" />
     }
 
     <app-charts [embedded]="true" [dataReady]="!isLoading" [overrideTransactions]="transactions" />
   } @else if (isLoading) {
-    <ui-card class="loading-card">
-      <ui-skeleton variant="block" height="6rem" />
-    </ui-card>
+    @if (showSkeleton) {
+      <div class="home-skeleton" aria-busy="true" aria-label="Loading Home">
+        <div class="home-skeleton__tiles">
+          <ui-skeleton variant="block" height="9rem" />
+          <ui-skeleton variant="block" height="9rem" />
+        </div>
+        <ui-skeleton variant="block" height="16rem" />
+      </div>
+    }
   } @else if (error) {
-    <ui-card>
-      <p class="error-text">{{ error }}</p>
+    <ui-card class="home-error">
+      <h2>Couldn't load Home.</h2>
+      <p>Your data is still in the vault. Try again.</p>
       <ui-button variant="primary" (clicked)="retryLoad()">Try again</ui-button>
     </ui-card>
   }
+
+  <ng-template #firstStepsTpl>
+    <section class="first-steps" aria-labelledby="first-steps-title">
+      <div class="first-steps__head">
+        <h2 id="first-steps-title">First steps</h2>
+        <span class="first-steps__progress">{{ firstStepsDoneCount }} of 4 done</span>
+        @if (!isStarterState) {
+          <button type="button" class="first-steps__hide" (click)="hideFirstSteps()">Hide</button>
+        }
+      </div>
+      <ol class="first-steps__list">
+        @for (step of firstSteps; track step.id) {
+          <li [class.done]="step.done">
+            @if (step.done) {
+              <!-- K1 seam: <ui-icon name="check" size="sm" /> goes here once K1's icon set lands on main. -->
+              <span>{{ step.label }}</span>
+              <span class="first-steps__state">Done</span>
+            } @else {
+              <span class="first-steps__ring" aria-hidden="true"></span>
+              <a [routerLink]="stepLink(step.id).path" [queryParams]="stepLink(step.id).params">{{ step.label }}</a>
+            }
+          </li>
+        }
+      </ol>
+    </section>
+  </ng-template>
 </div>

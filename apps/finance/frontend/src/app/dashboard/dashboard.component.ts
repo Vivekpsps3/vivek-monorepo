@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { formatDate, formatDay, formatRelativeDay, todayIsoDate } from '@vivek/browser';
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { ChartsComponent } from '../charts/charts.component';
@@ -17,6 +18,13 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
+import {
+  dueSoon as dueSoonItems,
+  firstSteps as firstStepsFor,
+  homeAsOfLine,
+  type DueItem,
+  type FirstStep,
+} from '../utils/home-summary';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { monthlyCashflowSeries } from '../crypto/client-finance';
 import { monthDelta, type MonthDelta } from '../utils/category-spend';
@@ -64,6 +72,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   subscriptions: Subscription[] = [];
   isLoading = true;
   error: string | null = null;
+  showSkeleton = false;
+  firstStepsHidden = false;
   /** One-time ticker-privacy notice, shown after the first automatic check. */
   priceNoticeVisible = false;
   /** True when the user turned automatic price checks off. */
@@ -71,6 +81,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   protected readonly guide = inject(FinanceGuideService);
 
+  private skeletonTimer: ReturnType<typeof setTimeout> | null = null;
   private destroy$ = new Subject<void>();
   private readonly marketRefresh = inject(MarketRefreshCoordinatorService, { optional: true });
   private readonly pricePrefs = inject(FinancePricePrefsService, { optional: true });
@@ -116,6 +127,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     });
     this.load();
+    this.readFirstStepsHidden();
   }
 
   dismissPriceNotice(): void {
@@ -130,6 +142,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.skeletonTimer) {
+      clearTimeout(this.skeletonTimer);
+      this.skeletonTimer = null;
+    }
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -213,6 +229,102 @@ export class DashboardComponent implements OnInit, OnDestroy {
       && !this.subscriptions.length;
   }
 
+  get hasBalances(): boolean {
+    return this.assets.length + this.liabilities.length + this.holdings.length > 0;
+  }
+
+  get hasMonthActivity(): boolean {
+    // F8 seam: add `|| this.monthScheduled !== 0` once F8's getter lands on main.
+    return this.monthPay !== 0 || this.monthSpend !== 0;
+  }
+
+  get asOfLine(): string {
+    return homeAsOfLine(this.assets, this.liabilities, this.holdings);
+  }
+
+  get hasRecurring(): boolean {
+    return this.fixedExpenses.length + this.subscriptions.length > 0;
+  }
+
+  get dueSoon(): DueItem[] {
+    return dueSoonItems(todayIsoDate(), 14, this.transactions, this.fixedExpenses, this.subscriptions);
+  }
+
+  get dueSoonTotal(): number {
+    return this.dueSoon.reduce((sum, row) => sum + row.amount, 0);
+  }
+
+  get firstSteps(): FirstStep[] {
+    return firstStepsFor({
+      assets: this.assets.length,
+      liabilities: this.liabilities.length,
+      holdings: this.holdings.length,
+      transactions: this.transactions.length,
+      jobIncomes: this.jobIncomes.length,
+      fixed: this.fixedExpenses.length,
+      subs: this.subscriptions.length,
+    });
+  }
+
+  get firstStepsDoneCount(): number {
+    return this.firstSteps.filter(step => step.done).length;
+  }
+
+  get showFirstSteps(): boolean {
+    if (this.isStarterState) return true;
+    return this.guide.firstStepsRequested() || (!this.firstStepsHidden && this.firstStepsDoneCount < 4);
+  }
+
+  get today(): string {
+    return todayIsoDate();
+  }
+
+  get monthOnlyName(): string {
+    return formatDate(this.today, 'month').split(' ')[0];
+  }
+
+  hideFirstSteps(): void {
+    this.firstStepsHidden = true;
+    try {
+      localStorage.setItem(this.firstStepsStorageKey, '1');
+    } catch {
+      // Private mode: hide for this page session only.
+    }
+    this.guide.clear();
+    this.cdr.markForCheck();
+  }
+
+  dueLabel(iso: string): string {
+    const relative = formatRelativeDay(iso);
+    return relative === 'Today' || relative === 'Tomorrow' ? relative : formatDay(iso);
+  }
+
+  stepLink(id: FirstStep['id']): { path: string; params: Record<string, string> | null } {
+    switch (id) {
+      case 'balance':
+        return { path: '/finance/have', params: null };
+      case 'holdings':
+        return { path: '/finance/have', params: { t: 'holdings' } };
+      case 'activity':
+        return { path: '/finance/spending', params: { add: '1' } };
+      case 'recurring':
+        return { path: '/finance/recurring', params: null };
+    }
+  }
+
+  private get firstStepsStorageKey(): string {
+    const id = this.session?.currentUser?.id;
+    return `finance-home-first-steps-hidden:${id ?? 'signed-out'}`;
+  }
+
+  private readFirstStepsHidden(): void {
+    try {
+      this.firstStepsHidden = localStorage.getItem(this.firstStepsStorageKey) === '1';
+    } catch {
+      this.firstStepsHidden = false;
+    }
+  }
+
   retryLoad(): void {
     this.load(true);
   }
@@ -220,6 +332,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private load(force = false): void {
     this.isLoading = true;
     this.error = null;
+    this.showSkeleton = false;
+    if (this.skeletonTimer) clearTimeout(this.skeletonTimer);
+    this.skeletonTimer = setTimeout(() => {
+      this.showSkeleton = true;
+      this.cdr.markForCheck();
+    }, 150);
     this.cdr.markForCheck();
     forkJoin({
       dashboard: this.finance.loadDashboard(force),
@@ -228,15 +346,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
+          if (this.skeletonTimer) {
+            clearTimeout(this.skeletonTimer);
+            this.skeletonTimer = null;
+          }
           this.isLoading = false;
           this.cdr.markForCheck();
         })
       )
       .subscribe({
         next: () => this.cdr.markForCheck(),
-        error: (err: Error) => {
-          const detail = err?.message ? ` ${err.message}` : '';
-          this.error = `The app could not load Home.${detail}`;
+        error: () => {
+          this.error = 'load-failed';
           this.cdr.markForCheck();
         },
       });

@@ -4,8 +4,16 @@ import { MarketRefreshCoordinatorService } from '../services/market-refresh-coor
 import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { ReplaySubject, of } from 'rxjs';
-import { CashflowSummary, Holding, Transaction } from '../models/transaction.model';
+import { Observable, ReplaySubject, Subject, of, throwError } from 'rxjs';
+import { type SessionPort } from '@vivek/ui';
+import {
+  Asset,
+  CashflowSummary,
+  FixedExpense,
+  Holding,
+  Subscription,
+  Transaction,
+} from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
 import { ChartsComponent } from '../charts/charts.component';
 import { DashboardComponent } from './dashboard.component';
@@ -240,5 +248,245 @@ describe('Dashboard', () => {
     expect(coordinator.refreshNow).toHaveBeenCalled();
     fixture.destroy();
     localStorage.clear();
+  });
+});
+
+describe('Home states (F14)', () => {
+  beforeEach(() => TestBed.configureTestingModule({
+    providers: [{ provide: MarketRefreshCoordinatorService, useValue: null }],
+  }));
+  interface HomeData {
+    assets?: Asset[];
+    holdings?: Holding[];
+    transactions?: Transaction[];
+    fixed?: FixedExpense[];
+    subs?: Subscription[];
+    cashflow?: CashflowSummary | null;
+  }
+
+  const asset = { id: 1, name: 'Checking', category: 'cash', current_value: 100, as_of_date: '2026-10-22' } as Asset;
+  const holding = { id: 1, symbol: 'VOO', shares: 1 } as Holding;
+  const transaction = { id: 1, date: '2026-10-10', amount: -5 } as unknown as Transaction;
+
+  function sub(name: string, amount: number, nextBill: string): Subscription {
+    return {
+      id: 1,
+      name,
+      category: 'entertainment',
+      amount,
+      frequency: 'monthly',
+      next_bill_date: nextBill,
+      is_active: true,
+    } as Subscription;
+  }
+
+  function bill(name: string, dueDay: number, amount = 10): FixedExpense {
+    return {
+      id: 1,
+      name,
+      category: 'utilities',
+      amount,
+      frequency: 'monthly',
+      start_date: '2026-01-01',
+      due_day: dueDay,
+      is_active: true,
+    } as FixedExpense;
+  }
+
+  async function render(
+    data: HomeData,
+    loadDashboard: () => Observable<unknown> = () => of([]),
+  ): Promise<ComponentFixture<DashboardComponent>> {
+    const finance = {
+      netWorth$: of({ total: 0, portfolio: 0, other_assets: 0, liabilities: 0 }),
+      cashflowSummary$: of(data.cashflow ?? null),
+      holdings$: of(data.holdings ?? []),
+      dashboardTransactions$: of(data.transactions ?? []),
+      assets$: of(data.assets ?? []),
+      liabilities$: of([]),
+      fixedExpenses$: of(data.fixed ?? []),
+      jobIncomes$: of([]),
+      subscriptions$: of(data.subs ?? []),
+      loadDashboard: jasmine.createSpy('loadDashboard').and.callFake(loadDashboard),
+      getLiabilities: jasmine.createSpy('getLiabilities').and.returnValue(of([])),
+    } as unknown as FinanceService;
+    await TestBed.configureTestingModule({
+      imports: [DashboardComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 7 } } as unknown as SessionPort },
+        provideRouter([]),
+      ],
+    })
+      .overrideComponent(DashboardComponent, {
+        remove: { imports: [ChartsComponent] },
+        add: { imports: [DashboardChartsStubComponent] },
+      })
+      .compileComponents();
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function createOnly(): ComponentFixture<DashboardComponent> {
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function text(fixture: ComponentFixture<DashboardComponent>): string {
+    // Money formatting inserts a word joiner after the currency symbol.
+    return ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/⁠/g, '');
+  }
+
+  beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(2026, 9, 20, 12));
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    jasmine.clock().uninstall();
+  });
+
+  it('empty vault shows one card and the checklist, no figures', async () => {
+    const fixture = await render({});
+    const el = fixture.nativeElement as HTMLElement;
+    expect(text(fixture)).toContain('Start with one number');
+    expect(text(fixture)).toContain('First steps');
+    expect(text(fixture)).toContain('0 of 4 done');
+    const addBalance = el.querySelector('a[href="/finance/have"]');
+    expect(addBalance?.textContent).toContain('Add a balance');
+    const importLink = el.querySelector('a[href="/finance/spending?add=1"]');
+    expect(importLink?.textContent).toContain('Import card activity');
+    expect(el.querySelector('.home-tile')).toBeNull();
+    expect(text(fixture)).not.toContain('Monthly income sources');
+    expect(el.querySelector('app-charts')).toBeNull();
+    expect(text(fixture)).not.toContain('Hide');
+    fixture.destroy();
+  });
+
+  it('net worth topline and as-of line', async () => {
+    const fixture = await render({ assets: [asset] });
+    const tile = (fixture.nativeElement as HTMLElement).querySelector('a.home-tile--balance');
+    expect(tile).not.toBeNull();
+    expect(tile?.textContent).toContain('Net worth');
+    expect(tile?.textContent).toContain('Balances Oct 22');
+    expect(text(fixture)).not.toContain('What you have');
+    fixture.destroy();
+  });
+
+  it('partial tiles become plain cards with one link', async () => {
+    const fixture = await render({ subs: [sub('Streaming', 10, '2026-11-15')] });
+    const el = fixture.nativeElement as HTMLElement;
+    const empty = el.querySelector('div.home-tile--empty');
+    expect(empty?.textContent).toContain('No balances yet.');
+    expect(empty?.querySelector('a')?.textContent).toContain('Add a balance');
+    expect(el.querySelector('a.home-tile--balance')).toBeNull();
+    fixture.destroy();
+  });
+
+  it('no activity this month', async () => {
+    const fixture = await render({ assets: [asset] });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(text(fixture)).toContain('No activity in October.');
+    const link = Array.from(el.querySelectorAll('a')).find(a => a.textContent?.includes('Add a transaction'));
+    expect(link?.getAttribute('href')).toContain('date=2026-10-20');
+    expect(link?.getAttribute('href')).toContain('add=1');
+    fixture.destroy();
+  });
+
+  it('due soon lists unposted bills', async () => {
+    const fixture = await render({ subs: [sub('Streaming', 15.49, '2026-10-22')] });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(text(fixture)).toContain('Due soon');
+    expect(text(fixture)).toContain('Next 14 days · $15.49');
+    const row = el.querySelector('.due-soon__row');
+    expect((row?.textContent ?? '').replace(/\s+/g, ' ')).toContain('Thu, Oct 22');
+    expect(row?.textContent).toContain('Streaming');
+    expect((row?.textContent ?? '').replace(/⁠/g, '')).toContain('$15.49');
+    expect(row?.querySelector('.money')?.classList.contains('negative')).toBeFalse();
+    fixture.destroy();
+  });
+
+  it('due soon empty copy', async () => {
+    const fixture = await render({ fixed: [bill('Rent', 5, 1200)] });
+    expect(text(fixture)).toContain('No bills due in the next two weeks.');
+    fixture.destroy();
+  });
+
+  it('due soon caps at five', async () => {
+    const fixed = [21, 22, 23, 24, 25, 26, 27].map((day, i) => bill(`Bill ${i + 1}`, day, i + 1));
+    const fixture = await render({ fixed });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.due-soon__row').length).toBe(5);
+    expect(text(fixture)).toContain('2 more due soon');
+    fixture.destroy();
+  });
+
+  it('no income card without income rows', async () => {
+    const cashflow = {
+      total_income: 0,
+      total_expenses: 0,
+      net_cashflow: 0,
+      income_occurrences: [],
+    } as unknown as CashflowSummary;
+    const fixture = await render({ assets: [asset], cashflow });
+    expect(text(fixture)).not.toContain('Monthly income sources');
+    expect(text(fixture)).not.toContain('No income sources were recorded');
+    fixture.destroy();
+  });
+
+  it('first steps hide persists per user', async () => {
+    const data: HomeData = { assets: [asset], transactions: [transaction] };
+    const fixture = await render(data);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(text(fixture)).toContain('2 of 4 done');
+    const hide = Array.from(el.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Hide');
+    hide?.click();
+    fixture.detectChanges();
+    expect(text(fixture)).not.toContain('First steps');
+    expect(localStorage.getItem('finance-home-first-steps-hidden:7')).toBe('1');
+    fixture.destroy();
+
+    const again = createOnly();
+    expect(text(again)).not.toContain('First steps');
+    again.destroy();
+  });
+
+  it('first steps disappear when all four are done', async () => {
+    const fixture = await render({
+      assets: [asset],
+      holdings: [holding],
+      transactions: [transaction],
+      subs: [sub('Streaming', 10, '2026-11-15')],
+    });
+    expect(text(fixture)).not.toContain('First steps');
+    fixture.destroy();
+  });
+
+  it('skeleton waits 150 ms', async () => {
+    const fixture = await render({}, () => new Subject<unknown>());
+    const el = fixture.nativeElement as HTMLElement;
+    jasmine.clock().tick(149);
+    fixture.detectChanges();
+    expect(el.querySelector('.home-skeleton')).toBeNull();
+    jasmine.clock().tick(1);
+    fixture.detectChanges();
+    expect(el.querySelector('.home-skeleton')).not.toBeNull();
+    fixture.destroy();
+  });
+
+  it('error copy hides the raw message', async () => {
+    const fixture = await render({}, () => throwError(() => new Error('HTTP 500 /vault')));
+    const el = fixture.nativeElement as HTMLElement;
+    expect(text(fixture)).toContain("Couldn't load Home.");
+    expect(text(fixture)).toContain('Your data is still in the vault. Try again.');
+    expect(text(fixture)).not.toContain('HTTP 500');
+    const finance = TestBed.inject(FinanceService) as unknown as { loadDashboard: jasmine.Spy };
+    const retry = Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes('Try again'));
+    retry?.click();
+    expect(finance.loadDashboard).toHaveBeenCalledWith(true);
+    fixture.destroy();
   });
 });
