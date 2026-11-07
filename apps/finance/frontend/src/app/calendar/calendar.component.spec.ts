@@ -16,7 +16,7 @@ describe('CalendarComponent Activity handoff', () => {
     } as any];
 
     expect(component.transactionActivityQuery(5)).toEqual({
-      t: 'activity', v: 'all', month: '2026-06', date: '2026-06-03', account: 'account-1',
+      t: null, v: 'all', month: '2026-06', date: '2026-06-03', account: 'account-1',
       category: 'groceries', merchant: 'green market', edit: 5,
     });
     component.ngOnDestroy();

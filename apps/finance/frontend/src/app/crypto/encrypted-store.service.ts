@@ -11,6 +11,7 @@ import {
   Subscription,
   Transaction,
 } from '../models/transaction.model';
+import { isoDateInZone } from '@vivek/browser';
 import { StockLabScenario } from '../models/stock-lab.model';
 import type { BrokerageAccountRecord, FidelityStageRecord, FidelityStageRow } from '../utils/fidelity-import.util';
 import type { FidelityCommitResult } from '../models/transaction.model';
@@ -31,6 +32,17 @@ export type { EncryptedCollection, EncryptedStoreChange } from './encrypted-stor
 export { RecordRevisionConflictError } from './encrypted-store.persistence';
 import { VaultService, type VaultWriteOptions } from './vault.service';
 
+function stableRecordText(record: Transaction): string {
+  const entries = Object.entries(record as unknown as Record<string, unknown>)
+    .filter(([, value]) => value !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify(entries);
+}
+
+function sameTransactionContent(a: Transaction, b: Transaction): boolean {
+  return stableRecordText(a) === stableRecordText(b);
+}
+
 @Injectable({ providedIn: 'root' })
 export class EncryptedStoreService {
   private generation = 0;
@@ -46,6 +58,7 @@ export class EncryptedStoreService {
       allocateId: () => this.allocateId(),
       upsertImportRecord: <T extends { id?: number }>(payload: T, clientId?: string, generation?: number) =>
         this.upsert('import_batches', payload, clientId, generation),
+      removeImportRecord: (id: number) => this.remove('import_batches', id),
       savePreparedRecords: <T extends { id: number }>(rows: T[], replaceExisting?: boolean) =>
         this.savePreparedRecords('import_batches', rows, replaceExisting),
       getTransactions: () => this.getTransactions(),
@@ -139,6 +152,33 @@ export class EncryptedStoreService {
     return this.runRecordUpdate('transactions', id, generation, () => this.remove('transactions', id, options));
   }
 
+  /**
+   * F21 Undo: put back the exact record deleteTransaction removed, under its
+   * original id and with every field intact. Restore is idempotent — when
+   * the record is already present with identical content the outcome is
+   * 'already-restored' and nothing is written, so a repeated Undo can never
+   * duplicate it. When a different record now holds the id, refuse rather
+   * than silently overwriting someone else's edit. The snapshot lives only
+   * in the caller's memory; nothing plaintext leaves the browser.
+   */
+  async restoreTransaction(
+    record: Transaction,
+    options?: VaultWriteOptions,
+  ): Promise<{ record: Transaction; outcome: 'restored' | 'already-restored' }> {
+    const generation = this.generation;
+    return this.runRecordUpdate('transactions', record.id, generation, async () => {
+      await this.ensureLoaded();
+      this.assertSession(generation);
+      const current = this.list<Transaction>('transactions').find(t => t.id === record.id);
+      if (current) {
+        if (sameTransactionContent(current, record)) return { record: current, outcome: 'already-restored' as const };
+        throw new Error('Transaction changed after it was deleted');
+      }
+      const restored = await this.upsert('transactions', { ...record }, undefined, generation, options);
+      return { record: restored, outcome: 'restored' as const };
+    });
+  }
+
   async deleteTransactions(ids: number[]): Promise<void> {
     const generation = this.generation;
     const uniqueIds = [...new Set(ids)];
@@ -203,6 +243,12 @@ export class EncryptedStoreService {
   }
   undoImportReceipt(id: number): Promise<{ removed: number; edited: number; missing: number }> {
     return this.bankImports.undoImportReceipt(id);
+  }
+  previewUndoImportReceipt(id: number): Promise<{ removable: number; editedKept: number; alreadyGone: number }> {
+    return this.bankImports.previewUndoImportReceipt(id);
+  }
+  deleteImportReceipt(id: number): Promise<void> {
+    return this.bankImports.deleteImportReceipt(id);
   }
 
   async bulkRenameTransactionCategories(renames: { fromCategory: string; toCategory: string }[]): Promise<{ updated: number; conflicts: number }> {
@@ -436,7 +482,7 @@ export class EncryptedStoreService {
     if (!/^[A-Z][A-Z0-9.-]*$/.test(this.normalizeSymbol(quote?.symbol || ''))) throw new Error('Invalid market ticker.');
     if (!Number.isFinite(quote?.price) || quote.price <= 0) throw new Error('Market quote price must be a positive finite number.');
     const date = quote.quote_date ?? '';
-    if (!this.isValidDate(date) || date > new Date().toISOString().slice(0, 10)) throw new Error('Market quote has an invalid or future trading date.');
+    if (!this.isValidDate(date) || date > isoDateInZone(new Date(), 'America/Los_Angeles')) throw new Error('Market quote has an invalid or future trading date.');
   }
 
   private normalizeSymbol(value: string): string { return value.trim().toUpperCase(); }

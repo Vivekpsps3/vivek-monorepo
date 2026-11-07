@@ -20,6 +20,7 @@ export interface TransactionActivityTotals {
   monthExpenseTotal: number;
   monthIncomeTotal: number;
   purchaseCount: number;
+  refundCount: number;
   incomeCount: number;
   excludedCount: number;
 }
@@ -75,6 +76,7 @@ export function transactionActivityTotals(rows: Transaction[]): TransactionActiv
   let expenseCents = 0;
   let incomeCents = 0;
   let purchaseCount = 0;
+  let refundCount = 0;
   let incomeCount = 0;
   let excludedCount = 0;
   for (const row of rows) {
@@ -84,8 +86,11 @@ export function transactionActivityTotals(rows: Transaction[]): TransactionActiv
       excludedCount += 1;
       continue;
     }
-    if (effects.spending !== 0) {
+    if (effects.spending > 0) {
       purchaseCount += 1;
+      expenseCents += fromDollars(effects.spending) ?? 0;
+    } else if (effects.spending < 0) {
+      refundCount += 1;
       expenseCents += fromDollars(effects.spending) ?? 0;
     }
     if (effects.income !== 0) {
@@ -97,6 +102,7 @@ export function transactionActivityTotals(rows: Transaction[]): TransactionActiv
     monthExpenseTotal: expenseCents / 100,
     monthIncomeTotal: incomeCents / 100,
     purchaseCount,
+    refundCount,
     incomeCount,
     excludedCount,
   };

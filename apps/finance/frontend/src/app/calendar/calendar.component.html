@@ -14,8 +14,12 @@
     <p class="section-eyebrow">This month </p>
     <div class="month-totals">
       <div class="month-total month-total--expense">
-        <span class="month-total__label">Spend</span>
+        <span class="month-total__label">Spent</span>
         <strong class="money">{{ monthSummary.expenseTotal | money }}</strong>
+      </div>
+      <div class="month-total">
+        <span class="month-total__label">Scheduled</span>
+        <strong class="money">{{ monthSummary.scheduledTotal | money }}</strong>
       </div>
       <div class="month-total">
         <span class="month-total__label">Income</span>
@@ -170,7 +174,7 @@
             @for (row of monthSummary.categories; track row.label) {
               <tr>
                 <td>
-                  <a [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
+                  <a [routerLink]="['/finance/spending']" [queryParams]="{ t: null, v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
                 </td>
                 <td>{{ row.value | money }}</td>
                 <td>{{ formatShare(row.pct) }}</td>

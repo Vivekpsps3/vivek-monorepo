@@ -14,6 +14,14 @@ import {
 } from '../models/transaction.model';
 import { ToastService, ConfirmService } from '@vivek/ui';
 import { plural } from '@vivek/browser';
+import {
+  bankExportHelp,
+  importButtonLabel,
+  importFileError,
+  importSummaryLine,
+  receiptLine,
+  undoConfirmBody,
+} from '../utils/bank-import-copy';
 
 @Injectable()
 export class TransactionsImportWorkflow implements OnDestroy {
@@ -71,6 +79,57 @@ export class TransactionsImportWorkflow implements OnDestroy {
 
   importBank(slug: string): BankImportOption | undefined {
     return this.importBanks.find(bank => bank.slug === slug);
+  }
+
+  /** Bank to preselect for a new file: the last receipt's bank, else the only account's bank. */
+  get defaultBankSlug(): string {
+    const fromReceipt = this.importReceipts.find(receipt => receipt.bank_slugs?.length)?.bank_slugs[0];
+    if (fromReceipt) return fromReceipt;
+    const slugs = new Set(this.bankAccounts.map(account => account.bank_slug).filter(Boolean));
+    return slugs.size === 1 ? [...slugs][0] : '';
+  }
+
+  importBankHelp(slug: string): string {
+    return bankExportHelp(slug);
+  }
+
+  importFileError(raw: string | null | undefined): string {
+    return importFileError(raw);
+  }
+
+  /** Rows that could be imported from the current previews, selected or not. */
+  get importableCount(): number {
+    return this.importRows.filter(row => row.status === 'new').length;
+  }
+
+  get importSummaryText(): string {
+    return importSummaryLine(this.importSummary, this.importableCount);
+  }
+
+  receiptLineFor(receipt: ImportReceipt): string {
+    const parsed = new Date(receipt.started_at);
+    const dateLabel = Number.isNaN(parsed.getTime())
+      ? receipt.started_at
+      : parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return receiptLine({
+      filenames: receipt.filenames,
+      dateLabel,
+      status: receipt.status,
+      saved: receipt.inserted_count || 0,
+      needFixing: receipt.unresolved?.length || 0,
+    });
+  }
+
+  /** Sentence-case badge text for a preview row. */
+  importStatusLabel(row: ImportPreviewRow): string {
+    if (row.status === 'duplicate') return 'Already imported';
+    if (row.kind === 'refund') return 'Refund';
+    if (row.kind === 'purchase') return 'Purchase';
+    if (row.kind === 'income') return 'Income';
+    if (row.kind === 'payment') return 'Card payment';
+    if (row.kind === 'transfer') return 'Transfer';
+    if (row.status === 'new') return 'New';
+    return row.status;
   }
 
   get canPreviewImport(): boolean {
@@ -197,7 +256,7 @@ export class TransactionsImportWorkflow implements OnDestroy {
     if (this.importParsing || this.importCommitting) return;
     const input = event.target as HTMLInputElement;
     for (const file of Array.from(input.files || [])) {
-      this.importFiles.push({ id: this.nextImportFileId++, bank_slug: '', file, account_key: undefined });
+      this.importFiles.push({ id: this.nextImportFileId++, bank_slug: this.defaultBankSlug, file, account_key: undefined });
     }
     input.value = '';
     this.onImportBankChange();
@@ -217,7 +276,10 @@ export class TransactionsImportWorkflow implements OnDestroy {
   runImportPreview() {
     if (this.importParsing || this.importCommitting) return;
     if (!this.canPreviewImport) {
-      this.importError = 'Choose CSV files and select a bank for every file.';
+      const missingBank = this.importFiles.find(entry => !this.importBank(entry.bank_slug));
+      this.importError = missingBank
+        ? `Choose the bank for ${missingBank.file.name} first.`
+        : 'Choose CSV files and select a bank for every file.';
       this.cdr.markForCheck();
       return;
     }
@@ -289,10 +351,9 @@ export class TransactionsImportWorkflow implements OnDestroy {
   }
 
   get importActionLabel(): string {
-    if (!this.selectedImportCount) return 'Save receipt';
+    if (this.legacyMappingCount && this.importSelected.size) return `Import and map ${plural(this.selectedImportCount, 'row')}`;
     if (this.legacyMappingCount && !this.importSelected.size) return `Map ${plural(this.legacyMappingCount, 'legacy transaction')}`;
-    if (this.legacyMappingCount) return `Import and map ${plural(this.selectedImportCount, 'row')}`;
-    return `Import ${plural(this.selectedImportCount, 'transaction')}`;
+    return importButtonLabel(this.importableCount, this.selectedImportCount);
   }
 
   get selectedImportExpenseTotal(): number {
@@ -409,9 +470,19 @@ export class TransactionsImportWorkflow implements OnDestroy {
   }
 
   async undoImport(receipt: ImportReceipt): Promise<void> {
+    // Preview first (F9): the confirm dialog names the real counts.
+    let counts: { removable: number; editedKept: number; alreadyGone: number };
+    try {
+      counts = await new Promise((resolve, reject) => {
+        this.financeService.previewUndoImportReceipt(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({ next: resolve, error: reject });
+      });
+    } catch (err) {
+      this.toastService.error(this.importFailureMessage(err, 'Could not check this import.'));
+      return;
+    }
     const ok = await this.confirmService.ask(
       'Undo this import?',
-      'Remove only import-created transactions that still match their saved values. Edited rows stay in the ledger, and this receipt no longer counts as coverage.',
+      undoConfirmBody(counts),
       'Undo import', 'Cancel'
     );
     if (!ok) return;
@@ -421,6 +492,22 @@ export class TransactionsImportWorkflow implements OnDestroy {
         this.refreshImportReceipts();
       },
       error: err => this.toastService.error(this.importFailureMessage(err, 'Could not undo this import.')),
+    });
+  }
+
+  async deleteImportReceipt(receipt: ImportReceipt): Promise<void> {
+    const ok = await this.confirmService.ask(
+      'Delete this receipt record?',
+      "The transactions stay. You just won't be able to undo this import later.",
+      'Delete receipt', 'Cancel'
+    );
+    if (!ok) return;
+    this.financeService.deleteImportReceipt(receipt.id).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.toastService.success('Receipt deleted. The transactions stay.');
+        this.refreshImportReceipts();
+      },
+      error: err => this.toastService.error(this.importFailureMessage(err, 'Could not delete this receipt.')),
     });
   }
 

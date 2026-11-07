@@ -68,6 +68,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
   width: 100%;
   margin: 0 0 var(--space-3);
   padding: 0;
@@ -110,3 +112,112 @@
 .chart-fallback a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .chart-fallback a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .chart-company-name { display: block; color: var(--text-secondary); }
+
+/* F11: card head, HTML legend, stat row, table captions */
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.chart-head .section-toggle {
+  flex: 1;
+  width: auto;
+  margin-bottom: 0;
+}
+
+.chart-head .text-link {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
+}
+
+.chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chart-legend__item[aria-pressed="false"] {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.chart-legend__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.chart-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-inline-end: 6px;
+}
+
+.chart-swatch--income {
+  background: var(--success);
+}
+
+.chart-swatch--spending {
+  background: color-mix(in srgb, var(--danger) 80%, transparent);
+}
+
+.chart-swatch--net {
+  position: relative;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.chart-swatch--net::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+}
+
+.chart-fallback th.num,
+.chart-fallback td.num {
+  text-align: right;
+}
+
+.chart-fallback caption {
+  text-align: start;
+  font-weight: 600;
+  padding-block-end: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .chart-legend__item {
+    min-height: 44px;
+  }
+}
+
+.chart-stat {
+  font: 600 var(--text-lg)/1.3 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  margin: var(--space-3) 0;
+}

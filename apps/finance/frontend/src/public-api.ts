@@ -5,6 +5,7 @@ export { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE, financeVaultPresent, clearFinan
 export { lockFinance } from './app/crypto/lock-finance';
 export { financeTabId } from './app/crypto/dek-holder';
 export async function loadMarketRefreshCoordinatorService() { return (await import('./app/services/market-refresh-coordinator.service')).MarketRefreshCoordinatorService; }
+export { FinanceLockService, type AutoLockSetting } from './app/core/finance-lock.service';
 export type { NetWorth } from './app/models/transaction.model';
 export type { PortfolioAccount, PositionHighlight } from './app/hub/finance-hub-snapshot';
 export async function loadFinanceRoutes(): Promise<Routes> { return (await import('./app/app.routes')).routes; }

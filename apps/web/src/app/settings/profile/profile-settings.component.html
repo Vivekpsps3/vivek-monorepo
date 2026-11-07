@@ -1,0 +1,41 @@
+<h1>Profile</h1>
+<ui-card>
+  <section id="birthday" class="birthday-section" aria-labelledby="birthday-heading">
+    <h2 id="birthday-heading">Birthday</h2>
+    <form class="birthday-form" (ngSubmit)="save()">
+      <div class="birthday-field">
+        <label for="birthday-input">Birthday</label>
+        <input
+          #birthdayField
+          id="birthday-input"
+          name="birthday"
+          type="date"
+          autocomplete="bday"
+          [value]="birthdayInput"
+          (input)="birthdayInput = $any($event.target).value"
+          [attr.aria-invalid]="invalid ? 'true' : null"
+          [attr.aria-describedby]="error ? 'birthday-error' : 'birthday-help'"
+          [disabled]="loading || saving" />
+        <p id="birthday-help" class="birthday-help">Used for Life in Pixels. Only you can see the date itself.</p>
+      </div>
+      <label class="birthday-toggle">
+        <input
+          type="checkbox"
+          name="show_age"
+          [checked]="showAge"
+          (change)="showAge = $any($event.target).checked"
+          [disabled]="loading || saving" />
+        <span>Show my age on Life in Pixels</span>
+      </label>
+      @if (error) {
+        <p id="birthday-error" class="form-error" role="alert" tabindex="-1" #birthdayAlert>{{ error }}</p>
+      }
+      <div class="birthday-actions">
+        <ui-button type="submit" [disabled]="loading || saving" [busy]="saving">Save</ui-button>
+        @if (savedBirthday) {
+          <ui-button variant="danger" type="button" [disabled]="loading || saving" (clicked)="remove()">Remove</ui-button>
+        }
+      </div>
+    </form>
+  </section>
+</ui-card>

@@ -85,17 +85,24 @@ restore tests, runtime dependency audits, and image checks for authenticated rea
 writes, CSRF, isolation, deletion, routing, and caching. Desktop/mobile Chromium
 checks run against the built image. Official Actions and image bases are pinned.
 
-The Deploy workflow accepts only successful trusted main push artifacts. It
-rejects stale SHAs; manual runs also require a successful main artifact. The
-existing runner downloads the image and checks out the exact tested SHA into a
-unique private directory under `RUNNER_TEMP`, then runs scripts/deploy-site.sh.
+The Deploy workflow accepts only commits from successful trusted main push CI
+runs. It rejects stale SHAs; manual runs also require successful CI and the
+seeded schema rehearsal for the selected main commit. The production runner
+checks out that exact SHA into a unique private directory under `RUNNER_TEMP`,
+then runs scripts/deploy-site.sh to rebuild the image from that source. No
+GitHub Actions artifacts are uploaded or downloaded. Base images are pinned
+and npm/pip dependencies use lock files, but deployment rebuilds the source
+rather than promoting the byte-identical image exercised by CI. Image checks
+run again before production data is accessed.
+
 Git authentication uses the job token through an ephemeral credential helper; no
 credential is stored in Git configuration. An `always()` step removes the source
-and image artifact on success or failure. Forced host/process termination can
-interrupt cleanup; the runner also cleans its temporary area between jobs. There
-is no permanent monorepo checkout or copied deployment configuration on the host. It does not build images
-or install npm/pip packages on production. Runtime code is baked into the image,
-so changing the checkout does not change the running application.
+checkout on success or failure. Forced host/process termination can interrupt
+cleanup; the runner also cleans its temporary area between jobs. There is no
+permanent monorepo checkout or copied deployment configuration on the host.
+Build dependencies are installed inside Docker build stages. Runtime code is
+baked into the image, so changing the checkout does not change the running
+application. Deployment allows 45 minutes for the build and rollout.
 
 The deploy script uses a temporary lock, reads the preceding image from Docker's
 existing metadata, runs image checks without production data/network, verifies a

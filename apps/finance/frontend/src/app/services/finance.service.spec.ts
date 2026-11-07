@@ -1,7 +1,7 @@
 import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
-import { firstValueFrom, Observable, of, Subject } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, Observable, of, Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
 import { holdDek, wipeDek } from '../crypto/dek-holder';
 import { lockFinance, lockLoad } from '../crypto/lock-finance';
@@ -9,7 +9,9 @@ import { loadFinanceHubSnapshot } from '../hub/finance-hub-facade';
 import { FinanceService } from './finance.service';
 import { VaultService } from '../crypto/vault.service';
 import { EncryptedStoreService } from '../crypto/encrypted-store.service';
-import { Asset } from '../models/transaction.model';
+import {
+  Asset, CashflowSummary, FixedExpense, Holding, JobIncome, Liability, Subscription, Transaction, TransactionCreate,
+} from '../models/transaction.model';
 
 describe('FinanceService', () => {
   let service: FinanceService;
@@ -205,6 +207,145 @@ describe('FinanceService', () => {
       await lockFinance(TestBed.inject(Injector)); release([secret]); await Promise.resolve();
       expect([seen, cleared]).toEqual([[], 5]);
     } finally { lockLoad.modules = real; }
+  });
+
+  it('lock-gates every subject-emitting getter while a read is in flight (B0F2 N2)', async () => {
+    interface Subjects {
+      _transactions: BehaviorSubject<Transaction[]>;
+      _dashboardTransactions: BehaviorSubject<Transaction[]>;
+      _holdings: BehaviorSubject<Holding[]>;
+      _liabilities: BehaviorSubject<Liability[]>;
+      _jobIncomes: BehaviorSubject<JobIncome[]>;
+      _fixedExpenses: BehaviorSubject<FixedExpense[]>;
+      _subscriptions: BehaviorSubject<Subscription[]>;
+      _cashflowSummary: BehaviorSubject<CashflowSummary | null>;
+    }
+    const subjects = service as unknown as Subjects;
+    const rows = <T>(...ids: number[]): T[] => ids.map(id => ({ id } as unknown as T));
+    async function expectLocked<R, S>(config: {
+      configure: (promise: Promise<R>) => void;
+      call: () => Observable<R>;
+      subject: BehaviorSubject<S>;
+      sentinel: S;
+      stale: R;
+    }): Promise<void> {
+      holdDek({} as CryptoKey);
+      config.subject.next(config.sentinel);
+      let release!: (value: R) => void;
+      config.configure(new Promise<R>(resolve => { release = resolve; }));
+      const seen: R[] = [];
+      let completed = false;
+      config.call().subscribe({ next: value => seen.push(value), complete: () => { completed = true; } });
+      wipeDek();
+      release(config.stale);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(seen).toEqual([]);
+      expect(completed).toBeTrue();
+      expect(config.subject.value).toEqual(config.sentinel);
+    }
+    await expectLocked({
+      configure: promise => encStore.getTransactions.and.returnValue(promise),
+      call: () => service.getTransactions(),
+      subject: subjects._transactions,
+      sentinel: rows<Transaction>(9001),
+      stale: rows<Transaction>(1),
+    });
+    await expectLocked({
+      configure: promise => encStore.getTransactions.and.returnValue(promise),
+      call: () => service.getDashboardTransactions(),
+      subject: subjects._dashboardTransactions,
+      sentinel: rows<Transaction>(9002),
+      stale: rows<Transaction>(2),
+    });
+    await expectLocked({
+      configure: promise => encStore.getCashflowSummary.and.returnValue(promise),
+      call: () => service.getCashflowSummary('2026-10-01', '2026-10-31'),
+      subject: subjects._cashflowSummary,
+      sentinel: { stale: 'sentinel' } as unknown as CashflowSummary,
+      stale: { stale: 'read' } as unknown as CashflowSummary,
+    });
+    await expectLocked({
+      configure: promise => encStore.getJobIncomes.and.returnValue(promise),
+      call: () => service.getJobIncomes(),
+      subject: subjects._jobIncomes,
+      sentinel: rows<JobIncome>(9003),
+      stale: rows<JobIncome>(3),
+    });
+    await expectLocked({
+      configure: promise => encStore.getFixedExpenses.and.returnValue(promise),
+      call: () => service.getFixedExpenses(),
+      subject: subjects._fixedExpenses,
+      sentinel: rows<FixedExpense>(9004),
+      stale: rows<FixedExpense>(4),
+    });
+    await expectLocked({
+      configure: promise => encStore.getSubscriptions.and.returnValue(promise),
+      call: () => service.getSubscriptions(),
+      subject: subjects._subscriptions,
+      sentinel: rows<Subscription>(9005),
+      stale: rows<Subscription>(5),
+    });
+    await expectLocked({
+      configure: promise => encStore.getLiabilities.and.returnValue(promise),
+      call: () => service.getLiabilities(),
+      subject: subjects._liabilities,
+      sentinel: rows<Liability>(9006),
+      stale: rows<Liability>(6),
+    });
+    await expectLocked({
+      configure: promise => encStore.getHoldings.and.returnValue(promise),
+      call: () => service.getHoldings(),
+      subject: subjects._holdings,
+      sentinel: rows<Holding>(9007),
+      stale: rows<Holding>(7),
+    });
+  });
+
+  it('does not publish a mutation write-back that resolves after a lock (B0F2 N2)', async () => {
+    const subjects = service as unknown as { _transactions: BehaviorSubject<Transaction[]> };
+    const sentinel = [{ id: 9001 } as unknown as Transaction];
+    subjects._transactions.next(sentinel);
+    encStore.addTransaction.and.resolveTo({ id: 1 } as unknown as Transaction);
+    let release: (value: Transaction[]) => void = () => undefined;
+    encStore.getTransactions.and.returnValue(new Promise<Transaction[]>(resolve => { release = resolve; }));
+    const written = firstValueFrom(service.addTransaction({} as unknown as TransactionCreate));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    wipeDek();
+    release([{ id: 2 } as unknown as Transaction]);
+    await written;
+    expect(subjects._transactions.value).toEqual(sentinel);
+  });
+
+  it('does not deliver assets when the vault locks and unlocks again during a read (B0F2 GA4)', async () => {
+    const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
+    let release: (rows: Asset[]) => void = () => undefined;
+    encStore.getAssets.and.returnValue(new Promise<Asset[]>(resolve => { release = resolve; }));
+    const seen: Asset[][] = [];
+    let completed = false;
+    service.getAssets().subscribe({ next: value => seen.push(value), complete: () => { completed = true; } });
+    wipeDek();
+    holdDek({} as CryptoKey);
+    release([secret]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(seen).toEqual([]);
+    expect(completed).toBeTrue();
+    expect((service as unknown as { _assets: BehaviorSubject<Asset[]> })._assets.value).toEqual([]);
+  });
+
+  it('does not let a stale subscription read overwrite a fresher one (B0F2 GA5)', async () => {
+    const subjects = service as unknown as { _subscriptions: BehaviorSubject<Subscription[]> };
+    const stale = [{ id: 40 } as unknown as Subscription];
+    const fresh = [{ id: 40 } as unknown as Subscription, { id: 60 } as unknown as Subscription];
+    let release: (value: Subscription[]) => void = () => undefined;
+    encStore.getSubscriptions.and.returnValue(new Promise<Subscription[]>(resolve => { release = resolve; }));
+    const staleRead = firstValueFrom(service.getSubscriptions());
+    encStore.getSubscriptions.and.resolveTo(fresh);
+    storeChanges.next({ collection: 'subscriptions', source: 'local' });
+    await firstValueFrom(service.getSubscriptions());
+    expect(subjects._subscriptions.value).toEqual(fresh);
+    release(stale);
+    await staleRead;
+    expect(subjects._subscriptions.value).toEqual(fresh);
   });
 
   it('continues refreshing valid collections when one member of a multi-collection snapshot goes stale', async () => {

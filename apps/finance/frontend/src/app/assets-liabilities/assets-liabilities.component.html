@@ -3,13 +3,15 @@
     [embedded]="embedded"
     [title]="'Assets and debts'">
 
-    <div uiPageActions class="header-actions">
-      <ui-button variant="secondary" (clicked)="openAddLiability()">Add liability</ui-button>
-      <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
-    </div>
+    @if (assets.length || liabilities.length) {
+      <div uiPageActions class="header-actions">
+        <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
+        <ui-button variant="secondary" (clicked)="openAddLiability()">Add debt</ui-button>
+      </div>
+    }
   </ui-page-header>
 
-  @if (netWorth) {
+  @if (netWorth && hasBalanceSheet) {
     <ui-card class="summary-card net-worth-hero">
       <p class="section-eyebrow">Net worth</p>
       <div class="stat-display money" aria-live="polite">{{ netWorth.total | money }}</div>
@@ -34,7 +36,7 @@
         <div class="breakdown-item">
           <span class="breakdown-label">
             <ui-icon name="credit-card" size="sm" />
-            <span class="summary-label">Liabilities</span>
+            <span class="summary-label">Debts</span>
           </span>
           <strong class="money">{{ (-netWorth.liabilities) | money }}</strong>
         </div>
@@ -42,7 +44,7 @@
       @if (assetDatesSummary() || liabilityDatesSummary()) {
       <div class="source-dates">
         @if (assetDatesSummary()) { <p>Asset dates <strong>{{ assetDatesSummary() }}</strong></p> }
-        @if (liabilityDatesSummary()) { <p>Liability dates <strong>{{ liabilityDatesSummary() }}</strong></p> }
+        @if (liabilityDatesSummary()) { <p>Debt dates <strong>{{ liabilityDatesSummary() }}</strong></p> }
       </div>
       }
     </ui-card>
@@ -86,21 +88,38 @@
           }
         </tbody>
       </ui-data-table>
+      <ul class="row-list">
+        @for (row of assets; track row.id) {
+          <li class="row-list__item">
+            <div class="row-list__line">
+              <strong>{{ row.name }}</strong>
+              <span class="money">{{ row.current_value | money }}</span>
+            </div>
+            <div class="row-list__line row-list__meta">
+              <span>{{ row.category | formatCategory }} · {{ row.as_of_date | appDate }}</span>
+              <span class="row-list__actions">
+                <ui-button variant="ghost" size="sm" (clicked)="openEditAsset(row)">Edit</ui-button>
+                <ui-button variant="danger" size="sm" (clicked)="deleteAsset(row)">Delete</ui-button>
+              </span>
+            </div>
+          </li>
+        }
+      </ul>
     } @else {
-      <ui-empty-state icon="wallet" message="Add checking, savings, property, or other asset balances.">
-        <ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button>
+      <ui-empty-state [title]="'No assets yet'" message="Add checking, savings, property, or anything else you own.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddAsset()">Add asset</ui-button></div>
       </ui-empty-state>
     }
   </ui-card>
 
-  <ui-card [title]="'Liabilities'">
+  <ui-card [title]="'Debts'">
     @if (liabilities.length) {
-      <ui-data-table ariaLabel="Liabilities">
+      <ui-data-table ariaLabel="Debts">
         <thead>
           <tr>
             <th scope="col">Name</th>
             <th scope="col">Category</th>
-            <th scope="col" class="num">Balance owed</th>
+            <th scope="col" class="num">Owed</th>
             <th scope="col">As of</th>
             <th scope="col">Actions</th>
           </tr>
@@ -131,9 +150,26 @@
           }
         </tbody>
       </ui-data-table>
+      <ul class="row-list">
+        @for (row of liabilities; track row.id) {
+          <li class="row-list__item">
+            <div class="row-list__line">
+              <strong>{{ row.name }}</strong>
+              <span class="money">{{ (-row.balance_owed) | money }}</span>
+            </div>
+            <div class="row-list__line row-list__meta">
+              <span>{{ row.category | formatCategory }} · {{ row.as_of_date | appDate }}</span>
+              <span class="row-list__actions">
+                <ui-button variant="ghost" size="sm" (clicked)="openEditLiability(row)">Edit</ui-button>
+                <ui-button variant="danger" size="sm" (clicked)="deleteLiability(row)">Delete</ui-button>
+              </span>
+            </div>
+          </li>
+        }
+      </ul>
     } @else {
-      <ui-empty-state icon="credit-card" message="Add mortgages, loans, or credit card balances you owe.">
-        <ui-button variant="primary" (clicked)="openAddLiability()">Add liability</ui-button>
+      <ui-empty-state icon="credit-card" [title]="'No debts recorded'" message="Add a mortgage, loan, or card balance you owe.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddLiability()">Add debt</ui-button></div>
       </ui-empty-state>
     }
   </ui-card>
@@ -165,7 +201,7 @@
   </form>
 </ui-dialog>
 <ui-dialog scrollTarget=".main-content" [open]="showLiabilityModal" labelledBy="liability-modal-title" (closed)="closeModals()">
-  <h3 id="liability-modal-title">{{ editingLiabilityId ? 'Edit liability' : 'Add liability' }}</h3>
+  <h3 id="liability-modal-title">{{ editingLiabilityId ? 'Edit debt' : 'Add debt' }}</h3>
   @if (liabilitySaveError) {
     <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ liabilitySaveError }}</p>
   }

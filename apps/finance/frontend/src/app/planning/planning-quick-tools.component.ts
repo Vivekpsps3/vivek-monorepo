@@ -43,7 +43,7 @@ export class PlanningQuickToolsComponent implements OnChanges {
       const liability = this.inputs?.liability_sources?.find(row => row.id === this.selectedDebtLiabilityId);
       if (liability) {
         this.debt.balance = liability.balance_owed;
-        this.debtSourceMessage = `Using ${liability.name} from What you have · balance date ${liability.as_of_date || 'unknown'}.`;
+        this.debtSourceMessage = `Using ${liability.name} from Net worth · balance date ${liability.as_of_date || 'unknown'}.`;
       } else {
         this.selectedDebtLiabilityId = null;
         this.debtSourceMessage = 'The selected liability was removed. Its last balance is kept as a manual estimate.';
@@ -142,7 +142,7 @@ export class PlanningQuickToolsComponent implements OnChanges {
     if (liability) {
       this.debt.name = liability.name;
       this.debt.balance = liability.balance_owed;
-      this.debtSourceMessage = `Using ${liability.name} from What you have · balance date ${liability.as_of_date || 'unknown'}.`;
+      this.debtSourceMessage = `Using ${liability.name} from Net worth · balance date ${liability.as_of_date || 'unknown'}.`;
     } else {
       this.debt.name = 'Debt estimate';
       this.debt.balance = 0;
