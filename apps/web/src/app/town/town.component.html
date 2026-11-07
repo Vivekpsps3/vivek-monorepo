@@ -1,0 +1,60 @@
+@if (state() === 'loading') {
+  <div aria-busy="true" aria-label="Loading Town">
+    <ui-skeleton class="header-skeleton" variant="lines" [lines]="2" />
+    <div class="town-layout">
+      <div class="scene"><ul aria-label="Town buildings">
+        @for (i of placeholders; track i) { <li><ui-skeleton class="tile-skeleton" height="96px" width="96px" /></li> }
+      </ul></div>
+      <ui-card><h2>Today</h2><ui-skeleton variant="lines" [lines]="3" /></ui-card>
+    </div>
+  </div>
+} @else if (state() === 'unavailable') {
+  <ui-state state="ready" thing="Town">
+    <div role="status"><p>Town is unavailable right now.</p><ui-button variant="secondary" (clicked)="load()">Retry</ui-button></div>
+  </ui-state>
+} @else if (data(); as data) {
+  <header>
+    <h1>{{ data.town.name }}</h1>
+    @if (data.town.next_level_xp !== null) {
+      <p>Lv {{ data.town.level }} · {{ data.town.xp }} / {{ data.town.next_level_xp }} XP</p>
+      <progress [value]="data.town.xp - data.town.level_xp_start" [max]="data.town.next_level_xp - data.town.level_xp_start"
+        role="progressbar" [attr.aria-valuemin]="data.town.level_xp_start" [attr.aria-valuemax]="data.town.next_level_xp"
+        [attr.aria-valuenow]="data.town.xp" [attr.aria-valuetext]="'Level ' + data.town.level + ', ' + data.town.xp + ' of ' + data.town.next_level_xp + ' XP'"
+        aria-label="Town XP"></progress>
+    } @else { <p>Lv {{ data.town.level }} · Max</p> }
+  </header>
+  @if (data.town.founded_on === null) {
+    <ui-empty-state title="Found Terraria-on-Sea" message="Pick a first habit. Your town grows as you keep it, and as you watch things in Media and finish trips in Travel.">
+      <img class="first-sprite" [src]="emptySprite" alt="" width="128" height="128">
+      <ui-button (clicked)="openHabitDialog(0, null)">Choose a first habit</ui-button>
+      <p>Media and Travel count from today on.</p>
+      <div class="suggestions">
+        @for (name of suggestions; track name) { <ui-button variant="secondary" (clicked)="openHabitDialog(0, null, name)">{{ name }}</ui-button> }
+      </div>
+    </ui-empty-state>
+  } @else {
+  <div class="town-layout">
+    <div class="scene">
+      <ul aria-label="Town buildings">
+        <li><app-town-lot kind="library" [building]="data.buildings.library" [swapFrom]="swapFrom('library')" /></li>
+        <li><app-town-lot kind="inn" [building]="data.buildings.inn" [swapFrom]="swapFrom('inn')" /></li>
+        <li><app-town-lot kind="treasury" [vaultPresent]="financeVaultPresent()" /></li>
+        @for (lot of data.lots; track lot.slot) {
+          <li><app-town-lot [lot]="lot" [habit]="habit(lot.habit_id)" [swapFrom]="swapFrom('h' + lot.habit_id)" (openHabit)="openHabitDialog(lot.slot, lot.habit_id)" /></li>
+        }
+      </ul>
+    </div>
+    <ui-card><h2>Today</h2>
+      <app-town-today [data]="data" [live]="live()" [vaultPresent]="financeVaultPresent()"
+        (newHabit)="openHabitDialog(null, null)" (history)="openHistory()"
+        (settled)="onSettled($event)" (dayChanged)="reload()" />
+    </ui-card>
+  </div>
+}
+  @if (edit(); as edit) {
+    <app-habit-dialog [data]="data" [slot]="edit.slot" [habitId]="edit.habitId" [prefill]="edit.prefill" (closed)="closeEdit($event)" />
+  }
+  @if (historyOpen()) {
+    <app-history-dialog [data]="data" (dirty)="reload()" (closed)="closeHistory($event)" />
+  }
+}

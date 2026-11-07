@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { formatDateRange, formatDay, ptoChoice, tripHeader } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -12,7 +13,7 @@ test('overlapping PTO is named on the trip and the home card', async ({ page, re
   const conflict = (await detail.json()).pto.conflicts.find(item => item.on_date === '2026-12-07');
   expect(conflict.amount).toBe('2');
   await page.goto('/travel/trips/' + first.id);
-  await expect(page.getByText(`${conflict.on_date} counts ${conflict.amount} PTO days across ${conflict.labels.join(', ')}.`)).toBeVisible();
+  await expect(page.getByText(`${formatDay(conflict.on_date)} counts ${conflict.amount} PTO days across ${conflict.labels.join(', ')}.`)).toBeVisible();
   await page.goto('/travel');
   await expect(page.getByRole('heading', { level: 3, name: 'North trip' }).locator('xpath=..')).toContainText('PTO overlaps');
   await expect(page.getByRole('heading', { level: 3, name: 'South trip' }).locator('xpath=..')).toContainText('PTO overlaps');
@@ -23,7 +24,7 @@ test('a same-day trip says same day', async ({ page }) => {
   await page.getByRole('button', { name: 'Save trip', exact: true }).click();
   const sameDay = header(page, 'Lisbon');
   await expect(sameDay).toContainText('· same day ·');
-  await expect(sameDay).toContainText('2026-12-14 – 2026-12-14');
+  await expect(sameDay).toContainText(formatDateRange('2026-12-14', '2026-12-14'));
 });
 
 test('a one-night trip says 1 night', async ({ page }) => {
@@ -77,7 +78,7 @@ test('a return before departure stays on the draft', async ({ page }) => {
   await page.getByLabel('Destination city').fill('Oslo');
   await expect(page.getByRole('button', { name: 'Save trip', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Save trip', exact: true }).click();
-  await expect(header(page, 'Oslo')).toContainText('2026-12-20 – 2026-12-22');
+  await expect(header(page, 'Oslo')).toContainText(formatDateRange('2026-12-20', '2026-12-22'));
 });
 
 test('a leap-day trip keeps February 29 and weekday PTO across March', async ({ page }) => {
@@ -88,7 +89,7 @@ test('a leap-day trip keeps February 29 and weekday PTO across March', async ({ 
   await expect(page.getByText('2 PTO days selected.')).toBeVisible();
   await page.getByRole('button', { name: 'Save trip', exact: true }).click();
   const saved = header(page, 'Reykjavik');
-  await expect(saved).toContainText('2028-02-29 – 2028-03-01');
+  await expect(saved).toContainText(formatDateRange('2028-02-29', '2028-03-01'));
   await expect(saved).toContainText('· 1 night ·');
   await expect(saved).toContainText('2 PTO days');
   await page.getByText('PTO · 2 days', { exact: true }).click();
@@ -99,7 +100,7 @@ test('a leap-day trip keeps February 29 and weekday PTO across March', async ({ 
 test('a half-day PTO choice saves as 0.5', async ({ page }) => {
   await plan(page, '2026-12-15', '2026-12-15', 'Coimbra');
   await page.getByText('Time off', { exact: true }).click();
-  await page.locator('label').filter({ hasText: '2026-12-15' }).getByRole('combobox').selectOption({ label: 'Half day' });
+  await ptoChoice(page, '2026-12-15').selectOption({ label: 'Half day' });
   await expectChoice(page, '2026-12-15', 'Half day');
   await expect(page.getByText('0.5 PTO days selected.')).toBeVisible();
   await page.getByRole('button', { name: 'Save trip', exact: true }).click();
@@ -116,11 +117,11 @@ async function plan(page, start, end, city) {
 }
 
 function header(page, title) {
-  return page.getByRole('heading', { level: 1, name: title }).locator('xpath=following-sibling::p').first();
+  return tripHeader(page, title);
 }
 
 async function expectChoice(page, day, label) {
-  await expect(page.locator('label').filter({ hasText: day }).getByRole('combobox').locator('option:checked')).toHaveText(label);
+  await expect(ptoChoice(page, day).locator('option:checked')).toHaveText(label);
 }
 
 async function createTrip(request, title, start, end) {

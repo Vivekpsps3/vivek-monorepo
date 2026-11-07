@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { DestroyRef, Injectable, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -25,6 +25,8 @@ import { EncryptedStoreService } from '../crypto/encrypted-store.service';
 import { FinanceImportService } from './finance-import.service';
 import { FinanceMarketCoordinator } from './finance-market-coordinator';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
+import { hasDek, readLockEpoch } from '../crypto/dek-holder';
+import { bindLockSnapshots } from '../crypto/lock-finance';
 import { VaultService, type VaultWriteOptions } from '../crypto/vault.service';
 import {
   BankAccountRecord,
@@ -124,6 +126,8 @@ export class FinanceService {
     private encStore: EncryptedStoreService,
     private financeImports: FinanceImportService
   ) {
+    const releaseSnapshots = bindLockSnapshots(() => this.clearSessionState());
+    inject(DestroyRef).onDestroy(releaseSnapshots);
     inject(SESSION_CONTEXT, { optional: true })?.cleared$?.pipe(takeUntilDestroyed()).subscribe(() => this.clearSessionState());
     this.market = new FinanceMarketCoordinator(this.encStore, {
       sessionToken: () => this.encStore.sessionToken,
@@ -665,19 +669,25 @@ export class FinanceService {
 
   getNetWorth(): Observable<NetWorth> {
     const dependencies: EncryptedCollection[] = ['holdings', 'assets', 'liabilities'];
-    const epoch = this.dataEpoch(dependencies);
-    return from(this.encStore.getNetWorth().then(nw => {
+    const epoch = this.dataEpoch(dependencies), lock = readLockEpoch();
+    return new Observable(subscriber => { void this.encStore.getNetWorth().then(nw => {
+      if (!hasDek() || lock !== readLockEpoch()) { subscriber.complete(); return; }
       if (epoch === this.dataEpoch(dependencies)) this._netWorth.next(nw);
-      return nw;
-    }));
+      subscriber.next(nw); subscriber.complete();
+    }, (error: unknown) => subscriber.error(error)); });
   }
 
   getAssets(): Observable<Asset[]> {
     const epoch = this.dataEpoch(['assets']);
-    return from(this.encStore.getAssets().then(rows => {
-      if (epoch === this.dataEpoch(['assets'])) this._assets.next(rows);
-      return rows;
-    }));
+    const lock = readLockEpoch();
+    return new Observable(subscriber => {
+      void this.encStore.getAssets().then(rows => {
+        if (lock !== readLockEpoch() || !hasDek()) return subscriber.complete();
+        if (epoch === this.dataEpoch(['assets'])) this._assets.next(rows);
+        subscriber.next(rows);
+        subscriber.complete();
+      }, (error: unknown) => subscriber.error(error));
+    });
   }
 
   addAsset(body: AssetCreate, silent = false): Observable<Asset> {

@@ -1,0 +1,18 @@
+<div class="settings-shell" [class.is-section]="sectionActive()">
+  <nav class="settings-nav" aria-label="Settings">
+    @for (section of sections; track section.path) {
+      <a
+        [routerLink]="['/settings', section.path]"
+        routerLinkActive="is-active"
+        ariaCurrentWhenActive="page"
+        [routerLinkActiveOptions]="{ exact: true }">{{ section.label }}</a>
+    }
+  </nav>
+  <main class="settings-main">
+    <a class="settings-back" routerLink="/settings">← Settings</a>
+    @if (!sectionActive()) {
+      <h1>Settings</h1>
+    }
+    <router-outlet />
+  </main>
+</div>

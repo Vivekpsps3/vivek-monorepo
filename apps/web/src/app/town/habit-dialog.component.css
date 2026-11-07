@@ -1,0 +1,8 @@
+label, legend { display: block; margin-top: 12px; }
+input, select { width: 100%; min-height: 44px; }
+fieldset { border: 0; margin: 12px 0 0; padding: 0; display: flex; gap: 8px; }
+.card { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; }
+.card img { width: 48px; height: 48px; image-rendering: pixelated; }
+.hint { color: var(--text-muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+p[role="alert"] { color: var(--danger, #8d2f2f); }

@@ -63,6 +63,7 @@ import {
   normalizePlanningAssumptions,
   restorePlanningProfilePayload,
 } from './planning-assumptions.util';
+import { spendingModeInference } from './spending-mode';
 import { AppDatePipe } from '@vivek/ui';
 
 @Component({
@@ -556,8 +557,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
 
   /** Align UI toggles with saved profile (matches server merge_profile / run overrides). */
   private syncTogglesFromProfile(payload: ProfilePayload): void {
-    this.spendingMode = payload.spending_mode
-      || (payload.spending_components ? 'components' : payload.annual_spending != null ? 'manual' : 'recurring');
+    this.spendingMode = payload.spending_mode || spendingModeInference.inferMissing(payload);
     this.assumptions.spending_mode = this.spendingMode;
     this.useTxSpending = this.spendingMode === 'recurring';
     this.useTxIncome = payload.monthly_income == null;

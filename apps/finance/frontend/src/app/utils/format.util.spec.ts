@@ -13,12 +13,15 @@ import {
 
 describe('formatMoney', () => {
   const stored = [0, 0.01, 0.1, 1.15, 10.1, 19.99, 1234.56, -45.67, 999999999999.99, 1000, 333, 1100];
+  const wordJoiner = '\u2060';
+  const glued = (text: string) =>
+    text.replaceAll('−', `−${wordJoiner}`).replaceAll('+', `+${wordJoiner}`).replaceAll('$', `$${wordJoiner}`);
 
   it('formats cents, signs, estimates, and missing values', () => {
-    expect(formatMoney(-4567)).toBe('−$45.67');
-    expect(formatMoney(fromDollars(-0.004))).toBe('$0.00');
-    expect(formatMoney(500000, { sign: 'always' })).toBe('+$5,000.00');
-    expect(formatMoney(568800, { style: 'whole', approx: true })).toBe('about $5,688');
+    expect(formatMoney(-4567)).toBe(glued('−$45.67'));
+    expect(formatMoney(fromDollars(-0.004))).toBe(glued('$0.00'));
+    expect(formatMoney(500000, { sign: 'always' })).toBe(glued('+$5,000.00'));
+    expect(formatMoney(568800, { style: 'whole', approx: true })).toBe(glued('about $5,688'));
     expect(formatMoney(null)).toBe('—');
     expect(formatMoney(Number.POSITIVE_INFINITY)).toBe('—');
     expect(formatCompactMoney(Number.NaN)).toBe('—');
@@ -77,19 +80,19 @@ describe('formatMoney', () => {
     expect(Math.round(-0.5)).not.toBe(-1);
     expect(fromDollars(-0.005)).toBe(-1);
     expect(fromDollars(2.675)).toBe(268);
-    expect(formatMoney(fromDollars(2.675))).toBe('$2.68');
+    expect(formatMoney(fromDollars(2.675))).toBe(glued('$2.68'));
   });
 
   it('displays untouched x.xx5 stored dollars the way main did', () => {
     const rows: Array<[number, string]> = [
-      [1.005, '$1.01'],
-      [0.285, '$0.29'],
-      [2.675, '$2.68'],
-      [19.995, '$20.00'],
-      [-1.005, '−$1.01'],
-      [-0.285, '−$0.29'],
-      [-2.675, '−$2.68'],
-      [-0.005, '−$0.01'],
+      [1.005, glued('$1.01')],
+      [0.285, glued('$0.29')],
+      [2.675, glued('$2.68')],
+      [19.995, glued('$20.00')],
+      [-1.005, glued('−$1.01')],
+      [-0.285, glued('−$0.29')],
+      [-2.675, glued('−$2.68')],
+      [-0.005, glued('−$0.01')],
     ];
     for (const [amount, display] of rows) {
       expect(formatMoney(fromDollars(amount))).withContext(String(amount)).toBe(display);
@@ -111,9 +114,9 @@ describe('formatMoney', () => {
     expect(formatPercent(-3, 0)).toBe('−3%');
     expect(formatPercent(3.25, 1)).toBe('3.3%');
     expect(formatPercent(null)).toBe('—');
-    expect(formatCompactMoney(-4)).toBe('$0');
+    expect(formatCompactMoney(-4)).toBe(glued('$0'));
     expect(formatCompactMoney(-4)).not.toContain('−');
-    expect(formatCompactMoney(-5)).toBe('−$0.1');
+    expect(formatCompactMoney(-5)).toBe(glued('−$0.1'));
     expect(plural(0, 'deposit')).toBe(PLURAL_ZERO_IS_NO ? 'No deposits' : '0 deposits');
   });
 });

@@ -11,13 +11,16 @@ export const addDays = (d: string, n: number): string =>
 export const dayIndex = (weekStart: string, d: string): number =>
   Math.round((toMs(d) - toMs(weekStart)) / 86400000);
 
+export const placeKey = (label: string): string =>
+  'place|' + label.normalize('NFC').trim().toLowerCase();
+
 export function biomeFor(trip: ApiTrip): Biome {
   const p = trip.place;
   if (p && p.lat_e2 !== null && p.lat_e2 !== undefined) {
     const a = Math.abs(p.lat_e2);
     return a >= 5500 ? 'snow' : a >= 3500 ? 'forest' : a >= 1500 ? 'desert' : 'jungle';
   }
-  const key = p && p.label ? 'place|' + p.label.normalize('NFC').trim().toLowerCase() : 'trip|' + trip.id;
+  const key = p && p.label ? placeKey(p.label) : 'trip|' + trip.id;
   return TRIP_BIOMES[Number(fnv1a64(key) % 4n)];
 }
 
@@ -44,12 +47,21 @@ export function normalizeWeek(api: ApiWeek): WeekInput {
       lit: !!trip || items.length > 0 || habitDay,
     });
   }
-  const habits: HabitInput[] = (api.habits || []).filter((h) => h.days.length > 0)
+  const habits: HabitInput[] = (api.habits || [])
     .map((h) => ({
       id: h.habit_id,
       style: h.style,
+      days: h.days.filter((day) => {
+        const index = dayIndex(week, day);
+        return index >= 0 && index < 7;
+      }),
+    }))
+    .filter((h) => h.days.length > 0)
+    .map((h) => ({
+      id: h.id,
+      style: h.style,
       n: h.days.length,
-      first: Math.min(...h.days.map((x) => dayIndex(week, x))),
+      first: Math.min(...h.days.map((day) => dayIndex(week, day))),
     }))
     .sort((a, b) => a.id - b.id);
   return { v: WORLDGEN_VERSION, week, days, habits };

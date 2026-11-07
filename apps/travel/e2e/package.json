@@ -1,1 +1,1 @@
-{"name":"travel-browser-tests","private":true,"type":"module","scripts":{"shots":"playwright test screenshots.spec.js"}}
+{"name":"travel-browser-tests","private":true,"scripts":{"shots":"playwright test screenshots.spec.js"}}

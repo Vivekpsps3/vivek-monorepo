@@ -1,10 +1,48 @@
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
-import { SESSION_CONTEXT } from '@vivek/ui';
+import { SESSION_CONTEXT, authNavigation, type SessionPort } from '@vivek/ui';
+import { financeTabId, hasDek, holdDek, readLockEpoch, wipeDek } from '../crypto/dek-holder';
+import { createVaultMaterial } from '../crypto/vault-crypto';
+import { clearFinanceSessionStorage } from '../crypto/dek-store';
 import { VaultService } from '../crypto/vault.service';
 import { FinanceService } from './finance.service';
 import { MarketRefreshCoordinatorService } from './market-refresh-coordinator.service';
+
+function pauseNextOpen(): { ready: Promise<void>; release: () => void; restore: () => void } {
+  const realOpen = indexedDB.open.bind(indexedDB);
+  let release!: () => void;
+  let markReady!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const ready = new Promise<void>(resolve => { markReady = resolve; });
+  let armed = true;
+  spyOn(indexedDB, 'open').and.callFake((name: string, version?: number) => {
+    if (!armed) return realOpen(name, version);
+    armed = false;
+    const real = realOpen(name, version);
+    let db: IDBDatabase | null = null;
+    let failure: DOMException | null = null;
+    let onsuccess: ((ev: Event) => void) | null = null;
+    let onerror: ((ev: Event) => void) | null = null;
+    let onupgradeneeded: ((ev: Event) => void) | null = null;
+    let upgrade: Event | null = null;
+    const fake = {} as IDBOpenDBRequest;
+    const replayUpgrade = () => { if (upgrade && onupgradeneeded) onupgradeneeded.call(fake, upgrade); };
+    Object.defineProperties(fake, {
+      result: { configurable: true, get: () => db },
+      error: { configurable: true, get: () => failure },
+      onsuccess: { configurable: true, get: () => onsuccess, set: (fn: (ev: Event) => void) => { onsuccess = fn; } },
+      onerror: { configurable: true, get: () => onerror, set: (fn: (ev: Event) => void) => { onerror = fn; } },
+      onupgradeneeded: { configurable: true, get: () => onupgradeneeded, set: (fn: (ev: Event) => void) => { onupgradeneeded = fn; replayUpgrade(); } },
+    });
+    real.onupgradeneeded = ev => { db = real.result; upgrade = ev; replayUpgrade(); };
+    real.onsuccess = () => { db = real.result; markReady(); void gate.then(() => onsuccess?.call(fake, new Event('success'))); };
+    real.onerror = () => { failure = real.error; markReady(); void gate.then(() => onerror?.call(fake, new Event('error'))); };
+    return fake;
+  });
+  return { ready, release, restore: () => { delete (indexedDB as unknown as { open?: unknown }).open; } };
+}
 
 describe('MarketRefreshCoordinatorService', () => {
   let coordinator: MarketRefreshCoordinatorService;
@@ -217,5 +255,76 @@ describe('MarketRefreshCoordinatorService', () => {
     await (coordinator as any).receiveTabMessage({ version: 1, userId: 8, kind: 'invalidate', collections: ['assets'] });
 
     expect(finance.refreshCollectionsFromAnotherTab).toHaveBeenCalledOnceWith(['holdings']);
+  });
+  it('ignores a lock from this tab and opens unlock for another tab', async () => {
+    holdDek({} as CryptoKey);
+    const receive = (tabId: string) => (coordinator as unknown as { receiveTabMessage(m: object): Promise<void> }).receiveTabMessage({ version: 1, userId: 7, kind: 'lock', tabId });
+    await receive(financeTabId());
+    await receive('other-tab');
+    expect(router.navigateByUrl).toHaveBeenCalledOnceWith('/finance/vault/unlock');
+    router.navigateByUrl.calls.reset();
+    wipeDek();
+    await receive('other-tab');
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('advances the lock epoch when a lock broadcast arrives while this tab is locked', async () => {
+    wipeDek();
+    const epoch = readLockEpoch();
+    await (coordinator as unknown as { receiveTabMessage(message: object): Promise<void> }).receiveTabMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'other-tab' });
+    expect(readLockEpoch()).toBe(epoch + 1);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(finance.clearSessionState).not.toHaveBeenCalled();
+  });
+
+  it('does not call goToLogin until the delete is released for a sign-out broadcast', async () => {
+    auth.clearLocalSession.and.callFake(() => clearFinanceSessionStorage());
+    const goToLogin = spyOn(authNavigation, 'goToLogin');
+    const paused = pauseNextOpen();
+    try {
+      const pending = (coordinator as unknown as { receiveTabMessage(message: object): Promise<void> }).receiveTabMessage({ version: 1, userId: 7, kind: 'signout' });
+      await paused.ready;
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(auth.clearLocalSession).toHaveBeenCalled();
+      expect(goToLogin).not.toHaveBeenCalled();
+      paused.release();
+      await pending;
+      expect(goToLogin).toHaveBeenCalledOnceWith(false);
+    } finally {
+      paused.release();
+      paused.restore();
+    }
+  });
+});
+
+describe('cross-tab lock during unlock', () => {
+  afterEach(() => { localStorage.removeItem('finance-dek'); TestBed.resetTestingModule(); });
+
+  it('discards an in-progress unlock when another tab broadcasts a lock', async () => {
+    const users = new BehaviorSubject<{ id: number } | null>({ id: 7 });
+    TestBed.configureTestingModule({ imports: [HttpClientTestingModule], providers: [
+      MarketRefreshCoordinatorService, provideRouter([]),
+      { provide: SESSION_CONTEXT, useValue: { user$: users, currentUser: { id: 7 } } as unknown as SessionPort },
+      { provide: FinanceService, useValue: { sessionToken: 1, dataChanges$: new Subject<unknown>(), clearSessionState(): void { /* already locked */ } } as unknown as FinanceService },
+    ] });
+    const vault = TestBed.inject(VaultService);
+    const coordinator = TestBed.inject(MarketRefreshCoordinatorService);
+    await vault.whenReady();
+    const payload = (await createVaultMaterial('correct-horse-battery', 1000)).setupPayload;
+    vault.loadPublicStatus({ exists: true, kdf_salt_b64: payload.kdf_salt_b64, kdf_iterations: payload.kdf_iterations, wrapped_dek_b64: payload.wrapped_dek_b64 });
+    wipeDek();
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { open = () => resolve(); });
+    let parked = false;
+    const real = crypto.subtle.deriveKey.bind(crypto.subtle) as (...args: never[]) => Promise<unknown>;
+    spyOn(crypto.subtle, 'deriveKey').and.callFake(((...args: never[]) => real(...args).then(async result => { parked = true; await gate; return result; })) as never);
+    const pending = vault.unlock('correct-horse-battery');
+    while (!parked) await new Promise(resolve => setTimeout(resolve, 0));
+    const epoch = readLockEpoch();
+    await (coordinator as unknown as { receiveTabMessage(message: object): Promise<void> }).receiveTabMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'other-tab' });
+    expect(readLockEpoch()).toBe(epoch + 1);
+    open();
+    expect(await pending).toBeFalse();
+    expect([localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked]).toEqual([null, false, false]);
   });
 });

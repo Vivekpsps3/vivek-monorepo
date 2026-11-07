@@ -73,7 +73,12 @@ test('photo selection and reset persist with source attribution',async({page,req
 });
 
 test('library is accessible at narrow width with no horizontal overflow',async({page})=>{
-  await page.setViewportSize({width:390,height:844});await page.goto('/media/library?sort=title');
+  await page.setViewportSize({width:390,height:844});
+  await page.goto('/hub');
+  const dune=page.getByRole('link',{name:'Dune Book'});
+  await expect(dune).toBeVisible();
+  expect((await dune.boundingBox())?.height??0).toBeGreaterThanOrEqual(44);
+  await page.goto('/media/library?sort=title');
   await expect(page.locator('media-card').first()).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   const result=await new AxeBuilder({page}).analyze();expect(result.violations).toEqual([]);

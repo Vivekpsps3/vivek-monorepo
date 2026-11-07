@@ -8,6 +8,7 @@
   },
   "include": [
     "src/**/*.spec.ts",
+    "../travel/frontend/src/**/*.spec.ts",
     "src/**/*.d.ts",
     "../../packages/ui/src/**/*.spec.ts"
   ]

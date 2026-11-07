@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from sqlalchemy import text
+from starlette.requests import ClientDisconnect
 from starlette.responses import Response
 
 from apps.server.api_key import ApiKeyMiddleware
@@ -29,6 +30,7 @@ from apps.server.frontend import register_frontend
 from apps.server.rate_limit import RateLimitMiddleware
 from apps.server.schema import assert_ready
 from apps.server.security_headers import SecurityHeadersMiddleware, csp_report
+from apps.server.town import router as town_router
 
 logger = logging.getLogger("site")
 # Module-level so a second create_app does not re-register the same series.
@@ -204,6 +206,9 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
         started = time.monotonic()
         try:
             response = await call_next(request)
+        except ClientDisconnect:
+            logger.info("client_disconnect request_id=%s", request_id)
+            response = Response(status_code=499)
         except Exception:
             logger.exception("request_failed request_id=%s", request_id)
             response = JSONResponse(
@@ -249,14 +254,16 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
             )
         return {"status": "ok", "release": release}
 
-    from apps.server.identity import account
+    from apps.server.identity import account, birthday
     from apps.server.identity import routes as identity_routes
 
     application.include_router(identity_routes.router, prefix="/api")
     application.include_router(account.router, prefix="/api")
+    application.include_router(birthday.router, prefix="/api")
     register_finance(application)
     register_travel(application)
     register_media(application)
+    application.include_router(town_router.router, prefix="/api")
     if dependencies.test_router is not None:
         application.include_router(dependencies.test_router)
 

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { ptoChoice, tripHeader } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -15,7 +16,7 @@ test('a Saturday to Sunday trip saves with weekends left off PTO', async ({ page
   await expectNotPto(page, '2026-11-08');
   await page.getByRole('button', { name: 'Save trip', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Honolulu', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1, name: 'Honolulu' }).locator('xpath=following-sibling::p').first()).toContainText('0 PTO days');
+  await expect(tripHeader(page, 'Honolulu')).toContainText('0 PTO days');
   await page.getByText('PTO · 0 days', { exact: true }).click();
   await expectNotPto(page, '2026-11-07');
   await expectNotPto(page, '2026-11-08');
@@ -23,5 +24,5 @@ test('a Saturday to Sunday trip saves with weekends left off PTO', async ({ page
 });
 
 async function expectNotPto(page, day) {
-  await expect(page.locator('label').filter({ hasText: day }).getByRole('combobox').locator('option:checked')).toHaveText('Not PTO');
+  await expect(ptoChoice(page, day).locator('option:checked')).toHaveText('Not PTO');
 }

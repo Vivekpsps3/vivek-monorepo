@@ -22,6 +22,8 @@ export interface FinanceHubSnapshot {
   positions: PositionHighlight[];
   freshness: string;
   cashOverlap: boolean;
+  /** Raw record counts. A zero balance is not an empty vault. */
+  counts: { accounts: number; holdings: number; debts: number };
 }
 
 /** Same valuation order as computeNetWorth, so account rows sum to portfolio value. */
@@ -95,5 +97,10 @@ export function buildFinanceHubSnapshot(assets: Asset[], liabilities: Liability[
     positions: largestPositions(holdings),
     freshness: priceFreshnessSummary(holdings),
     cashOverlap: hasManualCashAndBrokerage(assets, holdings),
+    counts: {
+      accounts: assets.length,
+      holdings: activeHoldings(holdings).length,
+      debts: liabilities.length,
+    },
   };
 }

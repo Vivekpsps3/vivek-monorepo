@@ -1,0 +1,8 @@
+<h1>Finance</h1>
+@if (locked) {
+  <ui-state state="locked" thing="settings" next="/settings/finance" />
+} @else if (locked === false) {
+  <ui-card>
+    <ui-button type="button" (clicked)="lock()">Lock now</ui-button>
+  </ui-card>
+}

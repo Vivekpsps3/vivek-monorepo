@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './frozen-clock';
 
 test('shared sign-in page is visible for anonymous users', async ({ page }) => {
   await page.route('**/api/auth/bootstrap-status', route => route.fulfill({

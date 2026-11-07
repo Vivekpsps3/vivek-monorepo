@@ -5,10 +5,12 @@ search-cache pruning may differ. Row loss or changed original values fails.
 """
 
 import json
+import re
 import sqlite3
 from collections import Counter
 
 _BOOKKEEPING = {"site_alembic_version", "site_revision_compatibility"}
+_HOURS_KEY = re.compile(r"^user:[0-9]+:pto_hours_per_day$")
 
 
 def _value(value):
@@ -86,6 +88,14 @@ def verify(before: dict, db: sqlite3.Connection) -> dict:
                 index = columns.index("membership_provenance")
                 allowed -= sum(row[index] is not None for row in expected)
             report["new_membership_rows"] = extra
+        elif table == "settings" and "key" in columns:
+            index = columns.index("key")
+            current_keys = [row[0] for row in db.execute("SELECT key FROM settings")]
+            expected_keys = [row[index] for row in expected]
+            new_keys = list((Counter(current_keys) - Counter(expected_keys)).elements())
+            if new_keys and all(_HOURS_KEY.fullmatch(str(key)) for key in new_keys):
+                allowed = len(new_keys)
+            report["new_pto_hour_settings"] = extra
         if extra != allowed:
             raise AssertionError(f"Unexplained added rows: {table}: {extra}, expected {allowed}")
         report["preserved_rows"] += len(expected)

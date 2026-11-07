@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './frozen-clock';
+import { moneyText } from './money-text';
 import { syntheticVault } from './synthetic-vault';
 
 const month = '2026-10';
@@ -78,17 +79,17 @@ test('home, planning, and activity agree on a negative subscription and a negati
 
   await vault.open('/');
   const home = page.locator('.home-tile--activity');
-  await expect(home).toContainText('$55.99');
-  await expect(home).not.toContainText('−$464.01');
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText('$1,400.00');
+  await expect(home).toContainText(moneyText('$55.99'));
+  await expect(home).not.toContainText(moneyText('−$464.01'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,400.00'));
 
   await vault.open('/planning');
-  await expect(page.getByText('Current net worth').locator('..')).toContainText('$1,400.00');
-  await expect(page.getByText('Subscriptions: $191.88')).toBeVisible();
-  await expect(page.locator('.planning-facts-grid')).not.toContainText('$480.00');
+  await expect(page.getByText('Current net worth').locator('..')).toContainText(moneyText('$1,400.00'));
+  await expect(page.getByText(moneyText('Subscriptions: $191.88'))).toBeVisible();
+  await expect(page.locator('.planning-facts-grid')).not.toContainText(moneyText('$480.00'));
 
   await vault.open('/spending?t=activity');
   await expect(page.getByText('Needs fixing').first()).toBeVisible();
   await expect(page.locator('.month-total__note')).toContainText('Excludes 1 entry');
-  await expect(page.locator('.month-total--expense')).toContainText('$40.00');
+  await expect(page.locator('.month-total--expense')).toContainText(moneyText('$40.00'));
 });

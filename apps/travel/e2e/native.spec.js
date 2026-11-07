@@ -1,5 +1,6 @@
 import {expect,test} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import {openTripFromList,ptoChoice} from './dates.mjs';
 
 test.beforeEach(async({request})=>{expect((await request.post('/e2e/reset')).ok()).toBeTruthy();});
 
@@ -35,7 +36,7 @@ test('quiet itinerary, manual transport, and per-date PTO survive reload',async(
  await page.getByRole('combobox',{name:'Mode',exact:true}).selectOption('drive');await page.getByLabel('From',{exact:true}).fill('Home');await page.getByLabel('To',{exact:true}).fill('Kyoto');
  await page.getByRole('button',{name:'Save transport',exact:true}).click();await expect(page.getByRole('heading',{name:'Drive',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Add activity',exact:true}).click();await page.getByLabel('Activity title').fill('Museum');await page.getByRole('button',{name:'Save activity'}).click();await expect(page.getByText('Museum',{exact:false}).first()).toBeVisible();
- await page.getByText('PTO · 2 days',{exact:true}).click();await page.locator('label').filter({hasText:'2026-11-06'}).getByRole('combobox').selectOption({label:'Not PTO'});await page.getByRole('button',{name:'Save PTO dates'}).click();
+ await page.getByText('PTO · 2 days',{exact:true}).click();await ptoChoice(page,'2026-11-06').selectOption({label:'Not PTO'});await page.getByRole('button',{name:'Save PTO dates'}).click();
  await page.reload();const saved=await(await request.get('/travel/api/trips/'+created.id)).json();expect(saved.pto_days_effective).toBe('1');expect(saved.transports[0].mode).toBe('drive');expect(saved.days.flatMap(day=>day.items).map(item=>item.title)).toEqual(['Museum']);
 });
 
@@ -44,12 +45,28 @@ test('map works after Hub navigation with origin-only tile referrer and no CSP f
  const referrers=[];const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript(()=>{window.cspFailures=[];document.addEventListener('securitypolicyviolation',event=>window.cspFailures.push(event.violatedDirective));});
  await page.route('https://tile.openstreetmap.org/**',route=>{referrers.push(route.request().headers()['referer']);return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64')});});
- await page.goto('/hub');await page.getByRole('link',{name:'Open Travel',exact:true}).click();await page.getByRole('heading',{name:'Map trip',exact:true}).click();
+ await page.goto('/hub');await page.getByRole('link',{name:'Open Travel',exact:true}).click();await openTripFromList(page,'Map trip');
  await page.getByRole('button',{name:'Show map',exact:true}).click();await expect(page.locator('.leaflet-marker-icon,.leaflet-interactive').first()).toBeVisible();await expect.poll(()=>referrers.length).toBeGreaterThan(0);
  expect(referrers.every(ref=>ref===new URL(page.url()).origin+'/')).toBe(true);expect(await page.evaluate(()=>window.cspFailures)).toEqual([]);expect(errors).toEqual([]);
  await page.getByRole('button',{name:'Zoom in',exact:true}).click();await expect(page.getByRole('link',{name:'OpenStreetMap contributors'})).toBeVisible();
 });
 
 test('trip home has one Hub and passes accessibility at 390 and 1280',async({page})=>{
- for(const width of [390,1280]){await page.setViewportSize({width,height:900});await page.goto('/travel');await expect(page.getByRole('heading',{name:'Trips',exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'Hub',exact:true})).toHaveCount(1);const axe=await new AxeBuilder({page}).analyze();expect(axe.violations).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);}
+ for(const width of [390,1280]){
+  await page.setViewportSize({width,height:900});
+  await page.goto('/travel');
+  await expect(page.getByRole('heading',{name:'Trips',exact:true})).toBeVisible();
+  if(width<=640){
+    await page.locator('.app-switcher__toggle').click();
+    await expect(page.locator('#app-switcher-menu')).toBeVisible();
+  }
+  await expect(page.getByRole('link',{name:'Hub',exact:true})).toHaveCount(1);
+  if(width<=640){
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#app-switcher-menu')).toHaveCount(0);
+  }
+  const axe=await new AxeBuilder({page}).analyze();
+  expect(axe.violations).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ }
 });
