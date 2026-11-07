@@ -584,7 +584,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     if (this.importWorkflow.importCommitting) return;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { t: 'activity', receipts: '1', add: '1' },
+      queryParams: { t: null, receipts: '1', add: '1' },
       queryParamsHandling: 'merge',
     });
   }
@@ -592,7 +592,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   viewImportedTransactions(receipt: ImportReceipt): void {
     void this.router.navigate(['/finance/spending'], {
       queryParams: {
-        t: 'activity', v: 'all', receipt: receipt.id, receipts: null,
+        t: null, v: 'all', receipt: receipt.id, receipts: null,
         month: null, date: null, from: null, through: null,
         periodStart: null, periodEnd: null, priorStart: null, priorEnd: null,
         group: null, dimension: null, review: null, edit: null, add: null,
@@ -603,7 +603,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   reattachCorrectedCsv(receipt: ImportReceipt): void {
     const filename = this.receiptFirstParseFilename(receipt);
     void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: 'activity', receipts: '1', add: '1', reattach: receipt.id, reattach_file: filename },
+      queryParams: { t: null, receipts: '1', add: '1', reattach: receipt.id, reattach_file: filename },
     });
   }
 

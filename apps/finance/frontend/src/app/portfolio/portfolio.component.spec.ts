@@ -331,3 +331,54 @@ describe('PortfolioComponent', () => {
     });
   });
 });
+
+import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { BehaviorSubject, Subject } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { FinanceService } from '../services/finance.service';
+
+describe('empty states (F10)', () => {
+  let fixture: ComponentFixture<PortfolioComponent>;
+
+  beforeEach(async () => {
+    const idle: MarketRefreshState = {
+      phase: 'idle', automatic: false, totalSymbols: 0, completedSymbols: 0,
+      updatedHoldings: 0, updatedEmployerValuations: 0, failures: [], startedAt: null, finishedAt: null,
+    };
+    const financeStub = {
+      holdings$: new BehaviorSubject<Holding[]>([]),
+      netWorth$: new BehaviorSubject<unknown>(null),
+      isLoading$: new BehaviorSubject<boolean>(false),
+      dataChanges$: new Subject<unknown>(),
+      getHoldings: () => of([]),
+      getNetWorth: () => of(null),
+      getHoldingImportStages: () => of([]),
+    };
+    const marketStub = {
+      status$: new BehaviorSubject<MarketRefreshState>(idle),
+      refreshNow: () => Promise.resolve(idle),
+      refreshSymbol: () => Promise.resolve({ symbol: 'VOO', holdingsUpdated: 0, employerValuationsUpdated: 0, failedRecords: [] }),
+    };
+    await TestBed.configureTestingModule({
+      imports: [PortfolioComponent],
+      providers: [
+        { provide: FinanceService, useValue: financeStub },
+        { provide: MarketRefreshCoordinatorService, useValue: marketStub },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        { provide: ConfirmService, useValue: { ask: () => Promise.resolve(true) } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(PortfolioComponent);
+    fixture.detectChanges();
+  });
+
+  it('no holdings → No holdings yet with Add holding then Import from Fidelity', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('No holdings yet');
+    expect(text).toContain('Add a position by hand or import a Fidelity positions file.');
+    const buttons = [...fixture.nativeElement.querySelectorAll('.empty-actions button')]
+      .map((el: Element) => el.textContent?.trim());
+    expect(buttons).toEqual(['Add holding', 'Import from Fidelity']);
+    expect(text).not.toContain('Add your first');
+  });
+});

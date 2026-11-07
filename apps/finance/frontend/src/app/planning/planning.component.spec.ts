@@ -1,7 +1,12 @@
+import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
-import { failureCopy } from '@vivek/ui';
+import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
 import { PlanningComponent } from './planning.component';
-import { DEFAULT_MC_ASSUMPTIONS, PlanningProfile } from '../models/planning.model';
+import { DEFAULT_MC_ASSUMPTIONS, PlanningInputsPreview, PlanningProfile } from '../models/planning.model';
+import { FinanceService, type FinanceDataChange } from '../services/finance.service';
+import { PlanningService } from '../services/planning.service';
 import { spendingModeInference } from './spending-mode';
 import { lastThreeCompletedMonths } from '../utils/planning-spending.util';
 
@@ -12,13 +17,13 @@ function createComponent() {
   planning.deleteProfile.and.returnValue(of(undefined));
   const toast = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
   const cdr = jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck']);
-  const component = new PlanningComponent(
+  const component = TestBed.runInInjectionContext(() => new PlanningComponent(
     planning as any,
     { ask: jasmine.createSpy('ask').and.resolveTo(true) } as any,
     toast as any,
     cdr,
     { dataChanges$: new Subject<any>() } as any
-  );
+  ));
   return { component, planning, toast, cdr };
 }
 
@@ -328,5 +333,46 @@ describe('PlanningComponent spending acceptance', () => {
 
     expect(component.savedInputsError).toBe(failureCopy('load', 'your saved inputs'));
     expect(component.error).toBeNull();
+  });
+});
+
+describe('empty states (F10)', () => {
+  const inputsPreview = (overrides: Partial<PlanningInputsPreview>): PlanningInputsPreview => ({
+    disclaimer: '', as_of: '', snapshot_hash: '',
+    net_worth_total: 0, net_worth_portfolio: 0, net_worth_liabilities: 0,
+    avg_monthly_income: 0, avg_monthly_expense: 0,
+    implied_annual_spending: 0, implied_annual_savings: 0,
+    transaction_count: 0, recurring_annual_spending: 0,
+    ...overrides,
+  });
+
+  it('hasPlanningInputs truth table', () => {
+    const { component } = createComponent();
+    component.inputs = null;
+    expect(component.hasPlanningInputs).toBeFalse();
+    component.inputs = inputsPreview({});
+    expect(component.hasPlanningInputs).toBeFalse();
+    component.inputs = inputsPreview({ net_worth_portfolio: 250 });
+    expect(component.hasPlanningInputs).toBeTrue();
+    component.inputs = inputsPreview({ recurring_annual_spending: -5 });
+    expect(component.hasPlanningInputs).toBeTrue();
+  });
+
+  it('goToEmptyAction routes (pay is the canonical default tab)', () => {
+    const planning = jasmine.createSpyObj<PlanningService>('PlanningService', ['createProfile', 'updateProfile', 'deleteProfile', 'createRun', 'getInputs', 'getSpendingSuggestionContext', 'listProfiles']);
+    const router = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    router.navigate.and.resolveTo(true);
+    TestBed.configureTestingModule({ providers: [{ provide: Router, useValue: router }] });
+    const component = TestBed.runInInjectionContext(() => new PlanningComponent(
+      planning,
+      { ask: jasmine.createSpy('ask').and.resolveTo(true) } as unknown as ConfirmService,
+      jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']),
+      jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['markForCheck']),
+      { dataChanges$: new Subject<FinanceDataChange>() } as unknown as FinanceService,
+    ));
+    component.goToEmptyAction('balance');
+    expect(router.navigate).toHaveBeenCalledWith(['/finance/have']);
+    component.goToEmptyAction('pay');
+    expect(router.navigate).toHaveBeenCalledWith(['/finance/recurring']);
   });
 });

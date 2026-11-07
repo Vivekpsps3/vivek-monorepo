@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { continueAfterAuth, safeNextPath } from '@vivek/ui';
 import { VaultService } from '../crypto/vault.service';
 import { UiButtonComponent, UiCardComponent, UiInputComponent, UiPageHeaderComponent } from '@vivek/ui';
 
@@ -61,8 +62,17 @@ export class VaultSetupComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     const status = await this.vault.refreshStatus();
     if (status.exists) {
-      await this.router.navigateByUrl('/finance/vault/unlock');
+      // Keep the current next so a setup deep link still returns afterwards.
+      await this.router.navigate(['/finance/vault/unlock'], {
+        queryParams: { next: safeNextPath() ?? undefined },
+      });
     }
+  }
+
+  /** Same return rule as the unlock screen (F5 §1). */
+  private continueAfterUnlock(): Promise<boolean> {
+    if (safeNextPath()) return continueAfterAuth(this.router);
+    return this.router.navigateByUrl(window.self === window.top ? '/finance' : '/finance/embed');
   }
 
   submit(event: Event): void {
@@ -83,7 +93,7 @@ export class VaultSetupComponent implements OnInit {
     this.busy = true;
     try {
       await this.vault.setup(this.passphrase);
-      await this.router.navigateByUrl('/finance/');
+      await this.continueAfterUnlock();
     } catch (e: any) {
       this.error = e?.error?.detail || e?.message || 'Vault setup failed';
     } finally {
