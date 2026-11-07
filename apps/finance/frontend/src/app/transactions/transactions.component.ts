@@ -943,18 +943,15 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     );
     if (!ok) return;
 
-    const backup: TransactionCreate = {
-      date: tx.date,
-      type: tx.type,
-      category: tx.category,
-      amount: tx.amount,
-      description: tx.description,
-    };
+    // F21: the Undo snapshot is the full record, held only in memory, so a
+    // restore puts back the intended record exactly — same id, merchant,
+    // account, kind and import linkage — never a stripped re-creation.
+    const backup: Transaction = { ...tx };
 
     this.removeTransaction(tx, backup);
   }
 
-  private removeTransaction(tx: Transaction, backup: TransactionCreate): void {
+  private removeTransaction(tx: Transaction, backup: Transaction): void {
     this.financeService.deleteTransaction(tx.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.toastService.success('Transaction deleted', () => this.restoreTransaction(backup));
@@ -968,10 +965,27 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     });
   }
 
-  private restoreTransaction(backup: TransactionCreate): void {
+  private restoreInFlight = new Set<number>();
+
+  private restoreTransaction(backup: Transaction): void {
+    // Exactly once: a second Undo click while a restore runs is a no-op,
+    // and the store answers 'already-restored' if the first attempt landed
+    // but its response was lost, so a retry can never duplicate the record.
+    if (this.restoreInFlight.has(backup.id)) return;
+    this.restoreInFlight.add(backup.id);
     // Keep the error toast if the user leaves this page while the restore is in flight.
-    this.financeService.addTransaction(backup, true).subscribe({
-      error: () => {
+    this.financeService.restoreTransaction(backup, true).subscribe({
+      next: () => {
+        this.restoreInFlight.delete(backup.id);
+      },
+      error: (err: unknown) => {
+        this.restoreInFlight.delete(backup.id);
+        if (err instanceof Error && err.message === 'Transaction changed after it was deleted') {
+          // A different record holds the id now. Never overwrite it, and a
+          // retry would fail the same way, so this toast has no action.
+          this.toastService.error(failureCopy('restore', 'this transaction', 'It changed after it was deleted.'));
+          return;
+        }
         this.toastService.error(failureCopy('restore', 'this transaction'), {
           label: 'Try again',
           run: () => this.restoreTransaction(backup),

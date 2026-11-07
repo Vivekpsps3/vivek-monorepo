@@ -47,6 +47,14 @@
   mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
 }
 
+/* Snap points can pull a keyboard-focused link's outline outside the viewport.
+   Keep its scroll margin visible, and do not fade the focus indicator. */
+:host .ui-section-nav__scroller:focus-within {
+  scroll-snap-type: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 .ui-section-nav__link {
   display: inline-flex;
   align-items: center;

@@ -400,7 +400,16 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
         .then(() => { authNavigation.goToLogin(false); })
         .catch(() => undefined);
     } else {
-      await this.router.navigateByUrl('/finance/vault/unlock');
+      // Remote lock (F5 §1): on a Finance route, go to unlock keeping the
+      // return path; on Hub/Settings don't navigate — those surfaces read
+      // vault.isUnlocked themselves. An unknown URL means the embedded
+      // Finance context, which always lands on the unlock screen.
+      const url = this.router.url || '';
+      if (url.startsWith('/finance/') && !url.startsWith('/finance/vault/')) {
+        await this.router.navigateByUrl(`/finance/vault/unlock?next=${encodeURIComponent(url)}`);
+      } else if (url === '' || url.startsWith('/finance/vault/')) {
+        await this.router.navigateByUrl('/finance/vault/unlock');
+      }
     }
   }
 }

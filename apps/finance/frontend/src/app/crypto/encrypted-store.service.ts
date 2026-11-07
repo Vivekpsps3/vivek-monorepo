@@ -31,6 +31,17 @@ export type { EncryptedCollection, EncryptedStoreChange } from './encrypted-stor
 export { RecordRevisionConflictError } from './encrypted-store.persistence';
 import { VaultService, type VaultWriteOptions } from './vault.service';
 
+function stableRecordText(record: Transaction): string {
+  const entries = Object.entries(record as unknown as Record<string, unknown>)
+    .filter(([, value]) => value !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify(entries);
+}
+
+function sameTransactionContent(a: Transaction, b: Transaction): boolean {
+  return stableRecordText(a) === stableRecordText(b);
+}
+
 @Injectable({ providedIn: 'root' })
 export class EncryptedStoreService {
   private generation = 0;
@@ -137,6 +148,33 @@ export class EncryptedStoreService {
   async deleteTransaction(id: number, options?: VaultWriteOptions): Promise<void> {
     const generation = this.generation;
     return this.runRecordUpdate('transactions', id, generation, () => this.remove('transactions', id, options));
+  }
+
+  /**
+   * F21 Undo: put back the exact record deleteTransaction removed, under its
+   * original id and with every field intact. Restore is idempotent — when
+   * the record is already present with identical content the outcome is
+   * 'already-restored' and nothing is written, so a repeated Undo can never
+   * duplicate it. When a different record now holds the id, refuse rather
+   * than silently overwriting someone else's edit. The snapshot lives only
+   * in the caller's memory; nothing plaintext leaves the browser.
+   */
+  async restoreTransaction(
+    record: Transaction,
+    options?: VaultWriteOptions,
+  ): Promise<{ record: Transaction; outcome: 'restored' | 'already-restored' }> {
+    const generation = this.generation;
+    return this.runRecordUpdate('transactions', record.id, generation, async () => {
+      await this.ensureLoaded();
+      this.assertSession(generation);
+      const current = this.list<Transaction>('transactions').find(t => t.id === record.id);
+      if (current) {
+        if (sameTransactionContent(current, record)) return { record: current, outcome: 'already-restored' as const };
+        throw new Error('Transaction changed after it was deleted');
+      }
+      const restored = await this.upsert('transactions', { ...record }, undefined, generation, options);
+      return { record: restored, outcome: 'restored' as const };
+    });
   }
 
   async deleteTransactions(ids: number[]): Promise<void> {
