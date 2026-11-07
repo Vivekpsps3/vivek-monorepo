@@ -20,6 +20,8 @@ import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
+import { NextEpisodeButtonComponent } from '../../../../media/frontend/src/next-episode-button.component';
+import type { NextResult } from '../../../../media/frontend/src/next-episode.service';
 interface TravelTrip {
   id: number;
   title: string;
@@ -51,7 +53,7 @@ interface MediaSummary {
   currently: MediaItem[];
   recent_reviews: MediaItem[];
   upcoming: MediaItem[];
-  next_episodes: Array<{ entry_id?: number; show_title: string; season: number; episode: number; title?: string | null; state?: string }>;
+  next_episodes: Array<{ entry_id: number; episode_id: number; show_title: string; season: number; episode: number; title?: string | null; air_date: string | null; state?: string }>;
 }
 
 interface FinanceView {
@@ -72,6 +74,7 @@ interface FinanceView {
   imports: [
     AppDatePipe,
     MoneyPipe,
+    NextEpisodeButtonComponent,
     RouterLink,
     UiStateComponent,
   ],
@@ -198,6 +201,46 @@ export class HubComponent implements OnInit {
     if (this.mediaPending) return;
     this.mediaPending = true;
     void this.loadMedia();
+  }
+
+  /** The Hub's one next-episode button sits on the first aired row, in list order. */
+  isTopNext(item: MediaSummary['next_episodes'][number]): boolean {
+    if (this.mediaState !== 'ready' || !this.media) return false;
+    return this.media.next_episodes.find(row => row.state === 'next') === item;
+  }
+
+  onMediaNextDone(result: NextResult, item: MediaSummary['next_episodes'][number]): void {
+    const media = this.media;
+    if (!media) return;
+    const next = result.next;
+    const next_episodes = next
+      ? media.next_episodes.map(row =>
+          row.entry_id === item.entry_id
+            ? {
+                ...row,
+                episode_id: next.id,
+                season: next.season_number,
+                episode: next.episode_number,
+                title: next.title,
+                air_date: next.air_date,
+                state: next.released ? 'next' : 'upcoming',
+              }
+            : row,
+        )
+      : media.next_episodes.filter(row => row.entry_id !== item.entry_id);
+    this.media = { ...media, next_episodes };
+    this.cdr.markForCheck();
+    requestAnimationFrame(() => {
+      const rowLink = document.querySelector<HTMLElement>(
+        `.next-episode-row a[href="/media/item/${item.entry_id}"]`,
+      );
+      const heading = document.querySelector<HTMLElement>('#media-heading a');
+      (rowLink ?? heading)?.focus();
+    });
+  }
+
+  onMediaNextReload(): void {
+    this.retryMedia();
   }
 
   retryFinance(): void {
