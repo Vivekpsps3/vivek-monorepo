@@ -270,9 +270,9 @@ export async function syntheticVault(
     } catch (error) {
       if (!(error instanceof errors.TimeoutError)) throw error;
     }
-    // No next= param, so unlock lands on /hub. /login is signed out, not unlocked.
-    await expect(target).toHaveURL(/\/hub$/);
-    await expect(target.locator('app-hub')).toBeVisible();
+    // No next= param, so unlock lands on Finance Home. /login is signed out, not unlocked.
+    await expect(target).toHaveURL(/\/finance\/?$/);
+    await expect(target.locator('app-dashboard')).toBeVisible();
     enteredPages.add(target);
   }
   async function navigate(pushPath: string, target: Page, expected: string | RegExp) {

@@ -63,6 +63,18 @@ describe('Transactions multi-file import UI', () => {
 
   const button = (name: string): HTMLButtonElement => Array.from(fixture.nativeElement.querySelectorAll('button')).find((node: any) => node.textContent.trim() === name) as HTMLButtonElement;
 
+  // The import-context refresh is debounce-driven (two 60ms debounce stages
+  // in TransactionsImportWorkflow), so a fixed sleep races it under load:
+  // any delay in the first stage pushes completion past the sleep. Wait for
+  // the refresh outcome itself instead of a wall-clock guess.
+  async function waitUntil(condition: () => boolean, description: string): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (!condition()) {
+      if (Date.now() > deadline) throw new Error(`Timed out waiting for ${description}`);
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+  }
+
   it('refreshes account and receipt context in the open import wizard without replacing its draft', async () => {
     let accounts: any[] = [{ id: 1, account_key: 'account-a', display_name: 'Old card label', confirmed: true, bank_slug: 'chase' }];
     let receipts: any[] = [];
@@ -72,12 +84,15 @@ describe('Transactions multi-file import UI', () => {
     component.importFiles = [draft];
     component.importStep = 'preview';
     component.importError = 'Keep this draft message';
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await waitUntil(() => component.bankAccounts[0]?.display_name === 'Old card label', 'the initial account load');
 
     accounts = [{ ...accounts[0], display_name: 'Renamed card' }];
     receipts = [{ id: 9, status: 'withdrawn', filenames: ['statement.csv'], unresolved: [], account_displays: ['Renamed card'] }];
     dataChanges$.next({ collections: ['bank_accounts', 'import_batches'], source: 'remote' });
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await waitUntil(
+      () => component.bankAccounts[0]?.display_name === 'Renamed card' && component.importReceipts.some(receipt => receipt.id === 9),
+      'the remote refresh to land',
+    );
     fixture.detectChanges();
 
     expect(component.showImportModal).toBeTrue();
@@ -93,7 +108,7 @@ describe('Transactions multi-file import UI', () => {
     finance.getBankAccounts.and.returnValue(of(accounts as any));
     routeQuery.next(convertToParamMap({ account: 'card-a' }));
     dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
-    await new Promise(resolve => setTimeout(resolve, 160));
+    await waitUntil(() => component.bankAccounts.some(account => account.account_key === 'card-a'), 'the account options to load');
     fixture.detectChanges();
 
     const accountSelect: HTMLSelectElement = fixture.nativeElement.querySelector('#tx-account-filter');
@@ -521,7 +536,7 @@ describe('Transactions multi-file import UI', () => {
 
 describe('Transactions delete and undo errors', () => {
   function makeComponent() {
-    const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'addTransaction']);
+    const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'addTransaction', 'restoreTransaction']);
     const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
     const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
     const component = new TransactionsComponent(
@@ -539,6 +554,7 @@ describe('Transactions delete and undo errors', () => {
 
   const transaction = {
     id: 8, date: '2026-10-03', type: 'expense' as const, category: 'Food', amount: -45.67, description: 'Legacy return',
+    merchant: 'Bakery', kind: 'purchase' as const, bank_account_key: 'card-a', account_display: 'Daily card',
   };
 
   it('shows one retry toast when deleting a transaction fails', async () => {
@@ -555,21 +571,47 @@ describe('Transactions delete and undo errors', () => {
   it('shows one retry toast when undoing a transaction delete fails and keeps the amount', async () => {
     const { component, finance, toast } = makeComponent();
     finance.deleteTransaction.and.returnValue(of({ ok: true }));
-    finance.addTransaction.and.returnValue(throwError(() => new Error('nope')));
+    finance.restoreTransaction.and.returnValue(throwError(() => new Error('nope')));
     await component.deleteTransaction(transaction);
     const undo = toast.success.calls.mostRecent().args[1] as () => void;
     undo();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't restore this transaction.");
     expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
-    expect(finance.addTransaction).toHaveBeenCalledWith(jasmine.objectContaining({
-      date: '2026-10-03', category: 'Food', amount: -45.67, description: 'Legacy return',
+    // F21: the restore carries the full record — id, merchant, account, kind —
+    // not the old five-field re-creation.
+    expect(finance.restoreTransaction).toHaveBeenCalledWith(jasmine.objectContaining({
+      id: 8, date: '2026-10-03', category: 'Food', amount: -45.67, description: 'Legacy return',
+      merchant: 'Bakery', kind: 'purchase', bank_account_key: 'card-a', account_display: 'Daily card',
     }), true);
     const retry = toast.error.calls.mostRecent().args[1].run as () => void;
-    finance.addTransaction.calls.reset();
+    finance.restoreTransaction.calls.reset();
     toast.error.calls.reset();
     retry();
     expect(toast.error).toHaveBeenCalledTimes(1);
-    expect(finance.addTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
+    expect(finance.restoreTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
+  });
+
+  it('F21: a repeated Undo after a landed restore shows no error and restores once', async () => {
+    const { component, finance, toast } = makeComponent();
+    finance.deleteTransaction.and.returnValue(of({ ok: true }));
+    finance.restoreTransaction.and.returnValue(of({ record: transaction, outcome: 'already-restored' }));
+    await component.deleteTransaction(transaction);
+    const undo = toast.success.calls.mostRecent().args[1] as () => void;
+    undo();
+    undo();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('F21: a restore conflict shows a terminal error with no retry action', async () => {
+    const { component, finance, toast } = makeComponent();
+    finance.deleteTransaction.and.returnValue(of({ ok: true }));
+    finance.restoreTransaction.and.returnValue(throwError(() => new Error('Transaction changed after it was deleted')));
+    await component.deleteTransaction(transaction);
+    const undo = toast.success.calls.mostRecent().args[1] as () => void;
+    undo();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't restore this transaction. It changed after it was deleted.");
+    expect(toast.error.calls.mostRecent().args[1]).toBeUndefined();
   });
 });

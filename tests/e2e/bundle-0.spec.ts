@@ -197,6 +197,39 @@ async function focusRingMisses(page: Page): Promise<string[]> {
   return misses;
 }
 
+for (const fontSize of [21, 22]) {
+  test(`section navigation keeps keyboard outlines visible with ${fontSize}px text`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/media');
+    const links = page.locator('.ui-section-nav__link');
+    await expect(links).toHaveCount(5);
+    // Exercise overflowing labels independently of which system font CI has.
+    await links.evaluateAll((elements, size) => {
+      for (const element of elements) (element as HTMLElement).style.fontSize = `${size}px`;
+    }, fontSize);
+    await links.first().focus();
+    for (let index = 0; index < await links.count(); index += 1) {
+      if (index > 0) await page.keyboard.press('Tab');
+      await expect(links.nth(index)).toBeFocused();
+      const ring = await links.nth(index).evaluate(element => {
+        const scroller = element.closest('.ui-section-nav__scroller')!;
+        const style = getComputedStyle(element);
+        const pad = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+        const box = element.getBoundingClientRect();
+        const viewport = scroller.getBoundingClientRect();
+        return {
+          left: box.left - pad - viewport.left,
+          right: viewport.right - box.right - pad,
+          mask: getComputedStyle(scroller).maskImage,
+        };
+      });
+      expect(ring.left).toBeGreaterThanOrEqual(-1);
+      expect(ring.right).toBeGreaterThanOrEqual(-1);
+      expect(ring.mask).toBe('none');
+    }
+  });
+}
+
 for (const width of [390, 1280]) {
   for (const theme of ['light', 'dark'] as const) {
     test(`bundle 0 shell at ${width}px ${theme}`, async ({ page }, testInfo) => {
@@ -349,8 +382,8 @@ test('a locked Finance card drops money, counts, and names loaded while unlocked
   await expect(page).toHaveURL(/\/settings\/account$/);
   await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Finance', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/finance$/);
-  await page.getByRole('button', { name: 'Lock now' }).click();
-  await expect(page.getByText('Finance is locked. Unlock to see settings.')).toBeVisible();
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await expect(page.getByText('Finance is locked. Unlock to see settings.', { exact: true })).toBeVisible();
   await page.locator('.app-switcher__bar').getByRole('link', { name: 'Hub', exact: true }).click();
   await expect(page).toHaveURL(/\/hub$/);
   await expect.poll(async () => page.evaluate(() => (window as Window & { __bundle0Document?: string }).__bundle0Document)).toBe(documentId);
@@ -406,12 +439,12 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
   const menu = await openUserMenu(page);
   await menu.getByRole('link', { name: 'Settings', exact: true }).click();
   await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Finance', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Lock now' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Lock Finance', exact: true })).toBeVisible();
   await finance.evaluate(() => { (window as Window & { __f6?: string }).__f6 = 'finance'; });
   await hub.evaluate(() => { (window as Window & { __f6?: string }).__f6 = 'hub'; });
-  await page.getByRole('button', { name: 'Lock now' }).click();
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
   await Promise.all([
-    expect(finance).toHaveURL(/\/finance\/vault\/unlock$/, { timeout: 1000 }),
+    expect.poll(() => new URL(finance.url()).pathname, { timeout: 1000 }).toBe('/finance/vault/unlock'),
     expect(finance.getByText('Harbor Checking')).toHaveCount(0, { timeout: 1000 }),
     expect(hub).toHaveURL(/\/hub$/, { timeout: 1000 }),
     expect.poll(async () => {
@@ -422,6 +455,7 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
         && !text.includes('HBRX');
     }, { timeout: 1000 }).toBe(true),
   ]);
+  expect(new URL(finance.url()).searchParams.get('next')).toBe('/finance/have?t=assets');
   expect(await finance.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('finance');
   expect(await hub.evaluate(() => (window as Window & { __f6?: string }).__f6)).toBe('hub');
   await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/settings(\/|$)/);

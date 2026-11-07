@@ -110,7 +110,8 @@ describe('vault-crypto', () => {
     const del = IDBObjectStore.prototype.delete;
     const spy = spyOn(IDBObjectStore.prototype, 'delete').and.callFake(function (this: IDBObjectStore, query?: IDBValidKey | IDBKeyRange) {
       const request = del.call(this, query as IDBValidKey);
-      setTimeout(() => { try { this.transaction.abort(); } catch { /* already finished */ } }, 0);
+      // Abort while the delete is pending so the test cannot race its commit.
+      this.transaction.abort();
       return request;
     });
     try {

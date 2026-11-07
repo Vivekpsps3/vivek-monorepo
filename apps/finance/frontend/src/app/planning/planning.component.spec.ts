@@ -257,10 +257,76 @@ describe('PlanningComponent spending acceptance', () => {
 
     await component.deleteSelectedProfile();
 
-    expect(component.error).toBe(failureCopy('delete', 'these saved inputs'));
+    expect(component.savedInputsError).toBe(failureCopy('delete', 'these saved inputs'));
+    expect(component.error).toBeNull();
     expect(component.profiles).toEqual([profile]);
     expect(component.selectedProfileId).toBe(profile.id);
     expect(toast.error).not.toHaveBeenCalled();
     expect(cdr.markForCheck).toHaveBeenCalled();
+  });
+
+  it('routes a failed save to the Saved inputs card error, not the page error', () => {
+    const { component, planning } = createComponent();
+    planning.createProfile.and.returnValue(throwError(() => ({ status: 503 })));
+    component.savedInputName = 'Baseline';
+
+    component.saveSavedInputs();
+
+    expect(component.savedInputsError).toBe(failureCopy('save', 'these inputs'));
+    expect(component.error).toBeNull();
+  });
+
+  it('clears a stale card error after a later successful save', () => {
+    const { component, planning } = createComponent();
+    const saved: PlanningProfile = {
+      id: 7, name: 'Baseline', base_currency: 'USD',
+      payload: structuredClone(DEFAULT_MC_ASSUMPTIONS), created_at: '', updated_at: '',
+    };
+    planning.createProfile.and.returnValue(throwError(() => ({ status: 503 })));
+    component.savedInputName = 'Baseline';
+    component.saveSavedInputs();
+    expect(component.savedInputsError).toBe(failureCopy('save', 'these inputs'));
+
+    planning.createProfile.and.returnValue(of(saved));
+    component.saveSavedInputs();
+
+    expect(component.savedInputsError).toBeNull();
+    expect(component.profiles).toEqual([saved]);
+  });
+
+  it('clears a stale save error after a later successful delete', async () => {
+    const { component, planning } = createComponent();
+    const profile: PlanningProfile = {
+      id: 4, name: 'Probe profile', base_currency: 'USD',
+      payload: structuredClone(DEFAULT_MC_ASSUMPTIONS), created_at: '', updated_at: '',
+    };
+    planning.createProfile.and.returnValue(throwError(() => ({ status: 503 })));
+    component.savedInputName = 'Probe profile';
+    component.saveSavedInputs();
+    expect(component.savedInputsError).toBe(failureCopy('save', 'these inputs'));
+
+    component.profiles = [profile];
+    component.selectedProfileId = profile.id;
+    await component.deleteSelectedProfile();
+
+    expect(component.savedInputsError).toBeNull();
+    expect(component.profiles).toEqual([]);
+  });
+
+  it('shows a profiles load failure in the Saved inputs card error', () => {
+    const { component, planning } = createComponent();
+    planning.listProfiles.and.returnValue(throwError(() => ({ status: 503 })));
+    planning.getInputs.and.returnValue(of({
+      net_worth_total: 0, avg_monthly_income: 0, recurring_annual_spending: 0,
+      implied_annual_spending: 0,
+    }));
+    planning.getSpendingSuggestionContext.and.returnValue(of({
+      transactions: [], receipts: [], accounts: [],
+    }));
+
+    component.ngOnInit();
+
+    expect(component.savedInputsError).toBe(failureCopy('load', 'your saved inputs'));
+    expect(component.error).toBeNull();
   });
 });
