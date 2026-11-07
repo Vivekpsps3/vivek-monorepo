@@ -180,3 +180,36 @@ describe('canonical tab links', () => {
     expect(harness.routeNativeElement!.querySelector('.hub-tabs')?.getAttribute('aria-label')).toBe('Recurring sections');
   });
 });
+
+describe('empty states (F10)', () => {
+  it('showAllCommitments resets type and status filters and keeps order', () => {
+    const params = new BehaviorSubject({ get: (key: string) => ({ t: 'spend' } as Record<string, string>)[key] ?? null, keys: ['t'] });
+    const router = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    router.navigate.and.resolveTo(true);
+    const finance = jasmine.createSpyObj('FinanceService', ['getFixedExpenses', 'getSubscriptions'], {
+      fixedExpenses$: new BehaviorSubject<FixedExpense[]>([]).asObservable(),
+      subscriptions$: new BehaviorSubject<Subscription[]>([]).asObservable(),
+    });
+    finance.getFixedExpenses.and.returnValue(of([]));
+    finance.getSubscriptions.and.returnValue(of([]));
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ActivatedRoute, useValue: { queryParamMap: params.asObservable() } },
+        { provide: Router, useValue: router },
+        { provide: FinanceService, useValue: finance },
+        { provide: ChangeDetectorRef, useValue: { markForCheck: jasmine.createSpy() } },
+      ],
+    });
+    const hub = TestBed.runInInjectionContext(() => new RecurringHubComponent());
+    hub.typeFilter = 'subscription';
+    hub.statusFilter = 'active';
+    hub.dateOrder = 'latest';
+    hub.showAllCommitments();
+    expect(hub.typeFilter).toBe('all');
+    expect(hub.statusFilter).toBe('all');
+    expect(hub.dateOrder).toBe('latest');
+    expect(router.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
+      queryParams: { kind: 'all', status: 'all', order: 'latest' },
+    }));
+  });
+});

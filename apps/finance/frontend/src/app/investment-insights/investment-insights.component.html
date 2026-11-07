@@ -9,8 +9,8 @@
     </ui-card>
   } @else if (portfolioValue <= 0) {
     <ui-card>
-      <ui-empty-state message="Add holdings or import a portfolio to see investment insights.">
-        <ui-icon name="portfolio" size="lg" style="display:block; margin: 0 auto 8px; opacity:.5;" />
+      <ui-empty-state [title]="'No holdings to project'" message="Add holdings or import from Fidelity to project growth.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="addHolding()">Add holding</ui-button></div>
       </ui-empty-state>
     </ui-card>
   } @else {

@@ -3,12 +3,14 @@
     [embedded]="embedded"
     [title]="compensationTracking ? 'Compensation history' : 'Jobs & pay'">
 
-    <div uiPageActions class="header-actions">
-      <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
-    </div>
+    @if (incomes.length || compensationTracking) {
+      <div uiPageActions class="header-actions">
+        <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
+      </div>
+    }
   </ui-page-header>
 
-  @if (!compensationTracking) {
+  @if (!compensationTracking && incomes.length) {
   <section class="income-summary">
     <div>
       <p class="section-eyebrow">Yearly pay</p>
@@ -173,9 +175,8 @@
         </tbody>
       </ui-data-table>
     } @else {
-      <ui-empty-state message="Add your salary and pay schedule.">
-        <ui-icon name="wallet" size="lg" style="display:block; margin: 0 auto 8px; opacity:.5;" />
-        <ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button>
+      <ui-empty-state [title]="'No jobs yet'" message="Add your salary and pay schedule to project income.">
+        <div class="empty-actions"><ui-button variant="primary" (clicked)="openAddModal()">Add job</ui-button></div>
       </ui-empty-state>
     }
   </ui-card>

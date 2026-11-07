@@ -391,19 +391,17 @@
 
     <ng-template #empty>
       @if (!loading && !listLoading && !listError) {
-        @if (hasActiveFilters) {
-          <ui-empty-state [title]="'No activity matches these filters'" message="Try clearing one filter or changing the date range.">
+        @if (hasActiveFilters && allTransactions.length) {
+          <ui-empty-state message="Nothing matches these filters">
             <div class="empty-actions">
               <ui-button variant="secondary" (clicked)="clearFilters()">Clear filters</ui-button>
             </div>
           </ui-empty-state>
         } @else {
-        <ui-empty-state [title]="'No transactions yet'">
-          <ui-icon name="transactions" size="lg" style="margin-bottom: 8px; opacity: 0.6;" />
-          <p class="empty-import-copy">Start with a bank CSV if you want the fastest and most accurate history.</p>
+        <ui-empty-state [title]="'No transactions yet'" message="Import a card statement or add one by hand.">
           <div class="empty-actions">
-            <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
-            <ui-button variant="primary" (clicked)="openAddModal()">Add income or expense</ui-button>
+            <ui-button variant="primary" (clicked)="openImportModal()">Import</ui-button>
+            <ui-button variant="secondary" (clicked)="openAddModal()">Add transaction</ui-button>
           </div>
         </ui-empty-state>
         }

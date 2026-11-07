@@ -8,8 +8,10 @@ import {
   OnDestroy,
   OnInit,
   ViewChild,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { formatCompactMoney as formatCompactCents, formatMoney, fromDollars } from '@vivek/browser';
 import { Subject, takeUntil } from 'rxjs';
@@ -111,10 +113,16 @@ export class InvestmentInsightsComponent implements OnInit, AfterViewInit, OnDes
   private projectionChart?: ChartInstance;
   private viewReady = false;
 
+  private readonly router = inject(Router, { optional: true });
+
   constructor(
     private financeService: FinanceService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
   ) {}
+
+  addHolding(): void {
+    void this.router?.navigate(['/finance/have'], { queryParams: { t: 'holdings' } });
+  }
 
   ngOnInit(): void {
     this.tableOpen = readTablePref();

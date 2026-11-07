@@ -4,6 +4,18 @@
     [title]="'Planning'"
   />
 
+  @if (!loading && !error && !hasPlanningInputs) {
+    <ui-card>
+      <ui-empty-state [title]="'Planning uses your balances, pay and bills'" message="Add a balance or your pay, and Planning fills in from there.">
+        <div class="empty-actions">
+          <ui-button variant="primary" (clicked)="goToEmptyAction('balance')">Add a balance</ui-button>
+          <ui-button variant="secondary" (clicked)="goToEmptyAction('pay')">Add pay</ui-button>
+        </div>
+      </ui-empty-state>
+    </ui-card>
+  }
+
+  @if (hasPlanningInputs) {
   <ui-card [title]="'Your current facts'">
 
     <div class="planning-facts-grid">
@@ -60,6 +72,7 @@
       </details>
     }
   </ui-card>
+  }
 
   <div class="planning-question">
     <label class="mc-field">

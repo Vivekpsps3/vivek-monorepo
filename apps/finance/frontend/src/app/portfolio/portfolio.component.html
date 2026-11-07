@@ -8,7 +8,7 @@
       <ui-button
         variant="secondary"
         [disabled]="refreshingPrices || holdings.length === 0"
-        ariaLabel="Refresh all share prices"
+        ariaLabel="Refresh prices"
         (clicked)="refreshAllPrices()"
       >
         @if (refreshingPrices) {
@@ -218,9 +218,11 @@
 
     <ng-template #empty>
       @if (!loading && !holdingsLoadError) {
-        <ui-empty-state message="No holdings yet.">
-          <ui-button variant="primary" (clicked)="openAddModal()">Add your first</ui-button>
-          <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
+        <ui-empty-state [title]="'No holdings yet'" message="Add a position by hand or import a Fidelity positions file.">
+          <div class="empty-actions">
+            <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
+            <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
+          </div>
         </ui-empty-state>
       }
     </ng-template>

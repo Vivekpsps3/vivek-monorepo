@@ -1,10 +1,13 @@
-import { ElementRef } from '@angular/core';
+import { ChangeDetectorRef, ElementRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
+import { FinanceService } from '../services/finance.service';
 import { InvestmentInsightsComponent } from './investment-insights.component';
 import { NetWorth } from '../models/transaction.model';
 
 describe('InvestmentInsightsComponent', () => {
   const createComponent = () =>
-    new InvestmentInsightsComponent({} as any, { markForCheck: () => undefined } as any);
+    TestBed.runInInjectionContext(() => new InvestmentInsightsComponent({} as any, { markForCheck: () => undefined } as any));
 
   it('uses 7% annual growth initially and after reset', () => {
     const component = createComponent();
@@ -80,5 +83,19 @@ describe('InvestmentInsightsComponent', () => {
     expect(localStorage.getItem('finance.chartTable.projection')).toBe('1');
     component.toggleTable();
     expect(localStorage.getItem('finance.chartTable.projection')).toBe('0');
+  });
+});
+
+describe('empty states (F10)', () => {
+  it('addHolding navigates to Have with the holdings tab', () => {
+    const router = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    router.navigate.and.resolveTo(true);
+    TestBed.configureTestingModule({ providers: [{ provide: Router, useValue: router }] });
+    const component = TestBed.runInInjectionContext(() => new InvestmentInsightsComponent(
+      {} as unknown as FinanceService,
+      { markForCheck: () => undefined } as unknown as ChangeDetectorRef,
+    ));
+    component.addHolding();
+    expect(router.navigate).toHaveBeenCalledWith(['/finance/have'], { queryParams: { t: 'holdings' } });
   });
 });

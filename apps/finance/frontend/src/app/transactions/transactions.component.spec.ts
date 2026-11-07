@@ -5,7 +5,7 @@ import { BehaviorSubject, from, of, Subject, throwError } from 'rxjs';
 import { TransactionsComponent } from './transactions.component';
 import { TransactionsEditorWorkflow } from './transactions-editor-workflow';
 import { TransactionsImportWorkflow } from './transactions-import-workflow';
-import { FinanceService } from '../services/finance.service';
+import { FinanceService, type FinanceDataChange } from '../services/finance.service';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
 import { BankAccountRecord, BankImportFilePreview, ImportReceipt, Transaction } from '../models/transaction.model';
@@ -752,5 +752,61 @@ describe('Activity layout (F12)', () => {
     seed(rows);
     const button: HTMLButtonElement = fixture.nativeElement.querySelector('.load-more-row button');
     expect(button.textContent.trim()).toBe('Show 100 more');
+  });
+});
+
+describe('empty states (F10)', () => {
+  let fixture: ComponentFixture<TransactionsComponent>;
+  let component: TransactionsComponent;
+  let finance: jasmine.SpyObj<FinanceService>;
+
+  beforeEach(async () => {
+    const dataChanges$ = new Subject<FinanceDataChange>();
+    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getJobIncomes', 'getImportReceipts', 'getBankAccounts', 'getImportBanks'], { isLoading$: of(false), transactions$: of([]), jobIncomes$: of([]), dataChanges$ });
+    finance.getTransactions.and.returnValue(of([]));
+    finance.getAllTransactions.and.returnValue(of([]));
+    finance.getJobIncomes.and.returnValue(of([]));
+    finance.getImportReceipts.and.returnValue(of([]));
+    finance.getBankAccounts.and.returnValue(of([]));
+    finance.getImportBanks.and.returnValue(of(listClientBankImports()));
+    await TestBed.configureTestingModule({
+      imports: [TransactionsComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        { provide: ConfirmService, useValue: {} },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) }, queryParamMap: of(convertToParamMap({})) } },
+        { provide: Router, useValue: { events: new Subject(), navigate: () => Promise.resolve(true), createUrlTree: () => ({}), serializeUrl: () => '/finance/spending' } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(TransactionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  function text(): string { return (fixture.nativeElement as HTMLElement).textContent ?? ''; }
+
+  it('empty ledger → No transactions yet with Import then Add transaction', () => {
+    component.allTransactions = [];
+    (component as unknown as { allTransactionsLoaded: boolean }).allTransactionsLoaded = true;
+    component.summaryMonth = '';
+    component.applyFilterAndSort();
+    fixture.detectChanges();
+    expect(text()).toContain('No transactions yet');
+    expect(text()).toContain('Import a card statement or add one by hand.');
+    const buttons = [...fixture.nativeElement.querySelectorAll('.empty-actions button')].map(b => b.textContent?.trim());
+    expect(buttons).toEqual(['Import', 'Add transaction']);
+  });
+
+  it('filtered empty → one-line message with Clear filters and no title', () => {
+    const coffee: Transaction = { id: 1, date: '2026-11-01', type: 'expense', description: 'Coffee', category: 'Food', merchant: 'Cafe', amount: -4 };
+    component.transactions = [coffee];
+    component.allTransactions = component.transactions;
+    component.searchTerm = 'zzz-no-match';
+    component.applyFilterAndSort();
+    fixture.detectChanges();
+    expect(text()).toContain('Nothing matches these filters');
+    expect(text()).not.toContain('No transactions yet');
+    expect(text()).not.toContain('No data yet.');
   });
 });

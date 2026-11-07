@@ -358,6 +358,10 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
     return excludedAmountNote(this.netWorth?.excluded_invalid_amounts ?? 0);
   }
 
+  get hasBalanceSheet(): boolean {
+    return this.assets.length > 0 || this.liabilities.length > 0 || (this.netWorth?.portfolio ?? 0) !== 0;
+  }
+
   assetDatesSummary(): string {
     return portfolioDateSummary(this.assets.map(row => row.as_of_date));
   }

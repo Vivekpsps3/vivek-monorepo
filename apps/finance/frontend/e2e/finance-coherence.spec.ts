@@ -669,7 +669,7 @@ test('a release notice uses production build metadata and preserves an open tran
   await expect(notice).toContainText((await loadedRelease.getAttribute('content'))!.slice(0, 12));
   await expect(notice).toContainText(latestRelease.slice(0, 12));
 
-  await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await page.locator('ui-page-header').getByRole('button', { name: 'Add transaction', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Add transaction' });
   await editor.getByLabel('Category', { exact: true }).fill('Food');
   await editor.getByLabel('Amount', { exact: true }).fill('18.25');

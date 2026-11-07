@@ -182,23 +182,26 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     const sessionKey = this.activeSessionKey!;
     const token = this.activeSessionToken!;
     this.activeRefreshSymbols = new Set<string>();
-    this.stateSubject.next({
-      ...EMPTY_STATE,
-      phase: 'refreshing',
-      automatic,
-      startedAt: new Date().toISOString(),
-    });
     try {
+      // ST-03 (F10): read the symbols before announcing anything. With no
+      // valid tickers there is no refresh: never emit 'refreshing', never
+      // set finishedAt, never toast — the state just ends idle.
       const symbols = [...new Set((await this.finance.getConfiguredMarketSymbols())
         .map(value => value.trim().toUpperCase())
         .filter(value => SYMBOL_PATTERN.test(value)))].sort();
       this.assertCurrentOperation(sessionKey, token, operation);
       symbols.forEach(symbol => this.activeRefreshSymbols.add(symbol));
       if (!symbols.length) {
-        const finished = { ...this.stateSubject.value, phase: 'complete' as const, finishedAt: new Date().toISOString() };
-        this.stateSubject.next(finished);
-        return finished;
+        const idle = { ...EMPTY_STATE, phase: 'idle' as const, automatic };
+        this.stateSubject.next(idle);
+        return idle;
       }
+      this.stateSubject.next({
+        ...EMPTY_STATE,
+        phase: 'refreshing',
+        automatic,
+        startedAt: new Date().toISOString(),
+      });
       this.stateSubject.next({ ...this.stateSubject.value, totalSymbols: symbols.length });
       const results: MarketSymbolRefreshResult[] = [];
       let index = 0;

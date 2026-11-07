@@ -72,7 +72,7 @@ function legacyChaseDedupeKey(date: string, amount: number, description: string)
 test('empty vault supports keyboard transaction entry and a failed save can be retried', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/spending?t=activity');
-  const add = page.getByRole('button', { name: 'Add transaction', exact: true });
+  const add = page.locator('ui-page-header').getByRole('button', { name: 'Add transaction', exact: true });
   await expect(add).toBeVisible();
   await add.focus();
   await page.keyboard.press('Enter');
@@ -349,7 +349,7 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
   await expect(page.locator('.summary-card')).toContainText(moneyText('$340.00'));
   await expect(page.locator('app-portfolio')).toContainText(/unavailable|unknown/i);
   expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
-  await page.getByRole('button', { name: 'Refresh all share prices', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh prices', exact: true }).click();
   await expect.poll(() => vault.quoteRequests.slice(1).map(symbol => symbol.toUpperCase()).sort()).toEqual(['SPAXX', 'VOO']);
   await expect(page.locator('.summary-card')).toContainText(moneyText('$12,750.00'));
   expect(vault.data('assets')[0].current_value).toBe(1000);

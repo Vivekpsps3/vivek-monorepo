@@ -678,6 +678,33 @@ details.account-sub[open] > summary::before {
   }
 }
 
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .empty-actions {
+    flex-direction: column;
+    /* Span the empty state's full width: ui-empty-state centers projected
+       actions in a shrink-wrapped flex row and pads the block by
+       var(--space-4), which would otherwise cap buttons at ~292px. */
+    width: calc(100% + 2 * var(--space-4));
+    margin-inline: calc(-1 * var(--space-4));
+  }
+
+  .empty-actions ui-button {
+    width: 100%;
+  }
+
+  .empty-actions ::ng-deep .ui-btn {
+    width: 100%;
+  }
+}
+
 /* F16: holding details row + gain percent */
 .holding-details td {
   color: var(--text-secondary);

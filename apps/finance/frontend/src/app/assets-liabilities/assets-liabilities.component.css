@@ -233,6 +233,28 @@ h3 {
   }
 }
 
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .empty-actions {
+    flex-direction: column;
+  }
+
+  .empty-actions ui-button {
+    width: 100%;
+  }
+
+  .empty-actions ::ng-deep .ui-btn {
+    width: 100%;
+  }
+}
+
 /* F16: two-line phone rows (shown at ≤640px, where tables hide). */
 .row-list {
   display: none;
