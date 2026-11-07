@@ -387,9 +387,9 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
   expect(vault.mutations.every(change => !JSON.stringify(change.body).includes('CROSS TAB PRIVATE DESCRIPTION'))).toBe(true);
 
   await openUserMenu(page);
-  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
-  await expect(page).toHaveURL(/\/vault\/unlock$/);
-  await expect(second).toHaveURL(/\/vault\/unlock$/);
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await expect(page).toHaveURL(/\/vault\/unlock\?next=/);
+  await expect(second).toHaveURL(/\/vault\/unlock\?next=/);
   const lockMessages = await page.evaluate(() => (window as any).__financeMessages as unknown[]);
   expect(lockMessages).toContainEqual({ version: 1, userId: 987, kind: 'lock', tabId: expect.any(String) });
   await page.evaluate(() => window.scrollTo(0, 0));

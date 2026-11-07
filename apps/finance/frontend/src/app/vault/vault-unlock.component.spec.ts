@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter, Router, withDisabledInitialNavigation } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -41,17 +41,21 @@ describe('VaultUnlockComponent', () => {
     expect(fixture.nativeElement.querySelector('.nav-tab, .mobile-tab')).toBeNull();
     expect(vault.unlock).toHaveBeenCalledWith('correct horse battery staple');
     expect(vault.upgradeKdfIfNeeded).toHaveBeenCalledWith('correct horse battery staple');
+    // No next: the F5 default is /finance/ at top level; Karma runs framed,
+    // so the embed default applies here (same self/top rule as afterAuthUrl).
     expect(router.navigateByUrl).toHaveBeenCalledWith('/finance/embed');
     expect(fixture.componentInstance.busy).toBeFalse();
   });
 
-  it('keeps the passphrase when unlock fails', async () => {
+  it('wrong passphrase shows the wrong-passphrase sentence and keeps the passphrase', async () => {
     const auth = jasmine.createSpyObj('AuthService', ['loadSession']);
     auth.currentUser = { username: 'vivek', email: 'vivek@pending.local' };
     const vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
     vault.isUnlocked = false;
     vault.refreshStatus.and.resolveTo({ exists: true });
-    vault.unlock.and.rejectWith(new Error('Unlock failed'));
+    const operationError = new Error('The operation failed for an operation-specific reason');
+    operationError.name = 'OperationError';
+    vault.unlock.and.rejectWith(operationError);
 
     TestBed.configureTestingModule({
       imports: [VaultUnlockComponent],
@@ -67,9 +71,11 @@ describe('VaultUnlockComponent', () => {
 
     fixture.componentInstance.passphrase = 'correct horse battery staple';
     await fixture.componentInstance.unlock();
+    fixture.detectChanges();
 
     expect(fixture.componentInstance.passphrase).toBe('correct horse battery staple');
-    expect(fixture.componentInstance.error).toBe('Unlock failed');
+    expect(fixture.componentInstance.error).toBe("That passphrase didn't unlock your vault. Check it and try again.");
+    expect(fixture.nativeElement.textContent).not.toContain('OperationError');
     expect(vault.upgradeKdfIfNeeded).not.toHaveBeenCalled();
   });
 
@@ -94,6 +100,126 @@ describe('VaultUnlockComponent', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(fixture.componentInstance.error).toBe('Vault was locked, try again');
     expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+  });
+
+  describe('F5 return path and states', () => {
+    let auth: jasmine.SpyObj<any>;
+    let vault: jasmine.SpyObj<any>;
+    let router: Router;
+    let navigate: jasmine.Spy;
+    const originalUrl = window.location.pathname + window.location.search;
+
+    function create(configure = true): ComponentFixture<VaultUnlockComponent> {
+      if (configure) {
+        TestBed.configureTestingModule({
+          imports: [VaultUnlockComponent],
+          providers: [
+            { provide: SESSION_CONTEXT, useValue: auth },
+            { provide: VaultService, useValue: vault },
+            provideRouter([]),
+          ],
+        });
+        router = TestBed.inject(Router);
+        navigate = spyOn(router, 'navigateByUrl').and.resolveTo(true);
+      }
+      const fixture = TestBed.createComponent(VaultUnlockComponent);
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    beforeEach(() => {
+      auth = jasmine.createSpyObj('AuthService', ['loadSession']);
+      auth.currentUser = { username: 'vivek', email: 'vivek@pending.local' };
+      vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
+      vault.isUnlocked = false;
+      vault.refreshStatus.and.resolveTo({ exists: true });
+      vault.unlock.and.callFake(async () => { vault.isUnlocked = true; return true; });
+      vault.upgradeKdfIfNeeded.and.resolveTo();
+    });
+
+    afterEach(() => {
+      window.history.pushState({}, '', originalUrl);
+    });
+
+    it('goes to a valid next after unlock', async () => {
+      window.history.pushState({}, '', '?next=' + encodeURIComponent('/finance/spending?t=calendar'));
+      const fixture = create();
+      await fixture.whenStable();
+      fixture.componentInstance.passphrase = 'correct horse battery staple';
+      await fixture.componentInstance.unlock();
+      expect(navigate).toHaveBeenCalledWith('/finance/spending?t=calendar');
+    });
+
+    it('ignores an off-site next', async () => {
+      window.history.pushState({}, '', '?next=' + encodeURIComponent('https://evil.example/phish'));
+      const fixture = create();
+      await fixture.whenStable();
+      fixture.componentInstance.passphrase = 'correct horse battery staple';
+      await fixture.componentInstance.unlock();
+      // Framed (Karma) embed default; top level this is '/finance/'.
+      expect(navigate).toHaveBeenCalledWith('/finance/embed');
+    });
+
+    it('empty submit shows "Enter your vault passphrase." and does not call unlock', async () => {
+      const fixture = create();
+      await fixture.whenStable();
+      fixture.componentInstance.passphrase = '';
+      await fixture.componentInstance.unlock();
+      expect(fixture.componentInstance.error).toBe('Enter your vault passphrase.');
+      expect(vault.unlock).not.toHaveBeenCalled();
+    });
+
+    it('HTTP 0 and 503 show the network sentence', async () => {
+      const { HttpErrorResponse } = await import('@angular/common/http');
+      for (const status of [0, 503]) {
+        TestBed.resetTestingModule();
+        vault.unlock.and.rejectWith(new HttpErrorResponse({ status, statusText: 'x' }));
+        const fixture = create();
+        await fixture.whenStable();
+        fixture.componentInstance.passphrase = 'correct horse battery staple';
+        await fixture.componentInstance.unlock();
+        expect(fixture.componentInstance.error).toBe("Can't reach Finance. Check your connection and try again.");
+      }
+    });
+
+    it('shows the slow message after 1.5s', fakeAsync(() => {
+      vault.unlock.and.returnValue(new Promise<boolean>(() => undefined));
+      const fixture = create();
+      flushMicrotasks();
+      fixture.componentInstance.passphrase = 'correct horse battery staple';
+      void fixture.componentInstance.unlock();
+      fixture.detectChanges();
+      expect(fixture.componentInstance.slow).toBe(false);
+      tick(1500);
+      expect(fixture.componentInstance.slow).toBe(true);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('this can take a few seconds on a phone');
+    }));
+
+    it('error line is always rendered', async () => {
+      const fixture = create();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const line = fixture.nativeElement.querySelector('#vault-unlock-error');
+      expect(line).not.toBeNull();
+      expect(line.textContent).toBe('');
+    });
+
+    it('shows the auto-lock notice once', async () => {
+      const { FinanceLockService } = await import('../core/finance-lock.service');
+      const first = create();
+      await first.whenStable();
+      const lock = TestBed.inject(FinanceLockService);
+      (lock as any).lastLockReasonSignal.set({ kind: 'auto', minutes: 15 });
+      const withNotice = create(false);
+      await withNotice.whenStable();
+      withNotice.detectChanges();
+      expect(withNotice.componentInstance.lockNotice).toBe('Finance locked after 15 minutes without activity.');
+      expect(withNotice.nativeElement.textContent).toContain('Finance locked after 15 minutes without activity.');
+      const second = create(false);
+      await second.whenStable();
+      expect(second.componentInstance.lockNotice).toBe('');
+    });
   });
 });
 
