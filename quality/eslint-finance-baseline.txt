@@ -56,7 +56,7 @@ apps/finance/frontend/src/app/subscriptions/subscriptions.component.ts	@angular-
 apps/finance/frontend/src/app/transactions/transactions-editor-workflow.ts	@angular-eslint/prefer-inject	5
 apps/finance/frontend/src/app/transactions/transactions-import-workflow.ts	@angular-eslint/prefer-inject	6
 apps/finance/frontend/src/app/transactions/transactions-import-workflow.ts	@typescript-eslint/no-explicit-any	4
-apps/finance/frontend/src/app/transactions/transactions.component.html	@angular-eslint/template/prefer-control-flow	5
+apps/finance/frontend/src/app/transactions/transactions.component.html	@angular-eslint/template/prefer-control-flow	4
 apps/finance/frontend/src/app/transactions/transactions.component.spec.ts	@typescript-eslint/no-explicit-any	19
 apps/finance/frontend/src/app/transactions/transactions.component.ts	@angular-eslint/prefer-inject	8
 apps/finance/frontend/src/app/transactions/transactions.component.ts	@typescript-eslint/no-explicit-any	1
