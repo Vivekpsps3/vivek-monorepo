@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
+import { fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
 import { DEK_STORE } from '../crypto/dek-store';
 import type { PlanningInputsPreview, PlanningProfile, ProfilePayload } from '../models/planning.model';
@@ -998,27 +999,45 @@ describe('loadFinanceBudgetKeptGuarded', () => {
       .toEqual({ status: 'unavailable' });
   });
 
-  it('returns unavailable within one deadline when the import uses most of the budget and the read exceeds the rest', async () => {
+  // Deterministic clock: with real timers the elapsed assertions below are
+  // wall-clock guesses, and any main-thread stall over ~150ms (GC, coverage,
+  // a busy runner) breaks them. fakeAsync virtualizes the timers and a stubbed
+  // performance.now advances with the fakes, so the deadline arithmetic is exact.
+  it('returns unavailable within one deadline when the import uses most of the budget and the read exceeds the rest', fakeAsync(() => {
     const deadlineMs = 400;
     const importMs = 250;
     let seen: number | undefined;
+    let now = 1_000;
+    spyOn(performance, 'now').and.callFake(() => now);
     const started = performance.now();
     const load = () => new Promise<{ loadFinanceBudgetKept: (injector: Injector, signal: AbortSignal, callOpts: { deadlineMs?: number }) => Promise<BudgetKeptResult> }>(resolve => {
-      setTimeout(() => resolve({
-        loadFinanceBudgetKept: (_injector, _signal, callOpts) => new Promise(settle => {
-          seen = callOpts.deadlineMs;
-          setTimeout(() => settle({ status: 'unavailable' }), callOpts.deadlineMs);
-        }),
-      }), importMs);
+      setTimeout(() => {
+        now = started + importMs;
+        resolve({
+          loadFinanceBudgetKept: (_injector, _signal, callOpts) => new Promise(settle => {
+            seen = callOpts.deadlineMs;
+            setTimeout(() => {
+              now = started + importMs + (seen ?? 0);
+              settle({ status: 'unavailable' });
+            }, callOpts.deadlineMs);
+          }),
+        });
+      }, importMs);
     });
-    expect(await loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs }, load))
-      .toEqual({ status: 'unavailable' });
+    let result: BudgetKeptResult | undefined;
+    void loadFinanceBudgetKeptGuarded(injector, new AbortController().signal, { ...opts, deadlineMs }, load)
+      .then(settled => { result = settled; });
+    tick(importMs);
+    flushMicrotasks();
+    tick(deadlineMs - importMs);
+    flushMicrotasks();
+    expect(result).toEqual({ status: 'unavailable' });
     const elapsed = performance.now() - started;
     expect(seen).toBeGreaterThan(0);
     expect(seen).toBeLessThan(deadlineMs);
     expect(elapsed).toBeGreaterThan(importMs);
     expect(elapsed).toBeLessThan(deadlineMs + 150);
-  });
+  }));
 
   it('throws RangeError synchronously for a bad today, weeks, or deadline and does not import', () => {
     const load = jasmine.createSpy('load').and.returnValue(new Promise(() => undefined));
