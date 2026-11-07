@@ -1,13 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
+import { BehaviorSubject, ReplaySubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
 import { isoDateInZone } from '@vivek/browser';
 import { authNavigation } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { financeTabId, lockedHere, wipeDek } from '../crypto/dek-holder';
 import { VaultService } from '../crypto/vault.service';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import { MarketPriceQuote } from '../models/transaction.model';
 import { FinanceService } from './finance.service';
 import { ToastService, failureCopy } from '@vivek/ui';
@@ -70,11 +71,15 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
   private readonly vault = inject(VaultService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly pricePrefs = inject(FinancePricePrefsService);
   private readonly stateSubject = new BehaviorSubject<MarketRefreshState>({ ...EMPTY_STATE });
   private readonly destroy$ = new Subject<void>();
   private sessionCancel$ = new Subject<void>();
   readonly status$ = this.stateSubject.asObservable();
-  readonly disclosure = 'Price refresh sends ticker symbols to the market data service. Holdings, shares, balances, and job records stay encrypted in your vault.';
+  readonly disclosure = 'Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.';
+  /** Emits once, when this session's automatic price check actually starts. */
+  private readonly firstAutoCheckSubject = new ReplaySubject<void>(1);
+  readonly firstAutoCheck$ = this.firstAutoCheckSubject.asObservable();
 
   private channel: BroadcastChannel | null = null;
   private activeUserId: number | null = null;
@@ -134,8 +139,10 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
       this.stateSubject.next({ ...EMPTY_STATE });
     }
     this.activeUserId = userId;
+    if (!this.pricePrefs.autoCheck(userId)) return;
     if (this.automaticSessionKey === key) return;
     this.automaticSessionKey = key;
+    this.firstAutoCheckSubject.next();
     void this.refreshConfiguredSymbols(true);
   }
 

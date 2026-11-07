@@ -115,6 +115,34 @@ describe('MarketRefreshCoordinatorService', () => {
     expect(finance.lookupSharePrice.calls.count()).toBe(2);
   });
 
+  it('skips the automatic check when the user turned it off, but manual refresh still works', async () => {
+    localStorage.setItem('finance-auto-price-check:7', 'off');
+    let autoCheckEmissions = 0;
+    coordinator.firstAutoCheck$.subscribe(() => { autoCheckEmissions += 1; });
+    coordinator.startForSession(7, 11);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(finance.getConfiguredMarketSymbols).not.toHaveBeenCalled();
+    expect(finance.lookupSharePrice).not.toHaveBeenCalled();
+    expect(autoCheckEmissions).toBe(0);
+    expect(coordinator.currentState.phase).toBe('idle');
+
+    const state = await coordinator.refreshNow();
+    expect(state.phase).toBe('complete');
+    expect(finance.lookupSharePrice.calls.count()).toBe(2);
+    localStorage.removeItem('finance-auto-price-check:7');
+  });
+
+  it('emits firstAutoCheck$ once when the automatic check starts', async () => {
+    let emissions = 0;
+    coordinator.firstAutoCheck$.subscribe(() => { emissions += 1; });
+    const finished = waitForFinished();
+    coordinator.startForSession(7, 11);
+    await finished;
+    coordinator.startForSession(7, 11);
+    expect(emissions).toBe(1);
+  });
+
   it('continues after one symbol fails and reports a partial outcome', async () => {
     finance.getConfiguredMarketSymbols.and.resolveTo(['AAPL', 'MSFT']);
     finance.lookupSharePrice.and.callFake((symbol: string) => symbol === 'MSFT'

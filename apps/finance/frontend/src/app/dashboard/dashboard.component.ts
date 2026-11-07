@@ -2,7 +2,9 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { ChartsComponent } from '../charts/charts.component';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import {
   Asset,
   CashflowSummary,
@@ -15,6 +17,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { FinanceGuideService } from '../core/finance-guide.service';
 import { UiButtonComponent, UiCardComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
@@ -59,10 +62,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
   subscriptions: Subscription[] = [];
   isLoading = true;
   error: string | null = null;
+  /** One-time ticker-privacy notice, shown after the first automatic check. */
+  priceNoticeVisible = false;
+  /** True when the user turned automatic price checks off. */
+  autoPricesOff = false;
 
   protected readonly guide = inject(FinanceGuideService);
 
   private destroy$ = new Subject<void>();
+  private readonly marketRefresh = inject(MarketRefreshCoordinatorService, { optional: true });
+  private readonly pricePrefs = inject(FinancePricePrefsService, { optional: true });
+  private readonly session = inject(SESSION_CONTEXT, { optional: true });
 
   constructor(
     private finance: FinanceService,
@@ -94,7 +104,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.subscriptions = subscriptions;
         this.cdr.markForCheck();
       });
+    const userId = this.session?.currentUser?.id;
+    if (userId != null && this.pricePrefs) this.autoPricesOff = !this.pricePrefs.autoCheck(userId);
+    this.marketRefresh?.firstAutoCheck$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      const id = this.session?.currentUser?.id;
+      if (id != null && this.pricePrefs && !this.pricePrefs.noticeSeen(id)) {
+        this.priceNoticeVisible = true;
+        this.cdr.markForCheck();
+      }
+    });
     this.load();
+  }
+
+  dismissPriceNotice(): void {
+    const userId = this.session?.currentUser?.id;
+    if (userId != null) this.pricePrefs?.markNoticeSeen(userId);
+    this.priceNoticeVisible = false;
+    this.cdr.markForCheck();
+  }
+
+  refreshPrices(): void {
+    void this.marketRefresh?.refreshNow();
   }
 
   ngOnDestroy(): void {

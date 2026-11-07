@@ -1,10 +1,19 @@
 <div class="page dashboard">
   <ui-page-header title="Home" />
   @if (!isLoading && !error && netWorth) {
+    @if (priceNoticeVisible) {
+      <div class="price-notice" role="status">
+        <p>Prices checked automatically. Only ticker symbols are sent.</p>
+        <ui-button variant="ghost" size="sm" (clicked)="dismissPriceNotice()">Got it</ui-button>
+      </div>
+    }
     <nav class="home-overview" aria-label="Home overview">
       <a routerLink="/finance/have" class="home-tile home-tile--balance">
         <span class="home-tile__topline">Net worth <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money">{{ have | money }}</span>
+        @if (autoPricesOff) {
+          <span class="home-status">Automatic price checks are off</span>
+        }
 
         <dl class="balance-breakdown">
           <div>
@@ -28,6 +37,9 @@
           <span class="home-status">{{ provisionalPositionCount | plural:'position' }} {{ provisionalPositionCount === 1 ? 'uses' : 'use' }} provisional values</span>
         }
       </a>
+      @if (autoPricesOff) {
+        <ui-button variant="secondary" size="sm" class="home-refresh-prices" (clicked)="refreshPrices()">Refresh prices</ui-button>
+      }
 
       <a routerLink="/finance/spending" class="home-tile home-tile--activity">
         <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
