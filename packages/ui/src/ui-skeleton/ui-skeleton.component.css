@@ -3,9 +3,9 @@
 .ui-skeleton__circle {
   background: linear-gradient(
     90deg,
-    var(--surface-2) 0%,
-    var(--surface-hover) 50%,
-    var(--surface-2) 100%
+    var(--skeleton-bg) 0%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-bg) 100%
   );
   background-size: 200% 100%;
   animation: ui-skeleton-shimmer 1.2s linear infinite;
@@ -41,6 +41,6 @@
   .ui-skeleton__line,
   .ui-skeleton__circle {
     animation: none;
-    background: var(--surface-2);
+    background: var(--skeleton-bg);
   }
 }

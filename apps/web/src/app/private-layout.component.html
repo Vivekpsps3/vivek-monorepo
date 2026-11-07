@@ -49,5 +49,10 @@
   @if (session.user$ | async; as user) {
     @for (identity of [user]; track identity.id) { <router-outlet /> }
   }
-  @else { <p class="page" role="status">Your session ended. <a routerLink="/auth/login">Sign in</a></p> }
+  @else {
+    <main class="page">
+      <h1>Your session ended</h1>
+      <ui-state state="expired" thing="your apps" [next]="sessionEndedNext" />
+    </main>
+  }
 </div>

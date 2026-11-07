@@ -171,10 +171,6 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     return result;
   }
 
-  broadcastLock(originTabId?: string): void {
-    this.broadcastSessionMessage('lock', originTabId);
-  }
-
   broadcastSignOut(): void {
     this.broadcastSessionMessage('signout');
   }
