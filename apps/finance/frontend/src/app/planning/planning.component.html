@@ -20,38 +20,35 @@
 
     <div class="planning-facts-grid">
       <div>
-        <span>Current net worth</span>
+        <span>{{ factsCopy.netWorth.label }}</span>
         <strong>{{ formatMoney(inputs?.net_worth_total) }}</strong>
         <a routerLink="/finance/have">Open assets and debts</a>
-        <small>Oldest valid balance date: {{ inputs?.oldest_balance_as_of | appDate }}</small>
+        <small>{{ factsCopy.netWorth.small }}</small>
       </div>
       <div>
-        <span>Portfolio value</span>
+        <span>{{ factsCopy.portfolio.label }}</span>
         <strong>{{ formatMoney(inputs?.net_worth_portfolio) }}</strong>
         <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }">Open holdings</a>
-        <small>
-          Oldest quote {{ inputs?.oldest_portfolio_quote_date | appDate }} ·
-          position {{ inputs?.oldest_portfolio_position_date | appDate }}
-        </small>
+        <small>{{ factsCopy.portfolio.small }}</small>
       </div>
       <div>
-        <span>Annual take-home pay</span>
-        <strong>{{ formatMoney((inputs?.avg_monthly_income || 0) * 12) }}</strong>
+        <span>{{ factsCopy.takeHome.label }}</span>
+        <strong>{{ formatMoney((inputs?.avg_monthly_income || 0) * 12) }} a year</strong>
         <a routerLink="/finance/recurring">Open jobs and pay</a>
-        <small>Active job-income schedules</small>
+        <small>{{ factsCopy.takeHome.small }}</small>
       </div>
       <div>
-        <span>Scheduled annual costs</span>
-        <strong>{{ formatMoney(inputs?.recurring_annual_spending) }}</strong>
+        <span>{{ factsCopy.scheduled.label }}</span>
+        <strong>{{ formatMoney(inputs?.recurring_annual_spending) }} a year</strong>
         <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }">Open bills and subscriptions</a>
-        <small>Active scheduled costs · {{ formatMoney(inputs?.annual_fixed_expenses) }} fixed · {{ formatMoney(inputs?.annual_subscriptions) }} subscriptions</small>
+        <small>{{ factsCopy.scheduled.small }}</small>
       </div>
     </div>
-    @if ((inputs?.undated_asset_balances || 0) + (inputs?.undated_liability_balances || 0) > 0) {
-      <p class="mc-help">Some balance records have no entered date: {{ inputs?.undated_asset_balances || 0 }} assets and {{ inputs?.undated_liability_balances || 0 }} liabilities.</p>
+    @for (warning of dateWarnings; track warning.text) {
+      <p class="mc-help">{{ warning.text }} <a [routerLink]="warning.link" [queryParams]="warning.queryParams">Add a date</a></p>
     }
-    @if ((inputs?.undated_portfolio_quotes || 0) + (inputs?.undated_portfolio_positions || 0) > 0) {
-      <p class="mc-help">Some holdings have no quote date ({{ inputs?.undated_portfolio_quotes || 0 }}) or position date ({{ inputs?.undated_portfolio_positions || 0 }}). The planning calculation date is not used as a market-data date.</p>
+    @if ((inputs?.undated_portfolio_quotes || 0) > 0) {
+      <p class="mc-help">{{ inputs?.undated_portfolio_quotes }} {{ inputs?.undated_portfolio_quotes === 1 ? 'holding has' : 'holdings have' }} no price date. <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }">Check prices</a></p>
     }
     @if (sourceRefreshError) {
       <p class="mc-error" role="status">{{ sourceRefreshError }} <ui-button variant="ghost" size="sm" (clicked)="refreshSourceFacts()">Retry loading current facts</ui-button></p>
@@ -103,19 +100,21 @@
     @if (showSpendingPlan()) {
     <ui-card [title]="'Annual spending plan'">
 
-      @if (showVariableCostWarning()) {
-        <p class="mc-callout mc-cost-warning" role="status">This basis may omit variable card purchases. Active recurring schedules cover fixed expenses and subscriptions; they do not include your transaction history. Add a realistic variable amount under “Fixed + variable + irregular components” or enter one manual annual total.</p>
-      }
       <div class="mc-control-grid">
         <label class="mc-field">
           <span>Spending basis</span>
-          <select name="spendingMode" aria-label="Spending basis" [ngModel]="spendingMode" (ngModelChange)="onSpendingModeChange($event)">
-            <option value="recurring">Active recurring schedules</option>
-            <option value="components">Fixed + variable + irregular components</option>
-            <option value="manual">One manual annual total</option>
+          <select name="spendingMode" aria-label="Spending basis" aria-describedby="spending-basis-help" [ngModel]="spendingMode" (ngModelChange)="onSpendingModeChange($event)">
+            <option value="recurring">Bills and subscriptions</option>
+            <option value="components">Add up categories</option>
+            <option value="manual">One yearly total</option>
           </select>
         </label>
       </div>
+      <p class="mc-help" id="spending-basis-help">{{ spendingBasisSentence }}</p>
+      <details class="spending-learn-more">
+        <summary>Learn more</summary>
+        <p>Bills and subscriptions don't include card purchases or other spending that changes month to month. To count that, choose Add up categories and enter a variable amount, or enter one yearly total.</p>
+      </details>
       @if (spendingMode === 'components') {
         <div class="mc-control-grid">
           <label class="mc-field">
@@ -211,9 +210,9 @@
           <p class="tool-metric">{{ formatMoney(inputs?.net_worth_total) }}</p>
           <p>Observed balance sheet with {{ formatSignedMoney(effectiveNetCashflow()) }} annual cashflow using your selected assumptions.</p>
           <div class="tool-breakdown">
-            <span>Net worth source: {{ inputs?.net_worth_source || 'balance-sheet' }}</span>
-            <span>Income source: {{ inputs?.annual_income_source || 'active-job-income' }}</span>
-            <span>Spending source: {{ inputs?.annual_spending_source || 'active-recurring-schedules' }}</span>
+            <span>{{ sourceLabel('net_worth') }}</span>
+            <span>{{ sourceLabel('income') }}</span>
+            <span>{{ spendingSourceLine }}</span>
             <span>Annual spending: {{ formatMoney(effectiveAnnualSpending()) }}</span>
             <span>Fixed expenses: {{ formatMoney(inputs?.annual_fixed_expenses) }}</span>
             <span>Subscriptions: {{ formatMoney(inputs?.annual_subscriptions) }}</span>

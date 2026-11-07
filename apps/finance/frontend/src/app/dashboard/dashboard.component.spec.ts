@@ -83,7 +83,7 @@ describe('Dashboard', () => {
       total_expenses: 0,
       net_cashflow: 3000,
       income_occurrences: [
-        { id: 'pay', date: '2026-10-15', kind: 'paycheck', label: 'Projected paycheck', name: 'Acme', detail: 'biweekly schedule · estimated net', amount: 2000 },
+        { id: 'pay', date: '2026-10-15', kind: 'paycheck', label: 'Projected paycheck', name: 'Acme', detail: 'biweekly schedule · estimated net', amount: 2000, payday_frequency: 'biweekly' },
         { id: 'sale', date: '2026-10-16', kind: 'stock_sale', label: 'ESPP sale', name: 'Acme', detail: 'ESPP 2026 · 5 shares sold', amount: 1000 },
         { id: 'equity', date: null, kind: 'estimate', label: 'Annual equity estimate', name: 'Acme', detail: 'Undated estimate; no payout date recorded', amount: 500 },
         { id: 'overlap', date: null, kind: 'overlap', label: 'Possible income overlap adjustment', name: 'Monthly aggregate adjustment', detail: 'Totals are within 20%; no date match is inferred.', amount: -500 },
@@ -115,10 +115,11 @@ describe('Dashboard', () => {
     fixture.detectChanges();
 
     const breakdown = fixture.nativeElement.querySelector('[aria-label="Monthly income breakdown"]') as HTMLElement;
-    expect(breakdown.textContent).toContain('Projected paycheck · Acme');
+    expect(breakdown.textContent).toContain('Acme paycheck');
     expect(breakdown.textContent).toContain('Oct 15');
-    expect(breakdown.textContent).toContain('ESPP sale · Acme');
-    expect(breakdown.textContent).toContain('Annual equity estimate · Acme');
+    expect(breakdown.textContent).toContain('Estimated net · Every two weeks');
+    expect(breakdown.textContent).toContain('ESPP sale');
+    expect(breakdown.textContent).toContain('Annual equity');
     expect(breakdown.textContent).toContain('No date');
     expect(breakdown.textContent).toContain('Possible income overlap adjustment');
     expect(fixture.nativeElement.textContent).not.toContain('Income and spending, counted once');

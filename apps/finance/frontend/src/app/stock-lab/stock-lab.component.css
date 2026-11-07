@@ -315,3 +315,12 @@ ui-button {
     white-space: normal;
   }
 }
+
+/* F18: lookup result line */
+.result-line {
+  margin: 0 0 var(--space-4);
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}

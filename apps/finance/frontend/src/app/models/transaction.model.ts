@@ -384,6 +384,8 @@ export interface IncomeCashflowOccurrence {
   name: string;
   detail: string;
   amount: number;
+  /** F18: job pay frequency, carried so Home rows can name the cadence. */
+  payday_frequency?: string;
 }
 
 export interface CashflowSummary {
