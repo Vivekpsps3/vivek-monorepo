@@ -446,6 +446,6 @@ jobs:
         with:
           name: playwright-traces
           path: |
-            apps/finance/frontend/test-results
-            apps/finance/frontend/playwright-report
+            test-results/finance
+            playwright-report/finance
           retention-days: 3

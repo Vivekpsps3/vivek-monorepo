@@ -24,7 +24,7 @@ h3 {
 .hint,
 .company-sub,
 .price-check-result,
-.import-summary,
+.import-help,
 .file-name,
 .resume-stage p {
   color: var(--text-secondary);
@@ -397,16 +397,16 @@ details.account-sub[open] > summary::before {
   margin: var(--space-2) 0;
 }
 
-.import-warning {
+.import-help,
+.import-consequence {
   margin: 0;
   font-size: var(--text-sm);
   line-height: 1.5;
-  color: var(--warning);
   overflow-wrap: anywhere;
 }
 
-.import-summary {
-  margin: 0;
+.import-consequence {
+  color: var(--warning);
 }
 
 .file-name {

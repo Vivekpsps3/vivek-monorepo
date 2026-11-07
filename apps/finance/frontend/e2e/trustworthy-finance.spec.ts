@@ -334,10 +334,10 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
   await expect(dialog.getByRole('table', { name: 'Fidelity import preview' })).toContainText(moneyText('$240'));
   expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
   vault.failWriteIn('holdings');
-  await dialog.getByRole('button', { name: 'Confirm Replace', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Replace', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: 'Replace Fidelity holdings?' });
   await expect(confirmation).toBeVisible();
-  await confirmation.getByRole('button', { name: 'Confirm Replace', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Replace', exact: true }).click();
   await expect.poll(() => vault.data('import_batches').filter(row => row.record_type === 'holding_stage').length).toBe(1);
   expect(vault.data('holdings')).toHaveLength(1);
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();

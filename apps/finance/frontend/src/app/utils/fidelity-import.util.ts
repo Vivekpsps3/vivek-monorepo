@@ -424,7 +424,7 @@ function holdingBelongsToMask(holding: Holding, mask: string, accounts: Brokerag
   return isFidelityDisplay(display) && display.includes(mask);
 }
 
-function isFidelityAccount(account: BrokerageAccountRecord, holdings: Holding[]): boolean {
+export function isFidelityAccount(account: BrokerageAccountRecord, holdings: Holding[]): boolean {
   const slug = String(account.broker_slug || '').trim().toLowerCase();
   if (slug) return slug === 'fidelity';
   const brokerName = String(account.broker_name || '').trim().toLowerCase();
