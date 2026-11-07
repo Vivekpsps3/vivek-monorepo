@@ -1,4 +1,8 @@
 import { Subject, of } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { Holding } from '../models/transaction.model';
+import { MarketResearchResponse } from '../models/stock-lab.model';
+import { FinanceService } from '../services/finance.service';
 import { StockLabComponent } from './stock-lab.component';
 
 describe('StockLabComponent', () => {
@@ -120,11 +124,12 @@ describe('StockLabComponent F7 no-fetch behaviour', () => {
     });
     scenarios.list.and.resolveTo([]);
     const finance = {
-      holdings$: new Subject<any>(),
-      getHoldings: () => of([]),
-    };
+      holdings$: new Subject<Holding[]>(),
+      getHoldings: () => of<Holding[]>([]),
+    } as unknown as FinanceService;
+    const toast = {} as unknown as ToastService;
     const component = new StockLabComponent(
-      market, scenarios, finance as any, {} as any,
+      market, scenarios, finance, toast,
       jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck'])
     );
     return { market, scenarios, component };
@@ -141,19 +146,20 @@ describe('StockLabComponent F7 no-fetch behaviour', () => {
   it('renders the saved-quote line from a saved holding and feeds the saved price to the purchase plan', () => {
     const { component } = labWithHoldings();
     component.holdings = [{
-      id: 1, symbol: 'VOO', shares: 2, purchase_price: 90, current_price: 111,
+      id: 1, symbol: 'VOO', shares: 2, purchase_price: 90, purchase_date: null, current_price: 111,
       price_source: 'manual', price_as_of: '2026-10-30T20:24:00Z',
-    } as any];
+    }];
     expect(component.savedQuoteLine).toBe('Saved price for VOO: 111 · Oct 30, 1:24 PM PT');
     component.research = [{
       symbol: 'VOO', valid: true, source: 'synthetic', fetched_at: '', cache_status: 'hit',
       warnings: [], profile: null, quote: null, history: [], dividends: [], splits: [], fundamentals: null,
-    } as any];
+      etf: null, analyst: null,
+    } satisfies MarketResearchResponse];
     component.scenario = {
       ...component.scenario, purchase_mode: 'shares', shares: 2, budget: 0, target_price: 0,
       projection_years: 0, base_growth_rate: 0, custom_growth_rate: null,
       dividend_growth_rate: 0, reinvest_dividends: false, tax_drag: 0, fee_drag: 0, inflation_rate: 0,
-    } as any;
+    };
     expect(component.purchasePlan?.position_value).toBe(222);
   });
 });

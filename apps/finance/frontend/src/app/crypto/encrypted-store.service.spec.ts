@@ -292,6 +292,16 @@ describe('EncryptedStoreService', () => {
     expect(await secondTab.getAssets()).toEqual([]);
   });
 
+  it('reloadCollections forwards options to persistence', async () => {
+    const harness = createStoreHarness();
+    const persistence = (harness.store as unknown as {
+      persistence: { reloadCollections: (collections: string[], options?: unknown) => Promise<void> };
+    }).persistence;
+    const reload = spyOn(persistence, 'reloadCollections').and.resolveTo();
+    await harness.store.reloadCollections(['assets'], { silent: true });
+    expect(reload).toHaveBeenCalledOnceWith(['assets'], { silent: true });
+  });
+
   it('assigns a safe positive ID when a legacy encrypted record has no ID', async () => {
     const harness = createStoreHarness();
     await harness.injectRemote('assets', { name: 'Legacy cash', category: 'cash', current_value: 40 });

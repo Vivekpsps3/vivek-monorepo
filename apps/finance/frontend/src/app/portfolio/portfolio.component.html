@@ -20,12 +20,13 @@
     </div>
   </ui-page-header>
   @for (stage of resumableFidelityStages; track stage.id) {
-    <ui-card class="resume-stage" [title]="'Fidelity replacement needs attention'">
+    <ui-card class="resume-stage" [title]="'Finish your Fidelity import'">
       <ui-button uiCardActions variant="primary" size="sm" (clicked)="resumeFidelityStage(stage)" [disabled]="fidelityImportCommitting">
         @if (fidelityImportCommitting) { <span class="spinner-inline" aria-hidden="true"></span> }
         Resume Fidelity import
       </ui-button>
       <p>{{ stage.filename }} · {{ stage.expected_row_count | plural:'staged position' }} · {{ stage.account_masks.length | plural:'account' }}</p>
+      <p>Your existing holdings stay until the replacement is verified. Resume to finish importing.</p>
     </ui-card>
   }
 
@@ -167,7 +168,7 @@
                         </td>
                         <td class="num">{{ h.shares }}</td>
                         <td class="num">{{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}</td>
-                        <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (h.current_price != null) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
+                        <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (hasCurrentPrice(h)) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
                         <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
                         <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
                         <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
@@ -231,7 +232,7 @@
                     </td>
                     <td class="num">{{ h.shares }}</td>
                     <td class="num">{{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}</td>
-                    <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (h.current_price != null) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
+                    <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (hasCurrentPrice(h)) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
                     <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
                     <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
                     <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
@@ -343,39 +344,37 @@
 
 <!-- Fidelity Import Modal -->
 <ui-dialog scrollTarget=".main-content" [open]="showFidelityImportModal" labelledBy="fidelity-import-modal-title" panelClass="ui-dialog-panel--wide" (closed)="closeFidelityImportModal()">
-    <h3 id="fidelity-import-modal-title">Import from Fidelity (replaces positions)</h3>
+    <h3 id="fidelity-import-modal-title">Import from Fidelity</h3>
     <div class="import-sheet">
 
-    <p class="import-warning">
-      Replacement positions are staged and verified first. Existing positions stay active until each selected account switches to the verified replacement.
-      Manual holdings and other brokerage accounts are unaffected.
+    <p class="import-help">
+      In Fidelity, open Positions and download the CSV export. Preview it here before replacing your Fidelity holdings.
+      Manual holdings and other brokerage accounts stay. Existing positions stay until the replacement is verified.
     </p>
 
     @if (fidelityImportStep === 'upload') {
       <div class="form-group">
-        <label>Fidelity CSV file</label>
-        <input type="file" accept=".csv" (change)="onFidelityFileSelected($event)" />
+        <label for="fidelity-import-file">Fidelity positions CSV file</label>
+        <input id="fidelity-import-file" type="file" accept=".csv" (change)="onFidelityFileSelected($event)" [disabled]="fidelityImportParsing" />
         @if (fidelityImportFile) {
           <p class="file-name">{{ fidelityImportFile.name }}</p>
         }
       </div>
       <div class="form-actions">
         @if (fidelityImportError) {
-          <p class="import-error" role="alert">{{ fidelityImportError }}</p>
+          <p id="fidelity-import-error" class="import-error" role="alert" tabindex="-1">{{ fidelityImportError }}</p>
         }
         <ui-button variant="primary" (clicked)="runFidelityPreview()" [disabled]="fidelityImportParsing">
           @if (fidelityImportParsing) {
             <span class="spinner-inline" aria-hidden="true"></span>
           }
-          Preview &amp; Replace
+          Preview
         </ui-button>
         <ui-button variant="secondary" (clicked)="closeFidelityImportModal()">Cancel</ui-button>
       </div>
     } @else if (fidelityImportPreview) {
-      <p class="import-summary">
-        Will replace holdings for <strong>{{ fidelityImportPreview.accounts.length | plural:'account' }}</strong>,
-        {{ fidelityImportPreview.summary.positions }} positions.
-        Reported market value: {{ fidelityImportPreview.summary.total_market_value == null ? 'incomplete' : (fidelityImportPreview.summary.total_market_value | money) }}.
+      <p class="import-consequence">{{ fidelityReplaceSummary }}</p>
+      <p class="import-help">
         Provisional positions: {{ fidelityImportPreview.summary.provisional_positions || 0 }};
         unavailable positions: {{ fidelityImportPreview.summary.unavailable_positions || 0 }}.
       </p>
@@ -429,13 +428,13 @@
 
       <div class="form-actions">
         @if (fidelityImportError) {
-          <p class="import-error" role="alert">{{ fidelityImportError }}</p>
+          <p id="fidelity-import-error" class="import-error" role="alert" tabindex="-1">{{ fidelityImportError }}</p>
         }
-        <ui-button variant="primary" (clicked)="commitFidelityImport()" [disabled]="fidelityImportCommitting">
+        <ui-button variant="primary" (clicked)="commitFidelityImport()" [disabled]="fidelityImportCommitting || selectedFidelityRows.length === 0">
           @if (fidelityImportCommitting) {
             <span class="spinner-inline" aria-hidden="true"></span>
           }
-          Confirm Replace
+          Replace
         </ui-button>
         <ui-button variant="secondary" (clicked)="closeFidelityImportModal()">Cancel</ui-button>
       </div>

@@ -39,9 +39,16 @@ import {
 import {
   FidelityAccountReplacementPreview,
   FidelityStageRecord,
+  isFidelityAccount,
   replacementPreviewForAccounts,
 } from '../utils/fidelity-import.util';
 import { formatAsOf, quoteBook } from '../utils/quote-book';
+import {
+  fidelityConfirmBody,
+  fidelityImportError,
+  fidelityImportToast,
+  fidelityReplaceLine,
+} from '../utils/fidelity-import-copy';
 import {
   UiBadgeComponent,
   UiBadgeVariant,
@@ -247,6 +254,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   asOfText(h: Holding): string {
     return formatAsOf(h.price_as_of);
+  }
+
+  /** A saved price exists when current_price is neither null nor undefined. */
+  hasCurrentPrice(h: Holding): boolean {
+    return h.current_price != null;
   }
 
   checkSharePrice() {
@@ -548,7 +560,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.financeService.resumeFidelityImportStage(stage.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: result => {
         this.fidelityImportCommitting = false;
-        this.toastService.success(`Activated ${plural(result.inserted, 'Fidelity position')}`);
+        this.toastService.success(fidelityImportToast(result.inserted));
         this.loadResumableFidelityStages();
         this.cdr.markForCheck();
       },
@@ -672,6 +684,8 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.fidelityImportStep = 'upload';
     this.fidelityImportFile = null;
     this.fidelityImportPreview = null;
+    this.fidelityImportError = '';
+    this.fidelityAccountReplacements = [];
     this.selectedFidelityAccounts.clear();
     this.cdr.markForCheck();
     this.financeService.getBrokerageImports().pipe(takeUntil(this.destroy$)).subscribe({
@@ -698,13 +712,14 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     const file = input.files?.[0];
     if (!file) return;
     this.fidelityImportFile = file;
+    this.fidelityImportError = '';
     this.cdr.markForCheck();
   }
 
   runFidelityPreview() {
+    if (this.fidelityImportParsing) return;
     if (!this.fidelityImportFile) {
-      this.fidelityImportError = 'Choose a Fidelity CSV file first.';
-      this.cdr.markForCheck();
+      this.showFidelityImportError('Choose a Fidelity positions CSV file first.');
       return;
     }
     this.fidelityImportError = '';
@@ -714,10 +729,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (preview) => {
-          this.fidelityImportParsing = false;
-          this.fidelityImportPreview = preview;
-          this.fidelityAccountReplacements = [];
-          this.fidelityImportStep = 'preview';
+          if (!preview.rows.length) {
+            this.fidelityImportParsing = false;
+            this.showFidelityImportError(fidelityImportError('No positions'));
+            return;
+          }
           this.selectedFidelityAccounts.clear();
           // select all for replace
           for (const row of preview.rows) {
@@ -725,6 +741,9 @@ export class PortfolioComponent implements OnInit, OnDestroy {
           }
           this.financeService.getBrokerageAccounts().pipe(takeUntil(this.destroy$)).subscribe({
             next: accounts => {
+              this.fidelityImportParsing = false;
+              this.fidelityImportPreview = preview;
+              this.fidelityImportStep = 'preview';
               this.knownBrokerageAccounts = accounts;
               this.fidelityAccountReplacements = replacementPreviewForAccounts(
                 preview.rows,
@@ -734,16 +753,57 @@ export class PortfolioComponent implements OnInit, OnDestroy {
               );
               this.cdr.markForCheck();
             },
-            error: () => this.cdr.markForCheck(),
+            error: () => {
+              this.fidelityImportParsing = false;
+              this.showFidelityImportError("Couldn't load your Fidelity accounts. Try again.");
+            },
           });
           this.cdr.markForCheck();
         },
-        error: () => {
+        error: (error: unknown) => {
           this.fidelityImportParsing = false;
-          this.fidelityImportError = "Couldn't read this file. Try again.";
-          this.cdr.markForCheck();
+          this.showFidelityImportError(fidelityImportError(error instanceof Error ? error.message : null));
         },
       });
+  }
+
+  private showFidelityImportError(message: string) {
+    this.fidelityImportError = message;
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      if (!this.destroyed && this.showFidelityImportModal) {
+        document.getElementById('fidelity-import-error')?.focus();
+      }
+    });
+  }
+
+  get selectedFidelityRows() {
+    return this.fidelityImportPreview?.rows.filter(row => this.selectedFidelityAccounts.has(row.account_mask)) ?? [];
+  }
+
+  get existingFidelityHoldingCount(): number {
+    const accountIds = new Set(this.knownBrokerageAccounts
+      .filter(account => isFidelityAccount(account, this.holdings) && this.selectedFidelityAccounts.has(account.account_mask.trim()))
+      .map(account => Number(account.id)));
+    const masks = new Set(Array.from(this.selectedFidelityAccounts, mask => mask.trim().toLocaleLowerCase()));
+    return this.holdings.filter(holding => {
+      if (holding.brokerage_account_id != null) {
+        if (accountIds.has(Number(holding.brokerage_account_id))) return true;
+        if (this.knownBrokerageAccounts.some(account => Number(account.id) === Number(holding.brokerage_account_id))) return false;
+      }
+      // Activation also recognizes old imported positions without a linked account.
+      const label = String(holding.account_display || '').trim().toLocaleLowerCase();
+      if (!label.startsWith('fidelity')) return false;
+      const suffix = label.split('···').at(-1)?.trim().split(/[\s(]/, 1)[0] || '';
+      return masks.has(suffix);
+    }).length;
+  }
+
+  get fidelityReplaceSummary(): string {
+    const rows = this.selectedFidelityRows;
+    const value = rows.some(row => row.market_value == null) ? null
+      : rows.reduce((total, row) => total + (row.market_value ?? 0), 0);
+    return fidelityReplaceLine(rows.length, value, this.existingFidelityHoldingCount);
   }
 
   async commitFidelityImport() {
@@ -764,18 +824,10 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     }
     this.fidelityImportError = '';
 
-    const accountLabels = this.fidelityImportPreview.accounts.filter(a => {
-      const mask = this.extractMaskFromDisplay(a);
-      return this.selectedFidelityAccounts.has(mask);
-    });
-    const accountList = accountLabels.length
-      ? accountLabels.map(a => `• ${a}`).join('\n')
-      : selectedMasks.map(m => `• ···${m}`).join('\n');
-
     const ok = await this.confirmService.ask(
       'Replace Fidelity holdings?',
-      `The selected Fidelity accounts will switch to the verified CSV positions. Existing positions stay active until the staged replacement is verified.\n\nAccounts:\n${accountList}\n\n${plural(rowsToSend.length, 'position row')} will be imported.`,
-      'Confirm Replace',
+      fidelityConfirmBody(rowsToSend.length, this.existingFidelityHoldingCount),
+      'Replace',
       'Cancel'
     );
     if (!ok) return;
@@ -789,9 +841,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         next: (res: FidelityCommitResult) => {
           this.fidelityImportCommitting = false;
           this.closeFidelityImportModal();
-          this.toastService.success(
-            `Replaced ${res.holdings_replaced} holdings, inserted ${res.inserted} for ${plural(res.accounts_replaced, 'account')}`
-          );
+          this.toastService.success(fidelityImportToast(res.inserted));
           this.loadResumableFidelityStages();
           this.cdr.markForCheck();
         },

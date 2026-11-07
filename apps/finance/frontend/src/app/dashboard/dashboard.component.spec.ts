@@ -35,7 +35,8 @@ describe('Dashboard', () => {
       getImportReceipts: jasmine.createSpy('getImportReceipts'),
       getAllTransactions: jasmine.createSpy('getAllTransactions'),
     } as unknown as FinanceService;
-    const component = new DashboardComponent(finance, { markForCheck: () => undefined } as any);
+    TestBed.configureTestingModule({});
+    const component = TestBed.runInInjectionContext(() => new DashboardComponent(finance, { markForCheck: () => undefined } as any));
 
     component.ngOnInit();
 
@@ -50,14 +51,16 @@ describe('Dashboard', () => {
   });
 
   it('shows setup links only while the user has no recorded finance data', () => {
-    const component = new DashboardComponent({} as any, { markForCheck: () => {} } as any);
+    TestBed.configureTestingModule({});
+    const component = TestBed.runInInjectionContext(() => new DashboardComponent({} as any, { markForCheck: () => {} } as any));
     expect(component.isStarterState).toBeTrue();
     component.jobIncomes = [{ id: 1 } as any];
     expect(component.isStarterState).toBeFalse();
   });
 
   it('reports quote dates from source trading dates, not recent fetch timestamps', () => {
-    const component = new DashboardComponent({} as any, { markForCheck: () => {} } as any);
+    TestBed.configureTestingModule({});
+    const component = TestBed.runInInjectionContext(() => new DashboardComponent({} as any, { markForCheck: () => {} } as any));
     component.holdings = [
       { id: 1, symbol: 'ABC', shares: 1, purchase_price: 10, purchase_date: null, quote_date: null, price_as_of: '2026-10-11T08:00:00Z' } as Holding,
     ];
