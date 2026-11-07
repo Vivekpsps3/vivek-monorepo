@@ -9,7 +9,7 @@ import { CompensationReportComponent } from '../income/compensation-report.compo
 import { FixedExpensesComponent } from '../fixed-expenses/fixed-expenses.component';
 import { SubscriptionsComponent } from '../subscriptions/subscriptions.component';
 import { FinanceService } from '../services/finance.service';
-import { UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
+import { UiButtonComponent, UiEmptyStateComponent, UiPageHeaderComponent } from '@vivek/ui';
 import { FixedExpense, Subscription } from '../models/transaction.model';
 import { dollarsFromCountedCents } from '@vivek/browser';
 import { countableCents, needsFixing } from '../utils/validators';
@@ -39,12 +39,13 @@ export interface CommitmentRow {
   standalone: true,
   imports: [
     AppDatePipe,
-    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
+    MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, UiPageHeaderComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
   template: `
     <div class="page recurring-page">
-      <nav class="hub-tabs" aria-label="Recurring">
-        <a [routerLink]="[]" [queryParams]="{ t: 'pay' }" queryParamsHandling="merge" [class.on]="tab === 'pay'">Jobs &amp; pay</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'spend' }" queryParamsHandling="merge" [class.on]="tab === 'spend'">Bills &amp; subscriptions</a>
+      <ui-page-header title="Recurring" />
+      <nav class="hub-tabs" aria-label="Recurring sections">
+        <a [routerLink]="[]" [queryParams]="{ t: null }" queryParamsHandling="merge" [class.on]="tab === 'pay'" [attr.aria-current]="tab === 'pay' ? 'page' : null">Pay</a>
+        <a [routerLink]="[]" [queryParams]="{ t: 'spend' }" queryParamsHandling="merge" [class.on]="tab === 'spend'" [attr.aria-current]="tab === 'spend' ? 'page' : null">Bills and subscriptions</a>
       </nav>
       @if (tab === 'spend') {
         <section class="commitments" aria-labelledby="commitments-title">
@@ -52,21 +53,27 @@ export interface CommitmentRow {
             <div>
               <h2 id="commitments-title">Bills &amp; subscriptions </h2>
             </div>
-            <div class="commitments__actions">
-              <ui-button variant="secondary" (clicked)="addBill()">Add bill</ui-button>
-              <ui-button variant="primary" (clicked)="addSubscription()">Add subscription</ui-button>
-            </div>
+            @if (rows.length) {
+              <div class="commitments__actions">
+                <ui-button variant="secondary" (clicked)="addBill()">Add bill</ui-button>
+                <ui-button variant="primary" (clicked)="addSubscription()">Add subscription</ui-button>
+              </div>
+            }
           </header>
+          @if (rows.length) {
           <div class="commitment-totals" aria-label="Bills and subscriptions totals">
             <div><span>Active monthly equivalent</span><strong class="money">{{ activeMonthlyTotal | money }}</strong></div>
             <div><span>Active annual equivalent</span><strong class="money">{{ activeAnnualTotal | money }}</strong></div>
             <div><span>Repeating</span><strong>{{ rows.length }}</strong></div>
           </div>
+          }
+          @if (rows.length) {
           <div class="commitment-filters" aria-label="Filter commitments">
             <label><span>Type</span><select name="commitment_type" [(ngModel)]="typeFilter" (ngModelChange)="filterChanged()"><option value="all">All types</option><option value="bill">Bills</option><option value="subscription">Subscriptions</option></select></label>
             <label><span>Status</span><select name="commitment_status" [(ngModel)]="statusFilter" (ngModelChange)="filterChanged()"><option value="all">Active and inactive</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
             <label><span>Order</span><select name="commitment_order" [(ngModel)]="dateOrder" (ngModelChange)="filterChanged()"><option value="soonest">Next due first</option><option value="latest">Latest due first</option></select></label>
           </div>
+          }
           @if (loadError) {
             <div class="commitment-error" role="alert"><span>{{ loadError }}</span><ui-button variant="secondary" (clicked)="loadCommitments()">Retry</ui-button></div>
           }
@@ -106,9 +113,16 @@ export interface CommitmentRow {
               }
             </div>
           } @else if (rows.length) {
-            <p class="commitment-empty">No items match these filters. Choose “All types” and “Active and inactive” to see every bill and subscription.</p>
+            <ui-empty-state message="Nothing matches these filters">
+              <div class="empty-actions"><ui-button variant="secondary" (clicked)="showAllCommitments()">Show all</ui-button></div>
+            </ui-empty-state>
           } @else if (!loadError) {
-            <ui-empty-state message="No bills or subscriptions yet." />
+            <ui-empty-state [title]="'No bills or subscriptions yet'" message="Add rent, utilities, or a streaming plan to see what repeats each month.">
+              <div class="empty-actions">
+                <ui-button variant="primary" (clicked)="addBill()">Add bill</ui-button>
+                <ui-button variant="secondary" (clicked)="addSubscription()">Add subscription</ui-button>
+              </div>
+            </ui-empty-state>
           }
         </section>
         <app-fixed-expenses [embedded]="true" [editorOnly]="true" />
@@ -148,6 +162,8 @@ export interface CommitmentRow {
     .status-chip { display:inline-flex; padding:.2rem .55rem; border-radius:99px; background:color-mix(in srgb, var(--success) 16%, var(--card-bg)); color:var(--success); font-size:.78rem; }
     .status-chip--inactive { background:var(--surface-2); color:var(--text-secondary); }
     .commitment-empty,.commitment-status,.commitment-error { padding:1rem; border-radius:.7rem; background:var(--surface-2); overflow-wrap:anywhere; }
+    .empty-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+    @media (max-width:640px){.empty-actions{flex-direction:column}.empty-actions ui-button{width:100%}}
     .commitment-error { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; background:color-mix(in srgb, var(--danger) 12%, var(--card-bg)); color:var(--danger); }
     .commitment-cards { display:none; }
     .compensation-history { box-sizing:border-box; min-width:0; max-width:100%; padding:1rem; border:1px solid var(--border-subtle); border-radius:.8rem; background:var(--card-bg); }
@@ -255,6 +271,12 @@ export class RecurringHubComponent implements OnInit {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  showAllCommitments(): void {
+    this.typeFilter = 'all';
+    this.statusFilter = 'all';
+    this.filterChanged();
   }
 
   ngOnInit(): void {

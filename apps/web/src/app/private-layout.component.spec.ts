@@ -92,4 +92,50 @@ describe('Shared private shell', () => {
     expect(fixture.componentInstance.appName).toBe('Travel');
     expect(fixture.componentInstance.home).toBe('/travel/');
   });
+  async function renderSignedOut(url: string) {
+    const session = {
+      currentUser: null,
+      user$: of(null),
+      isAdmin: () => false,
+      logout: jasmine.createSpy('logout'),
+    };
+    await TestBed.configureTestingModule({
+      imports: [PrivateLayoutComponent],
+      providers: [provideRouter([]), { provide: SessionService, useValue: session }],
+    }).compileComponents();
+    spyOnProperty(TestBed.inject(Router), 'url', 'get').and.returnValue(url);
+    const fixture = TestBed.createComponent(PrivateLayoutComponent);
+    fixture.detectChanges();
+    return { fixture, session };
+  }
+  it('renders the shared session-ended state with the current page as the sign-in return', async () => {
+    const { fixture } = await renderSignedOut('/travel/trips/42?view=map#day-2');
+    const main = fixture.nativeElement.querySelector('#workspace-content main') as HTMLElement | null;
+    expect(main).not.toBeNull();
+    expect(main!.querySelector('h1')?.textContent?.trim()).toBe('Your session ended');
+    const banner = main!.querySelector('[role="status"]') as HTMLElement | null;
+    expect(banner).not.toBeNull();
+    expect(banner!.textContent).toContain('Your session ended. Sign in again to see your apps.');
+    const signIn = main!.querySelector('a') as HTMLAnchorElement | null;
+    expect(signIn).not.toBeNull();
+    const href = new URL(signIn!.href);
+    expect(href.pathname).toBe('/auth/login');
+    expect(href.searchParams.get('next')).toBe('/travel/trips/42?view=map#day-2');
+  });
+  it('falls back to the Hub when the current URL is an auth page', async () => {
+    const { fixture } = await renderSignedOut('/auth/login');
+    expect(fixture.componentInstance.sessionEndedNext).toBe('/hub');
+  });
+  it('falls back to the Hub when the current URL is not a safe relative path', async () => {
+    const { fixture } = await renderSignedOut('//attacker.example/path');
+    expect(fixture.componentInstance.sessionEndedNext).toBe('/hub');
+  });
+  it('hides the suite-health slot only while it is empty', async () => {
+    const { fixture } = await render();
+    const health = fixture.nativeElement.querySelector('.suite-health') as HTMLElement;
+    expect(health).not.toBeNull();
+    expect(getComputedStyle(health).display).toBe('none');
+    health.textContent = 'Degraded';
+    expect(getComputedStyle(health).display).not.toBe('none');
+  });
 });

@@ -23,6 +23,7 @@ from apps.server.identity.session import _hash_secret, get_current_user, utc_now
 from apps.server.main import Dependencies, Settings, create_app
 from apps.server.migrations import adopt_or_upgrade
 from apps.server.town.models import TownBase
+from apps.server.world.models import WorldBase
 from apps.travel.backend.deps import get_geocoder
 from apps.travel.backend.models import Base as TravelBase
 
@@ -82,7 +83,12 @@ def fixture_app(directory: Path, suite: str):
     @fixtures.post("/e2e/reset")
     def reset():
         with database.engine.begin() as connection:
-            for metadata in (TravelBase.metadata, MediaBase.metadata, TownBase.metadata):
+            for metadata in (
+                TravelBase.metadata,
+                MediaBase.metadata,
+                TownBase.metadata,
+                WorldBase.metadata,
+            ):
                 for table in reversed(metadata.sorted_tables):
                     connection.execute(table.delete())
         if suite != "finance":

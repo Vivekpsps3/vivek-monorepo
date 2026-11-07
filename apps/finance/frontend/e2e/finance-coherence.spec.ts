@@ -48,7 +48,7 @@ test('unlock refreshes each unique holding and former-employer ticker once, appl
   await expect.poll(() => vault.data('job_incomes')[0]?.stock_valuations?.some((row: any) => row.price_per_share === 125 && row.symbol === 'VOO'))
     .toBe(true);
   await expect(page.locator('.market-banner')).toHaveCount(0);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,275.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,275.00'));
 
   expect(vault.quoteRequestDetails).toEqual([{ symbol: 'VOO', refresh: true }]);
   expect(vault.data('holdings')).toHaveLength(2);
@@ -83,7 +83,7 @@ test('a partial quote failure retains saved prices and position facts while Home
   await expect.poll(() => vault.data('holdings').find(row => row.symbol === 'VOO')?.current_price).toBe(125);
   await expect(page.locator('.market-banner')).toContainText('AAPL');
   await expect(page.locator('.market-banner')).toContainText('Saved prices remain available');
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,125.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,125.00'));
 
   expect(vault.data('holdings').find(row => row.symbol === 'AAPL')).toMatchObject({
     shares: 2, purchase_price: 20, current_price: 50, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-11',
@@ -145,7 +145,7 @@ test('the legacy compensation link opens one canonical Jobs & pay editor with re
   expect(url.searchParams.get('history')).toBe('1');
   expect(url.searchParams.get('start')).toBe('2024-01-01');
   expect(url.searchParams.get('end')).toBe('2024-12-31');
-  await expect(page.getByRole('link', { name: 'Jobs & pay', exact: true })).toHaveClass(/on/);
+  await expect(page.getByRole('link', { name: 'Pay', exact: true })).toHaveClass(/on/);
   await expect(page.locator('app-income').getByRole('heading', { name: 'Jobs and pay', exact: true })).toBeVisible();
   await expect(page.locator('app-income')).toHaveCount(1);
   await expect(page.locator('app-income').getByRole('button', { name: 'Add job', exact: true })).toBeVisible();
@@ -260,6 +260,7 @@ test('Activity exact account filters keep full matching totals through paginatio
     transactions: [...matching, ...otherAccount],
   });
   await vault.open('/spending?t=activity&v=spending&month=all');
+  await page.getByRole('button', { name: 'Filters' }).click();
   await expect(page.getByLabel('Account', { exact: true }).locator('option[value="card-a"]')).toHaveCount(1);
   await page.getByLabel('Account', { exact: true }).selectOption('card-a');
   await page.locator('#tx-category-filter').selectOption('food');
@@ -272,8 +273,8 @@ test('Activity exact account filters keep full matching totals through paginatio
   await expect(page.locator('.month-total--expense')).toContainText('110 purchases');
   const tableRows = page.getByRole('table', { name: 'Transactions history' }).getByRole('row');
   await expect(tableRows).toHaveCount(101);
-  await expect(page.getByRole('button', { name: 'Load more', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Load more', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Show 100 more', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Show 100 more', exact: true }).click();
   await expect(tableRows).toHaveCount(111);
   await expect(page.locator('.month-total--expense')).toContainText(moneyText('$110.00'));
 
@@ -323,7 +324,7 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   await checking.getByRole('button', { name: 'Edit', exact: true }).click();
   const assetEditor = page.getByRole('dialog', { name: 'Edit asset', exact: true });
   await assetEditor.getByLabel('Value').fill('1100');
-  await assetEditor.getByRole('button', { name: 'Save', exact: true }).click();
+  await assetEditor.getByRole('button', { name: 'Save asset', exact: true }).click();
   await expect(assetEditor).toBeHidden();
 
   await vault.open('/planning?t=path&tool=simulation');
@@ -387,9 +388,9 @@ test('two tabs refresh encrypted activity after edits, lock together, and send o
   expect(vault.mutations.every(change => !JSON.stringify(change.body).includes('CROSS TAB PRIVATE DESCRIPTION'))).toBe(true);
 
   await openUserMenu(page);
-  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
-  await expect(page).toHaveURL(/\/vault\/unlock$/);
-  await expect(second).toHaveURL(/\/vault\/unlock$/);
+  await page.getByRole('button', { name: 'Lock Finance', exact: true }).click();
+  await expect(page).toHaveURL(/\/vault\/unlock\?next=/);
+  await expect(second).toHaveURL(/\/vault\/unlock\?next=/);
   const lockMessages = await page.evaluate(() => (window as any).__financeMessages as unknown[]);
   expect(lockMessages).toContainEqual({ version: 1, userId: 987, kind: 'lock', tabId: expect.any(String) });
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -426,8 +427,8 @@ test('two tabs resolve simultaneous asset IDs as separate editable records', asy
   vault.holdNextUpserts(2);
   try {
     await Promise.all([
-      firstEditor.getByRole('button', { name: 'Save', exact: true }).click(),
-      secondEditor.getByRole('button', { name: 'Save', exact: true }).click(),
+      firstEditor.getByRole('button', { name: 'Save asset', exact: true }).click(),
+      secondEditor.getByRole('button', { name: 'Save asset', exact: true }).click(),
     ]);
     await expect.poll(() => vault.mutations
       .filter(change => change.path.endsWith('/upsert'))
@@ -452,7 +453,7 @@ test('two tabs resolve simultaneous asset IDs as separate editable records', asy
   await firstRow.getByRole('button', { name: 'Edit', exact: true }).click();
   const editOne = page.getByRole('dialog', { name: 'Edit asset', exact: true });
   await editOne.getByLabel('Value').fill('333');
-  await editOne.getByRole('button', { name: 'Save', exact: true }).click();
+  await editOne.getByRole('button', { name: 'Save asset', exact: true }).click();
   await expect.poll(() => vault.data('assets').find(row => row.name === 'Asset from tab one')?.current_value).toBe(333);
 
   const secondRow = second.getByRole('row').filter({ hasText: 'Asset from tab two' });
@@ -478,7 +479,7 @@ test('import account mapping refreshes the exact account label in another mounte
   const secondRow = second.getByRole('row').filter({ hasText: description });
   await expect(secondRow).toContainText('—');
 
-  await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   const csv = Buffer.from([
     'Transaction Date,Post Date,Description,Category,Type,Amount,Memo',
@@ -515,7 +516,7 @@ test('receipt coverage is saved and undo refreshes mounted Activity and Home tab
   await vault.open('/', homeTab);
   const homeMonth = homeTab.locator('.home-tile').filter({ hasText: 'This month' });
 
-  await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({
     name: 'confirmed-coverage.csv', mimeType: 'text/csv', buffer: Buffer.from(
@@ -559,7 +560,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
   });
   await vault.open('/');
   await expectQuoteRequests(vault, ['VOO']);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,125.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,125.00'));
   const holdingsCanvas = page.locator('canvas[aria-label="Portfolio allocation by symbol"]');
   const nontransparentChartPixels = () => holdingsCanvas.evaluate(node => {
     const canvas = node as HTMLCanvasElement;
@@ -603,7 +604,7 @@ test('Home stays readable at desktop, phone and dark theme sizes', async ({ page
 test('phone navigation keeps every section in view and supports keyboard Plan navigation', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/');
-  const desktopNav = page.locator('.nav-tabs');
+  const desktopNav = page.locator('ui-section-nav');
   await expect(desktopNav.getByRole('link')).toHaveCount(5);
   const hub = page.getByRole('navigation', { name: 'Apps' }).getByRole('link', { name: 'Hub', exact: true });
   await expect(hub).toHaveAttribute('href', '/hub');
@@ -668,7 +669,7 @@ test('a release notice uses production build metadata and preserves an open tran
   await expect(notice).toContainText((await loadedRelease.getAttribute('content'))!.slice(0, 12));
   await expect(notice).toContainText(latestRelease.slice(0, 12));
 
-  await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await page.locator('ui-page-header').getByRole('button', { name: 'Add transaction', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Add transaction' });
   await editor.getByLabel('Category', { exact: true }).fill('Food');
   await editor.getByLabel('Amount', { exact: true }).fill('18.25');

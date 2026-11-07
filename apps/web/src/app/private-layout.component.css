@@ -30,8 +30,11 @@
   min-width: 0;
 }
 
-.suite-health {
+.suite-health:empty {
   display: none;
+}
+
+.suite-health {
   flex: 0 0 auto;
 }
 

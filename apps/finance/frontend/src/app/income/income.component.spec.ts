@@ -1,5 +1,4 @@
 import { ChangeDetectorRef } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { IncomeComponent } from './income.component';
 import { FinanceService } from '../services/finance.service';
@@ -106,6 +105,41 @@ describe('IncomeComponent compensation editing', () => {
     expect(component.manualPriceNotice[3]).toContain('Manual price could not be saved');
     expect(component.manualPriceNotice[3]).not.toContain('Synthetic');
     expect(finance.updateJobIncome).toHaveBeenCalledWith(3, jasmine.any(Object), true);
+  });
+});
+
+import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { BehaviorSubject } from 'rxjs';
+
+describe('empty states (F10)', () => {
+  let fixture: ComponentFixture<IncomeComponent>;
+
+  beforeEach(async () => {
+    const financeStub = {
+      jobIncomes$: new BehaviorSubject<JobIncome[]>([]),
+      getJobIncomes: () => of([]),
+    };
+    await TestBed.configureTestingModule({
+      imports: [IncomeComponent],
+      providers: [
+        { provide: FinanceService, useValue: financeStub },
+        { provide: MarketRefreshCoordinatorService, useValue: { refreshSymbol: () => Promise.resolve({}) } },
+        { provide: ConfirmService, useValue: { ask: () => Promise.resolve(true) } },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(IncomeComponent);
+    fixture.detectChanges();
+  });
+
+  it('no jobs → No jobs yet, summary hidden, exactly one Add job', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('No jobs yet');
+    expect(el.textContent).toContain('Add your salary and pay schedule to project income.');
+    expect(el.textContent).not.toContain('Yearly pay');
+    expect(el.querySelector('.header-actions')).toBeNull();
+    const addJobs = [...el.querySelectorAll('button')].filter(b => b.textContent?.trim() === 'Add job');
+    expect(addJobs.length).toBe(1);
   });
 });
 

@@ -59,6 +59,12 @@ ui-button {
   overflow-wrap: anywhere;
 }
 
+.stock-saved-quote {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
 .stock-error {
   border-color: var(--danger);
   color: var(--danger);

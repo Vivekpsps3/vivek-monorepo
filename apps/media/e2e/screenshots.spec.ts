@@ -1,7 +1,7 @@
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { addItem, resetMedia } from './media-test';
+import { addItem, closeFilters, openFilters, resetMedia } from './media-test';
 
 const dir = process.env.SCREENSHOT_DIR || 'test-results/artifacts/media-ux';
 test.use({ reducedMotion: 'reduce' });
@@ -30,7 +30,8 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('A long title that wraps naturally on a narrow screen');
     await page.getByText('Optional details', { exact: true }).click();
     await page.getByLabel('Release year').fill('99');
-    await expect(page.getByRole('button', { name: 'Add to library' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Add to library' }).click();
+    await expect(page.getByText('Enter a year between 1000 and 3000.')).toBeVisible();
     await shot('add-invalid-year');
     await page.getByLabel('Release year').fill('2026');
     await page.getByLabel('Note').fill('A few words to remember this story.');
@@ -99,7 +100,9 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     await page.getByText('Source coverage · all types', { exact: true }).click();
     await shot('search-partial');
     await page.goto('/media/library?sort=title');
-    await page.getByRole('checkbox', { name: 'Favorites only' }).check();
+    await openFilters(page);
+    await page.getByRole('dialog').getByRole('checkbox', { name: 'Favorites only' }).check();
+    await closeFilters(page);
     await expect(page.getByText('No saved items match these filters', { exact: true })).toBeVisible();
     await shot('library-filter-empty');
     expect(errors).toEqual([]);

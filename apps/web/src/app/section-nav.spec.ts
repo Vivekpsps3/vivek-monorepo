@@ -22,6 +22,9 @@ describe('section nav', () => {
     if (!travelLayout || !mediaLayout) throw new Error('section layouts are missing from the public routes');
     expect(new travelLayout().sections[0]).toEqual(items[0]);
     expect(new mediaLayout().sections.find((section: UiSectionNavItem) => section.link === '/media/library')?.also).toEqual(['/media/item']);
+    // B0F2 P3: the Media tab reads "Add" at every width; the descriptive name stays in the aria-label.
+    expect(new mediaLayout().sections.find((section: UiSectionNavItem) => section.link === '/media/add'))
+      .toEqual({ label: 'Add', ariaLabel: 'Add manually', link: '/media/add' });
     TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', component: Blank }])] });
     const router = TestBed.inject(Router), fixture = TestBed.createComponent(UiSectionNavComponent);
     fixture.componentRef.setInput('label', 'Sections'); fixture.componentRef.setInput('items', items);

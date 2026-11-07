@@ -26,45 +26,26 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.summary-card .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4);
-  margin-top: var(--space-4);
+.summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-4) 0 0;
   padding-top: var(--space-4);
   border-top: 1px solid var(--border-subtle);
-}
-
-.breakdown-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.breakdown-label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  color: var(--text-tertiary);
-}
-
-.breakdown-item .summary-label {
-  margin: 0;
-}
-
-.summary-label {
-  display: block;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
-.breakdown-item .money {
+.summary-line .money {
+  color: var(--text);
   font-size: var(--text-lg);
   font-weight: 650;
-  overflow-wrap: anywhere;
+}
+
+.summary-sep {
+  color: var(--text-tertiary);
 }
 
 .hint {
@@ -76,14 +57,7 @@ h3 {
 }
 
 .source-dates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-6);
-  margin-top: var(--space-3);
-}
-
-.source-dates p {
-  margin: 0;
+  margin: var(--space-2) 0 0;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
@@ -162,13 +136,13 @@ h3 {
   gap: var(--space-2);
 }
 
-@media (min-width: 769px) {
+@media (min-width: 641px) {
   :host ::ng-deep .ui-data-table__table tbody td.num {
     white-space: nowrap;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .summary-card .summary-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
@@ -195,19 +169,13 @@ h3 {
     gap: var(--space-2);
   }
 
-  :host ::ng-deep .ui-data-table .ui-data-table__table tbody tr {
-    grid-template-columns: minmax(0, 1fr);
+  /* F16: tables give way to the two-line phone rows. */
+  :host ::ng-deep .ui-data-table {
+    display: none;
   }
 
-  :host ::ng-deep .ui-data-table .ui-data-table__table tbody td {
-    grid-column: 1 / -1;
-    text-align: left;
-  }
-
-  :host ::ng-deep .ui-data-table__table tbody td.num {
-    text-align: left;
-    font-size: var(--text-base);
-    font-weight: 650;
+  .row-list {
+    display: block;
   }
 
   .actions,
@@ -237,4 +205,57 @@ h3 {
     justify-content: flex-end;
     align-items: center;
   }
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .empty-actions {
+    flex-direction: column;
+  }
+
+  .empty-actions ui-button {
+    width: 100%;
+  }
+
+  .empty-actions ::ng-deep .ui-btn {
+    width: 100%;
+  }
+}
+
+/* F16: two-line phone rows (shown at ≤640px, where tables hide). */
+.row-list {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.row-list__item {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.row-list__item:last-child {
+  border-bottom: 0;
+}
+.row-list__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.row-list__meta {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.row-list__actions {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
 }

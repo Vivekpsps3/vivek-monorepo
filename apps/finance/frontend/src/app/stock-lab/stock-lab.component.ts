@@ -10,6 +10,7 @@ import { StockLabScenarioService } from '../services/stock-lab-scenario.service'
 import { ToastService } from '@vivek/ui';
 import { UiButtonComponent, UiCardComponent, UiDataTableComponent, UiEmptyStateComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
 import { buildScorecard, calculatePurchasePlan, calculateReturnPeriods, detectDividendCadence, trailingTwelveMonthDividend } from '../utils/stock-lab.util';
+import { formatAsOf, quoteBook } from '../utils/quote-book';
 import {
   EvidenceCard,
   evidenceKindLabel,
@@ -30,7 +31,7 @@ import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../sha
 })
 export class StockLabComponent implements OnInit, OnDestroy {
   @Input() embedded = false;
-  readonly disclosure = 'Ticker symbols on this page are sent to market data services. Scenario inputs stay encrypted in your vault.';
+  readonly disclosure = 'Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.';
   readonly calculateReturnPeriods = calculateReturnPeriods;
   readonly evidenceKindLabel = evidenceKindLabel;
   scenarios: StockLabScenario[] = [];
@@ -62,7 +63,7 @@ export class StockLabComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     });
     this.finance.getHoldings(false).pipe(takeUntil(this.destroy$)).subscribe();
-    this.loadMarketData(false);
+    // No fetch on open (PLN-08): market data loads only when the user asks.
   }
 
   ngOnDestroy(): void {
@@ -82,6 +83,21 @@ export class StockLabComponent implements OnInit, OnDestroy {
     return this.primaryResearch ? buildScorecard(this.primaryResearch, this.ownedExposurePct(this.primaryResearch.symbol)) : [];
   }
 
+  /** The saved quote for the primary ticker, from the one shared book. */
+  get savedQuoteLine(): string | null {
+    const symbol = this.scenario.primary_symbol?.trim().toUpperCase();
+    if (!symbol) return null;
+    const entry = quoteBook(this.holdings).get(symbol);
+    if (!entry) return null;
+    return `Saved price for ${symbol}: ${entry.price} · ${formatAsOf(entry.asOf)}`;
+  }
+
+  private get savedPrimaryPrice(): number | null {
+    const symbol = this.scenario.primary_symbol?.trim().toUpperCase();
+    if (!symbol) return null;
+    return quoteBook(this.holdings).get(symbol)?.price ?? null;
+  }
+
   get purchasePlan() {
     if (!this.primaryResearch) return null;
     return calculatePurchasePlan(this.primaryResearch, {
@@ -96,7 +112,7 @@ export class StockLabComponent implements OnInit, OnDestroy {
       tax_drag: this.scenario.tax_drag,
       fee_drag: this.scenario.fee_drag,
       inflation_rate: this.scenario.inflation_rate,
-    });
+    }, this.savedPrimaryPrice);
   }
 
   get dividendCadence(): string {
@@ -156,11 +172,11 @@ export class StockLabComponent implements OnInit, OnDestroy {
       next: batch => {
         if (request !== this.marketRequest) return;
         this.research = batch.results;
-        if (batch.failed.length) this.error = "Couldn't load market data. Try again.";
+        if (batch.failed.length) this.error = "Market data couldn't be loaded. Check your connection and try again.";
       },
       error: () => {
         if (request !== this.marketRequest) return;
-        this.error = "Couldn't load market data. Try again.";
+        this.error = "Market data couldn't be loaded. Check your connection and try again.";
       },
     });
   }
@@ -168,10 +184,10 @@ export class StockLabComponent implements OnInit, OnDestroy {
   async loadScenarios(): Promise<void> {
     try {
       this.scenarios = await this.scenariosSvc.list();
-      // Hydrate draft with first saved scenario; re-fetch market so research matches symbols.
+      // Hydrate draft with first saved scenario. Market data is not fetched
+      // here either; the saved price (if any) stands in until Look up.
       if (this.scenarios.length && this.scenario.id === 0) {
         this.scenario = { ...this.scenarios[0] };
-        this.loadMarketData(false);
       }
     } catch {
       this.error = "Couldn't load saved scenarios.";

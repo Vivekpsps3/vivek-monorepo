@@ -504,6 +504,24 @@ describe('loadFinanceBudgetKept', () => {
     expect(Object.keys(october.weeks[0]).sort()).toEqual(['kept', 'spend', 'weekStart', 'weeklyPlan']);
   });
 
+  // CI3 audit pin: budget-kept receives `today` as a civil date and does its
+  // week arithmetic on date-only values (UTC is the neutral carrier, so the
+  // host zone cannot move a day). The 2026-11-01 fall-back in
+  // America/Los_Angeles and the year boundary must not shift a week start.
+  it('keeps completed week starts on civil Mondays across the fall-back and the year boundary', async () => {
+    const { injector } = unlock({
+      profiles: [manual],
+      txs: [tx({ id: 1, date: '2026-01-05', amount: 1, kind: 'purchase' })],
+    });
+    const afterFallback = await ask(injector, { today: '2026-11-04', weeks: 2 });
+    const newYear = await ask(injector, { today: '2027-01-06', weeks: 2 });
+    expect(afterFallback.status).toBe('ready');
+    expect(newYear.status).toBe('ready');
+    if (afterFallback.status !== 'ready' || newYear.status !== 'ready') return;
+    expect(afterFallback.weeks.map(row => row.weekStart)).toEqual(['2026-10-19', '2026-10-26']);
+    expect(newYear.weeks.map(row => row.weekStart)).toEqual(['2026-12-21', '2026-12-28']);
+  });
+
   it('appends the in-progress week when includeCurrentWeek is set', async () => {
     const purchase = tx({ id: 1, date: '2026-10-14', amount: 12, kind: 'purchase' });
     const older = tx({ id: 2, date: '2026-09-01', amount: 1, kind: 'purchase' });

@@ -9,10 +9,11 @@ import {
   OnInit,
   Output,
   SimpleChanges,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Subject, auditTime, finalize, takeUntil } from 'rxjs';
 import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 import { FinanceDataChange, FinanceService } from '../services/finance.service';
@@ -40,6 +41,7 @@ import { PlanningResultsComponent } from './planning-results.component';
 import {
   UiButtonComponent,
   UiCardComponent,
+  UiEmptyStateComponent,
   UiPageHeaderComponent,
   UiSkeletonComponent,
 } from '@vivek/ui';
@@ -85,6 +87,7 @@ import { AppDatePipe } from '@vivek/ui';
     UiPageHeaderComponent,
     UiCardComponent,
     UiButtonComponent,
+    UiEmptyStateComponent,
     UiSkeletonComponent,
     PlanningQuickToolsComponent,
     PlanningResultsComponent,
@@ -104,6 +107,23 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   loading = true;
   running = false;
   error: string | null = null;
+
+  get hasPlanningInputs(): boolean {
+    return (this.inputs?.net_worth_total ?? 0) !== 0
+      || (this.inputs?.net_worth_portfolio ?? 0) !== 0
+      || (this.inputs?.avg_monthly_income ?? 0) !== 0
+      || (this.inputs?.recurring_annual_spending ?? 0) !== 0;
+  }
+
+  goToEmptyAction(kind: 'balance' | 'pay'): void {
+    if (kind === 'balance') {
+      void this.router?.navigate(['/finance/have']);
+    } else {
+      // Pay is Recurring's default tab, so the canonical URL has no t
+      // (F6). F10's text said { t: 'pay' }, which F6 superseded.
+      void this.router?.navigate(['/finance/recurring']);
+    }
+  }
 
   inputs: PlanningInputsPreview | null = null;
   assumptions: ProfilePayload = structuredClone(DEFAULT_MC_ASSUMPTIONS);
@@ -163,6 +183,8 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   private inputRefreshRequest = 0;
   private financeChangeVersion = 0;
   readonly workflow: PlanningWorkflow;
+
+  private readonly router = inject(Router, { optional: true });
 
   constructor(
     private planning: PlanningService,

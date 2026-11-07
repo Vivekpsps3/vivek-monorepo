@@ -170,6 +170,12 @@ def upsert_records(db: Session, user_id: int, items: list[dict[str, Any]]) -> li
             raise HTTPException(status_code=400, detail="Invalid ciphertext")
         schema_version = int(item.get("schema_version", 1))
         key_version = int(item.get("key_version", 1))
+        # Security (2026-10-30): health collections are v2-only; the Health
+        # client refuses v1 rows, so never let one be written.
+        if collection.startswith("health_") and schema_version != CURRENT_RECORD_SCHEMA_VERSION:
+            raise HTTPException(
+                status_code=422, detail="Health records require schema_version 2"
+            )
         if schema_version not in {1, CURRENT_RECORD_SCHEMA_VERSION} or key_version < 1:
             raise HTTPException(status_code=400, detail="Invalid version fields")
         row = (

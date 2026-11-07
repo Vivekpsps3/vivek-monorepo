@@ -3,6 +3,22 @@
   <ui-state state="locked" thing="settings" next="/settings/finance" />
 } @else if (locked === false) {
   <ui-card>
-    <ui-button type="button" (clicked)="lock()">Lock now</ui-button>
+    <ui-button type="button" variant="secondary" (clicked)="lock()">Lock Finance</ui-button>
+    <fieldset class="settings-row">
+      <legend>Lock Finance automatically</legend>
+      @for (choice of autoLockChoices; track choice.value) {
+        <label class="settings-radio">
+          <input
+            type="radio"
+            name="finance-auto-lock"
+            [value]="choice.value"
+            [checked]="autoLock === choice.value"
+            [attr.aria-describedby]="'finance-auto-lock-help'"
+            (change)="setAutoLock(choice.value)" />
+          {{ choice.label }}
+        </label>
+      }
+      <p class="settings-help" id="finance-auto-lock-help">Finance locks after this long without activity in any tab. You'll need your passphrase to unlock it.</p>
+    </fieldset>
   </ui-card>
 }
