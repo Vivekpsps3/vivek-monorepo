@@ -5,13 +5,14 @@ DEV_DATA := $(CURDIR)/.local/data
 WEB_ROOT := $(CURDIR)/dist/web/browser
 export PYTHONPATH := $(CURDIR)
 
-.PHONY: help install init-db dev build build-frontends test test-fast test-backend test-frontend test-suite-routes docker-build docker-up docker-down lint lint-python lint-web typecheck typecheck-python typecheck-web e2e lint-baseline coverage-pin db-upgrade db-revision db-check db-seed-dev db-validate-seeded
+.PHONY: help install init-db dev build build-frontends test test-fast test-backend test-frontend test-frontend-quick verify-fast test-suite-routes docker-build docker-up docker-down lint lint-python lint-web typecheck typecheck-python typecheck-web e2e lint-baseline coverage-pin db-upgrade db-revision db-check db-seed-dev db-validate-seeded
 PYTHON ?= python3
 PY := $(CURDIR)/.venv/bin/python
 help:
 	@echo 'One site, one SQLite database. See docs/OPERATIONS.md and docs/MIGRATIONS.md.'
 	@echo 'make install; make build-frontends; make dev'
 	@echo 'make test; make lint; make typecheck; make e2e'
+	@echo 'make verify-fast (every gate once); make test-frontend-quick (Karma without coverage, not a gate)'
 	@echo 'make docker-build; make test-suite-routes'
 	@echo 'make db-revision MESSAGE="describe the change"; make db-upgrade; make db-check'
 	@echo 'make db-seed-dev; make db-validate-seeded'
@@ -69,6 +70,26 @@ test-frontend:
 	npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI
 	npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI
 	npm run test:web -- --watch=false --browsers=ChromeHeadlessCI
+
+# Fast local iteration only — NOT a gate. Same suites and specs as
+# test-frontend, but Karma coverage instrumentation and the coverage gate
+# are off (SUITE_KARMA_COVERAGE=0 + --code-coverage=false). Use
+# test-frontend / verify-fast for any result you rely on.
+test-frontend-quick:
+	SUITE_KARMA_COVERAGE=0 npm run test:finance -- --watch=false --browsers=ChromeHeadlessCI --code-coverage=false
+	SUITE_KARMA_COVERAGE=0 npm run test:site -- --watch=false --browsers=ChromeHeadlessCI --code-coverage=false
+	SUITE_KARMA_COVERAGE=0 npm run test:web -- --watch=false --browsers=ChromeHeadlessCI --code-coverage=false
+
+# One canonical local verification: every gate exactly once (fast checks,
+# lint, typecheck, backend coverage gates, frontend Karma gates, node
+# suites). `make test` remains the test-only subset.
+verify-fast:
+	$(MAKE) test-fast
+	$(MAKE) lint
+	$(MAKE) typecheck
+	$(MAKE) test-backend
+	$(MAKE) test-frontend
+	node --test apps/travel/backend/static/tests/*.test.mjs apps/media/backend/static/tests/*.test.mjs packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs
 
 lint: lint-python lint-web
 
