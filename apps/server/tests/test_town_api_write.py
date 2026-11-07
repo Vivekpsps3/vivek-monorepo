@@ -1,7 +1,7 @@
 """Town write API: habits, check-ins, errors, CSRF, and owner scope."""
 
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +17,7 @@ from apps.server.town.models import Habit, HabitCadence, HabitCheckin, TownBase
 from apps.server.town.schemas import CheckinResult
 from apps.server.town.schemas import Habit as HabitShape
 from apps.server.town.writes import existing_checkin
+from packages.time.today import today_in_zone
 
 TODAY = date(2026, 10, 29)
 TZ = "America/Los_Angeles"
@@ -161,6 +162,13 @@ def test_route_field_errors_and_unknown_json(api):
     castle = {"name": "A", "slot": 0, "per_week": 7, "building_style": "castle"}
     _err(_post(client, castle), 422, "validation_error", _CHECK, {"building_style": _STYLE})
     _err(
+        _post(client, {"name": "A", "slot": 0, "per_week": 7, "building_style": None}),
+        422,
+        "validation_error",
+        _CHECK,
+        {"building_style": _STYLE},
+    )
+    _err(
         _post(client, {"name": "", "slot": 0, "per_week": 7}),
         422,
         "validation_error",
@@ -285,6 +293,49 @@ def test_conflicts_limit_and_names(api):
     )
 
 
+def test_habit_limit_counts_only_this_user(api):
+    """Another user's 200 habits do not spend this user's cap."""
+    client, database, _ = api
+    db = database.sessionmaker()
+    for index in range(200):
+        db.add(
+            Habit(
+                user_id=2,
+                name=f"Other {index}",
+                slot=0,
+                building_style="cottage",
+                per_week=7,
+                created_on=TODAY,
+                created_at=CLOCK,
+                archived_at=CLOCK,
+                archived_on=TODAY,
+                name_key=f"other {index}",
+            )
+        )
+    db.commit()
+    db.close()
+    made = _post(client, {"name": "Mine", "slot": 0, "per_week": 7})
+    assert made.status_code == 201
+    assert made.json()["name"] == "Mine"
+
+
+def test_name_taken_is_scoped_to_the_user(api):
+    client, _, application = api
+    first = _post(client, {"name": "Read", "slot": 0, "per_week": 7})
+    assert first.status_code == 201
+    _pin(application, 2)
+    second = _post(client, {"name": "Read", "slot": 0, "per_week": 7})
+    assert second.status_code == 201
+    assert second.json()["name"] == "Read"
+    _pin(application, 1)
+    _err(
+        _post(client, {"name": "read", "slot": 1, "per_week": 7}),
+        409,
+        "name_taken",
+        "You already have a habit with that name.",
+    )
+
+
 def test_window_idempotent_checkin_and_dst(api, tmp_path, monkeypatch):
     client, database, _ = api
     habit_id = _plant(database, "Early", 1, 7, date(2026, 10, 1))
@@ -337,6 +388,24 @@ def test_window_idempotent_checkin_and_dst(api, tmp_path, monkeypatch):
     assert undone.json()["habit"]["xp"] == 10
     repeat = _undo(client, habit_id, "2026-10-29")
     assert repeat.status_code == 200 and repeat.json()["checked"] is False
+    # today+2 is past the undo window. A planted row must stay.
+    later = date(2026, 10, 31)
+    db = database.sessionmaker()
+    db.add(HabitCheckin(habit_id=habit_id, user_id=1, day=later, created_at=CLOCK))
+    db.commit()
+    db.close()
+    _err(
+        _undo(client, habit_id, "2026-10-31"),
+        409,
+        "checkin_locked",
+        "Only today's check-in can be undone.",
+    )
+    db = database.sessionmaker()
+    kept = db.scalar(
+        select(HabitCheckin.id).where(HabitCheckin.habit_id == habit_id, HabitCheckin.day == later)
+    )
+    db.close()
+    assert kept is not None
     _err(_check(client, 999, "2026-10-29"), 404, "habit_not_found", "That habit doesn't exist.")
     folder = tmp_path / "dst"
     folder.mkdir()
@@ -587,3 +656,155 @@ def test_crafted_input_is_422_not_500(api):
     # An invalid UTF-8 byte in the body fails decoding (UnicodeDecodeError).
     bad_utf8 = raw(b'{"name": "Bad \xff name", "slot": 0, "per_week": 7}')
     _err(bad_utf8, 422, "validation_error", _CHECK, None)
+
+
+def _set_clock(application, moment):
+    application.dependency_overrides[get_town_clock] = lambda: moment
+
+
+def _item(client, habit_id, tz=TZ):
+    found = client.get("/api/town/habits", params={"tz": tz}).json()["items"]
+    for item in found:
+        if item["id"] == habit_id:
+            return item
+    raise AssertionError(habit_id)
+
+
+def test_la_evening_checkin_matches_get_can_check_yesterday(api):
+    """17:30 PDT and 16:30 PST: Mark yesterday agrees with GET, undo today works."""
+    client, database, application = api
+    out = "You can only check in for today or yesterday."
+    cases = (
+        (datetime(2026, 10, 30, 0, 30, tzinfo=UTC), date(2026, 10, 29), 0, "Pdt"),
+        (datetime(2026, 11, 3, 0, 30, tzinfo=UTC), date(2026, 11, 2), 1, "Pst"),
+    )
+    for moment, local, slot, name in cases:
+        assert today_in_zone(TZ, moment) == local
+        _set_clock(application, moment)
+        habit_id = _plant(database, name, slot, 7, date(2026, 10, 1))
+        before = _item(client, habit_id)
+        assert before["can_check_yesterday"] is True
+        yesterday = (local - timedelta(days=1)).isoformat()
+        marked = _check(client, habit_id, yesterday)
+        assert marked.status_code == 201 and marked.json()["checked"] is True
+        after = _item(client, habit_id)
+        assert marked.json()["habit"]["can_check_yesterday"] == after["can_check_yesterday"]
+        assert after["can_check_yesterday"] is False
+        made = _check(client, habit_id, local.isoformat())
+        assert made.status_code == 201
+        undone = _undo(client, habit_id, local.isoformat())
+        assert undone.status_code == 200 and undone.json()["checked"] is False
+        _err(
+            _check(client, habit_id, (local + timedelta(days=2)).isoformat()),
+            422,
+            "day_out_of_window",
+            out,
+        )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "gap: writes has no UTC date ±2 clamp for the check-in today; "
+        "spec §4.3 anchors the window on local today, and PR #52's security "
+        "review listed a UTC±2 day bound as optional"
+    ),
+)
+def test_server_day_clamps_to_the_utc_date_plus_or_minus_two():
+    from apps.server.town.writes import _server_day
+
+    now = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
+    assert _server_day(now, date(2026, 10, 29)) == date(2026, 10, 29)
+    assert _server_day(now, date(2026, 10, 30)) == date(2026, 10, 30)
+    assert _server_day(now, date(2026, 10, 28)) == date(2026, 10, 28)
+    assert _server_day(now, date(2026, 11, 5)) == date(2026, 10, 31)
+    assert _server_day(now, date(2026, 10, 1)) == date(2026, 10, 27)
+    naive = datetime(2026, 10, 29, 12, 0)
+    assert _server_day(naive, date(2026, 11, 5)) == date(2026, 10, 31)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "gap: a today more than two days from UTC still moves both windows; "
+        "spec §4.3 anchors them on local today, and PR #52's security review "
+        "listed a UTC±2 day bound as optional"
+    ),
+)
+def test_checkin_window_clamps_today_to_utc_plus_or_minus_two(api, monkeypatch):
+    """A today more than two days from UTC cannot move either window further."""
+    client, database, application = api
+    habit_id = _plant(database, "Clamp", 0, 7, date(2026, 10, 1))
+    moment = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
+    _set_clock(application, moment)
+    monkeypatch.setattr(
+        "apps.server.town.router.today_in_zone", lambda zone, now: date(2026, 11, 5)
+    )
+    assert _check(client, habit_id, "2026-10-30").status_code == 201
+    assert _check(client, habit_id, "2026-11-01").status_code == 201
+    _err(
+        _check(client, habit_id, "2026-10-29"),
+        422,
+        "day_out_of_window",
+        "You can only check in for today or yesterday.",
+    )
+    _err(
+        _check(client, habit_id, "2026-11-02"),
+        422,
+        "day_out_of_window",
+        "You can only check in for today or yesterday.",
+    )
+    undone = _undo(client, habit_id, "2026-11-01")
+    assert undone.status_code == 200 and undone.json()["checked"] is False
+    _err(
+        _undo(client, habit_id, "2026-10-30"),
+        409,
+        "checkin_locked",
+        "Only today's check-in can be undone.",
+    )
+
+
+def test_habit_id_outside_sqlite_integer_is_422(api):
+    client, _, _ = api
+    # 10**20 used to raise SQLite OverflowError (500). 0, -1, and 2**63 are outside 1..2**63-1.
+    for habit_id in (str(10**20), str(2**63), "0", "-1"):
+        routes = (
+            (
+                "get",
+                f"/api/town/habits/{habit_id}/checkins",
+                {"params": {"from": "2026-10-01", "to": "2026-10-02", "tz": TZ}},
+            ),
+            (
+                "patch",
+                f"/api/town/habits/{habit_id}",
+                {"params": {"tz": TZ}, "json": {"name": "A"}},
+            ),
+            (
+                "post",
+                f"/api/town/habits/{habit_id}/checkins",
+                {"params": {"tz": TZ}, "json": {"day": "2026-10-29"}},
+            ),
+            (
+                "delete",
+                f"/api/town/habits/{habit_id}/checkins/2026-10-29",
+                {"params": {"tz": TZ}},
+            ),
+        )
+        for method, url, kwargs in routes:
+            response = getattr(client, method)(url, **kwargs)
+            assert response.status_code == 422, (habit_id, method, response.status_code)
+            assert "Internal server error" not in response.text
+
+
+def test_max_sqlite_habit_id_is_not_found(api):
+    client, _, _ = api
+    habit_id = 2**63 - 1
+    missing = "That habit doesn't exist."
+    history = client.get(
+        f"/api/town/habits/{habit_id}/checkins",
+        params={"from": "2026-10-01", "to": "2026-10-02", "tz": TZ},
+    )
+    _err(history, 404, "habit_not_found", missing)
+    _err(_patch(client, habit_id, {"name": "A"}), 404, "habit_not_found", missing)
+    _err(_check(client, habit_id, "2026-10-29"), 404, "habit_not_found", missing)
+    _err(_undo(client, habit_id, "2026-10-29"), 404, "habit_not_found", missing)
