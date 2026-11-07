@@ -138,7 +138,7 @@ export class VaultUnlockComponent implements OnInit {
 }
 
 /** §4.7 classification: raw WebCrypto/server text never reaches the screen. */
-export function unlockErrorMessage(e: any): string {
+export function unlockErrorMessage(e: unknown): string {
   if (e instanceof HttpErrorResponse && (e.status === 0 || e.status >= 500)) return NETWORK_MESSAGE;
   return WRONG_PASSPHRASE_MESSAGE;
 }

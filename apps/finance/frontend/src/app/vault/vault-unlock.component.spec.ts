@@ -103,8 +103,9 @@ describe('VaultUnlockComponent', () => {
   });
 
   describe('F5 return path and states', () => {
-    let auth: jasmine.SpyObj<any>;
-    let vault: jasmine.SpyObj<any>;
+    let auth: jasmine.SpyObj<SessionPort>;
+    let vault: jasmine.SpyObj<VaultService>;
+    let unlocked = false;
     let router: Router;
     let navigate: jasmine.Spy;
     const originalUrl = window.location.pathname + window.location.search;
@@ -128,12 +129,20 @@ describe('VaultUnlockComponent', () => {
     }
 
     beforeEach(() => {
-      auth = jasmine.createSpyObj('AuthService', ['loadSession']);
-      auth.currentUser = { username: 'vivek', email: 'vivek@pending.local' };
-      vault = jasmine.createSpyObj('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
-      vault.isUnlocked = false;
+      auth = jasmine.createSpyObj<SessionPort>('AuthService', ['loadSession']);
+      Object.defineProperty(auth, 'currentUser', {
+        value: { username: 'vivek', email: 'vivek@pending.local' } as SessionPort['currentUser'],
+        configurable: true,
+      });
+      vault = jasmine.createSpyObj<VaultService>('VaultService', ['refreshStatus', 'unlock', 'upgradeKdfIfNeeded']);
+      unlocked = false;
+      Object.defineProperty(vault, 'isUnlocked', {
+        get: () => unlocked,
+        set: (value: boolean) => { unlocked = value; },
+        configurable: true,
+      });
       vault.refreshStatus.and.resolveTo({ exists: true });
-      vault.unlock.and.callFake(async () => { vault.isUnlocked = true; return true; });
+      vault.unlock.and.callFake(async () => { unlocked = true; return true; });
       vault.upgradeKdfIfNeeded.and.resolveTo();
     });
 
@@ -210,7 +219,8 @@ describe('VaultUnlockComponent', () => {
       const first = create();
       await first.whenStable();
       const lock = TestBed.inject(FinanceLockService);
-      (lock as any).lastLockReasonSignal.set({ kind: 'auto', minutes: 15 });
+      (lock as unknown as { lastLockReasonSignal: { set(value: { kind: 'auto'; minutes: number } | null): void } })
+        .lastLockReasonSignal.set({ kind: 'auto', minutes: 15 });
       const withNotice = create(false);
       await withNotice.whenStable();
       withNotice.detectChanges();
