@@ -51,10 +51,10 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await expect(page.locator('.market-banner')).toHaveCount(0);
   await expect(page.getByText(/of \d+ tickers/)).toHaveCount(0);
   await expect(page.locator('.mobile-tabbar')).toBeVisible();
-  await expect(page.locator('.nav-tabs')).toBeHidden();
+  await expect(page.locator('ui-section-nav')).toBeHidden();
   await expectFits(page, 'home');
 
-  await page.locator('.mobile-tab', { hasText: 'Have' }).click();
+  await page.locator('.mobile-tab', { hasText: 'Net worth' }).click();
   await expect(page).toHaveURL(/\/have/);
   await expectFits(page, 'assets');
   await page.getByRole('link', { name: 'Holdings' }).click();
@@ -70,7 +70,7 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   expect((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0)).toBeLessThanOrEqual(844 + 0.5);
   await page.keyboard.press('Escape');
 
-  await page.locator('.mobile-tab', { hasText: 'Spend' }).click();
+  await page.locator('.mobile-tab', { hasText: 'Spending' }).click();
   await expect(page).toHaveURL(/\/spending/);
   await expectFits(page, 'spending');
   const activity = page.locator('.tx-mobile-row').first();
@@ -83,11 +83,11 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await expect(page.locator('.calendar-grid')).toBeVisible();
   await expectFits(page, 'calendar');
 
-  await page.locator('.mobile-tab', { hasText: 'Repeat' }).click();
+  await page.locator('.mobile-tab', { hasText: 'Recurring' }).click();
   await expect(page).toHaveURL(/\/recurring/);
   await expectFits(page, 'recurring');
 
-  await page.locator('.mobile-tab', { hasText: 'Plan' }).click();
+  await page.locator('.mobile-tab', { hasText: 'Planning' }).click();
   await expect(page).toHaveURL(/\/planning/);
   await expectFits(page, 'planning');
   const scrolled = await page.evaluate(() => {
@@ -108,11 +108,11 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   // Subpixel layout can put boundingBox() a fraction past the viewport; allow up to 0.5px.
   expect(tutorialBox?.width ?? 999).toBeLessThanOrEqual(390 + 0.5);
   expect(tutorialBox?.height ?? 999).toBeLessThanOrEqual(844 + 0.5);
-  await expect(tutorial).toContainText('Only ticker symbols are sent for market quotes');
-  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(tutorial).toContainText('How Finance works');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
 
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(page.locator('.mobile-tabbar')).toBeVisible();
-  await expect(page.locator('.nav-tabs')).toBeHidden();
+  await expect(page.locator('ui-section-nav')).toBeHidden();
   await expectFits(page, 'narrow home');
 });

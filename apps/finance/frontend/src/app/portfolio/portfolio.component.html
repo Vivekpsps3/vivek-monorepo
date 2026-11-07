@@ -71,7 +71,7 @@
 
   <ui-card [title]="'Holdings'">
     <div uiCardActions class="table-actions table-actions--toolbar">
-        <input
+        <input name="searchTerm"
           type="search"
           [(ngModel)]="searchTerm"
           (input)="onSearchChange()"
@@ -109,7 +109,7 @@
               <summary>
                 <span class="account-label">
                   @if (editingNicknameFor === group.brokerageAccountId) {
-                    <input
+                    <input name="nicknameDraft"
                       type="text"
                       class="nickname-input"
                       [(ngModel)]="nicknameDraft"
@@ -351,7 +351,7 @@
     @if (fidelityImportStep === 'upload') {
       <div class="form-group">
         <label for="fidelity-import-file">Fidelity positions CSV file</label>
-        <input id="fidelity-import-file" type="file" accept=".csv" (change)="onFidelityFileSelected($event)" [disabled]="fidelityImportParsing" />
+        <input id="fidelity-import-file" name="onfidelityfileselected" type="file" accept=".csv" (change)="onFidelityFileSelected($event)" [disabled]="fidelityImportParsing" />
         @if (fidelityImportFile) {
           <p class="file-name">{{ fidelityImportFile.name }}</p>
         }
@@ -378,7 +378,7 @@
       <div class="import-accounts">
         @for (acc of fidelityImportPreview.accounts; track acc) {
           <label class="account-chip">
-            <input type="checkbox" [checked]="isFidelityAccountSelectedForDisplay(acc)" (change)="toggleFidelityAccountFromDisplay(acc)" />
+            <input name="togglefidelityaccountfromdisplay" type="checkbox" [checked]="isFidelityAccountSelectedForDisplay(acc)" (change)="toggleFidelityAccountFromDisplay(acc)" />
             {{ acc }}
           </label>
         }

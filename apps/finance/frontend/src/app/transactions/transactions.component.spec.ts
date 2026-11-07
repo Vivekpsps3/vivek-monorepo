@@ -491,7 +491,7 @@ describe('Transactions multi-file import UI', () => {
     router.navigate.calls.reset();
     component.openImportModal();
     expect(router.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
-      queryParams: { t: 'activity', receipts: '1', add: '1' },
+      queryParams: { t: null, receipts: '1', add: '1' },
       queryParamsHandling: 'merge',
     }));
 
@@ -510,7 +510,7 @@ describe('Transactions multi-file import UI', () => {
     router.navigate.calls.reset();
     component.viewImportedTransactions(receipt({ id: 4 }));
     expect(router.navigate).toHaveBeenCalledWith(['/finance/spending'], jasmine.objectContaining({
-      queryParams: jasmine.objectContaining({ t: 'activity', v: 'all', receipt: 4, receipts: null }),
+      queryParams: jasmine.objectContaining({ t: null, v: 'all', receipt: 4, receipts: null }),
     }));
 
     router.navigate.calls.reset();
@@ -520,7 +520,7 @@ describe('Transactions multi-file import UI', () => {
       unresolved: [{ line: 1, filename: 'statement.csv', reason: 'bad row' }],
     }));
     expect(router.navigate).toHaveBeenCalledWith(['/finance/spending'], jasmine.objectContaining({
-      queryParams: jasmine.objectContaining({ t: 'activity', receipts: '1', add: '1', reattach: 9, reattach_file: 'statement.csv' }),
+      queryParams: jasmine.objectContaining({ t: null, receipts: '1', add: '1', reattach: 9, reattach_file: 'statement.csv' }),
     }));
 
     component.showImportModal = false;

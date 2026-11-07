@@ -15,37 +15,6 @@
   line-height: 1.5;
 }
 
-.confirm-phrase {
-  margin: 0 0 var(--space-6);
-}
-
-.confirm-phrase__label {
-  display: block;
-  margin-bottom: var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.confirm-phrase__input {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
-  font: inherit;
-}
-
-.confirm-phrase__helper {
-  margin: var(--space-2) 0 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-
-.confirm-error {
-  margin: 0 0 var(--space-6);
-  color: var(--danger, #b3261e);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-
 .confirm-actions {
   display: flex;
   gap: var(--space-3);
