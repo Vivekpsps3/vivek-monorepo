@@ -1,0 +1,127 @@
+.cost-currency {
+  margin-bottom: var(--space-5);
+}
+
+.cost-total {
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 0 0 var(--space-2);
+}
+
+.cost-split {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin: var(--space-2) 0;
+}
+
+.cost-split-paid {
+  display: block;
+  height: 100%;
+  background: var(--chart-1);
+}
+
+.cost-split-unpaid {
+  display: block;
+  height: 100%;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.cost-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.cost-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.swatch--paid {
+  background: var(--chart-1);
+}
+
+.swatch--unpaid {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cost-table th,
+.cost-table td {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 400;
+}
+
+.cost-table thead th {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.cost-table tbody th {
+  font-weight: 400;
+}
+
+.cost-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cost-finance {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.cost-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cost-line-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * BLOCKED-ON-K1 deviation: the spec's ≤640 layout swaps these inline actions
+ * for a ui-menu ("More actions for …"). ui-menu ships with K1 and does not
+ * exist on main yet, so the inline actions stay visible at every width
+ * instead of inventing a menu component. Once K1 lands: hide
+ * .row-actions-inline at ≤640 and show the ui-menu there.
+ */
+.row-actions-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
