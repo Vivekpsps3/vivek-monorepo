@@ -795,6 +795,14 @@ export class FinanceService {
     return from(this.financeImports.undoBankReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
   }
 
+  previewUndoImportReceipt(receiptId: number): Observable<{ removable: number; editedKept: number; alreadyGone: number }> {
+    return from(this.financeImports.previewUndoBankReceipt(receiptId));
+  }
+
+  deleteImportReceipt(receiptId: number): Observable<void> {
+    return from(this.financeImports.deleteBankReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
+  }
+
   commitBankImport(
     _bankSlug: string,
     _filename: string,

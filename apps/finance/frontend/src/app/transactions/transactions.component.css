@@ -646,8 +646,6 @@ label.form-group,
 .import-table-scroll {
   max-width: 100%;
   min-width: 0;
-  max-height: 20rem;
-  overflow: auto;
   margin: var(--space-4) 0;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);

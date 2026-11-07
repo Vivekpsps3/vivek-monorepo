@@ -140,7 +140,7 @@ describe('Transactions multi-file import UI', () => {
     expect(button('Preview all files').disabled).toBeFalse();
     button('Preview all files').click();
     fixture.detectChanges();
-    expect(component.importError).toContain('Choose CSV files and select a bank for every file.');
+    expect(component.importError).toContain('Choose the bank for chase.csv first.');
     expect(previewPromise).toBeUndefined();
     assignBank(0, 'chase');
     expect(button('Preview all files').disabled).toBeFalse();
@@ -211,7 +211,9 @@ describe('Transactions multi-file import UI', () => {
     assignAccountName(1);
     await preview();
     expect(component.importPreviews[0].error).toContain('Missing required columns');
-    expect(fixture.nativeElement.querySelector('.import-file-preview [role="alert"]').textContent).toContain('Missing required columns');
+    // F9: the screen shows the plain sentence, never the raw parser text.
+    expect(fixture.nativeElement.querySelector('.import-file-preview [role="alert"]').textContent).toContain("This file doesn't look like a bank export.");
+    expect(fixture.nativeElement.querySelector('.import-file-preview [role="alert"]').textContent).not.toContain('Missing required columns');
     expect(component.selectedImportCount).toBe(1);
     button('Back').click();
     fixture.detectChanges();
