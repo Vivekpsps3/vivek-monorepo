@@ -16,16 +16,16 @@ import { SETTINGS_ROUTES } from './settings.routes';
 import { SettingsShellComponent } from './settings-shell.component';
 
 describe('settings shell', () => {
-  it('redirects /account and keeps profile out of the registry', () => {
+  it('redirects /account and registers profile (PF6)', () => {
     const layout = routes.find(route => route.component === PrivateLayoutComponent);
     const account = layout?.children?.find(route => route.path === 'account');
     const redirect = account?.redirectTo as (() => string) | string | undefined;
     expect(typeof redirect === 'function' ? redirect() : redirect).toBe('/settings/account');
     expect(SETTINGS_SECTIONS.map(section => section.path)).toEqual([
-      'account', 'appearance', 'travel', 'finance', 'about',
+      'account', 'profile', 'appearance', 'travel', 'finance', 'about',
     ]);
     expect(SETTINGS_SECTIONS.find(section => section.path === 'travel')?.data).toEqual({ embedded: true });
-    expect(SETTINGS_SECTIONS.some(section => section.path === 'profile')).toBeFalse();
+    expect(SETTINGS_SECTIONS.some(section => section.path === 'profile')).toBeTrue();
   });
 
   it('shows one Settings heading and the section list', () => {
@@ -39,8 +39,7 @@ describe('settings shell', () => {
     expect(headings.map(heading => heading.textContent?.trim())).toEqual(['Settings']);
     const labels = [...fixture.nativeElement.querySelectorAll('nav[aria-label="Settings"] a')].map(link =>
       (link.textContent ?? '').trim());
-    expect(labels).toEqual(['Account', 'Appearance', 'Travel', 'Finance', 'About']);
-    expect(fixture.nativeElement.textContent).not.toContain('Profile');
+    expect(labels).toEqual(['Account', 'Profile', 'Appearance', 'Travel', 'Finance', 'About']);
   });
 
   async function openIndex(wide: boolean): Promise<string> {
