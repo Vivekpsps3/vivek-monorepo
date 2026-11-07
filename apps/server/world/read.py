@@ -3,7 +3,8 @@
 Reads the domain tables directly with SQLAlchemy Core tuple selects (a
 constant number of statements, per the TB2B perf ruling) and imports nothing
 from the domain packages except their models modules (table objects) and
-Town's constants. W3a adds trips and finished media to the W2a habits read.
+Town's constants. W3a adds trips and finished media to the W2a habits read;
+L1a adds understood concepts.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from apps.media.backend.models import CatalogItem, Experience, UserEntry
 from apps.server.errors import APIError
 from apps.server.town.constants import MEDIA_FINISHED_KINDS
 from apps.server.town.models import Habit, HabitCheckin
+from apps.server.world.models import WorldConcept
 from apps.travel.backend.models import Stay, Trip
 
 INVALID_TZ_MESSAGE = "Your time zone wasn't recognized."
@@ -35,6 +37,7 @@ FINISHED_CAP = 50
 
 _habits = Habit.__table__
 _checkins = HabitCheckin.__table__
+_concepts = WorldConcept.__table__
 _trips = Trip.__table__
 _stays = Stay.__table__
 _entries = UserEntry.__table__
@@ -45,7 +48,10 @@ _experiences = Experience.__table__
 # domain's tables once migrated, but a partially built database (a
 # single-domain test fixture, say) may not; missing content tables read as
 # empty instead of erroring. One probe statement per request detects them.
+# L1a's world_concepts rides the same probe, keeping the request at one
+# probe statement.
 _CONTENT_TABLES = frozenset({"trips", "stays", "user_entries", "catalog_items", "experiences"})
+_PROBE_TABLES = _CONTENT_TABLES | {"world_concepts"}
 
 
 def monday_of(day: date) -> date:
@@ -96,9 +102,28 @@ def start_week_from_candidates(candidates: list[date], today: date, current_week
     return max(monday_of(earliest), floor)
 
 
+def read_concepts(db: Session, user_id: int, from_: date, to_end: date) -> list:
+    """Understood concepts in range, ordered (understood_on, id).
+
+    Archived-but-understood concepts still appear; deleted ones are gone.
+    """
+    return list(
+        db.execute(
+            select(_concepts.c.id, _concepts.c.name, _concepts.c.understood_on)
+            .where(
+                _concepts.c.user_id == user_id,
+                _concepts.c.understood_on.is_not(None),
+                _concepts.c.understood_on >= from_,
+                _concepts.c.understood_on <= to_end,
+            )
+            .order_by(_concepts.c.understood_on, _concepts.c.id)
+        ).all()
+    )
+
+
 def _existing_content_tables(db: Session) -> frozenset[str]:
     names = db.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'")).scalars()
-    return _CONTENT_TABLES.intersection(names)
+    return _PROBE_TABLES.intersection(names)
 
 
 def _earliest_candidate(db: Session, user_id: int, content_tables: frozenset[str]) -> date | None:
@@ -268,8 +293,18 @@ def read_world(db: Session, user_id: int, today: date, from_: date, to: date) ->
     current_week = monday_of(today)
 
     content_tables = _existing_content_tables(db)
+    has_concepts = "world_concepts" in content_tables
     earliest = _earliest_candidate(db, user_id, content_tables)
     candidates = [earliest] if earliest is not None else []
+    if has_concepts:
+        earliest_understood = db.execute(
+            select(func.min(_concepts.c.understood_on)).where(
+                _concepts.c.user_id == user_id,
+                _concepts.c.understood_on.is_not(None),
+            )
+        ).scalar_one()
+        if earliest_understood is not None:
+            candidates.append(earliest_understood)
     start_week = start_week_from_candidates(candidates, today, current_week)
 
     meta = {
@@ -325,6 +360,13 @@ def read_world(db: Session, user_id: int, today: date, from_: date, to: date) ->
         week = monday_of(row.day)
         days_by_week_habit.setdefault(week, {}).setdefault(row.habit_id, []).append(row.day)
 
+    concepts_by_week: dict[date, list[dict]] = {}
+    if has_concepts:
+        for row in read_concepts(db, user_id, from_, min(to_end, today)):
+            concepts_by_week.setdefault(monday_of(row.understood_on), []).append(
+                {"id": row.id, "name": row.name, "on": row.understood_on}
+            )
+
     trips_by_week: dict[date, list[dict]] = {}
     if {"trips", "stays"} <= content_tables:
         for trip, stays in read_trips(db, user_id, from_, to_end):
@@ -348,7 +390,9 @@ def read_world(db: Session, user_id: int, today: date, from_: date, to: date) ->
             finished_by_week.setdefault(monday_of(item["on"]), []).append(item)
 
     weeks = []
-    week_starts = sorted(set(days_by_week_habit) | set(trips_by_week) | set(finished_by_week))
+    week_starts = sorted(
+        set(days_by_week_habit) | set(concepts_by_week) | set(trips_by_week) | set(finished_by_week)
+    )
     for week in week_starts:
         habits = [
             {**habits_by_id[habit_id], "days": days_by_week_habit[week][habit_id]}
@@ -361,7 +405,7 @@ def read_world(db: Session, user_id: int, today: date, from_: date, to: date) ->
             "trips": trips_by_week.get(week, []),
             "finished": finished[:FINISHED_CAP],
             "habits": habits,
-            "concepts": [],
+            "concepts": concepts_by_week.get(week, []),
         }
         if len(finished) > FINISHED_CAP:
             week_payload["finished_more"] = len(finished) - FINISHED_CAP
