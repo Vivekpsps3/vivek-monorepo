@@ -7,7 +7,9 @@ import { financeTabId, hasDek, holdDek, readLockEpoch, wipeDek } from '../crypto
 import { createVaultMaterial } from '../crypto/vault-crypto';
 import { clearFinanceSessionStorage } from '../crypto/dek-store';
 import { VaultService } from '../crypto/vault.service';
-import { FinanceService } from './finance.service';
+import type { SessionUser } from '@vivek/auth';
+import type { MarketPriceQuote } from '../models/transaction.model';
+import { FinanceService, type FinanceDataChange } from './finance.service';
 import { MarketRefreshCoordinatorService } from './market-refresh-coordinator.service';
 
 function pauseNextOpen(): { ready: Promise<void>; release: () => void; restore: () => void } {
@@ -250,6 +252,50 @@ describe('MarketRefreshCoordinatorService', () => {
     expect(finance.applyMarketQuoteForSymbol).not.toHaveBeenCalled();
   });
 
+  it('reads the future-quote guard on the Los Angeles day, not the UTC day', async () => {
+    // Monday 2026-10-12 17:30 in Los Angeles: Los Angeles is on 2026-10-12
+    // while UTC is already on 2026-10-13, so a quote dated 2026-10-13 is a
+    // future trading date even though it matches the UTC day.
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
+      const futureQuote: MarketPriceQuote = {
+        symbol: 'AAPL', price: 125, price_source: 'live_eod', quote_date: '2026-10-13', valid: true,
+      };
+      finance.getConfiguredMarketSymbols.and.resolveTo(['AAPL']);
+      finance.lookupSharePrice.and.returnValue(of(futureQuote));
+      const finished = waitForFinished();
+      coordinator.startForSession(7, 11);
+      const state = await finished;
+
+      expect(state.phase).toBe('failed');
+      expect(state.failures[0].message).toContain('future trading date');
+      expect(finance.applyMarketQuoteForSymbol).not.toHaveBeenCalled();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('applies a quote dated the Los Angeles day during the Los Angeles evening', async () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-10-12T17:30:00-07:00'));
+    try {
+      const laQuote: MarketPriceQuote = {
+        symbol: 'AAPL', price: 125, price_source: 'live_eod', quote_date: '2026-10-12', valid: true,
+      };
+      finance.getConfiguredMarketSymbols.and.resolveTo(['AAPL']);
+      finance.lookupSharePrice.and.returnValue(of(laQuote));
+      const finished = waitForFinished();
+      coordinator.startForSession(7, 11);
+      const state = await finished;
+
+      expect(state.phase).toBe('complete');
+      expect(finance.applyMarketQuoteForSymbol).toHaveBeenCalledWith('AAPL', jasmine.objectContaining({ quote_date: '2026-10-12' }), 11);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('does not apply a quote after the vault session changes while the request is pending', async () => {
     finance.getConfiguredMarketSymbols.and.resolveTo(['AAPL']);
     const pending = new Subject<any>();
@@ -354,5 +400,70 @@ describe('cross-tab lock during unlock', () => {
     open();
     expect(await pending).toBeFalse();
     expect([localStorage.getItem('finance-dek'), hasDek(), vault.isUnlocked]).toEqual([null, false, false]);
+  });
+});
+
+describe('ST-03 zero-symbol refresh (F10)', () => {
+  let coordinator: MarketRefreshCoordinatorService;
+  let finance: jasmine.SpyObj<FinanceService> & { sessionToken: number; dataChanges$: Subject<FinanceDataChange> };
+
+  function setup(symbols: string[]): void {
+    const user: SessionUser = {
+      id: 7, email: 'sam@example.com', username: 'sam', display_name: 'Sam', role: 'user',
+      is_active: true, must_change_password: false,
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    };
+    const users = new BehaviorSubject<SessionUser | null>(user);
+    finance = jasmine.createSpyObj<FinanceService>('FinanceService', [
+      'getConfiguredMarketSymbols', 'lookupSharePrice', 'applyMarketQuoteForSymbol', 'refreshCollectionsFromAnotherTab', 'clearSessionState',
+    ]) as unknown as jasmine.SpyObj<FinanceService> & { sessionToken: number; dataChanges$: Subject<FinanceDataChange> };
+    finance.sessionToken = 11;
+    finance.dataChanges$ = new Subject<FinanceDataChange>();
+    finance.getConfiguredMarketSymbols.and.resolveTo(symbols);
+    finance.lookupSharePrice.and.callFake((symbol: string) => of({
+      symbol, price: 125, price_source: 'live_eod', quote_date: '2026-11-06', valid: true,
+    }));
+    finance.applyMarketQuoteForSymbol.and.resolveTo({ holdingsUpdated: 1, employerValuationsUpdated: 0, failedRecords: [] });
+    finance.refreshCollectionsFromAnotherTab.and.resolveTo();
+    const auth = { user$: users.asObservable(), currentUser: users.value, clearLocalSession: jasmine.createSpy('clearLocalSession') };
+    TestBed.configureTestingModule({
+      providers: [
+        MarketRefreshCoordinatorService,
+        { provide: SESSION_CONTEXT, useValue: auth },
+        { provide: FinanceService, useValue: finance },
+        { provide: VaultService, useValue: { isUnlocked: true } },
+        { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigateByUrl']) },
+      ],
+    });
+    coordinator = TestBed.inject(MarketRefreshCoordinatorService);
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('zero configured symbols → never emits refreshing, ends idle, no quote request', async () => {
+    setup([]);
+    coordinator.startForSession(7, 11);
+    await Promise.resolve();
+    const phases: string[] = [];
+    const sub = coordinator.status$.subscribe(state => phases.push(state.phase));
+    const result = await coordinator.refreshNow();
+    sub.unsubscribe();
+    expect(phases).not.toContain('refreshing');
+    expect(result.phase).toBe('idle');
+    expect(result.finishedAt).toBeNull();
+    expect(finance.lookupSharePrice).not.toHaveBeenCalled();
+  });
+
+  it('one symbol → emits refreshing first (unchanged)', async () => {
+    setup(['AAPL']);
+    coordinator.startForSession(7, 11);
+    await Promise.resolve();
+    const phases: string[] = [];
+    const sub = coordinator.status$.subscribe(state => phases.push(state.phase));
+    const result = await coordinator.refreshNow();
+    sub.unsubscribe();
+    expect(phases).toContain('refreshing');
+    expect(result.phase).toBe('complete');
+    expect(finance.lookupSharePrice).toHaveBeenCalledWith('AAPL', true);
   });
 });

@@ -26,6 +26,10 @@ LATER_THAN_BIRTHDAY = {
     "add_table:leave_policies",
     "add_index:ix_leave_policies_user_id",
     "add_column:pto_entries.bucket",
+    "add_table:world_concepts",
+    "add_index:ix_world_concepts_user_id",
+    "add_index:ix_world_concepts_user_understood",
+    "add_index:uq_world_concepts_active_name",
 }
 
 

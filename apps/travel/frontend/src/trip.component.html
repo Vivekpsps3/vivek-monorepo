@@ -18,19 +18,11 @@
       [eyebrow]="trip.status + ' · ' + trip.phase"
       [title]="trip.title"
     >
-      <p>
-        {{ showRange(trip.start_date, trip.end_date) }} ·
-        {{
-          trip.nights === 0
-            ? "same day"
-            : trip.nights === 1
-              ? "1 night"
-              : trip.nights + " nights"
-        }}
-        · {{ trip.pto_days_effective }} PTO days
-      </p>
-      <p class="muted">{{ trip.cities.join(" → ") }}</p>
-      <ui-button uiPageActions variant="ghost" (click)="open('trip')"
+      <p>{{ whenText(trip) }}</p>
+      @if (showSubtitle(trip.title, trip.cities)) {
+        <p class="muted">{{ trip.cities.join(" → ") }}</p>
+      }
+      <ui-button uiPageActions variant="secondary" (click)="open('trip')"
         >Edit trip</ui-button
       >
     </ui-page-header>
@@ -124,16 +116,11 @@
               <h3>{{ transport.label }}</h3>
               <p>{{ transport.depart_place }} → {{ transport.arrive_place }}</p>
               <p>
-                {{ transport.depart_at || "Departure not set" }}
-                {{ transport.depart_tz }} →
-                {{ transport.arrive_at || "Arrival not set" }}
-                {{ transport.arrive_tz }}
+                {{ transportWhenText(transport) }}
               </p>
-              @if (transport.cost) {
+              @if (transportCostText(transport)) {
                 <p class="muted">
-                  <span class="money">{{
-                    showMoney(transport.cost, transport.currency)
-                  }}</span>
+                  <span class="money">{{ transportCostText(transport) }}</span>
                   @if (transport.paid) {
                     · Paid
                   }
@@ -313,13 +300,7 @@
           <article class="trip-row">
             <div>
               <h3>{{ parking.place_name || parking.arrangement }}</h3>
-              <p>
-                {{ parking.booked ? "Booked" : "Not booked" }} ·
-                {{ parking.address }} ·
-                <span class="money">{{
-                  showMoney(parking.cost, parking.currency)
-                }}</span>
-              </p>
+              <p>{{ parkingLine(parking) }}</p>
               <p>{{ parking.notes }}</p>
             </div>
             <ui-button
@@ -349,7 +330,9 @@
           <article class="trip-row">
             <div>
               <p>{{ note.body }}</p>
-              <p class="muted">{{ showDay(note.on_date) }}</p>
+              @if (note.on_date) {
+                <p class="muted">{{ formatDay(note.on_date) }}</p>
+              }
             </div>
             <ui-button
               variant="ghost"

@@ -2,8 +2,18 @@ import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { showRange } from "./display";
+import { formatDateRange, formatMoney, formatRelativeDay } from "@vivek/browser";
 import { Home, Trip, travelError } from "./travel.models";
+import {
+  PAST_PREVIEW,
+  cardPtoText,
+  countdownText,
+  daysText,
+  isEmpty,
+  localToday,
+  pastSlice,
+  totals,
+} from "./trip-list.mjs";
 import {
   UiButtonComponent,
   UiCardComponent,
@@ -11,6 +21,12 @@ import {
   UiEmptyStateComponent,
   UiBadgeComponent,
 } from "@vivek/ui";
+
+type HomeTrip = Trip & {
+  days_until?: number | null;
+  next_action?: string | null;
+};
+
 @Component({
   standalone: true,
   imports: [
@@ -21,18 +37,21 @@ import {
     UiEmptyStateComponent,
     UiBadgeComponent,
   ],
+  styleUrl: "./travel.component.css",
   template: `<main class="page travel-page">
     <ui-page-header
       eyebrow="Your time away"
       title="Trips"
       subtitle="A little space for where you're going next."
     >
-      <ui-button
-        uiPageActions
-        variant="primary"
-        href="/travel/trips/new"
-        label="New trip"
-      />
+      @if (!data() || !isEmpty(data()!)) {
+        <ui-button
+          uiPageActions
+          variant="primary"
+          href="/travel/trips/new"
+          label="New trip"
+        />
+      }
     </ui-page-header>
     @if (error()) {
       <p class="local-error" role="alert">{{ error() }}</p>
@@ -42,7 +61,7 @@ import {
       @if (home.pto.configured) {
         <ui-card>
           PTO balance today:
-          <strong>{{ home.pto.balance_today }} days</strong> ·
+          <strong>{{ daysText(home.pto.balance_today) }}</strong> ·
           <a routerLink="/travel/pto">View forecast</a>
         </ui-card>
       }
@@ -61,33 +80,49 @@ import {
       }
       @for (group of groups(home); track group.title) {
         @if (group.trips.length) {
-          <section>
-            <h2>{{ group.title }}</h2>
+          <section [attr.aria-labelledby]="group.headingId">
+            <h2 [id]="group.headingId">{{ group.title }}</h2>
             <div class="trip-grid">
               @for (trip of group.trips; track trip.id) {
-                <a class="trip-card" [routerLink]="['/travel/trips', trip.id]">
-                  <ui-card>
-                    <ui-badge>{{ trip.status }}</ui-badge>
-                    <h3>{{ trip.title }}</h3>
-                    <p>{{ showRange(trip.start_date, trip.end_date) }}</p>
-                    <p class="muted">
-                      {{ trip.cities.join(" → ") }} ·
-                      {{ trip.pto_days_effective }} PTO days
-                    </p>
+                <a class="trip-card surface" [routerLink]="['/travel/trips', trip.id]">
+                  <div class="trip-card-top">
+                    <ui-badge
+                      [variant]="
+                        trip.phase === 'in_progress' ? 'success' : 'default'
+                      "
+                      >{{ chipText(trip) }}</ui-badge
+                    >
                     @if (trip.pto.conflicts.length) {
-                      <p>PTO overlaps</p>
+                      <ui-badge variant="warning">PTO overlaps</ui-badge>
                     }
-                  </ui-card>
+                  </div>
+                  <h3>{{ trip.title }}</h3>
+                  <p class="trip-card-when">
+                    {{ formatDateRange(trip.start_date, trip.end_date) }}
+                  </p>
+                  <p class="muted">
+                    {{ trip.cities.join(" → ")
+                    }}{{ trip.cities.length ? " · " : "" }}{{ cardPtoText(trip) }}
+                  </p>
+                  @if (totals(trip).length) {
+                    <p class="trip-card-cost num">{{ totalsText(trip) }}</p>
+                  }
+                  @if (trip.next_action) {
+                    <p class="trip-card-next">
+                      {{ trip.next_action }} <span aria-hidden="true">→</span>
+                    </p>
+                  }
                 </a>
               }
             </div>
           </section>
         }
       }
-      @if (!home.in_progress.length && !home.upcoming.length) {
+      @if (isEmpty(home)) {
         <ui-empty-state
           title="Your next trip starts with a date"
           message="Add a destination and dates. Flights, bookings, and plans can follow."
+          icon="calendar"
         >
           <ui-button
             variant="primary"
@@ -97,19 +132,35 @@ import {
         </ui-empty-state>
       }
       @if (home.past.length) {
-        <details>
-          <summary>Past trips ({{ home.past.length }})</summary>
-          <div class="trip-grid">
-            @for (trip of home.past; track trip.id) {
-              <a class="trip-card" [routerLink]="['/travel/trips', trip.id]">
-                <ui-card>
-                  <h3>{{ trip.title }}</h3>
-                  <p>{{ showRange(trip.start_date, trip.end_date) }}</p>
-                </ui-card>
+        <section aria-labelledby="past-heading">
+          <h2 id="past-heading">Past</h2>
+          <div class="trip-grid" id="past-grid">
+            @for (trip of pastSlice(home.past, pastExpanded()); track trip.id) {
+              <a class="trip-card surface" [routerLink]="['/travel/trips', trip.id]">
+                <h3>{{ trip.title }}</h3>
+                <p class="trip-card-when">
+                  {{ formatDateRange(trip.start_date, trip.end_date) }}
+                </p>
+                <p class="muted">{{ trip.cities.join(" → ") }}</p>
               </a>
             }
           </div>
-        </details>
+          @if (home.past.length > pastPreview) {
+            <ui-button
+              variant="ghost"
+              size="sm"
+              [ariaExpanded]="pastExpanded()"
+              ariaControls="past-grid"
+              (clicked)="pastExpanded.set(!pastExpanded())"
+            >
+              {{
+                pastExpanded()
+                  ? "Show fewer"
+                  : "Show all " + home.past.length + " past trips"
+              }}
+            </ui-button>
+          }
+        </section>
       }
     } @else {
       @if (!error()) {
@@ -119,11 +170,20 @@ import {
   </main>`,
 })
 export class TravelComponent {
-  readonly showRange = showRange;
+  readonly formatDateRange = formatDateRange;
+  readonly daysText = daysText;
+  readonly isEmpty = isEmpty;
+  readonly totals = totals;
+  readonly pastSlice = pastSlice;
+  readonly cardPtoText = cardPtoText;
+  readonly pastPreview = PAST_PREVIEW;
   private readonly http = inject(HttpClient);
   private readonly destroy = inject(DestroyRef);
   readonly data = signal<Home | null>(null);
   readonly error = signal("");
+  readonly pastExpanded = signal(false);
+  /** Browser-local calendar day (LA-day ruling, #113): never the UTC/server date. */
+  readonly today = localToday();
   constructor() {
     this.load();
   }
@@ -139,11 +199,20 @@ export class TravelComponent {
   }
   groups(home: Home): {
     title: string;
-    trips: Trip[];
+    headingId: string;
+    trips: HomeTrip[];
   }[] {
     return [
-      { title: "Away now", trips: home.in_progress },
-      { title: "Coming up", trips: home.upcoming },
+      { title: "Away now", headingId: "away-heading", trips: home.in_progress },
+      { title: "Upcoming", headingId: "upcoming-heading", trips: home.upcoming },
     ];
+  }
+  chipText(trip: HomeTrip): string {
+    return countdownText(trip, this.today) ?? formatRelativeDay(trip.start_date);
+  }
+  totalsText(trip: HomeTrip): string {
+    return totals(trip)
+      .map((total) => formatMoney(total.cents, { currency: total.currency }))
+      .join(" · ");
   }
 }

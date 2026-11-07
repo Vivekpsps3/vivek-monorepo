@@ -1,0 +1,31 @@
+.trip-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 44px;
+}
+
+.trip-card-top {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.trip-card-when {
+  margin: 0;
+}
+
+.trip-card-cost {
+  margin: 0;
+}
+
+.trip-card-next {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.trip-card h3 {
+  overflow-wrap: anywhere;
+}

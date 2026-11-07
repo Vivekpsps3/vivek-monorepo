@@ -19,7 +19,7 @@ describe('lockFinance', () => {
     TestBed.resetTestingModule();
   });
 
-  it('broadcasts, ends refresh, clears caches, then locks storage and memory', async () => {
+  it('ends refresh, clears caches, then locks storage and memory', async () => {
     const order: string[] = [];
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -31,7 +31,6 @@ describe('lockFinance', () => {
         {
           provide: MarketRefreshCoordinatorService,
           useValue: {
-            broadcastLock: () => order.push('broadcast'),
             endSession: () => order.push('end'),
           },
         },
@@ -48,7 +47,7 @@ describe('lockFinance', () => {
       return lock.call(vault);
     });
     await lockFinance(TestBed.inject(Injector));
-    expect(order).toEqual(['caches', 'broadcast', 'end', 'lock']);
+    expect(order).toEqual(['caches', 'end', 'lock']);
     vault['unlockedSubject'].next(true);
     expect(localStorage.getItem('finance-dek')).toBeNull();
     expect(hasDek()).toBeFalse();
@@ -81,7 +80,8 @@ describe('lockFinance', () => {
     try { await expectAsync(lockFinance(TestBed.inject(Injector))).toBeResolved(); expect(await heard).toEqual(jasmine.objectContaining({ version: 1, userId: 7, kind: 'lock' })); }
     finally { other.close(); }
     expect([hasDek(), localStorage.getItem('finance-dek'), vault.isUnlocked, unlocked.at(-1)]).toEqual([false, null, false, false]);
-    expect(toast.error).toHaveBeenCalledWith(jasmine.any(String), jasmine.objectContaining({ label: 'Try again' }));
+    // B0F2 P1: this tab is already locked when a later lock step fails.
+    expect(toast.error).toHaveBeenCalledWith('Locked here, but other tabs may still be open.', jasmine.objectContaining({ label: 'Try again' }));
     expect(cleared).toHaveBeenCalled();
     const before = cleared.calls.count();
     (toast.error as jasmine.Spy).calls.mostRecent().args[1].run();

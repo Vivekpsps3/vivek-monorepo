@@ -1,12 +1,12 @@
+import { SESSION_CONTEXT } from '@vivek/ui';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ReplaySubject, of } from 'rxjs';
-import { SESSION_CONTEXT } from '@vivek/ui';
 import { CashflowSummary, Holding, Transaction } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
-import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
-import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ChartsComponent } from '../charts/charts.component';
 import { DashboardComponent } from './dashboard.component';
 
@@ -18,6 +18,9 @@ class DashboardChartsStubComponent {
 }
 
 describe('Dashboard', () => {
+  beforeEach(() => TestBed.configureTestingModule({
+    providers: [{ provide: MarketRefreshCoordinatorService, useValue: null }],
+  }));
   it('loads the finance summary without fetching import or account details', () => {
     const finance = {
       netWorth$: of({ total: 1500 }),
@@ -35,7 +38,6 @@ describe('Dashboard', () => {
       getImportReceipts: jasmine.createSpy('getImportReceipts'),
       getAllTransactions: jasmine.createSpy('getAllTransactions'),
     } as unknown as FinanceService;
-    TestBed.configureTestingModule({});
     const component = TestBed.runInInjectionContext(() => new DashboardComponent(finance, { markForCheck: () => undefined } as any));
 
     component.ngOnInit();
@@ -51,7 +53,6 @@ describe('Dashboard', () => {
   });
 
   it('shows setup links only while the user has no recorded finance data', () => {
-    TestBed.configureTestingModule({});
     const component = TestBed.runInInjectionContext(() => new DashboardComponent({} as any, { markForCheck: () => {} } as any));
     expect(component.isStarterState).toBeTrue();
     component.jobIncomes = [{ id: 1 } as any];
@@ -59,7 +60,6 @@ describe('Dashboard', () => {
   });
 
   it('reports quote dates from source trading dates, not recent fetch timestamps', () => {
-    TestBed.configureTestingModule({});
     const component = TestBed.runInInjectionContext(() => new DashboardComponent({} as any, { markForCheck: () => {} } as any));
     component.holdings = [
       { id: 1, symbol: 'ABC', shares: 1, purchase_price: 10, purchase_date: null, quote_date: null, price_as_of: '2026-10-11T08:00:00Z' } as Holding,
@@ -96,13 +96,7 @@ describe('Dashboard', () => {
     } as unknown as FinanceService;
     await TestBed.configureTestingModule({
       imports: [DashboardComponent],
-      providers: [
-        { provide: FinanceService, useValue: finance },
-        { provide: MarketRefreshCoordinatorService, useValue: { firstAutoCheck$: of() } },
-        { provide: FinancePricePrefsService, useValue: new FinancePricePrefsService() },
-        { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 7 }, user$: of(null) } },
-        provideRouter([]),
-      ],
+      providers: [{ provide: FinanceService, useValue: finance }, provideRouter([])],
     }).overrideComponent(DashboardComponent, {
       remove: { imports: [ChartsComponent] },
       add: { imports: [DashboardChartsStubComponent] },
@@ -125,6 +119,39 @@ describe('Dashboard', () => {
     fixture.destroy();
   });
 
+  it('shows First steps when the Guide requested them even with data', async () => {
+    const finance = {
+      netWorth$: of({ total: 1000, portfolio: 500, other_assets: 600, liabilities: 100 }),
+      cashflowSummary$: of(null),
+      holdings$: of([]),
+      dashboardTransactions$: of([{ id: 1, date: '2026-10-10' }]),
+      assets$: of([{ id: 1 }]),
+      liabilities$: of([]),
+      fixedExpenses$: of([]),
+      jobIncomes$: of([]),
+      subscriptions$: of([]),
+      loadDashboard: jasmine.createSpy('loadDashboard').and.returnValue(of([])),
+      getLiabilities: jasmine.createSpy('getLiabilities').and.returnValue(of([])),
+    } as unknown as FinanceService;
+    await TestBed.configureTestingModule({
+      imports: [DashboardComponent],
+      providers: [{ provide: FinanceService, useValue: finance }, provideRouter([])],
+    }).overrideComponent(DashboardComponent, {
+      remove: { imports: [ChartsComponent] },
+      add: { imports: [DashboardChartsStubComponent] },
+    }).compileComponents();
+    const fixture: ComponentFixture<DashboardComponent> = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.isStarterState).toBeFalse();
+    expect(fixture.nativeElement.textContent).not.toContain('First steps');
+    const { FinanceGuideService } = await import('../core/finance-guide.service');
+    TestBed.inject(FinanceGuideService).requestFirstSteps();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('First steps');
+    fixture.destroy();
+  });
   function priceStubs(autoCheck: boolean) {
     const finance = {
       netWorth$: of({ total: 1000, portfolio: 500, other_assets: 600, liabilities: 100 }),

@@ -4,7 +4,8 @@ import re
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import BeforeValidator
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
@@ -12,10 +13,18 @@ from apps.server.database import get_db
 from apps.server.errors import APIError
 from apps.server.identity.models import User
 from apps.server.identity.session import get_current_user
+from apps.server.path_ids import MAX_PATH_ID
 from apps.server.town import writes
 from apps.server.town.clock import get_town_clock, resolve_tz
-from apps.server.town.schemas import CheckinDays, CheckinResult, Habit, HabitList, Town
-from apps.server.town.service import read_checkins, read_habits, read_town
+from apps.server.town.schemas import (
+    CheckinDays,
+    CheckinResult,
+    Habit,
+    HabitList,
+    HubTownSummary,
+    Town,
+)
+from apps.server.town.service import read_checkins, read_habits, read_town, read_town_summary
 from packages.time.today import today_in_zone
 
 router = APIRouter(prefix="/town", tags=["town"])
@@ -23,8 +32,24 @@ router = APIRouter(prefix="/town", tags=["town"])
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _CHECK_FIELDS = "Check the highlighted fields."
 
-# SQLite INTEGER is signed 64-bit. Ids outside it are 422, not a 500 overflow.
-HabitId = Annotated[int, Path(ge=1, le=2**63 - 1)]
+
+def _habit_id(value: object) -> int:
+    # T1F: the shared bounded_path_id pattern (same match and bounds as
+    # apps.server.path_ids), raising the town APIError so an invalid id's
+    # response is identical to a well-formed unknown habit's: a non-integer,
+    # non-positive, or out-of-SQLite-range id is 404 habit_not_found, never
+    # a 422 and never a 500 overflow.
+    try:
+        if re.fullmatch(r"[+-]?[0-9]+", str(value)):
+            parsed = int(str(value))
+            if 1 <= parsed <= MAX_PATH_ID:
+                return parsed
+    except ValueError:
+        pass
+    raise APIError(404, "habit_not_found", "That habit doesn't exist.")
+
+
+HabitId = Annotated[int, BeforeValidator(_habit_id)]
 
 
 def _reject() -> APIError:
@@ -64,6 +89,19 @@ def get_town(
 ) -> Town:
     zone = resolve_tz(tz)
     return Town.model_validate(read_town(db, principal.id, today_in_zone(zone, now), zone))
+
+
+@router.get("/summary", response_model=HubTownSummary)
+def get_town_summary(
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+    now: datetime = Depends(get_town_clock),
+) -> HubTownSummary:
+    zone = resolve_tz(tz)
+    return HubTownSummary.model_validate(
+        read_town_summary(db, principal.id, today_in_zone(zone, now), zone)
+    )
 
 
 @router.get("/habits", response_model=HabitList)

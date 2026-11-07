@@ -61,3 +61,5 @@ export const routes: Routes = [
     ],
   },
 ];
+
+export { NextEpisodeButtonComponent } from "./next-episode-button.component";

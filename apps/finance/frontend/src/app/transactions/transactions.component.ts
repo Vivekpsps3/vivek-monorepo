@@ -2,11 +2,13 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   Input,
   OnChanges,
   OnDestroy,
   OnInit,
   SimpleChanges,
+  ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -35,7 +37,7 @@ import {
   TransactionCreate,
 } from '../models/transaction.model';
 import { ConfirmService, ToastService, failureCopy } from '@vivek/ui';
-import { downloadCsv, plural } from '@vivek/browser';
+import { downloadCsv, formatDate, plural } from '@vivek/browser';
 import { excludedAmountNote } from '../utils/validators';
 import { focusField } from '../shared/form-validation';
 import {
@@ -158,6 +160,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   monthExpenseTotal = 0;
   monthIncomeTotal = 0;
   purchaseCount = 0;
+  refundCount = 0;
   incomeCount = 0;
   excludedCount = 0;
   categoryMergeFrom = '';
@@ -396,10 +399,37 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   get importSummary() { return this.importWorkflow.importSummary; }
 
   get summaryMonthLabel(): string {
-    if (!this.summaryMonth) return 'All months';
-    const [y, m] = this.summaryMonth.split('-');
-    const d = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
-    return d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+    return this.summaryMonth ? formatDate(`${this.summaryMonth}-01`, 'month') : 'All time';
+  }
+
+  get periodMonthName(): string {
+    return this.summaryMonth ? formatDate(`${this.summaryMonth}-01`, 'month').split(' ')[0] : '';
+  }
+
+  /** The month alone is not a narrowing filter; the eyebrow already shows it. */
+  get hasNarrowingFilters(): boolean {
+    return !!(this.searchTerm || this.categoryFilter || this.merchantFilter || this.accountFilter
+      || this.receiptFilter || this.fromDate || this.throughDate || this.selectedCalendarDate
+      || (!this.embedded && this.activityView !== 'all'));
+  }
+
+  get periodEyebrow(): string {
+    return this.summaryMonthLabel + (this.hasNarrowingFilters ? ' · filtered' : '');
+  }
+
+  get showPeriodFigures(): boolean {
+    return this.matchingTransactions.length > 0;
+  }
+
+  get spentCountLabel(): string {
+    const parts: string[] = [];
+    if (this.purchaseCount > 0) parts.push(plural(this.purchaseCount, 'purchase'));
+    if (this.refundCount > 0) parts.push(plural(this.refundCount, 'refund'));
+    return parts.length ? parts.join(', ') : 'No purchases';
+  }
+
+  get incomeCountLabel(): string {
+    return this.incomeCount ? plural(this.incomeCount, 'deposit') : 'No income';
   }
 
   get activityCategoryOptions(): string[] { return this.groupFilterOptions('category'); }
@@ -584,7 +614,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     if (this.importWorkflow.importCommitting) return;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { t: 'activity', receipts: '1', add: '1' },
+      queryParams: { t: null, receipts: '1', add: '1' },
       queryParamsHandling: 'merge',
     });
   }
@@ -592,7 +622,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   viewImportedTransactions(receipt: ImportReceipt): void {
     void this.router.navigate(['/finance/spending'], {
       queryParams: {
-        t: 'activity', v: 'all', receipt: receipt.id, receipts: null,
+        t: null, v: 'all', receipt: receipt.id, receipts: null,
         month: null, date: null, from: null, through: null,
         periodStart: null, periodEnd: null, priorStart: null, priorEnd: null,
         group: null, dimension: null, review: null, edit: null, add: null,
@@ -603,7 +633,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   reattachCorrectedCsv(receipt: ImportReceipt): void {
     const filename = this.receiptFirstParseFilename(receipt);
     void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: 'activity', receipts: '1', add: '1', reattach: receipt.id, reattach_file: filename },
+      queryParams: { t: null, receipts: '1', add: '1', reattach: receipt.id, reattach_file: filename },
     });
   }
 
@@ -671,6 +701,7 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     this.monthExpenseTotal = totals.monthExpenseTotal;
     this.monthIncomeTotal = totals.monthIncomeTotal;
     this.purchaseCount = totals.purchaseCount;
+    this.refundCount = totals.refundCount;
     this.incomeCount = totals.incomeCount;
     this.excludedCount = totals.excludedCount;
     this.cdr.markForCheck();
@@ -704,6 +735,27 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
 
   transactionLabel(tx: Transaction): string {
     return tx.kind === 'ambiguous_credit' ? 'Credit type needed' : tx.kind || tx.type;
+  }
+
+  /** IMP-06 kind badge; purchases get none — the sign and colour say it. */
+  transactionBadge(tx: Transaction): { label: string; variant: 'default' | 'success' | 'warning' } | null {
+    if (this.transactionNeedsFixing(tx)) return { label: 'Needs fixing', variant: 'warning' };
+    switch (tx.kind) {
+      case 'ambiguous_credit': return { label: 'Credit type needed', variant: 'warning' };
+      case 'refund': return { label: 'Refund', variant: 'success' };
+      case 'income': return { label: 'Income', variant: 'success' };
+      case 'transfer': return { label: 'Transfer', variant: 'default' };
+      case 'payment': return { label: 'Payment', variant: 'default' };
+      default: return null;
+    }
+  }
+
+  rowName(tx: Transaction): string {
+    return tx.merchant || tx.description || tx.category || 'Transaction';
+  }
+
+  rowDetail(tx: Transaction): string {
+    return [tx.category, tx.account_display].filter(Boolean).join(' · ');
   }
 
   transactionNeedsFixing(tx: Transaction): boolean {
@@ -772,6 +824,109 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
   get hasActiveFilters(): boolean {
     return !!(this.searchTerm || this.categoryFilter || this.merchantFilter || this.accountFilter || this.receiptFilter
       || this.summaryMonth || this.fromDate || this.throughDate || this.selectedCalendarDate);
+  }
+
+  filtersOpen = false;
+  @ViewChild('filterToggle') filterToggle?: ElementRef<HTMLButtonElement>;
+
+  get panelFilterCount(): number {
+    let count = 0;
+    if (!this.embedded && this.activityView !== 'all') count += 1;
+    if (this.categoryFilter) count += 1;
+    if (this.merchantFilter) count += 1;
+    if (this.accountFilter) count += 1;
+    if (this.fromDate) count += 1;
+    if (this.throughDate) count += 1;
+    return count;
+  }
+
+  get filterChips(): { key: string; label: string }[] {
+    const chips: { key: string; label: string }[] = [];
+    if (!this.embedded && this.activityView !== 'all') {
+      chips.push({ key: 'type', label: `Type: ${this.activityView === 'spending' ? 'Spending' : 'Income'}` });
+    }
+    if (this.categoryFilter) {
+      const label = this.categorySelectOptions.find(option => option.value === this.categoryFilter)?.label ?? this.categoryFilter;
+      chips.push({ key: 'category', label: `Category: ${label}` });
+    }
+    if (this.merchantFilter) {
+      const label = this.merchantSelectOptions.find(option => option.value === this.merchantFilter)?.label ?? this.merchantFilter;
+      chips.push({ key: 'merchant', label: `Merchant: ${label}` });
+    }
+    if (this.accountFilter) {
+      const label = this.accountSelectOptions.find(option => option.value === this.accountFilter)?.label ?? this.accountFilter;
+      chips.push({ key: 'account', label: `Account: ${label}` });
+    }
+    if (this.fromDate) chips.push({ key: 'from', label: `From: ${formatDate(this.fromDate, 'table')}` });
+    if (this.throughDate) chips.push({ key: 'through', label: `Through: ${formatDate(this.throughDate, 'table')}` });
+    if (this.selectedCalendarDate) chips.push({ key: 'day', label: `Day: ${formatDate(this.selectedCalendarDate, 'table')}` });
+    if (this.receiptFilter) chips.push({ key: 'receipt', label: 'From one import' });
+    return chips;
+  }
+
+  toggleFilters(): void {
+    this.filtersOpen = !this.filtersOpen;
+    this.cdr.markForCheck();
+    if (this.filtersOpen) {
+      setTimeout(() => document.getElementById('tx-type-filter')?.focus());
+    }
+  }
+
+  closeFiltersPanel(): void {
+    if (!this.filtersOpen) return;
+    this.filtersOpen = false;
+    this.cdr.markForCheck();
+    this.filterToggle?.nativeElement.focus();
+  }
+
+  removeChip(key: string): void {
+    const index = this.filterChips.findIndex(chip => chip.key === key);
+    switch (key) {
+      case 'type':
+        this.onActivityViewChange('all');
+        break;
+      case 'category':
+        this.categoryFilter = '';
+        this.onCategoryFilterChange();
+        break;
+      case 'merchant':
+        this.merchantFilter = '';
+        this.onMerchantFilterChange();
+        break;
+      case 'account':
+        this.accountFilter = '';
+        this.onAccountFilterChange();
+        break;
+      case 'from':
+        this.fromDate = '';
+        this.onDateRangeChange();
+        break;
+      case 'through':
+        this.throughDate = '';
+        this.onDateRangeChange();
+        break;
+      case 'day':
+        this.selectedCalendarDate = null;
+        this.visibleRowCount = this.pageSize;
+        this.syncQueryParams();
+        this.applyFilterAndSort();
+        break;
+      case 'receipt':
+        this.receiptFilter = '';
+        this.visibleRowCount = this.pageSize;
+        this.syncQueryParams();
+        this.applyFilterAndSort();
+        break;
+      default:
+        return;
+    }
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      const host = this.filterToggle?.nativeElement.closest('app-transactions');
+      const chips = host?.querySelectorAll<HTMLButtonElement>('.filter-chip');
+      const target = chips && chips.length ? chips[Math.min(Math.max(index, 0), chips.length - 1)] : undefined;
+      (target ?? this.filterToggle?.nativeElement)?.focus();
+    });
   }
 
   async mergeCategory(): Promise<void> {
@@ -943,18 +1098,15 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     );
     if (!ok) return;
 
-    const backup: TransactionCreate = {
-      date: tx.date,
-      type: tx.type,
-      category: tx.category,
-      amount: tx.amount,
-      description: tx.description,
-    };
+    // F21: the Undo snapshot is the full record, held only in memory, so a
+    // restore puts back the intended record exactly — same id, merchant,
+    // account, kind and import linkage — never a stripped re-creation.
+    const backup: Transaction = { ...tx };
 
     this.removeTransaction(tx, backup);
   }
 
-  private removeTransaction(tx: Transaction, backup: TransactionCreate): void {
+  private removeTransaction(tx: Transaction, backup: Transaction): void {
     this.financeService.deleteTransaction(tx.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.toastService.success('Transaction deleted', () => this.restoreTransaction(backup));
@@ -968,10 +1120,27 @@ export class TransactionsComponent implements OnInit, OnChanges, OnDestroy {
     });
   }
 
-  private restoreTransaction(backup: TransactionCreate): void {
+  private restoreInFlight = new Set<number>();
+
+  private restoreTransaction(backup: Transaction): void {
+    // Exactly once: a second Undo click while a restore runs is a no-op,
+    // and the store answers 'already-restored' if the first attempt landed
+    // but its response was lost, so a retry can never duplicate the record.
+    if (this.restoreInFlight.has(backup.id)) return;
+    this.restoreInFlight.add(backup.id);
     // Keep the error toast if the user leaves this page while the restore is in flight.
-    this.financeService.addTransaction(backup, true).subscribe({
-      error: () => {
+    this.financeService.restoreTransaction(backup, true).subscribe({
+      next: () => {
+        this.restoreInFlight.delete(backup.id);
+      },
+      error: (err: unknown) => {
+        this.restoreInFlight.delete(backup.id);
+        if (err instanceof Error && err.message === 'Transaction changed after it was deleted') {
+          // A different record holds the id now. Never overwrite it, and a
+          // retry would fail the same way, so this toast has no action.
+          this.toastService.error(failureCopy('restore', 'this transaction', 'It changed after it was deleted.'));
+          return;
+        }
         this.toastService.error(failureCopy('restore', 'this transaction'), {
           label: 'Try again',
           run: () => this.restoreTransaction(backup),

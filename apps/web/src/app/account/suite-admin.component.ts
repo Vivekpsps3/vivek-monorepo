@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { forkJoin, of } from 'rxjs';
+import { forkJoin, lastValueFrom, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { UiIconComponent, UiIconName } from '@vivek/ui';
+import { ConfirmService, UiIconComponent, UiIconName } from '@vivek/ui';
 const apiUrl = (path: string) => `/api${path}`;
 import { silentErrorToast } from '@vivek/ui';
 import { SessionService as AuthService } from '../platform/session.service';
@@ -43,6 +43,7 @@ export interface AttentionItem {
 export class SuiteAdminComponent implements OnInit {
   private http = inject(HttpClient);
   private auth = inject(AuthService);
+  private confirm = inject(ConfirmService);
   private cdr = inject(ChangeDetectorRef);
 
   users: AuthUser[] = [];
@@ -354,20 +355,25 @@ export class SuiteAdminComponent implements OnInit {
   }
 
   revokeSessions(user: AuthUser): void {
-    const prompt = this.isSelf(user)
-      ? 'Sign out every other device? This browser stays signed in, and the vault stays.'
-      : `Sign ${this.handle(user)} out everywhere? Their vault stays.`;
-    if (!window.confirm(prompt)) return;
-    this.http.post<{ ok: boolean; revoked: number }>(apiUrl(`/admin/users/${user.id}/revoke-sessions`), {}, { context: silentErrorToast() }).subscribe({
-      next: result => {
+    const self = this.isSelf(user);
+    void this.confirm.confirmAction({
+      title: self ? 'Sign out every other device?' : `Sign ${this.handle(user)} out everywhere?`,
+      message: self ? 'This browser stays signed in, and the vault stays.' : 'Their vault stays.',
+      confirmLabel: 'Sign out',
+      errorMessage: "Couldn't sign that account out. Nothing changed. Try again.",
+      run: async () => {
+        const result = await lastValueFrom(
+          this.http.post<{ ok: boolean; revoked: number }>(
+            apiUrl(`/admin/users/${user.id}/revoke-sessions`),
+            {},
+            { context: silentErrorToast() },
+          ),
+        );
         this.notice = result.revoked
           ? `Signed out ${result.revoked} ${result.revoked === 1 ? 'session' : 'sessions'}.`
           : 'No other sessions were open.';
-        this.load();
-      },
-      error: err => {
-        this.notice = err?.error?.detail || 'Could not sign that account out';
         this.cdr.markForCheck();
+        this.load();
       },
     });
   }
@@ -375,32 +381,44 @@ export class SuiteAdminComponent implements OnInit {
   deleteUser(user: AuthUser): void {
     if (!this.canDelete(user)) return;
     const label = this.handle(user);
-    if (!window.confirm(`Delete ${label}? Their encrypted finance records go with the account.`)) return;
-    this.http.delete<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}`), { context: silentErrorToast() }).subscribe({
-      next: () => {
+    void this.confirm.confirmAction({
+      title: `Delete ${label}?`,
+      message: 'Their encrypted finance records go with the account. This cannot be undone.',
+      confirmLabel: 'Delete',
+      phrase: `DELETE ${label}`,
+      errorMessage: "Couldn't delete that account. Nothing was deleted. Try again.",
+      run: async () => {
+        await lastValueFrom(
+          this.http.delete<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}`), { context: silentErrorToast() }),
+        );
         this.users = this.users.filter(item => item.id !== user.id);
         this.notice = `${label} was deleted.`;
-        this.load();
-      },
-      error: err => {
-        this.notice = err?.error?.detail || 'Could not delete that account';
         this.cdr.markForCheck();
+        this.load();
       },
     });
   }
 
   resetUser(user: AuthUser): void {
     const expected = `RESET ${user.username || user.email}`;
-    const typed = window.prompt(`Erase finance data for ${this.handle(user)}.\n\nType ${expected}`);
-    if (typed !== expected) return;
-    this.http.post<{ ok: boolean }>(apiUrl(`/admin/users/${user.id}/reset-contents`), { confirm: expected }, { context: silentErrorToast() }).subscribe({
-      next: () => {
+    void this.confirm.confirmAction({
+      title: `Erase finance data for ${this.handle(user)}?`,
+      message:
+        'Their encrypted finance records and Town health records are erased, and their sessions are signed out. This cannot be undone.',
+      confirmLabel: 'Erase data',
+      phrase: expected,
+      errorMessage: "Couldn't erase their data. Nothing was deleted. Try again.",
+      run: async () => {
+        await lastValueFrom(
+          this.http.post<{ ok: boolean }>(
+            apiUrl(`/admin/users/${user.id}/reset-contents`),
+            { confirm: expected },
+            { context: silentErrorToast() },
+          ),
+        );
         this.notice = `Finance data for ${this.handle(user)} was erased, and their sessions were signed out.`;
-        this.load();
-      },
-      error: err => {
-        this.notice = err?.error?.detail || 'Could not reset that account';
         this.cdr.markForCheck();
+        this.load();
       },
     });
   }

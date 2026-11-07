@@ -14,12 +14,16 @@ import {
   TRAVEL_SUMMARY_URL,
   fetchHubSummary,
   settleHubCard,
+  townSummaryUrl,
   type HubCardState,
 } from './hub-load';
+import { townIsEmpty, townStreakText, type TownSummary } from './town-hub-card';
 import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
+import { NextEpisodeButtonComponent } from '../../../../media/frontend/src/next-episode-button.component';
+import type { NextResult } from '../../../../media/frontend/src/next-episode.service';
 interface TravelTrip {
   id: number;
   title: string;
@@ -51,7 +55,7 @@ interface MediaSummary {
   currently: MediaItem[];
   recent_reviews: MediaItem[];
   upcoming: MediaItem[];
-  next_episodes: Array<{ entry_id?: number; show_title: string; season: number; episode: number; title?: string | null; state?: string }>;
+  next_episodes: Array<{ entry_id: number; episode_id: number; show_title: string; season: number; episode: number; title?: string | null; air_date: string | null; state?: string }>;
 }
 
 interface FinanceView {
@@ -72,6 +76,7 @@ interface FinanceView {
   imports: [
     AppDatePipe,
     MoneyPipe,
+    NextEpisodeButtonComponent,
     RouterLink,
     UiStateComponent,
   ],
@@ -105,12 +110,17 @@ export class HubComponent implements OnInit {
   media: MediaSummary | null = null;
   mediaPending = false;
   mediaUpdatedAt: number | null = null;
+  townState: HubCardState = 'loading';
+  town: TownSummary | null = null;
+  townPending = false;
+  townUpdatedAt: number | null = null;
 
   private generation = 0;
   private financeGeneration = 0;
   private userId: number | null | undefined = undefined;
   private travelCtrl: AbortController | null = null;
   private mediaCtrl: AbortController | null = null;
+  private townCtrl: AbortController | null = null;
   private financeCtrl: AbortController | null = null;
 
   private readonly route = inject(ActivatedRoute);
@@ -133,10 +143,12 @@ export class HubComponent implements OnInit {
         if (user) {
           void this.loadTravel();
           void this.loadMedia();
+          void this.loadTown();
           void this.loadFinance();
         } else {
           this.travelState = 'empty';
           this.mediaState = 'empty';
+          this.townState = 'empty';
           this.financeState = 'locked';
         }
       }
@@ -145,6 +157,7 @@ export class HubComponent implements OnInit {
     });
     void this.loadTravel();
     void this.loadMedia();
+    void this.loadTown();
     void this.loadFinance();
   }
 
@@ -200,6 +213,56 @@ export class HubComponent implements OnInit {
     void this.loadMedia();
   }
 
+  /** The Hub's one next-episode button sits on the first aired row, in list order. */
+  isTopNext(item: MediaSummary['next_episodes'][number]): boolean {
+    if (this.mediaState !== 'ready' || !this.media) return false;
+    return this.media.next_episodes.find(row => row.state === 'next') === item;
+  }
+
+  onMediaNextDone(result: NextResult, item: MediaSummary['next_episodes'][number]): void {
+    const media = this.media;
+    if (!media) return;
+    const next = result.next;
+    const next_episodes = next
+      ? media.next_episodes.map(row =>
+          row.entry_id === item.entry_id
+            ? {
+                ...row,
+                episode_id: next.id,
+                season: next.season_number,
+                episode: next.episode_number,
+                title: next.title,
+                air_date: next.air_date,
+                state: next.released ? 'next' : 'upcoming',
+              }
+            : row,
+        )
+      : media.next_episodes.filter(row => row.entry_id !== item.entry_id);
+    this.media = { ...media, next_episodes };
+    this.cdr.markForCheck();
+    requestAnimationFrame(() => {
+      const rowLink = document.querySelector<HTMLElement>(
+        `.next-episode-row a[href="/media/item/${item.entry_id}"]`,
+      );
+      const heading = document.querySelector<HTMLElement>('#media-heading a');
+      (rowLink ?? heading)?.focus();
+    });
+  }
+
+  onMediaNextReload(): void {
+    this.retryMedia();
+  }
+
+  retryTown(): void {
+    if (this.townPending) return;
+    this.townPending = true;
+    void this.loadTown();
+  }
+
+  townStreak(summary: TownSummary): string | null {
+    return townStreakText(summary);
+  }
+
   retryFinance(): void {
     if (this.financePending) return;
     this.financePending = true;
@@ -214,18 +277,22 @@ export class HubComponent implements OnInit {
     this.generation += 1;
     this.travelCtrl?.abort();
     this.mediaCtrl?.abort();
+    this.townCtrl?.abort();
     this.financeCtrl?.abort();
   }
 
   private clearCards(): void {
     this.trip = null;
     this.media = null;
+    this.town = null;
     this.travelPending = false;
     this.mediaPending = false;
+    this.townPending = false;
     this.financePending = false;
     this.clearFinanceNumbers();
     this.travelState = 'loading';
     this.mediaState = 'loading';
+    this.townState = 'loading';
     this.financeState = 'loading';
   }
 
@@ -279,6 +346,27 @@ export class HubComponent implements OnInit {
       this.media = settled.data;
     } finally {
       if (this.mediaCtrl === ctrl) this.mediaPending = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private async loadTown(): Promise<void> {
+    const generation = this.generation;
+    this.townCtrl?.abort();
+    const ctrl = new AbortController();
+    this.townCtrl = ctrl;
+    if (!this.town) this.townState = 'loading';
+    this.cdr.markForCheck();
+    try {
+      const result = await fetchHubSummary<TownSummary>(townSummaryUrl(), ctrl.signal);
+      if (generation !== this.generation || ctrl.signal.aborted) return;
+      const settled = settleHubCard(this.town, result, townIsEmpty);
+      if (!settled) return;
+      if (settled.state === 'ready' || settled.state === 'empty') this.townUpdatedAt = Date.now();
+      this.townState = settled.state;
+      this.town = settled.data;
+    } finally {
+      if (this.townCtrl === ctrl) this.townPending = false;
       this.cdr.markForCheck();
     }
   }

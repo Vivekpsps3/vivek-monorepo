@@ -4,10 +4,11 @@
     [title]="'Holdings'">
 
     <div uiPageActions class="header-actions">
+      <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
       <ui-button
         variant="secondary"
         [disabled]="refreshingPrices || holdings.length === 0"
-        ariaLabel="Refresh all share prices"
+        ariaLabel="Refresh prices"
         (clicked)="refreshAllPrices()"
       >
         @if (refreshingPrices) {
@@ -15,7 +16,6 @@
         }
         Refresh prices
       </ui-button>
-      <ui-button variant="primary" (clicked)="openAddModal()">Add Holding</ui-button>
       <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
     </div>
   </ui-page-header>
@@ -34,7 +34,7 @@
   <ui-card class="summary-card">
     <div class="summary">
       <div>
-        <div class="label">{{ hasMissingValues ? 'Known Portfolio Value' : 'Total Portfolio Value' }}</div>
+        <div class="label">{{ hasMissingValues ? 'Known portfolio value' : 'Portfolio value' }}</div>
         <div class="big-number stat-display">{{ getTotalValue() | money }}</div>
         <div class="source-dates">
           <p>Position dates <strong>{{ positionDateSummary() }}</strong></p>
@@ -45,7 +45,7 @@
         }
       </div>
       <div>
-        <div class="label">Total Unrealized Gain/Loss</div>
+        <div class="label">Unrealized gain</div>
         @if (getTotalGain() == null) {
           <div class="big-number stat-display">Unavailable</div>
           <p class="hint">At least one position has an unknown basis or market value.</p>
@@ -71,7 +71,7 @@
 
   <ui-card [title]="'Holdings'">
     <div uiCardActions class="table-actions table-actions--toolbar">
-        <input
+        <input name="searchTerm"
           type="search"
           [(ngModel)]="searchTerm"
           (input)="onSearchChange()"
@@ -97,6 +97,58 @@
     <div *ngIf="filteredHoldings.length > 0; else empty">
 
       <!-- Fidelity Section (collapsible) -->
+      <!-- F16: one holdings table for every group; cost basis and the
+           position date move to the details row under each holding. -->
+      <ng-template #holdingsTable let-rows="rows" let-label="label">
+        <ui-data-table [ariaLabel]="label">
+          <thead>
+            <tr>
+              <th scope="col">Symbol</th>
+              <th scope="col" class="num">Shares</th>
+              <th scope="col" class="num">Value</th>
+              <th scope="col" class="num">Gain</th>
+              <th scope="col">Price</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (h of rows; track h.id) {
+              <tr>
+                <td class="symbol">
+                  <strong>{{ h.symbol }}</strong>
+                  @if (h.company_name) {
+                    <br><small class="company-sub">{{ h.company_name }}</small>
+                  }
+                </td>
+                <td class="num">{{ h.shares }}</td>
+                <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
+                <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">
+                  {{ gainDisplay(h) }}
+                  <small class="gain-pct" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</small>
+                </td>
+                <td class="price-cell">
+                  <span>{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }}</span>
+                  @if (hasCurrentPrice(h)) { <span class="as-of-small">{{ asOfText(h) }}</span> }
+                  <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
+                  <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
+                  @if (priceSourceHint(h); as hint) {
+                    <span class="price-hint">{{ hint }}</span>
+                  }
+                </td>
+                <td class="actions actions--row">
+                  <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
+                  <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
+                  <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
+                </td>
+              </tr>
+              <tr class="holding-details">
+                <td colspan="6">Cost basis {{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }} · Position date {{ dateLabel(h.position_as_of) }} · {{ holdingSource(h) }}</td>
+              </tr>
+            }
+          </tbody>
+        </ui-data-table>
+      </ng-template>
+
       @if (accountGroups.fidelity.length > 0) {
         <details class="account-section" open>
           <summary class="section-header">
@@ -109,7 +161,7 @@
               <summary>
                 <span class="account-label">
                   @if (editingNicknameFor === group.brokerageAccountId) {
-                    <input
+                    <input name="nicknameDraft"
                       type="text"
                       class="nickname-input"
                       [(ngModel)]="nicknameDraft"
@@ -142,55 +194,7 @@
               </summary>
 
               <div class="table-scroll sub-table">
-                <ui-data-table [ariaLabel]="group.label + ' holdings'">
-                  <thead>
-                    <tr>
-                      <th scope="col">Symbol</th>
-                      <th scope="col" class="num">Shares</th>
-                      <th scope="col" class="num">Cost Basis</th>
-                      <th scope="col" class="num">Current</th>
-                      <th scope="col" class="num">Value</th>
-                      <th scope="col" class="num">Gain</th>
-                      <th scope="col" class="num">%</th>
-                      <th scope="col">Price</th>
-                      <th scope="col">Position date</th>
-                      <th scope="col">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (h of group.holdings; track h.id) {
-                      <tr>
-                        <td class="symbol">
-                          <strong>{{ h.symbol }}</strong>
-                          @if (h.company_name) {
-                            <br><small class="company-sub">{{ h.company_name }}</small>
-                          }
-                        </td>
-                        <td class="num">{{ h.shares }}</td>
-                        <td class="num">{{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}</td>
-                        <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (hasCurrentPrice(h)) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
-                        <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
-                        <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
-                        <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
-                        <td class="price-cell">
-                          <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
-                          <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
-                          @if (priceSourceHint(h); as hint) {
-                            <span class="price-hint">{{ hint }}</span>
-                          }
-                        </td>
-                        <td class="position-cell">
-                          <span class="as-of-small">{{ dateLabel(h.position_as_of) }}</span>
-                        </td>
-                        <td class="actions actions--row">
-                          <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
-                          <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
-                          <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </ui-data-table>
+                <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: group.holdings, label: group.label + ' holdings' }" />
               </div>
             </details>
           }
@@ -206,55 +210,7 @@
           </div>
 
           <div class="table-scroll">
-            <ui-data-table ariaLabel="Manual holdings">
-              <thead>
-                <tr>
-                  <th scope="col">Symbol</th>
-                  <th scope="col" class="num">Shares</th>
-                  <th scope="col" class="num">Cost Basis</th>
-                  <th scope="col" class="num">Current</th>
-                  <th scope="col" class="num">Value</th>
-                  <th scope="col" class="num">Gain</th>
-                  <th scope="col" class="num">%</th>
-                  <th scope="col">Price</th>
-                  <th scope="col">Position date</th>
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (h of accountGroups.manual; track h.id) {
-                  <tr>
-                    <td class="symbol">
-                      <strong>{{ h.symbol }}</strong>
-                      @if (h.company_name) {
-                        <br><small class="company-sub">{{ h.company_name }}</small>
-                      }
-                    </td>
-                    <td class="num">{{ h.shares }}</td>
-                    <td class="num">{{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}</td>
-                    <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (hasCurrentPrice(h)) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
-                    <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
-                    <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
-                    <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
-                    <td class="price-cell">
-                      <ui-badge [variant]="priceSourceBadgeVariant(h)">{{ priceFreshness(h) }}</ui-badge>
-                      <span class="as-of-small">{{ quoteDateLabel(h) }}</span>
-                      @if (priceSourceHint(h); as hint) {
-                        <span class="price-hint">{{ hint }}</span>
-                      }
-                    </td>
-                    <td class="position-cell">
-                      <span class="as-of-small">{{ dateLabel(h.position_as_of) }}</span>
-                    </td>
-                    <td class="actions actions--row">
-                      <ui-button variant="ghost" size="sm" [ariaLabel]="'Refresh price for ' + h.symbol" (clicked)="refreshHoldingPrice(h)">↻</ui-button>
-                      <ui-button variant="ghost" size="sm" [ariaLabel]="'Edit ' + h.symbol" (clicked)="editHolding(h)">Edit</ui-button>
-                      <ui-button variant="danger" size="sm" [ariaLabel]="'Delete ' + h.symbol" (clicked)="deleteHolding(h)">Delete</ui-button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </ui-data-table>
+            <ng-container *ngTemplateOutlet="holdingsTable; context: { rows: accountGroups.manual, label: 'Manual holdings' }" />
           </div>
         </div>
       }
@@ -263,9 +219,11 @@
 
     <ng-template #empty>
       @if (!loading && !holdingsLoadError) {
-        <ui-empty-state message="No holdings yet.">
-          <ui-button variant="primary" (clicked)="openAddModal()">Add your first</ui-button>
-          <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
+        <ui-empty-state [title]="'No holdings yet'" message="Add a position by hand or import a Fidelity positions file.">
+          <div class="empty-actions">
+            <ui-button variant="primary" (clicked)="openAddModal()">Add holding</ui-button>
+            <ui-button variant="secondary" (clicked)="openFidelityImportModal()">Import from Fidelity</ui-button>
+          </div>
         </ui-empty-state>
       }
     </ng-template>
@@ -355,7 +313,7 @@
     @if (fidelityImportStep === 'upload') {
       <div class="form-group">
         <label for="fidelity-import-file">Fidelity positions CSV file</label>
-        <input id="fidelity-import-file" type="file" accept=".csv" (change)="onFidelityFileSelected($event)" [disabled]="fidelityImportParsing" />
+        <input id="fidelity-import-file" name="onfidelityfileselected" type="file" accept=".csv" (change)="onFidelityFileSelected($event)" [disabled]="fidelityImportParsing" />
         @if (fidelityImportFile) {
           <p class="file-name">{{ fidelityImportFile.name }}</p>
         }
@@ -382,7 +340,7 @@
       <div class="import-accounts">
         @for (acc of fidelityImportPreview.accounts; track acc) {
           <label class="account-chip">
-            <input type="checkbox" [checked]="isFidelityAccountSelectedForDisplay(acc)" (change)="toggleFidelityAccountFromDisplay(acc)" />
+            <input name="togglefidelityaccountfromdisplay" type="checkbox" [checked]="isFidelityAccountSelectedForDisplay(acc)" (change)="toggleFidelityAccountFromDisplay(acc)" />
             {{ acc }}
           </label>
         }
