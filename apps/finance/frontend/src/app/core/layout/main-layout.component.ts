@@ -3,27 +3,26 @@ import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router
 import { ApiHealthService } from '../../services/api-health.service';
 import { AuthUser } from '@vivek/auth';
 import { SESSION_CONTEXT } from '@vivek/ui';
-import { Subject, filter, takeUntil } from 'rxjs';
-import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiIconName } from '@vivek/ui';
+import { Subject, filter, takeUntil, firstValueFrom } from 'rxjs';
+import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiIconName, UiSectionNavComponent } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
+import { FinanceLockService } from '../finance-lock.service';
+import { FinanceGuideService } from '../finance-guide.service';
 import { FinanceService } from '../../services/finance.service';
 import { UserMenuContent } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
-import { lockFinance } from '../../../public-api';
 
 export interface NavItem {
   path: string;
   label: string;
-  shortLabel: string;
   icon: UiIconName;
   exact: boolean;
 }
 
 interface NavGroup {
   label: string;
-  shortLabel: string;
   icon: UiIconName;
   adminOnly?: boolean;
   items: NavItem[];
@@ -32,7 +31,7 @@ interface NavGroup {
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, UiDialogComponent],
+  imports: [RouterOutlet, RouterLink, UiIconComponent, UiCardComponent, UiButtonComponent, UiDialogComponent, UiSectionNavComponent],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -49,6 +48,8 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private userMenu = inject(UserMenuContent);
   @ViewChild('userMenuActions', { static: true }) private userMenuActions!: TemplateRef<unknown>;
   private marketRefresh = inject(MarketRefreshCoordinatorService);
+  private lock = inject(FinanceLockService);
+  private guide = inject(FinanceGuideService);
   private readonly injector = inject(Injector);
   private destroy$ = new Subject<void>();
   private routePath = '';
@@ -63,44 +64,39 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   marketState: MarketRefreshState = this.marketRefresh.currentState;
   readonly marketRefreshDisclosure = this.marketRefresh.disclosure;
 
-  /** shortLabel is the 320px tab; the accessible name is label. */
+  /** One label set at every width (D3): Home, Net worth, Spending, Recurring, Planning. */
   readonly navGroups: NavGroup[] = [
     {
       label: 'Home',
-      shortLabel: 'Home',
       icon: 'dashboard',
-      items: [{ path: '/finance/', label: 'Home', shortLabel: 'Home', icon: 'dashboard', exact: true }],
+      items: [{ path: '/finance/', label: 'Home', icon: 'dashboard', exact: true }],
     },
     {
-      label: 'What you have',
-      shortLabel: 'Have',
+      label: 'Net worth',
       icon: 'scale',
       items: [
-        { path: '/finance/have', label: 'What you have', shortLabel: 'Have', icon: 'scale', exact: false },
+        { path: '/finance/have', label: 'Net worth', icon: 'scale', exact: false },
       ],
     },
     {
       label: 'Spending',
-      shortLabel: 'Spend',
       icon: 'transactions',
       items: [
-        { path: '/finance/spending', label: 'Spending', shortLabel: 'Spend', icon: 'transactions', exact: false },
+        { path: '/finance/spending', label: 'Spending', icon: 'transactions', exact: false },
       ],
     },
     {
       label: 'Recurring',
-      shortLabel: 'Repeat',
       icon: 'wallet',
       items: [
-        { path: '/finance/recurring', label: 'Recurring', shortLabel: 'Repeat', icon: 'wallet', exact: false },
+        { path: '/finance/recurring', label: 'Recurring', icon: 'wallet', exact: false },
       ],
     },
     {
       label: 'Planning',
-      shortLabel: 'Plan',
       icon: 'trending',
       items: [
-        { path: '/finance/planning', label: 'Planning', shortLabel: 'Plan', icon: 'trending', exact: false },
+        { path: '/finance/planning', label: 'Planning', icon: 'trending', exact: false },
       ],
     },
   ];
@@ -182,26 +178,18 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   }
 
   isActiveItem(item: NavItem): boolean {
+    // Legacy paths redirect in app.routes.ts before render, so plain
+    // prefix matching is enough here.
     const url = this.router.url.split('?')[0].split('#')[0];
-    if (item.path === '/finance/have') {
-      return url === '/finance/have' || url === '/finance/balance-sheet' || url === '/finance/portfolio';
-    }
-    if (item.path === '/finance/spending') {
-      return url === '/finance/spending' || url === '/finance/transactions' || url === '/finance/calendar';
-    }
-    if (item.path === '/finance/recurring') {
-      return url === '/finance/recurring' || url === '/finance/income' || url === '/finance/fixed-expenses' || url === '/finance/subscriptions';
-    }
-    if (item.path === '/finance/planning') {
-      return url === '/finance/planning' || url === '/finance/investment-insights' || url === '/finance/stock-lab';
-    }
-    return item.exact ? url === item.path : url === item.path || url.startsWith(`${item.path}/`);
+    return item.exact ? url === item.path || url === '/finance' : url === item.path || url.startsWith(`${item.path}/`);
+  }
+
+  get sectionNavItems(): { label: string; link: string; exact?: boolean }[] {
+    return this.visibleNavGroups.map(g => ({ label: g.label, link: g.items[0].path, exact: g.items[0].exact }));
   }
 
   lockVault(): void {
-    void lockFinance(this.injector).then(() => {
-      void this.router.navigateByUrl('/finance/vault/unlock');
-    });
+    void this.lock.lockNow();
   }
 
   logout(): void {
@@ -224,27 +212,27 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   }
 
   async clearMyData(): Promise<void> {
-    const confirmed = await this.confirm.ask(
-      'Clear your data?',
-      'This removes your finance records. Your account stays. You still need your passphrase to open the vault.',
-      'Clear my data'
-    );
-    if (!confirmed) return;
     this.isResettingData = true;
     this.cdr.markForCheck();
-    this.finance.resetMyData().subscribe({
-      next: () => {
-        this.isResettingData = false;
-        this.toast.success('Your data is clear.');
-        this.router.navigate(['/finance/']);
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.isResettingData = false;
-        this.toast.error("Couldn't clear your data. Something went wrong.");
-        this.cdr.markForCheck();
-      },
-    });
+    try {
+      const cleared = await this.confirm.confirmAction({
+        title: 'Clear all Finance data?',
+        // PLAN ruling: wipe copy includes Town health records.
+        message: 'This permanently deletes every balance, holding, transaction, job, bill and plan in your vault, plus your Town health records. Your account and passphrase stay. This can\'t be undone.',
+        phrase: 'CLEAR MY DATA',
+        confirmLabel: 'Clear data',
+        busyLabel: 'Clearing…',
+        // K2's option is named errorMessage (F2's text said failureMessage).
+        errorMessage: 'Couldn\'t clear your data. Nothing was deleted. Try again.',
+        run: () => firstValueFrom(this.finance.resetMyData()).then(() => undefined),
+      });
+      if (!cleared) return;
+      this.toast.success('Finance data cleared.');
+      await this.router.navigate(['/finance/']);
+    } finally {
+      this.isResettingData = false;
+      this.cdr.markForCheck();
+    }
   }
 
   openTutorial(): void {
@@ -255,6 +243,24 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   closeTutorial(): void {
     this.showTutorial = false;
     this.cdr.markForCheck();
+  }
+
+  showPriceDetails = false;
+
+  openPriceDetails(): void {
+    this.showPriceDetails = true;
+    this.cdr.markForCheck();
+  }
+
+  closePriceDetails(): void {
+    this.showPriceDetails = false;
+    this.cdr.markForCheck();
+  }
+
+  showFirstStepsOnHome(): void {
+    this.guide.requestFirstSteps();
+    this.closeTutorial();
+    void this.router.navigateByUrl('/finance');
   }
 
   refreshApiStatus(): void {

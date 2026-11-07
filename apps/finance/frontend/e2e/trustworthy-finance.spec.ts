@@ -72,7 +72,7 @@ function legacyChaseDedupeKey(date: string, amount: number, description: string)
 test('empty vault supports keyboard transaction entry and a failed save can be retried', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/spending?t=activity');
-  const add = page.getByRole('button', { name: 'Add transaction', exact: true });
+  const add = page.locator('ui-page-header').getByRole('button', { name: 'Add transaction', exact: true });
   await expect(add).toBeVisible();
   await add.focus();
   await page.keyboard.press('Enter');
@@ -105,7 +105,7 @@ test('recorded totals count refunds and exclude payments and unresolved credits 
   const activity = page.locator('.home-tile').filter({ hasText: 'This month' });
   await expect(activity).toContainText(moneyText('$200.00'));
   await expect(activity).toContainText(moneyText('$75.00'));
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,025.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,025.00'));
   await vault.open('/spending?t=activity');
   await expect(page.locator('.month-total--expense')).toContainText(moneyText('$75.00'));
   await expect(page.locator('.month-total--income')).toContainText(moneyText('$200.00'));
@@ -142,7 +142,7 @@ test('Spending opens on Activity without review controls and Home has no review 
   await vault.open('/');
   await expect(page.locator('.review-queue-card')).toHaveCount(0);
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$900.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$900.00'));
   expect(vault.data('transactions')[0]).toMatchObject({ description: 'Older card record', amount: 20 });
 
   await vault.open('/planning');
@@ -168,7 +168,7 @@ test('Charts show one cashflow and do not change financial records', async ({ pa
   await vault.open('/');
   await expectQuoteRequests(vault, ['VOO']);
   await expectHoldingPrice(vault, 'VOO', 125);
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,025.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,025.00'));
   const refreshedData = {
     assets: vault.data('assets'),
     liabilities: vault.data('liabilities'),
@@ -261,9 +261,9 @@ test('legacy spending links translate to Activity filters and five navigation hu
   await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('spending');
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toHaveCount(0);
   await vault.open('/planning');
-  await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Retirement & goals');
-  await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Portfolio projection');
-  await expect(page.getByRole('navigation', { name: 'Planning', exact: true })).toContainText('Stock research');
+  await expect(page.getByRole('navigation', { name: 'Planning sections', exact: true })).toContainText('Retirement and goals');
+  await expect(page.getByRole('navigation', { name: 'Planning sections', exact: true })).toContainText('Portfolio projection');
+  await expect(page.getByRole('navigation', { name: 'Planning sections', exact: true })).toContainText('Stock research');
 });
 
 test('planning accepts only covered selected spending and persists its composition without changing actual balances', async ({ page }) => {
@@ -343,13 +343,13 @@ test('Fidelity market values survive an interrupted replacement and explicit ref
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('link', { name: 'Home', exact: true }).first().click();
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,025.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,025.00'));
   await vault.open('/have?t=holdings');
   await page.getByRole('button', { name: /Resume/ }).first().click();
   await expect(page.locator('.summary-card')).toContainText(moneyText('$340.00'));
   await expect(page.locator('app-portfolio')).toContainText(/unavailable|unknown/i);
   expect(vault.quoteRequests.map(symbol => symbol.toUpperCase())).toEqual(['VOO']);
-  await page.getByRole('button', { name: 'Refresh all share prices', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh prices', exact: true }).click();
   await expect.poll(() => vault.quoteRequests.slice(1).map(symbol => symbol.toUpperCase()).sort()).toEqual(['SPAXX', 'VOO']);
   await expect(page.locator('.summary-card')).toContainText(moneyText('$12,750.00'));
   expect(vault.data('assets')[0].current_value).toBe(1000);

@@ -73,7 +73,7 @@
             @for (row of monthSummary.categories; track row.label) {
               <tr>
                 <td>
-                  <a [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
+                  <a [routerLink]="['/finance/spending']" [queryParams]="{ t: null, v: 'spending', month: monthKey, category: row.label }">{{ row.label }}</a>
                 </td>
                 <td>{{ row.value | money }}</td>
                 <td>{{ formatShare(row.pct) }}</td>
@@ -147,7 +147,7 @@
     <ui-card>
       <div class="selected-header">
         <h3>{{ selectedDate }}</h3>
-        <a class="calendar-cta" [routerLink]="['/finance/spending']" [queryParams]="{ t: 'activity', date: selectedDate, add: '1' }">Add transaction</a>
+        <a class="calendar-cta" [routerLink]="['/finance/spending']" [queryParams]="{ t: null, date: selectedDate, add: '1' }">Add transaction</a>
       </div>
       @if (selectedTransactions.length || selectedPlans.length || selectedIncomeOccurrences.length) {
         <p class="day-net">
