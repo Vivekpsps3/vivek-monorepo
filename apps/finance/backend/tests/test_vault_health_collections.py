@@ -109,6 +109,37 @@ def test_health_collections_roundtrip_conflict_counts_and_delete():
         assert client.get(f"/api/vault/records?collection={collection}").json() == []
 
 
+def _upsert_version(client, collection: str, client_id: str, schema_version: int):
+    record = {
+        "collection": collection,
+        "client_id": client_id,
+        "ciphertext_b64": _b64(),
+        "schema_version": schema_version,
+        "key_version": 1,
+    }
+    return client.post("/api/vault/records/upsert", json={"records": [record]})
+
+
+def test_health_collections_reject_schema_version_other_than_two():
+    # Security (2026-10-30): health_* upserts are v2-only, with a 422.
+    client = authenticated_client(app, email="thc2-health-version@example.com")
+    _setup(client)
+    for collection, client_id in _HEALTH:
+        for bad_version in (1, 3):
+            rejected = _upsert_version(client, collection, client_id, bad_version)
+            assert rejected.status_code == 422, rejected.text
+            assert rejected.json()["detail"] == "Health records require schema_version 2"
+        assert client.get(f"/api/vault/records?collection={collection}").json() == []
+        assert _upsert_version(client, collection, client_id, 2).status_code == 200
+
+
+def test_finance_collections_still_accept_legacy_schema_version():
+    client = authenticated_client(app, email="thc2-legacy-version@example.com")
+    _setup(client)
+    created = _upsert_version(client, "transactions", "txn_legacy001", 1)
+    assert created.status_code == 200, created.text
+
+
 def test_unknown_collection_is_rejected():
     client = authenticated_client(app, email="thv1-health-unknown@example.com")
     _setup(client)
