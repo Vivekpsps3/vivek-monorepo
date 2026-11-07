@@ -711,7 +711,8 @@ def test_la_evening_checkin_matches_get_can_check_yesterday(api):
     ),
 )
 def test_server_day_clamps_to_the_utc_date_plus_or_minus_two():
-    from apps.server.town.writes import _server_day
+    # gap: _server_day is not on main yet
+    from apps.server.town.writes import _server_day  # type: ignore[attr-defined]
 
     now = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
     assert _server_day(now, date(2026, 10, 29)) == date(2026, 10, 29)
