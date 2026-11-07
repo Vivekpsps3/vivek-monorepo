@@ -24,7 +24,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { computeCashflowSummary, monthEnd, transactionEffects } from '../crypto/client-finance';
-import { WEEK_STARTS_ON, formatPercent, todayIsoDate, weekStartIndex } from '@vivek/browser';
+import { WEEK_STARTS_ON, formatDate, formatMoney, formatPercent, fromDollars, plural, todayIsoDate, weekStartIndex } from '@vivek/browser';
 import { spendingGroupKey, UNASSIGNED_ACCOUNT_FILTER } from '../utils/spending-filter.util';
 import { monthKeyFromDate, MonthSpendSummary, summarizeMonthSpend } from '../utils/spend-summary.util';
 import {
@@ -95,6 +95,45 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedIncomeOccurrences: IncomeCashflowOccurrence[] = [];
   daysInMonth: CalendarDay[] = [];
   weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].slice(WEEK_STARTS_ON).concat(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].slice(0, WEEK_STARTS_ON));
+  weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].slice(WEEK_STARTS_ON).concat(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].slice(0, WEEK_STARTS_ON));
+  private focusedDate: string | null = null;
+  @ViewChild('dayHeading') dayHeading?: ElementRef<HTMLElement>;
+  @ViewChild('dayDetail') dayDetail?: ElementRef<HTMLElement>;
+
+  /** Weeks of seven cells; the last week is padded with blank days. */
+  get weeks(): CalendarDay[][] {
+    const weeks: CalendarDay[][] = [];
+    for (let i = 0; i < this.daysInMonth.length; i += 7) {
+      const week = this.daysInMonth.slice(i, i + 7);
+      while (week.length < 7) week.push({ date: '', hasTransactions: false, expense: 0, income: 0 });
+      weeks.push(week);
+    }
+    return weeks;
+  }
+
+  /** The grid's one tab stop: the focused day, else the selected day, else today, else the 1st. */
+  get rovingDate(): string {
+    if (this.focusedDate?.startsWith(this.monthKey)) return this.focusedDate;
+    if (this.selectedDate) return this.selectedDate;
+    const today = todayIsoDate();
+    return today.startsWith(this.monthKey) ? today : `${this.monthKey}-01`;
+  }
+
+  get selectedHeading(): string {
+    return this.selectedDate ? formatDate(this.selectedDate, 'heading') : '';
+  }
+
+  get selectedShortDate(): string {
+    return this.selectedDate ? formatDate(this.selectedDate, 'table') : '';
+  }
+
+  get monthOnlyName(): string {
+    return this.currentDate.toLocaleString('en-US', { month: 'long' });
+  }
+
+  get hasDayItems(): boolean {
+    return this.selectedTransactions.length + this.selectedPlans.length + this.selectedIncomeOccurrences.length > 0;
+  }
   monthSummary: MonthSpendSummary = summarizeMonthSpend([], monthKeyFromDate(new Date()));
 
   private destroy$ = new Subject<void>();
@@ -274,7 +313,37 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   selectDay(day: CalendarDay) {
     if (!day.date) return;
     this.applySelectedDay(day.date);
-    this.cdr.markForCheck();
+    this.focusedDate = day.date;
+    this.cdr.detectChanges();
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      this.dayDetail?.nativeElement.scrollIntoView({ block: 'start' });
+      this.dayHeading?.nativeElement.focus({ preventScroll: true });
+    }
+  }
+
+  /** Scheduled occurrences are counted separately from F8's posted-only expense. */
+  dayScheduled(day: CalendarDay): number {
+    return day.scheduled ?? (day.date ? this.countedOccurrences.filter(row => row.date === day.date).length : 0);
+  }
+
+  private postedExpense(day: CalendarDay): number {
+    return day.expense;
+  }
+
+  dayNet(day: CalendarDay): number {
+    return day.income - this.postedExpense(day);
+  }
+
+  dayAriaLabel(day: CalendarDay): string {
+    const parts: string[] = [];
+    const expense = this.postedExpense(day);
+    if (expense > 0) parts.push(`spent ${formatMoney(fromDollars(expense))}`);
+    else if (expense < 0) parts.push(`refunded ${formatMoney(fromDollars(-expense))}`);
+    if (day.income !== 0) parts.push(`income ${formatMoney(fromDollars(day.income))}`);
+    const scheduled = this.dayScheduled(day);
+    if (scheduled > 0) parts.push(plural(scheduled, 'scheduled bill'));
+    if (!parts.length) parts.push('no activity');
+    return `${formatDate(day.date, 'heading')}: ${parts.join(', ')}`;
   }
 
   private applySelectedDay(date: string) {
@@ -285,37 +354,54 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       .filter(row => row.date === date && row.kind !== 'posted' && row.kind !== 'overlap') || [];
   }
 
-  onDayKeydown(event: KeyboardEvent, day: CalendarDay, index: number) {
+  onDayKeydown(event: KeyboardEvent, day: CalendarDay) {
     if (!day.date) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       this.selectDay(day);
+      return;
     }
-    if (event.key === 'ArrowRight') {
-      event.preventDefault();
-      this.focusDay(index + 1);
-    }
-    if (event.key === 'ArrowLeft') {
-      event.preventDefault();
-      this.focusDay(index - 1);
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      this.focusDay(index + 7);
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      this.focusDay(index - 7);
+    const move = (iso: string | null) => {
+      if (iso) {
+        event.preventDefault();
+        this.focusDate(iso);
+      }
+    };
+    switch (event.key) {
+      case 'ArrowRight': move(this.shiftDate(day.date, 1)); break;
+      case 'ArrowLeft': move(this.shiftDate(day.date, -1)); break;
+      case 'ArrowDown': move(this.shiftDate(day.date, 7)); break;
+      case 'ArrowUp': move(this.shiftDate(day.date, -7)); break;
+      case 'Home': {
+        const row = this.weeks.find(week => week.some(d => d.date === day.date)) ?? [];
+        move(row.find(d => d.date)?.date ?? null);
+        break;
+      }
+      case 'End': {
+        const row = this.weeks.find(week => week.some(d => d.date === day.date)) ?? [];
+        const real = row.filter(d => d.date);
+        move(real[real.length - 1]?.date ?? null);
+        break;
+      }
     }
   }
 
-  private focusDay(index: number) {
-    const buttons = document.querySelectorAll<HTMLButtonElement>('.calendar-grid .day-btn');
-    const el = buttons[index];
-    if (el) el.focus();
+  /** Arrow-key movement is by ISO date and clamps to the visible month. */
+  private shiftDate(iso: string, days: number): string | null {
+    const [year, month, date] = iso.split('-').map(Number);
+    const next = new Date(year, month - 1, date + days);
+    const out = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+    return out.startsWith(this.monthKey) ? out : null;
+  }
+
+  focusDate(iso: string) {
+    this.focusedDate = iso;
+    this.cdr.detectChanges();
+    document.querySelector<HTMLElement>(`.calendar-grid [data-date="${iso}"]`)?.focus();
   }
 
   goToday() {
+    this.focusedDate = null;
     this.currentDate = new Date();
     this.generateCalendar();
     const today = todayIsoDate();
@@ -325,6 +411,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   prevMonth() {
+    this.focusedDate = null;
     this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() - 1, 1);
     this.generateCalendar();
     this.selectedDate = null;
@@ -335,6 +422,7 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   nextMonth() {
+    this.focusedDate = null;
     this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 1);
     this.generateCalendar();
     this.selectedDate = null;
@@ -345,16 +433,6 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   getMonthName(): string {
-    return this.currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-  }
-
-  dayTotal(): number {
-    const posted = this.selectedTransactions.reduce(
-      (sum, t) => sum + transactionEffects(t).income - transactionEffects(t).spending,
-      0
-    );
-    const repeating = this.selectedPlans.reduce((sum, row) => sum + row.amount, 0);
-    const projected = this.selectedIncomeOccurrences.reduce((sum, row) => sum + row.amount, 0);
-    return posted + projected - repeating;
+    return formatDate(`${this.monthKey}-01`, 'month');
   }
 }
