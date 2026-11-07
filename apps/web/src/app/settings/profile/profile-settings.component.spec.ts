@@ -139,7 +139,7 @@ describe('ProfileSettingsComponent (PF6)', () => {
     load({ birthday: null, show_age: false });
     component.birthdayInput = '1990-05-04';
     const saving = component.save();
-    http.expectOne('/api/account/birthday').error(new ProgressEvent('error'), { status: 500, statusText: 'Server Error' } as any);
+    http.expectOne('/api/account/birthday').error(new ProgressEvent('error'), { status: 500, statusText: 'Server Error' });
     await saving;
     expect(component.error).toBe("Birthday couldn't be saved.");
     expect(component.error).not.toContain('1990-05-04');
