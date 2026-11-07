@@ -34,7 +34,7 @@ export {
   chartCartesianScales,
 } from './chart-theme';
 export { UiConfirmDialogComponent } from './ui-confirm-dialog/ui-confirm-dialog.component';
-export { ConfirmService, type ConfirmState } from './confirm.service';
+export { ConfirmService, type ConfirmState, type ConfirmActionOptions } from './confirm.service';
 export { ToastService, type ToastAction, type ToastKind, type ToastPayload } from './toast.service';
 export {
   HTTP_ERROR_FALLBACK,
