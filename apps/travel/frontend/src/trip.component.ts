@@ -27,6 +27,13 @@ import {
 import { MapComponent, TravelPlace } from "./map.component";
 import { TransportEditorComponent } from "./transport-editor.component";
 import { showDay, showMoney, showRange } from "./display";
+import {
+  nightsWord,
+  ptoText,
+  showSubtitle,
+  transportWhen,
+} from "./trip-header.mjs";
+import { formatDateRange, formatDay, formatMoney, fromDollars } from "@vivek/browser";
 import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
 @Component({
   standalone: true,
@@ -49,6 +56,103 @@ export class TripComponent {
   readonly showDay = showDay;
   readonly showMoney = showMoney;
   readonly showRange = showRange;
+  readonly showSubtitle = showSubtitle;
+  readonly transportWhen = transportWhen;
+  readonly formatDay = formatDay;
+  readonly formatMoney = formatMoney;
+  // T2's toCents is not on main; fromDollars is main's existing equivalent
+  // (the same parser display.showMoney uses), so it is aliased, not copied.
+  readonly toCents = fromDollars;
+
+  whenText(trip: Trip): string {
+    return (
+      formatDateRange(trip.start_date, trip.end_date) +
+      " · " +
+      nightsWord(trip.nights) +
+      " · " +
+      ptoText(trip.pto_days_effective)
+    );
+  }
+
+  private clockText(time: string): string {
+    const [hours, minutes] = time.split(":").map(Number);
+    const date = new Date(2020, 0, 1, hours || 0, minutes || 0);
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  }
+
+  transportWhenText(transport: Transport): string {
+    const when = transportWhen(transport.depart_at, transport.arrive_at);
+    let text: string;
+    if (when.depart && when.arrive && when.sameDay) {
+      text =
+        formatDay(when.depart.date) +
+        " · " +
+        this.clockText(when.depart.time) +
+        " → " +
+        this.clockText(when.arrive.time);
+    } else if (when.depart && when.arrive) {
+      text =
+        formatDay(when.depart.date) +
+        " " +
+        this.clockText(when.depart.time) +
+        " → " +
+        formatDay(when.arrive.date) +
+        " " +
+        this.clockText(when.arrive.time);
+    } else if (when.depart) {
+      text =
+        formatDay(when.depart.date) +
+        " " +
+        this.clockText(when.depart.time) +
+        " → Arrival not set";
+    } else if (when.arrive) {
+      text =
+        "Departure not set → " +
+        formatDay(when.arrive.date) +
+        " " +
+        this.clockText(when.arrive.time);
+    } else {
+      text = "Departure not set → Arrival not set";
+    }
+    if (transport.depart_tz) {
+      text += " · " + transport.depart_tz;
+      if (transport.arrive_tz && transport.arrive_tz !== transport.depart_tz) {
+        text += " · " + transport.arrive_tz;
+      }
+    }
+    return text;
+  }
+
+  /** Formatted cost, or "" when the stored cost cannot be parsed (legacy). */
+  transportCostText(transport: Transport): string {
+    if (!transport.cost) return "";
+    const cents = fromDollars(transport.cost);
+    if (cents == null) return "";
+    try {
+      return formatMoney(cents, { currency: transport.currency || "USD" });
+    } catch {
+      return "";
+    }
+  }
+
+  parkingLine(parking: Trip["parking"][number]): string {
+    const parts = [parking.booked ? "Booked" : "Not booked"];
+    if (parking.address) parts.push(parking.address);
+    if (parking.cost) {
+      const cents = fromDollars(parking.cost);
+      if (cents != null) {
+        try {
+          parts.push(formatMoney(cents, { currency: parking.currency || "USD" }));
+        } catch {
+          // An unparseable currency leaves the cost off rather than raw.
+        }
+      }
+    }
+    return parts.join(" · ");
+  }
   private readonly session = inject(SESSION_CONTEXT);
   private readonly ownerId = this.session.currentUser?.id;
   private get ownsSession(): boolean {
