@@ -11,38 +11,53 @@
 
   <div class="charts-grid">
     <ui-card class="chart-wide">
-      <button type="button" class="section-toggle" (click)="toggleSection('cashflow')">
-        <span>Monthly cashflow</span>
-        <span>{{ sectionOpen.cashflow ? 'Hide' : 'Show' }}</span>
-      </button>
+      <div class="chart-head">
+        <button type="button" class="section-toggle" (click)="toggleSection('cashflow')">
+          <span>Monthly cashflow</span>
+          <span>{{ sectionOpen.cashflow ? 'Hide' : 'Show' }}</span>
+        </button>
+        @if (sectionOpen.cashflow && monthlyRows.length) {
+          <button type="button" class="text-link" [attr.aria-expanded]="tableOpen.cashflow" aria-controls="cashflow-table" (click)="toggleTable('cashflow')">
+            {{ tableOpen.cashflow ? 'Show as chart' : 'Show as table' }}
+          </button>
+        }
+      </div>
       @if (sectionOpen.cashflow && monthlyRows.length) {
-        <div class="chart-wrap tall" [class.chart-dim]="chartDimmed">
-          <canvas #incomeExpenseChart role="img" aria-label="Monthly cashflow chart. Select a month to open matching Activity."></canvas>
-        </div>
+        @if (tableOpen.cashflow) {
+          <div class="chart-fallback">
+            <table id="cashflow-table">
+              <caption>Monthly cashflow</caption>
+              <thead><tr><th scope="col">Month</th><th scope="col" class="num">Income</th><th scope="col" class="num">Spending</th><th scope="col" class="num">Net</th></tr></thead>
+              <tbody>
+                @for (row of monthlyRows; track row.month) {
+                  <tr>
+                    <th scope="row">{{ row.label }}</th>
+                    <td class="num"><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 0)" [attr.aria-label]="'Open ' + row.label + ' income in Activity'">{{ row.income | money }}</a></td>
+                    <td class="num"><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 1)" [attr.aria-label]="'Open ' + row.label + ' spending in Activity'">{{ row.expense | money }}</a></td>
+                    <td class="num"><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 2)" [attr.aria-label]="'Open ' + row.label + ' activity'">{{ money(row.net, 'always') }}</a></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="chart-legend" role="group" aria-label="Show or hide series">
+            @for (s of cashflowSeries; track s.key; let i = $index) {
+              <button type="button" class="chart-legend__item" [attr.aria-pressed]="!hiddenSeries[i]" (click)="toggleSeries(i)">
+                <span [class]="'chart-swatch chart-swatch--' + s.key" aria-hidden="true"></span>{{ s.label }}
+              </button>
+            }
+          </div>
+          <div class="chart-wrap tall" [class.chart-dim]="chartDimmed">
+            <canvas #incomeExpenseChart role="img" [attr.aria-label]="cashflowSummary"></canvas>
+          </div>
+        }
         <p class="chart-note">
           Income <strong class="money">{{ incomeTotal | money }}</strong>
           · Spending <strong class="money">{{ expenseTotal | money }}</strong>
           · Net <strong class="money">{{ netCashflow | money }}</strong>
           <span class="muted">Card activity and repeating pay and bills, counted once.</span>
         </p>
-        <details class="chart-data">
-          <summary>Data</summary>
-          <div class="chart-fallback">
-            <table aria-label="Monthly cashflow data table">
-              <thead><tr><th>Month</th><th>Income</th><th>Spending</th><th>Net</th></tr></thead>
-              <tbody>
-                @for (row of monthlyRows; track row.label) {
-                  <tr>
-                    <td>{{ row.label }}</td>
-                    <td><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 0)" [attr.aria-label]="'Open ' + row.label + ' income in Activity'">{{ row.income | money }}</a></td>
-                    <td><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 1)" [attr.aria-label]="'Open ' + row.label + ' spending in Activity'">{{ row.expense | money }}</a></td>
-                    <td [class.positive]="row.net >= 0"><a [routerLink]="['/finance/spending']" [queryParams]="monthlyRowQuery(row, 2)" [attr.aria-label]="'Open ' + row.label + ' activity'">{{ row.net >= 0 ? '+' : '−' }}{{ (row.net < 0 ? -row.net : row.net) | money }}</a></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </details>
       } @else if (sectionOpen.cashflow) {
         <ui-empty-state icon="transactions" message="Add pay or card activity to see cashflow over time." />
       }
@@ -54,9 +69,13 @@
         <span>{{ sectionOpen.category ? 'Hide' : 'Show' }}</span>
       </button>
       @if (sectionOpen.category && categoryRows.length) {
-        <div class="chart-wrap" [class.chart-dim]="chartDimmed">
-          <canvas #categoryChart role="img" aria-label="Spending by category chart. Select a category to open matching Activity; select Other to expand categories"></canvas>
-        </div>
+        @if (singleCategory; as only) {
+          <p class="chart-stat">{{ only.label }} · {{ formatShare(only.share) }} · {{ money(only.net) }}</p>
+        } @else {
+          <div class="chart-wrap" [class.chart-dim]="chartDimmed">
+            <canvas #categoryChart role="img" [attr.aria-label]="categorySummary"></canvas>
+          </div>
+        }
         <div class="chart-fallback">
           <app-category-spend-table [rows]="categoryTableRows" (expand)="toggleCategories()" />
         </div>
@@ -71,31 +90,45 @@
     </ui-card>
 
     <ui-card>
-      <button type="button" class="section-toggle" (click)="toggleSection('allocation')">
-        <span>Holdings mix</span>
-        <span>{{ sectionOpen.allocation ? 'Hide' : 'Show' }}</span>
-      </button>
+      <div class="chart-head">
+        <button type="button" class="section-toggle" (click)="toggleSection('allocation')">
+          <span>Holdings mix</span>
+          <span>{{ sectionOpen.allocation ? 'Hide' : 'Show' }}</span>
+        </button>
+        @if (sectionOpen.allocation && allocationRows.length && !singleHolding) {
+          <button type="button" class="text-link" [attr.aria-expanded]="tableOpen.allocation" aria-controls="allocation-table" (click)="toggleTable('allocation')">
+            {{ tableOpen.allocation ? 'Show as chart' : 'Show as table' }}
+          </button>
+        }
+      </div>
       @if (sectionOpen.allocation && allocationRows.length) {
-        <div class="chart-wrap" [class.chart-dim]="chartDimmed">
-          <canvas #portfolioChart role="img" aria-label="Portfolio allocation by symbol"></canvas>
-        </div>
-        <div class="chart-fallback">
-          <table aria-label="Portfolio allocation data table">
-            <thead><tr><th>Symbol</th><th>Value</th><th>%</th></tr></thead>
-            <tbody>
-              @for (row of allocationRows; track row.label) {
-                <tr>
-                  <td>
-                    {{ row.label }}
-                    @if (row.companyName) { <small class="chart-company-name">{{ row.companyName }}</small> }
-                  </td>
-                  <td>{{ row.value | money }}</td>
-                  <td>{{ formatShare(row.pct) }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        @if (singleHolding; as only) {
+          <p class="chart-stat">{{ only.label }} · {{ formatShare(only.pct) }} · {{ money(only.value) }}</p>
+        } @else if (!tableOpen.allocation) {
+          <div class="chart-wrap" [class.chart-dim]="chartDimmed">
+            <canvas #portfolioChart role="img" [attr.aria-label]="allocationSummary"></canvas>
+          </div>
+        }
+        @if (tableOpen.allocation) {
+          <div class="chart-fallback">
+            <table id="allocation-table">
+              <caption>Holdings mix</caption>
+              <thead><tr><th scope="col">Symbol</th><th scope="col">Value</th><th scope="col">Share</th></tr></thead>
+              <tbody>
+                @for (row of allocationRows; track row.label) {
+                  <tr>
+                    <th scope="row">
+                      {{ row.label }}
+                      @if (row.companyName) { <small class="chart-company-name">{{ row.companyName }}</small> }
+                    </th>
+                    <td>{{ row.value | money }}</td>
+                    <td>{{ formatShare(row.pct) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       } @else if (sectionOpen.allocation) {
         <ui-empty-state icon="portfolio" message="Add holdings to see allocation." />
       }

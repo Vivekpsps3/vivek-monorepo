@@ -34,7 +34,7 @@ export {
   chartCartesianScales,
 } from './chart-theme';
 export { UiConfirmDialogComponent } from './ui-confirm-dialog/ui-confirm-dialog.component';
-export { ConfirmService, type ConfirmState } from './confirm.service';
+export { ConfirmService, type ConfirmState, type ConfirmActionOptions } from './confirm.service';
 export { ToastService, type ToastAction, type ToastKind, type ToastPayload } from './toast.service';
 export {
   HTTP_ERROR_FALLBACK,
@@ -67,6 +67,10 @@ export { authGuard, adminGuard } from './auth.guard';
 export { authNavigation, safeNextPathFrom, safeNextPath, authPath, loginHref, afterAuthUrl, continueAfterAuth } from './after-auth';
 
 export { UserMenuContent } from './user-menu-content';
+export { UiMenuComponent } from './ui-menu/ui-menu.component';
+export { UiMenuItemDirective } from './ui-menu/ui-menu-item.directive';
+export { UiSegmentedComponent, type UiSegmentedOption } from './ui-segmented/ui-segmented.component';
+export { FinanceTripSpendRegistry, type TripSpendLookup, type TripSpendTotal } from './finance-trip-spend';
 
 export {
   CHANNEL_CAP,

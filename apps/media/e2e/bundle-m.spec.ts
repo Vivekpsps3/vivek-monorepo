@@ -1,20 +1,25 @@
 import { chooseColorTheme, openUserMenu } from '../../../tests/e2e/user-menu.mjs';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { addItem, openItem, resetMedia, savedItem } from './media-test';
+import { addItem, closeFilters, openFilters, openItem, resetMedia, savedItem } from './media-test';
 
 test.beforeEach(async ({ request }) => resetMedia(request));
 
 test('manual add requires a title and a valid year without losing the form', async ({ page }) => {
   await page.goto('/media/add');
-  await expect(page.getByRole('button', { name: 'Add to library' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Add to library' }).click();
+  await expect(page.getByText('Enter a title.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toBeFocused();
+  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Synthetic year');
   await page.getByText('Optional details', { exact: true }).click();
   await page.getByLabel('Release year').fill('99');
-  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Synthetic year');
-  await expect(page.getByRole('button', { name: 'Add to library' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Add to library' }).click();
+  await expect(page.getByText('Enter a year between 1000 and 3000.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Release year')).toBeFocused();
   await expect(page).toHaveURL(/\/media\/add$/);
   await page.getByLabel('Release year').fill('2026');
-  await expect(page.getByRole('button', { name: 'Add to library' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Add to library' }).click();
+  await expect(page).toHaveURL(/\/media\/item\//);
 });
 
 test('search distinguishes unavailable, unconfigured and available source coverage', async ({ page }) => {
@@ -54,7 +59,9 @@ test('library pages and favorites filter count only matching memberships and sur
   await expect(page.locator('main h1')).toHaveText(name);
   await page.goBack();
   await expect(page.locator('media-card')).toHaveCount(5);
-  await page.getByRole('checkbox', { name: 'Favorites only' }).check();
+  await openFilters(page);
+  await page.getByRole('dialog').getByRole('checkbox', { name: 'Favorites only' }).check();
+  await closeFilters(page);
   await expect(page.getByText('13 saved items', { exact: true })).toBeVisible();
   await expect(page.locator('media-card')).toHaveCount(13);
   await expect(page).toHaveURL(/fav=1/);

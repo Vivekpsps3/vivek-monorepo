@@ -4,18 +4,18 @@
     [title]="typeFilter === 'income' ? 'Income' : typeFilter === 'expense' ? 'Spend' : 'Spending'">
 
     <div uiPageActions class="header-actions">
-      <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
       <ui-button variant="primary" (clicked)="openAddModal()">Add transaction</ui-button>
+      <ui-button variant="secondary" (clicked)="openImportModal()">Import</ui-button>
     </div>
   </ui-page-header>
 
-  <section class="month-hero">
-    <p class="section-eyebrow">{{ summaryMonth ? 'This month' : 'Matching activity' }}</p>
+  <section class="month-hero" aria-labelledby="period-eyebrow">
+    <p class="section-eyebrow" id="period-eyebrow">{{ periodEyebrow }}</p>
     <div class="month-summary-row">
       <div class="month-picker-tools">
         <label class="month-picker">
           <span class="month-picker__caption">Month</span>
-          <input
+          <input name="summaryMonth"
             type="month"
             [(ngModel)]="summaryMonth"
             (ngModelChange)="onSummaryMonthChange()"
@@ -25,31 +25,35 @@
           <ui-button variant="ghost" size="sm" (clicked)="clearMonthFilter()">All months</ui-button>
         }
       </div>
-      <div class="month-totals">
-        @if (typeFilter !== 'income') {
-          <div class="month-total month-total--expense">
-            <span class="month-total__label">Spend · {{ purchaseCount | plural:'purchase' }}</span>
-            <strong class="money">{{ monthExpenseTotal | money }}</strong>
-          </div>
-        }
-        @if (typeFilter !== 'expense') {
-          <div class="month-total month-total--income">
-            <span class="month-total__label">
-              {{ typeFilter === 'income' ? 'Recorded income' : 'Income' }} · {{ incomeCount | plural:'deposit':'deposits' }}
-            </span>
-            <strong class="money">{{ monthIncomeTotal | money }}</strong>
-          </div>
-        }
-        @if (excludedNote()) {
-          <p class="month-total__note">{{ excludedNote() }}</p>
-        }
-        @if (typeFilter === 'all') {
-          <div class="month-total month-total--net">
-            <span class="month-total__label">Net</span>
-            <strong class="money">{{ monthIncomeTotal - monthExpenseTotal | money }}</strong>
-          </div>
-        }
-      </div>
+      @if (showPeriodFigures) {
+        <div class="month-totals">
+          @if (typeFilter !== 'income') {
+            <div class="month-total month-total--expense">
+              <span class="month-total__label">Spent</span>
+              <strong class="money">{{ monthExpenseTotal | money }}</strong>
+              <span class="month-total__count">{{ spentCountLabel }}</span>
+            </div>
+          }
+          @if (typeFilter !== 'expense') {
+            <div class="month-total month-total--income">
+              <span class="month-total__label">{{ typeFilter === 'income' ? 'Recorded income' : 'Income' }}</span>
+              <strong class="money">{{ monthIncomeTotal | money }}</strong>
+              <span class="month-total__count">{{ incomeCountLabel }}</span>
+            </div>
+          }
+          @if (excludedNote()) {
+            <p class="month-total__note">{{ excludedNote() }}</p>
+          }
+          @if (typeFilter === 'all') {
+            <div class="month-total month-total--net">
+              <span class="month-total__label">Net</span>
+              <strong class="money">{{ monthIncomeTotal - monthExpenseTotal | money:'standard':'always' }}</strong>
+            </div>
+          }
+        </div>
+      } @else if (transactions.length > 0 && summaryMonth) {
+        <p class="period-empty">No activity in {{ periodMonthName }}.</p>
+      }
     </div>
   </section>
 
@@ -102,20 +106,25 @@
       } @else {
         <p class="work-income-note">Select a month or a from and through date.</p>
       }
-      <a class="work-income-owner-link" [routerLink]="['/finance/recurring']" [queryParams]="{ t: 'pay' }">Manage jobs and pay in Recurring</a>
+      <a class="work-income-owner-link" [routerLink]="['/finance/recurring']">Manage jobs and pay in Recurring</a>
     </ui-card>
   }
 
   <ui-card [title]="'History'">
     <div class="table-actions table-actions--toolbar">
-      <input
+      <input name="searchTerm"
         type="search"
         [(ngModel)]="searchTerm"
         (input)="onSearchChange()"
-        placeholder="Search category or description..."
+        placeholder="Search descriptions"
         class="search-input"
         aria-label="Search transactions"
       />
+      <button type="button" class="filter-toggle" #filterToggle [attr.aria-expanded]="filtersOpen" aria-controls="activity-filters" (click)="toggleFilters()">{{ panelFilterCount ? 'Filters (' + panelFilterCount + ')' : 'Filters' }}</button>
+      <ui-button variant="ghost" size="sm" (clicked)="exportToCsv()">Export CSV</ui-button>
+    </div>
+
+    <div class="filter-panel" id="activity-filters" role="group" aria-label="Filters" [hidden]="!filtersOpen" (keydown.escape)="closeFiltersPanel()">
       <ui-select
         selectId="tx-type-filter"
         label="Type"
@@ -144,6 +153,8 @@
         [options]="accountSelectOptions"
         (valueChange)="accountFilter = $event; onAccountFilterChange()"
       />
+      <label>From <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
+      <label>Through <input type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
       <ui-select
         selectId="tx-sort"
         label="Sort"
@@ -151,16 +162,30 @@
         [options]="sortSelectOptions"
         (valueChange)="onSortPresetChange($event)"
       />
-      <ui-button variant="secondary" size="sm" (clicked)="exportToCsv()">Export CSV</ui-button>
+      <div class="filter-panel__footer">
+        @if (hasActiveFilters) {
+          <ui-button variant="ghost" size="sm" (clicked)="clearFilters()">Clear filters</ui-button>
+        }
+      </div>
     </div>
 
     <div class="activity-date-filters" aria-label="Activity date range">
-      <label>From <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
-      <label>Through <input type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
+      <label>From <input name="fromDate" type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
+      <label>Through <input name="throughDate" type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
       @if (hasActiveFilters) {
         <ui-button variant="ghost" size="sm" (clicked)="clearFilters()">Clear filters</ui-button>
       }
     </div>
+
+    @if (filterChips.length) {
+      <ul class="filter-chips" aria-label="Active filters">
+        @for (chip of filterChips; track chip.key) {
+          <li><button type="button" class="filter-chip" [attr.aria-label]="'Remove filter ' + chip.label" (click)="removeChip(chip.key)">
+            <span>{{ chip.label }}</span>
+          </button></li>
+        }
+      </ul>
+    }
     @if (listError) {
       <div class="activity-load-error" role="alert">
         <span>{{ listError }}</span>
@@ -173,7 +198,7 @@
       <div class="category-merge-grid">
         <label class="form-group">
           <span>Rename</span>
-          <input
+          <input name="categoryMergeFrom"
             type="text"
             list="category-options"
             [(ngModel)]="categoryMergeFrom"
@@ -182,7 +207,7 @@
         </label>
         <label class="form-group">
           <span>To</span>
-          <input
+          <input name="categoryMergeTo"
             type="text"
             list="category-options"
             [(ngModel)]="categoryMergeTo"
@@ -214,7 +239,7 @@
           <div class="category-bulk-rename__row">
             <label class="form-group">
               <span>From</span>
-              <input
+              <input name="fromCategory"
                 type="text"
                 list="category-options"
                 [(ngModel)]="row.fromCategory"
@@ -223,7 +248,7 @@
             </label>
             <label class="form-group">
               <span>To</span>
-              <input
+              <input name="toCategory"
                 type="text"
                 list="category-options"
                 [(ngModel)]="row.toCategory"
@@ -254,8 +279,8 @@
           </div>
         </div>
         <div class="category-bulk-rename__row">
-          <label class="form-group"><span>Merchant</span><input type="text" [(ngModel)]="bulkMerchant" list="merchant-options" placeholder="Merchant name" /></label>
-          <label class="form-group"><span>Category</span><input type="text" [(ngModel)]="bulkMerchantCategory" list="category-options" placeholder="Category" /></label>
+          <label class="form-group"><span>Merchant</span><input name="bulkMerchant" type="text" [(ngModel)]="bulkMerchant" list="merchant-options" placeholder="Merchant name" /></label>
+          <label class="form-group"><span>Category</span><input name="bulkMerchantCategory" type="text" [(ngModel)]="bulkMerchantCategory" list="category-options" placeholder="Category" /></label>
           <ui-button variant="secondary" size="sm" [disabled]="categoryMergeSaving" (clicked)="bulkCategorizeMerchant()">Apply</ui-button>
         </div>
       </div>
@@ -280,10 +305,7 @@
 
     @if (filteredTransactions.length > 0) {
       <p class="list-hint" role="status">
-        {{ filteredTransactions.length }} shown of {{ matchingTransactions.length }} matching
-        @if (summaryMonth) { for {{ summaryMonthLabel }} }
-        @if (categoryFilter) { in {{ categoryFilter }} }
-        @if (hasMore) { · load more for older history }
+        {{ filteredTransactions.length }} shown of {{ matchingTransactions.length }}@if (hasNarrowingFilters) { matching }
       </p>
     }
 
@@ -294,30 +316,28 @@
             <th scope="col" [attr.aria-sort]="sortColumn === 'date' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'" class="sortable">
               <button type="button" (click)="toggleSort('date')">Date {{ sortIcon('date') }}</button>
             </th>
-            <th scope="col">Type</th>
-            <th scope="col">Account</th>
-            <th scope="col" [attr.aria-sort]="sortColumn === 'category' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'" class="sortable">
-              <button type="button" (click)="toggleSort('category')">Category {{ sortIcon('category') }}</button>
-            </th>
-            <th scope="col">Merchant</th>
-            <th scope="col">Source description</th>
+            <th scope="col">Description</th>
             <th scope="col" [attr.aria-sort]="sortColumn === 'amount' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'" class="sortable amount-col">
               <button type="button" (click)="toggleSort('amount')">Amount {{ sortIcon('amount') }}</button>
             </th>
-            <th scope="col">Actions</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let tx of filteredTransactions; trackBy: trackByTxId">
             <td>{{ tx.date | appDate }}</td>
             <td>
-              <ui-badge [variant]="transactionNeedsFixing(tx) ? 'warning' : transactionEffects(tx).income > 0 ? 'success' : transactionEffects(tx).spending < 0 ? 'warning' : transactionEffects(tx).spending > 0 ? 'danger' : 'default'">{{ transactionNeedsFixing(tx) ? 'Needs fixing' : transactionLabel(tx) }}</ui-badge>
-              <span class="import-tag" *ngIf="tx.source === 'import'">import</span>
+              <div class="tx-desc">
+                <span class="tx-desc__name">{{ rowName(tx) }}</span>
+                <span class="tx-desc__meta">{{ rowDetail(tx) }}</span>
+                @if (transactionBadge(tx) || tx.source === 'import') {
+                  <span class="tx-desc__badges">
+                    @if (transactionBadge(tx); as badge) { <ui-badge [variant]="badge.variant">{{ badge.label }}</ui-badge> }
+                    @if (tx.source === 'import') { <ui-badge variant="default">Imported</ui-badge> }
+                  </span>
+                }
+              </div>
             </td>
-            <td class="account-cell">{{ tx.account_display || '—' }}</td>
-            <td>{{ tx.category }}</td>
-            <td>{{ tx.merchant || '—' }}</td>
-            <td class="desc">{{ tx.description || '—' }}</td>
             <td class="amount-col" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
               {{ transactionAmountPrefix(tx) }}{{ tx.amount | money }}
             </td>
@@ -335,11 +355,14 @@
         <details class="tx-mobile-row">
           <summary>
             <span class="tx-mobile-main">
-              <strong>{{ tx.merchant || tx.category || 'Transaction' }}</strong>
-              <small>{{ tx.date | appDate }} · {{ tx.category }}</small>
-              @if (transactionNeedsFixing(tx)) {
-                <ui-badge variant="warning">Needs fixing</ui-badge>
-              }
+              <strong>{{ rowName(tx) }}</strong>
+              <small>{{ tx.date | appDate }} · {{ rowDetail(tx) }}</small>
+              @if (transactionBadge(tx) || tx.source === 'import') {
+                <span class="tx-desc__badges">
+                  @if (transactionBadge(tx); as badge) { <ui-badge [variant]="badge.variant">{{ badge.label }}</ui-badge> }
+                  @if (tx.source === 'import') { <ui-badge variant="default">Imported</ui-badge> }
+                </span>
+                }
             </span>
             <span class="tx-mobile-amount" [class.positive]="transactionAmountClass(tx) === 'positive'" [class.negative]="transactionAmountClass(tx) === 'negative'">
               {{ transactionAmountPrefix(tx) }}{{ tx.amount | money }}
@@ -348,7 +371,6 @@
           <div class="tx-mobile-details">
             <p><strong>Source description</strong><span>{{ tx.description || '—' }}</span></p>
             <p><strong>Account</strong><span>{{ tx.account_display || '—' }}</span></p>
-            <p><strong>Kind</strong><span>{{ transactionNeedsFixing(tx) ? 'Needs fixing' : transactionLabel(tx) }}</span></p>
             @if (tx.kind === 'ambiguous_credit') { <p><strong>Classification</strong><span>Choose a type to include this credit in spending or income totals.</span></p> }
             <div class="actions actions--row">
               <ui-button variant="ghost" size="sm" (clicked)="editTransaction(tx)">Edit</ui-button>
@@ -362,26 +384,24 @@
     @if (hasMore && filteredTransactions.length > 0) {
       <div class="load-more-row">
         <ui-button variant="secondary" size="sm" (clicked)="loadMoreTransactions()" [disabled]="loadingMore">
-          {{ loadingMore ? 'Loading…' : 'Load more' }}
+          {{ loadingMore ? 'Loading…' : 'Show ' + pageSize + ' more' }}
         </ui-button>
       </div>
     }
 
     <ng-template #empty>
       @if (!loading && !listLoading && !listError) {
-        @if (hasActiveFilters) {
-          <ui-empty-state [title]="'No activity matches these filters'" message="Try clearing one filter or changing the date range.">
+        @if (hasActiveFilters && allTransactions.length) {
+          <ui-empty-state message="Nothing matches these filters">
             <div class="empty-actions">
               <ui-button variant="secondary" (clicked)="clearFilters()">Clear filters</ui-button>
             </div>
           </ui-empty-state>
         } @else {
-        <ui-empty-state [title]="'No transactions yet'">
-          <ui-icon name="transactions" size="lg" style="margin-bottom: 8px; opacity: 0.6;" />
-          <p class="empty-import-copy">Start with a bank CSV if you want the fastest and most accurate history.</p>
+        <ui-empty-state [title]="'No transactions yet'" message="Import a card statement or add one by hand.">
           <div class="empty-actions">
-            <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
-            <ui-button variant="primary" (clicked)="openAddModal()">Add income or expense</ui-button>
+            <ui-button variant="primary" (clicked)="openImportModal()">Import</ui-button>
+            <ui-button variant="secondary" (clicked)="openAddModal()">Add transaction</ui-button>
           </div>
         </ui-empty-state>
         }
@@ -474,7 +494,7 @@
 
               <label class="form-group import-account-picker">
                 <span>Account identity for this file</span>
-                <select [value]="entry.bank_account_id || ''" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onImportAccountChange(entry, $any($event.target).value)">
+                <select name="bank-account-id" [value]="entry.bank_account_id || ''" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onImportAccountChange(entry, $any($event.target).value)">
                   <option value="">Enter a new account identity…</option>
                   @for (account of importWorkflow.accountOptionsFor(entry); track account.id) {
                     <option [value]="account.id">{{ account.display_name }}</option>
@@ -586,7 +606,7 @@
                     <tr [class.duplicate-row]="row.status === 'duplicate'" [class.classification-row]="row.kind === 'ambiguous_credit'" (click)="importWorkflow.toggleImportRow(row)">
                       <td>
                         @if (row.status !== 'duplicate') {
-                          <input type="checkbox" [checked]="importWorkflow.isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importWorkflow.importCommitting || row.kind === 'ambiguous_credit'" (change)="importWorkflow.toggleImportRow(row)" />
+                          <input name="importworkflow" type="checkbox" [checked]="importWorkflow.isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importWorkflow.importCommitting || row.kind === 'ambiguous_credit'" (change)="importWorkflow.toggleImportRow(row)" />
                         }
                       </td>
                       <td>{{ row.date | appDate }}</td>
@@ -604,7 +624,7 @@
                         @if (row.status === 'review') {
                           <label class="form-group import-classification">
                             <span>Classify credit</span>
-                            <select [value]="row.kind" (click)="$event.stopPropagation()" (change)="$event.stopPropagation(); importWorkflow.setImportKind(row, $any($event.target).value)">
+                            <select name="kind" [value]="row.kind" (click)="$event.stopPropagation()" (change)="$event.stopPropagation(); importWorkflow.setImportKind(row, $any($event.target).value)">
                               <option value="ambiguous_credit">Choose…</option>
                               <option value="purchase">Purchase</option>
                               <option value="refund">Refund</option>

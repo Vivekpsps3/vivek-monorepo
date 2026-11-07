@@ -7,7 +7,7 @@ import { CategorySpendRow } from '../utils/category-spend';
 
 export interface CategorySpendTableRow extends CategorySpendRow {
   /** Drilldown query params; null renders the expand-categories button. */
-  query: { [key: string]: string } | null;
+  query: { [key: string]: string | null } | null;
   synthetic?: boolean;
 }
 

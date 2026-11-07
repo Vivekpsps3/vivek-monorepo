@@ -8,6 +8,7 @@ apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.sp
 apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.ts	@angular-eslint/prefer-inject	4
 apps/finance/frontend/src/app/calendar/calendar.component.spec.ts	@typescript-eslint/no-explicit-any	6
 apps/finance/frontend/src/app/calendar/calendar.component.ts	@angular-eslint/prefer-inject	2
+apps/finance/frontend/src/app/charts/charts.component.html	@angular-eslint/template/eqeqeq	1
 apps/finance/frontend/src/app/charts/charts.component.spec.ts	@typescript-eslint/no-explicit-any	20
 apps/finance/frontend/src/app/charts/charts.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/crypto/client-finance.spec.ts	@typescript-eslint/no-explicit-any	1
@@ -34,7 +35,7 @@ apps/finance/frontend/src/app/planning/planning-quick-tools.component.html	@angu
 apps/finance/frontend/src/app/planning/planning.component.html	@angular-eslint/template/eqeqeq	1
 apps/finance/frontend/src/app/planning/planning.component.spec.ts	@typescript-eslint/no-explicit-any	12
 apps/finance/frontend/src/app/planning/planning.component.ts	@angular-eslint/prefer-inject	5
-apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/eqeqeq	12
+apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/eqeqeq	9
 apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/prefer-control-flow	5
 apps/finance/frontend/src/app/portfolio/portfolio.component.spec.ts	@typescript-eslint/no-explicit-any	5
 apps/finance/frontend/src/app/portfolio/portfolio.component.ts	@angular-eslint/prefer-inject	5
@@ -55,7 +56,7 @@ apps/finance/frontend/src/app/subscriptions/subscriptions.component.ts	@angular-
 apps/finance/frontend/src/app/transactions/transactions-editor-workflow.ts	@angular-eslint/prefer-inject	5
 apps/finance/frontend/src/app/transactions/transactions-import-workflow.ts	@angular-eslint/prefer-inject	6
 apps/finance/frontend/src/app/transactions/transactions-import-workflow.ts	@typescript-eslint/no-explicit-any	4
-apps/finance/frontend/src/app/transactions/transactions.component.html	@angular-eslint/template/prefer-control-flow	5
+apps/finance/frontend/src/app/transactions/transactions.component.html	@angular-eslint/template/prefer-control-flow	4
 apps/finance/frontend/src/app/transactions/transactions.component.spec.ts	@typescript-eslint/no-explicit-any	19
 apps/finance/frontend/src/app/transactions/transactions.component.ts	@angular-eslint/prefer-inject	8
 apps/finance/frontend/src/app/transactions/transactions.component.ts	@typescript-eslint/no-explicit-any	1

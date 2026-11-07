@@ -151,11 +151,11 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       .reduce((sum, row) => sum + row.amount, 0) || 0;
   }
 
-  transactionActivityQuery(transactionId: number): Record<string, string | number> {
+  transactionActivityQuery(transactionId: number): Record<string, string | number | null> {
     const tx = this.transactions.find(row => row.id === transactionId);
-    if (!tx) return { t: 'activity', v: 'spending', month: this.monthKey };
+    if (!tx) return { t: null, v: 'spending', month: this.monthKey };
     return {
-      t: 'activity',
+      t: null,
       v: 'all',
       month: this.monthKey,
       date: tx.date,

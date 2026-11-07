@@ -20,7 +20,8 @@ import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { monthlyCashflowSeries } from '../crypto/client-finance';
 import { monthDelta, type MonthDelta } from '../utils/category-spend';
-import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '@vivek/ui';
+import { FinanceGuideService } from '../core/finance-guide.service';
+import { UiButtonComponent, UiCardComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
   actualQuoteDate,
   hasUnvaluedPositions,
@@ -44,6 +45,7 @@ import { PluralPipe } from '../shared/pipes/plural.pipe';
     UiButtonComponent,
     UiCardComponent,
     UiIconComponent,
+    UiPageHeaderComponent,
     UiSkeletonComponent,
   ],
   templateUrl: './dashboard.component.html',
@@ -66,6 +68,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   priceNoticeVisible = false;
   /** True when the user turned automatic price checks off. */
   autoPricesOff = false;
+
+  protected readonly guide = inject(FinanceGuideService);
 
   private destroy$ = new Subject<void>();
   private readonly marketRefresh = inject(MarketRefreshCoordinatorService, { optional: true });

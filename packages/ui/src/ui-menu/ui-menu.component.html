@@ -1,0 +1,36 @@
+<button
+  #trigger
+  type="button"
+  [id]="triggerId"
+  [class]="triggerClasses()"
+  [attr.aria-label]="iconOnly() ? label() : null"
+  aria-haspopup="menu"
+  [attr.aria-expanded]="open()"
+  [attr.aria-controls]="panelId"
+  (click)="onTriggerClick()"
+  (keydown)="onTriggerKeydown($event)"
+>
+  @if (iconOnly()) {
+    <ui-icon name="more" />
+  } @else {
+    @if (icon(); as iconName) {
+      <ui-icon [name]="iconName" size="sm" />
+    }
+    <span>{{ label() }}</span>
+  }
+</button>
+<div
+  #panel
+  class="ui-menu__panel"
+  [class.ui-menu__panel--up]="openUp()"
+  [class.ui-menu__panel--end]="align() === 'end'"
+  role="menu"
+  [id]="panelId"
+  [attr.aria-labelledby]="triggerId"
+  [hidden]="!open()"
+  tabindex="-1"
+  (click)="onPanelClick($event)"
+  (keydown)="onPanelKeydown($event)"
+>
+  <ng-content />
+</div>

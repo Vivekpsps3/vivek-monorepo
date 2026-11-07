@@ -7,10 +7,11 @@ import { VaultService } from './vault.service';
 
 /**
  * Requires an authenticated session and an unlocked vault.
- * - no vault -> /vault/setup
- * - vault locked -> /vault/unlock
+ * - no vault -> /vault/setup?next=<attempted url>
+ * - vault locked -> /vault/unlock?next=<attempted url>
+ * The unlock/setup screens return the user to `next` afterwards (F5).
  */
-export const vaultGuard: CanActivateFn = () => {
+export const vaultGuard: CanActivateFn = (_route, state) => {
   const auth = inject(SESSION_CONTEXT);
   const vault = inject(VaultService);
   const router = inject(Router);
@@ -23,8 +24,8 @@ export const vaultGuard: CanActivateFn = () => {
       }
       return from(vault.refreshStatus()).pipe(
         map(status => {
-          if (!status.exists) return router.createUrlTree(['/finance/vault/setup']);
-          if (!vault.isUnlocked) return router.createUrlTree(['/finance/vault/unlock']);
+          if (!status.exists) return router.createUrlTree(['/finance/vault/setup'], { queryParams: { next: state.url } });
+          if (!vault.isUnlocked) return router.createUrlTree(['/finance/vault/unlock'], { queryParams: { next: state.url } });
           return true;
         })
       );
