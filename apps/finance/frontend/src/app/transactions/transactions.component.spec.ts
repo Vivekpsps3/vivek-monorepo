@@ -8,7 +8,7 @@ import { TransactionsImportWorkflow } from './transactions-import-workflow';
 import { FinanceService } from '../services/finance.service';
 import { ToastService } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
-import { BankImportFilePreview, ImportReceipt } from '../models/transaction.model';
+import { BankAccountRecord, BankImportFilePreview, ImportReceipt, Transaction } from '../models/transaction.model';
 import { buildBankImportPreview, buildBankImportPreviews, listClientBankImports } from '../utils/bank-import.util';
 
 describe('Transactions multi-file import UI', () => {
@@ -63,18 +63,6 @@ describe('Transactions multi-file import UI', () => {
 
   const button = (name: string): HTMLButtonElement => Array.from(fixture.nativeElement.querySelectorAll('button')).find((node: any) => node.textContent.trim() === name) as HTMLButtonElement;
 
-  // The import-context refresh is debounce-driven (two 60ms debounce stages
-  // in TransactionsImportWorkflow), so a fixed sleep races it under load:
-  // any delay in the first stage pushes completion past the sleep. Wait for
-  // the refresh outcome itself instead of a wall-clock guess.
-  async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-    const deadline = Date.now() + 10_000;
-    while (!condition()) {
-      if (Date.now() > deadline) throw new Error(`Timed out waiting for ${description}`);
-      await new Promise(resolve => setTimeout(resolve, 5));
-    }
-  }
-
   it('refreshes account and receipt context in the open import wizard without replacing its draft', async () => {
     let accounts: any[] = [{ id: 1, account_key: 'account-a', display_name: 'Old card label', confirmed: true, bank_slug: 'chase' }];
     let receipts: any[] = [];
@@ -84,15 +72,12 @@ describe('Transactions multi-file import UI', () => {
     component.importFiles = [draft];
     component.importStep = 'preview';
     component.importError = 'Keep this draft message';
-    await waitUntil(() => component.bankAccounts[0]?.display_name === 'Old card label', 'the initial account load');
+    await new Promise(resolve => setTimeout(resolve, 150));
 
     accounts = [{ ...accounts[0], display_name: 'Renamed card' }];
     receipts = [{ id: 9, status: 'withdrawn', filenames: ['statement.csv'], unresolved: [], account_displays: ['Renamed card'] }];
     dataChanges$.next({ collections: ['bank_accounts', 'import_batches'], source: 'remote' });
-    await waitUntil(
-      () => component.bankAccounts[0]?.display_name === 'Renamed card' && component.importReceipts.some(receipt => receipt.id === 9),
-      'the remote refresh to land',
-    );
+    await new Promise(resolve => setTimeout(resolve, 150));
     fixture.detectChanges();
 
     expect(component.showImportModal).toBeTrue();
@@ -108,7 +93,7 @@ describe('Transactions multi-file import UI', () => {
     finance.getBankAccounts.and.returnValue(of(accounts as any));
     routeQuery.next(convertToParamMap({ account: 'card-a' }));
     dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
-    await waitUntil(() => component.bankAccounts.some(account => account.account_key === 'card-a'), 'the account options to load');
+    await new Promise(resolve => setTimeout(resolve, 160));
     fixture.detectChanges();
 
     const accountSelect: HTMLSelectElement = fixture.nativeElement.querySelector('#tx-account-filter');
@@ -586,5 +571,186 @@ describe('Transactions delete and undo errors', () => {
     retry();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(finance.addTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
+  });
+});
+
+describe('Activity layout (F12)', () => {
+  let fixture: ComponentFixture<TransactionsComponent>;
+  let component: TransactionsComponent;
+  let finance: jasmine.SpyObj<FinanceService>;
+  let routeQuery: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
+  let dataChanges$: Subject<{ collections: string[]; source: string }>;
+
+  const tx = (overrides: Record<string, unknown> = {}): Transaction => ({
+    id: 1, date: '2026-10-05', type: 'expense', kind: 'purchase', category: 'Food and Drink',
+    amount: 10, description: 'Corner Cafe', merchant: 'Corner Cafe', account_display: 'Daily card',
+    ...overrides,
+  } as unknown as Transaction);
+
+  beforeEach(async () => {
+    dataChanges$ = new Subject<{ collections: string[]; source: string }>();
+    finance = jasmine.createSpyObj('FinanceService', ['getTransactions', 'getAllTransactions', 'getJobIncomes', 'getImportReceipts', 'getBankAccounts', 'getImportBanks'], { isLoading$: of(false), transactions$: of([]), jobIncomes$: of([]), dataChanges$ });
+    finance.getTransactions.and.returnValue(of([]));
+    finance.getAllTransactions.and.returnValue(of([]));
+    finance.getJobIncomes.and.returnValue(of([]));
+    finance.getImportReceipts.and.returnValue(of([]));
+    finance.getBankAccounts.and.returnValue(of([]));
+    finance.getImportBanks.and.returnValue(of([]));
+    routeQuery = new BehaviorSubject(convertToParamMap({}));
+    await TestBed.configureTestingModule({
+      imports: [TransactionsComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        { provide: ConfirmService, useValue: {} },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) }, queryParamMap: routeQuery.asObservable() } },
+        { provide: Router, useValue: { events: new Subject(), navigate: () => Promise.resolve(true), createUrlTree: () => ({}), serializeUrl: () => '/finance/spending?t=activity' } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(TransactionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  const host = (): HTMLElement => fixture.nativeElement;
+
+  function seed(rows: Transaction[], month = '2026-10') {
+    component.allTransactions = rows;
+    component.transactions = rows;
+    component.summaryMonth = month;
+    component.applyFilterAndSort();
+    fixture.detectChanges();
+  }
+
+  it('header shows Add transaction then Import', () => {
+    const buttons = Array.from(host().querySelectorAll<HTMLElement>('.header-actions button'))
+      .map(node => node.textContent.trim());
+    expect(buttons).toEqual(['Add transaction', 'Import']);
+  });
+
+  it('eyebrow: month, All time, filtered', () => {
+    component.summaryMonth = '2026-10';
+    expect(component.periodEyebrow).toBe('October 2026');
+    component.summaryMonth = '';
+    expect(component.periodEyebrow).toBe('All time');
+    component.summaryMonth = '2026-10';
+    component.categoryFilter = 'Food';
+    expect(component.periodEyebrow).toBe('October 2026 · filtered');
+    component.categoryFilter = '';
+    expect(component.periodEyebrow).toBe('October 2026');
+  });
+
+  it('spent count label', () => {
+    component.purchaseCount = 2; component.refundCount = 1;
+    expect(component.spentCountLabel).toBe('2 purchases, 1 refund');
+    component.purchaseCount = 1; component.refundCount = 0;
+    expect(component.spentCountLabel).toBe('1 purchase');
+    component.purchaseCount = 0;
+    expect(component.spentCountLabel).toBe('No purchases');
+    component.refundCount = 2;
+    expect(component.spentCountLabel).toBe('2 refunds');
+  });
+
+  it('income count label', () => {
+    component.incomeCount = 1;
+    expect(component.incomeCountLabel).toBe('1 deposit');
+    component.incomeCount = 0;
+    expect(component.incomeCountLabel).toBe('No income');
+  });
+
+  it('no rows in month with data elsewhere → No activity in October. and no month-totals', () => {
+    seed([tx({ date: '2026-07-04', category: 'Travel', amount: 120 })]);
+    const empty = fixture.nativeElement.querySelector('.period-empty');
+    expect(empty?.textContent.trim()).toBe('No activity in October.');
+    expect(fixture.nativeElement.querySelector('.month-totals')).toBeNull();
+  });
+
+  it('Filters (n) counts category, merchant, account, from, through; not sort or search', () => {
+    component.categoryFilter = 'food';
+    component.merchantFilter = 'cafe';
+    component.accountFilter = 'card-a';
+    component.fromDate = '2026-10-01';
+    component.throughDate = '2026-10-31';
+    component.searchTerm = 'cafe';
+    expect(component.panelFilterCount).toBe(5);
+    fixture.detectChanges();
+    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector('.filter-toggle');
+    expect(toggle.textContent.trim()).toBe('Filters (5)');
+  });
+
+  it('chips render in order and removeChip clears only that filter', () => {
+    component.categoryFilter = 'Food';
+    component.fromDate = '2026-10-01';
+    fixture.detectChanges();
+    const labels = Array.from(host().querySelectorAll<HTMLElement>('.filter-chip'))
+      .map(node => node.getAttribute('aria-label'));
+    expect(labels).toEqual(['Remove filter Category: Food', 'Remove filter From: Oct 1']);
+    component.removeChip('category');
+    fixture.detectChanges();
+    expect(component.categoryFilter).toBe('');
+    const remaining = Array.from(host().querySelectorAll<HTMLElement>('.filter-chip'))
+      .map(node => node.getAttribute('aria-label'));
+    expect(remaining).toEqual(['Remove filter From: Oct 1']);
+  });
+
+  it('panel closed by default but deep-linked account still binds', async () => {
+    const accounts = [{ id: 1, account_key: 'card-a', display_name: 'Primary card', confirmed: true, bank_slug: 'chase' }];
+    finance.getBankAccounts.and.returnValue(of(accounts as unknown as BankAccountRecord[]));
+    routeQuery.next(convertToParamMap({ account: 'card-a' }));
+    dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
+    await new Promise(resolve => setTimeout(resolve, 160));
+    fixture.detectChanges();
+    expect(component.filtersOpen).toBeFalse();
+    const accountSelect: HTMLSelectElement = fixture.nativeElement.querySelector('#tx-account-filter');
+    expect(accountSelect.value).toBe('card-a');
+  });
+
+  it('Escape in panel closes it and focuses the Filters button', () => {
+    document.body.appendChild(fixture.nativeElement);
+    component.filtersOpen = true;
+    fixture.detectChanges();
+    const panel: HTMLElement = fixture.nativeElement.querySelector('#activity-filters');
+    panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(component.filtersOpen).toBeFalse();
+    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector('.filter-toggle');
+    expect(document.activeElement).toBe(toggle);
+    fixture.nativeElement.remove();
+  });
+
+  it('table has four columns: Date, Description, Amount, Actions', () => {
+    seed([tx()]);
+    const headers = Array.from(host().querySelectorAll<HTMLElement>('.tx-table-wrap thead th'))
+      .map(node => node.textContent.trim());
+    expect(headers.length).toBe(4);
+    expect(headers[0]).toContain('Date');
+    expect(headers[1]).toBe('Description');
+    expect(headers[2]).toContain('Amount');
+    expect(headers[3]).toBe('Actions');
+  });
+
+  it('row description line and badges', () => {
+    seed([
+      tx({ id: 1, kind: 'refund', amount: 5, source: 'import', description: 'CAFE REFUND' }),
+      tx({ id: 2, date: '2026-10-06', description: 'Bakery', merchant: 'Bakery' }),
+    ]);
+    const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('.tx-table-wrap tbody tr'));
+    expect(rows.length).toBe(2);
+    const refundRow = rows.find(row => row.textContent.includes('Refund'));
+    expect(refundRow).toBeTruthy();
+    expect(refundRow?.querySelector('.tx-desc__name')?.textContent?.trim()).toBe('Corner Cafe');
+    expect(refundRow?.querySelector('.tx-desc__meta')?.textContent?.trim()).toBe('Food and Drink · Daily card');
+    const badges = Array.from(refundRow?.querySelectorAll<HTMLElement>('.tx-desc__badges ui-badge') ?? [])
+      .map(node => node.textContent.trim());
+    expect(badges).toEqual(['Refund', 'Imported']);
+    const purchaseRow = rows.find(row => row.textContent.includes('Bakery'));
+    expect(purchaseRow?.querySelector('.tx-desc__badges')).toBeNull();
+  });
+
+  it('Show 100 more replaces Load more', () => {
+    const rows = Array.from({ length: 101 }, (_, i) => tx({ id: i + 1, date: `2026-10-${String((i % 28) + 1).padStart(2, '0')}` }));
+    seed(rows);
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector('.load-more-row button');
+    expect(button.textContent.trim()).toBe('Show 100 more');
   });
 });
