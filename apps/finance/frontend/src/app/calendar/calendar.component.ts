@@ -46,8 +46,11 @@ import { AppDatePipe } from '@vivek/ui';
 interface CalendarDay {
   date: string;
   hasTransactions: boolean;
+  /** Posted spend only (F8); scheduled amounts never enter the cell. */
   expense: number;
   income: number;
+  /** Count of scheduled occurrences falling on this day. */
+  scheduled?: number;
   isToday?: boolean;
 }
 
@@ -191,8 +194,10 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!spending) continue;
       spendByDay.set(tx.date, (spendByDay.get(tx.date) || 0) + spending);
     }
+    // Scheduled occurrences are counted per day, never added to cell spend.
+    const scheduledByDay = new Map<string, number>();
     for (const row of this.countedOccurrences) {
-      spendByDay.set(row.date, (spendByDay.get(row.date) || 0) + row.amount);
+      scheduledByDay.set(row.date, (scheduledByDay.get(row.date) || 0) + 1);
     }
 
     this.daysInMonth = [];
@@ -208,16 +213,13 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
           || incomeByDay.has(dateStr),
         expense: spendByDay.get(dateStr) || 0,
         income: incomeByDay.get(dateStr) || 0,
+        scheduled: scheduledByDay.get(dateStr) || 0,
         isToday: dateStr === today,
       });
     }
-    const posted = summarizeMonthSpend(this.transactions, monthKey, 5, this.countedOccurrences);
-    this.monthSummary = {
-      ...posted,
-      incomeTotal: summary.total_income,
-      expenseTotal: summary.total_expenses,
-      net: summary.net_cashflow,
-    };
+    // Posted-only month summary (F8): Spent / Scheduled / Income / Net all
+    // come from the posted ledger; scheduledTotal rides along separately.
+    this.monthSummary = summarizeMonthSpend(this.transactions, monthKey, 5, this.countedOccurrences);
     if (this.selectedDate) this.applySelectedDay(this.selectedDate);
     this.cdr.markForCheck();
     setTimeout(() => void this.paintCategoryChart());

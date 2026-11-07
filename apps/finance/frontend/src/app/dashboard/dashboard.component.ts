@@ -18,6 +18,8 @@ import {
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
+import { monthlyCashflowSeries } from '../crypto/client-finance';
+import { monthDelta, type MonthDelta } from '../utils/category-spend';
 import { FinanceGuideService } from '../core/finance-guide.service';
 import { UiButtonComponent, UiCardComponent, UiIconComponent, UiPageHeaderComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
@@ -140,12 +142,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.cashflow?.total_income ?? 0;
   }
 
-  get incomeOccurrences() {
-    return this.cashflow?.income_occurrences ?? [];
+  /** Current month key, e.g. '2026-11'. */
+  get currentMonth(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
 
+  get monthName(): string {
+    const now = new Date();
+    return now.toLocaleString('en-US', { month: 'long' });
+  }
+
+  /** Posted spend this month (recorded view; scheduled bills excluded). */
   get monthSpend(): number {
-    return this.cashflow?.total_expenses ?? 0;
+    return monthlyCashflowSeries([this.currentMonth], this.transactions, this.jobIncomes, this.fixedExpenses, this.subscriptions, 'recorded')[0]?.expense ?? 0;
+  }
+
+  /** Scheduled spend still to come this month, reported separately. */
+  get monthScheduled(): number {
+    return monthlyCashflowSeries([this.currentMonth], this.transactions, this.jobIncomes, this.fixedExpenses, this.subscriptions, 'scheduled')[0]?.expense ?? 0;
+  }
+
+  /** Like-for-like delta against the same window last month. */
+  get spendDelta(): MonthDelta {
+    return monthDelta(this.transactions, this.currentMonth);
+  }
+
+  get incomeOccurrences() {
+    return this.cashflow?.income_occurrences ?? [];
   }
 
   get monthNet(): number {

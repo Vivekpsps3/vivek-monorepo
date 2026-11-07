@@ -42,7 +42,7 @@
       }
 
       <a routerLink="/finance/spending" class="home-tile home-tile--activity">
-        <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+        <span class="home-tile__topline">{{ monthName }} <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
         <span class="home-split">
           <span>
@@ -50,10 +50,17 @@
             <strong class="money">{{ monthPay | money }}</strong>
           </span>
           <span>
-            <small>Spending</small>
+            <small>Spent</small>
             <strong class="money">{{ monthSpend | money }}</strong>
           </span>
+          <span>
+            <small>Scheduled</small>
+            <strong class="money">{{ monthScheduled | money }}</strong>
+          </span>
         </span>
+        @if (spendDelta; as delta) {
+          <span class="home-status">{{ delta.delta >= 0 ? '+' : '−' }}{{ (delta.delta >= 0 ? delta.delta : -delta.delta) | money }} {{ delta.label }}</span>
+        }
       </a>
     </nav>
 

@@ -70,31 +70,14 @@
       </button>
       @if (sectionOpen.category && categoryRows.length) {
         @if (singleCategory; as only) {
-          <p class="chart-stat">{{ only.label }} · {{ formatShare(only.pct) }} · {{ money(only.value) }}</p>
+          <p class="chart-stat">{{ only.label }} · {{ formatShare(only.share) }} · {{ money(only.net) }}</p>
         } @else {
           <div class="chart-wrap" [class.chart-dim]="chartDimmed">
             <canvas #categoryChart role="img" [attr.aria-label]="categorySummary"></canvas>
           </div>
         }
         <div class="chart-fallback">
-          <table aria-label="Spending category data table">
-            <thead><tr><th>Category</th><th>Amount</th><th>%</th></tr></thead>
-            <tbody>
-              @for (row of categoryRows; track (row.synthetic ? 'synthetic:' : 'category:') + row.label) {
-                <tr>
-                  <td>
-                    @if (row.synthetic) {
-                      <button type="button" class="chart-drilldown-link" (click)="toggleCategories()">{{ row.label }} · Show all categories</button>
-                    } @else {
-                      <a [routerLink]="['/finance/spending']" [queryParams]="categoryRowQuery(row) || {}">{{ row.label }}</a>
-                    }
-                  </td>
-                  <td>{{ row.value | money }}</td>
-                  <td>@if (row.pct == null) { Unavailable } @else { {{ formatShare(row.pct) }} }</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <app-category-spend-table [rows]="categoryTableRows" (expand)="toggleCategories()" />
         </div>
         @if (canCollapseCategories) {
           <button type="button" class="text-link" (click)="toggleCategories()">

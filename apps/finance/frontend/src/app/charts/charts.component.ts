@@ -13,7 +13,9 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FinanceService } from '../services/finance.service';
 import { FixedExpense, Holding, JobIncome, Subscription, Transaction } from '../models/transaction.model';
-import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '../crypto/client-finance';
+import { lastCalendarMonths, monthlyCashflowSeries } from '../crypto/client-finance';
+import { categorySpend, chartSlices, type CategorySpendRow } from '../utils/category-spend';
+import { CategorySpendTableComponent, type CategorySpendTableRow } from './category-spend-table.component';
 import { formatDate, formatPercent } from '@vivek/browser';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
@@ -50,7 +52,7 @@ type ChartConstructor = new (
   selector: 'app-charts',
   standalone: true,
   imports: [
-    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent],
+    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, CategorySpendTableComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -91,7 +93,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   expenseTotal = 0;
   netCashflow = 0;
   monthlyRows: { month: string; label: string; tick: string; income: number; expense: number; net: number }[] = [];
-  allCategoryRows: { label: string; value: number; pct: number | null }[] = [];
+  allCategoryRows: CategorySpendRow[] = [];
   allocationRows: { label: string; value: number; pct: number; companyName?: string | null }[] = [];
 
   private incomeChart?: ChartInstance;
@@ -248,7 +250,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   get categorySummary(): string {
     const top = this.categoryRows[0];
     if (!top) return '';
-    return `Spending by category. Largest: ${top.label}, ${chartMoney(top.value)}. Select a category to open it in Activity.`;
+    return `Spending by category. Largest: ${top.label}, ${chartMoney(top.net)}. Select a category to open it in Activity.`;
   }
 
   get allocationSummary(): string {
@@ -257,7 +259,7 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     return `Holdings mix. Largest: ${top.label}, ${this.formatShare(top.pct)}.`;
   }
 
-  get singleCategory(): { label: string; value: number; pct: number | null } | null {
+  get singleCategory(): CategorySpendRow | null {
     return this.categoryRows.length === 1 ? this.categoryRows[0] : null;
   }
 
@@ -280,23 +282,34 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     void this.paintCharts();
   }
 
-  get categoryRows(): { label: string; value: number; pct: number | null; synthetic?: boolean }[] {
+  get categoryRows(): (CategorySpendRow & { synthetic?: boolean; categories?: string[] })[] {
     if (!this.collapsedCategories || this.allCategoryRows.length <= 6) {
       return this.allCategoryRows;
     }
     const head = this.allCategoryRows.slice(0, 6);
     const tail = this.allCategoryRows.slice(6);
-    const otherValue = tail.reduce((sum, row) => sum + row.value, 0);
-    const total = this.allCategoryRows.reduce((sum, row) => sum + row.value, 0);
+    const otherNet = tail.reduce((sum, row) => sum + row.net, 0);
+    const otherPurchases = tail.reduce((sum, row) => sum + row.purchases, 0);
+    const totalPurchases = this.allCategoryRows.reduce((sum, row) => sum + row.purchases, 0);
     return [
       ...head,
       {
-        label: 'Other',
-        value: otherValue,
-        pct: total > 0 ? (otherValue / total) * 100 : null,
+        label: `Other (${tail.length})`,
+        net: otherNet,
+        purchases: otherPurchases,
+        share: totalPurchases > 0 ? (otherNet / totalPurchases) * 100 : null,
         synthetic: true,
+        categories: tail.map(row => row.label),
       },
     ];
+  }
+
+  /** Rows for the shared category table, with drilldown queries attached. */
+  get categoryTableRows(): CategorySpendTableRow[] {
+    return this.categoryRows.map(row => ({
+      ...row,
+      query: this.categoryRowQuery(row),
+    }));
   }
 
   get canCollapseCategories(): boolean {
@@ -329,23 +342,19 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   openCategoryDrilldown(index: number): void {
     const row = this.categoryRows[index];
     if (!row) return;
-    if (row.synthetic) {
-      this.collapsedCategories = false;
-      this.render$.next();
-      this.cdr.markForCheck();
-      return;
-    }
-    void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: null, v: 'spending', month: 'all', category: row.label },
-    });
+    const query = this.categoryRowQuery(row);
+    if (query) void this.router.navigate(['/finance/spending'], { queryParams: query });
   }
 
   monthlyRowQuery(row: { month: string }, datasetIndex = 0): { [key: string]: string | null } {
     return { t: null, v: datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all', month: row.month };
   }
 
-  categoryRowQuery(row: { label: string; synthetic?: boolean }): { [key: string]: string | null } | null {
-    return row.synthetic ? null : { t: null, v: 'spending', month: 'all', category: row.label };
+  categoryRowQuery(row: { label: string; synthetic?: boolean; categories?: string[] }): { [key: string]: string | null } | null {
+    if (row.synthetic) {
+      return { t: null, v: 'spending', month: 'all', categories: (row.categories ?? []).join('|') };
+    }
+    return { t: null, v: 'spending', month: 'all', category: row.label };
   }
 
   private computeDerived() {
@@ -371,21 +380,9 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         }))
       : [];
 
-    const byCategory = new Map<string, number>();
-    for (const tx of txs) {
-      const effect = transactionEffects(tx).spending;
-      if (!effect) continue;
-      byCategory.set(tx.category, (byCategory.get(tx.category) || 0) + effect);
-    }
-    const categoryTotal = [...byCategory.values()].reduce((s, v) => s + v, 0);
-    this.allCategoryRows = [...byCategory.entries()]
-      .filter(([, value]) => value !== 0)
-      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-      .map(([label, value]) => ({
-        label,
-        value,
-        pct: categoryTotal > 0 ? (value / categoryTotal) * 100 : null,
-      }));
+    // Refund-aware category spend (F8): signed nets from the shared util;
+    // the chart clamps negatives, the table keeps them signed.
+    this.allCategoryRows = categorySpend(txs, '').rows;
 
     const totalVal = this.holdings.reduce((s, h) => s + (h.value || 0), 0);
     this.allocationRows = [...this.holdings]
@@ -546,16 +543,17 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.categoryChart = undefined;
       return;
     }
-    const hasRefundEffects = this.categoryRows.some(row => row.value < 0);
+    // Always a doughnut (F8): refund-heavy categories clamp to a zero slice
+    // here and stay signed in the table beside the chart.
+    const slices = chartSlices(this.categoryRows);
     this.categoryChart = this.upsertChart(Chart, this.categoryChart, canvas, {
-      type: hasRefundEffects ? 'bar' : 'doughnut',
+      type: 'doughnut',
       data: {
-        labels: this.categoryRows.map(r => r.label),
+        labels: slices.map(r => r.label),
         datasets: [{
-          data: this.categoryRows.map(r => r.value),
-          backgroundColor: hasRefundEffects
-            ? this.categoryRows.map(row => row.value < 0 ? chartDangerColor() : chartAccentColor())
-            : this.chartColors(this.categoryRows.length),
+          label: 'Spending',
+          data: slices.map(r => r.value),
+          backgroundColor: this.chartColors(slices.length),
           ...chartSliceBorder(),
         }],
       },
@@ -564,8 +562,6 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         maintainAspectRatio: false,
         animation: prefersReducedMotion() ? false : undefined,
         interaction: { mode: 'nearest', intersect: true },
-        ...(hasRefundEffects ? { indexAxis: 'y' } : {}),
-        ...(hasRefundEffects ? { scales: chartCartesianScales() } : {}),
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -574,13 +570,12 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
               label: (item: { dataIndex: number }) => {
                 const row = this.categoryRows[item.dataIndex];
                 if (!row) return '';
-                // Interim derivation until F8 lands categorySpend.totalPurchases:
-                // gross purchases are the positive category totals.
-                const totalPurchases = this.allCategoryRows.reduce((sum, r) => sum + Math.max(0, r.value), 0);
-                const share = totalPurchases > 0 ? (row.value / totalPurchases) * 100 : null;
+                // Gross purchases remain the denominator even when refunds reduce net spend.
+                const totalPurchases = this.allCategoryRows.reduce((sum, r) => sum + r.purchases, 0);
+                const share = totalPurchases > 0 ? (row.net / totalPurchases) * 100 : null;
                 return share == null
-                  ? `${row.label} · ${chartMoney(row.value)}`
-                  : `${row.label} · ${chartMoney(row.value)} · ${this.formatShare(share)} of purchases`;
+                  ? `${row.label} · ${chartMoney(row.net)}`
+                  : `${row.label} · ${chartMoney(row.net)} · ${this.formatShare(share)} of purchases`;
               },
             },
           },
