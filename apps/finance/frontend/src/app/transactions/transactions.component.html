@@ -15,7 +15,7 @@
       <div class="month-picker-tools">
         <label class="month-picker">
           <span class="month-picker__caption">Month</span>
-          <input
+          <input name="summaryMonth"
             type="month"
             [(ngModel)]="summaryMonth"
             (ngModelChange)="onSummaryMonthChange()"
@@ -102,13 +102,13 @@
       } @else {
         <p class="work-income-note">Select a month or a from and through date.</p>
       }
-      <a class="work-income-owner-link" [routerLink]="['/finance/recurring']" [queryParams]="{ t: 'pay' }">Manage jobs and pay in Recurring</a>
+      <a class="work-income-owner-link" [routerLink]="['/finance/recurring']">Manage jobs and pay in Recurring</a>
     </ui-card>
   }
 
   <ui-card [title]="'History'">
     <div class="table-actions table-actions--toolbar">
-      <input
+      <input name="searchTerm"
         type="search"
         [(ngModel)]="searchTerm"
         (input)="onSearchChange()"
@@ -155,8 +155,8 @@
     </div>
 
     <div class="activity-date-filters" aria-label="Activity date range">
-      <label>From <input type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
-      <label>Through <input type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
+      <label>From <input name="fromDate" type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity from date" /></label>
+      <label>Through <input name="throughDate" type="date" [(ngModel)]="throughDate" (ngModelChange)="onDateRangeChange()" aria-label="Activity through date" /></label>
       @if (hasActiveFilters) {
         <ui-button variant="ghost" size="sm" (clicked)="clearFilters()">Clear filters</ui-button>
       }
@@ -173,7 +173,7 @@
       <div class="category-merge-grid">
         <label class="form-group">
           <span>Rename</span>
-          <input
+          <input name="categoryMergeFrom"
             type="text"
             list="category-options"
             [(ngModel)]="categoryMergeFrom"
@@ -182,7 +182,7 @@
         </label>
         <label class="form-group">
           <span>To</span>
-          <input
+          <input name="categoryMergeTo"
             type="text"
             list="category-options"
             [(ngModel)]="categoryMergeTo"
@@ -214,7 +214,7 @@
           <div class="category-bulk-rename__row">
             <label class="form-group">
               <span>From</span>
-              <input
+              <input name="fromCategory"
                 type="text"
                 list="category-options"
                 [(ngModel)]="row.fromCategory"
@@ -223,7 +223,7 @@
             </label>
             <label class="form-group">
               <span>To</span>
-              <input
+              <input name="toCategory"
                 type="text"
                 list="category-options"
                 [(ngModel)]="row.toCategory"
@@ -254,8 +254,8 @@
           </div>
         </div>
         <div class="category-bulk-rename__row">
-          <label class="form-group"><span>Merchant</span><input type="text" [(ngModel)]="bulkMerchant" list="merchant-options" placeholder="Merchant name" /></label>
-          <label class="form-group"><span>Category</span><input type="text" [(ngModel)]="bulkMerchantCategory" list="category-options" placeholder="Category" /></label>
+          <label class="form-group"><span>Merchant</span><input name="bulkMerchant" type="text" [(ngModel)]="bulkMerchant" list="merchant-options" placeholder="Merchant name" /></label>
+          <label class="form-group"><span>Category</span><input name="bulkMerchantCategory" type="text" [(ngModel)]="bulkMerchantCategory" list="category-options" placeholder="Category" /></label>
           <ui-button variant="secondary" size="sm" [disabled]="categoryMergeSaving" (clicked)="bulkCategorizeMerchant()">Apply</ui-button>
         </div>
       </div>
@@ -369,19 +369,17 @@
 
     <ng-template #empty>
       @if (!loading && !listLoading && !listError) {
-        @if (hasActiveFilters) {
-          <ui-empty-state [title]="'No activity matches these filters'" message="Try clearing one filter or changing the date range.">
+        @if (hasActiveFilters && allTransactions.length) {
+          <ui-empty-state message="Nothing matches these filters">
             <div class="empty-actions">
               <ui-button variant="secondary" (clicked)="clearFilters()">Clear filters</ui-button>
             </div>
           </ui-empty-state>
         } @else {
-        <ui-empty-state [title]="'No transactions yet'">
-          <ui-icon name="transactions" size="lg" style="margin-bottom: 8px; opacity: 0.6;" />
-          <p class="empty-import-copy">Start with a bank CSV if you want the fastest and most accurate history.</p>
+        <ui-empty-state [title]="'No transactions yet'" message="Import a card statement or add one by hand.">
           <div class="empty-actions">
-            <ui-button variant="secondary" (clicked)="openImportModal()">Import from bank</ui-button>
-            <ui-button variant="primary" (clicked)="openAddModal()">Add income or expense</ui-button>
+            <ui-button variant="primary" (clicked)="openImportModal()">Import</ui-button>
+            <ui-button variant="secondary" (clicked)="openAddModal()">Add transaction</ui-button>
           </div>
         </ui-empty-state>
         }
@@ -474,7 +472,7 @@
 
               <label class="form-group import-account-picker">
                 <span>Account identity for this file</span>
-                <select [value]="entry.bank_account_id || ''" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onImportAccountChange(entry, $any($event.target).value)">
+                <select name="bank-account-id" [value]="entry.bank_account_id || ''" [disabled]="importWorkflow.importParsing" (change)="importWorkflow.onImportAccountChange(entry, $any($event.target).value)">
                   <option value="">Enter a new account identity…</option>
                   @for (account of importWorkflow.accountOptionsFor(entry); track account.id) {
                     <option [value]="account.id">{{ account.display_name }}</option>
@@ -586,7 +584,7 @@
                     <tr [class.duplicate-row]="row.status === 'duplicate'" [class.classification-row]="row.kind === 'ambiguous_credit'" (click)="importWorkflow.toggleImportRow(row)">
                       <td>
                         @if (row.status !== 'duplicate') {
-                          <input type="checkbox" [checked]="importWorkflow.isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importWorkflow.importCommitting || row.kind === 'ambiguous_credit'" (change)="importWorkflow.toggleImportRow(row)" />
+                          <input name="importworkflow" type="checkbox" [checked]="importWorkflow.isImportRowSelected(row)" (click)="$event.stopPropagation()" [disabled]="importWorkflow.importCommitting || row.kind === 'ambiguous_credit'" (change)="importWorkflow.toggleImportRow(row)" />
                         }
                       </td>
                       <td>{{ row.date | appDate }}</td>
@@ -604,7 +602,7 @@
                         @if (row.status === 'review') {
                           <label class="form-group import-classification">
                             <span>Classify credit</span>
-                            <select [value]="row.kind" (click)="$event.stopPropagation()" (change)="$event.stopPropagation(); importWorkflow.setImportKind(row, $any($event.target).value)">
+                            <select name="kind" [value]="row.kind" (click)="$event.stopPropagation()" (change)="$event.stopPropagation(); importWorkflow.setImportKind(row, $any($event.target).value)">
                               <option value="ambiguous_credit">Choose…</option>
                               <option value="purchase">Purchase</option>
                               <option value="refund">Refund</option>

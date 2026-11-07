@@ -9,9 +9,9 @@ import { PortfolioComponent } from '../portfolio/portfolio.component';
   imports: [RouterLink, AssetsLiabilitiesComponent, PortfolioComponent],
   template: `
     <div class="page">
-      <nav class="hub-tabs" aria-label="What you have">
-        <a [routerLink]="[]" [queryParams]="{ t: 'assets' }" [class.on]="tab === 'assets'">Assets and debts</a>
-        <a [routerLink]="[]" [queryParams]="{ t: 'holdings' }" [class.on]="tab === 'holdings'">Holdings</a>
+      <nav class="hub-tabs" aria-label="Net worth sections">
+        <a [routerLink]="[]" [queryParams]="{ t: null }" [class.on]="tab === 'assets'" [attr.aria-current]="tab === 'assets' ? 'page' : null">Assets and debts</a>
+        <a [routerLink]="[]" [queryParams]="{ t: 'holdings' }" [class.on]="tab === 'holdings'" [attr.aria-current]="tab === 'holdings' ? 'page' : null">Holdings</a>
       </nav>
       @if (tab === 'holdings') {
         <app-portfolio [embedded]="true" />

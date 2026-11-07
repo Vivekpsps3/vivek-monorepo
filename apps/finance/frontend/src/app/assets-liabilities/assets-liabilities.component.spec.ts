@@ -99,3 +99,73 @@ describe('AssetsLiabilitiesComponent balance editing', () => {
     expect(component.saving).toBeFalse();
   });
 });
+
+import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { BehaviorSubject } from 'rxjs';
+import { ToastService } from '@vivek/ui';
+import { FinanceService } from '../services/finance.service';
+
+describe('empty states (F10)', () => {
+  let fixture: ComponentFixture<AssetsLiabilitiesComponent>;
+  let financeStub: {
+    assets$: BehaviorSubject<Asset[]>; liabilities$: BehaviorSubject<Liability[]>;
+    netWorth$: BehaviorSubject<unknown>;
+    getAssets: jasmine.Spy; getLiabilities: jasmine.Spy; getNetWorth: jasmine.Spy;
+  };
+
+  beforeEach(async () => {
+    financeStub = {
+      assets$: new BehaviorSubject<Asset[]>([]),
+      liabilities$: new BehaviorSubject<Liability[]>([]),
+      netWorth$: new BehaviorSubject<unknown>(null),
+      getAssets: jasmine.createSpy('getAssets').and.returnValue(of(null)),
+      getLiabilities: jasmine.createSpy('getLiabilities').and.returnValue(of(null)),
+      getNetWorth: jasmine.createSpy('getNetWorth').and.returnValue(of(null)),
+    };
+    await TestBed.configureTestingModule({
+      imports: [AssetsLiabilitiesComponent],
+      providers: [
+        { provide: FinanceService, useValue: financeStub },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'info']) },
+        { provide: ConfirmService, useValue: { ask: () => Promise.resolve(true) } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(AssetsLiabilitiesComponent);
+  });
+
+  function text(): string { return (fixture.nativeElement as HTMLElement).textContent ?? ''; }
+
+  it('hasBalanceSheet false when nothing exists', () => {
+    fixture.detectChanges();
+    expect(fixture.componentInstance.hasBalanceSheet).toBeFalse();
+  });
+
+  it('hasBalanceSheet true with rows', () => {
+    financeStub.assets$.next([{ id: 1, name: 'Checking', category: 'checking', current_value: 5, as_of_date: '2026-09-30', review_interval_days: 0 } as Asset]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.hasBalanceSheet).toBeTrue();
+  });
+
+  it('hasBalanceSheet true with portfolio-only net worth', () => {
+    financeStub.netWorth$.next({ total: 10, portfolio: 10, excluded_invalid_amounts: 0 });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.hasBalanceSheet).toBeTrue();
+  });
+
+  it('empty vault shows both empty states, no hero, no header buttons', () => {
+    financeStub.netWorth$.next({ total: 0, portfolio: 0, excluded_invalid_amounts: 0 });
+    fixture.detectChanges();
+    expect(text()).toContain('No assets yet');
+    expect(text()).toContain('No debts recorded');
+    expect(fixture.nativeElement.querySelector('.net-worth-hero')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.header-actions')).toBeNull();
+  });
+
+  it('hero and header buttons return once an asset exists', () => {
+    financeStub.netWorth$.next({ total: 5, portfolio: 0, excluded_invalid_amounts: 0 });
+    financeStub.assets$.next([{ id: 1, name: 'Checking', category: 'checking', current_value: 5, as_of_date: '2026-09-30', review_interval_days: 0 } as Asset]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.net-worth-hero')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.header-actions')).not.toBeNull();
+  });
+});

@@ -9,44 +9,12 @@
     (closed)="close(false)">
     <h2 id="confirm-title" class="confirm-title">{{ s.title }}</h2>
     <p id="confirm-message" class="confirm-message">{{ s.message }}</p>
-    @if (s.phrase) {
-      <div class="confirm-phrase">
-        <label class="confirm-phrase__label" for="confirm-phrase-field">
-          Type <strong>{{ s.phrase }}</strong> to confirm
-        </label>
-        <input
-          #phraseField
-          id="confirm-phrase-field"
-          class="confirm-phrase__input"
-          type="text"
-          autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
-          [value]="typed()"
-          [disabled]="s.busy === true"
-          aria-describedby="confirm-phrase-helper"
-          (input)="onTyped($event)"
-          (keydown.enter)="onPhraseEnter(s)" />
-        <p id="confirm-phrase-helper" class="confirm-phrase__helper">
-          The button stays off until the text matches exactly.
-        </p>
-      </div>
-    }
-    @if (s.error) {
-      <p class="confirm-error" role="alert">{{ s.error }}</p>
-    }
     <div class="confirm-actions">
-      <ui-button #cancelButton variant="secondary" [disabled]="s.busy === true" (clicked)="close(false)">
+      <ui-button variant="secondary" (clicked)="close(false)">
         {{ s.cancelLabel || 'Cancel' }}
       </ui-button>
-      <ui-button
-        #confirmButton
-        variant="danger"
-        [disabled]="s.busy === true"
-        [busy]="s.busy === true"
-        [ariaDisabled]="!s.busy && !phraseMatches(s)"
-        (clicked)="confirm(s)">
-        {{ s.busy && s.busyLabel ? s.busyLabel : s.confirmLabel || 'Confirm' }}
+      <ui-button variant="danger" (clicked)="close(true)">
+        {{ s.confirmLabel || 'Confirm' }}
       </ui-button>
     </div>
   </ui-dialog>

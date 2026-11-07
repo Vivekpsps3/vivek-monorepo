@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
 import { ChartsComponent } from '../charts/charts.component';
@@ -15,6 +15,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
+import { FinanceGuideService } from '../core/finance-guide.service';
 import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
   actualQuoteDate,
@@ -57,6 +58,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   subscriptions: Subscription[] = [];
   isLoading = true;
   error: string | null = null;
+
+  protected readonly guide = inject(FinanceGuideService);
 
   private destroy$ = new Subject<void>();
 
