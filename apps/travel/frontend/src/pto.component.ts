@@ -271,6 +271,8 @@ type Busy = "" | "policy" | "entry" | "remove";
                       name="entry-start"
                       [(ngModel)]="leave.start_date"
                       (blur)="touchEntry()"
+                      (keydown.tab)="leaveDate($event, entryEnd)"
+                      (keydown.shift.tab)="leaveDate($event, entryName)"
                     />
                   </ui-field>
                   <ui-field label="Last day" [required]="true" [error]="entryFieldErrors()['end_date']">
@@ -281,11 +283,13 @@ type Busy = "" | "policy" | "entry" | "remove";
                       name="entry-end"
                       [(ngModel)]="leave.end_date"
                       (blur)="touchEntry()"
+                      (keydown.tab)="leaveDate($event, dayTotal)"
+                      (keydown.shift.tab)="leaveDate($event, entryStart)"
                     />
                   </ui-field>
                 </div>
                 <details>
-                  <summary>Optional day total</summary>
+                  <summary #dayTotal>Optional day total</summary>
                   <ui-field label="Days (blank uses weekdays)" [optional]="true">
                     <input
                       uiFieldControl
@@ -350,7 +354,7 @@ type Busy = "" | "policy" | "entry" | "remove";
           <section>
             @for (name of bothBuckets; track name) {
               <ui-card>
-                <h2>{{ label(name) }}</h2>
+                <h2>{{ label(name) }} policy</h2>
                 @if (board.buckets[name]?.configured) {
                   <p>{{ balanceText(board, name) }}</p>
                   <ui-button
@@ -810,6 +814,13 @@ export class PtoComponent {
   touchEntry(): void {
     const errors = entryErrors(this.leave);
     this.entryFieldErrors.set(errors);
+  }
+
+  /** One Tab stop per date. The control would otherwise walk month, day, year, and the picker. */
+  leaveDate(event: Event, next: HTMLElement | undefined): void {
+    if (!(next instanceof HTMLElement)) return;
+    event.preventDefault();
+    next.focus();
   }
 
   touchEntryBucket(): void {
