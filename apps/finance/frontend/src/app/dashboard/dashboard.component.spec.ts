@@ -1,9 +1,12 @@
 import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { ReplaySubject, of } from 'rxjs';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { CashflowSummary, Holding, Transaction } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { ChartsComponent } from '../charts/charts.component';
 import { DashboardComponent } from './dashboard.component';
 
@@ -90,7 +93,13 @@ describe('Dashboard', () => {
     } as unknown as FinanceService;
     await TestBed.configureTestingModule({
       imports: [DashboardComponent],
-      providers: [{ provide: FinanceService, useValue: finance }, provideRouter([])],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: MarketRefreshCoordinatorService, useValue: { firstAutoCheck$: of() } },
+        { provide: FinancePricePrefsService, useValue: new FinancePricePrefsService() },
+        { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 7 }, user$: of(null) } },
+        provideRouter([]),
+      ],
     }).overrideComponent(DashboardComponent, {
       remove: { imports: [ChartsComponent] },
       add: { imports: [DashboardChartsStubComponent] },
@@ -111,5 +120,95 @@ describe('Dashboard', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Current net worth');
     expect(fixture.nativeElement.textContent).not.toContain('Source dates');
     fixture.destroy();
+  });
+
+  function priceStubs(autoCheck: boolean) {
+    const finance = {
+      netWorth$: of({ total: 1000, portfolio: 500, other_assets: 600, liabilities: 100 }),
+      cashflowSummary$: of(null),
+      holdings$: of([]),
+      dashboardTransactions$: of([]),
+      assets$: of([]),
+      liabilities$: of([]),
+      fixedExpenses$: of([]),
+      jobIncomes$: of([]),
+      subscriptions$: of([]),
+      loadDashboard: jasmine.createSpy('loadDashboard').and.returnValue(of([])),
+      getLiabilities: jasmine.createSpy('getLiabilities').and.returnValue(of([])),
+    } as unknown as FinanceService;
+    const firstAutoCheck = new ReplaySubject<void>(1);
+    const coordinator = {
+      firstAutoCheck$: firstAutoCheck.asObservable(),
+      refreshNow: jasmine.createSpy('refreshNow').and.resolveTo({}),
+    } as unknown as MarketRefreshCoordinatorService;
+    const prefs = new FinancePricePrefsService();
+    if (!autoCheck) prefs.setAutoCheck(7, false);
+    const session = { currentUser: { id: 7 }, user$: of(null) };
+    return { finance, firstAutoCheck, coordinator, prefs, session };
+  }
+
+  it('shows the one-time price notice after the first automatic check and records dismissal', async () => {
+    localStorage.clear();
+    const { finance, firstAutoCheck, coordinator, prefs, session } = priceStubs(true);
+    await TestBed.configureTestingModule({
+      imports: [DashboardComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: MarketRefreshCoordinatorService, useValue: coordinator },
+        { provide: FinancePricePrefsService, useValue: prefs },
+        { provide: SESSION_CONTEXT, useValue: session },
+        provideRouter([]),
+      ],
+    }).overrideComponent(DashboardComponent, {
+      remove: { imports: [ChartsComponent] },
+      add: { imports: [DashboardChartsStubComponent] },
+    }).compileComponents();
+    const fixture: ComponentFixture<DashboardComponent> = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.priceNoticeVisible).toBeFalse();
+
+    firstAutoCheck.next();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.priceNoticeVisible).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain('Prices checked automatically. Only ticker symbols are sent.');
+
+    fixture.componentInstance.dismissPriceNotice();
+    expect(fixture.componentInstance.priceNoticeVisible).toBeFalse();
+    expect(prefs.noticeSeen(7)).toBeTrue();
+    fixture.destroy();
+    localStorage.clear();
+  });
+
+  it('shows the off state and a manual Refresh prices action when automatic checks are off', async () => {
+    localStorage.clear();
+    const { finance, coordinator, prefs, session } = priceStubs(false);
+    await TestBed.configureTestingModule({
+      imports: [DashboardComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: MarketRefreshCoordinatorService, useValue: coordinator },
+        { provide: FinancePricePrefsService, useValue: prefs },
+        { provide: SESSION_CONTEXT, useValue: session },
+        provideRouter([]),
+      ],
+    }).overrideComponent(DashboardComponent, {
+      remove: { imports: [ChartsComponent] },
+      add: { imports: [DashboardChartsStubComponent] },
+    }).compileComponents();
+    const fixture: ComponentFixture<DashboardComponent> = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.autoPricesOff).toBeTrue();
+    const balanceTile = fixture.nativeElement.querySelector('.home-tile--balance') as HTMLElement;
+    expect(balanceTile.textContent).toContain('Automatic price checks are off');
+    const button = fixture.nativeElement.querySelector('.home-refresh-prices') as HTMLElement;
+    expect(button).not.toBeNull();
+    expect(balanceTile.contains(button)).toBeFalse();
+    fixture.componentInstance.refreshPrices();
+    expect(coordinator.refreshNow).toHaveBeenCalled();
+    fixture.destroy();
+    localStorage.clear();
   });
 });

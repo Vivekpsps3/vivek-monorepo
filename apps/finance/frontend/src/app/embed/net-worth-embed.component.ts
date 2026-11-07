@@ -96,7 +96,7 @@ export class NetWorthEmbedComponent implements OnInit, OnDestroy {
   private syncMarketSession(): void {
     const user = this.auth.currentUser;
     if (user && this.vault.isUnlocked) {
-      this.marketDisclosure = 'Ticker symbols are sent to market data for prices; holdings and balances stay in your vault.';
+      this.marketDisclosure = 'Ticker symbols are sent for prices. Holdings and balances stay in your vault.';
       this.marketRefresh.startForSession(user.id, this.finance.sessionToken);
     } else {
       this.marketDisclosure = null;

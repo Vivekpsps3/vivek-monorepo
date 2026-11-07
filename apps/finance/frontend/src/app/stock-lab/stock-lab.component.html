@@ -20,13 +20,14 @@
 
   <ui-card [title]="'Command center'">
     <div class="stock-controls-grid">
-      <label class="stock-field"><span>Primary ticker</span><input [ngModel]="scenario.primary_symbol" (ngModelChange)="setPrimarySymbol($event)" maxlength="10" /></label>
+      <label class="stock-field"><span>Ticker</span><input [ngModel]="scenario.primary_symbol" (ngModelChange)="setPrimarySymbol($event)" maxlength="10" /></label>
       <label class="stock-field"><span>History period</span><select [(ngModel)]="period"><option value="1y">1y</option><option value="2y">2y</option><option value="5y">5y</option><option value="10y">10y</option><option value="max">Max</option></select></label>
       <label class="stock-field"><span>Scenario</span><select [value]="scenario.id || ''" (change)="selectScenario($any($event.target).value)"><option value="">Current draft</option>@for (saved of scenarios; track saved.id) { <option [value]="saved.id">{{ saved.name }}</option> }</select></label>
       <label class="stock-field"><span>Scenario name</span><input [(ngModel)]="scenario.name" maxlength="120" /></label>
     </div>
+    @if (savedQuoteLine) { <p class="stock-saved-quote">{{ savedQuoteLine }}</p> }
     <div class="stock-actions-row">
-      <ui-button variant="primary" (clicked)="loadMarketData(false)" [disabled]="loading">Analyze</ui-button>
+      <ui-button variant="primary" (clicked)="loadMarketData(false)" [disabled]="loading">Look up</ui-button>
       <ui-button variant="secondary" (clicked)="loadMarketData(true)" [disabled]="loading">Refresh market data</ui-button>
       <ui-button variant="secondary" (clicked)="saveScenario()" [disabled]="saving">Save encrypted scenario</ui-button>
       <ui-button
@@ -121,6 +122,6 @@
       </ui-card>
     </section>
   } @else if (!loading) {
-    <ui-card><ui-empty-state [title]="'No market data'" message="Enter a ticker. Then click Analyze." /></ui-card>
+    <ui-card><ui-empty-state [title]="'No market data'" message="Enter a ticker, then choose Look up. Nothing is fetched until you do." /></ui-card>
   }
 </div>

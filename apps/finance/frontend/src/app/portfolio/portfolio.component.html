@@ -167,7 +167,7 @@
                         </td>
                         <td class="num">{{ h.shares }}</td>
                         <td class="num">{{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}</td>
-                        <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }}</td>
+                        <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (h.current_price != null) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
                         <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
                         <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
                         <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
@@ -231,7 +231,7 @@
                     </td>
                     <td class="num">{{ h.shares }}</td>
                     <td class="num">{{ h.purchase_price == null ? 'Unknown' : (h.purchase_price | money) }}</td>
-                    <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }}</td>
+                    <td class="num">{{ h.current_price == null ? 'Unavailable' : (h.current_price | money) }} @if (h.current_price != null) { <span class="as-of-small">{{ asOfText(h) }}</span> }</td>
                     <td class="num">{{ h.value == null ? 'Unavailable' : (h.value | money) }}</td>
                     <td class="num" [class.positive]="gainIsPositive(h)" [class.negative]="gainIsNegative(h)">{{ gainDisplay(h) }}</td>
                     <td class="num" [class.positive]="gainPercentIsPositive(h)" [class.negative]="gainPercentIsNegative(h)">{{ gainPercentDisplay(h) }}</td>
@@ -283,8 +283,9 @@
       <div class="form-row">
         <div class="form-group symbol-row">
           <label for="h-symbol">Symbol</label>
+          <p class="help" id="h-symbol-help">Checking a price sends the ticker symbol only.</p>
           <div class="symbol-check">
-            <input id="h-symbol" data-field="symbol" type="text" [(ngModel)]="newHolding.symbol" name="symbol" data-dialog-initial-focus [attr.aria-invalid]="holdingFieldError('symbol') ? true : null" [attr.aria-describedby]="holdingFieldError('symbol') ? 'h-symbol-error' : null" [attr.data-field-invalid]="holdingFieldError('symbol') ? true : null" />
+            <input id="h-symbol" aria-describedby="h-symbol-help" data-field="symbol" type="text" [(ngModel)]="newHolding.symbol" name="symbol" data-dialog-initial-focus [attr.aria-invalid]="holdingFieldError('symbol') ? true : null" [attr.aria-describedby]="holdingFieldError('symbol') ? 'h-symbol-error' : null" [attr.data-field-invalid]="holdingFieldError('symbol') ? true : null" />
             @if (holdingFieldError('symbol')) { <span id="h-symbol-error" class="ui-field__error"><span aria-hidden="true">⚠</span> {{ holdingFieldError('symbol') }}</span> }
             <ui-button variant="secondary" (clicked)="checkSharePrice()" [disabled]="checkingPrice">
               @if (checkingPrice) {
@@ -295,6 +296,9 @@
           </div>
           @if (priceCheckError) {
             <p class="import-error" role="alert">{{ priceCheckError }}</p>
+          }
+          @if (checkPrice(); as saved) {
+            <p class="price-check-result">Saved price {{ saved.price | money }} · {{ saved.asOfText }}</p>
           }
           <p class="price-check-result" *ngIf="priceCheck">
             <ng-container *ngIf="priceCheck.valid; else badQuote">
