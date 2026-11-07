@@ -46,6 +46,7 @@ export class EncryptedStoreService {
       allocateId: () => this.allocateId(),
       upsertImportRecord: <T extends { id?: number }>(payload: T, clientId?: string, generation?: number) =>
         this.upsert('import_batches', payload, clientId, generation),
+      removeImportRecord: (id: number) => this.remove('import_batches', id),
       savePreparedRecords: <T extends { id: number }>(rows: T[], replaceExisting?: boolean) =>
         this.savePreparedRecords('import_batches', rows, replaceExisting),
       getTransactions: () => this.getTransactions(),
@@ -203,6 +204,12 @@ export class EncryptedStoreService {
   }
   undoImportReceipt(id: number): Promise<{ removed: number; edited: number; missing: number }> {
     return this.bankImports.undoImportReceipt(id);
+  }
+  previewUndoImportReceipt(id: number): Promise<{ removable: number; editedKept: number; alreadyGone: number }> {
+    return this.bankImports.previewUndoImportReceipt(id);
+  }
+  deleteImportReceipt(id: number): Promise<void> {
+    return this.bankImports.deleteImportReceipt(id);
   }
 
   async bulkRenameTransactionCategories(renames: { fromCategory: string; toCategory: string }[]): Promise<{ updated: number; conflicts: number }> {
