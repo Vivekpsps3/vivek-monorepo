@@ -34,7 +34,7 @@ test('today and default dates stay on the Los Angeles day when UTC is already th
   await expect(transaction.getByLabel('Date', { exact: true })).toHaveValue(LA_TODAY);
 
   await vault.open('/have?t=holdings');
-  await page.getByRole('button', { name: 'Add Holding', exact: true }).click();
+  await page.getByRole('button', { name: 'Add holding', exact: true }).click();
   const holding = page.getByRole('dialog', { name: 'Add holding' });
   await expect(holding.getByLabel('Purchase date', { exact: true })).toHaveValue(LA_TODAY);
 

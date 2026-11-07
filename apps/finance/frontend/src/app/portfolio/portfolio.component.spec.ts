@@ -331,3 +331,28 @@ describe('PortfolioComponent', () => {
     });
   });
 });
+
+describe('PortfolioComponent row copy (F16)', () => {
+  it('names the holding source from its brokerage link', () => {
+    const { component } = componentWithFinance();
+    expect(component.holdingSource({ brokerage_account_id: 4 } as Holding)).toBe('Fidelity');
+    expect(component.holdingSource({ brokerage_account_id: null } as Holding)).toBe('Manual');
+    expect(component.holdingSource({} as Holding)).toBe('Manual');
+  });
+
+  it('delete asks with the symbol and toasts it back with undo', async () => {
+    const { component, finance, toast, confirm } = componentWithFinance();
+    finance.deleteHolding = jasmine.createSpy('deleteHolding').and.returnValue(of({}));
+    const holding = {
+      id: 9, symbol: 'VOO', shares: 2, purchase_price: 100, purchase_date: '2026-01-15',
+    } as Holding;
+    await component.deleteHolding(holding);
+    expect(confirm.ask).toHaveBeenCalledWith(
+      'Delete VOO?',
+      'This removes it from your portfolio. You can undo right after.',
+      'Delete',
+      'Cancel',
+    );
+    expect(toast.success).toHaveBeenCalledWith('VOO deleted', jasmine.any(Function));
+  });
+});
