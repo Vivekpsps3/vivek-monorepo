@@ -1,8 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Inject, OnDestroy, OnInit, Optional } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
+import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
 import { ChartsComponent } from '../charts/charts.component';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import {
   Asset,
   CashflowSummary,
@@ -15,6 +17,7 @@ import {
   Transaction,
 } from '../models/transaction.model';
 import { FinanceService } from '../services/finance.service';
+import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { UiButtonComponent, UiCardComponent, UiIconComponent, UiSkeletonComponent } from '@vivek/ui';
 import {
   actualQuoteDate,
@@ -57,12 +60,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
   subscriptions: Subscription[] = [];
   isLoading = true;
   error: string | null = null;
+  /** One-time ticker-privacy notice, shown after the first automatic check. */
+  priceNoticeVisible = false;
+  /** True when the user turned automatic price checks off. */
+  autoPricesOff = false;
 
   private destroy$ = new Subject<void>();
 
   constructor(
     private finance: FinanceService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    @Optional() private marketRefresh: MarketRefreshCoordinatorService | null = null,
+    @Optional() private pricePrefs: FinancePricePrefsService | null = null,
+    @Optional() @Inject(SESSION_CONTEXT) private session: SessionPort | null = null
   ) {}
 
   ngOnInit(): void {
@@ -90,7 +100,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.subscriptions = subscriptions;
         this.cdr.markForCheck();
       });
+    const userId = this.session?.currentUser?.id;
+    if (userId != null && this.pricePrefs) this.autoPricesOff = !this.pricePrefs.autoCheck(userId);
+    this.marketRefresh?.firstAutoCheck$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      const id = this.session?.currentUser?.id;
+      if (id != null && this.pricePrefs && !this.pricePrefs.noticeSeen(id)) {
+        this.priceNoticeVisible = true;
+        this.cdr.markForCheck();
+      }
+    });
     this.load();
+  }
+
+  dismissPriceNotice(): void {
+    const userId = this.session?.currentUser?.id;
+    if (userId != null) this.pricePrefs?.markNoticeSeen(userId);
+    this.priceNoticeVisible = false;
+    this.cdr.markForCheck();
+  }
+
+  refreshPrices(): void {
+    void this.marketRefresh?.refreshNow();
   }
 
   ngOnDestroy(): void {
