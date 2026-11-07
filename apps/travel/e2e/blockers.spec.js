@@ -26,7 +26,7 @@ test('phone navigation stays visible, fits the viewport and offers every Travel 
     expect(box.x + box.width).toBeLessThanOrEqual(391);
   }
   await nav.getByRole('link', { name: 'PTO', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'PTO', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'PTO', exact: true, level: 1 })).toBeVisible();
 });
 
 test('quick transport starts with a visible mode choice and hides flight fields until chosen', async ({ page, request }) => {

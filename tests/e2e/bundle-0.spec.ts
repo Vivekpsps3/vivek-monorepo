@@ -197,6 +197,39 @@ async function focusRingMisses(page: Page): Promise<string[]> {
   return misses;
 }
 
+for (const fontSize of [21, 22]) {
+  test(`section navigation keeps keyboard outlines visible with ${fontSize}px text`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/media');
+    const links = page.locator('.ui-section-nav__link');
+    await expect(links).toHaveCount(5);
+    // Exercise overflowing labels independently of which system font CI has.
+    await links.evaluateAll((elements, size) => {
+      for (const element of elements) (element as HTMLElement).style.fontSize = `${size}px`;
+    }, fontSize);
+    await links.first().focus();
+    for (let index = 0; index < await links.count(); index += 1) {
+      if (index > 0) await page.keyboard.press('Tab');
+      await expect(links.nth(index)).toBeFocused();
+      const ring = await links.nth(index).evaluate(element => {
+        const scroller = element.closest('.ui-section-nav__scroller')!;
+        const style = getComputedStyle(element);
+        const pad = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+        const box = element.getBoundingClientRect();
+        const viewport = scroller.getBoundingClientRect();
+        return {
+          left: box.left - pad - viewport.left,
+          right: viewport.right - box.right - pad,
+          mask: getComputedStyle(scroller).maskImage,
+        };
+      });
+      expect(ring.left).toBeGreaterThanOrEqual(-1);
+      expect(ring.right).toBeGreaterThanOrEqual(-1);
+      expect(ring.mask).toBe('none');
+    }
+  });
+}
+
 for (const width of [390, 1280]) {
   for (const theme of ['light', 'dark'] as const) {
     test(`bundle 0 shell at ${width}px ${theme}`, async ({ page }, testInfo) => {

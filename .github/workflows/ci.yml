@@ -1,5 +1,10 @@
 name: CI
 
+# A new commit replaces checks for the same PR or branch.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     # labeled and unlabeled retrigger the run. A re-run replays the original
@@ -210,6 +215,9 @@ jobs:
     name: Unified Site Release
     runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted", "linux", "x64", "monorepo-ci-release"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -391,6 +399,11 @@ jobs:
             docker compose --env-file /tmp/site-ci.env --profile ops down -v || true
           fi
       # Only main push artifacts are consumed by Deploy; PR images are disposable.
+      - name: Retain the latest successful release artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci_release_artifacts.py --repo "$GITHUB_REPOSITORY" --current-run "$GITHUB_RUN_ID" --apply
       - name: Package tested image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -405,6 +418,7 @@ jobs:
             image.tar.gz
             release.sha
           retention-days: 3
+          overwrite: true
 
   e2e:
     name: Finance Playwright
