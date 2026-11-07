@@ -7,11 +7,11 @@ import { Subject, filter, takeUntil } from 'rxjs';
 import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiIconName } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
+import { FinanceLockService } from '../finance-lock.service';
 import { FinanceService } from '../../services/finance.service';
 import { UserMenuContent } from '@vivek/ui';
 import { ToastService } from '@vivek/ui';
 import { MarketRefreshCoordinatorService, MarketRefreshState } from '../../services/market-refresh-coordinator.service';
-import { lockFinance } from '../../../public-api';
 
 export interface NavItem {
   path: string;
@@ -49,6 +49,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private userMenu = inject(UserMenuContent);
   @ViewChild('userMenuActions', { static: true }) private userMenuActions!: TemplateRef<unknown>;
   private marketRefresh = inject(MarketRefreshCoordinatorService);
+  private lock = inject(FinanceLockService);
   private readonly injector = inject(Injector);
   private destroy$ = new Subject<void>();
   private routePath = '';
@@ -199,9 +200,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   }
 
   lockVault(): void {
-    void lockFinance(this.injector).then(() => {
-      void this.router.navigateByUrl('/finance/vault/unlock');
-    });
+    void this.lock.lockNow();
   }
 
   logout(): void {

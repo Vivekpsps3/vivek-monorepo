@@ -45,6 +45,6 @@ test('Finance actions live in the username dropdown and preserve clear-data conf
   await page.getByRole('link', { name: 'Hub', exact: true }).click();
   await expect(page).toHaveURL(/\/hub$/);
   menu = await openUserMenu(page);
-  await expect(menu.getByRole('button', { name: 'Lock vault', exact: true })).toHaveCount(0);
+  await expect(menu.getByRole('button', { name: 'Lock Finance', exact: true })).toHaveCount(0);
   await expect(menu.getByRole('button', { name: 'Clear Finance data', exact: true })).toHaveCount(0);
 });
