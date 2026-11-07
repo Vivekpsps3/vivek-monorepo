@@ -26,6 +26,8 @@ import {
 } from "@vivek/ui";
 import { MapComponent, TravelPlace } from "./map.component";
 import { TransportEditorComponent } from "./transport-editor.component";
+import { TripCostsComponent } from "./trip-costs.component";
+import { TripRemindersComponent } from "./trip-reminders.component";
 import { showDay, showMoney, showRange } from "./display";
 import {
   nightsWord,
@@ -49,6 +51,8 @@ import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
     UiPageHeaderComponent,
     MapComponent,
     TransportEditorComponent,
+    TripCostsComponent,
+    TripRemindersComponent,
   ],
   templateUrl: "./trip.component.html",
 })
@@ -420,7 +424,13 @@ export class TripComponent {
         ...item,
       } as typeof this.stay;
   }
-  mutate(path: string, body: object, method = "post", close = true): void {
+  mutate(
+    path: string,
+    body: object,
+    method = "post",
+    close = true,
+    onFail?: () => void,
+  ): void {
     if (this.saving()) return;
     this.saving.set(true);
     this.error.set("");
@@ -445,6 +455,7 @@ export class TripComponent {
           this.load();
         },
         error: (e) => {
+          onFail?.();
           if (this.ownsSession && this.id === tripId) {
             this.saving.set(false);
             this.error.set(travelError(e));
@@ -705,13 +716,20 @@ export class TripComponent {
         "patch",
       );
   }
-  reminderDone(reminder: Trip["reminders"][number]): void {
+  reminderDone(
+    reminder: Trip["reminders"][number],
+    onFail?: () => void,
+  ): void {
     this.mutate(
       "/reminders/" + reminder.id,
       { ...reminder, done: !reminder.done },
       "patch",
       false,
+      onFail,
     );
+  }
+  addReminder(title: string, onFail: () => void): void {
+    this.mutate(this.endpoint("/reminders"), { title }, "post", false, onFail);
   }
   saveParking(): void {
     this.mutate(

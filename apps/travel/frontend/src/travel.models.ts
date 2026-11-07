@@ -117,6 +117,16 @@ export interface PtoPreview {
   note?: string;
   bucket?: string;
 }
+export interface CostBucket {
+  bucket: "transport" | "stays_plans" | "parking" | "other";
+  label: string;
+  total_cents: number;
+  paid_cents: number;
+  unpaid_cents: number;
+  total: string;
+  paid: string;
+  unpaid: string;
+}
 export interface Trip {
   id: number;
   title: string;
@@ -173,12 +183,24 @@ export interface Trip {
       total: string;
       paid: string;
       unpaid: string;
+      total_cents: number;
+      paid_cents: number;
+      unpaid_cents: number;
+      buckets: CostBucket[];
+    }[];
+    lines: {
+      amount_cents: number;
+      bucket: CostBucket["bucket"];
+      currency: string;
+      paid: boolean;
+      [key: string]: unknown;
     }[];
     manual: {
       id: number;
       category: string;
       label: string;
       amount: string;
+      amount_cents: number;
       currency: string;
       paid: boolean;
       notes: string | null;

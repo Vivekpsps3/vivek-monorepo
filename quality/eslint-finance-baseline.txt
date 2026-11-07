@@ -8,7 +8,6 @@ apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.sp
 apps/finance/frontend/src/app/assets-liabilities/assets-liabilities.component.ts	@angular-eslint/prefer-inject	4
 apps/finance/frontend/src/app/calendar/calendar.component.spec.ts	@typescript-eslint/no-explicit-any	6
 apps/finance/frontend/src/app/calendar/calendar.component.ts	@angular-eslint/prefer-inject	2
-apps/finance/frontend/src/app/charts/charts.component.html	@angular-eslint/template/eqeqeq	1
 apps/finance/frontend/src/app/charts/charts.component.spec.ts	@typescript-eslint/no-explicit-any	20
 apps/finance/frontend/src/app/charts/charts.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/crypto/client-finance.spec.ts	@typescript-eslint/no-explicit-any	1
@@ -69,6 +68,7 @@ apps/finance/frontend/src/app/vault/vault-setup.component.ts	@angular-eslint/pre
 apps/finance/frontend/src/app/vault/vault-setup.component.ts	@typescript-eslint/no-explicit-any	1
 apps/finance/frontend/src/app/vault/vault-unlock.component.ts	@angular-eslint/prefer-inject	3
 apps/finance/frontend/src/app/vault/vault-unlock.component.ts	@typescript-eslint/no-explicit-any	1
+apps/travel/frontend/src/trip-reminders.component.ts	@angular-eslint/no-output-native	1
 apps/web/src/app/app.component.ts	@angular-eslint/prefer-inject	3
 apps/web/src/app/hub/hub.component.html	@angular-eslint/template/eqeqeq	1
 apps/web/src/app/platform/auth/auth.service.ts	@typescript-eslint/no-explicit-any	3

@@ -345,85 +345,21 @@
         }
       </ui-card>
     }
-    @if (trip.reminders.length) {
-      <ui-card>
-        <h2>Reminders</h2>
-        @for (reminder of trip.reminders; track reminder.id) {
-          <article class="trip-row">
-            <div>
-              <h3>{{ reminder.title }}</h3>
-              <p>
-                {{ reminder.due_at }}
-                @if (reminder.done) {
-                  · Done
-                }
-              </p>
-            </div>
-            <div class="button-row">
-              <ui-button
-                variant="ghost"
-                size="sm"
-                (click)="reminderDone(reminder)"
-              >
-                {{ reminder.done ? "Mark open" : "Mark done" }}</ui-button
-              ><ui-button
-                variant="ghost"
-                size="sm"
-                (click)="remove('/reminders/' + reminder.id, 'reminder')"
-              >
-                Remove
-              </ui-button>
-            </div>
-          </article>
-        }
-      </ui-card>
-    }
-    @if (trip.budget.currencies.length || trip.budget.manual.length) {
-      <ui-card>
-        <h2>Trip costs</h2>
-        @for (total of trip.budget.currencies; track total.currency) {
-          <p>
-            <strong class="money">{{
-              showMoney(total.total, total.currency)
-            }}</strong>
-            · Paid
-            <span class="money">{{
-              showMoney(total.paid, total.currency)
-            }}</span>
-            · Unpaid
-            <span class="money">{{
-              showMoney(total.unpaid, total.currency)
-            }}</span>
-          </p>
-        }
-        <p class="muted">Currencies are kept separate.</p>
-        @for (line of trip.budget.manual; track line.id) {
-          <article class="trip-row">
-            <span
-              >{{ line.label }} ·
-              <span class="money">{{
-                showMoney(line.amount, line.currency)
-              }}</span>
-              @if (line.paid) {
-                · Paid
-              }</span
-            ><ui-button
-              variant="ghost"
-              size="sm"
-              (click)="open('budget', line)"
-            >
-              Edit cost</ui-button
-            ><ui-button
-              variant="ghost"
-              size="sm"
-              (click)="remove('/budget-lines/' + line.id, 'cost')"
-            >
-              Remove cost
-            </ui-button>
-          </article>
-        }
-      </ui-card>
-    }
+    <travel-trip-reminders
+      [reminders]="trip.reminders"
+      [busy]="saving()"
+      (toggle)="reminderDone($event.reminder, $event.revert)"
+      (add)="addReminder($event.title, $event.revert)"
+      (removeReminder)="remove('/reminders/' + $event.id, 'reminder')"
+    />
+    <travel-trip-costs
+      [budget]="trip.budget"
+      [tripId]="trip.id"
+      [busy]="saving()"
+      (addCost)="open('budget')"
+      (editCost)="open('budget', $event)"
+      (removeCost)="remove('/budget-lines/' + $event.id, 'cost')"
+    />
     <div class="danger-zone">
       <ui-button variant="danger-ghost" (click)="deleteTrip()"
         >Delete trip</ui-button
