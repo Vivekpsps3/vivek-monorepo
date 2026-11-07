@@ -264,6 +264,9 @@ def create_app(settings: Settings, dependencies: Dependencies | None = None) -> 
     register_travel(application)
     register_media(application)
     application.include_router(town_router.router, prefix="/api")
+    from apps.server.pixels import router as pixels_router
+
+    application.include_router(pixels_router.router, prefix="/api")
     if dependencies.test_router is not None:
         application.include_router(dependencies.test_router)
 
