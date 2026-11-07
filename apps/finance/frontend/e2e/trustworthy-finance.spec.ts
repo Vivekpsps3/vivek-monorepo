@@ -185,8 +185,8 @@ test('Charts show one cashflow and do not change financial records', async ({ pa
   await expect(note).toContainText(moneyText('Income $200.00'));
   await expect(note).toContainText(moneyText('Spending $205.00'));
   await expect(note).toContainText('counted once');
-  await charts.getByText('Data', { exact: true }).click();
-  const currentMonthRow = charts.getByRole('table', { name: 'Monthly cashflow data table' }).getByRole('row').last();
+  await charts.getByRole('button', { name: 'Show as table' }).first().click();
+  const currentMonthRow = charts.getByRole('table', { name: 'Monthly cashflow' }).getByRole('row').last();
   await expect(currentMonthRow).toContainText(moneyText('$205.00'));
   expect(vault.mutations).toHaveLength(mutationCount);
   expect(vault.quoteRequests).toHaveLength(quoteRequestCount);
