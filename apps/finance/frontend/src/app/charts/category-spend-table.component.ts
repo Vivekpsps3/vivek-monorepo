@@ -33,7 +33,7 @@ export interface CategorySpendTableRow extends CategorySpendRow {
               }
             </td>
             <td>{{ row.net | money }}</td>
-            <td>@if (row.share == null) { Unavailable } @else { {{ formatShare(row.share) }} }</td>
+            <td>@if (shareUnavailable(row)) { Unavailable } @else { {{ formatShare(row.share) }} }</td>
           </tr>
         }
       </tbody>
@@ -44,6 +44,11 @@ export interface CategorySpendTableRow extends CategorySpendRow {
 export class CategorySpendTableComponent {
   @Input() rows: CategorySpendTableRow[] = [];
   @Output() expand = new EventEmitter<void>();
+
+  /** Share is unavailable when it is null (or missing on an untyped row). */
+  shareUnavailable(row: CategorySpendTableRow): boolean {
+    return row.share == null;
+  }
 
   formatShare(value: number | null | undefined): string {
     return formatPercent(value, 0);

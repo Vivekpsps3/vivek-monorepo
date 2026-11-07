@@ -167,7 +167,15 @@ def parse_mypy_output(stdout: str) -> list[tuple[str, str]]:
 
 def mypy_findings() -> list[tuple[str, str]]:
     completed = run(
-        [sys.executable, "-m", "mypy", "--no-error-summary", "apps", "scripts"],
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "--no-error-summary",
+            "--no-color-output",
+            "apps",
+            "scripts",
+        ],
         ROOT,
     )
     if completed.returncode not in (0, 1):

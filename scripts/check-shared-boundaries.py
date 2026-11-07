@@ -58,6 +58,7 @@ _PLATFORM = (
     "apps.server.database",
     "apps.server.auth",
     "apps.server.errors",
+    "apps.server.path_ids",
     "apps.server.identity",
     "apps.server.api_key",
     "apps.server.rate_limit",

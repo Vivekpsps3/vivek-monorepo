@@ -887,7 +887,7 @@ def list_library(
     if tags:
         from apps.media.backend.services.tag_filter import tags_clause
 
-        rows = rows.filter(tags_clause(tags))
+        rows = rows.filter(tags_clause(tags, db))
     total = rows.count()
     title = CatalogItem.title_sort
     if sort == "rating":

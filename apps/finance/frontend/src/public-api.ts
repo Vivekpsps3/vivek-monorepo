@@ -1,6 +1,6 @@
 import type { Injector } from '@angular/core';
 import type { Routes } from '@angular/router';
-import { loadFinanceBudgetKeptGuarded } from './app/budget/budget-kept-import';
+import { loadFinanceBudgetKeptDaysGuarded, loadFinanceBudgetKeptGuarded } from './app/budget/budget-kept-import';
 export { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE, financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
 export { lockFinance } from './app/crypto/lock-finance';
 export { financeTabId } from './app/crypto/dek-holder';
@@ -21,4 +21,11 @@ export function loadFinanceBudgetKept(
 ) {
   return loadFinanceBudgetKeptGuarded(injector, signal, opts);
 }
-export type { BudgetKeptWeek, BudgetKeptResult } from './app/budget/budget-kept';
+export function loadFinanceBudgetKeptDays(
+  injector: Injector,
+  signal: AbortSignal,
+  opts: { from: string; to: string; deadlineMs?: number },
+) {
+  return loadFinanceBudgetKeptDaysGuarded(injector, signal, opts);
+}
+export type { BudgetKeptWeek, BudgetKeptResult, BudgetKeptDay, BudgetKeptDaysResult } from './app/budget/budget-kept';

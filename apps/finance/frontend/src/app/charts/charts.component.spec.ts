@@ -1,4 +1,7 @@
+import { ChangeDetectorRef } from '@angular/core';
+import { Router } from '@angular/router';
 import { of } from 'rxjs';
+import { FinanceService } from '../services/finance.service';
 import { ChartsComponent } from './charts.component';
 
 describe('ChartsComponent', () => {
@@ -96,7 +99,11 @@ describe('ChartsComponent', () => {
   });
 
   it('builds the exact Other (2) query string', () => {
-    const component = new ChartsComponent({} as any, { markForCheck: () => {} } as any, { navigate: () => Promise.resolve(true) } as any);
+    const component = new ChartsComponent(
+      {} as unknown as FinanceService,
+      { markForCheck: () => {} } as unknown as ChangeDetectorRef,
+      { navigate: () => Promise.resolve(true) } as unknown as Router
+    );
     component.allCategoryRows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((label, index) => ({
       label, net: 100 - index, purchases: 100 - index, share: 10,
     }));

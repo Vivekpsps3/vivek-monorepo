@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Inject, OnDestroy, OnInit, Optional } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Subject, combineLatest, finalize, forkJoin, takeUntil } from 'rxjs';
-import { SESSION_CONTEXT, type SessionPort } from '@vivek/ui';
+import { SESSION_CONTEXT } from '@vivek/ui';
 import { ChartsComponent } from '../charts/charts.component';
 import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import {
@@ -68,13 +68,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   autoPricesOff = false;
 
   private destroy$ = new Subject<void>();
+  private readonly marketRefresh = inject(MarketRefreshCoordinatorService, { optional: true });
+  private readonly pricePrefs = inject(FinancePricePrefsService, { optional: true });
+  private readonly session = inject(SESSION_CONTEXT, { optional: true });
 
   constructor(
     private finance: FinanceService,
-    private cdr: ChangeDetectorRef,
-    @Optional() private marketRefresh: MarketRefreshCoordinatorService | null = null,
-    @Optional() private pricePrefs: FinancePricePrefsService | null = null,
-    @Optional() @Inject(SESSION_CONTEXT) private session: SessionPort | null = null
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
