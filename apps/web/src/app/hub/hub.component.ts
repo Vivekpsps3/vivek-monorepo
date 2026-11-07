@@ -14,8 +14,10 @@ import {
   TRAVEL_SUMMARY_URL,
   fetchHubSummary,
   settleHubCard,
+  townSummaryUrl,
   type HubCardState,
 } from './hub-load';
+import { townIsEmpty, townStreakText, type TownSummary } from './town-hub-card';
 import {
   journalKindLabel,
   mediaReleaseLabel,
@@ -105,12 +107,17 @@ export class HubComponent implements OnInit {
   media: MediaSummary | null = null;
   mediaPending = false;
   mediaUpdatedAt: number | null = null;
+  townState: HubCardState = 'loading';
+  town: TownSummary | null = null;
+  townPending = false;
+  townUpdatedAt: number | null = null;
 
   private generation = 0;
   private financeGeneration = 0;
   private userId: number | null | undefined = undefined;
   private travelCtrl: AbortController | null = null;
   private mediaCtrl: AbortController | null = null;
+  private townCtrl: AbortController | null = null;
   private financeCtrl: AbortController | null = null;
 
   private readonly route = inject(ActivatedRoute);
@@ -133,10 +140,12 @@ export class HubComponent implements OnInit {
         if (user) {
           void this.loadTravel();
           void this.loadMedia();
+          void this.loadTown();
           void this.loadFinance();
         } else {
           this.travelState = 'empty';
           this.mediaState = 'empty';
+          this.townState = 'empty';
           this.financeState = 'locked';
         }
       }
@@ -145,6 +154,7 @@ export class HubComponent implements OnInit {
     });
     void this.loadTravel();
     void this.loadMedia();
+    void this.loadTown();
     void this.loadFinance();
   }
 
@@ -200,6 +210,16 @@ export class HubComponent implements OnInit {
     void this.loadMedia();
   }
 
+  retryTown(): void {
+    if (this.townPending) return;
+    this.townPending = true;
+    void this.loadTown();
+  }
+
+  townStreak(summary: TownSummary): string | null {
+    return townStreakText(summary);
+  }
+
   retryFinance(): void {
     if (this.financePending) return;
     this.financePending = true;
@@ -214,18 +234,22 @@ export class HubComponent implements OnInit {
     this.generation += 1;
     this.travelCtrl?.abort();
     this.mediaCtrl?.abort();
+    this.townCtrl?.abort();
     this.financeCtrl?.abort();
   }
 
   private clearCards(): void {
     this.trip = null;
     this.media = null;
+    this.town = null;
     this.travelPending = false;
     this.mediaPending = false;
+    this.townPending = false;
     this.financePending = false;
     this.clearFinanceNumbers();
     this.travelState = 'loading';
     this.mediaState = 'loading';
+    this.townState = 'loading';
     this.financeState = 'loading';
   }
 
@@ -279,6 +303,27 @@ export class HubComponent implements OnInit {
       this.media = settled.data;
     } finally {
       if (this.mediaCtrl === ctrl) this.mediaPending = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private async loadTown(): Promise<void> {
+    const generation = this.generation;
+    this.townCtrl?.abort();
+    const ctrl = new AbortController();
+    this.townCtrl = ctrl;
+    if (!this.town) this.townState = 'loading';
+    this.cdr.markForCheck();
+    try {
+      const result = await fetchHubSummary<TownSummary>(townSummaryUrl(), ctrl.signal);
+      if (generation !== this.generation || ctrl.signal.aborted) return;
+      const settled = settleHubCard(this.town, result, townIsEmpty);
+      if (!settled) return;
+      if (settled.state === 'ready' || settled.state === 'empty') this.townUpdatedAt = Date.now();
+      this.townState = settled.state;
+      this.town = settled.data;
+    } finally {
+      if (this.townCtrl === ctrl) this.townPending = false;
       this.cdr.markForCheck();
     }
   }

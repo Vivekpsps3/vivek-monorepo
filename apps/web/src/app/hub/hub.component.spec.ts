@@ -40,6 +40,21 @@ function trip(title: string) {
   };
 }
 
+function townBody() {
+  return {
+    name: 'Terraria-on-Sea',
+    founded_on: '2026-09-30',
+    level: 3,
+    xp: 260,
+    level_xp_start: 250,
+    next_level_xp: 500,
+    today_done: 1,
+    today_total: 2,
+    longest_streak: 3,
+    longest_streak_unit: 'days',
+  };
+}
+
 function mediaBody() {
   return {
     currently: [{ id: 3, kind: 'tv', title: 'The Wire', progress_label: 'S1 E2' }],
@@ -87,6 +102,10 @@ describe('HubComponent', () => {
     const index = pending.findIndex(call => call.url.includes(urlPart));
     if (index < 0) throw new Error(`missing fetch ${urlPart}; have ${pending.map(call => call.url).join(', ')}`);
     return pending.splice(index, 1)[0];
+  }
+
+  function resolveTown(body: unknown = townBody()): void {
+    takeCall('/api/town').resolve(json(200, body));
   }
 
   async function render(): Promise<void> {
@@ -190,15 +209,17 @@ describe('HubComponent', () => {
     expect(navigate).not.toHaveBeenCalled();
     takeCall('/travel/').resolve(json(200, {next_trip: null}));
     takeCall('/media/').resolve(json(200, {currently: [], recent_reviews: [], upcoming: [], next_episodes: []}));
+    resolveTown();
     query.next(convertToParamMap({settings: 'account'}));
     expect(navigate).toHaveBeenCalledWith('/settings/account', { replaceUrl: true });
   });
 
   it('recovers one failed summary without loading the vault or signing out', async () => {
     await render();
-    expect(pending.map(call => call.url).sort()).toEqual(['/media/api/summary', '/travel/api/summary']);
+    expect(pending.map(call => call.url.split('?')[0]).sort()).toEqual(['/api/town/summary', '/media/api/summary', '/travel/api/summary']);
     takeCall('/travel/').resolve(json(503, {}));
     takeCall('/media/').resolve(json(200, mediaBody()));
+    resolveTown();
     await paint();
 
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
@@ -228,6 +249,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(401, { detail: 'expired' }));
     takeCall('/media/').resolve(json(200, mediaBody()));
+    resolveTown();
     await paint();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Your session ended. Sign in again to see trips.');
@@ -240,6 +262,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: trip('Lisbon') }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
     await paint();
     expect(fixture.nativeElement.textContent).toContain('Lisbon');
 
@@ -260,12 +283,16 @@ describe('HubComponent', () => {
     await render();
     const firstTravel = takeCall('/travel/');
     const firstMedia = takeCall('/media/');
+    const firstTown = takeCall('/api/town');
     users.next(person(2, 'Bea'));
     await Promise.resolve();
     firstTravel.resolve(json(200, { next_trip: trip('Secret') }));
     firstMedia.resolve(json(200, mediaBody()));
+    firstTown.resolve(json(200, { ...townBody(), level: 99, xp: 9999 }));
+    resolveTown();
     await paint();
     expect(fixture.nativeElement.textContent).not.toContain('Secret');
+    expect(fixture.nativeElement.textContent).not.toContain('Lv 99');
 
     takeCall('/travel/').resolve(json(200, { next_trip: trip('Kyoto') }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
@@ -284,6 +311,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: trip('Lisbon') }));
     takeCall('/media/').resolve(json(503, {}));
+    resolveTown();
     await paint();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Lisbon');
@@ -303,6 +331,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, mediaBody()));
+    resolveTown();
     await paint();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('No trips yet');
@@ -317,6 +346,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
     await paint();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('No accounts yet');
@@ -332,6 +362,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
     await paint();
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).not.toContain('No accounts yet');
@@ -357,6 +388,7 @@ describe('HubComponent', () => {
     expect(component.financeState).toBe('locked');
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
     await paint();
   });
 
@@ -387,6 +419,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
     await paint();
   }
 
@@ -542,6 +575,7 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
     for (let i = 0; i < 20 && financeCalls === 0; i++) await new Promise(resolve => setTimeout(resolve, 0));
     fixture.detectChanges();
     expect(financeCalls).toBeGreaterThan(0);
@@ -565,9 +599,80 @@ describe('HubComponent', () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));
     takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
     await paint();
     expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
     expect(fixture.nativeElement.textContent).not.toContain('Save name');
     expect(fixture.nativeElement.textContent).not.toContain('Change username');
+  });
+
+  it('shows the town card with level, today, and streak while finance stays locked', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
+    await paint();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Terraria-on-Sea');
+    expect(text).toContain('Lv 3 · 260 / 500 XP');
+    expect(text).toContain('1 of 2 habits done today');
+    expect(text).toContain('Longest streak: 3-day streak');
+    expect(text).toContain('Open Town');
+    expect(text).toContain('Finance is locked. Unlock to see net worth.');
+    expect(vaultReads).toBe(0);
+    const bar = fixture.nativeElement.querySelector('section[aria-labelledby="town-heading"] progress');
+    expect(bar?.getAttribute('aria-valuemin')).toBe('250');
+    expect(bar?.getAttribute('aria-valuemax')).toBe('500');
+    expect(bar?.getAttribute('aria-valuenow')).toBe('260');
+    expect(bar?.getAttribute('aria-valuetext')).toBe('Level 3, 260 of 500 XP');
+  });
+
+  it('shows the town empty state for a town with no habits', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown({ ...townBody(), founded_on: null, level: 1, xp: 0, level_xp_start: 0, next_level_xp: 100, today_done: 0, today_total: 0, longest_streak: 0, longest_streak_unit: null });
+    await paint();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Start your town');
+    expect(text).not.toContain('habits done today');
+  });
+
+  it('omits the streak line when every streak is 0 but habits exist', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown({ ...townBody(), longest_streak: 0, longest_streak_unit: null });
+    await paint();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('1 of 2 habits done today');
+    expect(text).not.toContain('Longest streak');
+  });
+
+  it('recovers the town card when a failed summary is retried', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    takeCall('/api/town').resolve(json(503, {}));
+    await paint();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain("Couldn't load your town.");
+
+    fixture.nativeElement.querySelector('section[aria-labelledby="town-heading"] button').click();
+    fixture.detectChanges();
+    resolveTown();
+    await paint();
+    expect(fixture.nativeElement.textContent).toContain('Lv 3 · 260 / 500 XP');
+  });
+
+  it('shows the session-ended copy when the town summary is rejected', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    takeCall('/api/town').resolve(json(401, { detail: 'expired' }));
+    await paint();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Your session ended. Sign in again to see your town.');
+    expect(auth.logout).not.toHaveBeenCalled();
   });
 });

@@ -16,8 +16,15 @@ from apps.server.identity.session import get_current_user
 from apps.server.path_ids import MAX_PATH_ID
 from apps.server.town import writes
 from apps.server.town.clock import get_town_clock, resolve_tz
-from apps.server.town.schemas import CheckinDays, CheckinResult, Habit, HabitList, Town
-from apps.server.town.service import read_checkins, read_habits, read_town
+from apps.server.town.schemas import (
+    CheckinDays,
+    CheckinResult,
+    Habit,
+    HabitList,
+    HubTownSummary,
+    Town,
+)
+from apps.server.town.service import read_checkins, read_habits, read_town, read_town_summary
 from packages.time.today import today_in_zone
 
 router = APIRouter(prefix="/town", tags=["town"])
@@ -82,6 +89,19 @@ def get_town(
 ) -> Town:
     zone = resolve_tz(tz)
     return Town.model_validate(read_town(db, principal.id, today_in_zone(zone, now), zone))
+
+
+@router.get("/summary", response_model=HubTownSummary)
+def get_town_summary(
+    tz: str | None = None,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+    now: datetime = Depends(get_town_clock),
+) -> HubTownSummary:
+    zone = resolve_tz(tz)
+    return HubTownSummary.model_validate(
+        read_town_summary(db, principal.id, today_in_zone(zone, now), zone)
+    )
 
 
 @router.get("/habits", response_model=HabitList)

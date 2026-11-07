@@ -149,6 +149,22 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.town-bar {
+  grid-column: 1 / -1;
+}
+
+.town-open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.town-progress {
+  width: 100%;
+  margin: var(--space-3) 0;
+  accent-color: var(--accent);
+}
+
 .finance-more {
   margin-top: var(--space-5);
 }
