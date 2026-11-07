@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule, KeyValuePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, firstValueFrom, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import {
   Holding,
@@ -41,6 +41,7 @@ import {
   FidelityStageRecord,
   replacementPreviewForAccounts,
 } from '../utils/fidelity-import.util';
+import { formatAsOf, quoteBook } from '../utils/quote-book';
 import {
   UiBadgeComponent,
   UiBadgeVariant,
@@ -198,14 +199,24 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   }
 
   refreshHoldingPrice(h: Holding) {
-    void this.marketRefresh.refreshSymbol(h.symbol).then(result => {
-      if (result.error || result.failedRecords.length) {
-        this.toastService.error(`${h.symbol} quote could not be fully saved. Its prior price remains available.`);
-      } else {
-        this.toastService.success(`${h.symbol} price refreshed`);
-      }
-      this.cdr.markForCheck();
-    }).catch(() => this.toastService.error(`${h.symbol} price could not be refreshed. Its prior price remains available.`));
+    return this.refreshSymbols([h.symbol]);
+  }
+
+  /** Refresh the given held symbols, then re-read holdings so the table shows the shared book. */
+  private async refreshSymbols(symbols: string[]): Promise<void> {
+    const results = await Promise.all(symbols.map(symbol => this.marketRefresh.refreshSymbol(symbol)));
+    const failed = results.filter(result => result.error || result.failedRecords.length);
+    if (failed.length === symbols.length && symbols.length === 1) {
+      this.toastService.error(`${symbols[0]} price could not be refreshed. Its prior price remains available.`);
+    } else if (failed.length) {
+      this.toastService.error(`${failed.map(result => result.symbol).join(', ')} quote could not be fully saved. Its prior price remains available.`);
+    } else if (symbols.length === 1) {
+      this.toastService.success(`${symbols[0]} price refreshed`);
+    } else {
+      this.toastService.success('Prices refreshed');
+    }
+    await firstValueFrom(this.financeService.getHoldings());
+    this.cdr.markForCheck();
   }
 
   retryLoadHoldings(): void {
@@ -226,11 +237,35 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Saved quote for the symbol in the form, from the one shared book. */
+  checkPrice(): { price: number; asOfText: string } | null {
+    const symbol = this.newHolding.symbol.trim().toUpperCase();
+    if (!symbol) return null;
+    const entry = quoteBook(this.holdings).get(symbol);
+    return entry ? { price: entry.price, asOfText: formatAsOf(entry.asOf) } : null;
+  }
+
+  asOfText(h: Holding): string {
+    return formatAsOf(h.price_as_of);
+  }
+
   checkSharePrice() {
     const symbol = this.newHolding.symbol.trim().toUpperCase();
     if (!symbol) {
       this.priceCheckError = 'Enter a symbol to check price.';
       this.cdr.markForCheck();
+      return;
+    }
+    const held = this.holdings.some(holding => (holding.symbol ?? '').trim().toUpperCase() === symbol);
+    if (held) {
+      // Held symbols already have a saved quote: refresh it through the
+      // coordinator so the book, the table and this line stay in agreement.
+      this.checkingPrice = true;
+      this.priceCheckError = '';
+      void this.refreshSymbols([symbol]).finally(() => {
+        this.checkingPrice = false;
+        this.cdr.markForCheck();
+      });
       return;
     }
     this.priceCheckError = '';
