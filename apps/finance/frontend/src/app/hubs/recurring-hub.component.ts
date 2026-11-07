@@ -81,9 +81,9 @@ export interface CommitmentRow {
                   @for (item of filteredRows; track item.kind + ':' + item.id) {
                     <tr>
                       <td>{{ item.date | appDate }}</td>
-                      <td><strong>{{ item.name }}</strong><small>{{ item.kind === 'bill' ? item.category : 'Subscription' }} · {{ item.kind === 'bill' ? 'Bill' : 'Subscription' }}</small></td>
-                      <td>{{ item.account || 'Not recorded' }}</td>
-                      <td>{{ item.autopay == null ? 'Not recorded' : item.autopay ? 'Autopay' : 'Manual' }}</td>
+                      <td><strong>{{ item.name }}</strong><small>{{ metaLine(item) }}</small></td>
+                      <td>{{ item.account || '—' }}</td>
+                      <td>{{ item.autopay == null ? '—' : item.autopay ? 'Autopay' : 'Manual' }}</td>
                       <td>{{ frequencyLabel(item.frequency) }}</td>
                       <td class="money">
                         @if (item.needsFixing) { <ui-badge variant="warning">Needs fixing</ui-badge> }
@@ -99,8 +99,8 @@ export interface CommitmentRow {
             <div class="commitment-cards">
               @for (item of filteredRows; track item.kind + ':' + item.id) {
                 <article class="commitment-card">
-                  <div class="commitment-card__heading"><div><strong>{{ item.name }}</strong><span>{{ item.kind === 'bill' ? item.category : 'Subscription' }} · {{ item.active ? 'Active' : 'Inactive' }}</span></div><strong class="money">{{ item.amount | money }}</strong></div>
-                  <dl><div><dt>Next due</dt><dd>{{ item.date | appDate }}</dd></div><div><dt>Account</dt><dd>{{ item.account || 'Not recorded' }}</dd></div><div><dt>Autopay</dt><dd>{{ item.autopay == null ? 'Not recorded' : item.autopay ? 'Autopay' : 'Manual' }}</dd></div><div><dt>Frequency</dt><dd>{{ frequencyLabel(item.frequency) }}</dd></div></dl>
+                  <div class="commitment-card__heading"><div><strong>{{ item.name }}</strong><span>{{ metaLine(item) }}</span><span class="commitment-card__status">{{ item.active ? 'Active' : 'Inactive' }}</span></div><strong class="money">{{ item.amount | money }}</strong></div>
+                  <dl><div><dt>Next due</dt><dd>{{ item.date | appDate }}</dd></div><div><dt>Account</dt><dd>{{ item.account || '—' }}</dd></div><div><dt>Autopay</dt><dd>{{ item.autopay == null ? '—' : item.autopay ? 'Autopay' : 'Manual' }}</dd></div><div><dt>Frequency</dt><dd>{{ frequencyLabel(item.frequency) }}</dd></div></dl>
                   <div class="commitment-card__actions"><ui-button variant="secondary" (clicked)="edit(item)">Edit</ui-button><ui-button variant="danger" (clicked)="remove(item)">Delete</ui-button></div>
                 </article>
               }
@@ -217,6 +217,14 @@ export class RecurringHubComponent implements OnInit {
       const dateCompare = (a.date || '').localeCompare(b.date || '') * (this.dateOrder === 'soonest' ? 1 : -1);
       return dateCompare || a.name.localeCompare(b.name) || a.kind.localeCompare(b.kind);
     });
+  }
+
+  /** F18: one meta line per row — kind · category/account · payment mode. */
+  metaLine(item: CommitmentRow): string {
+    const kindLabel = item.kind === 'bill' ? 'Bill' : 'Subscription';
+    const middle = item.kind === 'bill' ? item.category : item.account || '—';
+    const payMode = item.autopay == null ? 'Manual' : item.autopay ? 'Autopay' : 'Manual';
+    return `${kindLabel} · ${middle} · ${payMode}`;
   }
 
   get filteredRows(): CommitmentRow[] {

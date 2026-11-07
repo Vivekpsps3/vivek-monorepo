@@ -101,6 +101,19 @@ describe('RecurringHubComponent', () => {
       replaceUrl: true,
     });
   });
+
+  it('metaLine reads kind, account and payment mode (F18)', () => {
+    component.fixedExpenses = [bill({})];
+    component.subscriptions = [subscription({})];
+    const rows = component.rows;
+    const rent = rows.find(row => row.name === 'Rent')!;
+    const internet = rows.find(row => row.name === 'Internet')!;
+    expect(component.metaLine(internet)).toBe('Subscription · Visa · Manual'); // never 'Subscription · Subscription'
+    expect(component.metaLine(rent)).toBe('Bill · Rent · Autopay');
+    component.subscriptions = [subscription({ payment_account: null })];
+    const noAccount = component.rows.find(row => row.name === 'Internet')!;
+    expect(component.metaLine(noAccount)).toBe('Subscription · — · Manual');
+  });
 });
 
 function componentRow(kind: 'bill' | 'subscription', record: FixedExpense | Subscription): CommitmentRow {

@@ -16,6 +16,7 @@ import {
   stockLabEvidenceCards,
 } from '../utils/evidence-labels.util';
 import { AppDatePipe } from '@vivek/ui';
+import { asOfPhrase } from '../planning/planning-copy';
 import { formatEstimate as formatEstimateMoney, formatStoredMoney } from '../shared/stored-money';
 
 @Component({
@@ -121,7 +122,7 @@ export class StockLabComponent implements OnInit, OnDestroy {
     return stockLabEvidenceCards({
       primarySymbol: this.scenario.primary_symbol,
       hasQuote: !!primary?.quote?.current_price,
-      cacheStatus: this.cachePhrase(primary?.cache_status),
+      asOf: asOfPhrase(primary?.fetched_at) || null,
     });
   }
 
@@ -276,11 +277,10 @@ export class StockLabComponent implements OnInit, OnDestroy {
     return formatEstimateMoney(value);
   }
 
-  cachePhrase(status: string | null | undefined): string {
-    if (status === 'hit') return 'cached';
-    if (status === 'refresh') return 'refreshed';
-    if (status === 'miss') return 'fetched';
-    return '—';
+  /** F18: "Price as of Oct 22, 3:24 PM PT" — no cache vocabulary. */
+  priceAsOf(fetchedAt: string | null | undefined): string {
+    const phrase = asOfPhrase(fetchedAt);
+    return phrase ? `Price ${phrase}` : '';
   }
 
   formatPct(value: number | null | undefined): string {

@@ -187,8 +187,29 @@ export class IncomeComponent implements OnInit, OnDestroy {
       .reduce((sum, row) => sum + row.annual_taxes + row.annual_deductions, 0);
   }
 
-  get activeMonthlyTotal(): number {
-    return this.activeAnnualNet / 12;
+  get activeHasTaxes(): boolean {
+    return this.activeAnnualAdjustments > 0;
+  }
+
+  get activeMonthlyGross(): number {
+    return this.activeAnnualTotal / 12;
+  }
+
+  /** F18 (REC-03): open the first current job without taxes, disclosure open. */
+  addTaxes(): void {
+    const row = this.incomes.find(
+      candidate => isCurrentJob(candidate) && candidate.annual_taxes + candidate.annual_deductions === 0,
+    );
+    if (!row) return;
+    this.openEditModal(row);
+    setTimeout(() => {
+      const disclosure = document.querySelector<HTMLDetailsElement>(
+        'ui-dialog details.pay-disclosure:not(.pay-disclosure--history)',
+      );
+      if (!disclosure) return;
+      disclosure.open = true;
+      disclosure.querySelector('input')?.focus();
+    }, 0);
   }
 
   get formAnnualBase(): number {

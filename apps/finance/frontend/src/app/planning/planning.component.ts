@@ -64,6 +64,13 @@ import {
   restorePlanningProfilePayload,
 } from './planning-assumptions.util';
 import { spendingModeInference } from './spending-mode';
+import {
+  asOfPhrase,
+  dateWarnings as dateWarningsFor,
+  planningSourceLabel,
+  spendingBasisSentence as spendingBasisSentenceFor,
+  type DateWarning,
+} from './planning-copy';
 import { focusErrorSummary } from '../shared/form-validation';
 import { AppDatePipe } from '@vivek/ui';
 
@@ -435,9 +442,55 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     return this.activeTool === 'overview' || this.activeTool === 'simulation' || this.activeTool === 'retirement-target';
   }
 
-  showVariableCostWarning(): boolean {
-    return this.spendingMode === 'recurring'
-      || (this.spendingMode === 'components' && this.effectiveSpendingComponents.variable_annual <= 0);
+  /** F18: plain-language facts-card copy (labels + source lines). */
+  get factsCopy(): {
+    netWorth: { label: string; small: string };
+    portfolio: { label: string; small: string };
+    takeHome: { label: string; small: string };
+    scheduled: { label: string; small: string };
+  } {
+    const inputs = this.inputs;
+    const balanceAsOf = asOfPhrase(inputs?.oldest_balance_as_of);
+    const quoteAsOf = asOfPhrase(inputs?.oldest_portfolio_quote_date);
+    return {
+      netWorth: {
+        label: 'Net worth',
+        small: balanceAsOf
+          ? `${planningSourceLabel('net_worth')} · ${balanceAsOf}`
+          : planningSourceLabel('net_worth'),
+      },
+      portfolio: {
+        label: 'Portfolio',
+        small: quoteAsOf ? `From your holdings · prices ${quoteAsOf}` : 'From your holdings',
+      },
+      takeHome: { label: 'Take-home', small: planningSourceLabel('income') },
+      scheduled: {
+        label: 'Scheduled costs',
+        // Spec gap: the ({fixed} bills, {subs} subscriptions) counts aren't
+        // carried by PlanningInputsPreview, so the parenthetical waits for a
+        // service/model addition owned outside F18.
+        small: planningSourceLabel('spending'),
+      },
+    };
+  }
+
+  get dateWarnings(): DateWarning[] {
+    return dateWarningsFor(this.inputs);
+  }
+
+  get spendingBasisSentence(): string {
+    return spendingBasisSentenceFor(this.spendingMode, this.inputs?.recurring_annual_spending || 0);
+  }
+
+  /** Tool-breakdown source line; components/manual spending plans aren't schedule-derived. */
+  get spendingSourceLine(): string {
+    return (this.inputs?.annual_spending_source || 'active-recurring-schedules') === 'active-recurring-schedules'
+      ? planningSourceLabel('spending')
+      : 'From your spending plan';
+  }
+
+  sourceLabel(kind: 'net_worth' | 'income'): string {
+    return planningSourceLabel(kind);
   }
 
   private onFinanceDataChange(change: FinanceDataChange): void {
