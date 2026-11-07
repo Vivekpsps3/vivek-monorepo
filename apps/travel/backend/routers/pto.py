@@ -2,12 +2,14 @@
 
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
+from apps.server.path_ids import bounded_path_id
 from apps.travel.backend.database import get_db
 from apps.travel.backend.models import PtoEntry, PtoPolicy
 from apps.travel.backend.schemas import PtoEntryIn, PtoPolicyIn
@@ -151,7 +153,7 @@ def create_entry(
 
 @router.delete("/pto/entries/{entry_id}", status_code=204)
 def delete_entry(
-    entry_id: int,
+    entry_id: Annotated[int, bounded_path_id("That PTO entry is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):

@@ -594,9 +594,9 @@ def test_home_cards_have_days_until_and_next_action(client):
     assert by_title["Later"]["next_action"] == "Review the plan"
     past = by_title["Already home"]
     assert past["phase"] == "past"
-    assert "days_until" not in past
-    assert "next_action" not in past
-    assert all("days_until" not in item and "next_action" not in item for item in body["past"])
+    assert past["days_until"] is None
+    assert past["next_action"] is None
+    assert all(item["days_until"] is None and item["next_action"] is None for item in body["past"])
 
 
 def test_budget_buckets_owner_scoped(client):
