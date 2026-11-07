@@ -219,6 +219,13 @@
     @if (activeTool === 'simulation') {
     <ui-card [title]="'Saved inputs'">
 
+      @if (savedInputsError) {
+        <div id="saved-inputs-card">
+          <p class="mc-error mc-saved-inputs-error" role="alert" tabindex="-1" data-error-summary>
+            <span aria-hidden="true">⚠</span> {{ savedInputsError }}
+          </p>
+        </div>
+      }
       <div class="mc-profiles-row">
         <label class="mc-field">
           <span>Load saved inputs</span>

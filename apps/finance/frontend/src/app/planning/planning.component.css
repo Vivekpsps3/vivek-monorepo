@@ -228,6 +228,16 @@ ui-button {
   border-radius: var(--radius-lg);
 }
 
+/* Inside the Saved inputs card the alert sits directly above the controls. */
+.mc-saved-inputs-error {
+  margin-bottom: var(--space-3);
+}
+
+.mc-saved-inputs-error:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
 .mc-summary-band,
 .mc-kpis {
   display: grid;
