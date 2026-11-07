@@ -1,0 +1,53 @@
+name: monorepo-ci
+services:
+  docker:
+    image: docker:29-dind@sha256:fafc2949724b06fd4e4bc53c446a09149b750693f0abe7f444e9eec1e138fe65
+    privileged: true
+    restart: unless-stopped
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: [dockerd, --host=unix:///run/ci-docker/docker.sock, --group=1001]
+    volumes:
+      - docker-data:/var/lib/docker
+      - docker-socket:/run/ci-docker
+      - work:/opt/runner/_work
+      - temp:/tmp
+    healthcheck:
+      test: [CMD, docker, -H, unix:///run/ci-docker/docker.sock, info]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 12g
+    cpus: 4
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  runner:
+    build: .
+    image: monorepo-ci-runner:local
+    restart: unless-stopped
+    depends_on:
+      docker: {condition: service_healthy}
+    # The tests probe nested Compose's loopback-published HTTP ports.
+    network_mode: service:docker
+    shm_size: 2g
+    volumes:
+      - runner:/opt/runner
+      - work:/opt/runner/_work
+      - home:/home/runner
+      - tools:/opt/hostedtoolcache
+      - docker-socket:/run/ci-docker
+      - temp:/tmp
+    mem_limit: 12g
+    cpus: 4
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+volumes:
+  runner:
+  work:
+  home:
+  tools:
+  temp:
+  docker-data:
+  docker-socket:

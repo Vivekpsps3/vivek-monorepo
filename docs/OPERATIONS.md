@@ -80,7 +80,7 @@ to an autoheal helper.
 
 ## Release and rollback
 
-GitHub-hosted CI runs domain tests, the root frontend production build, migration and
+The [local CI runner](./LOCAL-RUNNER.md) runs trusted domain tests, the root frontend production build, migration and
 restore tests, runtime dependency audits, and image checks for authenticated reads,
 writes, CSRF, isolation, deletion, routing, and caching. Desktop/mobile Chromium
 checks run against the built image. Official Actions and image bases are pinned.
