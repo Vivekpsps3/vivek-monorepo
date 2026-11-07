@@ -677,3 +677,15 @@ details.account-sub[open] > summary::before {
     font-weight: 650;
   }
 }
+
+/* F16: holding details row + gain percent */
+.holding-details td {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  padding-top: 0;
+  border-top: 0;
+}
+.gain-pct {
+  display: block;
+  font-size: var(--text-xs);
+}

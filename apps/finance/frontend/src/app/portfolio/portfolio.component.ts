@@ -546,10 +546,15 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.applyFilter();
   }
 
+  /** F16: where a holding came from, for the details row. */
+  holdingSource(h: Holding): string {
+    return h.brokerage_account_id != null ? 'Fidelity' : 'Manual';
+  }
+
   async deleteHolding(h: Holding) {
     const ok = await this.confirmService.ask(
-      'Delete holding?',
-      `Remove ${h.symbol} from your portfolio? You can undo right after.`,
+      `Delete ${h.symbol}?`,
+      'This removes it from your portfolio. You can undo right after.',
       'Delete',
       'Cancel'
     );
@@ -568,7 +573,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   private removeHolding(h: Holding, backup: HoldingCreate): void {
     this.financeService.deleteHolding(h.id, true).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
-        this.toastService.success('Holding deleted', () => this.restoreHolding(backup));
+        this.toastService.success(`${h.symbol} deleted`, () => this.restoreHolding(backup));
       },
       error: () => {
         this.toastService.error(failureCopy('delete', 'this holding'), {

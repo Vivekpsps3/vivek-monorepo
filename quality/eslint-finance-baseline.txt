@@ -35,7 +35,7 @@ apps/finance/frontend/src/app/planning/planning-quick-tools.component.html	@angu
 apps/finance/frontend/src/app/planning/planning.component.html	@angular-eslint/template/eqeqeq	1
 apps/finance/frontend/src/app/planning/planning.component.spec.ts	@typescript-eslint/no-explicit-any	12
 apps/finance/frontend/src/app/planning/planning.component.ts	@angular-eslint/prefer-inject	5
-apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/eqeqeq	12
+apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/eqeqeq	9
 apps/finance/frontend/src/app/portfolio/portfolio.component.html	@angular-eslint/template/prefer-control-flow	5
 apps/finance/frontend/src/app/portfolio/portfolio.component.spec.ts	@typescript-eslint/no-explicit-any	5
 apps/finance/frontend/src/app/portfolio/portfolio.component.ts	@angular-eslint/prefer-inject	5
