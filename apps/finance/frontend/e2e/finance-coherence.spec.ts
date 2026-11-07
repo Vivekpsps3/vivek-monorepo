@@ -645,7 +645,7 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     await page.screenshot({ path: `/tmp/finance-ux-nav-${width}.png` });
     await plan.focus();
     await expect(plan).toBeFocused();
-    await page.keyboard.press('Enter');
+    await plan.press('Enter');
     await expect(page).toHaveURL(/\/planning(?:\?|$)/);
     await expect(page.locator('app-planning-hub')).toBeVisible();
   }

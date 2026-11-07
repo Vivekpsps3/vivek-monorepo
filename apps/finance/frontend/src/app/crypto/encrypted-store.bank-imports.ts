@@ -158,7 +158,7 @@ export class EncryptedBankImportStore {
   async deleteImportReceipt(id: number): Promise<void> {
     await this.port.ensureLoaded();
     const chunks = this.port.getImportRows<ImportReceiptRows>()
-      .filter(row => (row as any).record_type === 'bank_receipt_rows' && Number(row.receipt_id) === id);
+      .filter(row => row.record_type === 'bank_receipt_rows' && Number(row.receipt_id) === id);
     for (const chunk of chunks) await this.port.removeImportRecord(chunk.id);
     await this.port.removeImportRecord(id);
   }

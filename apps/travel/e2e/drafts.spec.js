@@ -5,14 +5,13 @@ const travelNav = page => page.getByRole('navigation', { name: 'Travel sections'
 
 async function openPolicy(page) {
   await page.goto('/travel/pto');
-  await page.getByText('PTO policy and starting balance', { exact: true }).click();
+  await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
 }
 
 async function leaveDraft(page, label = 'Family visit') {
-  await page.getByLabel('Start date', { exact: true }).fill('2026-12-01');
-  await page.getByLabel('End date', { exact: true }).fill('2026-12-02');
-  await page.getByText('Save other leave', { exact: true }).click();
-  await page.getByLabel('Leave label').fill(label);
+  await page.getByLabel('First day', { exact: true }).fill('2026-12-01');
+  await page.getByLabel('Last day', { exact: true }).fill('2026-12-02');
+  await page.getByLabel('Name', { exact: true }).fill(label);
   await page.getByLabel('Notes (optional)').fill('Keep this draft');
 }
 
@@ -45,7 +44,7 @@ test.beforeEach(async ({ request }) => {
 test('PTO drafts protect navigation and reload; Keep editing preserves both forms and focus', async ({ page, request }) => {
   await openPolicy(page);
   expect(await blocksUnload(page)).toBe(false);
-  await page.getByLabel('Known balance (days)').fill('12.5');
+  await page.getByLabel('Starting balance').fill('12.5');
   await leaveDraft(page);
   expect(await blocksUnload(page)).toBe(true);
   const trips = travelNav(page).getByRole('link', { name: 'Trips', exact: true });
@@ -54,65 +53,72 @@ test('PTO drafts protect navigation and reload; Keep editing preserves both form
   await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(page).toHaveURL(/\/travel\/pto$/);
   await expect(trips).toBeFocused();
-  await expect(page.getByLabel('Known balance (days)')).toHaveValue('12.5');
-  await expect(page.getByLabel('Leave label')).toHaveValue('Family visit');
+  await expect(page.getByLabel('Starting balance')).toHaveValue('12.5');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Family visit');
   await expect(page.getByLabel('Notes (optional)')).toHaveValue('Keep this draft');
-  expect((await (await request.get('/travel/api/pto')).json()).policy.balance_saved).toBe('10.0000');
+  const unsaved = await (await request.get('/travel/api/pto')).json();
+  expect(unsaved.policy.balance_saved).toBe('10.0000');
+  expect(unsaved.buckets.pto.start_balance_hours).toBe('80');
   await trips.click();
   await page.getByRole('button', { name: 'Leave time off', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeFocused();
   await travelNav(page).getByRole('link', { name: 'PTO', exact: true }).click();
-  await page.getByText('PTO policy and starting balance', { exact: true }).click();
-  await expect(page.getByLabel('Known balance (days)')).toHaveValue('10');
-  await page.getByText('Save other leave', { exact: true }).click();
-  await expect(page.getByLabel('Leave label')).toHaveValue('');
+  await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
+  await expect(page.getByLabel('Starting balance')).toHaveValue('80');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('');
 });
 
 test('saving and removing leave refreshes totals without replacing an unsaved policy', async ({ page, request }) => {
   await openPolicy(page);
-  await page.getByLabel('Known balance (days)').fill('12.5');
+  await page.getByLabel('Starting balance').fill('12.5');
   await leaveDraft(page);
-  await page.getByRole('button', { name: 'Save leave', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.locator('main [role=status]')).toContainText('other edits still need saving');
-  await expect(page.getByLabel('Known balance (days)')).toHaveValue('12.5');
-  await expect(page.getByLabel('Leave label')).toHaveValue('');
+  await expect(page.getByLabel('Starting balance')).toHaveValue('12.5');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('');
   const saved = await (await request.get('/travel/api/pto')).json();
   expect(saved.entries.map(entry => entry.label)).toEqual(['Family visit']);
   expect(saved.policy.balance_saved).toBe('10.0000');
+  expect(saved.buckets.pto.start_balance_hours).toBe('80');
   await page.getByRole('button', { name: 'Remove leave', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Remove leave', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Family visit', exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Known balance (days)')).toHaveValue('12.5');
-  await page.getByRole('button', { name: 'Save PTO policy' }).click();
-  await expect(page.locator('main [role=status]')).toHaveText('PTO saved.');
+  await expect(page.getByLabel('Starting balance')).toHaveValue('12.5');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
   expect(await blocksUnload(page)).toBe(false);
   await travelNav(page).getByRole('link', { name: 'Trips', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeVisible();
-  expect((await (await request.get('/travel/api/pto')).json()).policy.balance_saved).toBe('12.5000');
+  const stored = await (await request.get('/travel/api/pto')).json();
+  expect(stored.buckets.pto.start_balance_hours).toBe('12.5');
+  expect(stored.policy.balance_saved).toBe('1.5625');
 });
 
 test('failed PTO save and retry retain both drafts; success saves only the submitted policy', async ({ page, request }) => {
   await openPolicy(page);
-  await page.getByLabel('Known balance (days)').fill('12.5');
+  await page.getByLabel('Starting balance').fill('12.5');
   await leaveDraft(page);
   let attempts = 0;
-  await page.route('**/travel/api/pto/policy', route => ++attempts === 1
+  await page.route('**/travel/api/pto/policies/pto', route => ++attempts === 1
     ? route.fulfill({ status: 502, json: { message: 'Policy temporarily unavailable' } }) : route.continue());
-  await page.getByRole('button', { name: 'Save PTO policy' }).click();
-  await expect(page.locator('main [role=alert]')).toContainText('Policy temporarily unavailable');
-  await page.getByRole('button', { name: 'Retry PTO' }).click();
-  await expect(page.getByLabel('Known balance (days)')).toHaveValue('12.5');
-  await expect(page.getByLabel('Leave label')).toHaveValue('Family visit');
-  const held = await holdResponse(page, '**/travel/api/pto/policy');
-  await page.getByRole('button', { name: 'Save PTO policy' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText("Couldn't save your PTO policy.");
+  await expect(page.getByRole('alert')).not.toContainText('Policy temporarily unavailable');
+  await expect(page.getByLabel('Starting balance')).toHaveValue('12.5');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Family visit');
+  const held = await holdResponse(page, '**/travel/api/pto/policies/pto');
+  await page.getByRole('alert').getByRole('button', { name: 'Retry', exact: true }).click();
   await held.ready;
-  await page.getByLabel('Known balance (days)').fill('15');
+  await page.getByLabel('Starting balance').fill('15');
   held.release();
   await expect(page.locator('main [role=status]')).toContainText('other edits still need saving');
   await expect(page.locator('main [role=alert]')).toHaveCount(0);
-  await expect(page.getByLabel('Known balance (days)')).toHaveValue('15');
-  await expect(page.getByLabel('Leave label')).toHaveValue('Family visit');
-  expect((await (await request.get('/travel/api/pto')).json()).policy.balance_saved).toBe('12.5000');
+  await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
+  await expect(page.getByLabel('Starting balance')).toHaveValue('15');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Family visit');
+  const raced = await (await request.get('/travel/api/pto')).json();
+  expect(raced.buckets.pto.start_balance_hours).toBe('12.5');
+  expect(raced.policy.balance_saved).toBe('1.5625');
   expect(await blocksUnload(page)).toBe(true);
 });
 
@@ -168,7 +174,7 @@ for (const screen of ['pto', 'settings']) {
   test(`session expiry clears a dirty ${screen} screen without a discard prompt`, async ({ page }) => {
     if (screen === 'pto') {
       await openPolicy(page);
-      await page.getByLabel('Known balance (days)').fill('14');
+      await page.getByLabel('Starting balance').fill('14');
     } else {
       await page.goto('/travel/settings');
       await page.getByLabel('New FlightAware API key').fill('synthetic-expired-key');
@@ -177,10 +183,10 @@ for (const screen of ['pto', 'settings']) {
     expect(ended.ok(), await ended.text()).toBeTruthy();
     expect((await page.request.get('/api/auth/me')).status()).toBe(401);
     await page.route('**/travel/api/**', route => route.fulfill({ status: 401, json: { message: 'Sign in again', code: 'session_expired' } }));
-    await page.getByRole('button', { name: screen === 'pto' ? 'Save PTO policy' : 'Save key', exact: true }).click();
+    await page.getByRole('button', { name: screen === 'pto' ? 'Save' : 'Save key', exact: true }).click();
     await expect(page).toHaveURL(/\/auth\/login/);
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByLabel(screen === 'pto' ? 'Known balance (days)' : 'New FlightAware API key')).toHaveCount(0);
+    await expect(page.getByLabel(screen === 'pto' ? 'Starting balance' : 'New FlightAware API key')).toHaveCount(0);
   });
 }
 });

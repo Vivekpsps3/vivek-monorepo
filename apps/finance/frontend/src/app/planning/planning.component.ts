@@ -64,6 +64,7 @@ import {
   restorePlanningProfilePayload,
 } from './planning-assumptions.util';
 import { spendingModeInference } from './spending-mode';
+import { focusErrorSummary } from '../shared/form-validation';
 import { AppDatePipe } from '@vivek/ui';
 
 @Component({
@@ -146,6 +147,9 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
   selectedProfileId: number | null = null;
   savedInputName = '';
   savedInputError = '';
+  /** Load/save/delete failure for the Saved inputs card (F23): rendered in
+   * the card as an alert, never as the page-level error. */
+  savedInputsError: string | null = null;
   savingProfile = false;
 
   private destroy$ = new Subject<void>();
@@ -173,6 +177,11 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
     this.workflow.listProfiles().pipe(takeUntil(this.destroy$)).subscribe({
       next: list => {
         this.profiles = list;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        // Announced by the card's role="alert"; focus is not stolen on load.
+        this.savedInputsError = failureCopy('load', 'your saved inputs');
         this.cdr.markForCheck();
       },
     });
@@ -511,6 +520,7 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
       return;
     }
     this.savedInputError = '';
+    this.savedInputsError = null;
     this.savingProfile = true;
     const body = { name, payload: this.normalizedAssumptions() };
     const req = this.workflow.saveProfile(this.selectedProfileId, body);
@@ -531,12 +541,20 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
             this.selectedProfileId = p.id;
           }
           this.savedInputName = p.name;
+          this.savedInputsError = null;
           this.toast.success('Saved inputs updated.');
         },
         error: () => {
-          this.error = failureCopy('save', 'these inputs');
+          this.savedInputsError = failureCopy('save', 'these inputs');
+          this.cdr.markForCheck();
+          this.focusSavedInputsError();
         },
       });
+  }
+
+  /** Move keyboard/screen-reader focus to the Saved inputs card alert. */
+  private focusSavedInputsError(): void {
+    setTimeout(() => focusErrorSummary(document.getElementById('saved-inputs-card')));
   }
 
   onProfileSelected(id: string): void {
@@ -607,11 +625,13 @@ export class PlanningComponent implements OnInit, OnChanges, OnDestroy {
           this.profiles = this.profiles.filter(p => p.id !== id);
           this.selectedProfileId = null;
           this.savedInputName = '';
+          this.savedInputsError = null;
           this.cdr.markForCheck();
         },
         error: () => {
-          this.error = failureCopy('delete', 'these saved inputs');
+          this.savedInputsError = failureCopy('delete', 'these saved inputs');
           this.cdr.markForCheck();
+          this.focusSavedInputsError();
         },
       });
   }

@@ -101,7 +101,7 @@ export class EncryptedStoreService {
   private remove(collection: CollectionName, id: number, options?: VaultWriteOptions): Promise<void> {
     return this.persistence.remove(collection, id, options);
   }
-  reloadCollections(collections: EncryptedCollection[]): Promise<void> { return this.persistence.reloadCollections(collections); }
+  reloadCollections(collections: EncryptedCollection[], options?: VaultWriteOptions): Promise<void> { return this.persistence.reloadCollections(collections, options); }
 
   async getTransactions(): Promise<Transaction[]> {
     await this.ensureLoaded();

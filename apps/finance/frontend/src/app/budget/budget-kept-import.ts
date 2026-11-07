@@ -1,5 +1,5 @@
 import type { Injector } from '@angular/core';
-import type { BudgetKeptResult } from './budget-kept';
+import type { BudgetKeptDaysResult, BudgetKeptResult } from './budget-kept';
 
 /**
  * Matches HUB_SUMMARY_DEADLINE_MS in apps/web/src/app/hub/hub-load.ts.
@@ -45,6 +45,18 @@ interface BudgetKeptModule {
   ): Promise<BudgetKeptResult>;
 }
 
+interface BudgetKeptDaysModule {
+  loadFinanceBudgetKeptDays(
+    injector: Injector,
+    signal: AbortSignal,
+    opts: {
+      from: string;
+      to: string;
+      deadlineMs?: number;
+    },
+  ): Promise<BudgetKeptDaysResult>;
+}
+
 /** The chunk missed the shared deadline. The caller maps this to unavailable. */
 class BudgetKeptImportDeadlineError extends Error {
   constructor() {
@@ -53,7 +65,7 @@ class BudgetKeptImportDeadlineError extends Error {
   }
 }
 
-function defaultLoad(): Promise<BudgetKeptModule> {
+function defaultLoad(): Promise<BudgetKeptModule & BudgetKeptDaysModule> {
   return import('./budget-kept');
 }
 
@@ -128,4 +140,73 @@ export function loadFinanceBudgetKeptGuarded(
   requireBudgetKeptWindow(opts.today, opts.weeks);
   const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_IMPORT_DEADLINE_MS);
   return runBudgetKeptImport(injector, signal, opts, deadlineMs, load);
+}
+
+const BUDGET_KEPT_MAX_DAYS = 3640;
+
+function isRealIsoDate(iso: string): boolean {
+  if (!ISO_DATE.test(iso)) return false;
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function daySpan(from: string, to: string): number {
+  return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
+}
+
+/** Same caller bugs as the core days facade, checked here so the chunk is not loaded first. */
+function requireBudgetKeptDayRange(from: string, to: string): void {
+  if (!isRealIsoDate(from) || !isRealIsoDate(to)) {
+    throw new RangeError('from and to must be valid YYYY-MM-DD dates');
+  }
+  if (from > to) throw new RangeError('from must not be after to');
+  if (daySpan(from, to) > BUDGET_KEPT_MAX_DAYS) {
+    throw new RangeError(`range must span at most ${BUDGET_KEPT_MAX_DAYS} days`);
+  }
+}
+
+async function runBudgetKeptDaysImport(
+  injector: Injector,
+  signal: AbortSignal,
+  opts: {
+    from: string;
+    to: string;
+  },
+  deadlineMs: number,
+  load: () => Promise<BudgetKeptDaysModule>,
+): Promise<BudgetKeptDaysResult> {
+  const started = performance.now();
+  let loaded: BudgetKeptDaysModule;
+  try {
+    loaded = await withSignalAndDeadline(load(), signal, deadlineMs);
+  } catch {
+    if (signal.aborted) return { status: 'cancelled' };
+    // A rejected chunk, including RangeError, is unavailable. expired is only a 401.
+    return { status: 'unavailable' };
+  }
+  const remaining = deadlineMs - (performance.now() - started);
+  if (remaining <= 0) return { status: 'unavailable' };
+  return loaded.loadFinanceBudgetKeptDays(injector, signal, { ...opts, deadlineMs: remaining });
+}
+
+/**
+ * Days companion to loadFinanceBudgetKeptGuarded, under the same rules:
+ * one shared deadline, abort is cancelled, import failures are unavailable,
+ * and a bad range or deadline throws before the import.
+ */
+export function loadFinanceBudgetKeptDaysGuarded(
+  injector: Injector,
+  signal: AbortSignal,
+  opts: {
+    from: string;
+    to: string;
+    deadlineMs?: number;
+  },
+  load: () => Promise<BudgetKeptDaysModule> = defaultLoad,
+): Promise<BudgetKeptDaysResult> {
+  if (signal.aborted) return Promise.resolve({ status: 'cancelled' });
+  requireBudgetKeptDayRange(opts.from, opts.to);
+  const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_IMPORT_DEADLINE_MS);
+  return runBudgetKeptDaysImport(injector, signal, opts, deadlineMs, load);
 }

@@ -1,10 +1,13 @@
 """Trips and everything that belongs to one trip."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
+from apps.server.path_ids import bounded_path_id
 from apps.travel.backend.database import get_db
 from apps.travel.backend.models import (
     BudgetLine,
@@ -84,7 +87,7 @@ def _check_stay_link(db: Session, trip_id: int, stay_id: int | None) -> None:
 
 @router.get("/trips/{trip_id}")
 def read_trip(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -151,7 +154,7 @@ def create_trip(
 
 @router.patch("/trips/{trip_id}")
 def update_trip(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: TripPatch,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -195,7 +198,7 @@ def update_trip(
 
 @router.delete("/trips/{trip_id}", status_code=204)
 def delete_trip(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -205,7 +208,7 @@ def delete_trip(
 
 @router.post("/trips/{trip_id}/stays", status_code=201)
 def create_stay(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: StayIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -223,7 +226,7 @@ def create_stay(
 
 @router.patch("/stays/{stay_id}")
 def update_stay(
-    stay_id: int,
+    stay_id: Annotated[int, bounded_path_id("That city is not here.")],
     body: StayIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -241,7 +244,7 @@ def update_stay(
 
 @router.delete("/stays/{stay_id}", status_code=204)
 def delete_stay(
-    stay_id: int,
+    stay_id: Annotated[int, bounded_path_id("That city is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -255,7 +258,7 @@ def delete_stay(
 
 @router.post("/trips/{trip_id}/transports", status_code=201)
 def create_transport(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: TransportIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -272,7 +275,7 @@ def create_transport(
 
 @router.patch("/transports/{transport_id}")
 def update_transport(
-    transport_id: int,
+    transport_id: Annotated[int, bounded_path_id("That ride is not here.")],
     body: TransportIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -289,7 +292,7 @@ def update_transport(
 
 @router.delete("/transports/{transport_id}", status_code=204)
 def delete_transport(
-    transport_id: int,
+    transport_id: Annotated[int, bounded_path_id("That ride is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -304,7 +307,7 @@ def delete_transport(
 
 @router.post("/trips/{trip_id}/plans", status_code=201)
 def create_plan(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: PlanIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -322,7 +325,7 @@ def create_plan(
 
 @router.patch("/plans/{plan_id}")
 def update_plan(
-    plan_id: int,
+    plan_id: Annotated[int, bounded_path_id("That plan is not here.")],
     body: PlanIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -340,7 +343,7 @@ def update_plan(
 
 @router.delete("/plans/{plan_id}", status_code=204)
 def delete_plan(
-    plan_id: int,
+    plan_id: Annotated[int, bounded_path_id("That plan is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -354,7 +357,7 @@ def delete_plan(
 
 @router.post("/trips/{trip_id}/parking", status_code=201)
 def create_parking(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: ParkingIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -371,7 +374,7 @@ def create_parking(
 
 @router.patch("/parking/{parking_id}")
 def update_parking(
-    parking_id: int,
+    parking_id: Annotated[int, bounded_path_id("That parking note is not here.")],
     body: ParkingIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -389,7 +392,7 @@ def update_parking(
 
 @router.delete("/parking/{parking_id}", status_code=204)
 def delete_parking(
-    parking_id: int,
+    parking_id: Annotated[int, bounded_path_id("That parking note is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -403,7 +406,7 @@ def delete_parking(
 
 @router.post("/trips/{trip_id}/notes", status_code=201)
 def create_note(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: NoteIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -417,7 +420,7 @@ def create_note(
 
 @router.delete("/notes/{note_id}", status_code=204)
 def delete_note(
-    note_id: int,
+    note_id: Annotated[int, bounded_path_id("That note is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -431,7 +434,7 @@ def delete_note(
 
 @router.post("/trips/{trip_id}/reminders", status_code=201)
 def create_reminder(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: ReminderIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -447,7 +450,7 @@ def create_reminder(
 
 @router.patch("/reminders/{reminder_id}")
 def update_reminder(
-    reminder_id: int,
+    reminder_id: Annotated[int, bounded_path_id("That reminder is not here.")],
     body: ReminderIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -464,7 +467,7 @@ def update_reminder(
 
 @router.delete("/reminders/{reminder_id}", status_code=204)
 def delete_reminder(
-    reminder_id: int,
+    reminder_id: Annotated[int, bounded_path_id("That reminder is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):
@@ -478,7 +481,7 @@ def delete_reminder(
 
 @router.post("/trips/{trip_id}/budget-lines", status_code=201)
 def create_budget_line(
-    trip_id: int,
+    trip_id: Annotated[int, bounded_path_id("That trip is not here.")],
     body: BudgetLineIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -497,7 +500,7 @@ def create_budget_line(
 
 @router.patch("/budget-lines/{line_id}")
 def update_budget_line(
-    line_id: int,
+    line_id: Annotated[int, bounded_path_id("That cost is not here.")],
     body: BudgetLineIn,
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
@@ -517,7 +520,7 @@ def update_budget_line(
 
 @router.delete("/budget-lines/{line_id}", status_code=204)
 def delete_budget_line(
-    line_id: int,
+    line_id: Annotated[int, bounded_path_id("That cost is not here.")],
     db: Session = Depends(get_db, scope="function"),
     principal: Principal = Depends(require_principal),
 ):

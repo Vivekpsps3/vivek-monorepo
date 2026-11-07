@@ -1,25 +1,27 @@
 import { ImportReceipt, Transaction } from '../models/transaction.model';
 import { EncryptedBankImportStore, type EncryptedBankImportPort } from './encrypted-store.bank-imports';
 
+type StoredImportRow = { id: number } & Record<string, unknown>;
+
 function makeStore() {
-  const importRows: any[] = [];
+  const importRows: StoredImportRow[] = [];
   const transactions: Transaction[] = [];
   let nextId = 100;
   const port: EncryptedBankImportPort = {
     ensureLoaded: async () => undefined,
-    getImportRows: <T>() => importRows as T[],
+    getImportRows: <T>() => importRows as unknown as T[],
     allocateId: () => ++nextId,
-    upsertImportRecord: async (payload: any) => {
-      const row = { ...payload, id: payload.id ?? ++nextId };
+    upsertImportRecord: async <T extends { id?: number }>(payload: T) => {
+      const row: StoredImportRow = { ...payload, id: payload.id ?? ++nextId };
       const index = importRows.findIndex(item => item.id === row.id);
       if (index >= 0) importRows[index] = row; else importRows.push(row);
-      return row;
+      return row as unknown as T;
     },
     removeImportRecord: async (id: number) => {
       const index = importRows.findIndex(item => item.id === id);
       if (index >= 0) importRows.splice(index, 1);
     },
-    savePreparedRecords: async (records: any[]) => records,
+    savePreparedRecords: async <T extends { id: number }>(records: T[]) => records,
     getTransactions: async () => transactions,
     deleteTransactions: async (ids: number[]) => {
       for (const id of ids) {

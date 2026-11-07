@@ -1,7 +1,10 @@
-"""Library tag filter: anchored JSON tokens, owner scope, and available_tags."""
+"""Library tag filter: Unicode whole strings, owner scope, and SQL pagination."""
+
+import json
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import text
 
 from apps.media.backend.models import UserEntry
 from apps.media.backend.services.tag_filter import available_tags, parse_tag_params, tags_clause
@@ -65,7 +68,7 @@ def test_tags_clause_matches_anchored_tokens(client):
             return [
                 row.id
                 for row in db.query(UserEntry.id)
-                .filter(UserEntry.user_id == 1, tags_clause(tags))
+                .filter(UserEntry.user_id == 1, tags_clause(tags, db))
                 .order_by(UserEntry.id)
                 .all()
             ]
@@ -167,10 +170,6 @@ def test_tags_filter_escaped_comma_tag(client):
 
 
 def test_tags_filter_non_ascii_exact(client):
-    # ensure_ascii stores É as \\u00c9. The filter lowercases in Python before
-    # json.dumps, so a query looks for \\u00e9. Stored "café" matches both
-    # spellings. Stored "CAFÉ" matches neither, because SQL lower() does not
-    # fold the escape.
     exact = _add(client, "Exact", ["café"])
     upper = _add(client, "Upper", ["CAFÉ"])
     with client.app.state.database.sessionmaker() as db:
@@ -181,9 +180,82 @@ def test_tags_filter_non_ascii_exact(client):
         assert upper_row.tags == '["CAF\\u00c9"]'
     for value in ("café", "CAFÉ"):
         payload = _library(client, {"tags": value, "sort": "title"})
-        assert _titles(payload) == ["Exact"]
+        assert _titles(payload) == ["Exact", "Upper"]
+        assert payload["total"] == 2
         assert "café" in payload["available_tags"]
         assert "CAFÉ" not in payload["available_tags"]
+    # Filtering reads legacy escaped JSON; it does not rewrite the stored value.
+    with client.app.state.database.sessionmaker() as db:
+        exact_row = db.get(UserEntry, exact["id"])
+        upper_row = db.get(UserEntry, upper["id"])
+        assert exact_row is not None and upper_row is not None
+        assert exact_row.tags == '["caf\\u00e9"]'
+        assert upper_row.tags == '["CAF\\u00c9"]'
+
+
+def test_unicode_tags_match_escaped_and_literal_json_with_sql_paging(client):
+    escaped = _add(client, "Escaped", ["Straße", "ΟΣ"])
+    literal = _add(client, "Literal", ["STRASSE", "ος"])
+    _add(client, "Substring", ["Straßen", "ΟΣ"])
+    with client.app.state.database.sessionmaker() as db:
+        row = db.get(UserEntry, literal["id"])
+        assert row is not None
+        row.tags = json.dumps(["STRASSE", "ος"], ensure_ascii=False)
+        db.commit()
+        original = {row.id: row.tags for row in db.query(UserEntry)}
+    common = [("tags", "STRASSE"), ("tags", "οσ"), ("sort", "title"), ("limit", "1")]
+    first = _library(client, common)
+    second = _library(client, [*common, ("offset", "1")])
+    assert _titles(first) == ["Escaped"]
+    assert _titles(second) == ["Literal"]
+    assert first["total"] == second["total"] == 2
+    assert first["has_more"] is True
+    assert second["has_more"] is False
+    with client.app.state.database.sessionmaker() as db:
+        assert {row.id: row.tags for row in db.query(UserEntry)} == original
+        row = db.get(UserEntry, escaped["id"])
+        assert row is not None and row.tags is not None
+        assert "\\u00df" in row.tags
+
+
+def test_unicode_filter_skips_malformed_rows_and_ignores_non_string_tags(client):
+    raws = [None, "{not-json", '{"tag":"CAFÉ"}', '"CAFÉ"', "123", '[1,null,{"tag":"CAFÉ"}]']
+    entries = [_add(client, f"Bad {index}") for index in range(len(raws))]
+    mixed = _add(client, "Mixed")
+    with client.app.state.database.sessionmaker() as db:
+        for entry, raw in zip(entries, raws, strict=True):
+            row = db.get(UserEntry, entry["id"])
+            assert row is not None
+            row.tags = raw
+        row = db.get(UserEntry, mixed["id"])
+        assert row is not None
+        row.tags = '["CAFÉ",1,null,{"tag":"other"}]'
+        db.commit()
+    payload = _library(client, {"tags": "café"})
+    assert _titles(payload) == ["Mixed"]
+    assert payload["total"] == 1
+    assert _library(client, {"tags": "1"})["total"] == 0
+
+
+def test_unicode_filter_registration_follows_physical_pooled_connections(client):
+    entry = _add(client, "Pooled", ["CAFÉ"])
+    factory = client.app.state.database.sessionmaker
+    with factory() as first, factory() as second:
+        first_driver = first.connection().connection.driver_connection
+        second_driver = second.connection().connection.driver_connection
+        assert first_driver is not second_driver
+        for db in [first, second]:
+            for _ in range(2):
+                query = db.query(UserEntry.id).filter(
+                    UserEntry.user_id == 1, tags_clause(["café"], db)
+                )
+                assert query.count() == 1
+                assert query.offset(0).limit(1).scalar() == entry["id"]
+            functions = db.execute(text("PRAGMA function_list")).all()
+            assert any(row.name == "media_tags_match" and row.flags & 0x800 for row in functions)
+    # A replacement physical connection also gets the function at the query boundary.
+    client.app.state.database.engine.dispose()
+    assert _titles(_library(client, {"tags": "CAFÉ"})) == ["Pooled"]
 
 
 def test_tags_filter_combines_with_other_filters_and_paging(client):
@@ -332,13 +404,14 @@ def test_library_without_tags_unchanged(client):
 def test_tags_filter_owner_scoped(client):
     from apps.server.auth import Principal, require_principal
 
-    _add(client, "Mine", ["shared", "only-mine"])
+    _add(client, "Mine", ["shared", "only-mine", "CAFÉ"])
     client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
-    _add(client, "Theirs", ["shared", "only-theirs"])
+    _add(client, "Theirs", ["shared", "only-theirs", "café"])
     theirs = _library(client, {"tags": "shared", "sort": "title"})
     assert _titles(theirs) == ["Theirs"]
     assert theirs["total"] == 1
-    assert theirs["available_tags"] == ["only-theirs", "shared"]
+    assert theirs["available_tags"] == ["café", "only-theirs", "shared"]
+    assert _titles(_library(client, {"tags": "CAFÉ"})) == ["Theirs"]
     hidden = _library(client, {"tags": "only-mine"})
     assert hidden["items"] == []
     assert hidden["total"] == 0
@@ -347,5 +420,6 @@ def test_tags_filter_owner_scoped(client):
     mine = _library(client, {"tags": "shared", "sort": "title"})
     assert _titles(mine) == ["Mine"]
     assert mine["total"] == 1
-    assert mine["available_tags"] == ["only-mine", "shared"]
+    assert mine["available_tags"] == ["CAFÉ", "only-mine", "shared"]
+    assert _titles(_library(client, {"tags": "café"})) == ["Mine"]
     assert "only-theirs" not in mine["available_tags"]

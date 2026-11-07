@@ -1,8 +1,18 @@
+import { ChangeDetectorRef } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { ConfirmService, ToastService } from '@vivek/ui';
 import { of, throwError } from 'rxjs';
+import {
+  BankAccountRecord,
+  BankImportFilePreview,
+  ImportPreviewRow,
+  ImportReceipt,
+} from '../models/transaction.model';
+import { FinanceService } from '../services/finance.service';
 import { TransactionsImportWorkflow } from './transactions-import-workflow';
 
 function makeWorkflow(overrides: Record<string, unknown> = {}) {
-  const finance: any = {
+  const finance = {
     dataChanges$: of(),
     getBankAccounts: () => of([]),
     getImportReceipts: () => of([]),
@@ -13,18 +23,38 @@ function makeWorkflow(overrides: Record<string, unknown> = {}) {
     deleteImportReceipt: jasmine.createSpy('deleteImportReceipt').and.returnValue(of(undefined)),
     ...overrides,
   };
-  const toast: any = { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') };
-  const confirm: any = { ask: jasmine.createSpy('ask').and.resolveTo(true) };
+  const toast = { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') };
+  const confirm = { ask: jasmine.createSpy('ask').and.resolveTo(true) };
   const workflow = new TransactionsImportWorkflow(
-    finance, toast, confirm, { markForCheck: () => undefined } as any, {} as any, {} as any,
+    finance as unknown as FinanceService,
+    toast as unknown as ToastService,
+    confirm as unknown as ConfirmService,
+    { markForCheck: () => undefined } as unknown as ChangeDetectorRef,
+    {} as unknown as ActivatedRoute,
+    {} as unknown as Router,
   );
   return { workflow, finance, toast, confirm };
 }
 
-const receipt: any = {
+const receipt: ImportReceipt = {
   id: 9, bank_slugs: ['chase'], filenames: ['chase.csv'], status: 'complete',
-  started_at: '2026-10-30T12:00:00Z', inserted_count: 3, unresolved: [],
+  started_at: '2026-10-30T12:00:00Z', selected_row_count: 3, inserted_count: 3,
+  unresolved: [], account_displays: [],
 };
+
+function bankAccount(bank_slug: string): BankAccountRecord {
+  return {
+    id: 1, bank_slug, account_mask: '1234', account_key: bank_slug,
+    display_name: bank_slug, confirmed: true,
+  };
+}
+
+function previewRow(overrides: Partial<ImportPreviewRow> = {}): ImportPreviewRow {
+  return {
+    dedupe_key: '', date: '2026-10-30', account_mask: '1234', account_display: 'Card',
+    description: '', category: '', amount: 0, status: 'new', ...overrides,
+  };
+}
 
 describe('TransactionsImportWorkflow F9', () => {
   it('preselects the bank from the last receipt, else the only account bank', () => {
@@ -32,23 +62,29 @@ describe('TransactionsImportWorkflow F9', () => {
     workflow.importReceipts = [receipt];
     expect(workflow.defaultBankSlug).toBe('chase');
     workflow.importReceipts = [];
-    workflow.bankAccounts = [{ bank_slug: 'amex' } as any, { bank_slug: 'amex' } as any];
+    workflow.bankAccounts = [bankAccount('amex'), bankAccount('amex')];
     expect(workflow.defaultBankSlug).toBe('amex');
-    workflow.bankAccounts = [{ bank_slug: 'amex' } as any, { bank_slug: 'citi' } as any];
+    workflow.bankAccounts = [bankAccount('amex'), bankAccount('citi')];
     expect(workflow.defaultBankSlug).toBe('');
   });
 
   it('labels the action from importable and selected counts, never Save receipt', () => {
     const { workflow } = makeWorkflow();
-    workflow.importPreviews = [{
+    const preview: BankImportFilePreview = {
       id: 1, bank_slug: 'chase', filename: 'chase.csv', error: null,
-      preview: { rows: [{ status: 'new' }, { status: 'new' }, { status: 'duplicate' }], summary: { total_parsed: 3, new: 2, duplicate: 1, skipped: 0, errors: 0 }, errors: [], skipped: [] },
-    } as any];
+      preview: {
+        bank: 'chase', filename: 'chase.csv',
+        rows: [previewRow(), previewRow(), previewRow({ status: 'duplicate' })],
+        summary: { total_parsed: 3, new: 2, duplicate: 1, skipped: 0, errors: 0 },
+        errors: [], skipped: [],
+      },
+    };
+    workflow.importPreviews = [preview];
     expect(workflow.importableCount).toBe(2);
     expect(workflow.importActionLabel).toBe('Select the transactions to import');
     workflow.importSelected = new Set(['a']);
-    (workflow as any).importRows; // warm getter
-    workflow.importPreviews[0].preview!.rows = [{ status: 'new', dedupe_key: 'a' }] as any;
+    expect(workflow.importRows.length).toBe(3);
+    workflow.importPreviews[0].preview!.rows = [previewRow({ dedupe_key: 'a' })];
     expect(workflow.importActionLabel).toBe('Import 1 transaction');
     expect(workflow.importActionLabel).not.toContain('Save receipt');
   });
@@ -94,8 +130,8 @@ describe('TransactionsImportWorkflow F9', () => {
   it('renders the shared receipt line and status labels', () => {
     const { workflow } = makeWorkflow();
     expect(workflow.receiptLineFor(receipt)).toBe('chase.csv · Oct 30, 2026 · Imported · 3 saved');
-    expect(workflow.importStatusLabel({ status: 'duplicate' } as any)).toBe('Already imported');
-    expect(workflow.importStatusLabel({ status: 'new', kind: 'refund' } as any)).toBe('Refund');
-    expect(workflow.importStatusLabel({ status: 'new', kind: 'purchase' } as any)).toBe('Purchase');
+    expect(workflow.importStatusLabel(previewRow({ status: 'duplicate' }))).toBe('Already imported');
+    expect(workflow.importStatusLabel(previewRow({ kind: 'refund' }))).toBe('Refund');
+    expect(workflow.importStatusLabel(previewRow({ kind: 'purchase' }))).toBe('Purchase');
   });
 });

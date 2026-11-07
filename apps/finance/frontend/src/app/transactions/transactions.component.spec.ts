@@ -63,6 +63,18 @@ describe('Transactions multi-file import UI', () => {
 
   const button = (name: string): HTMLButtonElement => Array.from(fixture.nativeElement.querySelectorAll('button')).find((node: any) => node.textContent.trim() === name) as HTMLButtonElement;
 
+  // The import-context refresh is debounce-driven (two 60ms debounce stages
+  // in TransactionsImportWorkflow), so a fixed sleep races it under load:
+  // any delay in the first stage pushes completion past the sleep. Wait for
+  // the refresh outcome itself instead of a wall-clock guess.
+  async function waitUntil(condition: () => boolean, description: string): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (!condition()) {
+      if (Date.now() > deadline) throw new Error(`Timed out waiting for ${description}`);
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+  }
+
   it('refreshes account and receipt context in the open import wizard without replacing its draft', async () => {
     let accounts: any[] = [{ id: 1, account_key: 'account-a', display_name: 'Old card label', confirmed: true, bank_slug: 'chase' }];
     let receipts: any[] = [];
@@ -72,12 +84,15 @@ describe('Transactions multi-file import UI', () => {
     component.importFiles = [draft];
     component.importStep = 'preview';
     component.importError = 'Keep this draft message';
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await waitUntil(() => component.bankAccounts[0]?.display_name === 'Old card label', 'the initial account load');
 
     accounts = [{ ...accounts[0], display_name: 'Renamed card' }];
     receipts = [{ id: 9, status: 'withdrawn', filenames: ['statement.csv'], unresolved: [], account_displays: ['Renamed card'] }];
     dataChanges$.next({ collections: ['bank_accounts', 'import_batches'], source: 'remote' });
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await waitUntil(
+      () => component.bankAccounts[0]?.display_name === 'Renamed card' && component.importReceipts.some(receipt => receipt.id === 9),
+      'the remote refresh to land',
+    );
     fixture.detectChanges();
 
     expect(component.showImportModal).toBeTrue();
@@ -93,7 +108,7 @@ describe('Transactions multi-file import UI', () => {
     finance.getBankAccounts.and.returnValue(of(accounts as any));
     routeQuery.next(convertToParamMap({ account: 'card-a' }));
     dataChanges$.next({ collections: ['bank_accounts'], source: 'remote' });
-    await new Promise(resolve => setTimeout(resolve, 160));
+    await waitUntil(() => component.bankAccounts.some(account => account.account_key === 'card-a'), 'the account options to load');
     fixture.detectChanges();
 
     const accountSelect: HTMLSelectElement = fixture.nativeElement.querySelector('#tx-account-filter');

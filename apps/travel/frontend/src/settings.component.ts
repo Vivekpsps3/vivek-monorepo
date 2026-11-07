@@ -7,19 +7,23 @@ import {
   signal,
 } from "@angular/core";
 import { NgTemplateOutlet } from "@angular/common";
-import { HttpClient } from "@angular/common/http";
+import { HttpClient, HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
+import { RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
   SESSION_CONTEXT,
   ConfirmService,
+  ToastService,
   UiButtonComponent,
   UiFieldComponent,
   UiFieldControlDirective,
   UiCardComponent,
   UiPageHeaderComponent,
+  silentErrorToast,
 } from "@vivek/ui";
-import { travelError } from "./travel.models";
+import { hoursPerDayError } from "./pto-model.mjs";
+import { travelError, type PtoSettings } from "./travel.models";
 interface Settings {
   flightaware: {
     configured: boolean;
@@ -36,6 +40,7 @@ interface Settings {
   imports: [
     FormsModule,
     NgTemplateOutlet,
+    RouterLink,
     UiButtonComponent,
     UiFieldComponent,
     UiFieldControlDirective,
@@ -96,38 +101,25 @@ interface Settings {
     </ui-card>
     <ui-card>
       <h2>Time off</h2>
-      <p class="muted">
-        Leave buckets track hours. This rate converts them to days on the
-        Time off page.
-      </p>
-      <form class="travel-form" #ptoForm="ngForm" (ngSubmit)="savePto()">
-        <ui-field label="Hours per day" [required]="true"
-          ><input
-            uiFieldControl
-            required
-            type="number"
-            min="0.01"
-            max="24"
-            step="0.01"
-            name="hoursPerDay"
-            [(ngModel)]="hoursPerDay"
-        /></ui-field>
-        <div class="button-row">
-          <ui-button
-            variant="primary"
-            type="submit"
-            [disabled]="saving() || !ptoForm.valid || !ptoDirty"
-          >
-            Save hours per day
-          </ui-button>
-        </div>
+      <form class="travel-form" novalidate (ngSubmit)="saveHours()">
+        <ui-field label="Hours in a workday" [required]="true" [error]="hoursError()">
+          <span class="hours-suffix">
+            <input
+              uiFieldControl
+              inputmode="decimal"
+              name="hours-per-day"
+              [ngModel]="hours"
+              (ngModelChange)="editHours($event)"
+              (blur)="checkHours()"
+            />
+            <span aria-hidden="true">h</span>
+          </span>
+        </ui-field>
+        <ui-button variant="primary" type="submit" [disabled]="savingHours() || !hoursDirty()">
+          {{ savingHours() ? "Saving…" : "Save hours" }}
+        </ui-button>
       </form>
-      @if (ptoError()) {
-        <p class="local-error" role="alert">{{ ptoError() }}</p>
-      }
-      @if (ptoMessage()) {
-        <p role="status">{{ ptoMessage() }}</p>
-      }
+      <a class="pto-policy-link" routerLink="/travel/pto">PTO policy</a>
     </ui-card>
     <ui-card>
       <h2>Maps</h2>
@@ -143,6 +135,18 @@ interface Settings {
   } @else {
     <main class="page travel-page"><ng-container *ngTemplateOutlet="settingsBody" /></main>
   }`,
+  styles: [
+    `
+      .hours-suffix { display: flex; align-items: center; gap: 0.4rem; }
+      .hours-suffix input { min-height: 44px; min-width: 0; flex: 1; }
+      .pto-policy-link {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        margin-top: 0.75rem;
+      }
+    `,
+  ],
 })
 export class SettingsComponent {
   /** Suite settings supplies the page heading and padding. `/travel/settings` keeps its own. */
@@ -155,22 +159,21 @@ export class SettingsComponent {
   private readonly http = inject(HttpClient);
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
   key = "";
-  hoursPerDay = "";
-  private savedHoursPerDay = "";
-  readonly ptoError = signal("");
-  readonly ptoMessage = signal("");
-  get ptoDirty(): boolean {
-    return this.hoursPerDay !== this.savedHoursPerDay;
-  }
+  hours = "";
+  private savedHours = "";
+  private hoursEdited = false;
   readonly data = signal<Settings | null>(null);
   readonly error = signal("");
   readonly saving = signal(false);
+  readonly savingHours = signal(false);
+  readonly hoursError = signal("");
   readonly message = signal("");
   canLeave(): boolean | Promise<boolean> {
     return (
       !this.ownsSession ||
-      (!this.key && !this.ptoDirty && !this.saving()) ||
+      (!this.key && !this.hoursDirty() && !this.saving() && !this.savingHours()) ||
       this.confirm.ask(
         "Leave this key draft?",
         "Your new API key has not been saved. A pending save may still finish.",
@@ -181,7 +184,7 @@ export class SettingsComponent {
   }
   @HostListener("window:beforeunload", ["$event"])
   unload(event: BeforeUnloadEvent): void {
-    if (this.ownsSession && (this.key || this.ptoDirty || this.saving())) {
+    if (this.ownsSession && (this.key || this.hoursDirty() || this.saving() || this.savingHours())) {
       event.preventDefault();
       event.returnValue = "";
     }
@@ -197,40 +200,62 @@ export class SettingsComponent {
       .subscribe({
         next: (d) => {
           this.data.set(d);
-          if (!this.ptoDirty && d.pto) {
-            this.hoursPerDay = d.pto.hours_per_day;
-            this.savedHoursPerDay = d.pto.hours_per_day;
-          }
+          const value = d.pto?.hours_per_day || "8";
+          this.savedHours = value;
+          if (!this.hoursEdited) this.hours = value;
         },
         error: (e) => this.error.set(travelError(e)),
       });
   }
-  savePto(): void {
-    if (this.saving() || !this.ptoDirty || !this.ownsSession) return;
-    const submitted = this.hoursPerDay;
-    this.saving.set(true);
-    this.ptoError.set("");
-    this.ptoMessage.set("");
+  hoursDirty(): boolean {
+    return this.hoursEdited && this.hours !== this.savedHours;
+  }
+  editHours(value: string): void {
+    this.hours = value;
+    this.hoursEdited = true;
+    this.hoursError.set("");
+  }
+  checkHours(): void {
+    this.hoursError.set(hoursPerDayError(this.hours, this.savedHours));
+  }
+  saveHours(): void {
+    if (this.savingHours() || !this.ownsSession) return;
+    const problem = hoursPerDayError(this.hours, this.savedHours);
+    this.hoursError.set(problem);
+    if (problem || !this.hoursDirty()) return;
+    const submitted = this.hours.trim();
+    this.savingHours.set(true);
     this.http
-      .put<{ hours_per_day: string; sick_prompt_dismissed: boolean }>(
+      .put<PtoSettings>(
         "/travel/api/settings/pto",
         { hours_per_day: submitted },
+        { context: silentErrorToast() },
       )
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
-        next: (d) => {
-          this.savedHoursPerDay = d.hours_per_day;
-          if (this.hoursPerDay === submitted) this.hoursPerDay = d.hours_per_day;
-          this.saving.set(false);
-          this.ptoMessage.set(
-            this.ptoDirty
-              ? "Hours per day saved. Your newer edit still needs saving."
-              : "Hours per day saved.",
-          );
+        next: (body) => {
+          this.savingHours.set(false);
+          const stored = body.hours_per_day || submitted;
+          this.savedHours = stored;
+          if (this.hours.trim() === submitted) {
+            this.hours = stored;
+            this.hoursEdited = false;
+          }
+          this.toast.success("Hours in a workday saved.");
         },
-        error: (e) => {
-          this.ptoError.set(travelError(e));
-          this.saving.set(false);
+        error: (e: HttpErrorResponse) => {
+          this.savingHours.set(false);
+          if (e.status === 401) return;
+          const fields = (e.error as { field_errors?: Record<string, unknown> } | null)?.field_errors;
+          const message = fields?.["hours_per_day"];
+          if (e.status === 422 && typeof message === "string") {
+            this.hoursError.set(message);
+            return;
+          }
+          this.toast.error("Couldn't save Hours in a workday.", {
+            label: "Retry",
+            run: () => this.saveHours(),
+          });
         },
       });
   }

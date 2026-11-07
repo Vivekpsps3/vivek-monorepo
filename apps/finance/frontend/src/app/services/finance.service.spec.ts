@@ -123,6 +123,16 @@ describe('FinanceService', () => {
     expect(events).toContain(jasmine.objectContaining({ collections: ['liabilities'], source: 'remote' }));
   });
 
+  it('refreshCollectionsFromAnotherTab reloads silently', async () => {
+    encStore.reloadCollections.and.resolveTo();
+    encStore.getTransactions.and.resolveTo([]);
+    encStore.getCashflowSummary.and.resolveTo({} as never);
+
+    await service.refreshCollectionsFromAnotherTab(['transactions']);
+
+    expect(encStore.reloadCollections).toHaveBeenCalledOnceWith(['transactions'], { silent: true });
+  });
+
   it('does not deliver decrypted assets after a lock', async () => {
     const secret = { id: 9, name: 'secret-asset', current_value: 1 } as Asset;
     let release: (rows: Asset[]) => void = () => undefined;
