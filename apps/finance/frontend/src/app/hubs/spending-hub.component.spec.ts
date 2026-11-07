@@ -1,5 +1,6 @@
-import { convertToParamMap } from '@angular/router';
-import { normalizeSpendingHubRoute } from './spending-hub.component';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { convertToParamMap, provideRouter } from '@angular/router';
+import { normalizeSpendingHubRoute, SpendingHubComponent } from './spending-hub.component';
 
 describe('SpendingHub route compatibility', () => {
   it('opens Activity by default', () => {
@@ -152,5 +153,30 @@ describe('SpendingHub route compatibility', () => {
       receiptsOpen: true,
       queryParams: null,
     });
+  });
+});
+
+describe('SpendingHubComponent heading (F1)', () => {
+  let fixture: ComponentFixture<SpendingHubComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [SpendingHubComponent],
+      providers: [provideRouter([])],
+    }).compileComponents();
+    fixture = TestBed.createComponent(SpendingHubComponent);
+    fixture.detectChanges();
+  });
+
+  it('renders one h1 "Spending" above the tabs', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    const headings = el.querySelectorAll('h1');
+    expect(headings.length).toBe(1);
+    expect(headings[0].textContent?.trim()).toBe('Spending');
+    const header = el.querySelector('ui-page-header');
+    const tabs = el.querySelector('nav.hub-tabs');
+    expect(header).not.toBeNull();
+    expect(tabs).not.toBeNull();
+    expect(header!.compareDocumentPosition(tabs!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
