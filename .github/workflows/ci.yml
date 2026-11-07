@@ -1,5 +1,10 @@
 name: CI
 
+# A new commit replaces checks for the same PR or branch.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     # labeled and unlabeled retrigger the run. A re-run replays the original
