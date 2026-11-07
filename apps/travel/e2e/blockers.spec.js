@@ -26,7 +26,7 @@ test('phone navigation stays visible, fits the viewport and offers every Travel 
     expect(box.x + box.width).toBeLessThanOrEqual(391);
   }
   await nav.getByRole('link', { name: 'PTO', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Time off', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'PTO', exact: true })).toBeVisible();
 });
 
 test('quick transport starts with a visible mode choice and hides flight fields until chosen', async ({ page, request }) => {
@@ -85,23 +85,22 @@ test('changing PTO cadence keeps a typed balance and native dates ignore unrelat
     hours_per_day: '8', balance_days: '10', balance_as_of: '2026-01-01',
   } });
   await page.goto('/travel/pto');
-  await page.getByText('PTO policy and starting balance', { exact: true }).click();
-  const balance = page.getByLabel('Known balance (days)');
+  await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
+  const balance = page.getByLabel('Starting balance');
   await balance.fill('12.5');
-  const policy = page.locator('form').filter({ has: balance });
-  await policy.getByLabel('Accrual cadence').selectOption('monthly');
+  await page.getByRole('radio', { name: 'Mo', exact: true }).check();
   await expect(balance).toHaveValue('12.5');
-  await page.getByLabel('Start date', { exact: true }).fill('2026-12-01');
+  await page.getByLabel('First day', { exact: true }).fill('2026-12-01');
   await page.mouse.click(2, 400);
-  await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-12-01');
-  await page.getByRole('button', { name: 'Save PTO policy' }).click();
-  await expect(page.locator('main [role=status]')).toContainText('PTO saved');
+  await expect(page.getByLabel('First day', { exact: true })).toHaveValue('2026-12-01');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
   // The independent unsaved leave dates now require deliberate reload approval.
   page.once('dialog', dialog => dialog.accept());
   await page.reload();
-  await page.getByText('PTO policy and starting balance', { exact: true }).click();
+  await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
   await expect(balance).toHaveValue('12.5');
-  await expect(policy.getByLabel('Accrual cadence')).toHaveValue('monthly');
+  await expect(page.getByRole('radio', { name: 'Mo', exact: true })).toBeChecked();
 });
 
 test('delete cancellation preserves a trip, failure is local, and success closes the dialog', async ({ page, request }) => {
