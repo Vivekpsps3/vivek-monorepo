@@ -15,6 +15,15 @@ export interface BudgetKeptWeek {
   kept: boolean | null;
 }
 
+export interface BudgetKeptDay {
+  date: string;
+  /** Month-to-date spending through this date, or null before the first transaction. */
+  spend: number | null;
+  /** Month-to-date spending allowed on this date under the monthly-pace rule. */
+  pace: number;
+  kept: boolean | null;
+}
+
 export type BudgetKeptResult =
   | { status: 'locked' }
   | { status: 'no_plan' }
@@ -25,6 +34,21 @@ export type BudgetKeptResult =
       weeklyPlan: number;
       mode: 'manual' | 'components' | 'recurring';
       weeks: BudgetKeptWeek[];
+    }
+  | { status: 'unavailable' }
+  | { status: 'expired' }
+  | { status: 'cancelled' };
+
+export type BudgetKeptDaysResult =
+  | { status: 'locked' }
+  | { status: 'no_plan' }
+  | { status: 'no_data' }
+  | {
+      status: 'ready';
+      annualPlan: number;
+      monthlyPlan: number;
+      mode: 'manual' | 'components' | 'recurring';
+      days: BudgetKeptDay[];
     }
   | { status: 'unavailable' }
   | { status: 'expired' }
@@ -49,6 +73,24 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?![\s\S])/;
 
 function weeklyPlanFor(annualPlan: number): number {
   return annualPlan * 7 / 365;
+}
+
+function monthlyPlanFor(annualPlan: number): number {
+  return annualPlan / 12;
+}
+
+/** Days in the month that contains a valid date, or null when the date is not a real YYYY-MM-DD. */
+function daysInMonthOf(iso: string): number | null {
+  if (shiftIsoDate(iso, 0) !== iso) return null;
+  const [year, month] = iso.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Allowed month-to-date spend on `date`: annual/12 × dayOfMonth/daysInMonth. */
+function monthlyPaceFor(annualPlan: number, date: string): number {
+  const daysInMonth = daysInMonthOf(date);
+  if (daysInMonth == null) return 0;
+  return monthlyPlanFor(annualPlan) * Number(date.slice(8, 10)) / daysInMonth;
 }
 
 function shiftIsoDate(iso: string, days: number): string | null {
@@ -188,6 +230,33 @@ export function budgetKeptWeeks(
       spend += transactionEffects(tx).spending;
     }
     return { weekStart, spend, weeklyPlan, kept: keptForSpend(spend, weeklyPlan) };
+  });
+}
+
+/**
+ * One row per date, in the order given. A day is kept when its month-to-date
+ * spending is at or under the monthly pace (annual/12 × dayOfMonth/daysInMonth),
+ * compared in cents. Days before the first transaction are unknown (null);
+ * days on or after it with zero month-to-date spend are kept.
+ */
+export function budgetKeptDays(
+  txs: Transaction[],
+  annualPlan: number,
+  days: string[],
+): BudgetKeptDay[] {
+  const first = firstTransactionDate(txs);
+  return days.map(date => {
+    const pace = monthlyPaceFor(annualPlan, date);
+    if (first == null || date < first || daysInMonthOf(date) == null) {
+      return { date, spend: null, pace, kept: null };
+    }
+    const monthStart = `${date.slice(0, 8)}01`;
+    let spend = 0;
+    for (const tx of txs) {
+      if (typeof tx?.date !== 'string' || tx.date < monthStart || tx.date > date) continue;
+      spend += transactionEffects(tx).spending;
+    }
+    return { date, spend, pace, kept: keptForSpend(spend, pace) };
   });
 }
 
@@ -368,4 +437,107 @@ export function loadFinanceBudgetKept(
   const weekStarts = completedWeekStarts(opts.today, opts.weeks, opts.includeCurrentWeek === true);
   const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_DEFAULT_DEADLINE_MS);
   return loadBudgetKeptBody(injector, signal, weekStarts, deadlineMs);
+}
+
+function assembleBudgetKeptDays(
+  profiles: PlanningProfile[],
+  inputs: PlanInputs,
+  txs: Transaction[],
+  dates: string[],
+): BudgetKeptDaysResult {
+  const decision = decideLatestPlan(profiles, inputs);
+  if (decision.status !== 'plan') return { status: decision.status };
+  if (txs.length === 0) return { status: 'no_data' };
+  return {
+    status: 'ready',
+    annualPlan: decision.annualPlan,
+    monthlyPlan: monthlyPlanFor(decision.annualPlan),
+    mode: decision.mode,
+    days: budgetKeptDays(txs, decision.annualPlan, dates),
+  };
+}
+
+/** Same error mapping as the weekly facade; its result is never `ready`. */
+function mapDaysLoadError(signal: AbortSignal, err: unknown): BudgetKeptDaysResult {
+  const mapped = mapLoadError(signal, err);
+  return mapped.status === 'ready' ? { status: 'unavailable' } : mapped;
+}
+
+async function readBudgetKeptDays(
+  injector: Injector,
+  signal: AbortSignal,
+  dates: string[],
+): Promise<BudgetKeptDaysResult> {
+  const opened = await openBudgetKeptVault(injector, signal);
+  if (opened.status !== 'open') return opened.status === 'ready' ? { status: 'unavailable' } : opened;
+  const [profiles, inputs, txs] = await firstValueFrom(
+    combineLatest([
+      opened.planning.listProfiles(),
+      opened.planning.getInputs(),
+      defer(() => from(opened.store.getTransactions())),
+    ]).pipe(takeUntil(abort$(signal))),
+  );
+  if (signal.aborted) return { status: 'cancelled' };
+  // Unrecognized mode is unavailable, which beats a vault that locked during the read.
+  if (decideLatestPlan(profiles, inputs).status === 'unavailable') return { status: 'unavailable' };
+  if (!opened.vault.isUnlocked) return { status: 'locked' };
+  return assembleBudgetKeptDays(profiles, inputs, txs, dates);
+}
+
+async function loadBudgetKeptDaysBody(
+  injector: Injector,
+  signal: AbortSignal,
+  dates: string[],
+  deadlineMs: number,
+): Promise<BudgetKeptDaysResult> {
+  try {
+    if (!financeVaultPresent()) return { status: 'locked' };
+    return await firstValueFrom(
+      defer(() => from(readBudgetKeptDays(injector, signal, dates))).pipe(
+        takeUntil(abort$(signal)),
+        timeout(deadlineMs),
+      ),
+    );
+  } catch (err) {
+    return mapDaysLoadError(signal, err);
+  }
+}
+
+const BUDGET_KEPT_MIN_DAYS = 1;
+/** 520 weeks of days, the same span the weekly facade allows. */
+const BUDGET_KEPT_MAX_DAYS = 3640;
+
+/** Caller bugs. `from` and `to` are real YYYY-MM-DD dates, `from` is not after `to`, and the inclusive span is 1 to 3640 days. */
+function dateRange(from: string, to: string): string[] {
+  if (shiftIsoDate(from, 0) !== from || shiftIsoDate(to, 0) !== to) {
+    throw new RangeError('from and to must be valid YYYY-MM-DD dates');
+  }
+  if (from > to) throw new RangeError('from must not be after to');
+  const dates: string[] = [];
+  let cursor: string | null = from;
+  while (cursor != null && cursor <= to) {
+    dates.push(cursor);
+    if (dates.length > BUDGET_KEPT_MAX_DAYS) {
+      throw new RangeError(`range must span at most ${BUDGET_KEPT_MAX_DAYS} days`);
+    }
+    cursor = shiftIsoDate(cursor, 1);
+  }
+  if (dates.length < BUDGET_KEPT_MIN_DAYS) throw new RangeError('range must include at least one day');
+  return dates;
+}
+
+/** Per-day companion to loadFinanceBudgetKept, with the same status union and precedence. */
+export function loadFinanceBudgetKeptDays(
+  injector: Injector,
+  signal: AbortSignal,
+  opts: {
+    from: string;
+    to: string;
+    deadlineMs?: number;
+  },
+): Promise<BudgetKeptDaysResult> {
+  if (signal.aborted) return Promise.resolve({ status: 'cancelled' });
+  const dates = dateRange(opts.from, opts.to);
+  const deadlineMs = requireDeadlineMs(opts.deadlineMs, BUDGET_KEPT_DEFAULT_DEADLINE_MS);
+  return loadBudgetKeptDaysBody(injector, signal, dates, deadlineMs);
 }
