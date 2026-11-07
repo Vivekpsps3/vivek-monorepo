@@ -159,6 +159,43 @@
         }
         </ui-state>
       </section>
+
+      <section class="side-panel town-bar" aria-labelledby="town-heading" [attr.aria-busy]="townState === 'loading' || townPending">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Town</p>
+            <h2 id="town-heading">{{ town?.name || 'Your town' }}</h2>
+          </div>
+          <a class="open-link town-open" routerLink="/town/">Open Town</a>
+        </div>
+        <ui-state
+          [state]="townState"
+          thing="your town"
+          emptyTitle="Start your town"
+          emptyMessage="Pick a first habit and watch your town grow."
+          emptyAction="Choose a first habit"
+          emptyLink="/town/"
+          emptyIcon="building"
+          [pending]="townPending"
+          [updatedAt]="townUpdatedAt"
+          (retry)="retryTown()">
+          @if (town && townState !== 'empty') {
+            @if (town.next_level_xp !== null) {
+              <p class="quiet-title">Lv {{ town.level }} · {{ town.xp }} / {{ town.next_level_xp }} XP</p>
+              <progress class="town-progress" [value]="town.xp - town.level_xp_start" [max]="town.next_level_xp - town.level_xp_start"
+                role="progressbar" [attr.aria-valuemin]="town.level_xp_start" [attr.aria-valuemax]="town.next_level_xp"
+                [attr.aria-valuenow]="town.xp" [attr.aria-valuetext]="'Level ' + town.level + ', ' + town.xp + ' of ' + town.next_level_xp + ' XP'"
+                aria-label="Town XP"></progress>
+            } @else {
+              <p class="quiet-title">Lv {{ town.level }} · Max</p>
+            }
+            <p class="figure-note">{{ town.today_done }} of {{ town.today_total }} habits done today</p>
+            @if (townStreak(town); as streak) {
+              <p class="figure-note">Longest streak: {{ streak }}</p>
+            }
+          }
+        </ui-state>
+      </section>
     </div>
 
   </main>
