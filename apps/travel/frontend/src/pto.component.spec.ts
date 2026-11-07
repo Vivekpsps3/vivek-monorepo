@@ -103,25 +103,26 @@ describe("PtoComponent (TPTO2A/2B)", () => {
 
   it("adopts bucket state into the forms and renders the forecast chart", () => {
     const { fixture, component } = setup();
-    expect(component.bucketForms.pto.start_balance_hours).toBe("80");
-    expect(component.bucketForms.sick.start_balance_hours).toBe("");
+    expect(component.drafts.pto.start_balance_hours).toBe("80");
+    expect(component.drafts.sick.start_balance_hours).toBe("");
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector("travel-pto-chart")).not.toBeNull();
-    expect(root.textContent).toContain("Leave buckets");
-    expect(root.textContent).toContain("Track sick time in its own bucket?");
+    expect(root.textContent).toContain("Balance today");
+    expect(root.textContent).toContain("Track sick time too");
   });
 
   it("saves a bucket policy with hours fields and a null blank cap", () => {
     const { component } = setup();
-    component.bucketForms.sick = {
+    component.drafts.sick = {
       start_balance_hours: " 40 ",
       balance_as_of: "2026-02-01",
       accrual_hours: "4",
       accrual_cadence: "monthly",
       cap_hours: "",
-      year_start: "01-01",
+      year_month: "01",
+      year_day: "01",
     };
-    component.saveBucket("sick");
+    component.savePolicy("sick");
     const req = httpMock.expectOne("/travel/api/pto/policies/sick");
     expect(req.request.method).toBe("PUT");
     expect(req.request.body).toEqual({
@@ -134,20 +135,20 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     });
     req.flush(payload());
     httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
-    expect(component.saving()).toBeFalse();
+    expect(component.busy()).toBe("");
   });
 
   it("sends the chosen bucket when saving leave", () => {
     const { component } = setup();
+    component.entryBucket = "sick";
     component.leave = {
       label: "Flu",
       start_date: "2026-07-01",
       end_date: "2026-07-02",
-      days: null,
+      days: "",
       notes: "",
-      bucket: "sick",
     };
-    component.saveLeave();
+    component.saveEntry();
     const req = httpMock.expectOne("/travel/api/pto/entries");
     expect(req.request.method).toBe("POST");
     expect(req.request.body.bucket).toBe("sick");
@@ -157,7 +158,7 @@ describe("PtoComponent (TPTO2A/2B)", () => {
 
   it("dismisses the sick prompt through PTO settings", () => {
     const { component } = setup();
-    component.dismissSickPrompt();
+    component.dismissPrompt();
     const req = httpMock.expectOne("/travel/api/settings/pto");
     expect(req.request.method).toBe("PUT");
     expect(req.request.body).toEqual({ sick_prompt_dismissed: true });

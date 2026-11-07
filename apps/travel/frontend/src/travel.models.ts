@@ -52,6 +52,71 @@ export interface PtoDate {
   amount: string;
   provenance: string;
 }
+export interface BucketState {
+  bucket: "pto" | "sick";
+  configured: boolean;
+  start_balance_hours?: string;
+  balance_as_of?: string;
+  accrual_hours?: string;
+  accrual_cadence?: string;
+  cap_hours?: string | null;
+  year_start?: string;
+  balance_today_hours?: string;
+  balance_today_days?: string;
+  at_cap?: boolean;
+  today_before_balance_date?: boolean;
+}
+export interface PtoEntryRow {
+  id: number;
+  trip_id: number | null;
+  start_date: string;
+  end_date: string;
+  days: string;
+  label: string;
+  kind: string;
+  notes: string | null;
+  bucket?: "pto" | "sick";
+  hours?: string;
+  charges?: {
+    on_date: string;
+    amount: string;
+  }[];
+}
+export interface PtoBoard {
+  hours_per_day: string;
+  pto_sick_prompt_dismissed: boolean;
+  buckets: {
+    pto: BucketState | null;
+    sick: BucketState | null;
+  };
+  entries: PtoEntryRow[];
+  policy?: {
+    configured?: boolean;
+    balance_saved?: string | null;
+    balance_as_of?: string | null;
+    balance_today?: string | null;
+    accrual_amount?: string | null;
+    accrual_unit?: string;
+    accrual_cadence?: string;
+    hours_per_day?: string;
+    annual_cap_days?: string | null;
+    conflicts?: {
+      on_date: string;
+      amount: string;
+      labels: string[];
+    }[];
+  };
+}
+export interface PtoSettings {
+  hours_per_day: string;
+  sick_prompt_dismissed: boolean;
+}
+export interface PtoPreview {
+  balance_when_you_leave?: string | null;
+  leftover_after?: string | null;
+  note?: string;
+  bucket?: string;
+}
 export interface Trip {
   id: number;
   title: string;
