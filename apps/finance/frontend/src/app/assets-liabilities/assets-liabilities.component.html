@@ -16,34 +16,15 @@
       @if (excludedNote(); as note) {
         <p class="muted">{{ note }}</p>
       }
-      <div class="summary-grid breakdown-row">
-        <div class="breakdown-item">
-          <span class="breakdown-label">
-            <ui-icon name="building" size="sm" />
-            <span class="summary-label">Other assets</span>
-          </span>
-          <strong class="money">{{ netWorth.other_assets | money }}</strong>
-        </div>
-        <div class="breakdown-item">
-          <span class="breakdown-label">
-            <ui-icon name="trending" size="sm" />
-            <span class="summary-label">Investments</span>
-          </span>
-          <strong class="money">{{ netWorth.portfolio | money }}</strong>
-        </div>
-        <div class="breakdown-item">
-          <span class="breakdown-label">
-            <ui-icon name="credit-card" size="sm" />
-            <span class="summary-label">Liabilities</span>
-          </span>
-          <strong class="money">{{ (-netWorth.liabilities) | money }}</strong>
-        </div>
-      </div>
-      @if (assetDatesSummary() || liabilityDatesSummary()) {
-      <div class="source-dates">
-        @if (assetDatesSummary()) { <p>Asset dates <strong>{{ assetDatesSummary() }}</strong></p> }
-        @if (liabilityDatesSummary()) { <p>Liability dates <strong>{{ liabilityDatesSummary() }}</strong></p> }
-      </div>
+      <p class="summary-line">
+        <span class="summary-part">Assets <strong class="money">{{ netWorth.other_assets | money }}</strong></span>
+        <span class="summary-sep" aria-hidden="true">·</span>
+        <span class="summary-part">Investments <strong class="money">{{ netWorth.portfolio | money }}</strong></span>
+        <span class="summary-sep" aria-hidden="true">·</span>
+        <span class="summary-part">Debts <strong class="money">{{ (-netWorth.liabilities) | money }}</strong></span>
+      </p>
+      @if (balancesDatesSummary()) {
+        <p class="source-dates">Balances as of <strong>{{ balancesDatesSummary() }}</strong></p>
       }
     </ui-card>
   }
@@ -160,7 +141,7 @@
     </ui-field>
     <div class="modal-actions">
       <ui-button type="button" variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
-      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
+      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save asset' }}</ui-button>
     </div>
   </form>
 </ui-dialog>
@@ -188,7 +169,7 @@
     </ui-field>
     <div class="modal-actions">
       <ui-button type="button" variant="ghost" (clicked)="closeModals()">Cancel</ui-button>
-      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
+      <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save debt' }}</ui-button>
     </div>
   </form>
 </ui-dialog>
