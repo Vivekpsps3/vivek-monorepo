@@ -14,7 +14,12 @@ export const HEALTH_LIMITS = Object.freeze({
 } as const);
 export const RUN_DISTANCES = Object.freeze({ '5k': 5000, '10k': 10000, half: 21097.5, full: 42195 } as const);
 export const RUN_TOLERANCE = Object.freeze(1.02 as const);
-export const PLATE_THRESHOLDS = Object.freeze({ 135: 61.235, 225: 102.058, 315: 142.882, 405: 183.705 } as const);
+// Stored lifts use this 2-decimal conversion. Plate cuts must too, or 135/315/405 lb miss.
+const round = (value: number, places: number) => Number(value.toFixed(places));
+export const lbToKg = (lb: number): number => round(lb * LB_PER_KG, 2);
+export const PLATE_THRESHOLDS = Object.freeze({
+  135: lbToKg(135), 225: lbToKg(225), 315: lbToKg(315), 405: lbToKg(405),
+} as const);
 export const PR_BEATEN_THRESHOLDS = Object.freeze([1, 5, 10, 25, 50] as const);
 export const LOGGED_WEEK_THRESHOLDS = Object.freeze([4, 12, 26, 52] as const);
 export const HEALTH_BADGES = Object.freeze({

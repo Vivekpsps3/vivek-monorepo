@@ -5,6 +5,7 @@ import { HEALTH_BADGES, HEALTH_DAILY_CAP, HEALTH_LIMITS, HEALTH_XP, LB_PER_KG,
 import { casefoldExercise, computeHealthXp, computePrEvents, currentPrs, e1RM, healthBadges,
   liftPrEligible, loggedWeeks, prBonusIndices, PrPolicy } from './health-math';
 import { HealthPr, HealthStat } from './health.types';
+import { validateHealthPr } from './health-validate';
 
 const today = '2026-10-31';
 const dates = { v: 1 as const, measured_on: today, logged_on: today };
@@ -32,7 +33,7 @@ describe('Health constants', () => {
     expect(HEALTH_XP).toEqual({ statEntry: 5, labEntry: 5, checkup: 10, prEntry: 5, newPr: 15 });
     expect(HEALTH_DAILY_CAP).toEqual({ clinic: 15, gym: 30 });
     expect(RUN_DISTANCES).toEqual({ '5k': 5000, '10k': 10000, half: 21097.5, full: 42195 });
-    expect(PLATE_THRESHOLDS).toEqual({ 135: 61.235, 225: 102.058, 315: 142.882, 405: 183.705 });
+    expect(PLATE_THRESHOLDS).toEqual({ 135: 61.23, 225: 102.06, 315: 142.88, 405: 183.7 });
   });
   it('includes all 20 badge IDs and only the five supplied names', () => {
     const named = { first_pr_lift: 'First lift PR', pr_beaten_5: 'PR breaker ×5', plate_225: 'Two plates',
@@ -171,6 +172,20 @@ describe('Health badges', () => {
     // The badge table says any lift e1RM, not just PR-eligible sets.
     expect(badges([lift(kg, 13)]) as string[]).toContain(`plate_${id}`);
   });
+  for (const lb of [135, 225, 315, 405] as const) {
+    it(`plate_${lb}: validated lb input unlocks at the plate and not 0.01 kg below`, () => {
+      const at = validateHealthPr(lift(lb), today, 'lb');
+      expect(at.fieldErrors).toEqual({});
+      expect(at.value.kg).toBe(PLATE_THRESHOLDS[lb]);
+      expect(healthBadges([], [at.value], events([at.value]), today) as string[]).toContain(`plate_${lb}`);
+      // Next lower stored kilogram, entered as its 2-decimal pound equivalent.
+      const belowKg = Number((at.value.kg! - 0.01).toFixed(2));
+      const below = validateHealthPr(lift(Number((belowKg / LB_PER_KG).toFixed(2))), today, 'lb');
+      expect(below.fieldErrors).toEqual({});
+      expect(below.value.kg).toBe(belowKg);
+      expect(healthBadges([], [below.value], events([below.value]), today) as string[]).not.toContain(`plate_${lb}`);
+    });
+  }
   for (const [id, metres] of Object.entries(RUN_DISTANCES)) it(`run_${id}: uses inclusive distance without a speed tolerance ceiling`, () => {
     expect(badges([run(metres - 0.001)]) as string[]).not.toContain(`run_${id}`);
     expect(badges([run(metres)]) as string[]).toContain(`run_${id}`);

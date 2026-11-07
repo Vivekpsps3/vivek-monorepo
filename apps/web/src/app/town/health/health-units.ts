@@ -1,7 +1,6 @@
 import { LB_PER_KG, METRES_PER_MILE } from './health.constants';
 
-const round = (value: number, places: number) => Number(value.toFixed(places));
-export const lbToKg = (lb: number): number => round(lb * LB_PER_KG, 2);
+export { lbToKg } from './health.constants';
 export const kgToLb = (kg: number): number => kg / LB_PER_KG;
 export const metresToKm = (metres: number): number => metres / 1000;
 export const kmToMetres = (km: number): number => km * 1000;
