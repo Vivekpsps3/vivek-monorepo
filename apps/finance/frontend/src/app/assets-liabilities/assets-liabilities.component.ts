@@ -29,7 +29,6 @@ import {
   UiSelectOption,
   UiDataTableComponent,
   UiDialogComponent,
-  UiIconComponent,
 } from '@vivek/ui';
 import { FormatCategoryPipe } from '../shared/pipes/format-category.pipe';
 import { MoneyPipe } from '@vivek/ui';
@@ -50,7 +49,6 @@ import { portfolioDateSummary } from '../utils/portfolio.util';
     UiSelectComponent,
     UiDataTableComponent,
     UiDialogComponent,
-    UiIconComponent,
     UiBadgeComponent,
     UiFieldComponent,
     UiFieldControlDirective,
@@ -356,6 +354,13 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
 
   excludedNote(): string | null {
     return excludedAmountNote(this.netWorth?.excluded_invalid_amounts ?? 0);
+  }
+
+  balancesDatesSummary(): string {
+    return portfolioDateSummary([
+      ...this.assets.map(row => row.as_of_date),
+      ...this.liabilities.map(row => row.as_of_date),
+    ]);
   }
 
   get hasBalanceSheet(): boolean {

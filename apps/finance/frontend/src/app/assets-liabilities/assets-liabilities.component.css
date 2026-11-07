@@ -26,45 +26,26 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.summary-card .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4);
-  margin-top: var(--space-4);
+.summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-4) 0 0;
   padding-top: var(--space-4);
   border-top: 1px solid var(--border-subtle);
-}
-
-.breakdown-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.breakdown-label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  color: var(--text-tertiary);
-}
-
-.breakdown-item .summary-label {
-  margin: 0;
-}
-
-.summary-label {
-  display: block;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
-.breakdown-item .money {
+.summary-line .money {
+  color: var(--text);
   font-size: var(--text-lg);
   font-weight: 650;
-  overflow-wrap: anywhere;
+}
+
+.summary-sep {
+  color: var(--text-tertiary);
 }
 
 .hint {
@@ -76,14 +57,7 @@ h3 {
 }
 
 .source-dates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-6);
-  margin-top: var(--space-3);
-}
-
-.source-dates p {
-  margin: 0;
+  margin: var(--space-2) 0 0;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   overflow-wrap: anywhere;

@@ -14,7 +14,7 @@ test('a failed asset save stays in the dialog with the draft', async ({ page }) 
   await dialog.getByLabel('Name', { exact: true }).fill('Savings');
   await dialog.getByLabel('Value', { exact: true }).fill('250');
   vault.failNextWrites(1);
-  await dialog.getByRole('button', { name: 'Save' }).click();
+  await dialog.getByRole('button', { name: 'Save asset' }).click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('alert')).toHaveText("Couldn't save. Something went wrong. Try again.");
   await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('Savings');

@@ -324,7 +324,7 @@ test('saved planning defaults keep live facts live, while explicit starting-bala
   await checking.getByRole('button', { name: 'Edit', exact: true }).click();
   const assetEditor = page.getByRole('dialog', { name: 'Edit asset', exact: true });
   await assetEditor.getByLabel('Value').fill('1100');
-  await assetEditor.getByRole('button', { name: 'Save', exact: true }).click();
+  await assetEditor.getByRole('button', { name: 'Save asset', exact: true }).click();
   await expect(assetEditor).toBeHidden();
 
   await vault.open('/planning?t=path&tool=simulation');
@@ -427,8 +427,8 @@ test('two tabs resolve simultaneous asset IDs as separate editable records', asy
   vault.holdNextUpserts(2);
   try {
     await Promise.all([
-      firstEditor.getByRole('button', { name: 'Save', exact: true }).click(),
-      secondEditor.getByRole('button', { name: 'Save', exact: true }).click(),
+      firstEditor.getByRole('button', { name: 'Save asset', exact: true }).click(),
+      secondEditor.getByRole('button', { name: 'Save asset', exact: true }).click(),
     ]);
     await expect.poll(() => vault.mutations
       .filter(change => change.path.endsWith('/upsert'))
@@ -453,7 +453,7 @@ test('two tabs resolve simultaneous asset IDs as separate editable records', asy
   await firstRow.getByRole('button', { name: 'Edit', exact: true }).click();
   const editOne = page.getByRole('dialog', { name: 'Edit asset', exact: true });
   await editOne.getByLabel('Value').fill('333');
-  await editOne.getByRole('button', { name: 'Save', exact: true }).click();
+  await editOne.getByRole('button', { name: 'Save asset', exact: true }).click();
   await expect.poll(() => vault.data('assets').find(row => row.name === 'Asset from tab one')?.current_value).toBe(333);
 
   const secondRow = second.getByRole('row').filter({ hasText: 'Asset from tab two' });

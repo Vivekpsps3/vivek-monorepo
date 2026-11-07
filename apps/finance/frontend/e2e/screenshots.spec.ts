@@ -222,7 +222,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await asset.getByLabel('Name', { exact: true }).fill('Savings');
         await asset.getByLabel('Value', { exact: true }).fill('250');
         vault.failNextWrites(1);
-        await asset.getByRole('button', { name: 'Save' }).click();
+        await asset.getByRole('button', { name: 'Save asset' }).click();
         await expect(asset.getByRole('alert')).toBeVisible();
         await shot('asset-save-failure', width, theme);
         await asset.getByRole('button', { name: 'Cancel' }).click();
@@ -269,7 +269,7 @@ test.describe('finance F1 screenshot matrix', () => {
         const added = page.getByRole('dialog', { name: 'Add asset' });
         await added.getByLabel('Name', { exact: true }).fill('Cash');
         await added.getByLabel('Value', { exact: true }).fill('10');
-        await added.getByRole('button', { name: 'Save' }).click();
+        await added.getByRole('button', { name: 'Save asset' }).click();
         await expect(page.getByText('Asset added')).toBeVisible();
         await expect(page.locator('.toast')).toHaveCount(3);
         await page.mouse.move(0, 0);
