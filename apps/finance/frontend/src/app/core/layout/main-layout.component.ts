@@ -3,7 +3,7 @@ import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router
 import { ApiHealthService } from '../../services/api-health.service';
 import { AuthUser } from '@vivek/auth';
 import { SESSION_CONTEXT } from '@vivek/ui';
-import { Subject, filter, takeUntil } from 'rxjs';
+import { Subject, filter, takeUntil, firstValueFrom } from 'rxjs';
 import { UiButtonComponent, UiCardComponent, UiDialogComponent, UiIconComponent, UiIconName, UiSectionNavComponent } from '@vivek/ui';
 import { ConfirmService } from '@vivek/ui';
 import { VaultService } from '../../crypto/vault.service';
@@ -212,27 +212,27 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   }
 
   async clearMyData(): Promise<void> {
-    const confirmed = await this.confirm.ask(
-      'Clear your data?',
-      'This removes your finance records. Your account stays. You still need your passphrase to open the vault.',
-      'Clear my data'
-    );
-    if (!confirmed) return;
     this.isResettingData = true;
     this.cdr.markForCheck();
-    this.finance.resetMyData().subscribe({
-      next: () => {
-        this.isResettingData = false;
-        this.toast.success('Your data is clear.');
-        this.router.navigate(['/finance/']);
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.isResettingData = false;
-        this.toast.error("Couldn't clear your data. Something went wrong.");
-        this.cdr.markForCheck();
-      },
-    });
+    try {
+      const cleared = await this.confirm.confirmAction({
+        title: 'Clear all Finance data?',
+        // PLAN ruling: wipe copy includes Town health records.
+        message: 'This permanently deletes every balance, holding, transaction, job, bill and plan in your vault, plus your Town health records. Your account and passphrase stay. This can\'t be undone.',
+        phrase: 'CLEAR MY DATA',
+        confirmLabel: 'Clear data',
+        busyLabel: 'Clearing…',
+        // K2's option is named errorMessage (F2's text said failureMessage).
+        errorMessage: 'Couldn\'t clear your data. Nothing was deleted. Try again.',
+        run: () => firstValueFrom(this.finance.resetMyData()).then(() => undefined),
+      });
+      if (!cleared) return;
+      this.toast.success('Finance data cleared.');
+      await this.router.navigate(['/finance/']);
+    } finally {
+      this.isResettingData = false;
+      this.cdr.markForCheck();
+    }
   }
 
   openTutorial(): void {
@@ -242,6 +242,18 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   closeTutorial(): void {
     this.showTutorial = false;
+    this.cdr.markForCheck();
+  }
+
+  showPriceDetails = false;
+
+  openPriceDetails(): void {
+    this.showPriceDetails = true;
+    this.cdr.markForCheck();
+  }
+
+  closePriceDetails(): void {
+    this.showPriceDetails = false;
     this.cdr.markForCheck();
   }
 

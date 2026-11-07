@@ -103,10 +103,23 @@
   </div>
 </ui-dialog>
 
+<ui-dialog [open]="showPriceDetails" labelledBy="price-details-title" (closed)="closePriceDetails()">
+  <h2 id="price-details-title" tabindex="-1" data-dialog-initial-focus>Price checks</h2>
+  <p>Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.</p>
+  <p>Prices come from a public market-data service, requested by Finance's server.</p>
+  <div class="form-actions"><ui-button variant="secondary" (clicked)="closePriceDetails()">Close</ui-button></div>
+</ui-dialog>
+
 <ng-template #userMenuActions>
   <div class="finance-user-actions">
     <button class="btn btn-ghost" type="button" (click)="openTutorial()">Guide</button>
     <button class="btn btn-ghost" type="button" (click)="lockVault()">Lock Finance</button>
-    <button class="btn btn-ghost danger" type="button" [disabled]="isResettingData" (click)="clearMyData()">Clear Finance data</button>
+    <hr class="finance-user-actions__divider" />
+    <p class="finance-user-actions__note">Price checks send ticker symbols only.
+      <button class="finance-user-actions__link" type="button" (click)="openPriceDetails()">Details</button></p>
+    <hr class="finance-user-actions__divider" />
+    <p class="finance-user-actions__label" id="finance-danger-label">Danger zone</p>
+    <button class="btn btn-ghost danger" type="button" aria-describedby="finance-danger-label"
+      [disabled]="isResettingData" (click)="clearMyData()">Clear data…</button>
   </div>
 </ng-template>
