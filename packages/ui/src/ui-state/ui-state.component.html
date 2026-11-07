@@ -12,7 +12,7 @@
   } @else if (state() === 'unavailable') {
     <div class="ui-state__banner ui-state__banner--warning" role="status">
       <p class="ui-state__line"><ui-icon name="alert" /><span>{{ unavailableCopy() }}</span></p>
-      <ui-button variant="secondary" size="sm" [busy]="pending()" [disabled]="pending()" (clicked)="onRetry()">Retry</ui-button>
+      <ui-button variant="secondary" [busy]="pending()" [disabled]="pending()" (clicked)="onRetry()">Retry</ui-button>
     </div>
   } @else if (state() === 'expired') {
     <div class="ui-state__banner ui-state__banner--warning" role="status">

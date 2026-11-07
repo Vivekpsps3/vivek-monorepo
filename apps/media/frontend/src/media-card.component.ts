@@ -65,6 +65,7 @@ import { MediaCard, statusLabel } from "./media.models";
       @if (item().caught_up) {
         <p class="muted">Caught up · Waiting for next episode</p>
       }
+      <ng-content select="[mediaCardActions]" />
     </div>
   </article>`,
 })

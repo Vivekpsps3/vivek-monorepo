@@ -88,6 +88,14 @@ export class FinanceImportService {
     return this.store.undoImportReceipt(receiptId);
   }
 
+  previewUndoBankReceipt(receiptId: number): Promise<{ removable: number; editedKept: number; alreadyGone: number }> {
+    return this.store.previewUndoImportReceipt(receiptId);
+  }
+
+  deleteBankReceipt(receiptId: number): Promise<void> {
+    return this.store.deleteImportReceipt(receiptId);
+  }
+
   commitBank(rows: ImportPreviewRow[]): Promise<ImportCommitResult> {
     return commitBankImportRows(this.store, rows);
   }

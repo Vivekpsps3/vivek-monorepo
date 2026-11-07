@@ -284,8 +284,8 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
 
   async deleteAsset(row: Asset) {
     const ok = await this.confirmService.ask(
-      'Delete asset?',
-      `Remove ${row.name} from your balance sheet?`,
+      `Delete ${row.name}?`,
+      "This removes it from your net worth. Past activity isn't affected.",
       'Delete',
       'Cancel'
     );
@@ -295,7 +295,7 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
 
   private removeAsset(row: Asset): void {
     this.financeService.deleteAsset(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success('Asset deleted'),
+      next: () => this.toastService.success(`${row.name} deleted`),
       error: () => {
         this.toastService.error(failureCopy('delete', 'this asset'), {
           label: 'Try again',
@@ -307,8 +307,8 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
 
   async deleteLiability(row: Liability) {
     const ok = await this.confirmService.ask(
-      'Delete liability?',
-      `Remove ${row.name} from your balance sheet?`,
+      `Delete ${row.name}?`,
+      "This removes it from your net worth. Past activity isn't affected.",
       'Delete',
       'Cancel'
     );
@@ -318,7 +318,7 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
 
   private removeLiability(row: Liability): void {
     this.financeService.deleteLiability(row.id, true).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => this.toastService.success('Liability deleted'),
+      next: () => this.toastService.success(`${row.name} deleted`),
       error: () => {
         this.toastService.error(failureCopy('delete', 'this debt'), {
           label: 'Try again',
@@ -361,6 +361,18 @@ export class AssetsLiabilitiesComponent implements OnInit, OnDestroy {
       ...this.assets.map(row => row.as_of_date),
       ...this.liabilities.map(row => row.as_of_date),
     ]);
+  }
+
+  get hasBalanceSheet(): boolean {
+    return this.assets.length > 0 || this.liabilities.length > 0 || (this.netWorth?.portfolio ?? 0) !== 0;
+  }
+
+  assetDatesSummary(): string {
+    return portfolioDateSummary(this.assets.map(row => row.as_of_date));
+  }
+
+  liabilityDatesSummary(): string {
+    return portfolioDateSummary(this.liabilities.map(row => row.as_of_date));
   }
 
 }

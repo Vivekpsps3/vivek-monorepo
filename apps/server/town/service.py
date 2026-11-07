@@ -294,6 +294,36 @@ def read_town(db: Session, user_id: int, today: date, tz: str) -> dict:
     )
 
 
+def read_town_summary(db: Session, user_id: int, today: date, tz: str) -> dict:
+    """Hub card summary: the town progress, today's habits, and the longest
+    current streak, reduced from the same read model as GET /api/town so the
+    card can never disagree with the town page. Streaks are compared in days
+    (a weekly streak counts its weeks x 7) and reported in their own unit."""
+    full = read_town(db, user_id, today, tz)
+    longest = 0
+    longest_unit: str | None = None
+    longest_days = 0
+    for habit in full["habits"]:
+        streak = habit["streak"]
+        current = streak["current"]
+        days = current if streak["unit"] == "days" else current * 7
+        if days > longest_days:
+            longest, longest_unit, longest_days = current, streak["unit"], days
+    town = full["town"]
+    return dict(
+        name=town["name"],
+        founded_on=town["founded_on"],
+        level=town["level"],
+        xp=town["xp"],
+        level_xp_start=town["level_xp_start"],
+        next_level_xp=town["next_level_xp"],
+        today_done=full["today"]["done"],
+        today_total=full["today"]["total"],
+        longest_streak=longest,
+        longest_streak_unit=longest_unit,
+    )
+
+
 def _as_date(value: object) -> date:
     if type(value) is date:
         return value

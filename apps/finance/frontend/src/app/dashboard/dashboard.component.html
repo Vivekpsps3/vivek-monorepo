@@ -1,9 +1,19 @@
 <div class="page dashboard">
+  <ui-page-header title="Home" />
   @if (!isLoading && !error && netWorth) {
+    @if (priceNoticeVisible) {
+      <div class="price-notice" role="status">
+        <p>Prices checked automatically. Only ticker symbols are sent.</p>
+        <ui-button variant="ghost" size="sm" (clicked)="dismissPriceNotice()">Got it</ui-button>
+      </div>
+    }
     <nav class="home-overview" aria-label="Home overview">
       <a routerLink="/finance/have" class="home-tile home-tile--balance">
-        <span class="home-tile__topline">What you have <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+        <span class="home-tile__topline">Net worth <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money">{{ have | money }}</span>
+        @if (autoPricesOff) {
+          <span class="home-status">Automatic price checks are off</span>
+        }
 
         <dl class="balance-breakdown">
           <div>
@@ -27,9 +37,12 @@
           <span class="home-status">{{ provisionalPositionCount | plural:'position' }} {{ provisionalPositionCount === 1 ? 'uses' : 'use' }} provisional values</span>
         }
       </a>
+      @if (autoPricesOff) {
+        <ui-button variant="secondary" size="sm" class="home-refresh-prices" (clicked)="refreshPrices()">Refresh prices</ui-button>
+      }
 
       <a routerLink="/finance/spending" class="home-tile home-tile--activity">
-        <span class="home-tile__topline">This month <span class="home-tile__arrow" aria-hidden="true">→</span></span>
+        <span class="home-tile__topline">{{ monthName }} <span class="home-tile__arrow" aria-hidden="true">→</span></span>
         <span class="home-tile__value money" [class.negative]="monthNet < 0">{{ monthNet | money }}</span>
         <span class="home-split">
           <span>
@@ -37,10 +50,17 @@
             <strong class="money">{{ monthPay | money }}</strong>
           </span>
           <span>
-            <small>Spending</small>
-            <strong class="money negative">{{ monthSpend | money }}</strong>
+            <small>Spent</small>
+            <strong class="money">{{ monthSpend | money }}</strong>
+          </span>
+          <span>
+            <small>Scheduled</small>
+            <strong class="money">{{ monthScheduled | money }}</strong>
           </span>
         </span>
+        @if (spendDelta; as delta) {
+          <span class="home-status">{{ delta.delta >= 0 ? '+' : '−' }}{{ (delta.delta >= 0 ? delta.delta : -delta.delta) | money }} {{ delta.label }}</span>
+        }
       </a>
     </nav>
 
@@ -67,17 +87,17 @@
       </ui-card>
     }
 
-    @if (isStarterState) {
+    @if (isStarterState || guide.firstStepsRequested()) {
       <section class="starter-card" aria-labelledby="starter-title">
         <div class="starter-card__heading">
           <h2 id="starter-title">First steps</h2>
           <p>Add the parts you track, in any order.</p>
         </div>
         <nav class="starter-links" aria-label="Finance setup">
-          <a routerLink="/finance/have" [queryParams]="{ t: 'assets' }"><ui-icon name="wallet" size="sm" />Add assets and debts<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/have"><ui-icon name="wallet" size="sm" />Add assets and debts<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
           <a routerLink="/finance/have" [queryParams]="{ t: 'holdings' }"><ui-icon name="portfolio" size="sm" />Add holdings<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/finance/spending" [queryParams]="{ t: 'imports' }"><ui-icon name="upload" size="sm" />Import bank CSVs<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
-          <a routerLink="/finance/recurring" [queryParams]="{ t: 'pay' }"><ui-icon name="building" size="sm" />Add jobs and pay<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/spending" [queryParams]="{ receipts: '1' }"><ui-icon name="upload" size="sm" />Import bank CSVs<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
+          <a routerLink="/finance/recurring"><ui-icon name="building" size="sm" />Add jobs and pay<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
           <a routerLink="/finance/recurring" [queryParams]="{ t: 'spend' }"><ui-icon name="calendar" size="sm" />Add bills and subscriptions<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
           <a routerLink="/finance/planning"><ui-icon name="trending" size="sm" />Build a plan<ui-icon class="starter-links__arrow" name="chevron-right" size="sm" /></a>
         </nav>

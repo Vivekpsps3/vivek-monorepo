@@ -1,0 +1,80 @@
+:host {
+  position: relative;
+  display: inline-block;
+}
+
+.ui-menu__trigger--icon-only {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.ui-menu__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 12rem;
+  max-width: min(20rem, calc(100vw - 32px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 30;
+  padding: var(--space-1) 0;
+}
+
+.ui-menu__panel--end {
+  left: auto;
+  right: 0;
+}
+
+.ui-menu__panel--up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.ui-menu__panel[hidden] {
+  display: none;
+}
+
+.ui-menu__panel:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+:host ::ng-deep [uiMenuItem] {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--control-h);
+  padding: 0 var(--space-4);
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+:host ::ng-deep [uiMenuItem]:hover,
+:host ::ng-deep [uiMenuItem]:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+:host ::ng-deep [uiMenuItem][aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+:host ::ng-deep [uiMenuItem].ui-menu-item--danger {
+  color: var(--danger);
+  border-top: 1px solid var(--border);
+}
+
+/* Only the first danger item gets the divider. */
+:host ::ng-deep [uiMenuItem].ui-menu-item--danger ~ [uiMenuItem].ui-menu-item--danger {
+  border-top: none;
+}

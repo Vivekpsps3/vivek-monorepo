@@ -136,26 +136,46 @@ h3 {
   gap: var(--space-2);
 }
 
-@media (min-width: 769px) {
+@media (min-width: 641px) {
   :host ::ng-deep .ui-data-table__table tbody td.num {
     white-space: nowrap;
   }
 }
 
-@media (max-width: 768px) {
-  :host ::ng-deep .ui-data-table .ui-data-table__table tbody tr {
+@media (max-width: 640px) {
+  .summary-card .summary-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-top: var(--space-3);
   }
 
-  :host ::ng-deep .ui-data-table .ui-data-table__table tbody td {
-    grid-column: 1 / -1;
-    text-align: left;
+  .breakdown-item {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
   }
 
-  :host ::ng-deep .ui-data-table__table tbody td.num {
-    text-align: left;
-    font-size: var(--text-base);
-    font-weight: 650;
+  .breakdown-item:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .source-dates {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  /* F16: tables give way to the two-line phone rows. */
+  :host ::ng-deep .ui-data-table {
+    display: none;
+  }
+
+  .row-list {
+    display: block;
   }
 
   .actions,
@@ -185,4 +205,57 @@ h3 {
     justify-content: flex-end;
     align-items: center;
   }
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .empty-actions {
+    flex-direction: column;
+  }
+
+  .empty-actions ui-button {
+    width: 100%;
+  }
+
+  .empty-actions ::ng-deep .ui-btn {
+    width: 100%;
+  }
+}
+
+/* F16: two-line phone rows (shown at ≤640px, where tables hide). */
+.row-list {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.row-list__item {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.row-list__item:last-child {
+  border-bottom: 0;
+}
+.row-list__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.row-list__meta {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.row-list__actions {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
 }

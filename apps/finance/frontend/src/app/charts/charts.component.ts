@@ -13,20 +13,35 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FinanceService } from '../services/finance.service';
 import { FixedExpense, Holding, JobIncome, Subscription, Transaction } from '../models/transaction.model';
-import { lastCalendarMonths, monthlyCashflowSeries, transactionEffects } from '../crypto/client-finance';
-import { formatPercent } from '@vivek/browser';
+import { lastCalendarMonths, monthlyCashflowSeries } from '../crypto/client-finance';
+import { categorySpend, chartSlices, type CategorySpendRow } from '../utils/category-spend';
+import { CategorySpendTableComponent, type CategorySpendTableRow } from './category-spend-table.component';
+import { formatDate, formatPercent } from '@vivek/browser';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import type { Chart as ChartInstance, ChartItem } from 'chart.js';
 import { UiCardComponent, UiEmptyStateComponent } from '@vivek/ui';
 import {
   chartColorAt,
   chartCartesianScales,
-  chartLegendBottom,
   chartSuccessColor,
   chartDangerColor,
   chartAccentColor,
   chartSliceBorder,
 } from '@vivek/ui';
+import {
+  NARROW_QUERY,
+  chartCompactMoney,
+  chartMoney,
+  financeTooltip,
+  isNarrow,
+  monthTickLabel,
+  prefersReducedMotion,
+  readTablePref,
+  shouldDrill,
+  trimCashflowRange,
+  withAlpha,
+  writeTablePref,
+} from '../utils/chart-options';
 import { MoneyPipe } from '@vivek/ui';
 type ChartConstructor = new (
   item: ChartItem,
@@ -37,7 +52,7 @@ type ChartConstructor = new (
   selector: 'app-charts',
   standalone: true,
   imports: [
-    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent],
+    MoneyPipe, CommonModule, RouterLink, UiCardComponent, UiEmptyStateComponent, CategorySpendTableComponent],
   templateUrl: './charts.component.html',
   styleUrl: './charts.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -62,11 +77,23 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   sectionOpen = { cashflow: true, category: true, allocation: true };
 
+  tableOpen = { cashflow: readTablePref('cashflow', false), allocation: readTablePref('allocation', true) };
+  hiddenSeries = [false, false, false];
+  readonly cashflowSeries = [
+    { key: 'income', label: 'Income' },
+    { key: 'spending', label: 'Spending' },
+    { key: 'net', label: 'Net' },
+  ];
+  readonly money = chartMoney;
+  private lastTap: { key: string; at: number } | null = null;
+  private narrowQuery: MediaQueryList | null = null;
+  private onNarrowChange = () => this.render$.next();
+
   incomeTotal = 0;
   expenseTotal = 0;
   netCashflow = 0;
-  monthlyRows: { month: string; label: string; income: number; expense: number; net: number }[] = [];
-  allCategoryRows: { label: string; value: number; pct: number | null }[] = [];
+  monthlyRows: { month: string; label: string; tick: string; income: number; expense: number; net: number }[] = [];
+  allCategoryRows: CategorySpendRow[] = [];
   allocationRows: { label: string; value: number; pct: number; companyName?: string | null }[] = [];
 
   private incomeChart?: ChartInstance;
@@ -109,6 +136,11 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit() {
+    this.narrowQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(NARROW_QUERY)
+      : null;
+    this.narrowQuery?.addEventListener('change', this.onNarrowChange);
+
     this.render$
       .pipe(debounceTime(120), takeUntil(this.destroy$))
       .subscribe(() => void this.schedulePaint());
@@ -164,11 +196,75 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.narrowQuery?.removeEventListener('change', this.onNarrowChange);
     this.destroy$.next();
     this.destroy$.complete();
     this.incomeChart?.destroy();
     this.categoryChart?.destroy();
     this.portfolioChart?.destroy();
+  }
+
+  toggleTable(id: 'cashflow' | 'allocation'): void {
+    this.tableOpen[id] = !this.tableOpen[id];
+    writeTablePref(id, this.tableOpen[id]);
+    this.cdr.markForCheck();
+    this.render$.next();
+    void this.schedulePaint();
+  }
+
+  toggleSeries(index: number): void {
+    this.hiddenSeries[index] = !this.hiddenSeries[index];
+    this.incomeChart?.setDatasetVisibility(index, !this.hiddenSeries[index]);
+    this.incomeChart?.update();
+    this.cdr.markForCheck();
+  }
+
+  onChartTap(chart: 'cashflow' | 'category', index: number, datasetIndex: number, event: { native?: Event | null }): void {
+    const pointerType = (event.native as PointerEvent | null)?.pointerType ?? '';
+    const key = `${chart}:${index}:${datasetIndex}`;
+    const now = Date.now();
+    if (!shouldDrill(this.lastTap, key, pointerType, now)) {
+      this.lastTap = { key, at: now };
+      return;
+    }
+    this.lastTap = null;
+    if (chart === 'cashflow') {
+      this.openMonthlyDrilldown(index, datasetIndex);
+    } else {
+      this.openCategoryDrilldown(index);
+    }
+  }
+
+  get cashflowSummary(): string {
+    const rows = this.monthlyRows;
+    if (!rows.length) return '';
+    const first = rows[0];
+    const last = rows[rows.length - 1];
+    const best = rows.reduce((top, row) => (row.net > top.net ? row : top), rows[0]);
+    const sameYear = first.label.split(' ').pop() === last.label.split(' ').pop();
+    const firstText = sameYear ? first.label.split(' ')[0] : monthTickLabel(first.month, true);
+    const bestName = best.label.split(' ')[0];
+    return `Monthly cashflow, ${firstText} to ${last.label}. Net highest in ${bestName}, ${chartMoney(best.net, 'always')}.`;
+  }
+
+  get categorySummary(): string {
+    const top = this.categoryRows[0];
+    if (!top) return '';
+    return `Spending by category. Largest: ${top.label}, ${chartMoney(top.net)}. Select a category to open it in Activity.`;
+  }
+
+  get allocationSummary(): string {
+    const top = this.allocationRows[0];
+    if (!top) return '';
+    return `Holdings mix. Largest: ${top.label}, ${this.formatShare(top.pct)}.`;
+  }
+
+  get singleCategory(): CategorySpendRow | null {
+    return this.categoryRows.length === 1 ? this.categoryRows[0] : null;
+  }
+
+  get singleHolding(): { label: string; value: number; pct: number } | null {
+    return this.allocationRows.length === 1 ? this.allocationRows[0] : null;
   }
 
   private async ensureChartCtor(): Promise<ChartConstructor> {
@@ -186,23 +282,34 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     void this.paintCharts();
   }
 
-  get categoryRows(): { label: string; value: number; pct: number | null; synthetic?: boolean }[] {
+  get categoryRows(): (CategorySpendRow & { synthetic?: boolean; categories?: string[] })[] {
     if (!this.collapsedCategories || this.allCategoryRows.length <= 6) {
       return this.allCategoryRows;
     }
     const head = this.allCategoryRows.slice(0, 6);
     const tail = this.allCategoryRows.slice(6);
-    const otherValue = tail.reduce((sum, row) => sum + row.value, 0);
-    const total = this.allCategoryRows.reduce((sum, row) => sum + row.value, 0);
+    const otherNet = tail.reduce((sum, row) => sum + row.net, 0);
+    const otherPurchases = tail.reduce((sum, row) => sum + row.purchases, 0);
+    const totalPurchases = this.allCategoryRows.reduce((sum, row) => sum + row.purchases, 0);
     return [
       ...head,
       {
-        label: 'Other',
-        value: otherValue,
-        pct: total > 0 ? (otherValue / total) * 100 : null,
+        label: `Other (${tail.length})`,
+        net: otherNet,
+        purchases: otherPurchases,
+        share: totalPurchases > 0 ? (otherNet / totalPurchases) * 100 : null,
         synthetic: true,
+        categories: tail.map(row => row.label),
       },
     ];
+  }
+
+  /** Rows for the shared category table, with drilldown queries attached. */
+  get categoryTableRows(): CategorySpendTableRow[] {
+    return this.categoryRows.map(row => ({
+      ...row,
+      query: this.categoryRowQuery(row),
+    }));
   }
 
   get canCollapseCategories(): boolean {
@@ -228,30 +335,26 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!row) return;
     const view = datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all';
     void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: 'activity', v: view, month: row.month },
+      queryParams: { t: null, v: view, month: row.month },
     });
   }
 
   openCategoryDrilldown(index: number): void {
     const row = this.categoryRows[index];
     if (!row) return;
+    const query = this.categoryRowQuery(row);
+    if (query) void this.router.navigate(['/finance/spending'], { queryParams: query });
+  }
+
+  monthlyRowQuery(row: { month: string }, datasetIndex = 0): { [key: string]: string | null } {
+    return { t: null, v: datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all', month: row.month };
+  }
+
+  categoryRowQuery(row: { label: string; synthetic?: boolean; categories?: string[] }): { [key: string]: string | null } | null {
     if (row.synthetic) {
-      this.collapsedCategories = false;
-      this.render$.next();
-      this.cdr.markForCheck();
-      return;
+      return { t: null, v: 'spending', month: 'all', categories: (row.categories ?? []).join('|') };
     }
-    void this.router.navigate(['/finance/spending'], {
-      queryParams: { t: 'activity', v: 'spending', month: 'all', category: row.label },
-    });
-  }
-
-  monthlyRowQuery(row: { month: string }, datasetIndex = 0): { [key: string]: string } {
-    return { t: 'activity', v: datasetIndex === 0 ? 'income' : datasetIndex === 1 ? 'spending' : 'all', month: row.month };
-  }
-
-  categoryRowQuery(row: { label: string; synthetic?: boolean }): { [key: string]: string } | null {
-    return row.synthetic ? null : { t: 'activity', v: 'spending', month: 'all', category: row.label };
+    return { t: null, v: 'spending', month: 'all', category: row.label };
   }
 
   private computeDerived() {
@@ -267,30 +370,19 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.expenseTotal = series.reduce((sum, row) => sum + row.expense, 0);
     this.netCashflow = this.incomeTotal - this.expenseTotal;
     this.monthlyRows = series.some(row => row.income || row.expense)
-      ? series.map(row => ({
+      ? trimCashflowRange(series).map((row, i) => ({
           month: row.month,
-          label: this.formatMonth(row.month),
+          label: formatDate(`${row.month}-01`, 'month'),
+          tick: monthTickLabel(row.month, i === 0 || row.month.endsWith('-01')),
           income: row.income,
           expense: row.expense,
           net: row.net,
         }))
       : [];
 
-    const byCategory = new Map<string, number>();
-    for (const tx of txs) {
-      const effect = transactionEffects(tx).spending;
-      if (!effect) continue;
-      byCategory.set(tx.category, (byCategory.get(tx.category) || 0) + effect);
-    }
-    const categoryTotal = [...byCategory.values()].reduce((s, v) => s + v, 0);
-    this.allCategoryRows = [...byCategory.entries()]
-      .filter(([, value]) => value !== 0)
-      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-      .map(([label, value]) => ({
-        label,
-        value,
-        pct: categoryTotal > 0 ? (value / categoryTotal) * 100 : null,
-      }));
+    // Refund-aware category spend (F8): signed nets from the shared util;
+    // the chart clamps negatives, the table keeps them signed.
+    this.allCategoryRows = categorySpend(txs, '').rows;
 
     const totalVal = this.holdings.reduce((s, h) => s + (h.value || 0), 0);
     this.allocationRows = [...this.holdings]
@@ -347,11 +439,12 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private updateIncomeExpense(Chart: ChartConstructor) {
     const canvas = this.incomeExpenseCanvas?.nativeElement;
-    if (!canvas || this.monthlyRows.length === 0) {
+    if (!canvas || this.monthlyRows.length === 0 || this.tableOpen.cashflow) {
       this.incomeChart?.destroy();
       this.incomeChart = undefined;
       return;
     }
+    const base = chartCartesianScales();
     this.incomeChart = this.upsertChart(Chart, this.incomeChart, canvas, {
       type: 'bar',
       data: {
@@ -362,89 +455,142 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
             data: this.monthlyRows.map(r => r.income),
             backgroundColor: chartSuccessColor(),
             borderRadius: 6,
+            order: 1,
+            hidden: this.hiddenSeries[0],
           },
           {
             label: 'Spending',
             data: this.monthlyRows.map(r => r.expense),
-            backgroundColor: chartDangerColor(),
+            backgroundColor: withAlpha(chartDangerColor(), 0.8),
             borderRadius: 6,
+            order: 1,
+            hidden: this.hiddenSeries[1],
           },
           {
             type: 'line',
-            label: 'Net cashflow',
+            label: 'Net',
             data: this.monthlyRows.map(r => r.net),
             borderColor: chartAccentColor(),
             backgroundColor: chartAccentColor(),
-            tension: 0.25,
-            pointRadius: 3,
+            tension: 0,
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            borderWidth: 2,
+            order: 0,
+            hidden: this.hiddenSeries[2],
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: prefersReducedMotion() ? false : undefined,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: chartLegendBottom(),
-          tooltip: { enabled: false },
+          legend: { display: false },
+          tooltip: {
+            ...financeTooltip(),
+            callbacks: {
+              title: (items: Array<{ dataIndex: number }>) =>
+                items.length ? this.monthlyRows[items[0].dataIndex]?.label ?? '' : '',
+              label: (item: { dataIndex: number; datasetIndex: number }) => {
+                const row = this.monthlyRows[item.dataIndex];
+                if (!row) return '';
+                if (row.income === 0 && row.expense === 0) return 'No activity';
+                if (item.datasetIndex === 0) return `Income ${chartMoney(row.income)}`;
+                if (item.datasetIndex === 1) return `Spending ${chartMoney(row.expense)}`;
+                return `Net ${chartMoney(row.net, 'always')}`;
+              },
+            },
+            filter: (item: { dataIndex: number; datasetIndex: number }) => {
+              const row = this.monthlyRows[item.dataIndex];
+              if (row && row.income === 0 && row.expense === 0) return item.datasetIndex === 0;
+              return true;
+            },
+          },
         },
-        onClick: (_event: unknown, active: Array<{ datasetIndex: number; index: number }>) => {
+        onClick: (event: { native?: Event | null }, active: Array<{ datasetIndex: number; index: number }>) => {
           const point = active[0];
-          if (point) this.openMonthlyDrilldown(point.index, point.datasetIndex);
+          if (point) this.onChartTap('cashflow', point.index, point.datasetIndex, event);
         },
-        scales: chartCartesianScales(),
+        scales: {
+          x: {
+            ...base.x,
+            ticks: {
+              ...base.x.ticks,
+              maxTicksLimit: isNarrow() ? 4 : 12,
+              autoSkip: true,
+              callback: (_value: unknown, index: number) => this.monthlyRows[index]?.tick ?? '',
+            },
+          },
+          y: {
+            ...base.y,
+            beginAtZero: this.monthlyRows.every(r => r.net >= 0),
+            ticks: {
+              ...base.y.ticks,
+              callback: (value: unknown) => chartCompactMoney(Number(value)),
+            },
+          },
+        },
       },
     });
   }
 
   private updateCategorySpending(Chart: ChartConstructor) {
     const canvas = this.categoryCanvas?.nativeElement;
-    if (!canvas || this.categoryRows.length === 0) {
+    if (!canvas || this.categoryRows.length === 0 || this.singleCategory) {
       this.categoryChart?.destroy();
       this.categoryChart = undefined;
       return;
     }
-    const hasRefundEffects = this.categoryRows.some(row => row.value < 0);
+    // Always a doughnut (F8): refund-heavy categories clamp to a zero slice
+    // here and stay signed in the table beside the chart.
+    const slices = chartSlices(this.categoryRows);
     this.categoryChart = this.upsertChart(Chart, this.categoryChart, canvas, {
-      type: hasRefundEffects ? 'bar' : 'doughnut',
+      type: 'doughnut',
       data: {
-        labels: this.categoryRows.map(r => r.label),
+        labels: slices.map(r => r.label),
         datasets: [{
-          data: this.categoryRows.map(r => r.value),
-          backgroundColor: hasRefundEffects
-            ? this.categoryRows.map(row => row.value < 0 ? chartDangerColor() : chartAccentColor())
-            : this.chartColors(this.categoryRows.length),
+          label: 'Spending',
+          data: slices.map(r => r.value),
+          backgroundColor: this.chartColors(slices.length),
           ...chartSliceBorder(),
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        ...(hasRefundEffects ? { indexAxis: 'y' } : {}),
-        ...(hasRefundEffects ? { scales: chartCartesianScales() } : {}),
+        animation: prefersReducedMotion() ? false : undefined,
+        interaction: { mode: 'nearest', intersect: true },
         plugins: {
-          // A bar chart's legend is the dataset name. Categories are already the axis labels.
-          legend: hasRefundEffects ? { display: false } : chartLegendBottom(),
-          tooltip: { enabled: false },
+          legend: { display: false },
+          tooltip: {
+            ...financeTooltip(),
+            callbacks: {
+              label: (item: { dataIndex: number }) => {
+                const row = this.categoryRows[item.dataIndex];
+                if (!row) return '';
+                // Gross purchases remain the denominator even when refunds reduce net spend.
+                const totalPurchases = this.allCategoryRows.reduce((sum, r) => sum + r.purchases, 0);
+                const share = totalPurchases > 0 ? (row.net / totalPurchases) * 100 : null;
+                return share == null
+                  ? `${row.label} · ${chartMoney(row.net)}`
+                  : `${row.label} · ${chartMoney(row.net)} · ${this.formatShare(share)} of purchases`;
+              },
+            },
+          },
         },
-        onClick: (_event: unknown, active: Array<{ index: number }>) => {
+        onClick: (event: { native?: Event | null }, active: Array<{ index: number }>) => {
           const point = active[0];
-          if (point) this.openCategoryDrilldown(point.index);
+          if (point) this.onChartTap('category', point.index, 0, event);
         },
       },
     });
   }
 
-  private formatMonth(value: string): string {
-    const [year, month] = value.split('-').map(Number);
-    return new Date(year, month - 1, 1).toLocaleString(undefined, {
-      month: 'short',
-      year: '2-digit',
-    });
-  }
-
   private updatePortfolio(Chart: ChartConstructor) {
     const canvas = this.portfolioCanvas?.nativeElement;
-    if (!canvas || this.allocationRows.length === 0) {
+    if (!canvas || this.allocationRows.length === 0 || this.tableOpen.allocation || this.singleHolding) {
       this.portfolioChart?.destroy();
       this.portfolioChart = undefined;
       return;
@@ -462,9 +608,19 @@ export class ChartsComponent implements OnInit, AfterViewInit, OnDestroy {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: prefersReducedMotion() ? false : undefined,
+        interaction: { mode: 'nearest', intersect: true },
         plugins: {
-          legend: chartLegendBottom(),
-          tooltip: { enabled: false },
+          legend: { display: false },
+          tooltip: {
+            ...financeTooltip(),
+            callbacks: {
+              label: (item: { dataIndex: number }) => {
+                const row = this.allocationRows[item.dataIndex];
+                return row ? `${row.label} · ${chartMoney(row.value)} · ${this.formatShare(row.pct)}` : '';
+              },
+            },
+          },
         },
       },
     });

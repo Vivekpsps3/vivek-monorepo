@@ -1,12 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
+import { BehaviorSubject, ReplaySubject, Subject, firstValueFrom, takeUntil, timeout } from 'rxjs';
+import { isoDateInZone } from '@vivek/browser';
 import { authNavigation } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { financeTabId, lockedHere, wipeDek } from '../crypto/dek-holder';
 import { VaultService } from '../crypto/vault.service';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import { MarketPriceQuote } from '../models/transaction.model';
 import { FinanceService } from './finance.service';
 import { ToastService, failureCopy } from '@vivek/ui';
@@ -69,11 +71,15 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
   private readonly vault = inject(VaultService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly pricePrefs = inject(FinancePricePrefsService);
   private readonly stateSubject = new BehaviorSubject<MarketRefreshState>({ ...EMPTY_STATE });
   private readonly destroy$ = new Subject<void>();
   private sessionCancel$ = new Subject<void>();
   readonly status$ = this.stateSubject.asObservable();
-  readonly disclosure = 'Price refresh sends ticker symbols to the market data service. Holdings, shares, balances, and job records stay encrypted in your vault.';
+  readonly disclosure = 'Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.';
+  /** Emits once, when this session's automatic price check actually starts. */
+  private readonly firstAutoCheckSubject = new ReplaySubject<void>(1);
+  readonly firstAutoCheck$ = this.firstAutoCheckSubject.asObservable();
 
   private channel: BroadcastChannel | null = null;
   private activeUserId: number | null = null;
@@ -133,8 +139,10 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
       this.stateSubject.next({ ...EMPTY_STATE });
     }
     this.activeUserId = userId;
+    if (!this.pricePrefs.autoCheck(userId)) return;
     if (this.automaticSessionKey === key) return;
     this.automaticSessionKey = key;
+    this.firstAutoCheckSubject.next();
     void this.refreshConfiguredSymbols(true);
   }
 
@@ -171,10 +179,6 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     return result;
   }
 
-  broadcastLock(originTabId?: string): void {
-    this.broadcastSessionMessage('lock', originTabId);
-  }
-
   broadcastSignOut(): void {
     this.broadcastSessionMessage('signout');
   }
@@ -185,23 +189,26 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     const sessionKey = this.activeSessionKey!;
     const token = this.activeSessionToken!;
     this.activeRefreshSymbols = new Set<string>();
-    this.stateSubject.next({
-      ...EMPTY_STATE,
-      phase: 'refreshing',
-      automatic,
-      startedAt: new Date().toISOString(),
-    });
     try {
+      // ST-03 (F10): read the symbols before announcing anything. With no
+      // valid tickers there is no refresh: never emit 'refreshing', never
+      // set finishedAt, never toast — the state just ends idle.
       const symbols = [...new Set((await this.finance.getConfiguredMarketSymbols())
         .map(value => value.trim().toUpperCase())
         .filter(value => SYMBOL_PATTERN.test(value)))].sort();
       this.assertCurrentOperation(sessionKey, token, operation);
       symbols.forEach(symbol => this.activeRefreshSymbols.add(symbol));
       if (!symbols.length) {
-        const finished = { ...this.stateSubject.value, phase: 'complete' as const, finishedAt: new Date().toISOString() };
-        this.stateSubject.next(finished);
-        return finished;
+        const idle = { ...EMPTY_STATE, phase: 'idle' as const, automatic };
+        this.stateSubject.next(idle);
+        return idle;
       }
+      this.stateSubject.next({
+        ...EMPTY_STATE,
+        phase: 'refreshing',
+        automatic,
+        startedAt: new Date().toISOString(),
+      });
       this.stateSubject.next({ ...this.stateSubject.value, totalSymbols: symbols.length });
       const results: MarketSymbolRefreshResult[] = [];
       let index = 0;
@@ -280,7 +287,7 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
     if (!quote?.valid || quote.symbol?.trim().toUpperCase() !== symbol) throw new Error('Market service returned a different or unavailable ticker.');
     if (!Number.isFinite(quote.price) || quote.price <= 0) throw new Error('Market service returned an invalid price.');
     const date = quote.quote_date || '';
-    if (!isValidDate(date) || date > new Date().toISOString().slice(0, 10)) throw new Error('Market service returned an invalid or future trading date.');
+    if (!isValidDate(date) || date > isoDateInZone(new Date(), 'America/Los_Angeles')) throw new Error('Market service returned an invalid or future trading date.');
   }
 
   private publishProgress(operation: number, result: MarketSymbolRefreshResult, total: number): void {
@@ -404,7 +411,16 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
         .then(() => { authNavigation.goToLogin(false); })
         .catch(() => undefined);
     } else {
-      await this.router.navigateByUrl('/finance/vault/unlock');
+      // Remote lock (F5 §1): on a Finance route, go to unlock keeping the
+      // return path; on Hub/Settings don't navigate — those surfaces read
+      // vault.isUnlocked themselves. An unknown URL means the embedded
+      // Finance context, which always lands on the unlock screen.
+      const url = this.router.url || '';
+      if (url.startsWith('/finance/') && !url.startsWith('/finance/vault/')) {
+        await this.router.navigateByUrl(`/finance/vault/unlock?next=${encodeURIComponent(url)}`);
+      } else if (url === '' || url.startsWith('/finance/vault/')) {
+        await this.router.navigateByUrl('/finance/vault/unlock');
+      }
     }
   }
 }

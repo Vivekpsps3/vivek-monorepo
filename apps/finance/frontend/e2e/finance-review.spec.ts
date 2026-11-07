@@ -81,7 +81,7 @@ test('home, planning, and activity agree on a negative subscription and a negati
   const home = page.locator('.home-tile--activity');
   await expect(home).toContainText(moneyText('$55.99'));
   await expect(home).not.toContainText(moneyText('−$464.01'));
-  await expect(page.locator('.home-tile').filter({ hasText: 'What you have' })).toContainText(moneyText('$1,400.00'));
+  await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,400.00'));
 
   await vault.open('/planning');
   await expect(page.getByText('Current net worth').locator('..')).toContainText(moneyText('$1,400.00'));

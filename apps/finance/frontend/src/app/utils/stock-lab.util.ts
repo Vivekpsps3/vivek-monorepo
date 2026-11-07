@@ -140,9 +140,10 @@ export function trailingTwelveMonthDividend(research: MarketResearchResponse): n
 
 export function calculatePurchasePlan(
   research: MarketResearchResponse,
-  input: PurchasePlanInput
+  input: PurchasePlanInput,
+  savedPrice?: number | null
 ): PurchasePlanResult {
-  const currentPrice = Math.max(0.01, Number(research.quote?.current_price ?? research.history.at(-1)?.close ?? 0));
+  const currentPrice = Math.max(0.01, Number(research.quote?.current_price ?? savedPrice ?? research.history.at(-1)?.close ?? 0));
   const effectivePurchasePrice = input.purchase_mode === 'target_price'
     ? Math.max(0.01, Number(input.target_price || currentPrice))
     : currentPrice;

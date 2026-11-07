@@ -27,6 +27,10 @@
       </div>
     </div>
     <div class="suite-header__end">
+      <button class="btn btn-ghost search-toggle" type="button" aria-label="Search"
+        [attr.title]="searchShortcutTitle" (click)="openSearch()">
+        <ui-icon name="search" />
+      </button>
       <div class="suite-health" aria-hidden="true"></div>
       <div class="suite-account" #userMenu>
         <button #userButton class="btn btn-ghost user-menu-toggle" type="button"
@@ -49,5 +53,11 @@
   @if (session.user$ | async; as user) {
     @for (identity of [user]; track identity.id) { <router-outlet /> }
   }
-  @else { <p class="page" role="status">Your session ended. <a routerLink="/auth/login">Sign in</a></p> }
+  @else {
+    <main class="page">
+      <h1>Your session ended</h1>
+      <ui-state state="expired" thing="your apps" [next]="sessionEndedNext" />
+    </main>
+  }
 </div>
+<suite-search-dialog [open]="searchOpen()" (closed)="closeSearch()" />

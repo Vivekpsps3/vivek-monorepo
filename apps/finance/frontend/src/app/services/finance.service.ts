@@ -172,6 +172,37 @@ export class FinanceService {
     return `${this.encStore.sessionToken}::${versions}`;
   }
 
+  /**
+   * B0F2 N2 (defense in depth — the store itself throws when locked): a read
+   * that resolves after the vault locked must not hand decrypted rows to the
+   * subscriber or publish them into a subject. It completes silently instead,
+   * the same shape getAssets and getNetWorth already use.
+   */
+  private guardedRead<T>(read: () => Promise<T>, publish: (value: T) => void): Observable<T> {
+    const lock = readLockEpoch();
+    return new Observable(subscriber => {
+      void read().then(value => {
+        if (lock !== readLockEpoch() || !hasDek()) { subscriber.complete(); return; }
+        publish(value);
+        subscriber.next(value);
+        subscriber.complete();
+      }, (error: unknown) => subscriber.error(error));
+    });
+  }
+
+  /** A write-back publishes only when the vault stayed unlocked for the whole write. */
+  private publishValueIfUnlocked<T>(lock: number, subject: BehaviorSubject<T>, value: T): void {
+    if (lock === readLockEpoch() && hasDek()) subject.next(value);
+  }
+
+  private async publishReadBackIfUnlocked<T>(
+    lock: number,
+    subject: BehaviorSubject<T[]>,
+    read: () => Promise<T[]>
+  ): Promise<void> {
+    this.publishValueIfUnlocked(lock, subject, await read());
+  }
+
   getConfiguredMarketSymbols(): Promise<string[]> {
     return this.market.getConfiguredSymbols();
   }
@@ -323,7 +354,8 @@ export class FinanceService {
     append?: boolean;
   }): Observable<Transaction[]> {
     const epoch = this.dataEpoch(['transactions']);
-    return from(this.encStore.getTransactions().then(rows => {
+    return this.guardedRead(async () => {
+      const rows = await this.encStore.getTransactions();
       let out = rows;
       if (options?.search) {
         const q = options.search.toLowerCase();
@@ -337,13 +369,13 @@ export class FinanceService {
       }
       const skip = options?.skip ?? 0;
       const limit = options?.limit ?? out.length;
-      out = out.slice(skip, skip + limit);
+      return out.slice(skip, skip + limit);
+    }, out => {
       if (epoch === this.dataEpoch(['transactions'])) {
         if (options?.append) this._transactions.next([...this._transactions.value, ...out]);
         else this._transactions.next(out);
       }
-      return out;
-    }));
+    });
   }
 
   /** Full encrypted ledger for totals that must stay correct when the visible table is paged. */
@@ -353,21 +385,18 @@ export class FinanceService {
 
   getDashboardTransactions(_options?: { limit?: number }): Observable<Transaction[]> {
     const epoch = this.dataEpoch(['transactions']);
-    return from(this.encStore.getTransactions().then(rows => {
-      // Dashboard totals must use the complete ledger; visible pagination is a component concern.
-      const out = rows;
-      if (epoch === this.dataEpoch(['transactions'])) this._dashboardTransactions.next(out);
-      return out;
-    }));
+    // Dashboard totals must use the complete ledger; visible pagination is a component concern.
+    return this.guardedRead(() => this.encStore.getTransactions(), rows => {
+      if (epoch === this.dataEpoch(['transactions'])) this._dashboardTransactions.next(rows);
+    });
   }
 
   getCashflowSummary(startDate: string, endDate: string): Observable<CashflowSummary> {
     const dependencies: EncryptedCollection[] = ['transactions', 'job_incomes', 'fixed_expenses', 'subscriptions'];
     const epoch = this.dataEpoch(dependencies);
-    return from(this.encStore.getCashflowSummary(startDate, endDate).then(s => {
-      if (epoch === this.dataEpoch(dependencies)) this._cashflowSummary.next(s as CashflowSummary);
-      return s as CashflowSummary;
-    }));
+    return this.guardedRead(async () => (await this.encStore.getCashflowSummary(startDate, endDate)) as CashflowSummary, summary => {
+      if (epoch === this.dataEpoch(dependencies)) this._cashflowSummary.next(summary);
+    });
   }
 
   getCashflowSummaryForCurrentMonth(): Observable<CashflowSummary> {
@@ -380,8 +409,9 @@ export class FinanceService {
 
   addTransaction(tx: TransactionCreate, silent = false): Observable<Transaction> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.addTransaction(tx as Omit<Transaction, 'id'>, options);
-      this._transactions.next(await this.encStore.getTransactions());
+      await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return row;
     }, silent);
@@ -389,17 +419,28 @@ export class FinanceService {
 
   updateTransaction(id: number, tx: Partial<TransactionCreate>, silent = false): Observable<Transaction> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.updateTransaction(id, tx as Partial<Transaction>, options);
-      this._transactions.next(await this.encStore.getTransactions());
+      await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return row;
     }, silent);
   }
 
+  restoreTransaction(record: Transaction, silent = false): Observable<{ record: Transaction; outcome: 'restored' | 'already-restored' }> {
+    return this.commit(async options => {
+      const result = await this.encStore.restoreTransaction(record, options);
+      this._transactions.next(await this.encStore.getTransactions());
+      this.invalidateDashboardCache();
+      return result;
+    }, silent);
+  }
+
   deleteTransaction(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       await this.encStore.deleteTransaction(id, options);
-      this._transactions.next(await this.encStore.getTransactions());
+      await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return { ok: true };
     }, silent);
@@ -407,16 +448,16 @@ export class FinanceService {
 
   getJobIncomes(): Observable<JobIncome[]> {
     const epoch = this.dataEpoch(['job_incomes']);
-    return from(this.encStore.getJobIncomes().then(rows => {
+    return this.guardedRead(() => this.encStore.getJobIncomes(), rows => {
       if (epoch === this.dataEpoch(['job_incomes'])) this._jobIncomes.next(rows);
-      return rows;
-    }));
+    });
   }
 
   addJobIncome(body: JobIncomeCreate, silent = false): Observable<JobIncome> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.addJobIncome(body, options);
-      this._jobIncomes.next(await this.encStore.getJobIncomes());
+      await this.publishReadBackIfUnlocked(lock, this._jobIncomes, () => this.encStore.getJobIncomes());
       this.invalidateDashboardCache();
       return row;
     }, silent);
@@ -424,8 +465,9 @@ export class FinanceService {
 
   updateJobIncome(id: number, body: Partial<JobIncomeCreate>, silent = false): Observable<JobIncome> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.updateJobIncome(id, body, options);
-      this._jobIncomes.next(await this.encStore.getJobIncomes());
+      await this.publishReadBackIfUnlocked(lock, this._jobIncomes, () => this.encStore.getJobIncomes());
       this.invalidateDashboardCache();
       return row;
     }, silent);
@@ -433,31 +475,33 @@ export class FinanceService {
 
   deleteJobIncome(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       await this.encStore.deleteJobIncome(id, options);
-      this._jobIncomes.next(await this.encStore.getJobIncomes());
+      await this.publishReadBackIfUnlocked(lock, this._jobIncomes, () => this.encStore.getJobIncomes());
       this.invalidateDashboardCache();
       return { ok: true };
     }, silent);
   }
 
   getFixedExpenses(): Observable<FixedExpense[]> {
-    return from(this.encStore.getFixedExpenses().then(rows => {
-      this._fixedExpenses.next(rows);
-      return rows;
-    }));
+    const epoch = this.dataEpoch(['fixed_expenses']);
+    return this.guardedRead(() => this.encStore.getFixedExpenses(), rows => {
+      if (epoch === this.dataEpoch(['fixed_expenses'])) this._fixedExpenses.next(rows);
+    });
   }
 
   getSubscriptions(): Observable<Subscription[]> {
-    return from(this.encStore.getSubscriptions().then(rows => {
-      this._subscriptions.next(rows);
-      return rows;
-    }));
+    const epoch = this.dataEpoch(['subscriptions']);
+    return this.guardedRead(() => this.encStore.getSubscriptions(), rows => {
+      if (epoch === this.dataEpoch(['subscriptions'])) this._subscriptions.next(rows);
+    });
   }
 
   addSubscription(body: SubscriptionCreate, silent = false): Observable<Subscription> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.addSubscription(body, options);
-      this._subscriptions.next(await this.encStore.getSubscriptions());
+      await this.publishReadBackIfUnlocked(lock, this._subscriptions, () => this.encStore.getSubscriptions());
       this.invalidateDashboardCache();
       return row;
     }, silent);
@@ -465,8 +509,9 @@ export class FinanceService {
 
   updateSubscription(id: number, body: Partial<SubscriptionCreate>, silent = false): Observable<Subscription> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.updateSubscription(id, body, options);
-      this._subscriptions.next(await this.encStore.getSubscriptions());
+      await this.publishReadBackIfUnlocked(lock, this._subscriptions, () => this.encStore.getSubscriptions());
       this.invalidateDashboardCache();
       return row;
     }, silent);
@@ -474,8 +519,9 @@ export class FinanceService {
 
   deleteSubscription(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       await this.encStore.deleteSubscription(id, options);
-      this._subscriptions.next(await this.encStore.getSubscriptions());
+      await this.publishReadBackIfUnlocked(lock, this._subscriptions, () => this.encStore.getSubscriptions());
       this.invalidateDashboardCache();
       return { ok: true };
     }, silent);
@@ -506,8 +552,9 @@ export class FinanceService {
 
   addFixedExpense(body: FixedExpenseCreate, silent = false): Observable<FixedExpense> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.addFixedExpense(body, options);
-      this._fixedExpenses.next(await this.encStore.getFixedExpenses());
+      await this.publishReadBackIfUnlocked(lock, this._fixedExpenses, () => this.encStore.getFixedExpenses());
       this.invalidateDashboardCache();
       return row;
     }, silent);
@@ -515,8 +562,9 @@ export class FinanceService {
 
   updateFixedExpense(id: number, body: Partial<FixedExpenseCreate>, silent = false): Observable<FixedExpense> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.updateFixedExpense(id, body, options);
-      this._fixedExpenses.next(await this.encStore.getFixedExpenses());
+      await this.publishReadBackIfUnlocked(lock, this._fixedExpenses, () => this.encStore.getFixedExpenses());
       this.invalidateDashboardCache();
       return row;
     }, silent);
@@ -524,8 +572,9 @@ export class FinanceService {
 
   deleteFixedExpense(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       await this.encStore.deleteFixedExpense(id, options);
-      this._fixedExpenses.next(await this.encStore.getFixedExpenses());
+      await this.publishReadBackIfUnlocked(lock, this._fixedExpenses, () => this.encStore.getFixedExpenses());
       this.invalidateDashboardCache();
       return { ok: true };
     }, silent);
@@ -534,9 +583,10 @@ export class FinanceService {
   renameCategory(fromCategory: string, toCategory: string): Observable<CategoryRenameResult> {
     const from_category = fromCategory.trim();
     const to_category = toCategory.trim();
+    const lock = readLockEpoch();
     return from(this.encStore.bulkRenameTransactionCategories([{ fromCategory: from_category, toCategory: to_category }]).then(async result => {
       this.invalidateDashboardCache();
-      this._transactions.next(await this.encStore.getTransactions());
+      await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
       return { updated: result.updated, from_category, to_category };
     }));
   }
@@ -551,9 +601,10 @@ export class FinanceService {
       })),
     };
     const rows = payload.renames.map(row => ({ fromCategory: row.from_category, toCategory: row.to_category }));
+    const lock = readLockEpoch();
     return from(this.encStore.bulkRenameTransactionCategories(rows).then(async result => {
       this.invalidateDashboardCache();
-      this._transactions.next(await this.encStore.getTransactions());
+      await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
       return {
         updated: result.updated,
         renames: payload.renames.map(row => ({ ...row, updated: 0 })),
@@ -562,8 +613,9 @@ export class FinanceService {
   }
 
   bulkCategorizeMerchant(merchant: string, category: string): Observable<{ updated: number; conflicts: number }> {
+    const lock = readLockEpoch();
     return from(this.encStore.bulkCategorizeMerchant(merchant, category).then(async result => {
-      this._transactions.next(await this.encStore.getTransactions());
+      await this.publishReadBackIfUnlocked(lock, this._transactions, () => this.encStore.getTransactions());
       this.invalidateDashboardCache();
       return result;
     }));
@@ -571,13 +623,13 @@ export class FinanceService {
 
   getHoldings(_refreshPrices = false): Observable<Holding[]> {
     const epoch = this.dataEpoch(['holdings']);
-    return from(this.encStore.getHoldings().then(rows => {
+    return this.guardedRead(() => this.encStore.getHoldings(), rows => {
       if (epoch === this.dataEpoch(['holdings'])) this._holdings.next(rows);
-      return rows;
-    }));
+    });
   }
 
   refreshAllHoldingPrices(): Observable<{ holdings: Holding[]; updated: number; failed: number }> {
+    const lock = readLockEpoch();
     return from(this.encStore.getHoldings()).pipe(
       mergeMap(holdings => {
         const symbols = [...new Set(holdings.map(row => row.symbol.trim().toUpperCase()).filter(symbol => /^[A-Z][A-Z0-9.-]*$/.test(symbol)))];
@@ -594,7 +646,7 @@ export class FinanceService {
           reduce((total, result) => ({ updated: total.updated + result.updated, failed: total.failed + result.failed }), { updated: 0, failed: 0 }),
           mergeMap(async result => {
             const refreshed = await this.encStore.getHoldings();
-            this._holdings.next(refreshed);
+            this.publishValueIfUnlocked(lock, this._holdings, refreshed);
             this.refreshDerivedMetrics();
             return { holdings: refreshed, ...result };
           })
@@ -604,6 +656,7 @@ export class FinanceService {
   }
 
   refreshHoldingPrice(holdingId: number): Observable<Holding> {
+    const lock = readLockEpoch();
     return from(this.encStore.getHoldings()).pipe(
       mergeMap(rows => {
         const row = rows.find(item => item.id === holdingId);
@@ -615,7 +668,7 @@ export class FinanceService {
           mergeMap(quote => {
             if (!quote.valid) return throwError(() => new Error('No valid market quote was returned.'));
             return from(this.encStore.updateHoldingPrice(row.id, quote).then(async updated => {
-              this._holdings.next(await this.encStore.getHoldings());
+              await this.publishReadBackIfUnlocked(lock, this._holdings, () => this.encStore.getHoldings());
               this.refreshDerivedMetrics();
               return updated;
             }));
@@ -626,8 +679,9 @@ export class FinanceService {
   }
 
   confirmHoldingPosition(holdingId: number, asOfDate: string): Observable<Holding> {
+    const lock = readLockEpoch();
     return from(this.encStore.updateHolding(holdingId, { position_as_of: asOfDate }).then(async row => {
-      this._holdings.next(await this.encStore.getHoldings());
+      await this.publishReadBackIfUnlocked(lock, this._holdings, () => this.encStore.getHoldings());
       this.refreshDerivedMetrics();
       return row;
     }));
@@ -642,8 +696,9 @@ export class FinanceService {
 
   addHolding(holding: HoldingCreate, silent = false): Observable<Holding> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.addHolding(holding, options);
-      this._holdings.next(await this.encStore.getHoldings());
+      await this.publishReadBackIfUnlocked(lock, this._holdings, () => this.encStore.getHoldings());
       this.refreshDerivedMetrics();
       return row;
     }, silent);
@@ -651,8 +706,9 @@ export class FinanceService {
 
   updateHolding(id: number, holding: Partial<HoldingCreate>, silent = false): Observable<Holding> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.updateHolding(id, holding as Partial<Holding>, this.encStore.sessionToken, options);
-      this._holdings.next(await this.encStore.getHoldings());
+      await this.publishReadBackIfUnlocked(lock, this._holdings, () => this.encStore.getHoldings());
       this.refreshDerivedMetrics();
       return row;
     }, silent);
@@ -660,8 +716,9 @@ export class FinanceService {
 
   deleteHolding(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       await this.encStore.deleteHolding(id, options);
-      this._holdings.next(await this.encStore.getHoldings());
+      await this.publishReadBackIfUnlocked(lock, this._holdings, () => this.encStore.getHoldings());
       this.refreshDerivedMetrics();
       return { ok: true };
     }, silent);
@@ -692,8 +749,9 @@ export class FinanceService {
 
   addAsset(body: AssetCreate, silent = false): Observable<Asset> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.addAsset(body, options);
-      this._assets.next(await this.encStore.getAssets());
+      await this.publishReadBackIfUnlocked(lock, this._assets, () => this.encStore.getAssets());
       this.refreshDerivedMetrics();
       return row;
     }, silent);
@@ -701,8 +759,9 @@ export class FinanceService {
 
   updateAsset(id: number, body: Partial<AssetCreate>, silent = false): Observable<Asset> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.updateAsset(id, body, options);
-      this._assets.next(await this.encStore.getAssets());
+      await this.publishReadBackIfUnlocked(lock, this._assets, () => this.encStore.getAssets());
       this.refreshDerivedMetrics();
       return row;
     }, silent);
@@ -710,8 +769,9 @@ export class FinanceService {
 
   deleteAsset(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       await this.encStore.deleteAsset(id, options);
-      this._assets.next(await this.encStore.getAssets());
+      await this.publishReadBackIfUnlocked(lock, this._assets, () => this.encStore.getAssets());
       this.refreshDerivedMetrics();
       return { ok: true };
     }, silent);
@@ -719,16 +779,16 @@ export class FinanceService {
 
   getLiabilities(): Observable<Liability[]> {
     const epoch = this.dataEpoch(['liabilities']);
-    return from(this.encStore.getLiabilities().then(rows => {
+    return this.guardedRead(() => this.encStore.getLiabilities(), rows => {
       if (epoch === this.dataEpoch(['liabilities'])) this._liabilities.next(rows);
-      return rows;
-    }));
+    });
   }
 
   addLiability(body: LiabilityCreate, silent = false): Observable<Liability> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.addLiability(body, options);
-      this._liabilities.next(await this.encStore.getLiabilities());
+      await this.publishReadBackIfUnlocked(lock, this._liabilities, () => this.encStore.getLiabilities());
       this.refreshDerivedMetrics();
       return row;
     }, silent);
@@ -736,8 +796,9 @@ export class FinanceService {
 
   updateLiability(id: number, body: Partial<LiabilityCreate>, silent = false): Observable<Liability> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       const row = await this.encStore.updateLiability(id, body, options);
-      this._liabilities.next(await this.encStore.getLiabilities());
+      await this.publishReadBackIfUnlocked(lock, this._liabilities, () => this.encStore.getLiabilities());
       this.refreshDerivedMetrics();
       return row;
     }, silent);
@@ -745,8 +806,9 @@ export class FinanceService {
 
   deleteLiability(id: number, silent = false): Observable<{ ok: boolean }> {
     return this.commit(async options => {
+      const lock = readLockEpoch();
       await this.encStore.deleteLiability(id, options);
-      this._liabilities.next(await this.encStore.getLiabilities());
+      await this.publishReadBackIfUnlocked(lock, this._liabilities, () => this.encStore.getLiabilities());
       this.refreshDerivedMetrics();
       return { ok: true };
     }, silent);
@@ -793,6 +855,14 @@ export class FinanceService {
 
   undoBankImport(receiptId: number): Observable<{ removed: number; edited: number; missing: number }> {
     return from(this.financeImports.undoBankReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
+  }
+
+  previewUndoImportReceipt(receiptId: number): Observable<{ removable: number; editedKept: number; alreadyGone: number }> {
+    return from(this.financeImports.previewUndoBankReceipt(receiptId));
+  }
+
+  deleteImportReceipt(receiptId: number): Observable<void> {
+    return from(this.financeImports.deleteBankReceipt(receiptId)).pipe(tap(() => this.refreshAfterImport()));
   }
 
   commitBankImport(
