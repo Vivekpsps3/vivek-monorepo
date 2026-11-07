@@ -153,8 +153,8 @@ export function weekLevel(score: number): number {
 export function weekScore(dayScores: readonly number[]): number {
   let total = 0;
   for (const score of dayScores) {
-    if (typeof score !== 'number' || !Number.isFinite(score)) {
-      throw new RangeError('Week score parts must be finite numbers');
+    if (typeof score !== 'number' || !Number.isFinite(score) || score < 0) {
+      throw new RangeError('Week score parts must be finite numbers ≥ 0');
     }
     total += score;
   }
@@ -211,10 +211,10 @@ export function weeksBySunday(days: readonly DatedChannels[]): SundayWeekScore[]
   });
 }
 
-/** Rows on the Life poster: max(90, age + 1). */
+/** Rows on the Life poster: max(90, age + 1). Age follows the same rule as the life-row index: a whole number ≥ 0. */
 export function lifeRowCount(age: number): number {
-  if (typeof age !== 'number' || !Number.isFinite(age)) {
-    throw new RangeError('Age must be a finite number');
+  if (typeof age !== 'number' || !Number.isInteger(age) || age < 0) {
+    throw new RangeError(`Age must be a whole number ≥ 0, not ${age}`);
   }
   return Math.max(LIFE_MIN_ROWS, age + 1);
 }

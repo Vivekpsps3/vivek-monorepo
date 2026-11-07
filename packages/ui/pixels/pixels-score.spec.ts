@@ -284,6 +284,8 @@ describe('pixels life geometry', () => {
     expect(lifeRowStart('2000-02-29', 4)).toBe('2004-02-29');
     expect(lifeRowStart('2000-02-28', 1)).toBe('2001-02-28');
     expect(lifeRowStart('1996-03-14', 30)).toBe('2026-03-14');
+    // 2100 is divisible by 100 but not 400, so it is not a leap year.
+    expect(lifeRowStart('2000-02-29', 100)).toBe('2100-02-28');
   });
 
   it('gives week 52 the leftover day or two and keeps the earlier weeks at 7', () => {
@@ -360,12 +362,17 @@ describe('pixels life geometry', () => {
     expect(() => lifeRowStart('2026-13-01', 0)).toThrowError(RangeError);
     expect(() => lifeRowStart('2026-1-01', 0)).toThrowError(RangeError);
     expect(() => sundayOnOrBefore('2026-04-31')).toThrowError(RangeError);
+    // 2100-02-29 is not a calendar date: 2100 is not a leap year.
+    expect(() => sundayOnOrBefore('2100-02-29')).toThrowError(RangeError);
     expect(() => lifeRowStart('2000-02-29', -1)).toThrowError(RangeError);
     expect(() => lifeWeekDayCount(364, 52)).toThrowError(RangeError);
     expect(() => lifeWeekDayCount(365, 0)).toThrowError(RangeError);
     expect(() => lifeWeekDayCount(365, 53)).toThrowError(RangeError);
     expect(() => lifeRowCount(Number.NaN)).toThrowError(RangeError);
+    expect(() => lifeRowCount(90.5)).toThrowError(RangeError);
+    expect(() => lifeRowCount(-1)).toThrowError(RangeError);
     expect(() => weekScore([Number.NaN])).toThrowError(RangeError);
+    expect(() => weekScore([-5, 1])).toThrowError(RangeError);
     expect(() => dayLevel(Number.POSITIVE_INFINITY)).toThrowError(RangeError);
   });
 });
