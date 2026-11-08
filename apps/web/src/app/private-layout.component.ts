@@ -49,6 +49,7 @@ export class PrivateLayoutComponent {
     { label: 'Travel', href: '/travel', exact: false },
     { label: 'Media', href: '/media', exact: false },
     { label: 'Town', href: '/town', exact: false },
+    { label: 'Pixels', href: '/pixels', exact: false },
   ] as const;
 
   @ViewChild('userMenu') private userMenu?: ElementRef<HTMLElement>;
@@ -224,7 +225,7 @@ export class PrivateLayoutComponent {
 
   get appName(): string {
     const section = this.router.url.split(/[?#]/)[0].split('/')[1] ?? '';
-    return ({ hub: 'Hub', finance: 'Finance', travel: 'Travel', media: 'Media', town: 'Town' } as Record<string, string>)[section] || 'Apps';
+    return ({ hub: 'Hub', finance: 'Finance', travel: 'Travel', media: 'Media', town: 'Town', pixels: 'Pixels' } as Record<string, string>)[section] || 'Apps';
   }
 
   get home(): string {

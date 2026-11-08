@@ -12,7 +12,8 @@
           type="date"
           autocomplete="bday"
           [value]="birthdayInput"
-          (input)="birthdayInput = $any($event.target).value"
+          (input)="onBirthdayInput($any($event.target).value, false)"
+          (change)="onBirthdayInput($any($event.target).value, true)"
           [attr.aria-invalid]="invalid ? 'true' : null"
           [attr.aria-describedby]="error ? 'birthday-error' : 'birthday-help'"
           [disabled]="loading || saving" />
