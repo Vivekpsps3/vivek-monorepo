@@ -60,6 +60,12 @@ weight. Angular uses
 at most two build workers, Node's heap is capped at 2560 MiB, and each runner
 has 2 GiB of shared memory for Chromium. Logs rotate at 10 MiB with three files.
 
+Backend coverage gates and Playwright each default to two test workers within
+that existing allocation. Pytest distributes whole files; each browser worker
+owns a separate disposable server and database. Keep the worker count at two
+unless the container CPU and memory budget is revisited. Performance gates run
+serially after the server coverage workers have exited.
+
 The release runner uses a dedicated Docker-in-Docker daemon, storage, socket,
 and network namespace. No host home, production data volume, or host Docker
 socket is mounted. This matters because release rehearsals use production's

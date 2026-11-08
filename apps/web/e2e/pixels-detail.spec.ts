@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 // Day panel, phone sheet, and the persisted By app choice. The year page
 // owns ?year/?day and passes phone from the viewport.

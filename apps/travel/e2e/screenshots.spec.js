@@ -1,6 +1,6 @@
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 const dir = process.env.SCREENSHOT_DIR || 'test-results/artifacts/travel-ux';
 const widths = (process.env.SHOT_WIDTHS || '390,768,1280').split(',').map(Number);

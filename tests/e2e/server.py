@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import base64
 import os
+import socket
 import tempfile
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -271,7 +272,13 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="suite-browser-") as directory:
         application = fixture_app(Path(directory), args.suite)
-        uvicorn.run(application, host="127.0.0.1", port=args.port, log_level="warning")
+        # Bind in the owning process. Port 0 lets concurrent workers and local
+        # runs ask the OS for a free port without a reserve/release race.
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", args.port))
+            print(f"E2E_SERVER_URL=http://127.0.0.1:{listener.getsockname()[1]}", flush=True)
+            server = uvicorn.Server(uvicorn.Config(application, log_level="warning"))
+            server.run(sockets=[listener])
 
 
 if __name__ == "__main__":

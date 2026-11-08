@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 import type { TownResponse } from '../src/app/town/town.types';
 
 // TH1 owns domainConfig('town'), the server clock and the synthetic seeds.

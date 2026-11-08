@@ -84,7 +84,7 @@ for (const combo of combos) {
     }
     await expect(detail).toContainText('Streaming');
     await expect(detail).toContainText('Not posted');
-    await page.screenshot({ path: `calendar-${combo.width}-${combo.theme}.png` });
+    await page.screenshot({ path: test.info().outputPath(`calendar-${combo.width}-${combo.theme}.png`) });
 
     const oct2 = page.getByRole('gridcell', { name: 'Friday, Oct 2: no activity' });
     await oct2.click();

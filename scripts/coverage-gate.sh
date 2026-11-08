@@ -45,7 +45,10 @@ floor=$(read_field floor) || { echo "quality/coverage.txt has no $suite floor" >
 report=$(mktemp)
 trap 'rm -f "$report"' EXIT
 set +e
+# Keep module fixtures together and bound concurrency to the runner's two CPUs.
+# Set PYTEST_WORKERS=0 for an in-process debugging run.
 "$py" -m pytest -q "$tests" -m "not perf" \
+  -n "${PYTEST_WORKERS:-2}" --dist=loadfile \
   "${coverage_args[@]}" \
   --cov-report=term \
   --cov-fail-under="$floor" | tee "$report"

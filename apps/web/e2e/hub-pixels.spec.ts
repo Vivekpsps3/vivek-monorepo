@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 // Hub year strip. The town Playwright project matches this file
 // (tests/e2e/config.ts). Seed `pixels` stores a birthday the card must not show.

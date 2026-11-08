@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { Router, RouterLink, RouterOutlet, provideRouter } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterOutlet, provideRouter } from '@angular/router';
 import { PrivateLayoutComponent } from './private-layout.component';
 import { SessionService } from './platform/session.service';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, Subject, of } from 'rxjs';
 
 @Component({standalone: true, template: '<input aria-label="Private draft" value="">'})
 class PrivateDraftComponent {}
@@ -64,7 +64,7 @@ describe('Shared private shell', () => {
     expect(next).not.toBe(first);
     expect(next.value).toBe('');
   });
-  async function render(admin = false) {
+  async function render(admin = false, events?: Subject<NavigationEnd>) {
     const session = {
       currentUser: { id: 1, display_name: 'Ada' },
       user$: of({ id: 1, display_name: 'Ada' }),
@@ -75,10 +75,30 @@ describe('Shared private shell', () => {
       imports: [PrivateLayoutComponent],
       providers: [provideRouter([]), { provide: SessionService, useValue: session }],
     }).compileComponents();
+    if (events) spyOnProperty(TestBed.inject(Router), 'events', 'get').and.returnValue(events);
     const fixture = TestBed.createComponent(PrivateLayoutComponent);
     fixture.detectChanges();
     return { fixture, session };
   }
+  it('preserves a keyboard-focusable table row when the route heading arrives', async () => {
+    const events = new Subject<NavigationEnd>();
+    const { fixture } = await render(false, events);
+    const main = document.createElement('main');
+    const heading = document.createElement('h1');
+    heading.textContent = 'Pixels';
+    const table = document.createElement('table');
+    const row = table.insertRow();
+    row.tabIndex = 0;
+    row.insertCell().textContent = 'Aug 15, 2026';
+    main.append(heading, table);
+    fixture.nativeElement.querySelector('#workspace-content').append(main);
+    row.focus();
+
+    events.next(new NavigationEnd(1, '/pixels?year=2026', '/pixels?year=2026'));
+    // Route heading focus is queued as a microtask; flush that exact boundary.
+    await Promise.resolve();
+    expect(document.activeElement).toBe(row);
+  });
   it('keeps a grid cell focused after the page heading arrives', async () => {
     const session = {
       currentUser: { id: 1, display_name: 'Ada' },

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 // T3 e2e. Seeded through the API like undo.spec.js. Due dates are built
 // relative to the test's Date.now() in local time, matching the component's

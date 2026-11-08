@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('public prerenders and private navigation use their own complete favicon family', async ({ page, request }) => {
   for (const path of ['/', '/home', '/work', '/about', '/secrets']) {

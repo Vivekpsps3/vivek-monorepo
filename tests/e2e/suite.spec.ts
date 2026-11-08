@@ -1,5 +1,5 @@
 import { chooseColorTheme } from './user-menu.mjs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import AxeBuilder from '@axe-core/playwright';
 
 test('public pages prerender meaningful HTML and never request private APIs', async ({ page, request }) => {

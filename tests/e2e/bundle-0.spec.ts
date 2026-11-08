@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from './fixtures';
 import { syntheticVault } from '../../apps/finance/frontend/e2e/synthetic-vault';
 import { chooseColorTheme, openUserMenu } from './user-menu.mjs';
 

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 // TH1 owns the town server, clock and seeds. Enable with apps/web/e2e/playwright.config.ts.
 test.describe('Town dialogs', () => {

@@ -33,3 +33,16 @@ export async function closeFilters(page: Page) {
   await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
+
+export function watchMediaConsole(page: Page, violations: string[]) {
+  page.on('console', msg => {
+    if (/Content Security Policy|Trusted Types/i.test(msg.text())) violations.push(msg.text());
+  });
+  page.on('pageerror', error => {
+    if (/Content Security Policy|Trusted Types/i.test(error.message)) violations.push(error.message);
+  });
+}
+export async function expectCleanMediaPage(page: Page, violations: string[]) {
+  expect(violations).toEqual([]);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+}

@@ -1,4 +1,4 @@
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect } from '../../../../tests/e2e/fixtures';
 
 /**
  * Noon on 2026-10-15 in America/Los_Angeles (PDT, UTC-7).

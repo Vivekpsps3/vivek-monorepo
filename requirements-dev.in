@@ -2,6 +2,7 @@
 # The production image does not install either file.
 pytest==8.4.2
 pytest-cov==7.0.0
+pytest-xdist==3.8.0
 ruff==0.14.2
 mypy==1.18.2
 pip-audit==2.9.0

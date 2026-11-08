@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 test('PTO checkbox has a visible keyboard focus ring and Space changes its selection', async ({ page, request }) => {
   await request.post('/e2e/reset');
