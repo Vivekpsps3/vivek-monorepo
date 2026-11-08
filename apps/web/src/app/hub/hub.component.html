@@ -196,6 +196,47 @@
           }
         </ui-state>
       </section>
+
+      <section class="side-panel pixels-bar" aria-labelledby="pixels-heading" [attr.aria-busy]="pixelsState === 'loading' || pixelsPending">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Pixels</p>
+            <h2 id="pixels-heading">Year in Pixels</h2>
+          </div>
+          <a class="open-link pixels-open" routerLink="/pixels">Open Pixels</a>
+        </div>
+        <ui-state
+          [state]="pixelsState"
+          thing="pixels"
+          emptyTitle="No days yet"
+          emptyMessage="Nothing recorded in the last 13 weeks."
+          [pending]="pixelsPending"
+          [updatedAt]="pixelsUpdatedAt"
+          (retry)="retryPixels()">
+          @if (pixelsSummary(); as summary) {
+            <p class="figure-note">{{ summary.activeLine }}</p>
+            <p class="figure-note">{{ summary.runLine }}</p>
+          }
+          <div class="pixel-strip">
+            @for (row of pixelRows(); track $index) {
+              @for (cell of row; track cell.date) {
+                <div
+                  class="pixel"
+                  [class.l1]="cell.level === 1"
+                  [class.l2]="cell.level === 2"
+                  [class.l3]="cell.level === 3"
+                  [class.l4]="cell.level === 4"
+                  [class.future]="cell.future"
+                  [class.plan]="cell.planned"
+                  [class.today]="cell.today"
+                  [attr.data-date]="cell.date"
+                  aria-hidden="true"
+                  (click)="openPixelDay(cell)"></div>
+              }
+            }
+          </div>
+        </ui-state>
+      </section>
     </div>
 
   </main>

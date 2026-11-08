@@ -8,9 +8,14 @@ import { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE } from '../../../../finance/fron
 import { VaultService } from '../../../../finance/frontend/src/testing';
 import { Asset, Holding, Liability } from '../../../../finance/frontend/src/testing';
 import { FinanceService } from '../../../../finance/frontend/src/testing';
-import { loadMarketRefreshCoordinatorService } from '../../../../finance/frontend/src/public-api';
+import { loadMarketRefreshCoordinatorService, type BudgetKeptDaysResult } from '../../../../finance/frontend/src/public-api';
+import { todayIsoDate } from '@vivek/browser';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ThemeService } from '@vivek/ui';
+import { PIXELS_FINANCE_DAYS, PixelsDataService } from '../pixels/pixels-data.service';
 import { HubComponent } from './hub.component';
+import { hubStripWindow } from './pixels-hub-card';
 
 function person(id: number, name = 'Ada'): AuthUser {
   return {
@@ -89,6 +94,7 @@ describe('HubComponent', () => {
   const pending: PendingCall[] = [];
   let holdFinance: Promise<void> | null = null;
   let releaseFinance: () => void = () => undefined;
+  let financeDays: BudgetKeptDaysResult;
 
   function json(status: number, body: unknown): Response {
     return {
@@ -108,9 +114,34 @@ describe('HubComponent', () => {
     takeCall('/api/town').resolve(json(200, body));
   }
 
-  async function render(): Promise<void> {
+  function pixelsBody(days: Array<{ date: string; town?: number; media?: number; trip?: number }> = [], profile?: unknown) {
+    const window = hubStripWindow(todayIsoDate());
+    return {
+      from: window.start,
+      to: window.end,
+      days,
+      sources: { town: 'ok', media: 'ok', travel: 'ok' },
+      first_activity_on: null,
+      ...(profile === undefined ? {} : { profile }),
+    };
+  }
+
+  function flushPixels(body: unknown = pixelsBody(), status = 200): void {
+    const req = TestBed.inject(HttpTestingController).expectOne(request => request.url === '/api/pixels');
+    expect(req.request.params.has('profile')).withContext(req.request.urlWithParams).toBeFalse();
+    expect(req.request.params.get('profile')).toBeNull();
+    const window = hubStripWindow(todayIsoDate());
+    expect(req.request.params.get('from')).toBe(window.start);
+    expect(req.request.params.get('to')).toBe(window.end);
+    const payload = (body ?? {}) as Record<string, unknown>;
+    if (status === 200) req.flush(payload);
+    else req.flush(payload, { status, statusText: status === 401 ? 'Expired' : 'Unavailable' });
+  }
+
+  async function render(body?: unknown): Promise<void> {
     fixture = TestBed.createComponent(HubComponent);
     fixture.detectChanges();
+    flushPixels(body);
     await Promise.resolve();
   }
 
@@ -128,6 +159,7 @@ describe('HubComponent', () => {
     vaultLocks = 0;
     financeCalls = 0;
     financeError = null;
+    financeDays = { status: 'locked' };
     localStorage.removeItem(DEK_STORE);
     users = new BehaviorSubject<AuthUser | null>(person(1));
     holdFinance = null;
@@ -147,6 +179,9 @@ describe('HubComponent', () => {
     await TestBed.configureTestingModule({
       imports: [HubComponent],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PIXELS_FINANCE_DAYS, useValue: () => Promise.resolve(financeDays) },
         provideRouter([]),
         { provide: AuthService, useValue: auth },
         {
@@ -198,7 +233,9 @@ describe('HubComponent', () => {
   });
 
   afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
     localStorage.removeItem(DEK_STORE);
+    localStorage.removeItem(VAULT_PRESENCE);
   });
 
   it('sends the account query to settings', async () => {
@@ -285,6 +322,7 @@ describe('HubComponent', () => {
     const firstMedia = takeCall('/media/');
     const firstTown = takeCall('/api/town');
     users.next(person(2, 'Bea'));
+    flushPixels();
     await Promise.resolve();
     firstTravel.resolve(json(200, { next_trip: trip('Secret') }));
     firstMedia.resolve(json(200, mediaBody()));
@@ -674,5 +712,101 @@ describe('HubComponent', () => {
     const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
     expect(text).toContain('Your session ended. Sign in again to see your town.');
     expect(auth.logout).not.toHaveBeenCalled();
+  });
+
+  it('shows the year strip after Town without a birthday or a tab stop on a cell', async () => {
+    const day = hubStripWindow(todayIsoDate()).start;
+    await render(pixelsBody(
+      [{ date: day, town: 1 }],
+      { birthday: '1990-05-04', show_age: true },
+    ));
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
+    await paint();
+    expect(fixture.componentInstance.pixelsState).toBe('ready');
+    const sections = [...fixture.nativeElement.querySelectorAll('.pair > section')].map(section => section.getAttribute('aria-labelledby'));
+    expect(sections).toEqual(['travel-heading', 'media-heading', 'finance-heading', 'town-heading', 'pixels-heading']);
+    const card = fixture.nativeElement.querySelector('section[aria-labelledby="pixels-heading"]') as HTMLElement;
+    const text = card.textContent ?? '';
+    expect(text).toContain('Year in Pixels');
+    expect(text).toContain('1 active days in the last 13 weeks');
+    expect(text).toContain('Longest run: 1 days');
+    expect(text).not.toContain('1990-05-04');
+    expect(text.toLowerCase()).not.toContain('birthday');
+    expect(text).not.toContain('Finance');
+    expect(card.innerHTML).not.toContain('1990-05-04');
+    const links = [...card.querySelectorAll('a')];
+    expect(links.map(link => link.textContent?.trim())).toEqual(['Open Pixels']);
+    expect(links[0]?.getAttribute('href')).toBe('/pixels');
+    expect(card.querySelectorAll('button').length).toBe(0);
+    const cells = [...card.querySelectorAll('.pixel')] as HTMLElement[];
+    expect(cells.length).toBe(91);
+    for (const cell of cells) {
+      expect(cell.tagName).toBe('DIV');
+      expect(cell.getAttribute('aria-hidden')).toBe('true');
+      expect(cell.getAttribute('tabindex')).toBeNull();
+      expect(cell.tabIndex).toBeLessThan(0);
+    }
+    expect(card.querySelectorAll('a, button, input, select, textarea, [tabindex="0"]').length).toBe(1);
+    expect(card.querySelector(`[data-date="${day}"]`)?.classList.contains('l1')).toBeTrue();
+
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    fixture.componentInstance.openPixelDay({ date: '2026-12-01', level: 0, future: true, today: false, planned: false });
+    expect(navigate).not.toHaveBeenCalled();
+    (card.querySelector(`[data-date="${day}"]`) as HTMLElement).click();
+    expect(navigate).toHaveBeenCalledWith(['/pixels'], { queryParams: { year: day.slice(0, 4), day } });
+  });
+
+  it('drops finance colours when the vault lock clears kept days', async () => {
+    localStorage.setItem(DEK_STORE, 'present');
+    const day = hubStripWindow(todayIsoDate()).dates.find(date => date <= todayIsoDate()) ?? hubStripWindow(todayIsoDate()).start;
+    financeDays = {
+      status: 'ready',
+      annualPlan: 1200,
+      monthlyPlan: 100,
+      mode: 'manual',
+      days: [{ date: day, spend: 0, pace: 1, kept: true }],
+    };
+    await render(pixelsBody());
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
+    await paint();
+    const card = fixture.nativeElement.querySelector('section[aria-labelledby="pixels-heading"]') as HTMLElement;
+    expect(card.querySelector(`[data-date="${day}"]`)?.classList.contains('l1')).toBeTrue();
+    expect(card.textContent).toContain('1 active days in the last 13 weeks');
+    expect(card.textContent).not.toContain('Finance is locked');
+    TestBed.inject(PixelsDataService).dropFinance();
+    fixture.detectChanges();
+    expect(card.querySelector(`[data-date="${day}"]`)?.classList.contains('l1')).toBeFalse();
+    expect(card.textContent).toContain('0 active days in the last 13 weeks');
+    expect(card.textContent).toContain('Longest run: 0 days');
+    expect(card.textContent).not.toContain('Finance');
+  });
+
+  it('keeps a scored strip when a refresh fails and shows session copy when pixels expires', async () => {
+    const day = hubStripWindow(todayIsoDate()).start;
+    await render(pixelsBody([{ date: day, town: 2 }]));
+    takeCall('/travel/').resolve(json(200, { next_trip: null }));
+    takeCall('/media/').resolve(json(200, { currently: [], recent_reviews: [], upcoming: [], next_episodes: [] }));
+    resolveTown();
+    await paint();
+    expect(fixture.nativeElement.textContent).toContain('1 active days in the last 13 weeks');
+    fixture.componentInstance.retryPixels();
+    fixture.detectChanges();
+    flushPixels({}, 503);
+    await paint();
+    const stale = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(stale).toContain('1 active days in the last 13 weeks');
+    expect(stale).toContain('Updated');
+
+    fixture.componentInstance.retryPixels();
+    fixture.detectChanges();
+    flushPixels({}, 401);
+    await paint();
+    const expired = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(expired).toContain('Your session ended. Sign in again to see pixels.');
+    expect(expired).not.toContain('active days');
   });
 });
