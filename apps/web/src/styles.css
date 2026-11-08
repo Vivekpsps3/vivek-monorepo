@@ -152,7 +152,13 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    /* `transition-duration` alone leaves `transition-property` at its initial
+       value, `all`. Every element then interpolates, so a new invalid border
+       still reads as the base border and a focus ring still reads as the 3px
+       initial outline for that frame. None keeps the end state immediate. */
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }
 

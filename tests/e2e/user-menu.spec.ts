@@ -8,7 +8,7 @@ for (const width of [320, 1440]) test(`the username dropdown keeps the header co
   await chooseColorTheme(page, 'dark');
   const header = page.getByRole('banner');
   const trigger = header.getByRole('button', { name: 'synthetic', exact: true });
-  await expect(header.getByRole('button')).toHaveCount(width <= 640 ? 2 : 1);
+  await expect(header.getByRole('button')).toHaveCount(width <= 640 ? 3 : 2);
   await expect(header.getByRole('combobox')).toHaveCount(0);
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   expect((await header.boundingBox())!.height).toBeLessThan(80);

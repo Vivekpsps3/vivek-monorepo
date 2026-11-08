@@ -169,13 +169,11 @@ h3 {
     gap: var(--space-2);
   }
 
-  /* F16: tables give way to the two-line phone rows. */
+  /* F16: tables give way to the two-line phone rows.
+     The show rule lives after the base `.row-list { display: none }`,
+     which would otherwise win by source order. */
   :host ::ng-deep .ui-data-table {
     display: none;
-  }
-
-  .row-list {
-    display: block;
   }
 
   .actions,
@@ -258,4 +256,10 @@ h3 {
   display: inline-flex;
   gap: var(--space-1);
   flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .row-list {
+    display: block;
+  }
 }
