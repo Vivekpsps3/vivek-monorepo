@@ -1,3 +1,4 @@
+import { isoDateInZone } from '@vivek/browser';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { EncryptedStoreService } from './encrypted-store.service';
 import { replaceStockValuation } from '../utils/job-compensation.util';
@@ -203,7 +204,7 @@ describe('EncryptedStoreService', () => {
 
   it('serializes a manual holding edit with its quote and preserves the edited position facts', async () => {
     const { store } = createStoreHarness();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = isoDateInZone(new Date(), 'America/Los_Angeles');
     const holding = await store.addHolding({
       symbol: 'MSFT', shares: 10, purchase_price: 50, purchase_date: '2024-01-02',
       lifecycle_status: 'active', position_as_of: '2026-10-01',
@@ -229,7 +230,7 @@ describe('EncryptedStoreService', () => {
 
   it('rejects mismatched and future quotes while keeping the last saved holding price', async () => {
     const { store } = createStoreHarness();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = isoDateInZone(new Date(), 'America/Los_Angeles');
     const holding = await store.addHolding({ symbol: 'MSFT', shares: 10, purchase_price: 50, purchase_date: '2024-01-02' });
 
     await expectAsync(store.updateHoldingPrice(holding.id, {
