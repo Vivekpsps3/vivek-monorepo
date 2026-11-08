@@ -47,7 +47,9 @@ these volumes into a repository. Avoid `down -v`, which deletes state and caches
 Every worker has its own Compose project, registration, workspace, home, tool
 cache, temporary directory, and network namespace. Parallel browser tests can
 use the same localhost ports without collisions. Test workers have no Docker
-socket, host mounts, or privileged sidecar.
+socket, host mount, or privileged sidecar. They share the Docker volume
+`monorepo-ci-dist`, mounted at `/opt/ci-dist`, which carries the one production
+bundle from Frontend to Playwright.
 
 Each CI runner, the release runner, and the release runner's nested Docker daemon
 are capped at 2 CPUs and 6 GiB RAM. Backend and Playwright run on those CI

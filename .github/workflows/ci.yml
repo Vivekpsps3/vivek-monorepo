@@ -103,13 +103,25 @@ jobs:
       - name: Shared browser and UI contracts
         run: node --test packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs
       - name: Production bundle
-        run: make build-frontends
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: web-dist
-          path: dist/web
-          retention-days: 1
-          if-no-files-found: error
+        run: |
+          set -euo pipefail
+          make build-frontends
+          test -d dist/web/browser
+          # The three CI runners share this directory. GitHub artifact storage
+          # is over quota, and this repository does not upload Actions artifacts.
+          if [ "${RUNNER_ENVIRONMENT:-}" != "self-hosted" ]; then
+            exit 0
+          fi
+          case "${GITHUB_SHA}" in
+            *[!0-9a-f]*|"") echo "refusing unexpected GITHUB_SHA" >&2; exit 1 ;;
+          esac
+          root=/opt/ci-dist
+          dest="$root/${GITHUB_SHA}"
+          mkdir -p "$dest"
+          rm -rf "$dest/web"
+          cp -a dist/web "$dest/web"
+          find "$root" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+            | sort -n | head -n -3 | cut -d' ' -f2- | xargs -r rm -rf
 
   playwright:
     name: Playwright
@@ -118,10 +130,20 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: web-dist
-          path: dist/web
+      - name: Production bundle from Frontend
+        run: |
+          set -euo pipefail
+          src="/opt/ci-dist/${GITHUB_SHA}/web"
+          if [ -d "$src/browser" ]; then
+            mkdir -p dist
+            rm -rf dist/web
+            cp -a "$src" dist/web
+          elif [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ]; then
+            echo "Frontend bundle for ${GITHUB_SHA} is not in /opt/ci-dist" >&2
+            exit 1
+          else
+            make build-frontends
+          fi
       - uses: ./.github/actions/setup-python
       - uses: ./.github/actions/setup-playwright
       # Domain configs cover Finance, Media, Town, and Travel. The root config
