@@ -128,7 +128,7 @@ export class PixelsDataService {
   ): Promise<{ status: 'ok'; financeStatus: FinanceJoinStatus; kept: Map<string, boolean | null> } | { status: 'dropped' }> {
     if (!this.vaultPresent()) return { status: 'ok', financeStatus: 'locked', kept: new Map() };
     const kept = new Map<string, boolean | null>();
-    let financeStatus: FinanceJoinStatus = 'ready';
+    const financeStatus: FinanceJoinStatus = 'ready';
     const windows = inclusiveWindows(request.from, request.to, FINANCE_MAX_INCLUSIVE);
     for (const window of windows) {
       if (generation !== this.generation || !this.vaultPresent()) return { status: 'dropped' };
