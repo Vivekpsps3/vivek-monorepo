@@ -144,7 +144,7 @@ test.describe('finance F1 screenshot matrix', () => {
 
         await vault.open('/have?t=assets');
         await expect(page.getByText('Needs fixing').filter({ visible: true }).first()).toBeVisible();
-        await expect(page.getByText('Amount too large to count')).toBeVisible();
+        await expect(page.getByText('Amount too large to count').filter({ visible: true })).toBeVisible();
         await expect(page.getByText(/Excludes \d+ entr/)).toBeVisible();
         await shot('net-worth-needs-fixing', width, theme);
 
@@ -188,7 +188,8 @@ test.describe('finance F1 screenshot matrix', () => {
         await shot('growth-presets', width, theme);
 
         await vault.open('/planning?t=stocks');
-        await expect(page.getByText('Save this scenario first to delete it.')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Save scenario', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Delete scenario', exact: true })).toHaveCount(0);
         await shot('stock-lab-delete', width, theme);
 
         await vault.open('/hub');
