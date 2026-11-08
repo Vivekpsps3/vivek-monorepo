@@ -30,7 +30,7 @@
   </div>
   <div class="row treasury">
     <span>Treasury</span>
-    @if (!vaultPresent()) { <ui-badge>Locked</ui-badge> } @else { <ui-skeleton variant="lines" [lines]="1" /> }
+    @if (!vaultPresent()) { <ui-badge>Finance vault locked</ui-badge> } @else { <span>{{ treasuryNote() }}</span> }
   </div>
 </div>
 @if (restNote()) { <p class="rest">{{ restNote() }}</p> }

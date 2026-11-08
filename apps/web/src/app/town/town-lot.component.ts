@@ -1,13 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { UiSkeletonComponent } from '@vivek/ui';
 import { buildingSprite, townSpriteUrl, type TownSpriteId } from './town-sprites';
+import { treasuryUnlocked } from './town-levels';
 import type { Building, Habit, TownResponse } from './town.types';
 
 @Component({
   selector: 'app-town-lot',
-  imports: [NgTemplateOutlet, RouterLink, UiSkeletonComponent],
+  imports: [NgTemplateOutlet, RouterLink],
   templateUrl: './town-lot.component.html',
   styleUrl: './town-lot.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -18,6 +18,8 @@ export class TownLotComponent {
   lot = input<TownResponse['lots'][number]>();
   habit = input<Habit>();
   vaultPresent = input(false);
+  /** Habit weeks already counted by Town. Null means they could not be read. */
+  weeksKept = input<number | null>(null);
   /** Previous stage while the 240ms swap plays. Null skips the old sprite, including reduced motion. */
   swapFrom = input<1 | 2 | 3 | null>(null);
   openHabit = output<void>();
@@ -46,8 +48,23 @@ export class TownLotComponent {
     const kind = this.kind(), habit = this.habit(), lot = this.lot(), building = this.building();
     let name: string, label: string, sprite: TownSpriteId, link = '';
     if (kind === 'treasury') {
-      name = 'Treasury'; label = this.vaultPresent() ? '' : 'Locked · Unlock'; sprite = 'treasury-locked';
-      link = this.vaultPresent() ? '/finance' : '/finance/vault/unlock?next=%2Ftown';
+      name = 'Treasury';
+      const present = this.vaultPresent();
+      link = present ? '/finance' : '/finance/vault/unlock?next=%2Ftown';
+      if (!present) {
+        label = 'Finance vault locked';
+        sprite = 'treasury-locked';
+      } else {
+        const weeks = this.weeksKept();
+        if (weeks == null || !Number.isFinite(weeks)) {
+          label = 'Unavailable';
+          sprite = buildingSprite('treasury', 1);
+        } else {
+          const unlocked = treasuryUnlocked(weeks);
+          label = `Lv ${unlocked.level}`;
+          sprite = buildingSprite('treasury', unlocked.stage);
+        }
+      }
     } else if (kind === 'library' || kind === 'inn') {
       name = kind === 'library' ? 'Library' : 'Inn';
       const source = kind === 'library' ? 'Media' : 'Travel';

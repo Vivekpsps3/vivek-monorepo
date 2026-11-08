@@ -4,9 +4,7 @@
     <img class="town-sprite" [class.new]="oldStage() !== null" [src]="view().src" alt="" width="96" height="96" decoding="async">
   </span>
   <span class="label name" [title]="view().name">{{ view().name }}</span>
-  @if (kind() === 'treasury' && vaultPresent()) {
-    <ui-skeleton variant="lines" [lines]="1" />
-  } @else { <span class="label sub-label">{{ view().label }}</span> }
+  <span class="label sub-label">{{ view().label }}</span>
 </ng-template>
 @if (kind() === 'treasury' && !vaultPresent()) {
   <a class="tile" [href]="view().link"><ng-container [ngTemplateOutlet]="contents" /></a>

@@ -21,15 +21,34 @@ describe('Town tiles', () => {
       expect(el.textContent).toContain(`Lv — · ${source} unavailable`);
     }
   });
-  it('shows no digits in locked Treasury and only a computing skeleton when unlocked', () => {
+  it('explains a locked Finance vault, then shows the habit-week level once it is open', () => {
     const { fixture, el } = render({ kind: 'treasury' });
-    expect(el.textContent).toContain('Locked · Unlock');
+    expect(el.textContent).toContain('Finance vault locked');
     expect(el.textContent).not.toMatch(/\d/);
+    expect(el.textContent).not.toMatch(/\$/);
     expect(el.querySelector('a')?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Ftown');
-    fixture.componentRef.setInput('vaultPresent', true); fixture.detectChanges();
-    expect(el.querySelector('a')?.getAttribute('href')).toBe('/finance');
-    expect(el.querySelector('ui-skeleton')).not.toBeNull();
     expect(el.querySelector('img')?.getAttribute('src')).toBe('/town/treasury-locked.svg');
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+    // 2 kept weeks is treasury tier 3 and sprite stage 2. Town level is not involved.
+    fixture.componentRef.setInput('vaultPresent', true);
+    fixture.componentRef.setInput('weeksKept', 2);
+    fixture.detectChanges();
+    expect(el.querySelector('a')?.getAttribute('href')).toBe('/finance');
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+    expect(el.querySelector('img')?.getAttribute('src')).toBe('/town/treasury-2.svg');
+    expect(el.textContent).toContain('Lv 3');
+    expect(el.textContent).not.toContain('Finance vault locked');
+    expect(el.textContent).not.toMatch(/\$/);
+    fixture.componentRef.setInput('weeksKept', 4);
+    fixture.detectChanges();
+    expect(el.querySelector('img')?.getAttribute('src')).toBe('/town/treasury-3.svg');
+    expect(el.textContent).toContain('Lv 4');
+    fixture.componentRef.setInput('weeksKept', null);
+    fixture.detectChanges();
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+    expect(el.textContent).toContain('Unavailable');
+    expect(el.textContent).not.toMatch(/Lv \d/);
+    expect(el.querySelector('img')?.getAttribute('src')).not.toBe('/town/treasury-locked.svg');
   });
   it('keeps locked lots non-focusable', () => {
     const { el } = render({ lot: { state: 'locked', unlock_level: 5 } });
