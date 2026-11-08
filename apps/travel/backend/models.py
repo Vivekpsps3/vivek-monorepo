@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -293,6 +294,10 @@ class LeavePolicy(Base):
     accrual_cadence: Mapped[str] = mapped_column(String(20), nullable=False, default="yearly")
     cap_hours: Mapped[str | None] = mapped_column(String(32), nullable=True)
     year_start: Mapped[str] = mapped_column(String(5), nullable=False, default="01-01")
+    # Unused hours stay in the balance across each policy-year start unless turned off.
+    carry_forward: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("1")
+    )
 
 
 class TripPtoDay(Base):

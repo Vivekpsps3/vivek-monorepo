@@ -647,6 +647,7 @@ class LeavePolicyIn(BaseModel):
     accrual_cadence: bool | str | int | float | None = None
     cap_hours: bool | str | int | float | None = None
     year_start: bool | str | int | float | None = None
+    carry_forward: bool | str | int | float | None = None
 
 
 class PtoSettingsIn(BaseModel):

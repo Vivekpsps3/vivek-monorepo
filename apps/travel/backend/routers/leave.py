@@ -91,6 +91,7 @@ def bucket_state(db: Session, user_id: int, bucket: str, usages, today: date, hp
         "accrual_cadence": row.accrual_cadence,
         "cap_hours": row.cap_hours,
         "year_start": row.year_start,
+        "carry_forward": bool(row.carry_forward),
         "balance_today_hours": fmt_hours(balance),
         "balance_today_days": fmt_days(_days(balance, hpd)),
         "at_cap": cap is not None and balance >= cap,
@@ -117,6 +118,7 @@ def series_body(db: Session, user_id: int, today: date) -> dict:
             return None
         assert row is not None
         parsed = bucket_from_row(row)
+        bucket_horizon = policy_year(today, parsed.year_start)[1]
         charges = _charges([usage for usage in usages if usage.bucket == name], hpd)
         points = []
         first = None
@@ -124,10 +126,10 @@ def series_body(db: Session, user_id: int, today: date) -> dict:
         # on the event list instead of stepping through every day since as_of.
         today_balance = parsed.start_balance_hours
         horizon_balance = parsed.start_balance_hours
-        for point in segments(parsed, charges, today, horizon):
+        for point in segments(parsed, charges, today, bucket_horizon):
             if point["on"] == today:
                 today_balance = point["balance"]
-            if point["on"] == horizon:
+            if point["on"] == bucket_horizon:
                 horizon_balance = point["balance"]
             shown = quantize_hours(point["balance"])
             public = {
@@ -154,6 +156,7 @@ def series_body(db: Session, user_id: int, today: date) -> dict:
             "balance_today_days": fmt_days(_days(today_balance, hpd)),
             "balance_horizon_hours": fmt_hours(horizon_balance),
             "balance_horizon_days": fmt_days(_days(horizon_balance, hpd)),
+            "horizon_end": bucket_horizon,
             "first_negative": first,
             "points": points,
         }
@@ -214,6 +217,7 @@ def save_policy(
     row.accrual_cadence = clean["accrual_cadence"]
     row.cap_hours = None if clean["cap_hours"] is None else store_hours(clean["cap_hours"])
     row.year_start = clean["year_start"]
+    row.carry_forward = clean["carry_forward"]
     db.flush()
     if bucket == "pto":
         if hours_setting_text(db, principal.id) is None:
