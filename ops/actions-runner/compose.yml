@@ -36,7 +36,7 @@ services:
       timeout: 5s
       retries: 20
     mem_limit: 6g
-    cpus: 1.5
+    cpus: 2
     cpu_shares: 128
     logging:
       driver: json-file
@@ -55,15 +55,15 @@ services:
       - docker-socket:/run/ci-docker
       - temp:/tmp
     mem_limit: 6g
-    cpus: 1.5
+    cpus: 2
     cpu_shares: 128
   worker:
     <<: *runner
     profiles: [worker]
     # Each worker runs in its own Compose project: no shared workspaces or ports.
     # Test jobs have no Docker socket, host mounts, or privileged sidecar.
-    mem_limit: 4g
-    cpus: 0.75
+    mem_limit: 6g
+    cpus: 2
     cpu_shares: 128
 volumes:
   runner:
