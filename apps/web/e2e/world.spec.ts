@@ -55,23 +55,17 @@ test.describe('World explorer', () => {
     const world = page.locator('app-world');
     await expect(world).toHaveAttribute('data-view', 'list');
     await expect(page.getByText('Reduced motion is on, so World opens on the list.')).toBeVisible();
-    const afterEnd = await page.evaluate(() => {
-      const region = document.querySelector('[role="region"][aria-label="World"]');
-      region?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
-      return new Promise<string>(resolve => {
-        queueMicrotask(() => resolve(document.querySelector('.world-live')?.textContent?.trim() ?? ''));
-      });
-    });
-    expect(afterEnd).toBe('Town');
-    const afterHome = await page.evaluate(() => {
-      const region = document.querySelector('[role="region"][aria-label="World"]');
-      region?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
-      return new Promise<string>(resolve => {
-        queueMicrotask(() => resolve(document.querySelector('.world-live')?.textContent?.trim() ?? ''));
-      });
-    });
-    expect(afterHome).not.toBe('Town');
-    expect(afterHome.length).toBeGreaterThan(0);
+    // The list collapses the map, and change detection paints the live region
+    // on the next frame. Press the region itself so End and Home still move it.
+    const region = page.locator('[role="region"][aria-label="World"]');
+    const live = page.locator('.world-live');
+    await expect(live).toHaveText(/2026-10-12/);
+    await region.focus();
+    await region.press('End');
+    await expect(live).toHaveText('Town');
+    await region.press('Home');
+    await expect(live).not.toHaveText('Town');
+    await expect(live).not.toHaveText('');
   });
 
   test('390px viewport does not scroll sideways', async ({ page }) => {

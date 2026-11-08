@@ -176,4 +176,13 @@ describe('bandAt', () => {
     expect(bandAt(seaCenter - 5, 10, WEEKS)).toEqual({ week: '2026-11-02', day: 6, inTown: true });
     expect(bandAt(0, 8, [])).toEqual({ week: '', day: 6, inTown: true });
   });
+
+  it('calls a wide viewport parked at the right edge Town', () => {
+    const weeks = Array.from({ length: 26 }, (_, index) => `2020-01-${String(index).padStart(2, '0')}`);
+    const viewport = 416;
+    const end = total(weeks.length) - viewport;
+    expect(bandAt(end, viewport, weeks)).toEqual({ week: weeks[25], day: 6, inTown: true });
+    expect(bandAt(end - 8, viewport, weeks).inTown).toBeFalse();
+    expect(bandAt(0, viewport, weeks).inTown).toBeFalse();
+  });
 });

@@ -1,7 +1,7 @@
 # Local GitHub Actions runner pool
 
-Trusted main/master pushes and same-repository pull requests can execute all ten
-CI jobs concurrently on amd7600-server:
+Trusted main/master pushes and same-repository pull requests can execute all four
+CI jobs on amd7600-server:
 
 - Nine test workers, `amd7600-ci-01` through `amd7600-ci-09`, have labels
   `self-hosted`, `linux`, `x64`, and `monorepo-ci`.
@@ -11,10 +11,11 @@ CI jobs concurrently on amd7600-server:
   `amd7600-prod` runner has the `monorepo-prod` label and handles production
   deployment only.
 
-Each registered runner executes one job at a time. The nine test jobs and one
-release job can all start together. Additional workflow runs queue until slots
-are available. On this 12-thread, 64 GiB host, parallel jobs share CPU capacity;
-ten concurrent jobs do not imply a tenfold speedup. All containers restart after
+Each registered runner executes one job at a time. The Backend, Frontend, and
+Playwright jobs use the test workers; Playwright waits for the Frontend bundle.
+Unified Site Release uses the release runner. Additional workflow runs queue
+until slots are available. On this 12-thread, 64 GiB host, parallel jobs share
+CPU capacity; four concurrent jobs do not imply a fourfold speedup. All containers restart after
 host reboots. Their project-specific volumes preserve registration and caches.
 
 The Ubuntu 24.04 runner image includes Chrome, Python, build tools, and Docker CLI.

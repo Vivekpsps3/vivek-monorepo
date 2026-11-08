@@ -10,7 +10,7 @@ make lint-baseline # rewrite quality/*.txt after a finding count shrinks
 make coverage-pin  # rewrite quality/coverage.txt from a fresh measurement
 ```
 
-Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requirements-dev.in`). `make install` installs that lock with `--require-hashes`. The production image installs only `apps/server/requirements.lock`. The image-building CI job does not install the dev lock. `pip-audit` is in the dev lock and runs in the finance backend job, against `apps/server/requirements.lock`.
+Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requirements-dev.in`). `make install` installs that lock with `--require-hashes`. The production image installs only `apps/server/requirements.lock`. The image-building CI job does not install the dev lock. `pip-audit` is in the dev lock and runs in the Backend job, against `apps/server/requirements.lock`.
 
 ## Ratchet
 
@@ -80,6 +80,8 @@ Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json
 
 Run Travel with `npx playwright test --config apps/travel/e2e/playwright.config.js`, Media with `npx playwright test --config apps/media/e2e/playwright.config.ts`, and Town (Pixels Year, day, Life, and Hub) with `npx playwright test --config apps/web/e2e/playwright.config.ts`. `npm ci` runs once at the root. Existing Finance/site `npm test --prefix` commands are forwarding wrappers. Root/shared UI Karma is `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI`. Screenshots are discovered by default and outputs are isolated under `test-results/{finance,travel,media,town}`. Set `CHROME_BIN` for Karma or `PLAYWRIGHT_CHROMIUM_EXECUTABLE` for an existing Chromium installation.
 
+CI runs one Backend job, one Frontend job, and one Playwright job. Frontend lints, typechecks, and runs the three Karma suites, then builds `dist/web` once and uploads it. Playwright downloads that bundle, installs Chromium once, and runs Finance, Media, Town, Travel, and the suite project. It does not build the frontend again. Unified Site Release still builds the production image and runs the seeded schema rehearsal; Deploy matches that job and its "Seeded schema rehearsals" step by name.
+
 The production browser check is `SITE_TEST_URL=http://127.0.0.1:PORT node scripts/test-site-browser.mjs` against an initially empty disposable release database. It verifies public content/network isolation, local crypto, real account creation, private SPA transitions, map DOM, allowed images and blocked script/HTML sinks. Tiles/images use deterministic interception. `make docker-build test-suite-routes` and `bash scripts/validate-seeded-adoption.sh` validate the actual immutable image and historical/current entrypoints. These gates supplement the unit/browser suites.
 
-Traces and screenshots are kept on failure (`trace: retain-on-failure`, retries stay 0). CI uploads `test-results` and `playwright-report` when the job fails. Playwright's browser download is cached on the `@playwright/test` version and shared by the finance, media, and town e2e jobs, and the image job. Finance and the image install operating-system dependencies on a cache hit. Media and Town install Chromium only: the GitHub-hosted image already has the shared libraries, and `--with-deps` was spending about 16 minutes downloading fonts.
+Traces and screenshots are kept on failure (`trace: retain-on-failure`, retries stay 0). Playwright's browser download is cached on the `@playwright/test` version. The Playwright job and the image job install Chromium only. `--with-deps` was spending about 16 minutes downloading fonts on a GitHub-hosted runner.

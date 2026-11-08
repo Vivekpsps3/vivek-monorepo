@@ -137,7 +137,13 @@ export function bandAt(
 ): { week: string; day: number; inTown: boolean } {
   const center = x + viewportTiles / 2;
   const loadedTiles = weeks.length * CHUNK_W;
-  if (weeks.length === 0 || center >= loadedTiles) {
+  // A desktop viewport is wider than the district, so the clamp stops before
+  // the center can enter Town. End still parks on that clamp with Town in view.
+  const mapTiles = loadedTiles + DISTRICT_TILES + PIER_TILES;
+  const maxX = Math.max(0, mapTiles - viewportTiles);
+  const atEnd = maxX > 0 && x >= maxX - 0.01;
+  const townInView = x + viewportTiles > loadedTiles;
+  if (weeks.length === 0 || center >= loadedTiles || (atEnd && townInView)) {
     return { week: weeks.length > 0 ? weeks[weeks.length - 1] : '', day: 6, inTown: true };
   }
   const safe = center < 0 ? 0 : center;
