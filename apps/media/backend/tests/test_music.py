@@ -256,6 +256,8 @@ def test_saving_an_album_does_not_insert_its_songs(client, monkeypatch, tmp_path
     body = created.json()
     assert body["rating"] is None
     assert body["artwork_url"] is None
+    assert body["catalog"]["source_id"] == "2b8f453f-ffd6-4860-8742-7cff1c2feae3"
+    assert body["catalog"]["extra"]["release_id"] == "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe"
     assert body["catalog"]["extra"]["metadata_pending"] is True
     assert body["music"]["albums"][0]["tracks"] == []
     added = client.post(
@@ -453,8 +455,9 @@ def test_two_users_keep_independent_music_membership(client):
 def test_discography_browse_does_not_insert_membership(client, monkeypatch, tmp_path):
     seen = []
 
-    def catalog(_http, artist_id, group_offset=0, release_offset=0, max_pages=1):
+    def catalog(_http, artist_id, group_offset=0, release_offset=0, max_pages=1, db=None):
         seen.append((artist_id, group_offset, release_offset, max_pages))
+        assert db is not None
         return {
             "partial": True,
             "group_offset": group_offset + 100,
@@ -700,8 +703,11 @@ def test_studio_browse_names_the_releases_it_leaves_out():
 def test_discography_save_keeps_one_song_without_its_album(client, monkeypatch, tmp_path):
     seen = []
 
-    def catalog(_http, artist_id, group_offset=0, release_offset=0, max_pages=1, release_type=None):
+    def catalog(
+        _http, artist_id, group_offset=0, release_offset=0, max_pages=1, release_type=None, db=None
+    ):
         seen.append(release_type)
+        assert db is not None
         return {"partial": False, "group_offset": 0, "release_offset": 0, "albums": []}
 
     monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
@@ -828,3 +834,397 @@ def test_discography_save_keeps_one_song_without_its_album(client, monkeypatch, 
     assert stored.execute("select count(*) from user_entries").fetchone()[0] == before_entries
     assert stored.execute("select count(*) from catalog_items").fetchone()[0] == before_catalogs
     stored.close()
+
+
+ARI = "f4fdbb4c-e4b7-47a0-b83b-d91bbfcfa387"
+PETAL_GROUP = "2b8f453f-ffd6-4860-8742-7cff1c2feae3"
+PETAL_RELEASE = "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe"
+DECOY_ARTIST = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+PETAL_SONG = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+
+
+def _petal_detail(source_id):
+    return {
+        "source": "musicbrainz",
+        "source_id": PETAL_RELEASE if source_id == PETAL_RELEASE else PETAL_GROUP,
+        "kind": "album",
+        "title": "petal",
+        "creator": "Not Used For Linking",
+        "year": 2026,
+        "overview": None,
+        "artwork_url": f"https://coverartarchive.org/release-group/{PETAL_GROUP}/front-250",
+        "genres": [],
+        "external_ratings": [],
+        "extra": {
+            "release_group_id": PETAL_GROUP,
+            "artist_id": ARI,
+            "release_id": PETAL_RELEASE,
+            "primary_type": "Album",
+        },
+        "releases": [{"released_on": "2026-07-31", "precision": "day", "status": "released"}],
+        "episodes": [],
+        "provenance": {
+            "provider": "musicbrainz",
+            "coverage": "official",
+            "fetched_at": "2026-11-08T00:00:00+00:00",
+        },
+    }
+
+
+def _lookup_petal(_source, kind, source_id):
+    if kind == "album" and source_id in {PETAL_RELEASE, PETAL_GROUP}:
+        return _petal_detail(source_id)
+    return None
+
+
+def _save_named_artist(client, source_id):
+    saved = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": source_id,
+            "kind": "artist",
+            "title": "Ariana Grande",
+            "status": "following",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    return saved.json()
+
+
+def test_search_saved_pressing_links_under_the_artist_mbid(client, monkeypatch, tmp_path):
+    monkeypatch.setattr("apps.media.backend.services.providers.lookup_detail", _lookup_petal)
+
+    def catalog(*_args, **_kwargs):
+        return {
+            "partial": False,
+            "group_offset": 0,
+            "release_offset": 0,
+            "albums": [
+                {
+                    "source_id": PETAL_GROUP,
+                    "title": "petal",
+                    "year": 2026,
+                    "tracks": [{"source_id": PETAL_SONG, "title": "kiss me", "position": 1}],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_catalog", catalog)
+    artist = _save_named_artist(client, ARI)
+    decoy = _save_named_artist(client, DECOY_ARTIST)
+    saved = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": PETAL_RELEASE,
+            "kind": "album",
+            "title": "petal",
+            "creator": "Ariana Grande",
+            "extra": {"release_group_id": PETAL_GROUP},
+            "status": "want",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    album = saved.json()
+    assert album["already_saved"] is False
+    assert album["catalog"]["source_id"] == PETAL_GROUP
+    assert album["catalog"]["extra"]["release_id"] == PETAL_RELEASE
+    again = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": PETAL_RELEASE,
+            "kind": "album",
+            "title": "petal",
+            "creator": "Ariana Grande",
+        },
+    ).json()
+    assert again["already_saved"] is True
+    assert again["id"] == album["id"]
+    via_group = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": PETAL_GROUP,
+            "kind": "album",
+            "title": "petal",
+        },
+    ).json()
+    assert via_group["already_saved"] is True
+    assert via_group["id"] == album["id"]
+
+    nested = client.get(f"/api/entries/{artist['id']}").json()
+    assert [row["title"] for row in nested["music"]["albums"]] == ["petal"]
+    assert client.get(f"/api/entries/{decoy['id']}").json()["music"]["albums"] == []
+    library = client.get("/api/library").json()["items"]
+    assert next(item for item in library if item["id"] == artist["id"])["saved_count"] == 1
+    assert next(item for item in library if item["id"] == decoy["id"])["saved_count"] == 0
+    assert sum(item["kind"] == "album" for item in library) == 1
+
+    page = client.get(f"/api/entries/{artist['id']}/discography").json()
+    assert page["albums"][0]["source_id"] == PETAL_GROUP
+    assert page["albums"][0]["saved"] is True
+    assert page["albums"][0]["saved_id"] == album["id"]
+    song = client.post(
+        f"/api/entries/{artist['id']}/discography",
+        json={
+            "kind": "track",
+            "source_id": PETAL_SONG,
+            "title": "kiss me",
+            "album_source_id": PETAL_GROUP,
+            "album_title": "petal",
+            "position": 1,
+        },
+    )
+    assert song.status_code == 200, song.text
+    music = client.get(f"/api/entries/{artist['id']}").json()["music"]
+    assert [row["title"] for row in music["albums"][0]["tracks"]] == ["kiss me"]
+
+    stored = sqlite3.connect(tmp_path / "media.db")
+    albums = {
+        row[0] for row in stored.execute("select source_id from catalog_items where kind = 'album'")
+    }
+    links = stored.execute(
+        "select music_links.relation, parent.source_id, child.source_id "
+        "from music_links "
+        "join catalog_items parent on parent.id = music_links.parent_catalog_id "
+        "join catalog_items child on child.id = music_links.child_catalog_id "
+        "where parent.kind = 'artist' and child.kind = 'album'"
+    ).fetchall()
+    stored.close()
+    assert albums == {PETAL_GROUP}
+    assert links == [("artist-release-group", ARI, PETAL_GROUP)]
+
+
+def test_existing_pressing_repairs_by_artist_mbid_not_name(client, monkeypatch, tmp_path):
+    artist = _save_named_artist(client, ARI)
+    decoy = _save_named_artist(client, DECOY_ARTIST)
+    stored = sqlite3.connect(tmp_path / "media.db")
+    stored.execute(
+        "INSERT INTO catalog_items ("
+        "kind, title, creator, source, source_id, extra, genres, external_ratings, "
+        "created_at, updated_at) VALUES ("
+        "'album', 'petal', 'Ariana Grande', 'musicbrainz', ?, ?, '[]', '[]', "
+        "'2020-01-01', '2020-01-01')",
+        (PETAL_RELEASE, '{"metadata_pending":true}'),
+    )
+    catalog_id = stored.execute("select last_insert_rowid()").fetchone()[0]
+    stored.execute(
+        "INSERT INTO user_entries ("
+        "user_id, catalog_id, status, review_spoiler, favorite, anticipated, "
+        "created_at, updated_at) VALUES (1, ?, 'want', 0, 0, 0, '2020-01-01', '2020-01-01')",
+        (catalog_id,),
+    )
+    stored.commit()
+    stored.close()
+    monkeypatch.setattr("apps.media.backend.services.providers.lookup_detail", _lookup_petal)
+
+    nested = client.get(f"/api/entries/{artist['id']}").json()
+    assert [row["title"] for row in nested["music"]["albums"]] == ["petal"]
+    assert client.get(f"/api/entries/{decoy['id']}").json()["music"]["albums"] == []
+    library = client.get("/api/library").json()["items"]
+    assert next(item for item in library if item["id"] == artist["id"])["saved_count"] == 1
+    assert sum(item["kind"] == "album" for item in library) == 1
+
+    stored = sqlite3.connect(tmp_path / "media.db")
+    rows = stored.execute(
+        "select source_id, extra from catalog_items where kind = 'album'"
+    ).fetchall()
+    links = stored.execute(
+        "select music_links.relation, parent.source_id, child.source_id "
+        "from music_links "
+        "join catalog_items parent on parent.id = music_links.parent_catalog_id "
+        "join catalog_items child on child.id = music_links.child_catalog_id "
+        "where parent.kind = 'artist' and child.kind = 'album'"
+    ).fetchall()
+    entries = stored.execute(
+        "select count(*) from user_entries "
+        "join catalog_items on catalog_items.id = user_entries.catalog_id "
+        "where catalog_items.kind = 'album'"
+    ).fetchone()[0]
+    stored.close()
+    assert len(rows) == 1
+    assert rows[0][0] == PETAL_GROUP
+    assert PETAL_RELEASE in rows[0][1]
+    assert entries == 1
+    assert ("artist-release-group", ARI, PETAL_GROUP) in links
+    assert all(row[1] != DECOY_ARTIST for row in links)
+
+
+def test_pressing_row_merges_into_the_saved_release_group(client, monkeypatch, tmp_path):
+    monkeypatch.setattr("apps.media.backend.services.providers.lookup_detail", _lookup_petal)
+    artist = _save_named_artist(client, ARI)
+    group = client.post(
+        "/api/library/from-provider",
+        json={
+            "source": "musicbrainz",
+            "source_id": PETAL_GROUP,
+            "kind": "album",
+            "title": "petal",
+            "status": "want",
+        },
+    ).json()
+    stored = sqlite3.connect(tmp_path / "media.db")
+    stored.execute(
+        "INSERT INTO catalog_items ("
+        "kind, title, creator, source, source_id, extra, genres, external_ratings, "
+        "created_at, updated_at) VALUES ("
+        "'album', 'petal pressing', 'Ariana Grande', 'musicbrainz', ?, ?, '[]', '[]', "
+        "'2020-01-01', '2020-01-01')",
+        (PETAL_RELEASE, '{"metadata_pending":true}'),
+    )
+    pressing_id = stored.execute("select last_insert_rowid()").fetchone()[0]
+    stored.execute(
+        "INSERT INTO user_entries ("
+        "user_id, catalog_id, status, review_spoiler, favorite, anticipated, "
+        "created_at, updated_at) VALUES (1, ?, 'completed', 0, 1, 0, '2020-01-01', '2020-01-01')",
+        (pressing_id,),
+    )
+    stored.commit()
+    stored.close()
+
+    library = client.get("/api/library").json()["items"]
+    albums = [item for item in library if item["kind"] == "album"]
+    assert [item["id"] for item in albums] == [group["id"]]
+    assert albums[0]["favorite"] is True
+    nested = client.get(f"/api/entries/{artist['id']}").json()
+    assert [row["title"] for row in nested["music"]["albums"]] == ["petal"]
+    stored = sqlite3.connect(tmp_path / "media.db")
+    rows = stored.execute(
+        "select source_id, extra from catalog_items where kind = 'album'"
+    ).fetchall()
+    album_entries = stored.execute(
+        "select count(*) from user_entries "
+        "join catalog_items on catalog_items.id = user_entries.catalog_id "
+        "where catalog_items.kind = 'album'"
+    ).fetchone()[0]
+    stored.close()
+    assert len(rows) == 1
+    assert rows[0][0] == PETAL_GROUP
+    assert PETAL_RELEASE in rows[0][1]
+    assert album_entries == 1
+
+
+def test_discography_songs_come_from_the_release_group():
+    titles = [
+        "kiss me",
+        "hate that i made you love me",
+        "petal",
+        "song four",
+        "song five",
+        "song six",
+        "song seven",
+        "song eight",
+        "song nine",
+        "song ten",
+        "song eleven",
+        "song twelve",
+    ]
+    other_group = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+    calls = []
+
+    def handle(request):
+        params = dict(request.url.params)
+        calls.append((request.url.path, params))
+        if request.url.path.endswith("/release-group"):
+            return httpx.Response(
+                200,
+                json={
+                    "release-groups": [
+                        {
+                            "id": PETAL_GROUP,
+                            "title": "petal",
+                            "primary-type": "Album",
+                            "first-release-date": "2026-07-31",
+                        },
+                        {
+                            "id": other_group,
+                            "title": "Other",
+                            "primary-type": "Album",
+                            "first-release-date": "2020-01-01",
+                        },
+                    ],
+                    "release-group-count": 2,
+                },
+            )
+        if request.url.path.endswith("/release"):
+            if params.get("artist") and not params.get("release-group"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "releases": [
+                            {
+                                "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                                "title": "Unrelated",
+                                "release-group": {"id": other_group},
+                                "media": [
+                                    {
+                                        "tracks": [
+                                            {"title": "not petal", "recording": {"id": "rec-x"}}
+                                        ]
+                                    }
+                                ],
+                            }
+                        ],
+                        "release-count": 326,
+                    },
+                )
+            if params.get("release-group") == PETAL_GROUP:
+                return httpx.Response(
+                    200,
+                    json={
+                        "releases": [
+                            {
+                                "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                                "media": [
+                                    {
+                                        "tracks": [
+                                            {"title": "only", "recording": {"id": "rec-short"}}
+                                        ]
+                                    }
+                                ],
+                            },
+                            {
+                                "id": PETAL_RELEASE,
+                                "media": [
+                                    {
+                                        "tracks": [
+                                            {
+                                                "title": title,
+                                                "recording": {"id": f"rec-{index}"},
+                                            }
+                                            for index, title in enumerate(titles, start=1)
+                                        ]
+                                    }
+                                ],
+                            },
+                        ],
+                        "release-count": 2,
+                    },
+                )
+            return httpx.Response(200, json={"releases": [], "release-count": 0})
+        return httpx.Response(404, json={"error": "Not Found"})
+
+    from apps.media.backend.services.providers import musicbrainz_artist_catalog
+
+    http = httpx.Client(transport=httpx.MockTransport(handle))
+    page = musicbrainz_artist_catalog(http, ARI)
+    petal = next(row for row in page["albums"] if row["source_id"] == PETAL_GROUP)
+    assert [row["title"] for row in petal["tracks"]] == titles
+    release_calls = [params for path, params in calls if path.endswith("/release")]
+    assert release_calls
+    assert all(params.get("release-group") for params in release_calls)
+    petal_calls = [params for params in release_calls if params.get("release-group") == PETAL_GROUP]
+    assert petal_calls
+    assert petal_calls[0]["status"] == "official"
+    assert "recordings" in petal_calls[0]["inc"]
+    group_calls = [params for path, params in calls if path.endswith("/release-group")]
+    assert group_calls
+    assert all(params.get("artist") == ARI for params in group_calls)
+    before = len(release_calls)
+    again = musicbrainz_artist_catalog(http, ARI)
+    again_petal = next(row for row in again["albums"] if row["source_id"] == PETAL_GROUP)
+    assert [row["title"] for row in again_petal["tracks"]] == titles
+    later = [params for path, params in calls if path.endswith("/release")]
+    assert len(later) == before

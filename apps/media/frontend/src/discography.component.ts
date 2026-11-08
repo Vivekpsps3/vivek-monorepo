@@ -41,9 +41,7 @@ interface Discography {
     <ui-page-header
       backLabel="← Artist"
       [backLink]="'/media/item/' + id"
-      eyebrow="Explore, then choose"
       title="Browse discography"
-      subtitle="Browsing does not save albums or songs."
     >
       <ui-field uiPageActions label="Release type"
         ><select

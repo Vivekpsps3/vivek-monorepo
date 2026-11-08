@@ -48,9 +48,11 @@ def _clear_provider_health():
 
     providers._HEALTH.clear()
     providers.SEARCH_CACHE.clear()
+    providers._GROUP_TRACKS.clear()
     yield
     providers._HEALTH.clear()
     providers.SEARCH_CACHE.clear()
+    providers._GROUP_TRACKS.clear()
 
 
 @pytest.fixture(autouse=True)

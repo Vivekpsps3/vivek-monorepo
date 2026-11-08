@@ -833,6 +833,10 @@ def _keep_release_group(group: dict, release_type: str | None) -> bool:
     return wanted in names
 
 
+# Longest official tracklist for one release group. Keyed by group MBID.
+_GROUP_TRACKS: dict[str, list[dict]] = {}
+
+
 def musicbrainz_artist_catalog(
     http: httpx.Client,
     artist_id: str,
@@ -840,13 +844,18 @@ def musicbrainz_artist_catalog(
     release_offset: int = 0,
     max_pages: int = 1,
     release_type: str | None = None,
+    db: Session | None = None,
 ) -> dict:
-    """One bounded page of public releases and songs. This saves nothing.
+    """One bounded page of release groups. This saves nothing.
 
     The default is studio albums. Singles, EPs, live, remix, and compilation
     rows are a separate request so a studio page does not imply they are absent.
-    Offsets continue a previous page. max_pages keeps one request bounded.
+    Group offsets continue a previous page. max_pages keeps the group list bounded.
+    Songs for each group come from that group's own official releases, not from
+    an artist-wide release page. ``release_offset`` is accepted for older callers
+    and does not select those songs.
     """
+    _ = release_offset
     mb_type = _mb_release_type(release_type)
     groups, groups_partial, group_next = _mb_pages(
         http,
@@ -857,33 +866,6 @@ def musicbrainz_artist_catalog(
         max_pages=max_pages,
         start_offset=group_offset,
     )
-    releases, releases_partial, release_next = _mb_pages(
-        http,
-        "https://musicbrainz.org/ws/2/release",
-        {
-            "artist": artist_id,
-            "type": mb_type,
-            "status": "official",
-            "inc": "recordings release-groups",
-            "fmt": "json",
-        },
-        "releases",
-        "release-count",
-        max_pages=max_pages,
-        start_offset=release_offset,
-    )
-    tracks_by_group: dict[str, list[dict]] = {}
-    for release in releases:
-        if not isinstance(release, dict):
-            continue
-        group = _mapping(release.get("release-group"))
-        group_id = group.get("id")
-        if not isinstance(group_id, str):
-            continue
-        tracks = _tracks_from_release(release)
-        current = tracks_by_group.get(group_id)
-        if current is None or len(tracks) > len(current):
-            tracks_by_group[group_id] = tracks
     albums = []
     seen = set()
     for group in groups:
@@ -904,16 +886,63 @@ def musicbrainz_artist_catalog(
                 "title": group.get("title") or "Untitled",
                 "year": year,
                 "artwork_url": f"https://coverartarchive.org/release-group/{group['id']}/front-250",
-                "tracks": list(tracks_by_group.get(group["id"]) or []),
+                "tracks": _group_tracks(http, group["id"], db),
             }
         )
     albums.sort(key=lambda row: ((row.get("year") or 9999), str(row.get("title") or "").casefold()))
     return {
         "albums": albums,
-        "partial": bool(groups_partial or releases_partial),
+        "partial": bool(groups_partial),
         "group_offset": group_next if groups_partial else 0,
-        "release_offset": release_next if releases_partial else 0,
+        "release_offset": 0,
     }
+
+
+def _group_track_key(group_id: str) -> str:
+    return f"musicbrainz:artist-catalog:group-tracks:{group_id}"
+
+
+def _group_tracks(http: httpx.Client, group_id: str, db: Session | None) -> list[dict]:
+    """Longest official tracklist for this release group. Cached per group."""
+    cached = _GROUP_TRACKS.get(group_id)
+    if cached is not None:
+        return [dict(row) for row in cached]
+    if db is not None:
+        stored = _cache_get(db, _group_track_key(group_id))
+        if isinstance(stored, dict) and isinstance(stored.get("tracks"), list):
+            tracks = [dict(row) for row in stored["tracks"] if isinstance(row, dict)]
+            _GROUP_TRACKS[group_id] = tracks
+            return [dict(row) for row in tracks]
+    tracks = _fetch_group_tracks(http, group_id)
+    _GROUP_TRACKS[group_id] = tracks
+    if db is not None:
+        _cache_put(db, _group_track_key(group_id), {"tracks": tracks})
+    return [dict(row) for row in tracks]
+
+
+def _fetch_group_tracks(http: httpx.Client, group_id: str) -> list[dict]:
+    """Official pressings of this group only. The longest tracklist wins."""
+    releases, _partial, _next = _mb_pages(
+        http,
+        "https://musicbrainz.org/ws/2/release",
+        {
+            "release-group": group_id,
+            "status": "official",
+            "inc": "recordings",
+            "fmt": "json",
+        },
+        "releases",
+        "release-count",
+        max_pages=1,
+    )
+    best: list[dict] = []
+    for release in releases:
+        if not isinstance(release, dict):
+            continue
+        tracks = _tracks_from_release(release)
+        if len(tracks) > len(best):
+            best = tracks
+    return best
 
 
 def _skipped_album(group: dict) -> bool:
@@ -1285,6 +1314,22 @@ def artist_name(credit) -> str | None:
         return None
     name = credit[0].get("name") or (credit[0].get("artist") or {}).get("name")
     return name or None
+
+
+def primary_artist_id(credit) -> str | None:
+    """MusicBrainz id of the first credited artist. The display name is not an id."""
+    if not isinstance(credit, list):
+        return None
+    for item in credit:
+        if not isinstance(item, dict):
+            continue
+        artist = item.get("artist")
+        if not isinstance(artist, dict):
+            continue
+        found = mbid(artist.get("id"))
+        if found:
+            return found
+    return None
 
 
 def music_result(
@@ -2061,6 +2106,18 @@ def musicbrainz_artist_detail(http: httpx.Client, source_id: str) -> dict | None
     return row
 
 
+def _album_identity_extra(group_id: str | None, credit, pressing_id: str | None = None) -> dict:
+    extra = {}
+    if mbid(group_id):
+        extra["release_group_id"] = group_id
+    artist_id = primary_artist_id(credit)
+    if artist_id:
+        extra["artist_id"] = artist_id
+    if mbid(pressing_id):
+        extra["release_id"] = pressing_id
+    return extra
+
+
 def musicbrainz_album_detail(http: httpx.Client, source_id: str) -> dict | None:
     release_id = mbid(source_id)
     if not release_id:
@@ -2071,26 +2128,52 @@ def musicbrainz_album_detail(http: httpx.Client, source_id: str) -> dict | None:
         params={"inc": "artists release-groups", "fmt": "json"},
     )
     if getattr(response, "status_code", 200) == 404:
-        return None
+        return _musicbrainz_release_group_detail(http, release_id)
     response.raise_for_status()
     item = response.json()
     if not isinstance(item, dict) or not item.get("title"):
         return None
     group = _mapping(item.get("release-group"))
     group_id = group.get("id") if isinstance(group.get("id"), str) else None
+    credit = item.get("artist-credit")
     row = music_result(
         "album",
         source_id.strip(),
         item.get("title"),
-        artist_name(item.get("artist-credit")),
+        artist_name(credit),
         item.get("date") if isinstance(item.get("date"), str) else None,
     )
     row["artwork_url"] = cover_art_url(release_id, group_id)
-    extra = {}
-    if mbid(group_id):
-        extra["release_group_id"] = group_id
+    extra = _album_identity_extra(group_id, credit, release_id)
     if isinstance(group.get("primary-type"), str):
         extra["primary_type"] = group["primary-type"]
+    row["extra"] = extra
+    row["provenance"] = provenance("musicbrainz", "official")
+    return row
+
+
+def _musicbrainz_release_group_detail(http: httpx.Client, group_id: str) -> dict | None:
+    """Album identity when the saved id is the release group, not a pressing."""
+    response = mb_get(
+        http,
+        f"https://musicbrainz.org/ws/2/release-group/{group_id}",
+        params={"inc": "artists", "fmt": "json"},
+    )
+    if getattr(response, "status_code", 200) == 404:
+        return None
+    response.raise_for_status()
+    item = response.json()
+    if not isinstance(item, dict) or not item.get("title"):
+        return None
+    credit = item.get("artist-credit")
+    released = (
+        item.get("first-release-date") if isinstance(item.get("first-release-date"), str) else None
+    )
+    row = music_result("album", group_id, item.get("title"), artist_name(credit), released)
+    row["artwork_url"] = cover_art_url(None, group_id)
+    extra = _album_identity_extra(group_id, credit)
+    if isinstance(item.get("primary-type"), str):
+        extra["primary_type"] = item["primary-type"]
     row["extra"] = extra
     row["provenance"] = provenance("musicbrainz", "official")
     return row
