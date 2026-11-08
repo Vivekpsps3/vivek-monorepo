@@ -6,7 +6,7 @@ const finance = domainConfig('finance'), travel = domainConfig('travel'), media 
 // The same project definitions serve both individual app commands and CI.
 // Worker fixtures start only the servers required by selected projects.
 export default defineConfig({
-  workers: 2,
+  workers: 4,
   retries: 0,
   timeout: 60_000,
   outputDir: 'test-results/suite',

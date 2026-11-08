@@ -29,7 +29,7 @@ export function domainConfig(domain: 'finance' | 'travel' | 'media' | 'town') {
     outputDir: path.join(root, 'test-results', domain),
     timeout: domain === 'finance' || domain === 'town' ? 60_000 : domain === 'travel' ? 45_000 : 30_000,
     // Files run concurrently; tests within each file retain their ordering.
-    workers: 2,
+    workers: 4,
     retries: 0,
     reporter: [['list'], ['html', { open: 'never', outputFolder: path.join(root, 'playwright-report', domain) }]],
     use: {

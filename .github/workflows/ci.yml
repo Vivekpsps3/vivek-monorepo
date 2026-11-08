@@ -147,7 +147,7 @@ jobs:
             make build-frontends
           fi
       # Root projects reuse the domain configs and start isolated servers on
-      # demand. One scheduler balances all domains across the two workers.
+      # demand. One scheduler balances all domains across the four workers.
       - name: Finance, Travel, Media, and Town
         env:
           PYTHON: python
