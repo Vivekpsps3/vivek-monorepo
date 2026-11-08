@@ -2,6 +2,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Subject } from 'rxjs';
 import { ToastService } from '@vivek/ui';
+import { VAULT_PRESENCE } from '../../../../finance/frontend/src/public-api';
 import { SessionService } from '../platform/session.service';
 import { TownApiService, type CheckinResult } from './town.api';
 import { TownComponent } from './town.component';
@@ -214,6 +215,43 @@ describe('Town page', () => {
     const { fixture, el } = render(snapshot());
     expect(fixture.componentInstance.state()).toBe('ready');
     expect(el.textContent).toContain('Lv 3 · 340 / 500 XP');
+  });
+  it('explains a locked Finance vault on the treasury tile and in Today', () => {
+    const { el } = render(snapshot());
+    const tile = el.querySelectorAll('ul > li')[2] as HTMLElement;
+    expect(tile.querySelector('img')?.getAttribute('src')).toBe('/town/treasury-locked.svg');
+    expect(tile.textContent).toContain('Finance vault locked');
+    expect(tile.textContent).not.toMatch(/\d/);
+    expect(tile.querySelector('a')?.getAttribute('href')).toBe('/finance/vault/unlock?next=%2Ftown');
+    expect(el.querySelector('.treasury ui-badge')?.textContent?.trim()).toBe('Finance vault locked');
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+    expect(tile.textContent).not.toMatch(/\$/);
+  });
+  it('shows the treasury tier from habit weeks when the Finance vault is present', () => {
+    localStorage.setItem(VAULT_PRESENCE, '7');
+    const data = snapshot();
+    const { fixture, el } = render(data);
+    const tile = () => el.querySelectorAll('ul > li')[2] as HTMLElement;
+    expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-1.svg');
+    expect(tile().textContent).toContain('Lv 1');
+    expect(tile().querySelector('a')?.getAttribute('href')).toBe('/finance');
+    expect(el.querySelector('.treasury')?.textContent).toContain('Lv 1');
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+    expect(tile().textContent).not.toMatch(/\$/);
+    data.habits = [{
+      id: 4, name: 'Walk', slot: 0, building_style: 'garden',
+      cadence: { per_week: 3, kind: 'weekly', pending: null }, created_on: '2026-10-05', archived_on: null,
+      xp: 80, level: 2, stage: 2, level_xp_start: 50, next_level_xp: 150,
+      streak: { unit: 'weeks', current: 4, best: 4, best_days: 0, best_weeks: 4, rest_day_available: null, rest_used_on: null },
+      week: { done: 1, target: 3 }, checked_today: false, checked_yesterday: false, can_check_yesterday: true, last7: [],
+    } as Habit];
+    response.next(data); fixture.detectChanges();
+    expect(tile().querySelector('img')?.getAttribute('src')).toBe('/town/treasury-3.svg');
+    expect(tile().textContent).toContain('Lv 4');
+    expect(tile().textContent).not.toContain('Lv 3');
+    expect(el.querySelector('.treasury')?.textContent).toContain('Lv 4');
+    expect(el.querySelector('.treasury')?.textContent).not.toContain('Locked');
+    expect(el.querySelector('ui-skeleton')).toBeNull();
   });
   it('reflows to two columns below the minimum tile width using the scene container', () => {
     const { el } = render(snapshot());

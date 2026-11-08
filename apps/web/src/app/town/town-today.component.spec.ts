@@ -69,7 +69,8 @@ describe('Today panel', () => {
     expect(el.textContent).toContain('Auto · +10/10 XP today');
     expect(el.textContent).toContain('Auto · +5/15 XP today');
     expect(el.textContent).toContain('Auto ✓');
-    expect(el.textContent).toContain('Locked');
+    expect(el.querySelector('.treasury ui-badge')?.textContent?.trim()).toBe('Finance vault locked');
+    expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(el.textContent).toContain('Rest days: Forge ✓, Cottage used');
     const button = el.querySelector<HTMLButtonElement>('button')!;
     expect(button.getAttribute('aria-label')).toBe('Mark Read 20 pages done for today');
@@ -80,10 +81,19 @@ describe('Today panel', () => {
     expect(history).toHaveBeenCalled();
     fixture.componentRef.setInput('data', snapshot([]));
     fixture.componentRef.setInput('vaultPresent', true);
+    // 8 kept weeks is treasury tier 5. The snapshot town is level 3, which must not leak in.
+    fixture.componentRef.setInput('weeksKept', 8);
     fixture.detectChanges();
     expect(el.textContent).toContain('No active habits');
-    expect(el.querySelector('ui-skeleton')).not.toBeNull();
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+    expect(el.querySelector('.treasury')?.textContent).toContain('Lv 5');
     expect(el.textContent).not.toContain('Locked');
+    expect(el.querySelector('.treasury')?.textContent).not.toMatch(/\$/);
+    fixture.componentRef.setInput('weeksKept', null);
+    fixture.detectChanges();
+    expect(el.querySelector('ui-skeleton')).toBeNull();
+    expect(el.querySelector('.treasury')?.textContent).toContain('Unavailable');
+    expect(el.querySelector('.treasury')?.textContent).not.toMatch(/Lv \d/);
   });
 
   it('disables a new habit when no lot is free and keeps the helper copy', () => {

@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, effect, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ToastService, UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent, UiSkeletonComponent } from '@vivek/ui';
+import { ToastService, UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent } from '@vivek/ui';
 import { TownApiService, type CheckinResult } from './town.api';
+import { treasuryUnlocked } from './town-levels';
 import type { Building, Habit, TownResponse } from './town.types';
 
 const STYLE_NAME = { forge: 'Forge', garden: 'Garden', cottage: 'Cottage' } as const;
@@ -44,7 +45,7 @@ function problem(error: unknown): { code?: string; message: string } {
 
 @Component({
   selector: 'app-town-today',
-  imports: [UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent, UiSkeletonComponent],
+  imports: [UiBadgeComponent, UiButtonComponent, UiEmptyStateComponent],
   templateUrl: './town-today.component.html',
   styleUrl: './town-today.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -56,6 +57,8 @@ export class TownTodayComponent {
   private readonly host = inject(ElementRef<HTMLElement>);
   readonly data = input.required<TownResponse>();
   readonly vaultPresent = input(false);
+  /** Habit weeks already counted by Town. Null means they could not be read. */
+  readonly weeksKept = input<number | null>(null);
   readonly live = input('');
   readonly newHabit = output<void>();
   readonly history = output<void>();
@@ -132,6 +135,12 @@ export class TownTodayComponent {
 
   restNote(): string {
     return formatRest(this.habits());
+  }
+
+  treasuryNote(): string {
+    const weeks = this.weeksKept();
+    if (weeks == null || !Number.isFinite(weeks)) return 'Unavailable';
+    return `Lv ${treasuryUnlocked(weeks).level}`;
   }
 
   autoLabel(kind: 'library' | 'inn', building: Building): string {

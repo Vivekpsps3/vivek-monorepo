@@ -25,3 +25,13 @@ export function levelProgress(
 export function treasuryTier(weeksKept: number): number {
   return level(weeksKept, TREASURY_WEEKS);
 }
+
+/**
+ * Unlocked treasury. The level is the habit-week tier from TREASURY_WEEKS, not the town level.
+ * The stage is the same sprite stage the world paints.
+ */
+export function treasuryUnlocked(weeksKept: number): { level: number; stage: 1 | 2 | 3 } {
+  const weeks = Number.isFinite(weeksKept) && weeksKept > 0 ? Math.floor(weeksKept) : 0;
+  const tier = treasuryTier(weeks);
+  return { level: tier, stage: stage(tier) };
+}
