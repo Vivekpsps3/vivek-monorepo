@@ -22,6 +22,12 @@ class PrivateDraftComponent {}
 })
 class GridPageComponent {}
 
+@Component({
+  standalone: true,
+  template: '<main><h1>Spending</h1><button type="button">Add transaction</button></main>',
+})
+class ButtonPageComponent {}
+
 describe('Shared private shell', () => {
   it('destroys a mounted private draft when the signed-in identity changes', async () => {
     const users = new BehaviorSubject({id: 1, display_name: 'Ada'});
@@ -73,6 +79,23 @@ describe('Shared private shell', () => {
     cell.focus();
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(document.activeElement).toBe(cell);
+  });
+  it('leaves a button focused after the page heading has landed', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'finance/spending', component: ButtonPageComponent}]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/finance/spending');
+    const button = harness.routeNativeElement?.querySelector('main button') as HTMLButtonElement;
+    button.focus();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(document.activeElement).toBe(button);
   });
   it('provides the app switcher and one account/theme surface', async () => {
     const { fixture } = await render();
