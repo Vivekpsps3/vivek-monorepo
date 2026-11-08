@@ -45,8 +45,8 @@ for (const viewport of viewports) {
       await expect(assetDialog.getByRole('button', { name: 'Save asset', exact: true })).toBeVisible();
       await assetDialog.getByRole('button', { name: 'Cancel' }).click();
 
-      await page.getByRole('button', { name: 'Add liability' }).first().click();
-      const debtDialog = page.getByRole('dialog', { name: 'Add liability' });
+      await page.getByRole('button', { name: 'Add debt', exact: true }).first().click();
+      const debtDialog = page.getByRole('dialog', { name: 'Add debt' });
       await expect(debtDialog.getByRole('button', { name: 'Save debt', exact: true })).toBeVisible();
       await debtDialog.getByRole('button', { name: 'Cancel' }).click();
 

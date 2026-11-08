@@ -420,6 +420,11 @@ ui-button {
   border-radius: var(--radius-sm);
 }
 
+.mc-field input[aria-invalid="true"],
+.mc-field select[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
 .mc-field input:focus-visible,
 .mc-field select:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 75%, var(--border));

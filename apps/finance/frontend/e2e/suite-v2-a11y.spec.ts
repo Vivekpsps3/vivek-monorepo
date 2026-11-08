@@ -84,20 +84,18 @@ for (const width of [390, 1280]) {
         const violations = watchConsole(page);
         const vault = await syntheticVault(page, seed);
         await vault.open('/');
-        const tabSelector = width === 390 ? '.mobile-tab' : '.nav-tab';
         const sections: Array<{ tab: string; h1: string }> = [
-          { tab: 'Have', h1: 'What you have' },
-          { tab: 'Spend', h1: 'Spending' },
-          { tab: 'Repeat', h1: 'Recurring' },
-          { tab: 'Plan', h1: 'Planning' },
+          { tab: 'Net worth', h1: 'What you have' },
+          { tab: 'Spending', h1: 'Spending' },
+          { tab: 'Recurring', h1: 'Recurring' },
+          { tab: 'Planning', h1: 'Planning' },
           { tab: 'Home', h1: 'Home' },
         ];
-        const desktopLabels: Record<string, string> = {
-          Have: 'What you have', Spend: 'Spending', Repeat: 'Recurring', Plan: 'Planning', Home: 'Home',
-        };
         for (const section of sections) {
-          const label = width === 390 ? section.tab : desktopLabels[section.tab];
-          await page.locator(tabSelector, { hasText: label }).first().click();
+          const nav = width === 390
+            ? page.locator('.mobile-tabbar')
+            : page.getByRole('navigation', { name: 'Finance sections' }).first();
+          await nav.getByRole('link', { name: section.tab, exact: true }).click();
           await expect(page.locator('h1')).toHaveText(section.h1);
           await expect(page.locator('h1')).toBeFocused();
         }
@@ -117,12 +115,16 @@ for (const width of [390, 1280]) {
 
       test('zero spending is not red', async ({ page }) => {
         const violations = watchConsole(page);
-        const vault = await syntheticVault(page, {});
+        const vault = await syntheticVault(page, {
+          assets: [{ id: 1, name: 'Checking', category: 'cash', current_value: 100, as_of_date: '2026-10-01' }],
+          transactions: [{ id: 2, date: '2026-10-02', type: 'income', kind: 'income', category: 'Salary', amount: 10, description: 'Pay' }],
+        });
         await vault.open('/');
         const tile = page.locator('.home-tile--activity');
         await expect(tile).toBeVisible();
         const colours = await tile.evaluate(el => {
-          const spending = el.querySelector('.home-split strong');
+          const spent = [...el.querySelectorAll('span')].find(node => node.querySelector('small')?.textContent?.trim() === 'Spent');
+          const spending = spent?.querySelector('strong');
           if (!spending) throw new Error('spending value missing');
           return {
             value: getComputedStyle(spending).color,
@@ -139,7 +141,7 @@ for (const width of [390, 1280]) {
         const violations = watchConsole(page);
         const vault = await syntheticVault(page, seed);
         await vault.open('/planning?t=path');
-        const field = page.locator('.mc-field input').first();
+        const field = page.locator('.mc-field select, .mc-field input').first();
         await expect(field).toBeVisible();
         const borders = await field.evaluate(el => {
           const input = el as HTMLInputElement;
@@ -163,9 +165,10 @@ for (const width of [390, 1280]) {
         const violations = watchConsole(page);
         const vault = await syntheticVault(page, seed);
         await vault.open('/planning?t=path');
+        await page.getByLabel('Planning question').selectOption('retirement-target');
         const targets = [
-          page.locator('app-planning .mc-field input, app-planning .mc-field select').first(),
-          page.locator('app-planning-quick-tools .mc-field input, app-planning-quick-tools .mc-field select').first(),
+          page.locator('app-planning .planning-question select'),
+          page.locator('app-planning-quick-tools .mc-field input').first(),
         ];
         for (const target of targets) {
           await expect(target).toBeVisible();

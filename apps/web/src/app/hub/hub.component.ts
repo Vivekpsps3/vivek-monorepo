@@ -22,8 +22,7 @@ import {
   journalKindLabel,
   mediaReleaseLabel,
 } from './hub-summary';
-import { NextEpisodeButtonComponent } from '../../../../media/frontend/src/next-episode-button.component';
-import type { NextResult } from '../../../../media/frontend/src/next-episode.service';
+import { NextEpisodeButtonComponent, NextEpisodeUndoService, type NextResult } from '../../../../media/frontend/src/public-api';
 interface TravelTrip {
   id: number;
   title: string;
@@ -89,6 +88,7 @@ export class HubComponent implements OnInit {
   private readonly injector = inject(Injector);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly episodeUndo = inject(NextEpisodeUndoService);
 
   name = 'Your library of days';
   readonly today = new Date();
@@ -127,6 +127,7 @@ export class HubComponent implements OnInit {
   private readonly router = inject(Router);
 
   ngOnInit(): void {
+    this.episodeUndo.restored$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onMediaNextReload());
     this.watchVaultLock();
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.get('settings') === 'account') {

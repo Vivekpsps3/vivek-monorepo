@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test';
 import { test, expect } from './frozen-clock';
 import { syntheticVault } from './synthetic-vault';
+import { moneyText } from './money-text';
 
 /**
  * F11 acceptance: cashflow range/trimming, the remembered table toggle,
@@ -80,7 +81,7 @@ for (const width of [390, 1280]) {
         await expect(rows.first().locator('th[scope="row"]')).toHaveText('May 2026');
         await expect(rows.last().locator('th[scope="row"]')).toHaveText('October 2026');
         const june = table.getByRole('row', { name: /June 2026/ });
-        await expect(june).toContainText('$0.00');
+        await expect(june).toContainText(moneyText('$0.00'));
         const octoberNet = plain(await rows.last().locator('td').last().innerText());
         expect(octoberNet).toBe('+$4,941.00');
         expect(await page.evaluate(() => localStorage.getItem('finance.chartTable.cashflow'))).toBe('1');

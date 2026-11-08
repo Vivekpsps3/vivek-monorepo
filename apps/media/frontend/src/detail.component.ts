@@ -32,6 +32,7 @@ import {
 } from "./media.models";
 import { showDay } from "./display";
 import { MediaCardComponent } from "./media-card.component";
+import { NextEpisodeUndoService } from "./next-episode-undo.service";
 @Component({
   standalone: true,
   imports: [
@@ -104,9 +105,26 @@ export class DetailComponent {
   readonly statusLabel = statusLabel;
   constructor() {
     this.destroy.onDestroy(() => clearTimeout(this.skeletonTimer));
+    inject(NextEpisodeUndoService).restored$
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe((entryId) => this.refreshEpisodeProgress(entryId));
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((p) => {
       this.load(Number(p.get("id")));
     });
+  }
+  private refreshEpisodeProgress(entryId: number): void {
+    if (this.item()?.id !== entryId) return;
+    const generation = this.generation;
+    this.http.get<Detail>(`/media/api/entries/${entryId}`)
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (detail) => {
+          if (generation === this.generation) this.item.set(detail);
+        },
+        error: (error) => {
+          if (generation === this.generation) this.error.set(errorCopy(error));
+        },
+      });
   }
   private endpoint(): string {
     return "/media/api/entries/" + this.item()!.id;

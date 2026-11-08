@@ -14,6 +14,39 @@ def test_health(client):
     assert client.get("/api/health").json()["app"] == "travel"
 
 
+def test_home_returns_all_owned_past_trips_for_expandable_list(client, monkeypatch):
+    from apps.server.auth import Principal, require_principal
+    from apps.travel.backend.services import assemble
+
+    class FixtureDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 11, 1)
+
+    monkeypatch.setattr(assemble, "date", FixtureDate)
+    owned_ids = []
+    for offset in range(7):
+        start = date(2026, 10, 1) + timedelta(days=offset)
+        created = client.post(
+            "/api/trips",
+            json={"title": f"Past {offset}", "start_date": str(start), "end_date": str(start)},
+        )
+        assert created.status_code == 201, created.text
+        owned_ids.append(created.json()["id"])
+
+    client.app.dependency_overrides[require_principal] = lambda: Principal(2, "other", "Other")
+    foreign = client.post(
+        "/api/trips",
+        json={"title": "Other's trip", "start_date": "2026-10-31", "end_date": "2026-10-31"},
+    )
+    assert foreign.status_code == 201, foreign.text
+    client.app.dependency_overrides[require_principal] = lambda: Principal(1, "tester", "Tester")
+
+    home = client.get("/api/home")
+    assert home.status_code == 200, home.text
+    assert [trip["id"] for trip in home.json()["past"]] == list(reversed(owned_ids))
+
+
 def test_trip_flow_home_calendar_budget_and_pto(client, monkeypatch):
     from apps.travel.backend.services import assemble
 

@@ -1,5 +1,6 @@
 import { expect, test } from './frozen-clock';
 import { syntheticVault } from './synthetic-vault';
+import { moneyText } from './money-text';
 
 // Suite UX v2 F13: the calendar leads with its grid, day cells carry one
 // signed net and a scheduled dot under exact spoken labels, and the day
@@ -60,7 +61,7 @@ for (const combo of combos) {
     }
 
     const oct20 = page.getByRole('gridcell', { name: 'Tuesday, Oct 20: spent $45.67, 1 scheduled bill' });
-    await expect(oct20).toContainText('−$46');
+    await expect(oct20).toContainText(moneyText('−$46'));
     await expect(oct20.locator('.cal-scheduled-dot')).toHaveCount(1);
 
     const detail = page.locator('.day-detail');
@@ -74,9 +75,12 @@ for (const combo of combos) {
     } else {
       await expect(page.locator('#day-detail-heading')).toBeFocused();
       await expect(page.locator('#day-detail-heading')).toHaveText('Tuesday, Oct 20');
+      // Selecting a day scrolls the detail into view, so measure both boxes after that.
       const detailBox = await detail.boundingBox();
+      const gridAfterSelect = await grid.boundingBox();
       expect(detailBox).not.toBeNull();
-      expect(detailBox!.y).toBeGreaterThan(gridBox!.y + gridBox!.height - 1);
+      expect(gridAfterSelect).not.toBeNull();
+      expect(detailBox!.y).toBeGreaterThan(gridAfterSelect!.y + gridAfterSelect!.height - 1);
     }
     await expect(detail).toContainText('Streaming');
     await expect(detail).toContainText('Not posted');
@@ -105,11 +109,14 @@ test('calendar keyboard: arrows move by a day and Tab leaves the grid in one ste
   await page.setViewportSize({ width: 1280, height: 900 });
   const vault = await syntheticVault(page, calendarSeed);
   await vault.open('/finance/spending?t=calendar');
-  const oct20 = page.getByRole('gridcell', { name: 'Tuesday, Oct 20: spent $45.67, 1 scheduled bill' });
-  await oct20.focus();
-  await expect(oct20).toBeFocused();
+  // The category chart paints after the first view, and that refresh must not
+  // be what the keyboard test races. Wait for it, then use the one tab stop.
+  await expect(page.locator('.month-charts canvas').first()).toBeVisible();
+  const today = page.locator('.day.today');
+  await today.focus();
+  await expect(today).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('gridcell', { name: /Wednesday, Oct 21/ })).toBeFocused();
+  await expect(page.getByRole('gridcell', { name: /Friday, Oct 16/ })).toBeFocused();
   await page.keyboard.press('Tab');
   const focusedDate = await page.evaluate(() => document.activeElement?.getAttribute('data-date'));
   expect(focusedDate).toBeNull();

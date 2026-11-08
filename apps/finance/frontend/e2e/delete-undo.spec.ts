@@ -25,7 +25,8 @@ test.describe('transaction delete undo (F21)', () => {
   test('undo restores the exact record once', async ({ page }) => {
     const vault = await syntheticVault(page, seed);
     await vault.open('/spending');
-    await expect(page.getByText('Bakery run').first()).toBeVisible();
+    const row = page.getByRole('row', { name: /Bakery/ });
+    await expect(row).toBeVisible();
     await deleteSeeded(page);
     await expect.poll(() => vault.data('transactions')).toHaveLength(0);
     const undo = page.getByRole('button', { name: 'Undo', exact: true });
@@ -38,7 +39,7 @@ test.describe('transaction delete undo (F21)', () => {
       id: 4242, description: 'Bakery run', merchant: 'Bakery', amount: 12.5,
       bank_account_key: 'card-a', account_display: 'Daily card', kind: 'purchase',
     });
-    await expect(page.getByText('Bakery run').first()).toBeVisible();
+    await expect(row).toBeVisible();
   });
 
   test('after 8 seconds the Undo offer is gone', async ({ page }) => {

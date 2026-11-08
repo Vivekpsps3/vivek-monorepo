@@ -1,3 +1,4 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { BehaviorSubject, of } from 'rxjs';
@@ -228,6 +229,7 @@ describe('Calendar layout (F13)', () => {
       matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
     }) as unknown as MediaQueryList);
     scrollSpy.calls.reset();
+    cell(fixture, '2026-10-20').focus();
     fixture.componentInstance.selectDay(day);
     fixture.detectChanges();
     expect(document.activeElement?.id).not.toBe('day-detail-heading');
@@ -240,9 +242,11 @@ describe('Calendar layout (F13)', () => {
     fixture.componentInstance.cashflowSummary = {
       income_occurrences: [{ date: null, kind: 'estimate', amount: 1200 }],
     } as unknown as typeof fixture.componentInstance.cashflowSummary;
+    // OnPush ignores the fixture ref; the component's own detector has to be marked.
+    fixture.componentRef.injector.get(ChangeDetectorRef).markForCheck();
     fixture.detectChanges();
     const note = fixture.nativeElement.querySelector('.calendar-undated-note') as HTMLElement;
-    expect(note?.textContent?.trim()).toBe("$1,200.00 of estimated pay has no date, so it isn't on the calendar.");
+    expect(stripJoiner(note?.textContent).trim()).toBe("$1,200.00 of estimated pay has no date, so it isn't on the calendar.");
     const grid = fixture.nativeElement.querySelector('.calendar-grid') as HTMLElement;
     expect(grid.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(fixture.nativeElement.textContent).not.toContain('Undated job estimates');

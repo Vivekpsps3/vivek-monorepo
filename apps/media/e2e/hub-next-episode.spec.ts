@@ -82,6 +82,53 @@ for (const viewport of viewports) {
         await expectCleanPage(page, violations);
       });
 
+      test('undo restores the final episode after its Hub row is removed', async ({ page, request }) => {
+        const violations: string[] = [];
+        const show = await seedShow(request, 'Final episode show');
+        await markNextViaApi(request, show.id);
+        await openHub(page, theme, violations);
+        const card = mediaCard(page);
+        await card.getByRole('button', { name: /Watched S1E2/ }).click();
+        await expect(card.getByRole('button', { name: /Watched S1E/ })).toHaveCount(0);
+        const toast = page.locator('.toast').filter({ hasText: 'Marked S1E2 watched' });
+        await toast.getByRole('button', { name: 'Undo' }).click();
+        await expect(page.locator('.toast').filter({ hasText: 'S1E2 is next again.' })).toBeVisible();
+        await expect(card.getByRole('button', { name: /Watched S1E2/ })).toBeVisible();
+        await expectCleanPage(page, violations);
+      });
+
+      test('episode Undo survives navigation away from the Hub', async ({ page, request }) => {
+        const violations: string[] = [];
+        await seedShow(request, 'Navigation show');
+        await openHub(page, theme, violations);
+        await mediaCard(page).getByRole('button', { name: /Watched S1E1/ }).click();
+        await page.getByRole('link', { name: 'Open Media', exact: true }).click();
+        await expect(page).toHaveURL(/\/media\/?$/);
+        await page.locator('.toast').filter({ hasText: 'Marked S1E1 watched' }).getByRole('button', { name: 'Undo' }).click();
+        await expect(page.locator('.toast').filter({ hasText: 'S1E1 is next again.' })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Watched S1E1/ })).toBeVisible();
+        await expectCleanPage(page, violations);
+      });
+
+      test('Undo refreshes an open Detail without losing its unsaved note', async ({ page, request }) => {
+        const violations: string[] = [];
+        await seedShow(request, 'Detail undo show');
+        await openHub(page, theme, violations);
+        await mediaCard(page).getByRole('button', { name: /Watched S1E1/ }).click();
+        await mediaCard(page).getByRole('link', { name: 'Detail undo show', exact: true }).first().click();
+        await expect(page.getByRole('heading', { name: 'Detail undo show', exact: true })).toBeVisible();
+        const note = page.getByLabel('Note (optional)', { exact: true });
+        await note.fill('Keep this unsaved note');
+        await page.locator('summary').filter({ hasText: 'Season 1' }).click();
+        const pilot = page.locator('.episode-row').filter({ hasText: 'Pilot' });
+        await expect(pilot.getByRole('button', { name: 'Unwatch', exact: true })).toBeVisible();
+        await page.locator('.toast').filter({ hasText: 'Marked S1E1 watched' }).getByRole('button', { name: 'Undo' }).click();
+        await expect(pilot.getByRole('button', { name: 'Mark watched', exact: true })).toBeVisible();
+        await expect(note).toHaveValue('Keep this unsaved note');
+        await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
+        await expectCleanPage(page, violations);
+      });
+
       test('hub shows only one next-episode button', async ({ page, request }) => {
         const violations: string[] = [];
         await seedShow(request, 'First show');

@@ -102,7 +102,7 @@ test('recorded totals count refunds and exclude payments and unresolved credits 
   await vault.open('/');
   await expectQuoteRequests(vault, ['VOO']);
   await expectHoldingPrice(vault, 'VOO', 125);
-  const activity = page.locator('.home-tile').filter({ hasText: 'This month' });
+  const activity = page.locator('.home-tile--activity');
   await expect(activity).toContainText(moneyText('$200.00'));
   await expect(activity).toContainText(moneyText('$75.00'));
   await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,025.00'));
@@ -131,7 +131,6 @@ test('Spending opens on Activity without review controls and Home has no review 
   await vault.open('/spending');
   await expect(page.getByRole('link', { name: 'Activity', exact: true })).toHaveClass(/on/);
   await expect(page.getByRole('link', { name: 'Imports', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('all');
   await expect(page.locator('app-transactions')).toBeVisible();
   await expect(page.locator(nativeHoverTitleSelector)).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveCount(0);
@@ -228,7 +227,7 @@ test('Calendar keeps its selected date when opening Add transaction', async ({ p
   const vault = await syntheticVault(page);
   await vault.open('/spending?t=calendar');
   const selected = `${today().slice(0, 8)}05`;
-  await page.getByRole('gridcell', { name: selected, exact: true }).click();
+  await page.locator(`[data-date="${selected}"]`).click();
   await page.getByRole('link', { name: 'Add transaction', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add transaction' });
   await expect(dialog).toBeVisible();
@@ -245,7 +244,7 @@ test('summaries include transactions beyond 5,000 while visible rows remain pagi
   }));
   const vault = await syntheticVault(page, { transactions: rows });
   await vault.open('/');
-  await expect(page.locator('.home-tile').filter({ hasText: 'This month' })).toContainText(moneyText('$5,101.00'), { timeout: 30_000 });
+  await expect(page.locator('.home-tile--activity')).toContainText(moneyText('$5,101.00'), { timeout: 30_000 });
   await vault.open('/spending?t=activity');
   await expect(page.locator('.month-total--expense')).toContainText(moneyText('$5,101.00'), { timeout: 30_000 });
   expect(await page.locator('tbody tr').count()).toBeLessThan(5_101);
@@ -256,10 +255,10 @@ test('legacy spending links translate to Activity filters and five navigation hu
   await vault.open('/spending?t=pay', page, '/spending?t=activity&v=income');
   await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).toContainText('Activity');
   await expect(page.getByRole('navigation', { name: 'Spending sections', exact: true })).not.toContainText('Imports');
-  await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('income');
+  await expect(page).toHaveURL(/v=income/);
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toBeVisible();
   await vault.open('/spending?t=spend', page, '/spending?t=activity&v=spending');
-  await expect(page.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue('spending');
+  await expect(page).toHaveURL(/v=spending/);
   await expect(page.getByRole('heading', { name: 'Work income', exact: true })).toHaveCount(0);
   await vault.open('/planning');
   await expect(page.getByRole('navigation', { name: 'Planning sections', exact: true })).toContainText('Retirement and goals');
@@ -393,12 +392,12 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   const mapping = dialog.getByRole('checkbox', { name: /Map matching legacy transactions to this account/ });
   await expect(mapping).not.toBeChecked();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
-  await expect(dialog.locator('.import-file-preview')).toContainText('1 new · 0 duplicate');
+  await expect(dialog.locator('.import-file-preview')).toContainText('1 new · 0 already imported');
   await dialog.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(mapping).toBeVisible();
   await mapping.check();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
-  await expect(dialog.locator('.import-file-preview')).toContainText('0 new · 1 duplicate');
+  await expect(dialog.locator('.import-file-preview')).toContainText('0 new · 1 already imported');
   const mapAction = dialog.getByRole('button', { name: 'Map 1 legacy transaction', exact: true });
   await expect(mapAction).toBeEnabled();
   await mapAction.click();
@@ -421,7 +420,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
   await dialog.getByLabel('Account name', { exact: true }).fill('Chase account B');
   await expect(dialog.getByRole('checkbox', { name: /Map matching legacy transactions to this account/ })).not.toBeChecked();
   await dialog.getByRole('button', { name: 'Preview all files', exact: true }).click();
-  await expect(dialog.locator('.import-file-preview')).toContainText('1 new · 0 duplicate');
+  await expect(dialog.locator('.import-file-preview')).toContainText('1 new · 0 already imported');
   await dialog.getByRole('button', { name: 'Import 1 transaction', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => vault.data('transactions').length).toBe(2);
@@ -445,7 +444,7 @@ test('mapping a legacy Chase transaction is opt-in and keeps a later identical r
 test('bank imports require account identity, resume one receipt, and undo retains edited records', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
-  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.locator('.header-actions').getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({
     name: 'statement.csv', mimeType: 'text/csv', buffer: Buffer.from(

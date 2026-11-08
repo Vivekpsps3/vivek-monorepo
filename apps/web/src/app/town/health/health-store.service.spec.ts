@@ -1,8 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Observable, of } from 'rxjs';
-import type { EncryptedRecordDto } from '../../../../../finance/frontend/src/app/crypto/vault.service';
+import { Observable, of, type ObservedValueOf } from 'rxjs';
 import { loadTownHealthStages } from './index';
 import {
   HEALTH_CONFLICT_MESSAGE,
@@ -12,6 +11,8 @@ import {
   type HealthVault,
 } from './health-store.service';
 import type { HealthPr, HealthStat } from './health.types';
+
+type EncryptedRecordDto = ObservedValueOf<ReturnType<HealthVault['listRecords']>>[number];
 
 const MARKER = 'PLAINTEXT_MARKER_719';
 

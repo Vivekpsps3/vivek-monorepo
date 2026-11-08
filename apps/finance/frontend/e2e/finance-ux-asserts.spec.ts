@@ -37,6 +37,9 @@ test('home charts at 1280 have a real size and painted pixels', async ({ page })
     holdings: [{
       id: 10, symbol: 'VOO', shares: 2, purchase_price: 80, purchase_date: '2022-01-01',
       current_price: 100, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-10',
+    }, {
+      id: 11, symbol: 'BND', shares: 4, purchase_price: 70, purchase_date: '2022-01-01',
+      current_price: 75, price_source: 'manual', quote_date: '2026-10-08', position_as_of: '2026-10-10',
     }],
     transactions: [
       { id: 13, date: '2026-10-02', type: 'expense', kind: 'purchase', category: 'Food', amount: 40, description: 'Grocery' },
@@ -44,20 +47,21 @@ test('home charts at 1280 have a real size and painted pixels', async ({ page })
   });
   await page.setViewportSize({ width: 1280, height: 900 });
   await vault.open('/');
-  await expect.poll(async () => page.evaluate(() => {
-    const canvases = [...document.querySelectorAll('canvas')];
-    if (canvases.length < 3) return false;
-    return canvases.every(node => {
-      const canvas = node as HTMLCanvasElement;
-      if (canvas.width < 2 || canvas.height < 2 || canvas.clientWidth < 2 || canvas.clientHeight < 2) return false;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return false;
-      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      for (let index = 3; index < data.length; index += 64) {
-        if (data[index] > 8) return true;
-      }
-      return false;
-    });
+  await page.locator('app-charts').scrollIntoViewIfNeeded();
+  const cashflow = page.locator('app-charts canvas').first();
+  await expect(cashflow).toBeVisible();
+  await expect.poll(async () => cashflow.evaluate(node => {
+    const canvas = node as HTMLCanvasElement;
+    if (canvas.width < 2 || canvas.height < 2 || canvas.clientWidth < 2 || canvas.clientHeight < 2) return false;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let index = 3; index < data.length; index += 64) {
+      if (data[index] > 8) return true;
+    }
+    return false;
   })).toBe(true);
+  await expect(page.getByText('VOO')).toBeVisible();
+  await expect(page.getByText('BND')).toBeVisible();
   await expect(page.locator('.toast')).toHaveCount(0);
 });

@@ -405,6 +405,14 @@ details.account-sub[open] > summary::before {
   overflow-wrap: anywhere;
 }
 
+.import-help {
+  color: var(--text-secondary);
+}
+
+:host ::ng-deep .import-help {
+  color: var(--text-secondary);
+}
+
 .import-consequence {
   color: var(--warning);
 }

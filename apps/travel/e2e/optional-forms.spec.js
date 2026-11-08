@@ -49,7 +49,7 @@ test('failed optional editors keep their draft and a retry saves one item', asyn
     }
     return route.continue();
   });
-  await openTrip(page, request);
+  const trip = await openTrip(page, request);
 
   await page.getByRole('button', { name: 'Add transport', exact: true }).click();
   await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('drive');
@@ -77,7 +77,9 @@ test('failed optional editors keep their draft and a retry saves one item', asyn
   await more(page, 'Add reminder');
   await field(page, 'Reminder').fill('Pack');
   await retrySave(page, 'Save reminder', field(page, 'Reminder'), 'Pack');
-  await expect(page.getByRole('heading', { name: 'Pack', exact: true })).toHaveCount(1);
+  await expect(page.locator('.trip-reminders').getByRole('checkbox', { name: 'Pack', exact: true })).toHaveCount(1);
+  const savedReminders = (await (await request.get(`/travel/api/trips/${trip.id}`)).json()).reminders;
+  expect(savedReminders.filter(reminder => reminder.title === 'Pack')).toHaveLength(1);
 
   await more(page, 'Add parking');
   await field(page, 'Parking place').fill('Garage');

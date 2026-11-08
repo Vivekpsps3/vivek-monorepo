@@ -623,7 +623,8 @@ def build_home(db, today: date | None = None, *, user_id: int) -> dict:
         "attention": attention[:12],
         "in_progress": in_progress,
         "upcoming": upcoming,
-        "past": past[:4],
+        # The client previews six and lets the owner expand the complete list.
+        "past": past,
     }
 
 

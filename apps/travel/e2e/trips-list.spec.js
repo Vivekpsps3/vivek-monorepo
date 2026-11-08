@@ -83,15 +83,17 @@ for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1
       await expect(future).toContainText(formatDateRange(iso(43), iso(45)));
       await expect(future).toContainText('Review the plan');
       const text = (await future.textContent()).replaceAll('\u2060', '');
-      expect(text).toContain('$1,240.00 · €80.00');
+      // The API sorts currency buckets by code; the card preserves that order.
+      expect(text).toContain('€80.00 · $1,240.00');
       await expectCleanLayout(page);
     });
 
     test(`[${width} ${theme}] groups are Away now, Upcoming and Past in order`, async ({ page, request }) => {
       await seed(request);
       await page.goto('/travel');
-      const headings = await page.locator('main h2').allTextContents();
       const wanted = ['Away now', 'Upcoming', 'Past'];
+      await expect(page.locator('main h2')).toHaveText(wanted);
+      const headings = await page.locator('main h2').allTextContents();
       expect(headings.filter((text) => wanted.includes(text.trim())).map((text) => text.trim())).toEqual(wanted);
       await expectCleanLayout(page);
     });

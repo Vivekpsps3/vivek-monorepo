@@ -20,7 +20,7 @@ test('Finance loads unchanged with health collections present', async ({ page })
 
   await vault.open('/');
   await expect(
-    page.locator('.home-tile').filter({ hasText: 'What you have' }),
+    page.locator('.home-tile').filter({ hasText: 'Net worth' }),
   ).toContainText(moneyText('$1,000.00'));
 
   await vault.open('/have');

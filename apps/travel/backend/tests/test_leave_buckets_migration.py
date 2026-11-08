@@ -14,6 +14,7 @@ from apps.server.identity.admin import delete_user_account
 from apps.server.identity.models import User, UserRole
 from apps.server.migrations import (
     current_revision,
+    head_revision,
     make_config,
     model_diff,
     plan,
@@ -161,8 +162,7 @@ def test_upgrade_is_lossless_and_get_pto_is_unchanged(tmp_path):
         db.commit()
     command.upgrade(_cfg(database), REVISION)
     assert current_revision(database) == REVISION
-    assert model_diff(database) == []
-    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == [REVISION]
+    assert ScriptDirectory.from_config(_cfg(database)).get_heads() == [head_revision()]
     with sqlite3.connect(database) as db:
         assert db.execute(
             "SELECT count(*) FROM leave_policies WHERE bucket = 'sick'"
@@ -248,6 +248,9 @@ def test_upgrade_is_lossless_and_get_pto_is_unchanged(tmp_path):
             assert body["entries"][0]["hours"] == "8"
     assert _read(database, 6)["policy"]["configured"] is False
     assert _read(database, 6)["entries"] == []
+    # Current models include later features; compare only after reaching head.
+    command.upgrade(_cfg(database), "head")
+    assert model_diff(database) == []
 
 
 @pytest.mark.parametrize(
@@ -408,6 +411,7 @@ def test_downgrade_round_trip_restores_pto_output(tmp_path):
     assert {key: restored_day[key] for key in kept} == {key: before[1][key] for key in kept}
     command.upgrade(_cfg(database), REVISION)
     assert current_revision(database) == REVISION
+    command.upgrade(_cfg(database), "head")
     assert model_diff(database) == []
 
 

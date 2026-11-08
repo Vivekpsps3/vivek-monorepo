@@ -343,7 +343,8 @@ export class CalendarComponent implements OnInit, AfterViewInit, OnDestroy {
     const scheduled = this.dayScheduled(day);
     if (scheduled > 0) parts.push(plural(scheduled, 'scheduled bill'));
     if (!parts.length) parts.push('no activity');
-    return `${formatDate(day.date, 'heading')}: ${parts.join(', ')}`;
+    // Word joiners keep visible currency together, but are not spoken content.
+    return `${formatDate(day.date, 'heading')}: ${parts.join(', ')}`.replaceAll('\u2060', '');
   }
 
   private applySelectedDay(date: string) {

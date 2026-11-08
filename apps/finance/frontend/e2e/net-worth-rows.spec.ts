@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { moneyText } from './money-text';
 import { syntheticVault } from './synthetic-vault';
 
 // F16: debt labels, header order, delete copy, and the holdings details row.
@@ -16,7 +17,7 @@ test('assets and debts use the plain labels and delete copy', async ({ page }) =
   await expect(page.getByRole('table', { name: 'Debts' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Owed' })).toBeVisible();
   await expect(page.getByText('Liabilities', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Debt dates')).toBeVisible();
+  await expect(page.getByText('Balances as of')).toBeVisible();
 
   const debts = page.getByRole('table', { name: 'Debts' });
   await debts.getByRole('button', { name: 'Delete' }).click();
@@ -41,5 +42,5 @@ test('holdings show one table shape with a details row', async ({ page }) => {
 
   const table = page.getByRole('table', { name: 'Manual holdings' });
   await expect(table.getByRole('columnheader')).toHaveText(['Symbol', 'Shares', 'Value', 'Gain', 'Price', 'Actions']);
-  await expect(table).toContainText('Cost basis $100.00 · Position date Jan 1 · Manual');
+  await expect(table).toContainText(moneyText('Cost basis $100.00 · Position date Jan 1 · Manual'));
 });

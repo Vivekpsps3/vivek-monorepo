@@ -12,6 +12,7 @@ import { formatDay } from "@vivek/browser";
 import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeButtonComponent } from "./next-episode-button.component";
 import { NextResult } from "./next-episode.service";
+import { NextEpisodeUndoService } from "./next-episode-undo.service";
 import { episodeLabel } from "./next-episode.mjs";
 import { MediaCard, LibraryResponse, NextEpisode, errorCopy } from "./media.models";
 import {
@@ -98,7 +99,6 @@ interface Summary {
                         [episode]="cardRow(item)?.episode ?? 0"
                         [showTitle]="item.title"
                         (done)="onNextDone($event, item.id)"
-                        (undone)="reloadSummary()"
                         (failed)="onNextFailed($event)"
                       />
                     </div>
@@ -135,7 +135,6 @@ interface Summary {
                       [episode]="episode.episode"
                       [showTitle]="episode.show_title"
                       (done)="onNextDone($event, episode.entry_id)"
-                      (undone)="reloadSummary()"
                       (failed)="onNextFailed($event)"
                     />
                   </div>
@@ -209,6 +208,9 @@ export class NowComponent {
   readonly favorites = signal<MediaCard[] | null>(null);
   readonly favoritesError = signal(false);
   constructor() {
+    inject(NextEpisodeUndoService).restored$
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe(() => this.reloadSummary());
     this.load();
   }
   load(): void {

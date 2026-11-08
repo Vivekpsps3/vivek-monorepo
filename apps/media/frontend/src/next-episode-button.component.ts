@@ -10,9 +10,10 @@ import {
   untracked,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { ToastService, UiButtonComponent } from "@vivek/ui";
+import { UiButtonComponent } from "@vivek/ui";
 import { episodeLabel, nextEpisodeError } from "./next-episode.mjs";
 import { NextEpisodeService, NextResult } from "./next-episode.service";
+import { NextEpisodeUndoService } from "./next-episode-undo.service";
 
 let nextButtonId = 0;
 
@@ -51,14 +52,13 @@ export class NextEpisodeButtonComponent {
   readonly pending = output<void>();
   readonly done = output<NextResult>();
   readonly failed = output<{ reload: boolean }>();
-  readonly undone = output<void>();
 
   protected readonly titleId = `next-episode-title-${++nextButtonId}`;
   protected readonly busy = signal(false);
   protected readonly error = signal("");
 
   private readonly service = inject(NextEpisodeService);
-  private readonly toast = inject(ToastService);
+  private readonly undo = inject(NextEpisodeUndoService);
   private readonly destroy = inject(DestroyRef);
   constructor() {
     // The inline error clears when the inputs change (a new next episode).
@@ -76,23 +76,20 @@ export class NextEpisodeButtonComponent {
   }
 
   protected mark(): void {
+    const entryId = this.entryId();
     const episodeId = this.episodeId();
     if (episodeId === null || this.busy()) return;
     this.error.set("");
     this.busy.set(true);
     this.pending.emit();
     this.service
-      .markNext(this.entryId(), episodeId)
+      .markNext(entryId, episodeId)
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (result) => {
           this.busy.set(false);
           this.done.emit(result);
-          const label = result.marked.label;
-          this.toast.show(`Marked ${label} watched`, "success", undefined, {
-            label: "Undo",
-            run: () => this.undo(result),
-          });
+          this.undo.offer(entryId, result);
         },
         error: (e: { status?: number; error?: { detail?: unknown } }) => {
           this.busy.set(false);
@@ -103,19 +100,4 @@ export class NextEpisodeButtonComponent {
       });
   }
 
-  private undo(result: NextResult): void {
-    const label = result.marked.label;
-    this.service
-      .undo(this.entryId(), result.marked.episode_id)
-      .pipe(takeUntilDestroyed(this.destroy))
-      .subscribe({
-        next: () => {
-          this.undone.emit();
-          this.toast.show(`${label} is next again.`);
-        },
-        error: () => {
-          this.toast.show(`Couldn't undo. ${label} is still marked watched.`, "error");
-        },
-      });
-  }
 }

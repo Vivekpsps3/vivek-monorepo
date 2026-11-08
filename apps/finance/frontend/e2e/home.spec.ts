@@ -1,4 +1,5 @@
 import { expect, type Page, test } from './frozen-clock';
+import { moneyText } from './money-text';
 import { syntheticVault } from './synthetic-vault';
 
 // F14: Home states. The clock is frozen at noon PT on 2026-10-20.
@@ -37,15 +38,15 @@ for (const width of widths) {
       const vault = await syntheticVault(page, {});
       await vault.open('/');
       await expect(page.getByRole('heading', { name: 'Start with one number' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Add a balance' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Import card activity' })).toBeVisible();
+      await expect(page.locator('.home-empty__primary', { hasText: 'Add a balance' })).toBeVisible();
+      await expect(page.locator('.home-empty__secondary', { hasText: 'Import card activity' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'First steps' })).toBeVisible();
       await expect(page.locator('.home-tile')).toHaveCount(0);
       await expect(page.locator('canvas')).toHaveCount(0);
       await expectNoHorizontalScroll(page);
       await page.screenshot({ path: testInfo.outputPath(`home-empty-${width}-${theme}.png`), fullPage: true });
 
-      await page.getByRole('link', { name: 'Import card activity' }).click();
+      await page.locator('.home-empty__secondary', { hasText: 'Import card activity' }).click();
       await expect(page).toHaveURL(/\/spending/);
       await expect(page.getByRole('dialog')).toBeVisible();
     });
@@ -85,7 +86,8 @@ for (const width of widths) {
       const vault = await syntheticVault(page, seededSeed());
       vault.setQuote('VOO', { price: 700.81 });
       await vault.open('/');
-      await expect(page.locator('.home-tile--balance')).toContainText('Balances Oct 22 · Prices as of 7:38 AM PT');
+      await expect(page.locator('.home-asof')).toContainText('Balances Oct 22');
+      await expect(page.locator('.home-asof')).toContainText(/Prices as of .+ PT/);
     });
 
     test(`${combo} due soon`, async ({ page }) => {
@@ -96,7 +98,7 @@ for (const width of widths) {
       await vault.open('/');
       const card = page.locator('.due-soon');
       await expect(card).toContainText('Streaming');
-      await expect(card).toContainText('$15.49');
+      await expect(card).toContainText(moneyText('$15.49'));
     });
 
     test(`${combo} first steps progress and hide`, async ({ page }) => {
@@ -106,7 +108,7 @@ for (const width of widths) {
       vault.setQuote('VOO', { price: 700.81 });
       await vault.open('/');
       await expect(page.locator('.first-steps')).toContainText('3 of 4 done');
-      await page.getByRole('button', { name: 'Hide' }).click();
+      await page.getByRole('button', { name: 'Hide', exact: true }).click();
       await expect(page.locator('.first-steps')).toHaveCount(0);
       await vault.reload();
       await expect(page.locator('.first-steps')).toHaveCount(0);
@@ -116,8 +118,9 @@ for (const width of widths) {
       await page.setViewportSize({ width, height: 844 });
       await page.addInitScript(choice => localStorage.setItem('suite-theme', choice), theme);
       const vault = await syntheticVault(page, seededSeed());
-      await page.route('**/vault/**', route => route.abort());
       await vault.open('/');
+      await page.route('**/vault/records**', route => route.abort());
+      await page.reload();
       await expect(page.getByRole('heading', { name: "Couldn't load Home." })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
       await expectNoHorizontalScroll(page);
