@@ -1,0 +1,53 @@
+@if (detail(); as detail) {
+  @if (phone()) {
+    <div class="scrim" (click)="close()"></div>
+  }
+  <section
+    class="day-detail"
+    [class.sheet]="phone()"
+    [attr.role]="phone() ? 'dialog' : null"
+    [attr.aria-modal]="phone() ? 'true' : null"
+    [attr.aria-live]="phone() ? null : 'polite'"
+    aria-labelledby="day-detail-heading"
+  >
+    @if (phone()) {
+      <div class="grab" aria-hidden="true"></div>
+    }
+    <div class="header">
+      <h2 id="day-detail-heading" [class.is-today]="detail.isToday">{{ detail.heading }}</h2>
+      <button type="button" class="close" data-day-close aria-label="Close" (click)="close()">Close</button>
+    </div>
+    <p class="meta">
+      <span class="chip">
+        <span [class]="detail.levelClass" aria-hidden="true"></span>
+        Level {{ detail.level }} of 4
+      </span>
+      <span>{{ detail.activityLabel }}</span>
+    </p>
+    <div class="rows">
+      <div class="row">
+        <p>{{ detail.town }}</p>
+        <a routerLink="/town/">Open Town</a>
+      </div>
+      <div class="row">
+        <p>{{ detail.media }}</p>
+        <a routerLink="/media/">Open Media</a>
+      </div>
+      <div class="row">
+        <p>{{ detail.travel }}</p>
+        @if (detail.tripId !== null) {
+          <a [routerLink]="'/travel/trips/' + detail.tripId">Open trip</a>
+        }
+      </div>
+      @if (detail.finance.locked) {
+        <div class="row row--locked">
+          <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels' }">{{ detail.finance.text }}</a>
+        </div>
+      } @else {
+        <div class="row">
+          <p>{{ detail.finance.text }}</p>
+        </div>
+      }
+    </div>
+  </section>
+}

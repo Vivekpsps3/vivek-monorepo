@@ -1,0 +1,40 @@
+<div class="scroll">
+  <table>
+    <caption>Year in a table</caption>
+    <thead>
+      <tr>
+        <th scope="col">Date</th>
+        <th scope="col">Level</th>
+        <th scope="col">Activities</th>
+        <th scope="col">Town</th>
+        <th scope="col">Media</th>
+        <th scope="col">Travel</th>
+        <th scope="col">Finance</th>
+        <th scope="col">Dominant app</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (day of rows(); track day.date) {
+        <tr tabindex="0" (click)="choose(day.date)" (keydown.enter)="$event.preventDefault(); choose(day.date)">
+          <th scope="row">
+            <time [attr.datetime]="day.date">{{ heading(day.date) }}</time>
+          </th>
+          <td>{{ day.level }} of 4</td>
+          <td>{{ activities(day) }}</td>
+          <td>{{ day.channels.town }}</td>
+          <td>{{ day.channels.media }}</td>
+          <td>{{ travel(day) }}</td>
+          <td>{{ finance(day) }}</td>
+          <td>
+            @if (day.dominant) {
+              <span class="app">
+                <span [class]="swatch(day)" aria-hidden="true"></span>
+                {{ dominant(day) }}
+              </span>
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
