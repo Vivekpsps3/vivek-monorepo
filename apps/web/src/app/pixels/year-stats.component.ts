@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { UiIconComponent } from '@vivek/ui';
+import type { FinanceJoinStatus } from './pixels.types';
 
 @Component({
   selector: 'app-year-stats',
@@ -16,4 +17,5 @@ export class YearStatsComponent {
     tripDays: number;
     budgetKept: number | null;
   }>();
+  financeStatus = input<FinanceJoinStatus>('locked');
 }

@@ -54,7 +54,9 @@ describe('Life week panel', () => {
 
     fixture.componentRef.setInput('financeStatus', 'no_plan');
     fixture.detectChanges();
-    expect(el.textContent).toContain('Finance is locked. Unlock to include budget kept.');
+    expect(el.textContent).toContain('Finance · no data');
+    expect(el.textContent).not.toContain('Finance is locked');
+    expect(el.querySelector('a[href*="vault/unlock"]')).toBeNull();
   });
 
   it('steps a week or a year from the 44px controls', () => {
@@ -70,8 +72,8 @@ describe('Life week panel', () => {
     expect(el.textContent).toContain('Finance · no data for this week');
     const steps: string[] = [];
     fixture.componentInstance.step.subscribe(step => steps.push(step));
-    el.querySelector<HTMLButtonElement>('[aria-label="Next week"]')!.click();
-    el.querySelector<HTMLButtonElement>('[aria-label="Previous year"]')!.click();
+    el.querySelector<HTMLButtonElement>('[aria-label="Wk ▶, next week"]')!.click();
+    el.querySelector<HTMLButtonElement>('[aria-label="▲ Yr, previous year"]')!.click();
     expect(steps).toEqual(['week-next', 'year-prev']);
     for (const button of el.querySelectorAll('.life-steppers button')) {
       expect(getComputedStyle(button).minHeight).toBe('44px');

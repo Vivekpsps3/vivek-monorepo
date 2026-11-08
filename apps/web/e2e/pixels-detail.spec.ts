@@ -20,6 +20,7 @@ test.describe('Pixels day detail', () => {
     await expect(sheet.getByRole('button', { name: 'Close' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
+    await expect(page.locator('[data-date="2026-08-15"]')).toBeFocused();
   });
 
   test('1280 shows the same day in a side panel', async ({ page }) => {
@@ -30,6 +31,9 @@ test.describe('Pixels day detail', () => {
     await expect(panel).toContainText('Portland, day 2 of 4');
     await expect(panel).toContainText('Sat, Aug 15, 2026');
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(page.locator('[data-date="2026-08-15"]')).toBeFocused();
   });
 
   test('By app persists across a reload', async ({ page }) => {

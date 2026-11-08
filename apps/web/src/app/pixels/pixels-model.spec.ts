@@ -36,9 +36,9 @@ describe('pixels finance join', () => {
     expect(withoutFinance(snapshot, '2026-10-29').days.every(day => day.channels.fin === null)).toBeTrue();
   });
 
-  it('keeps an empty past year empty and a future year drawable', () => {
+  it('keeps an empty past year and a future year drawable', () => {
     const empty = snapshotOf('2026-01-01', '2026-01-02');
-    expect(yearScreenState(empty, 'ready', '2026-10-29')).toBe('empty');
+    expect(yearScreenState(empty, 'ready', '2026-10-29')).toBe('ready');
     const future = snapshotOf('2031-01-01', '2031-01-02');
     expect(yearScreenState(future, 'ready', '2026-10-29')).toBe('ready');
   });

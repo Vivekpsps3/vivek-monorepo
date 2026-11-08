@@ -48,7 +48,7 @@ describe('Shared private shell', () => {
     const { fixture } = await render();
     const apps = fixture.nativeElement.querySelector('nav[aria-label="Apps"]') as HTMLElement;
     const links = [...apps.querySelectorAll('a')].map(link => link.getAttribute('href'));
-    expect(links).toEqual(['/hub', '/finance', '/travel', '/media']);
+    expect(links).toEqual(['/hub', '/finance', '/travel', '/media', '/town']);
     expect(fixture.nativeElement.querySelector('a.suite-hub')).toBeNull();
     expect(fixture.nativeElement.querySelector('a.suite-brand')).toBeNull();
     expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();

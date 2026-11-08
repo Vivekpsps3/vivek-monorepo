@@ -15,8 +15,11 @@ test.describe('Pixels Life', () => {
   function watchNonSelf(page: Page): string[] {
     const nonSelf: string[] = [];
     page.on('request', req => {
+      if (req.url().startsWith('data:')) return;
       const url = new URL(req.url());
-      if (url.origin !== new URL(page.url()).origin && !req.url().startsWith('data:')) nonSelf.push(req.url());
+      const here = page.url();
+      const origin = here && here !== 'about:blank' ? new URL(here).origin : url.origin;
+      if (url.origin !== origin) nonSelf.push(req.url());
     });
     return nonSelf;
   }
@@ -51,14 +54,13 @@ test.describe('Pixels Life', () => {
     test(`keyboard moves the selected week at ${width}`, async ({ page }) => {
       await openLife(page, width, 'light');
       const group = page.getByRole('group', { name: /Life in weeks/ });
-      await group.focus();
-      const live = page.locator('[aria-live="polite"]');
+      const live = page.locator('app-pixels-life [aria-live="polite"]');
       await expect(live).toContainText(/Week of/);
       const before = (await live.innerText()).trim();
-      await page.keyboard.press('ArrowRight');
-      await page.keyboard.press('ArrowRight');
+      await group.press('ArrowRight');
+      await group.press('ArrowRight');
       await expect(live).not.toHaveText(before);
-      await page.keyboard.press('t');
+      await group.press('t');
       await expect(live).toContainText('This week.');
       if (width === 390) {
         await page.getByRole('button', { name: 'Next year' }).click();
@@ -76,6 +78,6 @@ test.describe('Pixels Life', () => {
     await page.goto('/pixels/life');
     await expect(page.getByRole('link', { name: 'Add your birthday' })).toHaveAttribute('href', '/settings/profile');
     await expect(page.getByText('Your birthday stays private.')).toBeVisible();
-    await expect(page.locator('app-pixels-life svg')).toHaveCount(0);
+    await expect(page.locator('app-life-poster')).toHaveCount(0);
   });
 });

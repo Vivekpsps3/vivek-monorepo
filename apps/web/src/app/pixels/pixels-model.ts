@@ -149,14 +149,10 @@ export function sourceNotices(sources: PixelSources): string[] {
   return notices;
 }
 
-export function yearScreenState(snapshot: PixelsSnapshot | null, phase: HubCardState, today: string): HubCardState {
+export function yearScreenState(snapshot: PixelsSnapshot | null, phase: HubCardState, _today: string): HubCardState {
   if (phase === 'loading' || phase === 'expired' || phase === 'unavailable') return phase;
   if (!snapshot) return phase === 'stale' ? 'stale' : 'loading';
   if (sourceNotices(snapshot.sources).length > 0) return phase === 'stale' ? 'stale' : 'ready';
-  const started = snapshot.days.some(day => !day.future && day.date <= today);
-  const anyActivity = snapshot.days.some(day => !day.future && (day.score > 0 || day.trip != null));
-  const anyPlan = snapshot.days.some(day => day.planned);
-  if (started && !anyActivity && !anyPlan) return 'empty';
   return phase === 'stale' ? 'stale' : 'ready';
 }
 

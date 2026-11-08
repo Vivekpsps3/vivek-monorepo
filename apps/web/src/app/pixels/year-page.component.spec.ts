@@ -134,4 +134,17 @@ describe('Year page', () => {
     expect(el.querySelector('app-year-table')).not.toBeNull();
     expect(el.querySelector('app-day-detail')).toBeNull();
   });
+
+  it('returns focus to the selected cell when Escape closes the day', async () => {
+    const year = todayIsoDate().slice(0, 4);
+    const harness = await open(`/pixels?year=${year}&day=${year}-01-01`);
+    const el = harness.routeNativeElement as HTMLElement;
+    const close = el.querySelector<HTMLButtonElement>('[data-day-close]');
+    expect(close).not.toBeNull();
+    close!.click();
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(TestBed.inject(Router).url).not.toContain('day=');
+    expect(document.activeElement?.id).toBe(`pixel-day-${year}-01-01`);
+  });
 });

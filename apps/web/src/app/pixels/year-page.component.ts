@@ -114,10 +114,17 @@ export class YearPageComponent {
   }
 
   clearDay(): void {
+    const date = this.day();
     this.day.set(null);
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { year: String(this.year()), day: null },
+    });
+    if (!date || typeof document === 'undefined') return;
+    const id = `pixel-day-${date}`;
+    queueMicrotask(() => {
+      const cell = document.getElementById(id);
+      if (cell instanceof HTMLElement) cell.focus();
     });
   }
 

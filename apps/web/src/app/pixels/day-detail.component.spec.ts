@@ -84,7 +84,9 @@ describe('Day detail', () => {
     over.fixture.destroy();
     const guessed = render(view({ channels: { town: 0, media: 0, trip: 0, fin: 0 } }), { financeStatus: 'no_data' });
     expect(guessed.el.textContent).not.toContain('over budget');
-    expect(guessed.el.textContent).toContain('Finance is locked. Unlock to include budget kept.');
+    expect(guessed.el.textContent).toContain('Finance · no data');
+    expect(guessed.el.textContent).not.toContain('Finance is locked');
+    expect(guessed.el.querySelector('a[href*="vault/unlock"]')).toBeNull();
   });
 
   it('emits closed on Escape and does not guess a close when no day is open', () => {

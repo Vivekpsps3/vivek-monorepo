@@ -45,9 +45,10 @@ export function mediaLine(count: number): string {
 
 /** Ready maps 1 and 0 to kept or over pace. Null, including ready before the first transaction, is not a miss. */
 export function financeCopy(status: FinanceJoinStatus, fin: number | null): { locked: boolean; text: string } {
-  if (status !== 'ready') {
+  if (status === 'locked') {
     return { locked: true, text: 'Finance is locked. Unlock to include budget kept.' };
   }
+  if (status !== 'ready') return { locked: false, text: 'Finance · no data' };
   if (fin === 1) return { locked: false, text: 'Finance · budget kept' };
   if (fin === 0) return { locked: false, text: 'Finance · over budget pace' };
   return { locked: false, text: 'Finance · the budget is not in this day' };
@@ -104,7 +105,13 @@ export class DayDetailComponent implements AfterViewInit {
 
   private focusClose(): void {
     if (!this.phone() || !this.day()) return;
-    const button = this.host.nativeElement.querySelector('[data-day-close]');
-    if (button instanceof HTMLButtonElement) button.focus();
+    const focus = () => {
+      const button = this.host.nativeElement.querySelector('[data-day-close]');
+      if (button instanceof HTMLButtonElement) button.focus();
+    };
+    focus();
+    // The shell moves focus to the page heading while this sheet is still mounting.
+    setTimeout(focus, 0);
+    setTimeout(focus, 50);
   }
 }

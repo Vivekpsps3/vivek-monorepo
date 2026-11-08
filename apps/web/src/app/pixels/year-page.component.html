@@ -22,7 +22,7 @@
       <p class="pixels-notice" role="status">{{ text }}</p>
     }
     @if (stats(); as stats) {
-      <app-year-stats [stats]="stats" />
+      <app-year-stats [stats]="stats" [financeStatus]="snapshot.financeStatus" />
     }
     @if (preferences.view() === 'table') {
       <app-year-table [days]="snapshot.days" (selected)="selectDay($event)" />

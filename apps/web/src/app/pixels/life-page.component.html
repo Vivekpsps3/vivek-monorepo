@@ -85,8 +85,10 @@
                 <li><span class="life-swatch life-swatch-trip" aria-hidden="true"></span> Trip week</li>
                 <li><span class="life-swatch life-swatch-plan" aria-hidden="true"></span> Planned trip</li>
               }
-              @if ((snapshot()?.financeStatus ?? 'locked') !== 'ready') {
-                <li>Finance locked @if (snapshot()?.financeStatus === 'locked') { <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels/life' }">Unlock</a> }</li>
+              @if (snapshot()?.financeStatus === 'locked') {
+                <li>Finance locked <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels/life' }">Unlock</a></li>
+              } @else if (snapshot()?.financeStatus !== 'ready') {
+                <li>Finance · no data</li>
               }
             </ul>
           </section>

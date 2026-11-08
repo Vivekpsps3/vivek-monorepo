@@ -4,6 +4,12 @@
   max-width: 100%;
 }
 
+:host:has(.sheet) {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
 .day-detail {
   background: var(--card-bg);
   color: var(--text);

@@ -14,10 +14,12 @@
   <div>
     <dt>Budget kept</dt>
     <dd data-stat="budget-kept">
-      @if (stats().budgetKept === null) {
+      @if (financeStatus() === 'locked') {
         <span class="year-stats__lock" role="img" aria-label="Finance locked">
           <ui-icon name="lock" />
         </span>
+      } @else if (financeStatus() !== 'ready') {
+        no data
       } @else {
         {{ stats().budgetKept }}
       }

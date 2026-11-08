@@ -18,6 +18,7 @@ From the repo root, these are the commands CI runs. Run every one that touches t
 - `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` — root shell/shared UI Karma
 - `make e2e` — Finance Playwright, after the root production bundle
 - `npx playwright test --config apps/media/e2e/playwright.config.ts` — Media Playwright
+- `npx playwright test --config apps/web/e2e/playwright.config.ts` — Town Playwright, including Pixels
 - `npx playwright test` in `apps/travel/e2e` — Travel Playwright
 
 `make test` runs the fast checks, all four Python coverage gates, and all three Karma suites. Run the Playwright command for any screen those suites open. Gates and floors are in [Quality gates](docs/QUALITY.md).
