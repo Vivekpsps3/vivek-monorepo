@@ -1,21 +1,23 @@
 # Local GitHub Actions runner pool
 
-Trusted main/master pushes and same-repository pull requests can execute all ten
-CI jobs concurrently on amd7600-server:
+Trusted main/master pushes and same-repository pull requests can execute all four
+CI jobs on amd7600-server:
 
-- Nine test workers, `amd7600-ci-01` through `amd7600-ci-09`, have labels
-  `self-hosted`, `linux`, `x64`, and `monorepo-ci`.
+- Three CI runners, `amd7600-ci-01` through `amd7600-ci-03`, have labels
+  `self-hosted`, `linux`, `x64`, and `monorepo-ci`. Backend, Frontend, and
+  Playwright each take one of these runners.
 - One release runner, `amd7600-ci`, has labels `self-hosted`, `linux`, `x64`,
   and `monorepo-ci-release`. Only Unified Site Release targets this runner.
 - Fork pull requests continue to use GitHub-hosted runners. The separate
   `amd7600-prod` runner has the `monorepo-prod` label and handles production
   deployment only.
 
-Each registered runner executes one job at a time. The nine test jobs and one
-release job can all start together. Additional workflow runs queue until slots
-are available. On this 12-thread, 64 GiB host, parallel jobs share CPU capacity;
-ten concurrent jobs do not imply a tenfold speedup. All containers restart after
-host reboots. Their project-specific volumes preserve registration and caches.
+Each registered runner executes one job at a time. The Backend, Frontend, and
+Playwright jobs use the test workers; Playwright waits for the Frontend bundle.
+Unified Site Release uses the release runner. Additional workflow runs queue
+until slots are available. On this 12-thread, 64 GiB host, parallel jobs share
+CPU capacity. All containers restart after host reboots. Their project-specific
+volumes preserve registration and caches.
 
 The Ubuntu 24.04 runner image includes Chrome, Python, build tools, and Docker CLI.
 Existing setup-python and setup-node actions select each job's language versions.
@@ -32,7 +34,7 @@ docker compose -f ops/actions-runner/compose.yml -p monorepo-ci-01 logs --tail 6
 
 Starting the pool is idempotent: existing registrations are reused. To add or
 restart a single test worker, run `./ops/actions-runner/register.sh worker 01`
-(the accepted slots are `01` through `09`). The release runner uses
+(the accepted slots are `01` through `03`). The release runner uses
 `./ops/actions-runner/register.sh release`.
 
 New registrations require an administrator GitHub CLI login with repository
@@ -45,12 +47,16 @@ these volumes into a repository. Avoid `down -v`, which deletes state and caches
 Every worker has its own Compose project, registration, workspace, home, tool
 cache, temporary directory, and network namespace. Parallel browser tests can
 use the same localhost ports without collisions. Test workers have no Docker
-socket, host mounts, or privileged sidecar.
+socket, host mount, or privileged sidecar. They share the Docker volume
+`monorepo-ci-dist`, mounted at `/opt/ci-dist`, which carries the one production
+bundle from Frontend to Playwright.
 
-Each test worker is capped at 0.75 CPU and 4 GiB RAM. The release runner and its
-nested Docker daemon are each capped at 1.5 CPUs and 6 GiB RAM. Across all ten
-slots this caps CI at 9.75 logical CPUs and 48 GiB RAM, leaving capacity for host
-services. All CI containers have reduced CPU scheduling weight. Angular uses
+Each CI runner, the release runner, and the release runner's nested Docker daemon
+are capped at 2 CPUs and 6 GiB RAM. Backend and Playwright run on those CI
+runners, so each gets 2 cores and a 6 GiB cap. Across the three CI runners, the
+release runner, and its daemon this caps CI at 10 logical CPUs and 30 GiB RAM,
+leaving capacity for host services. All CI containers have reduced CPU scheduling
+weight. Angular uses
 at most two build workers, Node's heap is capped at 2560 MiB, and each runner
 has 2 GiB of shared memory for Chromium. Logs rotate at 10 MiB with three files.
 

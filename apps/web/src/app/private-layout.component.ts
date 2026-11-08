@@ -100,14 +100,17 @@ export class PrivateLayoutComponent {
       const editing = active instanceof HTMLElement
         && !!active.closest('input, textarea, select, [contenteditable="true"]');
       if (editing) return;
-      // A grid key handler owns focus once the user lands on a cell. Chasing
-      // the heading after that steals the calendar and year keyboard.
-      const inGrid = active instanceof HTMLElement && !!active.closest('[role="grid"]');
-      if (inGrid) return;
+      // A control inside the arrived page owns the keyboard. Section links sit
+      // outside main, so choosing Net worth or Trips still moves focus to the
+      // new heading. Chasing that heading after the user reaches Add
+      // transaction, Edit, or the year grid steals Enter.
+      const inPageControl = active instanceof HTMLElement
+        && !!active.closest('#workspace-content main')
+        && !!active.closest('a, button, input, textarea, select, [role="button"], [role="link"], [role="grid"], [contenteditable="true"]');
+      if (inPageControl) return;
       if (!dialogOpen && heading) {
         if (active !== heading) {
-          if (performance.now() - started > 400) return;
-          confirm = false;
+          if (confirm || performance.now() - started > 400) return;
           heading.tabIndex = -1;
           heading.focus({ preventScroll: true, focusVisible: false } as FocusOptions & { focusVisible?: boolean });
           setTimeout(tick, 0);

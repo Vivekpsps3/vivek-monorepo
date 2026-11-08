@@ -1,0 +1,66 @@
+<ui-dialog [open]="open()" [panelClass]="panelClass()" labelledBy="concept-sheet-title" (closed)="close()">
+  <h2 id="concept-sheet-title">{{ copy.concepts }}</h2>
+  <div class="concept-tabs" role="tablist" aria-label="Concepts">
+    <button type="button" role="tab" class="world-tab" [attr.aria-selected]="tab() === 'notyet'" (click)="tab.set('notyet')">{{ copy.notYet }}</button>
+    <button type="button" role="tab" class="world-tab" [attr.aria-selected]="tab() === 'understood'" (click)="tab.set('understood')">{{ copy.understood }}</button>
+    <button type="button" role="tab" class="world-tab" [attr.aria-selected]="tab() === 'archived'" (click)="tab.set('archived')">{{ copy.archived }}</button>
+  </div>
+  @if (listError()) { <p role="alert">{{ listError() }}</p> }
+  @if (notice()) { <p aria-live="polite">{{ notice() }}</p> }
+  <ui-button variant="secondary" (clicked)="startCreate()">{{ copy.addConcept }}</ui-button>
+  @if (showForm() || creating()) {
+    <form class="concept-form" (submit)="save($event)">
+      <label for="concept-name">Name</label>
+      <input #nameInput id="concept-name" data-dialog-initial-focus required minlength="1" maxlength="80" [value]="draft().name" (input)="onDraft('name', $event)" [attr.aria-invalid]="fieldErrors().name ? 'true' : null" [attr.aria-describedby]="fieldErrors().name ? 'concept-name-error' : null">
+      @if (fieldErrors().name) { <p id="concept-name-error" role="alert">{{ fieldErrors().name }}</p> }
+      <label for="concept-note">Note</label>
+      <textarea id="concept-note" rows="3" maxlength="2000" [value]="draft().note" (input)="onDraft('note', $event)"></textarea>
+      @if (fieldErrors().note) { <p role="alert">{{ fieldErrors().note }}</p> }
+      <label for="concept-source">Source</label>
+      <input id="concept-source" type="text" maxlength="500" autocomplete="off" aria-describedby="concept-source-help" [value]="draft().source" (input)="onDraft('source', $event)">
+      <p id="concept-source-help" class="concept-help">{{ copy.sourceHelper }}</p>
+      @if (fieldErrors().source) { <p role="alert">{{ fieldErrors().source }}</p> }
+      <ui-button type="button" variant="secondary" (clicked)="copySource(draft().source)">{{ copy.copySource }}</ui-button>
+      <label for="concept-understood">Understood</label>
+      <input id="concept-understood" type="date" min="2000-01-01" [attr.max]="today() || null" [value]="draft().understood_on" (input)="onDraft('understood_on', $event)">
+      @if (fieldErrors().understood_on) { <p role="alert">{{ fieldErrors().understood_on }}</p> }
+      @if (formError()) { <p role="alert">{{ formError() }}</p> }
+      <div class="concept-actions">
+        <ui-button type="submit" [busy]="busy()" [disabled]="busy()">Save</ui-button>
+        <ui-button type="button" variant="secondary" (clicked)="showForm.set(false)">Cancel</ui-button>
+      </div>
+    </form>
+  }
+  <div class="concept-cards">
+    @for (concept of visibleConcepts(); track concept.id) {
+      <article class="concept-card" [id]="'concept-' + concept.id" tabindex="-1">
+        <h3>{{ concept.name }}</h3>
+        @if (concept.note) { <p>{{ concept.note }}</p> }
+        @if (concept.source) {
+          <p>{{ concept.source }}</p>
+          <ui-button variant="secondary" (clicked)="copySource(concept.source)">{{ copy.copySource }}</ui-button>
+        }
+        @if (concept.understood_on) { <p>{{ concept.understood_on }}</p> }
+        <div class="concept-actions">
+          @if (!concept.archived && !concept.understood_on) {
+            <ui-button [disabled]="!today()" (clicked)="markUnderstood(concept)">{{ copy.markUnderstood }}</ui-button>
+          }
+          @if (!concept.archived && concept.understood_on) {
+            <ui-button variant="secondary" (clicked)="undo(concept)">{{ copy.undoUnderstood }}</ui-button>
+            <label class="concept-date">{{ copy.changeDate }}
+              <input type="date" min="2000-01-01" [attr.max]="today() || null" [value]="concept.understood_on" (change)="changeDate(concept, $event)">
+            </label>
+          }
+          <ui-button variant="secondary" (clicked)="edit(concept)">{{ copy.edit }}</ui-button>
+          @if (concept.archived) {
+            <ui-button variant="secondary" (clicked)="archive(concept, false)">{{ copy.unarchive }}</ui-button>
+          } @else {
+            <ui-button variant="secondary" (clicked)="archive(concept, true)">{{ copy.archive }}</ui-button>
+          }
+          <ui-button variant="danger" (clicked)="remove(concept)">Delete</ui-button>
+        </div>
+      </article>
+    }
+  </div>
+</ui-dialog>
+<ui-confirm-dialog />

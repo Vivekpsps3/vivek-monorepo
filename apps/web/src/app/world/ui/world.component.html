@@ -1,0 +1,104 @@
+<div class="world-page">
+  <h1>World</h1>
+  <div class="world-toolbar" role="toolbar" aria-label="World">
+    <ui-button variant="secondary" ariaLabel="Previous week" (clicked)="stepWeek(-1)">{{ copy.weekBack }}</ui-button>
+    <ui-button variant="secondary" ariaLabel="Next week" (clicked)="stepWeek(1)">{{ copy.weekForward }}</ui-button>
+    <ui-button variant="secondary" (clicked)="goToday()">{{ copy.today }}</ui-button>
+    <a class="world-inline" href="/town">{{ copy.town }}</a>
+    <label class="world-jump">
+      <span>{{ copy.jump }}</span>
+      <input type="date" [value]="centerWeek()" (change)="onJump($event)">
+    </label>
+    <ui-button variant="secondary" (clicked)="openConcepts()">{{ copy.concepts }}</ui-button>
+    <ui-button variant="secondary" [pressed]="fogOn()" (clicked)="toggleFog()">{{ copy.litMap }}</ui-button>
+    <ui-button variant="secondary" [pressed]="mode() === 'list'" (clicked)="setMode('list')">{{ copy.listView }}</ui-button>
+    <ui-button variant="secondary" [pressed]="mode() === 'map'" (clicked)="setMode('map')">{{ copy.mapView }}</ui-button>
+    @if (chests().toolbar; as link) {
+      <a class="world-inline" [href]="link.href">{{ link.label }}</a>
+    }
+    @if (chests().retry) {
+      <ui-button variant="secondary" (clicked)="retryBudget()">{{ copy.retry }}</ui-button>
+    }
+  </div>
+  <p class="world-hint">{{ copy.hint }}</p>
+  @if (reduced()) { <p class="world-motion">{{ copy.reducedMotionNote }}</p> }
+  @if (litText(); as lit) { <p class="world-lit">{{ lit }}</p> }
+  <p class="world-live" aria-live="polite">{{ liveText() }}</p>
+  @if (busy() && !error()) { <p class="world-loading" aria-busy="true">{{ copy.loading }}</p> }
+  @if (error(); as message) {
+    <div class="world-banner" role="alert">
+      <p>{{ message }}</p>
+      <ui-button variant="secondary" (clicked)="retry()">{{ copy.retry }}</ui-button>
+    </div>
+  } @else if (slow() && busy()) {
+    <div class="world-banner" role="status">
+      <p>{{ copy.loading }}</p>
+      <ui-button variant="secondary" (clicked)="retry()">{{ copy.retry }}</ui-button>
+    </div>
+  }
+  @if (townFailed()) {
+    <div class="world-banner" role="status">
+      <p>{{ copy.townUnavailable }}</p>
+      <ui-button variant="secondary" (clicked)="retryTown()">{{ copy.retry }}</ui-button>
+    </div>
+  }
+  <div #stage class="world-stage" role="region" aria-label="World" tabindex="0"
+    [class.is-collapsed]="mode() === 'list'" (keydown)="onKey($event)">
+    <canvas #canvas aria-hidden="true"></canvas>
+  </div>
+  <aside #weekPanel class="world-panel" tabindex="-1" [attr.aria-label]="copy.weekPanel">
+    <h2>{{ inTown() ? copy.town : (centerReading()?.label || copy.weekPanel) }}</h2>
+    @if (centerReading(); as reading) {
+      <ul>
+        @for (item of reading.items; track item.id) {
+          <li>
+            @if (conceptId(item); as id) {
+              <button type="button" class="world-text" (click)="openConcepts(id)">{{ item.title }}</button>
+            } @else if (item.kind === 'budget') {
+              <span data-budget>{{ item.title }}</span>
+            } @else {
+              <span>{{ item.title }}</span>@if (item.detail) { <span> {{ item.detail }}</span> }@if (item.date) { <span> {{ item.date }}</span> }
+            }
+          </li>
+        }
+      </ul>
+    }
+  </aside>
+  @if (showEmpty()) {
+    <ui-empty-state [title]="copy.emptyTitle" [message]="copy.emptyMessage">
+      <a href="/town">{{ copy.town }}</a>
+      <ui-button (clicked)="openCreate()">{{ copy.addConcept }}</ui-button>
+    </ui-empty-state>
+  } @else {
+    <ol class="world-list" [class.is-alternative]="mode() === 'map'" aria-label="Weeks">
+      @for (reading of readings(); track reading.week) {
+        <li [attr.aria-current]="reading.week === centerWeek() && !inTown() ? 'date' : null">
+          <h3>{{ reading.label }}</h3>
+          <ul>
+            @for (item of reading.items; track item.id) {
+              <li>
+                @if (conceptId(item); as id) {
+                  <button type="button" class="world-text" (click)="openConcepts(id)">{{ item.title }}</button>
+                } @else if (item.kind === 'budget') {
+                  <span data-budget>{{ item.title }}</span>
+                } @else {
+                  <span>{{ item.title }}</span>@if (item.detail) { <span> {{ item.detail }}</span> }@if (item.date) { <span> {{ item.date }}</span> }
+                }
+              </li>
+            }
+          </ul>
+        </li>
+      }
+    </ol>
+  }
+  @if (canLoadOlder()) {
+    <ui-button variant="secondary" (clicked)="loadOlder()">{{ copy.loadOlder }}</ui-button>
+  }
+  <app-concept-sheet
+    [open]="conceptsOpen()"
+    [today]="serverToday()"
+    [focusId]="conceptFocus()"
+    [creating]="creatingConcept()"
+    (closed)="closeConcepts()"
+    (changed)="onConceptChanged($event)" />
+</div>

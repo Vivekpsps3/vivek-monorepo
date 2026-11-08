@@ -48,7 +48,7 @@ describe('Town Worldgen barrel', () => {
       'TREASURY_WEEKS', 'MEDIA_FINISHED_KINDS', 'HABIT_NAME_MAX', 'HABIT_TOTAL_MAX',
       'CHECKIN_WINDOW', 'SLOT_DEFAULT_STYLE', 'FIXED_LOTS', 'TOWN_LOTS', 'TOWN_CONSTANTS_VERSION',
       'TOWN_SPRITE_IDS', 'townSpriteUrl', 'buildingSprite',
-      'level', 'stage', 'levelProgress', 'treasuryTier',
+      'level', 'stage', 'levelProgress', 'treasuryTier', 'weeksKeptRun',
     ].sort());
   });
 });

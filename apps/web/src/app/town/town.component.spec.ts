@@ -54,6 +54,7 @@ describe('Town page', () => {
     expect(el.querySelectorAll('ul > li').length).toBe(9);
     expect([...el.querySelectorAll('.name')].slice(0, 3).map(n => n.textContent)).toEqual(['Library', 'Inn', 'Treasury']);
     expect(el.querySelectorAll('ui-card h2').length).toBe(1);
+    expect(el.querySelector('a[href="/town/world"]')?.textContent?.trim()).toBe('Explore the world');
   });
   it('shows max level without a next-XP denominator', () => {
     const data = snapshot(); Object.assign(data.town, { level: 10, xp: 5500, level_xp_start: 5000, next_level_xp: null });
@@ -92,6 +93,7 @@ describe('Town page', () => {
     expect(el.textContent).toContain('Pick a first habit. Your town grows as you keep it, and as you watch things in Media and finish trips in Travel.');
     expect(el.textContent).toContain('Media and Travel count from today on.');
     expect(el.querySelector('ui-card')).toBeNull();
+    expect(el.querySelector('a[href="/town/world"]')?.textContent?.trim()).toBe('Explore the world');
     expect(el.querySelector('img')?.width).toBe(128);
     const buttons = [...el.querySelectorAll('button')];
     buttons[0].click(); expect(open).toHaveBeenCalledWith(0, null);

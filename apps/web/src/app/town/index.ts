@@ -6,4 +6,5 @@ export {
   CHECKIN_WINDOW, SLOT_DEFAULT_STYLE, FIXED_LOTS, TOWN_LOTS, TOWN_CONSTANTS_VERSION,
 } from './town.constants';
 export { level, stage, levelProgress, treasuryTier } from './town-levels';
+export { weeksKeptRun } from './weeks-kept';
 export type { TownResponse, Habit, Building } from './town.types';

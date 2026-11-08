@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Component } from '@angular/core';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { Router, provideRouter } from '@angular/router';
+import { Router, RouterLink, RouterOutlet, provideRouter } from '@angular/router';
 import { PrivateLayoutComponent } from './private-layout.component';
 import { SessionService } from './platform/session.service';
 import { BehaviorSubject, of } from 'rxjs';
@@ -21,6 +21,28 @@ class PrivateDraftComponent {}
   `,
 })
 class GridPageComponent {}
+
+@Component({
+  standalone: true,
+  template: '<main><h1>Spending</h1><button type="button">Add transaction</button></main>',
+})
+class ButtonPageComponent {}
+
+@Component({
+  standalone: true,
+  imports: [RouterLink, RouterOutlet],
+  template: `
+    <nav aria-label="Finance sections"><a id="net-worth" routerLink="/finance/have">Net worth</a></nav>
+    <router-outlet />
+  `,
+})
+class SectionLayoutComponent {}
+
+@Component({
+  standalone: true,
+  template: '<main><h1>What you have</h1></main>',
+})
+class HavePageComponent {}
 
 describe('Shared private shell', () => {
   it('destroys a mounted private draft when the signed-in identity changes', async () => {
@@ -73,6 +95,44 @@ describe('Shared private shell', () => {
     cell.focus();
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(document.activeElement).toBe(cell);
+  });
+  it('leaves a button focused after the page heading has landed', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'finance/spending', component: ButtonPageComponent}]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/finance/spending');
+    const button = harness.routeNativeElement?.querySelector('main button') as HTMLButtonElement;
+    button.focus();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(document.activeElement).toBe(button);
+  });
+  it('moves focus from a section link to the arrived heading', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [
+        {path: 'finance', component: SectionLayoutComponent, children: [
+          {path: 'have', component: HavePageComponent},
+        ]},
+      ]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/finance');
+    (document.getElementById('net-worth') as HTMLAnchorElement).focus();
+    await harness.navigateByUrl('/finance/have');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(document.activeElement).toBe(document.querySelector('#workspace-content main h1'));
   });
   it('provides the app switcher and one account/theme surface', async () => {
     const { fixture } = await render();

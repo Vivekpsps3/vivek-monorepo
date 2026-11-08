@@ -6,7 +6,7 @@
     <div class="local-error" role="alert">
       {{ error() }}
       @if (!item()) {
-        <ui-button variant="ghost" (click)="load(+routeId())"
+        <ui-button variant="ghost" (click)="load(+routeId(), true)"
           >Retry item</ui-button
         >
       } @else {

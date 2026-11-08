@@ -28,6 +28,9 @@ coverage.xml
 
 # SQLite (local data — never commit)
 data/
+# World client source lives in a directory named data; it is not a database.
+!apps/web/src/app/world/data/
+!apps/web/src/app/world/data/**
 *.db
 *.db-wal
 *.db-shm

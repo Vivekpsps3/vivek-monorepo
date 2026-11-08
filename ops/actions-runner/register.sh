@@ -12,8 +12,8 @@ case "$role" in
     docker compose -p "$project" up -d --wait docker
     ;;
   worker)
-    slot=${2:?Usage: register.sh worker SLOT (01 through 09)}
-    [[ "$slot" =~ ^0[1-9]$ ]] || { echo 'Worker slot must be 01 through 09' >&2; exit 2; }
+    slot=${2:?Usage: register.sh worker SLOT (01 through 03)}
+    [[ "$slot" =~ ^0[1-3]$ ]] || { echo 'Worker slot must be 01 through 03' >&2; exit 2; }
     project="monorepo-ci-$slot"
     service=worker
     runner_name="amd7600-ci-$slot"

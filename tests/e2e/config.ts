@@ -19,7 +19,7 @@ export function domainConfig(domain: 'finance' | 'travel' | 'media' | 'town') {
     : `apps/${domain}/e2e`;
   return defineConfig({
     testDir: path.join(root, testDir),
-    ...(domain === 'town' ? { testMatch: /(?:pixels-(?:year|detail|life)|hub-pixels)\.spec\.ts/ } : {}),
+    ...(domain === 'town' ? { testMatch: /(?:pixels-(?:year|detail|life)|hub-pixels|world)\.spec\.ts/ } : {}),
     outputDir: path.join(root, 'test-results', domain),
     timeout: domain === 'finance' || domain === 'town' ? 60_000 : domain === 'travel' ? 45_000 : 30_000,
     workers: 1,
