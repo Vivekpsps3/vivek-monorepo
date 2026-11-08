@@ -70,7 +70,7 @@ services:
       - temp:/tmp
       - ci-dist:/opt/ci-dist
     mem_limit: 6g
-    cpus: 2
+    cpus: 4
     cpu_shares: 128
 volumes:
   ci-dist:

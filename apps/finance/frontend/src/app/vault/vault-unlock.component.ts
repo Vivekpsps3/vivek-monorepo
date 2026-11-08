@@ -1,4 +1,4 @@
-import { Inject, Component, OnInit, inject } from '@angular/core';
+import { Inject, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { continueAfterAuth, safeNextPath } from '@vivek/ui';
@@ -55,6 +55,7 @@ export class VaultUnlockComponent implements OnInit {
   lockNotice = '';
   private slowTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly financeLock = inject(FinanceLockService);
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor(
     private vault: VaultService,
@@ -70,6 +71,7 @@ export class VaultUnlockComponent implements OnInit {
     }
     this.financeLock.clearLockReason();
     const status = await this.vault.refreshStatus();
+    if (this.destroyRef.destroyed) return;
     if (!status.exists) {
       await this.router.navigateByUrl('/finance/vault/setup');
       return;
@@ -85,6 +87,9 @@ export class VaultUnlockComponent implements OnInit {
 
   /** Where a successful unlock lands: a valid next, else Finance Home (or the embed). */
   private continueAfterUnlock(): Promise<boolean> {
+    // Saved keys can open Home while a submitted passphrase is still deriving.
+    // Its late completion must not replace the route the user opened next.
+    if (this.destroyRef.destroyed) return Promise.resolve(false);
     if (safeNextPath()) return continueAfterAuth(this.router);
     return this.router.navigateByUrl(window.self === window.top ? '/finance' : '/finance/embed');
   }

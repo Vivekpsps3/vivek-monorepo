@@ -51,18 +51,18 @@ socket, host mount, or privileged sidecar. They share the Docker volume
 `monorepo-ci-dist`, mounted at `/opt/ci-dist`, which carries the one production
 bundle from Frontend to Playwright.
 
-Each CI runner, the release runner, and the release runner's nested Docker daemon
-are capped at 2 CPUs and 6 GiB RAM. Backend and Playwright run on those CI
-runners, so each gets 2 cores and a 6 GiB cap. Across the three CI runners, the
-release runner, and its daemon this caps CI at 10 logical CPUs and 30 GiB RAM,
-leaving capacity for host services. All CI containers have reduced CPU scheduling
+Each test runner is capped at 4 CPUs and 6 GiB RAM. Backend and Playwright each
+use one of these runners. The release runner and its nested Docker daemon each
+retain a 2 CPU and 6 GiB cap. The combined quotas are 16 logical CPUs and 30 GiB
+RAM on the 12-thread host; concurrent jobs share the available CPU capacity.
+All CI containers have reduced CPU scheduling
 weight. Angular uses
 at most two build workers, Node's heap is capped at 2560 MiB, and each runner
 has 2 GiB of shared memory for Chromium. Logs rotate at 10 MiB with three files.
 
-Backend coverage gates and Playwright each default to two test workers within
+Backend coverage gates and Playwright each default to four test workers within
 that existing allocation. Pytest distributes whole files; each browser worker
-owns a separate disposable server and database. Keep the worker count at two
+owns a separate disposable server and database. Keep the worker count at four
 unless the container CPU and memory budget is revisited. Performance gates run
 serially after the server coverage workers have exited.
 

@@ -159,6 +159,41 @@ describe('VaultUnlockComponent', () => {
       expect(navigate).toHaveBeenCalledWith('/finance/spending?t=calendar');
     });
 
+    it('does not redirect again when a submitted unlock finishes after restored keys already opened Home', async () => {
+      let finishStatus!: (status: { exists: boolean }) => void;
+      let finishUnlock!: (opened: boolean) => void;
+      vault.refreshStatus.and.returnValue(new Promise(resolve => { finishStatus = resolve; }));
+      vault.unlock.and.returnValue(new Promise(resolve => { finishUnlock = resolve; }));
+      const fixture = create();
+      fixture.componentInstance.passphrase = 'correct horse battery staple';
+      const submitted = fixture.componentInstance.unlock();
+
+      // A second tab restores saved keys while its visible form is submitted.
+      // Initialization reaches Home first; the user can then open Activity.
+      unlocked = true;
+      finishStatus({ exists: true });
+      await fixture.whenStable();
+      expect(navigate).toHaveBeenCalledTimes(1);
+      fixture.destroy();
+      navigate.calls.reset();
+
+      finishUnlock(true);
+      await submitted;
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('ignores a status response after leaving the unlock screen', async () => {
+      let finishStatus!: (status: { exists: boolean }) => void;
+      vault.refreshStatus.and.returnValue(new Promise(resolve => { finishStatus = resolve; }));
+      const fixture = create();
+      fixture.destroy();
+
+      // Even a missing-vault response must not replace the user's new route.
+      finishStatus({ exists: false });
+      await fixture.whenStable();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
     it('ignores an off-site next', async () => {
       window.history.pushState({}, '', '?next=' + encodeURIComponent('https://evil.example/phish'));
       const fixture = create();
