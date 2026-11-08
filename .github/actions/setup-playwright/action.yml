@@ -9,7 +9,7 @@ runs:
   using: composite
   steps:
     - if: inputs.install-node == 'true'
-      uses: ./../setup-node
+      uses: ${{ github.action_path }}/../setup-node
     - id: playwright-version
       shell: bash
       run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"

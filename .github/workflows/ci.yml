@@ -29,7 +29,7 @@ jobs:
     runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted", "linux", "x64", "monorepo-ci"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 45
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-python
@@ -79,7 +79,7 @@ jobs:
     runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted", "linux", "x64", "monorepo-ci"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 45
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup-node
       - run: npm audit --omit=dev --audit-level=high
       - name: ESLint
@@ -117,7 +117,7 @@ jobs:
     runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted", "linux", "x64", "monorepo-ci"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 90
     steps:
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: web-dist
@@ -148,7 +148,7 @@ jobs:
       # A depth-1 push checkout leaves origin/main with no parents, and
       # github.event.before is not in the clone. The rehearsal also
       # unshallows itself; this keeps the pre-merge commit in the graph.
-      - uses: ./.github/actions/checkout
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Rehearsal preflight survives a depth-1 clone
