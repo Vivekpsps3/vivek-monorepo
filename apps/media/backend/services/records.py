@@ -501,6 +501,539 @@ def _detail_matches(detail, source: str, kind: str, source_id: str) -> bool:
     return isinstance(found, str) and found.strip().casefold() == source_id.casefold()
 
 
+def _catalog_by_source(db: Session, source: str, source_id: str | None) -> CatalogItem | None:
+    if not source_id:
+        return None
+    return (
+        db.query(CatalogItem)
+        .filter(CatalogItem.source == source, CatalogItem.source_id == source_id)
+        .one_or_none()
+    )
+
+
+def _new_pending_catalog(
+    db: Session, kind: str, title: str, source: str, source_id: str
+) -> CatalogItem:
+    catalog = CatalogItem(
+        kind=kind,
+        title=title,
+        source=source,
+        source_id=source_id,
+        genres=dumps([]),
+        extra=dumps(
+            {
+                "metadata_pending": True,
+                "provenance": {"provider": source, "coverage": "pending", "fetched_at": None},
+            }
+        ),
+        external_ratings=dumps([]),
+    )
+    db.add(catalog)
+    db.flush()
+    return catalog
+
+
+def _entry_for_catalog(
+    db: Session, user_id: int, catalog: CatalogItem, body: dict
+) -> tuple[UserEntry, bool]:
+    existing = (
+        db.query(UserEntry)
+        .filter(UserEntry.user_id == user_id, UserEntry.catalog_id == catalog.id)
+        .one_or_none()
+    )
+    if existing is not None:
+        return existing, True
+    return new_entry(db, user_id, catalog, body), False
+
+
+def _album_detail_fits(detail: dict, requested_id: str, group_id: str) -> bool:
+    if detail.get("source") != "musicbrainz" or detail.get("kind") != "album":
+        return False
+    found = detail.get("source_id")
+    allowed = {requested_id.casefold(), group_id.casefold()}
+    if isinstance(found, str) and found.strip().casefold() in allowed:
+        return True
+    extra = detail.get("extra")
+    if not isinstance(extra, dict):
+        return False
+    marked = extra.get("release_group_id")
+    return isinstance(marked, str) and marked.casefold() == group_id.casefold()
+
+
+def _identity_from_detail(
+    detail: dict, requested_id: str
+) -> tuple[str | None, str | None, str | None, bool]:
+    """Group id, pressing id, primary artist id, and whether the release named no artist."""
+    from apps.media.backend.services.providers import mbid as mb
+
+    raw_extra = detail.get("extra")
+    extra: dict = raw_extra if isinstance(raw_extra, dict) else {}
+    group = mb(extra.get("release_group_id"))
+    artist = mb(extra.get("artist_id"))
+    pressing = mb(extra.get("release_id"))
+    found = mb(detail.get("source_id")) if isinstance(detail.get("source_id"), str) else None
+    requested = mb(requested_id)
+    if group and found and found != group:
+        pressing = pressing or found
+    elif group and requested and requested != group:
+        pressing = pressing or requested
+    if pressing == group:
+        pressing = None
+    return group, pressing, artist, bool(group and not artist)
+
+
+def _album_identity_resolved(catalog: CatalogItem) -> bool:
+    from apps.media.backend.services.providers import mbid as mb
+
+    extra = _extra(catalog)
+    group = extra.get("release_group_id")
+    if not isinstance(group, str) or not mb(group) or group != catalog.source_id:
+        return False
+    if mb(extra.get("artist_id")):
+        return True
+    return extra.get("artist_uncredited") is True
+
+
+def _remember_album_identity(
+    catalog: CatalogItem,
+    group_id: str | None,
+    pressing_id: str | None,
+    artist_id: str | None,
+    uncredited: bool,
+) -> None:
+    extra = _extra(catalog)
+    if group_id and catalog.source_id == group_id:
+        extra["release_group_id"] = group_id
+    if pressing_id and pressing_id != catalog.source_id:
+        ids = extra.get("release_ids")
+        if not isinstance(ids, list):
+            ids = []
+        current = extra.get("release_id")
+        if isinstance(current, str) and current and current not in ids:
+            ids.append(current)
+        if pressing_id not in ids:
+            ids.append(pressing_id)
+        if not isinstance(current, str) or not current:
+            extra["release_id"] = pressing_id
+        extra["release_ids"] = ids
+    if artist_id:
+        extra["artist_id"] = artist_id
+        extra.pop("artist_uncredited", None)
+    elif uncredited and group_id and catalog.source_id == group_id:
+        extra["artist_uncredited"] = True
+    _save_extra(catalog, extra)
+
+
+def _link_saved_artists(
+    db: Session, user_id: int, album: CatalogItem, artist_id: str | None
+) -> None:
+    """Link this album under a saved artist with this MusicBrainz id. Names are ignored."""
+    from apps.media.backend.services.providers import mbid as mb
+
+    artist_id = mb(artist_id)
+    if not artist_id or album.kind != "album":
+        return
+    artists = (
+        db.query(UserEntry)
+        .join(CatalogItem, UserEntry.catalog_id == CatalogItem.id)
+        .filter(
+            UserEntry.user_id == user_id,
+            CatalogItem.kind == "artist",
+            CatalogItem.source == "musicbrainz",
+            CatalogItem.source_id == artist_id,
+        )
+        .all()
+    )
+    for artist in artists:
+        found = (
+            db.query(MusicLink.id)
+            .filter(
+                MusicLink.parent_catalog_id == artist.catalog_id,
+                MusicLink.child_catalog_id == album.id,
+                MusicLink.relation.in_(_ALBUM_RELATIONS),
+            )
+            .first()
+        )
+        if found is not None:
+            continue
+        _ensure_link(
+            db,
+            artist.catalog_id,
+            album.id,
+            "artist-release-group",
+            _next_position(db, artist.catalog_id, _ALBUM_RELATIONS),
+            artist.catalog.title,
+        )
+
+
+def _copy_blank_album_fields(keeper: CatalogItem, duplicate: CatalogItem) -> None:
+    if not keeper.artwork_url and duplicate.artwork_url:
+        keeper.artwork_url = duplicate.artwork_url
+    if keeper.year is None and duplicate.year is not None:
+        keeper.year = duplicate.year
+    if not keeper.creator and duplicate.creator:
+        keeper.creator = duplicate.creator
+    if not keeper.overview and duplicate.overview:
+        keeper.overview = duplicate.overview
+    extra = _extra(keeper)
+    other = _extra(duplicate)
+    for key in ("artist_id", "release_group_id", "release_id", "primary_type"):
+        if not extra.get(key) and other.get(key):
+            extra[key] = other[key]
+    if (
+        extra.get("artist_uncredited") is not True
+        and other.get("artist_uncredited") is True
+        and not extra.get("artist_id")
+    ):
+        extra["artist_uncredited"] = True
+    ids: list[str] = []
+    for source in (extra, other):
+        listed = source.get("release_ids")
+        if isinstance(listed, list):
+            ids.extend(item for item in listed if isinstance(item, str) and item not in ids)
+        one = source.get("release_id")
+        if isinstance(one, str) and one and one not in ids:
+            ids.append(one)
+    if ids:
+        extra["release_ids"] = ids
+        if not extra.get("release_id"):
+            extra["release_id"] = ids[0]
+    _save_extra(keeper, extra)
+
+
+def _fill_blank_entry(keeper: UserEntry, duplicate: UserEntry) -> None:
+    """Keep the group entry. Copy a personal mark only where the keeper is blank."""
+    if keeper.rating is None and duplicate.rating is not None:
+        keeper.rating = duplicate.rating
+    if not keeper.review and duplicate.review:
+        keeper.review = duplicate.review
+        keeper.review_spoiler = duplicate.review_spoiler
+        keeper.review_updated_at = duplicate.review_updated_at
+    if not keeper.summary and duplicate.summary:
+        keeper.summary = duplicate.summary
+    if not keeper.tags and duplicate.tags:
+        keeper.tags = duplicate.tags
+    if duplicate.favorite:
+        keeper.favorite = True
+    if duplicate.anticipated:
+        keeper.anticipated = True
+
+
+def _retarget_entry_dependents(db: Session, old_id: int, new_id: int) -> None:
+    from apps.media.backend.models import AlbumRating, Experience, ProgressOperation, TrackRating
+
+    for experience in db.query(Experience).filter(Experience.entry_id == old_id).all():
+        experience.entry_id = new_id
+    for operation in db.query(ProgressOperation).filter(ProgressOperation.entry_id == old_id).all():
+        operation.entry_id = new_id
+    for album_rating in db.query(AlbumRating).filter(AlbumRating.entry_id == old_id).all():
+        kept_album = (
+            db.query(AlbumRating)
+            .filter(
+                AlbumRating.user_id == album_rating.user_id,
+                AlbumRating.entry_id == new_id,
+                AlbumRating.album_id == album_rating.album_id,
+            )
+            .one_or_none()
+        )
+        if kept_album is None:
+            album_rating.entry_id = new_id
+        elif kept_album.rating is None and album_rating.rating is not None:
+            kept_album.rating = album_rating.rating
+            db.delete(album_rating)
+        else:
+            db.delete(album_rating)
+    for track_rating in db.query(TrackRating).filter(TrackRating.entry_id == old_id).all():
+        kept_track = (
+            db.query(TrackRating)
+            .filter(
+                TrackRating.user_id == track_rating.user_id,
+                TrackRating.entry_id == new_id,
+                TrackRating.track_id == track_rating.track_id,
+            )
+            .one_or_none()
+        )
+        if kept_track is None:
+            track_rating.entry_id = new_id
+        elif kept_track.rating is None and track_rating.rating is not None:
+            kept_track.rating = track_rating.rating
+            db.delete(track_rating)
+        else:
+            db.delete(track_rating)
+    for season in db.query(SeasonProgress).filter(SeasonProgress.entry_id == old_id).all():
+        kept_season = (
+            db.query(SeasonProgress)
+            .filter(
+                SeasonProgress.user_id == season.user_id,
+                SeasonProgress.entry_id == new_id,
+                SeasonProgress.season_number == season.season_number,
+            )
+            .one_or_none()
+        )
+        if kept_season is None:
+            season.entry_id = new_id
+        else:
+            db.delete(season)
+    db.flush()
+
+
+def _retarget_user_entries(db: Session, old_catalog_id: int, new_catalog_id: int) -> None:
+    entries = db.query(UserEntry).filter(UserEntry.catalog_id == old_catalog_id).all()
+    for entry in entries:
+        keeper = (
+            db.query(UserEntry)
+            .filter(UserEntry.user_id == entry.user_id, UserEntry.catalog_id == new_catalog_id)
+            .one_or_none()
+        )
+        if keeper is None:
+            entry.catalog_id = new_catalog_id
+            continue
+        _fill_blank_entry(keeper, entry)
+        _retarget_entry_dependents(db, entry.id, keeper.id)
+        db.delete(entry)
+    db.flush()
+
+
+def _retarget_music_links(db: Session, old_id: int, new_id: int) -> None:
+    links = (
+        db.query(MusicLink)
+        .filter(or_(MusicLink.parent_catalog_id == old_id, MusicLink.child_catalog_id == old_id))
+        .all()
+    )
+    removed = []
+    updates = []
+    for link in links:
+        parent = new_id if link.parent_catalog_id == old_id else link.parent_catalog_id
+        child = new_id if link.child_catalog_id == old_id else link.child_catalog_id
+        if parent == child:
+            removed.append(link)
+            continue
+        clash = (
+            db.query(MusicLink)
+            .filter(
+                MusicLink.parent_catalog_id == parent,
+                MusicLink.child_catalog_id == child,
+                MusicLink.relation == link.relation,
+                MusicLink.id != link.id,
+            )
+            .one_or_none()
+        )
+        if clash is not None:
+            removed.append(link)
+            continue
+        updates.append((link, parent, child))
+    for link in removed:
+        db.delete(link)
+    db.flush()
+    for link, parent, child in updates:
+        link.parent_catalog_id = parent
+        link.child_catalog_id = child
+    db.flush()
+
+
+def _retarget_releases(db: Session, old_id: int, new_id: int) -> None:
+    for row in db.query(Release).filter(Release.catalog_id == old_id).all():
+        row.catalog_id = new_id
+    lifecycle = db.query(SeriesLifecycle).filter(SeriesLifecycle.catalog_id == old_id).one_or_none()
+    if lifecycle is not None:
+        keeper = (
+            db.query(SeriesLifecycle).filter(SeriesLifecycle.catalog_id == new_id).one_or_none()
+        )
+        if keeper is None:
+            lifecycle.catalog_id = new_id
+        else:
+            db.delete(lifecycle)
+    db.flush()
+
+
+def _merge_album_catalog(
+    db: Session, keeper: CatalogItem, duplicate: CatalogItem, pressing_id: str | None
+) -> CatalogItem:
+    """One album for the release group. The pressing id stays on that row."""
+    if keeper.id == duplicate.id:
+        return keeper
+    _copy_blank_album_fields(keeper, duplicate)
+    _retarget_music_links(db, duplicate.id, keeper.id)
+    _retarget_releases(db, duplicate.id, keeper.id)
+    _retarget_user_entries(db, duplicate.id, keeper.id)
+    db.flush()
+    db.delete(duplicate)
+    db.flush()
+    if pressing_id:
+        _remember_album_identity(keeper, keeper.source_id, pressing_id, None, False)
+    return keeper
+
+
+def _claim_album_group(
+    db: Session,
+    *,
+    group_id: str,
+    pressing_id: str | None,
+    requested_id: str,
+    title: str,
+    requested_row: CatalogItem | None,
+    strict: bool,
+) -> CatalogItem | None:
+    """Store the release group as the album. A pressing row is attached, not kept apart.
+
+    A group id that already belongs to another kind is not reused. ``strict``
+    reports that the same way a save already rejects a provider id of the wrong kind.
+    """
+    group = _catalog_by_source(db, "musicbrainz", group_id)
+    if group is not None and group.kind != "album":
+        if strict:
+            fail("That provider id is already a different type.")
+        return None
+    pressing = None
+    if pressing_id and pressing_id != group_id:
+        pressing = _catalog_by_source(db, "musicbrainz", pressing_id)
+    if (
+        pressing is None
+        and requested_row is not None
+        and requested_row.source_id not in {None, group_id}
+    ):
+        pressing = requested_row
+    if pressing is not None and pressing.kind != "album":
+        if strict:
+            fail("That provider id is already a different type.")
+        return None
+    if group is None and pressing is not None:
+        pressing.source_id = group_id
+        db.flush()
+        return pressing
+    if group is None:
+        return _new_pending_catalog(db, "album", title, "musicbrainz", group_id)
+    if pressing is not None and pressing.id != group.id:
+        return _merge_album_catalog(db, group, pressing, pressing_id or requested_id)
+    return group
+
+
+def _place_musicbrainz_album(
+    db: Session,
+    user_id: int,
+    *,
+    title: str,
+    requested_id: str,
+    requested_row: CatalogItem | None,
+    group_id: str,
+    pressing_id: str | None,
+    artist_id: str | None,
+    uncredited: bool,
+    detail: dict | None,
+    strict: bool,
+) -> CatalogItem:
+    from apps.media.backend.services.providers import mbid as mb
+
+    claimed = _claim_album_group(
+        db,
+        group_id=group_id,
+        pressing_id=pressing_id,
+        requested_id=requested_id,
+        title=title,
+        requested_row=requested_row,
+        strict=strict,
+    )
+    if claimed is None:
+        if strict or requested_row is None:
+            fail("That provider id is already a different type.")
+        extra = _extra(requested_row)
+        extra["identity_blocked"] = True
+        extra["release_group_id"] = group_id
+        if artist_id:
+            extra["artist_id"] = artist_id
+        _save_extra(requested_row, extra)
+        _link_saved_artists(db, user_id, requested_row, artist_id)
+        return requested_row
+    if (
+        detail is not None
+        and _metadata_pending(claimed)
+        and _album_detail_fits(detail, requested_id, group_id)
+    ):
+        _apply_authoritative(db, claimed, detail)
+    _remember_album_identity(claimed, group_id, pressing_id, artist_id, uncredited)
+    stored_artist = artist_id or mb(_extra(claimed).get("artist_id"))
+    _link_saved_artists(db, user_id, claimed, stored_artist)
+    return claimed
+
+
+def _save_musicbrainz_album(
+    db: Session, user_id: int, body: dict, source_id: str, title: str
+) -> tuple[UserEntry, bool]:
+    """The album is the release group. The id being saved may be one pressing of it."""
+    from apps.media.backend.services import providers
+    from apps.server.database import release_for_provider_io
+
+    raw_hint = body.get("extra")
+    hinted: dict = raw_hint if isinstance(raw_hint, dict) else {}
+    group_id = providers.mbid(hinted.get("release_group_id"))
+    pressing_id = providers.mbid(hinted.get("release_id"))
+    if group_id and group_id != source_id:
+        pressing_id = pressing_id or source_id
+    elif pressing_id == group_id:
+        pressing_id = None
+
+    requested = _catalog_by_source(db, "musicbrainz", source_id)
+    if requested is not None and requested.kind != "album":
+        fail("That provider id is already a different type.")
+
+    known = _catalog_by_source(db, "musicbrainz", group_id) if group_id else None
+    need_detail = not (
+        known is not None
+        and known.kind == "album"
+        and not _metadata_pending(known)
+        and _album_identity_resolved(known)
+        and (requested is None or requested.id == known.id)
+    )
+    detail = None
+    if need_detail:
+        release_for_provider_io(db)
+        detail = providers.lookup_detail("musicbrainz", "album", source_id)
+
+    artist_id = None
+    uncredited = False
+    if (
+        isinstance(detail, dict)
+        and detail.get("source") == "musicbrainz"
+        and detail.get("kind") == "album"
+    ):
+        parsed_group, parsed_pressing, artist_id, uncredited = _identity_from_detail(
+            detail, source_id
+        )
+        if parsed_group:
+            group_id = parsed_group
+        if parsed_pressing:
+            pressing_id = parsed_pressing
+    if pressing_id == group_id:
+        pressing_id = None
+
+    if not group_id:
+        catalog = requested or _new_pending_catalog(db, "album", title, "musicbrainz", source_id)
+        if (
+            detail is not None
+            and _metadata_pending(catalog)
+            and _detail_matches(detail, "musicbrainz", "album", source_id)
+        ):
+            _apply_authoritative(db, catalog, detail)
+        return _entry_for_catalog(db, user_id, catalog, body)
+
+    catalog = _place_musicbrainz_album(
+        db,
+        user_id,
+        title=title,
+        requested_id=source_id,
+        requested_row=requested
+        if requested is not None and requested.source_id != group_id
+        else None,
+        group_id=group_id,
+        pressing_id=pressing_id,
+        artist_id=artist_id,
+        uncredited=uncredited,
+        detail=detail if isinstance(detail, dict) else None,
+        strict=True,
+    )
+    return _entry_for_catalog(db, user_id, catalog, body)
+
+
 def create_from_provider(db: Session, user_id: int, body: dict) -> tuple[UserEntry, bool]:
     """Save the person's row first. Canonical fields come from detail, not the browser."""
     from apps.media.backend.services import providers
@@ -512,11 +1045,9 @@ def create_from_provider(db: Session, user_id: int, body: dict) -> tuple[UserEnt
     if source not in providers.sources_for_kind(kind):
         fail("That source does not cover this type.")
     title = clean_text(body.get("title"), 300, "Title", required=True)
-    catalog = (
-        db.query(CatalogItem)
-        .filter(CatalogItem.source == source, CatalogItem.source_id == source_id)
-        .one_or_none()
-    )
+    if source == "musicbrainz" and kind == "album" and providers.mbid(source_id):
+        return _save_musicbrainz_album(db, user_id, body, source_id, title)
+    catalog = _catalog_by_source(db, source, source_id)
     if catalog is not None and catalog.kind != kind:
         fail("That provider id is already a different type.")
     detail = None
@@ -524,36 +1055,98 @@ def create_from_provider(db: Session, user_id: int, body: dict) -> tuple[UserEnt
         release_for_provider_io(db)
         detail = providers.lookup_detail(source, kind, source_id)
     if catalog is None:
-        catalog = CatalogItem(
-            kind=kind,
-            title=title,
-            source=source,
-            source_id=source_id,
-            genres=dumps([]),
-            extra=dumps(
-                {
-                    "metadata_pending": True,
-                    "provenance": {
-                        "provider": source,
-                        "coverage": "pending",
-                        "fetched_at": None,
-                    },
-                }
-            ),
-            external_ratings=dumps([]),
-        )
-        db.add(catalog)
-        db.flush()
+        catalog = _new_pending_catalog(db, kind, title, source, source_id)
     if detail is not None and _detail_matches(detail, source, kind, source_id):
         _apply_authoritative(db, catalog, detail)
-    existing = (
-        db.query(UserEntry)
-        .filter(UserEntry.user_id == user_id, UserEntry.catalog_id == catalog.id)
-        .one_or_none()
-    )
-    if existing is not None:
-        return existing, True
-    return new_entry(db, user_id, catalog, body), False
+    return _entry_for_catalog(db, user_id, catalog, body)
+
+
+def repair_musicbrainz_albums(db: Session, user_id: int) -> None:
+    """Point saved pressings at their release group and link the primary artist by MBID."""
+    from apps.media.backend.services import providers
+    from apps.server.database import release_for_provider_io
+
+    catalog_ids = [
+        row.id
+        for row in db.query(CatalogItem.id)
+        .join(UserEntry, UserEntry.catalog_id == CatalogItem.id)
+        .filter(
+            UserEntry.user_id == user_id,
+            CatalogItem.kind == "album",
+            CatalogItem.source == "musicbrainz",
+            CatalogItem.source_id.is_not(None),
+        )
+        .all()
+    ]
+    for catalog_id in catalog_ids:
+        catalog = db.get(CatalogItem, catalog_id)
+        if catalog is None or catalog.kind != "album" or catalog.source != "musicbrainz":
+            continue
+        if not catalog.source_id:
+            continue
+        extra = _extra(catalog)
+        if extra.get("identity_blocked") is True:
+            _link_saved_artists(db, user_id, catalog, providers.mbid(extra.get("artist_id")))
+            continue
+        group = providers.mbid(extra.get("release_group_id"))
+        artist = providers.mbid(extra.get("artist_id"))
+        uncredited = extra.get("artist_uncredited") is True
+        pressing = providers.mbid(extra.get("release_id"))
+        if group and catalog.source_id != group:
+            if not pressing:
+                pressing = providers.mbid(catalog.source_id)
+            catalog = _place_musicbrainz_album(
+                db,
+                user_id,
+                title=catalog.title,
+                requested_id=catalog.source_id,
+                requested_row=catalog,
+                group_id=group,
+                pressing_id=pressing,
+                artist_id=artist,
+                uncredited=uncredited,
+                detail=None,
+                strict=False,
+            )
+        if _extra(catalog).get("identity_blocked") is True:
+            continue
+        if _album_identity_resolved(catalog):
+            _link_saved_artists(
+                db, user_id, catalog, providers.mbid(_extra(catalog).get("artist_id"))
+            )
+            continue
+        looked_up = catalog.source_id
+        if not isinstance(looked_up, str) or not providers.mbid(looked_up):
+            continue
+        release_for_provider_io(db)
+        detail = providers.lookup_detail("musicbrainz", "album", looked_up)
+        if (
+            not isinstance(detail, dict)
+            or detail.get("source") != "musicbrainz"
+            or detail.get("kind") != "album"
+        ):
+            continue
+        parsed_group, parsed_pressing, parsed_artist, parsed_uncredited = _identity_from_detail(
+            detail, looked_up
+        )
+        if not parsed_group:
+            blocked = _extra(catalog)
+            blocked["identity_blocked"] = True
+            _save_extra(catalog, blocked)
+            continue
+        _place_musicbrainz_album(
+            db,
+            user_id,
+            title=catalog.title,
+            requested_id=looked_up,
+            requested_row=catalog if looked_up != parsed_group else None,
+            group_id=parsed_group,
+            pressing_id=parsed_pressing,
+            artist_id=parsed_artist,
+            uncredited=parsed_uncredited,
+            detail=detail,
+            strict=False,
+        )
 
 
 def save_discovered(
@@ -1522,6 +2115,8 @@ def detail(db: Session, entry: UserEntry) -> dict:
     from apps.media.backend.services.metadata import lifecycle
     from apps.media.backend.services.portraits import attribution
 
+    if entry.catalog.kind in {"artist", "album", "track"}:
+        repair_musicbrainz_albums(db, entry.user_id)
     releases = db.query(Release).filter(Release.catalog_id == entry.catalog_id).all()
     show = episode_state(db, entry.user_id, entry.catalog) if entry.catalog.kind == "tv" else None
     return {

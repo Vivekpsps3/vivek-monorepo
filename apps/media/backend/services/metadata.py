@@ -178,4 +178,6 @@ def refresh(db: Session, entry: UserEntry, body: dict | None = None) -> None:
     if linking:
         catalog.source, catalog.source_id = source, identity
     records._apply_authoritative(db, catalog, detail)
+    if catalog.source == "musicbrainz" and catalog.kind in {"album", "artist"}:
+        records.repair_musicbrainz_albums(db, entry.user_id)
     db.flush()

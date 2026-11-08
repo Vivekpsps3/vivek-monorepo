@@ -375,17 +375,35 @@ def test_itunes_detail_looks_up_the_track_id():
 
 
 def test_musicbrainz_detail_keeps_release_and_recording_ids():
+    artist_id = "f4fdbb4c-e4b7-47a0-b83b-d91bbfcfa387"
+    group_id = "2b8f453f-ffd6-4860-8742-7cff1c2feae3"
+    release_id = "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe"
+    credit = [{"name": "Ariana Grande", "artist": {"id": artist_id, "name": "Ariana Grande"}}]
+
     def handler(request: httpx.Request) -> httpx.Response:
-        if "/release/" in request.url.path:
+        if "/release-group/" in request.url.path:
             return httpx.Response(
                 200,
                 json={
-                    "id": "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe",
+                    "id": group_id,
+                    "title": "petal",
+                    "primary-type": "Album",
+                    "first-release-date": "2026-07-31",
+                    "artist-credit": credit,
+                },
+            )
+        if "/release/" in request.url.path:
+            if request.url.path.rstrip("/").endswith(group_id):
+                return httpx.Response(404, json={"error": "Not Found"})
+            return httpx.Response(
+                200,
+                json={
+                    "id": release_id,
                     "title": "petal",
                     "date": "2026-07-31",
-                    "artist-credit": [{"name": "Ariana Grande"}],
+                    "artist-credit": credit,
                     "release-group": {
-                        "id": "2b8f453f-ffd6-4860-8742-7cff1c2feae3",
+                        "id": group_id,
                         "primary-type": "Single",
                     },
                 },
@@ -414,17 +432,26 @@ def test_musicbrainz_detail_keeps_release_and_recording_ids():
     with _http(handler) as http:
         artist = musicbrainz_artist_detail(http, "f4fdbb4c-e4b7-47a0-b83b-d91bbfcfa387")
         assert artist is not None
-        album = musicbrainz_album_detail(http, "0ea273f2-a76b-4ff5-8cd9-f54ba2f290fe")
+        album = musicbrainz_album_detail(http, release_id)
         assert album is not None
+        group = musicbrainz_album_detail(http, group_id)
+        assert group is not None
         track = musicbrainz_track_detail(http, "11111111-1111-1111-1111-111111111111")
         assert track is not None
         skipped = musicbrainz_album_detail(http, "not-an-mbid")
     assert artist["releases"] == []
     assert artist["year"] == 1993
     assert artist["overview"] == "singer"
-    assert album["extra"]["release_group_id"] == "2b8f453f-ffd6-4860-8742-7cff1c2feae3"
+    assert album["source_id"] == release_id
+    assert album["extra"]["release_group_id"] == group_id
+    assert album["extra"]["artist_id"] == artist_id
+    assert album["extra"]["release_id"] == release_id
     assert album["artwork_url"].startswith("https://coverartarchive.org/release-group/")
     assert album["releases"][0]["precision"] == "day"
+    assert group["source_id"] == group_id
+    assert group["extra"]["release_group_id"] == group_id
+    assert group["extra"]["artist_id"] == artist_id
+    assert "release_id" not in group["extra"]
     assert track["kind"] == "track"
     assert track["releases"][0]["precision"] == "year"
     assert skipped is None
