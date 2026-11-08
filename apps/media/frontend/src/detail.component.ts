@@ -66,6 +66,7 @@ export class DetailComponent {
   private photoRequest?: Subscription;
   private linkRequest?: Subscription;
   private generation = 0;
+  private pendingId: number | null = null;
   private baseFields: ItemFields | null = null;
   private baseVersion = "";
   private reviewBase = "";
@@ -132,7 +133,11 @@ export class DetailComponent {
   routeId(): string {
     return this.route.snapshot.paramMap.get("id") || "0";
   }
-  load(id: number): void {
+  load(id: number, force = false): void {
+    // A second param emission for the item already on screen used to cancel
+    // the form and drop a save that had just been edited.
+    if (!force && (this.pendingId === id || this.item()?.id === id)) return;
+    this.pendingId = id;
     this.loadingRequest?.unsubscribe();
     this.photoRequest?.unsubscribe();
     this.linkRequest?.unsubscribe();
@@ -161,6 +166,7 @@ export class DetailComponent {
       .subscribe({
         next: (d) => {
           if (generation !== this.generation) return;
+          this.pendingId = null;
           clearTimeout(this.skeletonTimer);
           this.loading.set(false);
           this.adopt(d);
@@ -174,6 +180,7 @@ export class DetailComponent {
         },
         error: (e) => {
           if (generation === this.generation) {
+            this.pendingId = null;
             clearTimeout(this.skeletonTimer);
             this.loading.set(false);
             this.error.set(errorCopy(e));
@@ -221,7 +228,7 @@ export class DetailComponent {
   }
   reloadSaved(): void {
     this.rememberDraft();
-    this.load(Number(this.routeId()));
+    this.load(Number(this.routeId()), true);
   }
   private snapshot(): string {
     return JSON.stringify([

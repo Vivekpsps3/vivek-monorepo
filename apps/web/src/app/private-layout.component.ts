@@ -100,10 +100,12 @@ export class PrivateLayoutComponent {
       const editing = active instanceof HTMLElement
         && !!active.closest('input, textarea, select, [contenteditable="true"]');
       if (editing) return;
-      // A control inside the arrived page owns the keyboard. Chasing the heading
-      // after that steals Enter from Add transaction, Edit, and the year grid.
+      // A control inside the arrived page owns the keyboard. Section links sit
+      // outside main, so choosing Net worth or Trips still moves focus to the
+      // new heading. Chasing that heading after the user reaches Add
+      // transaction, Edit, or the year grid steals Enter.
       const inPageControl = active instanceof HTMLElement
-        && !!active.closest('#workspace-content')
+        && !!active.closest('#workspace-content main')
         && !!active.closest('a, button, input, textarea, select, [role="button"], [role="link"], [role="grid"], [contenteditable="true"]');
       if (inPageControl) return;
       if (!dialogOpen && heading) {
