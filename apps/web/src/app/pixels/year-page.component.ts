@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { todayIsoDate } from '@vivek/browser';
@@ -36,6 +36,7 @@ function yearKey(year: number): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class YearPageComponent {
+  @ViewChild(YearGridComponent) private yearGrid?: YearGridComponent;
   private readonly data = inject(PixelsDataService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -120,12 +121,7 @@ export class YearPageComponent {
       relativeTo: this.route,
       queryParams: { year: String(this.year()), day: null },
     });
-    if (!date || typeof document === 'undefined') return;
-    const id = `pixel-day-${date}`;
-    queueMicrotask(() => {
-      const cell = document.getElementById(id);
-      if (cell instanceof HTMLElement) cell.focus();
-    });
+    if (date) this.yearGrid?.focusDate(date);
   }
 
   reload(): void {

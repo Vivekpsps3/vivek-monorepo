@@ -4,6 +4,7 @@ import {
   Component,
   ElementRef,
   HostListener,
+  OnDestroy,
   computed,
   inject,
   input,
@@ -62,8 +63,9 @@ export function financeCopy(status: FinanceJoinStatus, fin: number | null): { lo
   styleUrls: ['./pixels.css', './day-detail.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DayDetailComponent implements AfterViewInit {
+export class DayDetailComponent implements AfterViewInit, OnDestroy {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private focusTimers: ReturnType<typeof setTimeout>[] = [];
 
   day = input<PixelDayView | null>(null);
   financeStatus = input<FinanceJoinStatus>('locked');
@@ -94,24 +96,34 @@ export class DayDetailComponent implements AfterViewInit {
     this.focusClose();
   }
 
+  ngOnDestroy(): void {
+    this.cancelFocus();
+  }
+
   @HostListener('document:keydown.escape')
   onEscape(): void {
     if (this.day()) this.close();
   }
 
   close(): void {
+    this.cancelFocus();
     this.closed.emit();
+  }
+
+  private cancelFocus(): void {
+    for (const timer of this.focusTimers) clearTimeout(timer);
+    this.focusTimers = [];
   }
 
   private focusClose(): void {
     if (!this.phone() || !this.day()) return;
     const focus = () => {
+      if (!this.day()) return;
       const button = this.host.nativeElement.querySelector('[data-day-close]');
       if (button instanceof HTMLButtonElement) button.focus();
     };
     focus();
     // The shell moves focus to the page heading while this sheet is still mounting.
-    setTimeout(focus, 0);
-    setTimeout(focus, 50);
+    this.focusTimers.push(setTimeout(focus, 0), setTimeout(focus, 50));
   }
 }

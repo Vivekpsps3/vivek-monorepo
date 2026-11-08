@@ -113,8 +113,10 @@ test('calendar keyboard: arrows move by a day and Tab leaves the grid in one ste
   // be what the keyboard test races. Wait for it, then use the one tab stop.
   await expect(page.locator('.month-charts canvas').first()).toBeVisible();
   const today = page.locator('.day.today');
-  await today.focus();
-  await expect(today).toBeFocused();
+  await expect(async () => {
+    await today.focus();
+    await expect(today).toBeFocused({ timeout: 250 });
+  }).toPass();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('gridcell', { name: /Friday, Oct 16/ })).toBeFocused();
   await page.keyboard.press('Tab');

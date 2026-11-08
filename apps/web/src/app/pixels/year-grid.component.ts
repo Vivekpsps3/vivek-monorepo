@@ -158,6 +158,18 @@ export class YearGridComponent {
     this.picked.emit(date);
   }
 
+  /** Keep this day as the one tab stop, then focus it after the grid repaints. */
+  focusDate(date: string): void {
+    this.roving.set(date);
+    const focus = () => {
+      if (this.roving() !== date) return;
+      const node = this.host.nativeElement.querySelector(`[data-date="${date}"]`) as HTMLElement | null;
+      node?.focus();
+    };
+    queueMicrotask(focus);
+    setTimeout(focus, 0);
+  }
+
   private orientation(): YearOrientation {
     return this.phone() ? 'days-by-month' : 'months-by-day';
   }

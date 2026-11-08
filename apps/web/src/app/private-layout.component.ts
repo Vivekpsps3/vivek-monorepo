@@ -100,8 +100,13 @@ export class PrivateLayoutComponent {
       const editing = active instanceof HTMLElement
         && !!active.closest('input, textarea, select, [contenteditable="true"]');
       if (editing) return;
+      // A grid key handler owns focus once the user lands on a cell. Chasing
+      // the heading after that steals the calendar and year keyboard.
+      const inGrid = active instanceof HTMLElement && !!active.closest('[role="grid"]');
+      if (inGrid) return;
       if (!dialogOpen && heading) {
         if (active !== heading) {
+          if (performance.now() - started > 400) return;
           confirm = false;
           heading.tabIndex = -1;
           heading.focus({ preventScroll: true, focusVisible: false } as FocusOptions & { focusVisible?: boolean });
