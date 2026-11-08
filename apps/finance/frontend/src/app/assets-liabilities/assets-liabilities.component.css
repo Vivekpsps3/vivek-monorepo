@@ -259,3 +259,9 @@ h3 {
   gap: var(--space-1);
   flex-shrink: 0;
 }
+
+@media (max-width: 640px) {
+  .row-list {
+    display: block;
+  }
+}

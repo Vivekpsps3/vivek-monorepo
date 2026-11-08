@@ -74,7 +74,18 @@
           <li class="row-list__item">
             <div class="row-list__line">
               <strong>{{ row.name }}</strong>
-              <span class="money">{{ row.current_value | money }}</span>
+              @if (amountProblem(row.current_value, 'nonNegative'); as problem) {
+                <span>
+                  <ui-badge variant="warning">Needs fixing</ui-badge>
+                  @if (problem === 'over-max') {
+                    <span>Amount too large to count · <button type="button" (click)="openEditAsset(row)">Fix</button></span>
+                  } @else {
+                    <span class="money">{{ row.current_value | money }}</span>
+                  }
+                </span>
+              } @else {
+                <span class="money">{{ row.current_value | money }}</span>
+              }
             </div>
             <div class="row-list__line row-list__meta">
               <span>{{ row.category | formatCategory }} · {{ row.as_of_date | appDate }}</span>
@@ -136,7 +147,18 @@
           <li class="row-list__item">
             <div class="row-list__line">
               <strong>{{ row.name }}</strong>
-              <span class="money">{{ (-row.balance_owed) | money }}</span>
+              @if (amountProblem(row.balance_owed, 'nonNegative'); as problem) {
+                <span>
+                  <ui-badge variant="warning">Needs fixing</ui-badge>
+                  @if (problem === 'over-max') {
+                    <span>Amount too large to count · <button type="button" (click)="openEditLiability(row)">Fix</button></span>
+                  } @else {
+                    <span class="money">{{ (-row.balance_owed) | money }}</span>
+                  }
+                </span>
+              } @else {
+                <span class="money">{{ (-row.balance_owed) | money }}</span>
+              }
             </div>
             <div class="row-list__line row-list__meta">
               <span>{{ row.category | formatCategory }} · {{ row.as_of_date | appDate }}</span>

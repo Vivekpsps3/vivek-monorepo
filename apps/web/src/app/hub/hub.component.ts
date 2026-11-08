@@ -18,6 +18,9 @@ import {
   type HubCardState,
 } from './hub-load';
 import { townIsEmpty, townStreakText, type TownSummary } from './town-hub-card';
+import { hubStripRows, hubStripSummary, hubStripWindow, type HubStripCell } from './pixels-hub-card';
+import { PixelsDataService } from '../pixels/pixels-data.service';
+import { withoutFinance, yearStats } from '../pixels/pixels-model';
 import {
   journalKindLabel,
   mediaReleaseLabel,
@@ -80,7 +83,7 @@ interface FinanceView {
     UiStateComponent,
   ],
   templateUrl: './hub.component.html',
-  styleUrl: './hub.component.css',
+  styleUrls: ['./hub.component.css', '../pixels/pixels.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HubComponent implements OnInit {
@@ -89,6 +92,7 @@ export class HubComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
   private readonly episodeUndo = inject(NextEpisodeUndoService);
+  private readonly pixelsData = inject(PixelsDataService);
 
   name = 'Your library of days';
   readonly today = new Date();
@@ -114,8 +118,14 @@ export class HubComponent implements OnInit {
   town: TownSummary | null = null;
   townPending = false;
   townUpdatedAt: number | null = null;
+  pixelsState: HubCardState = 'loading';
+  pixels: Parameters<typeof withoutFinance>[0] | null = null;
+  pixelsPending = false;
+  pixelsUpdatedAt: number | null = null;
 
   private generation = 0;
+  private pixelsLoad = 0;
+  private pixelsClearGeneration = 0;
   private financeGeneration = 0;
   private userId: number | null | undefined = undefined;
   private travelCtrl: AbortController | null = null;
@@ -128,6 +138,7 @@ export class HubComponent implements OnInit {
 
   ngOnInit(): void {
     this.episodeUndo.restored$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onMediaNextReload());
+    this.pixelsData.financeCleared$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onPixelsFinanceCleared());
     this.watchVaultLock();
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.get('settings') === 'account') {
@@ -146,11 +157,13 @@ export class HubComponent implements OnInit {
           void this.loadMedia();
           void this.loadTown();
           void this.loadFinance();
+          void this.loadPixels();
         } else {
           this.travelState = 'empty';
           this.mediaState = 'empty';
           this.townState = 'empty';
           this.financeState = 'locked';
+          this.pixelsState = 'empty';
         }
       }
       this.userId = nextId;
@@ -160,6 +173,7 @@ export class HubComponent implements OnInit {
     void this.loadMedia();
     void this.loadTown();
     void this.loadFinance();
+    void this.loadPixels();
   }
 
   fidelityAccounts(): PortfolioAccount[] {
@@ -260,6 +274,29 @@ export class HubComponent implements OnInit {
     void this.loadTown();
   }
 
+  retryPixels(): void {
+    if (this.pixelsPending) return;
+    this.pixelsPending = true;
+    void this.loadPixels();
+  }
+
+  pixelRows(): HubStripCell[][] {
+    return this.pixels ? hubStripRows(this.pixels.days) : [];
+  }
+
+  pixelsSummary(): { activeLine: string; runLine: string } | null {
+    if (!this.pixels) return null;
+    return hubStripSummary(yearStats(this.pixels.days, this.pixels.financeStatus));
+  }
+
+  /** Past and today cells open that day. Future cells are not a control. */
+  openPixelDay(cell: HubStripCell): void {
+    if (cell.future) return;
+    void this.router.navigate(['/pixels'], {
+      queryParams: { year: cell.date.slice(0, 4), day: cell.date },
+    });
+  }
+
   townStreak(summary: TownSummary): string | null {
     return townStreakText(summary);
   }
@@ -286,14 +323,17 @@ export class HubComponent implements OnInit {
     this.trip = null;
     this.media = null;
     this.town = null;
+    this.pixels = null;
     this.travelPending = false;
     this.mediaPending = false;
     this.townPending = false;
+    this.pixelsPending = false;
     this.financePending = false;
     this.clearFinanceNumbers();
     this.travelState = 'loading';
     this.mediaState = 'loading';
     this.townState = 'loading';
+    this.pixelsState = 'loading';
     this.financeState = 'loading';
   }
 
@@ -368,6 +408,56 @@ export class HubComponent implements OnInit {
       this.town = settled.data;
     } finally {
       if (this.townCtrl === ctrl) this.townPending = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private onPixelsFinanceCleared(): void {
+    this.pixelsClearGeneration += 1;
+    if (!this.pixels) return;
+    this.pixels = withoutFinance(this.pixels, todayIsoDate());
+    this.cdr.markForCheck();
+  }
+
+  private async loadPixels(): Promise<void> {
+    const generation = this.generation;
+    const load = ++this.pixelsLoad;
+    const clearGeneration = this.pixelsClearGeneration;
+    if (!this.pixels) this.pixelsState = 'loading';
+    this.cdr.markForCheck();
+    const current = () => generation === this.generation && load === this.pixelsLoad;
+    try {
+      const today = todayIsoDate();
+      const range = hubStripWindow(today);
+      const result = await this.pixelsData.load({
+        from: range.start,
+        to: range.end,
+        profile: false,
+        includeTrips: false,
+        today,
+      });
+      if (!current()) return;
+      if (result.status === 'dropped') return;
+      if (result.status === 'expired') {
+        this.pixels = null;
+        this.pixelsState = 'expired';
+        return;
+      }
+      if (result.status === 'unavailable') {
+        if (this.pixels && yearStats(this.pixels.days, this.pixels.financeStatus).active > 0) {
+          this.pixelsState = 'stale';
+          return;
+        }
+        this.pixels = null;
+        this.pixelsState = 'unavailable';
+        return;
+      }
+      const snapshot = clearGeneration === this.pixelsClearGeneration ? result.snapshot : withoutFinance(result.snapshot, today);
+      this.pixels = snapshot;
+      this.pixelsUpdatedAt = Date.now();
+      this.pixelsState = 'ready';
+    } finally {
+      if (load === this.pixelsLoad) this.pixelsPending = false;
       this.cdr.markForCheck();
     }
   }

@@ -1,0 +1,51 @@
+@if (notice(); as text) {
+  <p class="pixels-notice" role="status">{{ text }}</p>
+}
+
+<app-year-toolbar
+  [year]="year()"
+  [financeStatus]="snapshot()?.financeStatus ?? null"
+  (shift)="shiftYear($event)"
+/>
+
+<ui-state
+  [state]="screen()"
+  thing="this year"
+  emptyTitle="No activity this year"
+  emptyMessage="Squares fill in when Town, Media, or Travel records a day."
+  [updatedAt]="snapshot()?.fetchedAt ?? null"
+  next="/pixels"
+  (retry)="reload()"
+>
+  @if (readySnapshot(); as snapshot) {
+    @for (text of notices(); track text) {
+      <p class="pixels-notice" role="status">{{ text }}</p>
+    }
+    @if (stats(); as stats) {
+      <app-year-stats [stats]="stats" [financeStatus]="snapshot.financeStatus" />
+    }
+    @if (preferences.view() === 'table') {
+      <app-year-table [days]="snapshot.days" (selected)="selectDay($event)" />
+    } @else {
+      <app-year-grid
+        [year]="year()"
+        [days]="snapshot.days"
+        [selected]="day()"
+        [colorBy]="preferences.colorBy()"
+        [today]="today"
+        [phone]="phone()"
+        (picked)="selectDay($event)"
+      />
+      @if (selectedDay(); as current) {
+        <app-day-detail
+          [day]="current"
+          [financeStatus]="snapshot.financeStatus"
+          [today]="today"
+          [phone]="phone()"
+          (closed)="clearDay()"
+        />
+      }
+    }
+    <app-pixels-legend [colorBy]="preferences.colorBy()" />
+  }
+</ui-state>

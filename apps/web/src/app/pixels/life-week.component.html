@@ -1,0 +1,35 @@
+<section class="life-week" aria-labelledby="life-week-heading">
+  <p class="life-kicker">{{ week().now ? 'Selected week · this week' : 'Selected week' }}</p>
+  <h2 id="life-week-heading">{{ range() }}</h2>
+  <p class="life-summary">{{ summary() }}</p>
+  @if (place()) {
+    <p class="life-place">{{ place() }}</p>
+  }
+  <ul>
+    @if (showTown()) {
+      <li>{{ town() }}</li>
+    }
+    @if (showMedia()) {
+      <li>{{ media() }}</li>
+    }
+    @if (showTravel()) {
+      <li>{{ travel() }}</li>
+    }
+    @if (financeStatus() === 'locked') {
+      <li class="life-lock">
+        <span>Finance is locked. Unlock to include budget kept.</span>
+        <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels/life' }">Unlock</a>
+      </li>
+    } @else if (financeStatus() !== 'ready') {
+      <li>Finance · no data</li>
+    } @else {
+      <li>{{ finance() }}</li>
+    }
+  </ul>
+  <div class="life-steppers">
+    <button type="button" aria-label="◀ Wk, previous week" (click)="step.emit('week-prev')">◀ Wk</button>
+    <button type="button" aria-label="Wk ▶, next week" (click)="step.emit('week-next')">Wk ▶</button>
+    <button type="button" aria-label="▲ Yr, previous year" (click)="step.emit('year-prev')">▲ Yr</button>
+    <button type="button" aria-label="Yr ▼, next year" (click)="step.emit('year-next')">Yr ▼</button>
+  </div>
+</section>

@@ -300,7 +300,7 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   await page.goto('/hub');
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   const bar = page.locator('.app-switcher__bar');
-  for (const name of ['Hub', 'Finance', 'Travel', 'Media']) {
+  for (const name of ['Hub', 'Finance', 'Travel', 'Media', 'Town']) {
     await expect(bar.getByRole('link', { name, exact: true })).toBeVisible();
   }
   await expect(page.locator('.app-switcher__toggle')).toBeHidden();
@@ -313,7 +313,7 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   await page.keyboard.press('Enter');
   const menu = page.locator('#app-switcher-menu');
   await expect(menu).toBeVisible();
-  for (const name of ['Hub', 'Finance', 'Travel', 'Media']) {
+  for (const name of ['Hub', 'Finance', 'Travel', 'Media', 'Town']) {
     await expect(menu.getByRole('link', { name, exact: true })).toBeVisible();
   }
   await page.keyboard.press('ArrowDown');
@@ -323,7 +323,7 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   await page.keyboard.press('ArrowUp');
   await expect(menu.getByRole('link', { name: 'Hub', exact: true })).toBeFocused();
   await page.keyboard.press('End');
-  await expect(menu.getByRole('link', { name: 'Media', exact: true })).toBeFocused();
+  await expect(menu.getByRole('link', { name: 'Town', exact: true })).toBeFocused();
   await page.keyboard.press('Home');
   await expect(menu.getByRole('link', { name: 'Hub', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
@@ -447,7 +447,7 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
   // cross-tab lock lands as fast as the channel delivers it, and a hard 1s
   // cap only made this test flaky under load.
   await Promise.all([
-    expect(finance).toHaveURL(/\/finance\/vault\/unlock$/),
+    expect(finance).toHaveURL(/\/finance\/vault\/unlock(?:\?|$)/),
     expect(finance.getByText('Harbor Checking')).toHaveCount(0),
     expect(hub).toHaveURL(/\/hub$/),
     expect.poll(async () => {

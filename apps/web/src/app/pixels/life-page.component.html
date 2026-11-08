@@ -1,0 +1,123 @@
+<div class="life-page">
+  <div class="life-toolbar">
+    <p>One square per week since your birthday. Each row is one year.</p>
+    @if (grid()) {
+      <ui-button variant="secondary" (clicked)="toggleView()">
+        {{ preferences.view() === 'table' ? 'View as poster' : 'View as table' }}
+      </ui-button>
+    }
+  </div>
+
+  @for (banner of banners(); track banner) {
+    <p class="life-banner" role="status">
+      <span>{{ banner }}</span>
+      <button type="button" (click)="load()">Retry</button>
+    </p>
+  }
+
+  <ui-state
+    [state]="uiState()"
+    thing="your pixels"
+    [emptyTitle]="emptyTitle()"
+    [emptyMessage]="emptyMessage()"
+    [emptyAction]="emptyAction()"
+    emptyLink="/settings/profile"
+    [emptyIcon]="emptyIcon()"
+    [updatedAt]="updatedAt()"
+    next="/pixels/life"
+    (retry)="load()">
+    @if (grid(); as life) {
+      <div class="life-layout">
+        <div
+          class="life-keys"
+          role="group"
+          tabindex="0"
+          [attr.aria-label]="groupLabel()"
+          aria-describedby="life-key-help"
+          (keydown)="onKey($event)">
+          <p id="life-key-help" class="visually-hidden">
+            Arrow keys move one week or one year. Page Up and Page Down move ten years.
+            Home and End move to the start or end of the row. T jumps to this week.
+          </p>
+          @if (preferences.view() === 'table') {
+            <app-life-table
+              [years]="life.years"
+              [showAge]="life.showAge"
+              [showTown]="showTown()"
+              [selectedRow]="selected()?.row ?? null"
+              (pick)="selectRow($event)" />
+          } @else {
+            <app-life-poster
+              [weeks]="life.cells"
+              [metrics]="metrics()"
+              [birthday]="life.birthday"
+              [showAge]="life.showAge"
+              [rowCount]="life.rowCount"
+              [now]="life.now"
+              [selected]="selected()"
+              (selectedChange)="select($event)" />
+          }
+        </div>
+        <div class="life-side">
+          @if (selectedCell(); as cell) {
+            <app-life-week
+              [week]="cell"
+              [rowCount]="life.rowCount"
+              [showAge]="life.showAge"
+              [financeStatus]="snapshot()?.financeStatus ?? 'locked'"
+              [showTown]="showTown()"
+              [showMedia]="showMedia()"
+              [showTravel]="showTravel()"
+              (step)="onStep($event)" />
+          }
+          <section class="life-card" aria-labelledby="life-legend-heading">
+            <h2 id="life-legend-heading">Legend</h2>
+            <ul class="life-legend">
+              <li><span class="life-swatch life-swatch-0" aria-hidden="true"></span> Less</li>
+              <li><span class="life-swatch life-swatch-1" aria-hidden="true"></span><span class="visually-hidden">level 1</span></li>
+              <li><span class="life-swatch life-swatch-2" aria-hidden="true"></span><span class="visually-hidden">level 2</span></li>
+              <li><span class="life-swatch life-swatch-3" aria-hidden="true"></span><span class="visually-hidden">level 3</span></li>
+              <li><span class="life-swatch life-swatch-4" aria-hidden="true"></span> More</li>
+              <li><span class="life-swatch life-swatch-lived" aria-hidden="true"></span> Lived, no suite data</li>
+              <li><span class="life-swatch life-swatch-future" aria-hidden="true"></span> Future</li>
+              <li><span class="life-swatch life-swatch-now" aria-hidden="true"></span> This week</li>
+              @if (metrics().showDots) {
+                <li><span class="life-swatch life-swatch-trip" aria-hidden="true"></span> Trip week</li>
+                <li><span class="life-swatch life-swatch-plan" aria-hidden="true"></span> Planned trip</li>
+              }
+              @if (snapshot()?.financeStatus === 'locked') {
+                <li>Finance locked <a routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels/life' }">Unlock</a></li>
+              } @else if (snapshot()?.financeStatus !== 'ready') {
+                <li>Finance · no data</li>
+              }
+            </ul>
+          </section>
+          <section class="life-card" aria-labelledby="life-trips-heading">
+            <h2 id="life-trips-heading">Trips</h2>
+            @if (trips().length === 0) {
+              <p class="life-note">No trips in this range.</p>
+            } @else {
+              <ul class="life-trips">
+                @for (trip of trips(); track trip.id) {
+                  <li>
+                    <span aria-hidden="true">{{ trip.start > (snapshot()?.to ?? '') ? '◇' : '●' }}</span>
+                    {{ trip.title }}
+                    <span class="life-note">{{ tripWhen(trip.start) }}</span>
+                    @if (trip.start > (snapshot()?.to ?? '')) {
+                      <span class="visually-hidden">planned</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+          @if (!life.showAge) {
+            <p class="life-note">Age is hidden. Turn on "Show my age" in <a routerLink="/settings/profile">Settings › Profile</a>.</p>
+          }
+        </div>
+      </div>
+    }
+  </ui-state>
+
+  <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ announcement() }}</p>
+</div>

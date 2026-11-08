@@ -1,0 +1,22 @@
+<ul class="pixels-legend" aria-label="Legend">
+  @if (colorBy() === 'activity') {
+    <li class="pixels-legend__ramp">
+      <span>Less</span>
+      <span class="pixel" aria-hidden="true"></span>
+      <span class="pixel l1" aria-hidden="true"></span>
+      <span class="pixel l2" aria-hidden="true"></span>
+      <span class="pixel l3" aria-hidden="true"></span>
+      <span class="pixel l4" aria-hidden="true"></span>
+      <span>More</span>
+    </li>
+    <li><span class="pixel trip" aria-hidden="true"></span> Trip day</li>
+    <li><span class="pixel plan" aria-hidden="true"></span> Planned trip</li>
+    <li><span class="pixel future" aria-hidden="true"></span> Future</li>
+  } @else {
+    <li><span class="pixel app-town" aria-hidden="true"></span> Town</li>
+    <li><span class="pixel app-media" aria-hidden="true"></span> Media</li>
+    <li><span class="pixel app-travel" aria-hidden="true"></span> Travel</li>
+    <li><span class="pixel app-finance" aria-hidden="true"></span> Finance</li>
+    <li class="pixels-legend__note">Square shows the app with the most points that day.</li>
+  }
+</ul>

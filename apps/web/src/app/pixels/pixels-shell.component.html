@@ -1,0 +1,10 @@
+<div class="pixels">
+  <p class="eyebrow">Hub</p>
+  <h1>Pixels</h1>
+  <p class="sub">Your suite activity, one square at a time.</p>
+  <nav class="pixels-tabs" aria-label="Pixels views">
+    <a routerLink="/pixels" routerLinkActive="is-current" [routerLinkActiveOptions]="{ exact: true }">Year</a>
+    <a routerLink="/pixels/life" routerLinkActive="is-current">Life</a>
+  </nav>
+  <router-outlet />
+</div>

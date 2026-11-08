@@ -21,9 +21,6 @@ export class PrivateLayoutComponent {
   readonly menuOpen = signal(false);
   readonly switcherOpen = signal(false);
   readonly searchOpen = signal(false);
-  readonly isMac = typeof navigator !== 'undefined'
-    && /mac/i.test(navigator.platform || navigator.userAgent);
-  readonly searchShortcutTitle = this.isMac ? 'Search (⌘ K)' : 'Search (Ctrl K)';
 
   @ViewChild(SearchDialogComponent) private searchDialog?: SearchDialogComponent;
 
@@ -51,6 +48,7 @@ export class PrivateLayoutComponent {
     { label: 'Finance', href: '/finance', exact: false },
     { label: 'Travel', href: '/travel', exact: false },
     { label: 'Media', href: '/media', exact: false },
+    { label: 'Town', href: '/town', exact: false },
   ] as const;
 
   @ViewChild('userMenu') private userMenu?: ElementRef<HTMLElement>;
@@ -102,8 +100,13 @@ export class PrivateLayoutComponent {
       const editing = active instanceof HTMLElement
         && !!active.closest('input, textarea, select, [contenteditable="true"]');
       if (editing) return;
+      // A grid key handler owns focus once the user lands on a cell. Chasing
+      // the heading after that steals the calendar and year keyboard.
+      const inGrid = active instanceof HTMLElement && !!active.closest('[role="grid"]');
+      if (inGrid) return;
       if (!dialogOpen && heading) {
         if (active !== heading) {
+          if (performance.now() - started > 400) return;
           confirm = false;
           heading.tabIndex = -1;
           heading.focus({ preventScroll: true, focusVisible: false } as FocusOptions & { focusVisible?: boolean });
@@ -141,6 +144,16 @@ export class PrivateLayoutComponent {
   closeMenu(restoreFocus = true): void {
     this.menuOpen.set(false);
     if (restoreFocus) this.userButton?.nativeElement.focus();
+  }
+
+  /**
+   * Escape has to remove the menu before the key event returns. The signal
+   * update otherwise waits for a later change-detection turn, so the next
+   * open still sees the menu and skips the click that would show it.
+   */
+  private paintMenus(): void {
+    if (!this.userButton && !this.switcherButton) return;
+    this.change.detectChanges();
   }
 
   closeSwitcher(restoreFocus = true): void {
@@ -196,17 +209,19 @@ export class PrivateLayoutComponent {
       event.preventDefault();
       event.stopPropagation();
       this.closeSwitcher();
+      this.paintMenus();
       return;
     }
     if (!this.menuOpen()) return;
     event.preventDefault();
     event.stopPropagation();
     this.closeMenu();
+    this.paintMenus();
   }
 
   get appName(): string {
     const section = this.router.url.split(/[?#]/)[0].split('/')[1] ?? '';
-    return ({ hub: 'Hub', finance: 'Finance', travel: 'Travel', media: 'Media' } as Record<string, string>)[section] || 'Apps';
+    return ({ hub: 'Hub', finance: 'Finance', travel: 'Travel', media: 'Media', town: 'Town' } as Record<string, string>)[section] || 'Apps';
   }
 
   get home(): string {

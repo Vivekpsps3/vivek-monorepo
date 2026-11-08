@@ -1,0 +1,58 @@
+.life-week {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  padding: var(--space-4);
+}
+
+.life-kicker,
+.life-summary,
+.life-place {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.life-week h2 {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.life-week ul {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.life-lock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.life-lock a {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.life-steppers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.life-steppers button {
+  min-height: 44px;
+  min-width: 44px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+}

@@ -228,7 +228,7 @@ test('Calendar keeps its selected date when opening Add transaction', async ({ p
   await vault.open('/spending?t=calendar');
   const selected = `${today().slice(0, 8)}05`;
   await page.locator(`[data-date="${selected}"]`).click();
-  await page.getByRole('link', { name: 'Add transaction', exact: true }).click();
+  await page.getByRole('link', { name: /^Add transaction on / }).click();
   const dialog = page.getByRole('dialog', { name: 'Add transaction' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Date', { exact: true })).toHaveValue(selected);
@@ -479,7 +479,7 @@ test('bank imports require account identity, resume one receipt, and undo retain
   await editor.getByLabel('Merchant (optional)', { exact: true }).fill('Coffee shop');
   await editor.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(editor).toBeHidden();
-  await page.getByText(/Import receipts \(/).click();
+  await page.getByText(/Import history \(/).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('dialog', { name: 'Undo this import?' }).getByRole('button', { name: 'Undo import', exact: true }).click();
   // The unedited rows disappear before the receipt is marked withdrawn. Waiting

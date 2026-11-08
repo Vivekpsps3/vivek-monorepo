@@ -13,7 +13,7 @@ import { UiPageHeaderComponent } from '@vivek/ui';
   imports: [RouterLink, PlanningComponent, InvestmentInsightsComponent, StockLabComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <ui-page-header title="Planning" />
+      <ui-page-header [title]="'Planning'" />
       <nav class="hub-tabs" aria-label="Planning sections">
         <a [routerLink]="[]" [queryParams]="{ t: null }" [class.on]="tab === 'path'" [attr.aria-current]="tab === 'path' ? 'page' : null">Retirement and goals</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'growth' }" [class.on]="tab === 'growth'" [attr.aria-current]="tab === 'growth' ? 'page' : null">Portfolio projection</a>

@@ -1,0 +1,36 @@
+.life-table-wrap {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.life-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--text-sm);
+}
+
+.life-table-wrap caption {
+  text-align: left;
+  margin-bottom: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.life-table-wrap th,
+.life-table-wrap td {
+  text-align: left;
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.life-table-wrap button {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+}

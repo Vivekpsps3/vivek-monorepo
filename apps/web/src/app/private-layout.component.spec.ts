@@ -9,6 +9,19 @@ import { BehaviorSubject, of } from 'rxjs';
 @Component({standalone: true, template: '<input aria-label="Private draft" value="">'})
 class PrivateDraftComponent {}
 
+@Component({
+  standalone: true,
+  template: `
+    <main>
+      <h1>Spending</h1>
+      <div role="grid" aria-label="October 2026">
+        <button type="button" role="gridcell" class="day">15</button>
+      </div>
+    </main>
+  `,
+})
+class GridPageComponent {}
+
 describe('Shared private shell', () => {
   it('destroys a mounted private draft when the signed-in identity changes', async () => {
     const users = new BehaviorSubject({id: 1, display_name: 'Ada'});
@@ -44,11 +57,28 @@ describe('Shared private shell', () => {
     fixture.detectChanges();
     return { fixture, session };
   }
+  it('keeps a grid cell focused after the page heading arrives', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'finance/spending', component: GridPageComponent}]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/finance/spending');
+    const cell = harness.routeNativeElement?.querySelector('[role="gridcell"]') as HTMLButtonElement;
+    cell.focus();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(document.activeElement).toBe(cell);
+  });
   it('provides the app switcher and one account/theme surface', async () => {
     const { fixture } = await render();
     const apps = fixture.nativeElement.querySelector('nav[aria-label="Apps"]') as HTMLElement;
     const links = [...apps.querySelectorAll('a')].map(link => link.getAttribute('href'));
-    expect(links).toEqual(['/hub', '/finance', '/travel', '/media']);
+    expect(links).toEqual(['/hub', '/finance', '/travel', '/media', '/town']);
     expect(fixture.nativeElement.querySelector('a.suite-hub')).toBeNull();
     expect(fixture.nativeElement.querySelector('a.suite-brand')).toBeNull();
     expect(fixture.nativeElement.querySelector('a[href="/account"]')).toBeNull();

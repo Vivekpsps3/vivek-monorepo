@@ -94,6 +94,15 @@
   --chart-4: #3d6f8f;
   --chart-5: #6e6a5e;
   --chart-6: #857f74;
+  --pixel-0: var(--surface-2);
+  --pixel-1: #5f9e98;
+  --pixel-2: #2f807a;
+  --pixel-3: #146560;
+  --pixel-4: #0a4744;
+  --pixel-lived: #c9c0b3;
+  --pixel-future: var(--border);
+  --pixel-ring: var(--text);
+  --pixel-plan: var(--chart-4);
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
@@ -152,6 +161,11 @@
     --chart-4: #8eb6d4;
     --chart-5: #c8c0a4;
     --chart-6: #7d8794;
+    --pixel-1: #4f8d86;
+    --pixel-2: #6fb3aa;
+    --pixel-3: #8fd0c8;
+    --pixel-4: #c9eee9;
+    --pixel-lived: #514b43;
 }
 
 @media (max-width: 640px) {

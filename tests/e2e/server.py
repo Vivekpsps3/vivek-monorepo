@@ -9,7 +9,7 @@ import argparse
 import base64
 import os
 import tempfile
-from datetime import timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,7 +22,9 @@ from apps.server.identity.models import User, UserSession
 from apps.server.identity.session import _hash_secret, get_current_user, utc_now_naive
 from apps.server.main import Dependencies, Settings, create_app
 from apps.server.migrations import adopt_or_upgrade
-from apps.server.town.models import TownBase
+from apps.server.town.clock import get_town_clock
+from apps.server.town.engine import name_key
+from apps.server.town.models import Habit, HabitCheckin, TownBase
 from apps.server.world.models import WorldBase
 from apps.travel.backend.deps import get_geocoder
 from apps.travel.backend.models import Base as TravelBase
@@ -78,10 +80,71 @@ def fixture_app(directory: Path, suite: str):
                     },
                 )
 
+    clock_box = {"now": datetime(2026, 10, 29, 19, 0, tzinfo=UTC)}
+
+    def seed_pixels(empty: bool) -> None:
+        from apps.travel.backend.models import Trip
+
+        now = datetime.now(UTC)
+        with database.sessionmaker.begin() as db:
+            owner = db.get(User, 1)
+            other = db.get(User, 2)
+            if owner is not None:
+                owner.birthday = None if empty else date(1990, 5, 4)
+                owner.pixels_show_age = False
+            if other is not None:
+                other.birthday = date(1980, 1, 1)
+                other.pixels_show_age = True
+            if empty:
+                return
+            habit = Habit(
+                user_id=1,
+                name="Read synthetic",
+                slot=0,
+                building_style="forge",
+                per_week=7,
+                created_on=date(2026, 1, 1),
+                created_at=now,
+                name_key=name_key("Read synthetic"),
+            )
+            other_habit = Habit(
+                user_id=2,
+                name="Other habit",
+                slot=0,
+                building_style="garden",
+                per_week=7,
+                created_on=date(2026, 1, 1),
+                created_at=now,
+                name_key=name_key("Other habit"),
+            )
+            db.add_all([habit, other_habit])
+            db.flush()
+            for day in (date(2026, 1, 10), date(2026, 8, 15)):
+                db.add(HabitCheckin(habit_id=habit.id, user_id=1, day=day, created_at=now))
+            db.add(HabitCheckin(habit_id=other_habit.id, user_id=2, day=date(2026, 8, 15), created_at=now))
+            db.add_all([
+                Trip(
+                    user_id=1,
+                    title="Portland",
+                    start_date=date(2026, 8, 14),
+                    end_date=date(2026, 8, 17),
+                    status="booked",
+                    counts_as_pto=False,
+                ),
+                Trip(
+                    user_id=2,
+                    title="Other trip",
+                    start_date=date(2026, 8, 14),
+                    end_date=date(2026, 8, 17),
+                    status="booked",
+                    counts_as_pto=False,
+                ),
+            ])
+
     fixtures = APIRouter()
 
     @fixtures.post("/e2e/reset")
-    def reset():
+    def reset(request: Request):
         with database.engine.begin() as connection:
             for metadata in (
                 TravelBase.metadata,
@@ -101,8 +164,19 @@ def fixture_app(directory: Path, suite: str):
                         "expires_at": utc_now_naive() + timedelta(days=1),
                     }
                 )
-        if suite == "media":
+        seed = request.query_params.get("seed") or ""
+        if seed in {"pixels", "pixels-empty"}:
+            seed_pixels(empty=seed == "pixels-empty")
+        elif suite == "media":
             seed_media()
+        return {"ok": True, "seed": seed or suite}
+
+    @fixtures.post("/e2e/town/clock")
+    async def set_town_clock(request: Request):
+        payload = await request.json()
+        raw = payload.get("iso") if isinstance(payload, dict) else None
+        moment = datetime.fromisoformat(raw) if isinstance(raw, str) else datetime(2026, 10, 29, 19, 0, tzinfo=UTC)
+        clock_box["now"] = moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
         return {"ok": True}
 
     @fixtures.get("/synthetic-cover.png")
@@ -137,6 +211,8 @@ def fixture_app(directory: Path, suite: str):
     application.dependency_overrides[get_geocoder] = lambda: (
         lambda _query: [{"label": "Kyoto", "lat": 35.0116, "lng": 135.7681}]
     )
+    if suite == "town":
+        application.dependency_overrides[get_town_clock] = lambda: clock_box["now"]
 
     if suite != "finance":
         with database.sessionmaker.begin() as db:
@@ -179,7 +255,7 @@ def fixture_app(directory: Path, suite: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", choices=("finance", "travel", "media"), required=True)
+    parser.add_argument("--suite", choices=("finance", "travel", "media", "town"), required=True)
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
     os.environ.update(AUTH_SIGNUP_MODE="open", SESSION_COOKIE_SECURE="0", LOCAL_DEV_AUTH="0")

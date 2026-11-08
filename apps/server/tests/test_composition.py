@@ -427,6 +427,10 @@ def test_startup_checks_schema_frontend_and_static_files(tmp_path):
         assert "<app-root" in settings.text
         assert client.get("/settings/account").status_code == 200
         assert client.get("/settings/profile").status_code == 404
+        assert client.get("/pixels").status_code == 200
+        assert "<app-root" in client.get("/pixels").text
+        assert client.get("/pixels/life").status_code == 200
+        assert client.get("/pixelsx").status_code == 404
         assert client.get("/account").status_code == 200
         assert client.get("/travel/trips/42").status_code == 200
         _user(application.state.database, 1, "town-token", "town-csrf")
