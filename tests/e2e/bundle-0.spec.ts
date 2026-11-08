@@ -447,7 +447,7 @@ test('a settings lock clears Finance and the Hub in other tabs within a second',
   // cross-tab lock lands as fast as the channel delivers it, and a hard 1s
   // cap only made this test flaky under load.
   await Promise.all([
-    expect(finance).toHaveURL(/\/finance\/vault\/unlock$/),
+    expect(finance).toHaveURL(/\/finance\/vault\/unlock(?:\?|$)/),
     expect(finance.getByText('Harbor Checking')).toHaveCount(0),
     expect(hub).toHaveURL(/\/hub$/),
     expect.poll(async () => {

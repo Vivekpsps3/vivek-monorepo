@@ -17,7 +17,7 @@ export const NETWORK_MESSAGE = "Can't reach Finance. Check your connection and t
   imports: [UiPageHeaderComponent, UiCardComponent, UiButtonComponent, UiInputComponent],
   template: `
     <div class="page vault-page">
-      <ui-page-header title="Unlock your vault" />
+      <ui-page-header [title]="'Unlock your vault'" />
       <ui-card>
         @if (username) {
           <p class="vault-unlock__who">Signed in as <strong>{{ username }}</strong>. <button type="button" class="vault-unlock__link" (click)="signOut()">Not you? Sign out</button></p>

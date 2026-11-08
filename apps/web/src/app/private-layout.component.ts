@@ -21,9 +21,6 @@ export class PrivateLayoutComponent {
   readonly menuOpen = signal(false);
   readonly switcherOpen = signal(false);
   readonly searchOpen = signal(false);
-  readonly isMac = typeof navigator !== 'undefined'
-    && /mac/i.test(navigator.platform || navigator.userAgent);
-  readonly searchShortcutTitle = this.isMac ? 'Search (⌘ K)' : 'Search (Ctrl K)';
 
   @ViewChild(SearchDialogComponent) private searchDialog?: SearchDialogComponent;
 
