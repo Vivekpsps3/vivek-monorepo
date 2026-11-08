@@ -1,0 +1,26 @@
+<dl class="year-stats">
+  <div>
+    <dt>Active days</dt>
+    <dd data-stat="active">{{ stats().active }}</dd>
+  </div>
+  <div>
+    <dt>Longest run</dt>
+    <dd data-stat="longest-run">{{ stats().longestRun }}</dd>
+  </div>
+  <div>
+    <dt>Trip days</dt>
+    <dd data-stat="trip-days">{{ stats().tripDays }}</dd>
+  </div>
+  <div>
+    <dt>Budget kept</dt>
+    <dd data-stat="budget-kept">
+      @if (stats().budgetKept === null) {
+        <span class="year-stats__lock" role="img" aria-label="Finance locked">
+          <ui-icon name="lock" />
+        </span>
+      } @else {
+        {{ stats().budgetKept }}
+      }
+    </dd>
+  </div>
+</dl>

@@ -1,0 +1,43 @@
+<div
+  class="year-grid"
+  role="grid"
+  [attr.aria-label]="label()"
+  aria-rowcount="12"
+  aria-colcount="31"
+  (keydown)="onKeydown($event)"
+>
+  @for (row of rows(); track row[0].month) {
+    <div class="year-grid__row" role="row" [attr.aria-rowindex]="row[0].month">
+      @for (cell of row; track cell.day) {
+        @if (cell.date) {
+          <button
+            type="button"
+            role="gridcell"
+            [id]="cellId(cell.date)"
+            [attr.data-date]="cell.date"
+            [attr.data-month]="cell.month"
+            [attr.data-day]="cell.day"
+            [class]="cell.className"
+            [attr.aria-label]="cell.label"
+            [attr.aria-selected]="cell.date === selected()"
+            [attr.aria-current]="cell.today ? 'date' : null"
+            [attr.tabindex]="cell.date === tabDate() ? 0 : -1"
+            [style.grid-row]="cell.gridRow"
+            [style.grid-column]="cell.gridColumn"
+            (click)="pick(cell.date)"
+          ></button>
+        } @else {
+          <div
+            class="pixel none"
+            role="presentation"
+            aria-hidden="true"
+            [attr.data-month]="cell.month"
+            [attr.data-day]="cell.day"
+            [style.grid-row]="cell.gridRow"
+            [style.grid-column]="cell.gridColumn"
+          ></div>
+        }
+      }
+    </div>
+  }
+</div>
