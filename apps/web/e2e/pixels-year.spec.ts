@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../../../tests/e2e/fixtures';
 
 // Town Playwright project (apps/web/e2e/playwright.config.ts). Seed `pixels`.
 test.describe('Pixels year', () => {
@@ -113,6 +113,7 @@ test.describe('Pixels year', () => {
         await expect(table).toBeVisible();
         const portland = table.getByRole('row', { name: /Aug 15, 2026/ });
         await expect(portland).toContainText('Portland, day 2 of 4');
+        await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Pixels');
         await portland.focus();
         await expect(portland).toBeFocused();
         await page.keyboard.press('Enter');

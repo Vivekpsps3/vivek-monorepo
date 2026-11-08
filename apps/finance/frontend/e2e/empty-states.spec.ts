@@ -117,7 +117,7 @@ test.describe('empty states behavior', () => {
     const vault = await syntheticVault(page, {});
     await vault.open('/have?t=holdings');
     await expect(page.getByText('No holdings yet')).toBeVisible();
-    await page.waitForTimeout(1000);
+    await page.clock.runFor(1000);
     expect(vault.quoteRequests).toEqual([]);
     await expect(page.getByText(/Updating prices/)).toHaveCount(0);
   });

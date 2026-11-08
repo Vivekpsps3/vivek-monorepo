@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 import { formatDateRange } from './dates.mjs';
 
 // Dates are built from the browser-local calendar day (the same localToday
@@ -56,76 +56,43 @@ test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
 });
 
-for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']]) {
-  test.describe(`trips list at ${width}px ${theme}`, () => {
-    test.use({ viewport: { width, height: width === 390 ? 844 : 800 } });
+// Appearance is covered by screenshots/axe; list behavior runs once.
+test('trips group current, upcoming and past plans with expandable history', async ({ page, request }) => {
+  await seed(request);
+  await page.goto('/travel');
+  const awayCard = card(page, 'Away now trip');
+  await expect(awayCard).toContainText('Day 2 of 4');
+  await expect(awayCard).toContainText("Open today's plan");
 
-    test.beforeEach(async ({ page }) => {
-      await page.addInitScript((value) => {
-        localStorage.setItem('suite-theme', value);
-      }, theme);
-    });
+  const future = card(page, 'Future trip');
+  await expect(future).toContainText('In 43 days');
+  await expect(future).toContainText(formatDateRange(iso(43), iso(45)));
+  await expect(future).toContainText('Review the plan');
+  const text = (await future.textContent()).replaceAll('\u2060', '');
+  // The API sorts currency buckets by code; the card preserves that order.
+  expect(text).toContain('€80.00 · $1,240.00');
 
-    test(`[${width} ${theme}] in progress card says Day 2 of 4 and Open today's plan`, async ({ page, request }) => {
-      await seed(request);
-      await page.goto('/travel');
-      const awayCard = card(page, 'Away now trip');
-      await expect(awayCard).toContainText('Day 2 of 4');
-      await expect(awayCard).toContainText("Open today's plan");
-      await expectCleanLayout(page);
-    });
+  const wanted = ['Away now', 'Upcoming', 'Past'];
+  await expect(page.locator('main h2')).toHaveText(wanted);
 
-    test(`[${width} ${theme}] upcoming card shows In 43 days, formatted range, per-currency totals and Review the plan`, async ({ page, request }) => {
-      await seed(request);
-      await page.goto('/travel');
-      const future = card(page, 'Future trip');
-      await expect(future).toContainText('In 43 days');
-      await expect(future).toContainText(formatDateRange(iso(43), iso(45)));
-      await expect(future).toContainText('Review the plan');
-      const text = (await future.textContent()).replaceAll('\u2060', '');
-      // The API sorts currency buckets by code; the card preserves that order.
-      expect(text).toContain('€80.00 · $1,240.00');
-      await expectCleanLayout(page);
-    });
-
-    test(`[${width} ${theme}] groups are Away now, Upcoming and Past in order`, async ({ page, request }) => {
-      await seed(request);
-      await page.goto('/travel');
-      const wanted = ['Away now', 'Upcoming', 'Past'];
-      await expect(page.locator('main h2')).toHaveText(wanted);
-      const headings = await page.locator('main h2').allTextContents();
-      expect(headings.filter((text) => wanted.includes(text.trim())).map((text) => text.trim())).toEqual(wanted);
-      await expectCleanLayout(page);
-    });
-
-    test(`[${width} ${theme}] past shows six and Show all 7 past trips expands and collapses`, async ({ page, request }) => {
-      await seed(request);
-      await page.goto('/travel');
-      const past = page.locator('section').filter({
-        has: page.getByRole('heading', { name: 'Past', exact: true }),
-      });
-      await expect(past.locator('a.trip-card')).toHaveCount(6);
-      const toggle = past.getByRole('button', { name: 'Show all 7 past trips', exact: true });
-      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      await toggle.click();
-      await expect(past.locator('a.trip-card')).toHaveCount(7);
-      const fewer = past.getByRole('button', { name: 'Show fewer', exact: true });
-      await expect(fewer).toHaveAttribute('aria-expanded', 'true');
-      await fewer.click();
-      await expect(past.locator('a.trip-card')).toHaveCount(6);
-      await expect(past.getByRole('button')).toBeFocused();
-      await expectCleanLayout(page);
-    });
-
-    test(`[${width} ${theme}] no raw ISO dates on the list`, async ({ page, request }) => {
-      await seed(request);
-      await page.goto('/travel');
-      const text = await page.locator('main').textContent();
-      expect(text).not.toMatch(/\b\d{4}-\d{2}-\d{2}/);
-      await expectCleanLayout(page);
-    });
+  const past = page.locator('section').filter({
+    has: page.getByRole('heading', { name: 'Past', exact: true }),
   });
-}
+  await expect(past.locator('a.trip-card')).toHaveCount(6);
+  const toggle = past.getByRole('button', { name: 'Show all 7 past trips', exact: true });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(past.locator('a.trip-card')).toHaveCount(7);
+  const fewer = past.getByRole('button', { name: 'Show fewer', exact: true });
+  await expect(fewer).toHaveAttribute('aria-expanded', 'true');
+  await fewer.click();
+  await expect(past.locator('a.trip-card')).toHaveCount(6);
+  await expect(past.getByRole('button')).toBeFocused();
+
+  const mainText = await page.locator('main').textContent();
+  expect(mainText).not.toMatch(/\b\d{4}-\d{2}-\d{2}/);
+  await expectCleanLayout(page);
+});
 
 test('empty: no header New trip and primary Plan a trip', async ({ page }) => {
   await page.goto('/travel');

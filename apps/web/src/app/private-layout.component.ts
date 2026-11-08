@@ -103,10 +103,10 @@ export class PrivateLayoutComponent {
       // A control inside the arrived page owns the keyboard. Section links sit
       // outside main, so choosing Net worth or Trips still moves focus to the
       // new heading. Chasing that heading after the user reaches Add
-      // transaction, Edit, or the year grid steals Enter.
+      // transaction, Edit, the year grid or a focusable table row steals Enter.
       const inPageControl = active instanceof HTMLElement
         && !!active.closest('#workspace-content main')
-        && !!active.closest('a, button, input, textarea, select, [role="button"], [role="link"], [role="grid"], [contenteditable="true"]');
+        && !!active.closest('a, button, input, textarea, select, [role="button"], [role="link"], [role="grid"], [tabindex]:not([tabindex="-1"]), [contenteditable="true"]');
       if (inPageControl) return;
       if (!dialogOpen && heading) {
         if (active !== heading) {

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../../../tests/e2e/fixtures';
 import type { TownResponse } from '../src/app/town/town.types';
 
 // TH1 owns the town server, clock and seeds. These scenarios run with that harness.

@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../../../tests/e2e/fixtures';
 
 // Life poster. Seeds and the town domain come from the shared web Playwright harness.
 // Birthday values here are synthetic.

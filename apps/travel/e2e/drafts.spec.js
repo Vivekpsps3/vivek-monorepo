@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 const policy = { balance_days: '10', balance_as_of: '2026-01-01', accrual_amount: '1', accrual_unit: 'day', accrual_cadence: 'monthly', hours_per_day: '8' };
 const travelNav = page => page.getByRole('navigation', { name: 'Travel sections', exact: true });

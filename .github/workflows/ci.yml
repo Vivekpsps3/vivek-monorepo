@@ -130,6 +130,8 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-python
+      - uses: ./.github/actions/setup-playwright
       - name: Production bundle from Frontend
         run: |
           set -euo pipefail
@@ -144,22 +146,12 @@ jobs:
           else
             make build-frontends
           fi
-      - uses: ./.github/actions/setup-python
-      - uses: ./.github/actions/setup-playwright
-      # Domain configs cover Finance, Media, Town, and Travel. The root config
-      # repeats those three projects, so this job runs only its suite project.
+      # Root projects reuse the domain configs and start isolated servers on
+      # demand. One scheduler balances all domains across the two workers.
       - name: Finance, Travel, Media, and Town
         env:
           PYTHON: python
-        run: |
-          set -uo pipefail
-          fail=0
-          npx playwright test --config apps/finance/frontend/playwright.config.ts || fail=1
-          npx playwright test --config apps/media/e2e/playwright.config.ts || fail=1
-          npx playwright test --config apps/web/e2e/playwright.config.ts || fail=1
-          npx playwright test --config apps/travel/e2e/playwright.config.js || fail=1
-          npx playwright test --project=suite || fail=1
-          exit "$fail"
+        run: npx playwright test
 
   unified:
     # deploy.yml "Require the seeded schema rehearsal" matches this name.

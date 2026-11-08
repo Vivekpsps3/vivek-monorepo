@@ -1,6 +1,6 @@
 import { chooseColorTheme, openUserMenu } from '../../../tests/e2e/user-menu.mjs';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 test('axe on all native Travel screens in light and dark at phone and desktop widths', async ({ page, request }) => {
   test.setTimeout(180_000);

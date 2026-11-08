@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 // PF6: Settings › Profile › Birthday. Runs under the town e2e domain
 // (apps/web/e2e/playwright.config.ts from TH1). Seeds come from

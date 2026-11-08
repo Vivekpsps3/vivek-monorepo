@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../../../tests/e2e/fixtures';
 
 // The town project sets reducedMotion: 'reduce' and America/Los_Angeles.
 //

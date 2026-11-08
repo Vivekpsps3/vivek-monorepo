@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../../tests/e2e/fixtures';
 
 const morning = {
   ident: 'UAL837', ident_iata: 'UA837', status: 'Scheduled',
@@ -74,7 +74,12 @@ test('a date-line flight says the arrival is on an earlier local date', async ({
 });
 
 test('a missing key, a timeout, and no match stay distinct and editable', async ({ page, request }) => {
+  await page.clock.install({ time: new Date('2026-11-01T12:00:00Z') });
   let mode = 'missing';
+  let releaseTimeout;
+  const timeoutGate = new Promise(resolve => { releaseTimeout = resolve; });
+  let timeoutStarted;
+  const pendingTimeout = new Promise(resolve => { timeoutStarted = resolve; });
   await page.route('**/travel/api/flights/lookup', async route => {
     if (mode === 'missing') {
       return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
@@ -82,7 +87,8 @@ test('a missing key, a timeout, and no match stay distinct and editable', async 
       }) });
     }
     if (mode === 'timeout') {
-      await new Promise(resolve => setTimeout(resolve, 7000));
+      timeoutStarted();
+      await timeoutGate;
       return route.abort().catch(() => {});
     }
     return route.fulfill({ json: { flights: [] } });
@@ -93,8 +99,16 @@ test('a missing key, a timeout, and no match stay distinct and editable', async 
   await expect(problem).toContainText('Add a FlightAware AeroAPI key in Settings');
   await expect(page.getByLabel('Departure local date and time')).toBeEnabled();
   mode = 'timeout';
-  await page.getByRole('button', { name: 'Retry flight schedule' }).click();
-  await expect(problem).toContainText('FlightAware took too long', { timeout: 8000 });
+  await page.clock.pauseAt(new Date('2026-11-01T12:01:00Z'));
+  try {
+    await page.getByRole('button', { name: 'Retry flight schedule' }).click();
+    await pendingTimeout;
+    await page.clock.runFor(5000);
+    await expect(problem).toContainText('FlightAware took too long');
+  } finally {
+    releaseTimeout();
+    await page.clock.resume();
+  }
   mode = 'none';
   await page.getByRole('button', { name: 'Retry flight schedule' }).click();
   await expect(problem).toContainText('No matching flight on that date');
