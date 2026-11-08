@@ -1,0 +1,94 @@
+.concept-tabs,
+.concept-actions,
+.concept-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.concept-tabs { margin: 12px 0; }
+
+.world-tab,
+.concept-form input,
+.concept-form textarea,
+.concept-date input,
+.concept-actions ui-button {
+  min-height: 44px;
+}
+
+.world-tab {
+  min-width: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--card-bg, transparent);
+  border: 1px solid var(--border, currentColor);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.world-tab[aria-selected="true"] {
+  outline: 2px solid var(--accent, currentColor);
+}
+
+.concept-form,
+.concept-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 16px;
+}
+
+.concept-card {
+  flex: 1 1 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, transparent);
+}
+
+.concept-form input,
+.concept-form textarea,
+.concept-date input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  color: var(--text);
+  background: var(--card-bg, transparent);
+  border: 1px solid var(--border, currentColor);
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+}
+
+.concept-help { margin: 0; font-size: 0.9rem; }
+
+.concept-date {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+:host :focus-visible {
+  outline: 2px solid var(--focus-ring, #0b5fff);
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  :host ::ng-deep .ui-dialog-backdrop:has(.world-concept-side) {
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: 0;
+  }
+
+  :host ::ng-deep .world-concept-side {
+    height: 100%;
+    max-height: 100%;
+    max-width: min(28rem, 100%);
+    margin: 0;
+    border-radius: 0;
+    overflow: auto;
+  }
+}

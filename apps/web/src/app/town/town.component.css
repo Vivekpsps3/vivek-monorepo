@@ -1,5 +1,6 @@
 :host { display: block; box-sizing: border-box; max-width: 1200px; margin: auto; padding: 16px; }
 header { margin-bottom: 24px; }
+.explore-world { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; }
 h1, h2 { margin-top: 0; }
 progress { width: 100%; accent-color: var(--accent); }
 .town-layout { display: grid; gap: 24px; align-items: start; }

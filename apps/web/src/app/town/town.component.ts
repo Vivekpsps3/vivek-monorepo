@@ -15,6 +15,7 @@ import { TownTodayComponent, liveCheck } from './town-today.component';
 import { stage } from './town-levels';
 import { applySeen, readSeen } from './town-seen';
 import type { TownResponse } from './town.types';
+import { WORLD_COPY } from '../world/world.types';
 
 @Component({
   selector: 'app-town',
@@ -40,6 +41,7 @@ export class TownComponent {
   readonly placeholders = Array.from({ length: 9 }, (_, i) => i);
   readonly suggestions = ['Read 20 pages', 'Walk 30 minutes', 'Sleep by 12'];
   readonly emptySprite = townSpriteUrl('lot-empty');
+  readonly exploreWorld = WORLD_COPY.explore;
   private readonly document = inject(DOCUMENT);
   constructor() {
     this.loads.pipe(

@@ -22,6 +22,7 @@
         [attr.aria-valuenow]="data.town.xp" [attr.aria-valuetext]="'Level ' + data.town.level + ', ' + data.town.xp + ' of ' + data.town.next_level_xp + ' XP'"
         aria-label="Town XP"></progress>
     } @else { <p>Lv {{ data.town.level }} · Max</p> }
+    <a class="explore-world" href="/town/world">{{ exploreWorld }}</a>
   </header>
   @if (data.town.founded_on === null) {
     <ui-empty-state title="Found Terraria-on-Sea" message="Pick a first habit. Your town grows as you keep it, and as you watch things in Media and finish trips in Travel.">

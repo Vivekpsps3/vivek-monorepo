@@ -41,7 +41,7 @@ EARLIEST_UNDERSTOOD = date(2000, 1, 1)
 NAME_INVALID_MESSAGE = "Enter a name of 1 to 80 characters, without control characters."
 NAME_TAKEN_MESSAGE = "You already have a concept with that name."
 DATE_INVALID_MESSAGE = "That date isn't available for a concept."
-LIMIT_MESSAGE = "You can keep at most 500 concepts."
+LIMIT_MESSAGE = "Delete a concept to free a space. You can keep at most 500."
 NOTE_INVALID_MESSAGE = "Notes can be at most 2,000 characters."
 SOURCE_INVALID_MESSAGE = "Source must be a single line of at most 500 characters."
 
