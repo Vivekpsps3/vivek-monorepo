@@ -140,6 +140,16 @@ export class PrivateLayoutComponent {
     if (restoreFocus) this.userButton?.nativeElement.focus();
   }
 
+  /**
+   * Escape has to remove the menu before the key event returns. The signal
+   * update otherwise waits for a later change-detection turn, so the next
+   * open still sees the menu and skips the click that would show it.
+   */
+  private paintMenus(): void {
+    if (!this.userButton && !this.switcherButton) return;
+    this.change.detectChanges();
+  }
+
   closeSwitcher(restoreFocus = true): void {
     this.switcherOpen.set(false);
     if (restoreFocus) this.switcherButton?.nativeElement.focus();
@@ -193,12 +203,14 @@ export class PrivateLayoutComponent {
       event.preventDefault();
       event.stopPropagation();
       this.closeSwitcher();
+      this.paintMenus();
       return;
     }
     if (!this.menuOpen()) return;
     event.preventDefault();
     event.stopPropagation();
     this.closeMenu();
+    this.paintMenus();
   }
 
   get appName(): string {

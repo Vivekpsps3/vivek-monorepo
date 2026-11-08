@@ -204,7 +204,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await shot('admin-locks', width, theme);
 
         await vault.open('/recurring');
-        await page.locator('header').getByRole('button', { name: 'Add job' }).click();
+        await page.getByRole('button', { name: 'Add job', exact: true }).click();
         const job = page.getByRole('dialog', { name: 'Add job' });
         await job.getByRole('button', { name: 'Save' }).click();
         await expect(job.locator('[data-error-summary]')).toBeFocused();

@@ -2,8 +2,10 @@ import { expect } from '@playwright/test';
 
 export async function openUserMenu(page) {
   const trigger = page.locator('.user-menu-toggle');
-  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
   const menu = page.getByRole('navigation', { name: 'User options', exact: true });
+  // The expanded flag can still say open after Escape until the menu node is gone.
+  // A click in that window would close it. Open only when the menu is not shown.
+  if (!(await menu.isVisible())) await trigger.click();
   await expect(menu).toBeVisible();
   return menu;
 }
