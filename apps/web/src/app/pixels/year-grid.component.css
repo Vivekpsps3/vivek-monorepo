@@ -1,0 +1,47 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Twelve month rows in the DOM. At max-width 640px the same cells are placed
+   as 31 day rows by 12 month columns, matching adjacentYearDate. */
+.year-grid {
+  display: grid;
+  grid-template-columns: repeat(31, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.year-grid__row {
+  display: contents;
+}
+
+.year-grid .pixel {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 0;
+}
+
+.year-grid button.pixel {
+  border: 0;
+  font: inherit;
+  font-size: 0;
+  line-height: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.year-grid .pixel.none {
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .year-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}

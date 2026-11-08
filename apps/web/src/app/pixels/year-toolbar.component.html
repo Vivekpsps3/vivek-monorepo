@@ -1,0 +1,16 @@
+<div class="year-toolbar">
+  <div class="year-toolbar__nav">
+    <ui-button variant="secondary" size="sm" ariaLabel="Previous year" [disabled]="year() <= 1" (clicked)="shift.emit(-1)">
+      <ui-icon name="chevron-left" size="sm" />
+    </ui-button>
+    <h2 class="year-toolbar__year">{{ year() }}</h2>
+    <ui-button variant="secondary" size="sm" ariaLabel="Next year" [disabled]="year() >= 9999" (clicked)="shift.emit(1)">
+      <ui-icon name="chevron-right" size="sm" />
+    </ui-button>
+  </div>
+  <app-color-by-toggle />
+  <ui-button variant="secondary" size="sm" (clicked)="toggleView()">{{ viewLabel() }}</ui-button>
+  @if (financeStatus() === 'locked') {
+    <a class="year-toolbar__unlock" routerLink="/finance/vault/unlock" [queryParams]="{ next: '/pixels' }">Finance locked · Unlock</a>
+  }
+</div>
