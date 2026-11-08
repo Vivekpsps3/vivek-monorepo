@@ -149,14 +149,33 @@ h1 {
   grid-column: 1 / -1;
 }
 
-.town-bar {
+.town-bar,
+.pixels-bar {
   grid-column: 1 / -1;
 }
 
-.town-open {
+.town-open,
+.pixels-open {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+}
+
+.pixel-strip {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: var(--space-4);
+}
+
+.pixel-strip .pixel {
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 8px;
+}
+
+.pixel-strip .pixel:not(.future) {
+  cursor: pointer;
 }
 
 .town-progress {
