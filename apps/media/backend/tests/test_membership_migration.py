@@ -338,13 +338,15 @@ def test_mapping_keeps_scores_and_creates_only_evidenced_memberships():
 
 def test_revision_is_the_only_head_after_trip_pto(tmp_path):
     script = ScriptDirectory.from_config(make_config("sqlite://"))
-    assert script.get_heads() == ["site_leave_buckets_v1"]
+    assert script.get_heads() == [head_revision()]
     assert (
         script.get_revision("site_catalog_title_sort_v1").down_revision == "site_media_progress_v1"
     )
     assert script.get_revision("site_media_progress_v1").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PARENT
-    assert head_revision() == "site_leave_buckets_v1"
+    assert REVISION in {
+        revision.revision for revision in script.iterate_revisions(head_revision(), "base")
+    }
     offline = StringIO()
     plan = make_config("sqlite://")
     plan.stdout = offline
@@ -416,7 +418,7 @@ def test_revision_is_the_only_head_after_trip_pto(tmp_path):
         db.commit()
 
     command.upgrade(cfg, "head")
-    assert current_revision(database) == "site_leave_buckets_v1"
+    assert current_revision(database) == head_revision()
     assert model_diff(database) == []
     with sqlite3.connect(database) as db:
         assert db.execute(
@@ -492,7 +494,7 @@ def test_revision_is_the_only_head_after_trip_pto(tmp_path):
         ).fetchone() == (0,)
 
     command.upgrade(cfg, "head")
-    assert current_revision(database) == "site_leave_buckets_v1"
+    assert current_revision(database) == head_revision()
     assert model_diff(database) == []
 
 

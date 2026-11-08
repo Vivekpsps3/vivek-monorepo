@@ -417,6 +417,10 @@ h2:focus-visible,
   color: var(--text);
 }
 
+.import-help {
+  color: var(--text-secondary);
+}
+
 .toast-host {
   position: fixed;
   left: 24px;
@@ -708,11 +712,12 @@ h2:focus-visible,
   }
 
   .toast-host {
-    left: 50%;
-    right: auto;
+    left: var(--space-4);
+    right: var(--space-4);
     bottom: max(24px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    width: min(400px, calc(100vw - 32px));
+    width: auto;
+    max-width: none;
+    transform: none;
   }
 
   body:has(app-main-layout) .toast-host {

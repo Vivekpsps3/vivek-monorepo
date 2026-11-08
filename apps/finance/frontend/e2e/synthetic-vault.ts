@@ -159,7 +159,10 @@ export async function syntheticVault(
     return JSON.parse(Buffer.concat([cipher.update(packed.subarray(12, -16)), cipher.final()]).toString());
   }
   for (const [collection, rows] of Object.entries(seed)) {
-    for (const data of rows) {
+    let nextId = Math.max(0, ...rows.map(row => Number.isSafeInteger(row.id) ? row.id : 0)) + 1;
+    for (const input of rows) {
+      // Omitted ids must not collapse every row onto the same ciphertext key.
+      const data = { ...input, id: input.id ?? nextId++ };
       const row: RecordRow = {
         collection, client_id: `synthetic_${collection}_${data.id}`, ciphertext_b64: '',
         schema_version: 2, key_version: 1, revision: 1, updated_at: new Date().toISOString(),

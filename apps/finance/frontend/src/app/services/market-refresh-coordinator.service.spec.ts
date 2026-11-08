@@ -2,6 +2,7 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
+import { isoDateInZone } from '@vivek/browser';
 import { SESSION_CONTEXT, authNavigation, type SessionPort } from '@vivek/ui';
 import { financeTabId, hasDek, holdDek, readLockEpoch, wipeDek } from '../crypto/dek-holder';
 import { createVaultMaterial } from '../crypto/vault-crypto';
@@ -55,7 +56,7 @@ describe('MarketRefreshCoordinatorService', () => {
   let auth: any;
 
   const quote = (symbol: string, values: Record<string, unknown> = {}) => ({
-    symbol, price: 125, price_source: 'live_eod', quote_date: new Date().toISOString().slice(0, 10), valid: true, ...values,
+    symbol, price: 125, price_source: 'live_eod', quote_date: isoDateInZone(new Date(), 'America/Los_Angeles'), valid: true, ...values,
   });
 
   beforeEach(() => {

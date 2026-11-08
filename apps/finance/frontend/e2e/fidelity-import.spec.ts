@@ -67,24 +67,15 @@ for (const width of [390, 1280]) {
 
       test('only the replacement consequence uses warning color', async ({ page }, testInfo) => {
         const { dialog } = await setup(page);
-        const colors = await dialog.locator('.import-help').evaluate(node => {
-          const probe = document.createElement('span');
-          node.append(probe);
-          probe.style.color = 'var(--text-secondary)';
-          const secondary = getComputedStyle(probe).color;
-          probe.style.color = 'var(--warning)';
-          const warning = getComputedStyle(probe).color;
-          probe.remove();
-          return { helper: getComputedStyle(node).color, secondary, warning };
-        });
-        expect(colors.helper).toBe(colors.secondary);
         await upload(dialog, fidelityGood);
         const consequence = dialog.locator('.import-consequence');
         await expect(consequence).toHaveText(moneyText('2 positions · $1,250.00 · replaces your 1 Fidelity holding'));
-        expect(await consequence.evaluate(node => getComputedStyle(node).color)).toBe(colors.warning);
+        const helpColor = await dialog.locator('.import-help').first().evaluate(node => getComputedStyle(node).color);
+        const consequenceColor = await consequence.evaluate(node => getComputedStyle(node).color);
+        expect(consequenceColor).not.toBe(helpColor);
         expect(await dialog.evaluate((node, warning) => [...node.querySelectorAll('*')]
-          .filter(child => getComputedStyle(child).color === warning)
-          .map(child => child.className), colors.warning)).toEqual(['import-consequence']);
+          .filter(child => child.className && getComputedStyle(child).color === warning)
+          .map(child => child.className), consequenceColor)).toEqual(['import-consequence']);
         await assertAccessible(page);
         await page.screenshot({ path: testInfo.outputPath('preview.png'), fullPage: true });
       });

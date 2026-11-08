@@ -85,7 +85,9 @@ for (const [width, theme] of [[390, 'light'], [390, 'dark'], [1280, 'light'], [1
       })).ok()).toBeTruthy();
       await page.goto('/travel/trips/' + trip.id);
       const main = page.locator('main');
-      const text = (await main.textContent()).replaceAll('⁠', '');
+      await expect(tripHeader(page, 'Formatted trip')).toBeVisible();
+      // Rendered block boundaries must not become a raw amount/currency pair.
+      const text = (await main.innerText()).replaceAll('⁠', '');
       expect(text).not.toMatch(/\b\d{4}-\d{2}-\d{2}/);
       expect(text).not.toMatch(/\b\d+\.\d{2} [A-Z]{3}\b/);
       expect(text).not.toContain(' · · ');

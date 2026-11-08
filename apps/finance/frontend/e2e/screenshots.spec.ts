@@ -77,10 +77,14 @@ async function chooseTheme(page: Page, vault: Awaited<ReturnType<typeof syntheti
 
 async function expectSkipLinkFocused(page: Page) {
   const skip = page.locator('.skip-link');
-  // Home has no main h1. Wait for route-arrival focus to reach its fallback
-  // before focusing the skip link, so that delayed move cannot steal focus.
+  // Route arrival focuses the page h1 when there is one, otherwise the workspace.
   await page.bringToFront();
-  await expect(page.locator('#workspace-content')).toBeFocused();
+  const heading = page.locator('h1');
+  if (await heading.count()) {
+    await expect(heading.first()).toBeFocused();
+  } else {
+    await expect(page.locator('#workspace-content')).toBeFocused();
+  }
   await skip.focus();
   await expect(skip).toBeFocused();
 }
@@ -129,7 +133,8 @@ test.describe('finance F1 screenshot matrix', () => {
         await expect(page.locator('.home-tile--balance')).toContainText('Holdings');
         await expect(page.locator('.home-tile--balance .source-dates')).toHaveCount(0);
         await shot('home-source-dates', width, theme);
-        await page.locator('canvas[aria-label*="category"]').scrollIntoViewIfNeeded();
+        await page.locator('app-charts').scrollIntoViewIfNeeded();
+        await expect(page.locator('app-charts canvas').first()).toBeVisible();
         await expectChartsDrawn(page);
         await freezeCharts(page);
         await shot('donuts-home', width, theme);
@@ -138,7 +143,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await shot('skip-link', width, theme);
 
         await vault.open('/have?t=assets');
-        await expect(page.getByText('Needs fixing').first()).toBeVisible();
+        await expect(page.getByText('Needs fixing').filter({ visible: true }).first()).toBeVisible();
         await expect(page.getByText('Amount too large to count')).toBeVisible();
         await expect(page.getByText(/Excludes \d+ entr/)).toBeVisible();
         await shot('net-worth-needs-fixing', width, theme);
@@ -159,7 +164,7 @@ test.describe('finance F1 screenshot matrix', () => {
         await thawCharts(page);
 
         await vault.open('/planning');
-        await expect(page.getByText('Current net worth').locator('..')).toContainText(moneyText('$1,'));
+        await expect(page.locator('.tool-metric').first()).toContainText(moneyText('$1,'));
         await expect(page.getByText(moneyText('−$480.00'))).toHaveCount(0);
         await shot('planning-negative-subscription', width, theme);
 

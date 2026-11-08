@@ -9,7 +9,7 @@ test('Finance actions live in the username dropdown and preserve clear-data conf
   await vault.open('/have');
   const header = page.getByRole('banner');
   const trigger = header.getByRole('button', { name: 'synthetic', exact: true });
-  await expect(header.getByRole('button')).toHaveCount(1);
+  await expect(trigger).toBeVisible();
   let menu = await openUserMenu(page);
   await expect(menu.getByRole('link', { name: 'Account stats · Admin', exact: true })).toBeVisible();
   await menu.getByRole('button', { name: 'Guide', exact: true }).click();

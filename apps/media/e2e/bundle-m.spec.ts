@@ -34,7 +34,7 @@ test('search distinguishes unavailable, unconfigured and available source covera
   });
   await page.goto('/media/search');
   await page.getByRole('searchbox').fill('d');
-  await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
+  await expect(page.locator('main').getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
   expect(requests).toBe(0);
   await page.getByRole('searchbox').fill('dune');
   await expect(page.getByText('Search is incomplete.', { exact: true })).toBeVisible();

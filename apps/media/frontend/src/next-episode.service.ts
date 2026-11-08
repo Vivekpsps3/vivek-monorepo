@@ -1,6 +1,7 @@
 import { Injectable, inject } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { Observable, map } from "rxjs";
+import { silentErrorToast } from "@vivek/ui";
 import { Detail, Episode } from "./media.models";
 
 export interface MarkedEpisode {
@@ -29,7 +30,7 @@ export class NextEpisodeService {
     return this.http
       .post<NextResponse>(`/media/api/entries/${entryId}/episodes/next`, {
         expected_episode_id: expectedEpisodeId,
-      })
+      }, { context: silentErrorToast() })
       .pipe(
         map((response) => ({
           marked: response.marked,
@@ -42,7 +43,7 @@ export class NextEpisodeService {
     return this.http
       .post<void>(`/media/api/entries/${entryId}/episodes/${episodeId}/watched`, {
         watched: false,
-      })
+      }, { context: silentErrorToast() })
       .pipe(map(() => undefined));
   }
 }

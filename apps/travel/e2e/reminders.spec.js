@@ -131,7 +131,7 @@ for (const combo of COMBOS) {
       });
       const section = await openReminders(page, trip);
       await section.getByLabel('Fragile').check();
-      await expect(page.getByRole('alert')).toContainText('Toggle unavailable');
+      await expect(page.locator('main').getByRole('alert')).toContainText('Toggle unavailable');
       await expect(section.getByLabel('Fragile')).not.toBeChecked();
       await expect(section.getByRole('heading', { name: 'Done', exact: true })).toHaveCount(0);
       await expectClean(page, violations);

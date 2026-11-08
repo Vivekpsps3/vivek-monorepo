@@ -60,6 +60,7 @@
 
 .month-hero .section-eyebrow {
   margin: 0;
+  color: var(--text);
 }
 
 .import-guide-card {
@@ -269,6 +270,7 @@
 }
 
 .table-actions--toolbar {
+  --control-h-sm: 44px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -276,6 +278,19 @@
   width: 100%;
   margin-bottom: var(--space-3);
   min-width: 0;
+}
+
+/* Equal 44px boxes keep search, Filters, and Export on one baseline. */
+.table-actions--toolbar .search-input,
+.table-actions--toolbar .filter-toggle,
+:host ::ng-deep .table-actions--toolbar .ui-btn--sm {
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px;
+}
+
+:host ::ng-deep .table-actions--toolbar .ui-btn--sm {
+  padding-block: 0;
 }
 
 .table-actions--toolbar .search-input {
@@ -1024,7 +1039,7 @@ label.form-group,
 
 /* F12: Filters toggle, panel and chips */
 .filter-toggle {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 var(--space-3);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);

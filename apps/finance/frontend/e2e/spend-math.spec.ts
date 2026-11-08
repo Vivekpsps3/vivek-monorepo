@@ -33,7 +33,7 @@ test('the category table keeps refunds signed while the chart clamps them', asyn
 
   const table = page.locator('app-category-spend-table');
   await expect(table).toContainText('Food');
-  await expect(table).toContainText(moneyText('$17.25'));
+  await expect(table).toContainText(moneyText('$27.25'));
   await expect(table).toContainText('Shopping');
   await expect(table).toContainText(moneyText('−$3.25'));
 });

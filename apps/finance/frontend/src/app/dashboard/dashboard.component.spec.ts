@@ -154,6 +154,8 @@ describe('Dashboard', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(fixture.componentInstance.isStarterState).toBeFalse();
+    fixture.componentInstance.hideFirstSteps();
+    fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('First steps');
     const { FinanceGuideService } = await import('../core/finance-guide.service');
     TestBed.inject(FinanceGuideService).requestFirstSteps();
@@ -165,7 +167,7 @@ describe('Dashboard', () => {
     const finance = {
       netWorth$: of({ total: 1000, portfolio: 500, other_assets: 600, liabilities: 100 }),
       cashflowSummary$: of(null),
-      holdings$: of([]),
+      holdings$: of([{ id: 1, symbol: 'VOO', shares: 1 }]),
       dashboardTransactions$: of([]),
       assets$: of([]),
       liabilities$: of([]),

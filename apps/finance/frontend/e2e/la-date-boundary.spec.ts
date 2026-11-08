@@ -26,7 +26,8 @@ test('today and default dates stay on the Los Angeles day when UTC is already th
   const vault = await syntheticVault(page);
   await vault.open('/spending?t=calendar');
   expect(await browserDates(page)).toEqual({ utc: UTC_TODAY, la: LA_TODAY });
-  await expect(page.locator('.day.today')).toHaveAttribute('aria-label', LA_TODAY);
+  await expect(page.locator('.day.today')).toHaveAttribute('data-date', LA_TODAY);
+  await expect(page.locator('.day.today')).toHaveAttribute('aria-label', /Oct 15/);
 
   await vault.open('/spending?t=activity');
   await page.locator('ui-page-header').getByRole('button', { name: 'Add transaction', exact: true }).click();
@@ -34,12 +35,12 @@ test('today and default dates stay on the Los Angeles day when UTC is already th
   await expect(transaction.getByLabel('Date', { exact: true })).toHaveValue(LA_TODAY);
 
   await vault.open('/have?t=holdings');
-  await page.getByRole('button', { name: 'Add holding', exact: true }).click();
+  await page.getByRole('button', { name: 'Add holding', exact: true }).first().click();
   const holding = page.getByRole('dialog', { name: 'Add holding' });
   await expect(holding.getByLabel('Purchase date', { exact: true })).toHaveValue(LA_TODAY);
 
   await vault.open('/have?t=assets');
-  await page.getByRole('button', { name: 'Add asset', exact: true }).click();
+  await page.getByRole('button', { name: 'Add asset', exact: true }).first().click();
   const asset = page.getByRole('dialog', { name: 'Add asset' });
   await expect(asset.getByLabel(/^As of\b/)).toHaveValue(LA_TODAY);
 });
@@ -55,7 +56,7 @@ test('receipt coverage and quote_date stay on the Los Angeles day when UTC is al
   expect(vault.data('holdings')[0].quote_date).not.toBe(UTC_TODAY);
 
   await vault.open('/spending?t=imports', page, '/spending?t=activity&receipts=1');
-  await page.getByRole('button', { name: 'Import from bank', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Import from bank', exact: true });
   await dialog.locator('input[type=file]').setInputFiles({
     name: 'boundary-coverage.csv',

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { moneyText } from './money-text';
 import { syntheticVault } from './synthetic-vault';
 
 // F20: the projection leads with a plain-language answer, an HTML legend,
@@ -10,8 +11,8 @@ test('projection answer, legend and yearly table', async ({ page }) => {
   vault.setQuote('VOO', { price: 700.86 });
   await vault.open('/planning?t=growth');
 
-  await expect(page.getByRole('heading', { name: 'About $5,689 in 30 years' })).toBeVisible();
-  await expect(page.getByText('Starting from $700.86 · 7% a year · $0.00 a month')).toBeVisible();
+  await expect(page.getByRole('heading', { name: moneyText('About $5,689 in 30 years') })).toBeVisible();
+  await expect(page.getByText(moneyText('Starting from $700.86 · 7% a year · $0.00 a month'))).toBeVisible();
 
   // HTML legend toggles series visibility state.
   const projectedToggle = page.getByRole('button', { name: 'Projected value' });
@@ -26,11 +27,11 @@ test('projection answer, legend and yearly table', async ({ page }) => {
   const table = page.getByRole('table', { name: 'Projection by year' });
   await expect(table).toBeVisible();
   await expect(table.getByRole('row')).toHaveCount(31); // header + 30 years
-  await expect(table).toContainText('$5,689');
+  await expect(table).toContainText(moneyText('$5,689'));
 
   // Presets and the Custom path (focus moves to the growth input).
   await page.getByRole('button', { name: '10% annual growth preset' }).click();
-  await expect(page.getByRole('heading', { name: /in 30 years/ })).not.toHaveText('About $5,689 in 30 years');
+  await expect(page.getByRole('heading', { name: /in 30 years/ })).not.toHaveText(moneyText('About $5,689 in 30 years'));
   await page.getByRole('button', { name: 'Custom annual growth' }).click();
   const growthInput = page.locator('#growthInput');
   await expect(growthInput).toBeFocused();

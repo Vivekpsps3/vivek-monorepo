@@ -37,7 +37,9 @@ test('search retains successful matches on partial failure and type/query throug
 
 test('failed manual save keeps the form and retry saves one item',async({page})=>{
   await page.goto('/media/add');
-  await expect(page.getByRole('button',{name:'Add to library'})).toBeDisabled();
+  await page.getByRole('button',{name:'Add to library'}).click();
+  await expect(page.getByLabel('Title')).toBeFocused();
+  await expect(page.getByLabel('Title')).toHaveAttribute('aria-invalid','true');
   await page.getByLabel('Title').fill('Native manual story');
   await page.route('**/media/api/library',async route=>{
     if(route.request().method()==='POST'){await route.fulfill({status:502,json:{code:'unavailable',message:'Synthetic save failure'}});await page.unroute('**/media/api/library');}else await route.continue();

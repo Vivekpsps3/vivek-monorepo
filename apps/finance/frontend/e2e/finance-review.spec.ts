@@ -26,7 +26,7 @@ test('a failed asset save stays in the dialog with the draft', async ({ page }) 
 test('an empty job form focuses the summary once', async ({ page }) => {
   const vault = await syntheticVault(page);
   await vault.open('/recurring');
-  await page.locator('header').getByRole('button', { name: 'Add job' }).click();
+  await page.getByRole('button', { name: 'Add job', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add job' });
   await dialog.getByRole('button', { name: 'Save' }).click();
   const summary = dialog.locator('[data-error-summary]');
@@ -84,7 +84,7 @@ test('home, planning, and activity agree on a negative subscription and a negati
   await expect(page.locator('.home-tile').filter({ hasText: 'Net worth' })).toContainText(moneyText('$1,400.00'));
 
   await vault.open('/planning');
-  await expect(page.getByText('Current net worth').locator('..')).toContainText(moneyText('$1,400.00'));
+  await expect(page.locator('.tool-metric').first()).toContainText(moneyText('$1,400.00'));
   await expect(page.getByText(moneyText('Subscriptions: $191.88'))).toBeVisible();
   await expect(page.locator('.planning-facts-grid')).not.toContainText(moneyText('$480.00'));
 

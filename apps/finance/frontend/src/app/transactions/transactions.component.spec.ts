@@ -538,7 +538,7 @@ describe('Transactions multi-file import UI', () => {
 
 describe('Transactions delete and undo errors', () => {
   function makeComponent() {
-    const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'addTransaction']);
+    const finance = jasmine.createSpyObj('FinanceService', ['deleteTransaction', 'restoreTransaction']);
     const toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
     const confirm = { ask: () => Promise.resolve(true) } as unknown as ConfirmService;
     const component = new TransactionsComponent(
@@ -572,22 +572,22 @@ describe('Transactions delete and undo errors', () => {
   it('shows one retry toast when undoing a transaction delete fails and keeps the amount', async () => {
     const { component, finance, toast } = makeComponent();
     finance.deleteTransaction.and.returnValue(of({ ok: true }));
-    finance.addTransaction.and.returnValue(throwError(() => new Error('nope')));
+    finance.restoreTransaction.and.returnValue(throwError(() => new Error('nope')));
     await component.deleteTransaction(transaction);
     const undo = toast.success.calls.mostRecent().args[1] as () => void;
     undo();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.error.calls.mostRecent().args[0]).toBe("Couldn't restore this transaction.");
     expect(toast.error.calls.mostRecent().args[1].label).toBe('Try again');
-    expect(finance.addTransaction).toHaveBeenCalledWith(jasmine.objectContaining({
+    expect(finance.restoreTransaction).toHaveBeenCalledWith(jasmine.objectContaining({
       date: '2026-10-03', category: 'Food', amount: -45.67, description: 'Legacy return',
     }), true);
     const retry = toast.error.calls.mostRecent().args[1].run as () => void;
-    finance.addTransaction.calls.reset();
+    finance.restoreTransaction.calls.reset();
     toast.error.calls.reset();
     retry();
     expect(toast.error).toHaveBeenCalledTimes(1);
-    expect(finance.addTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
+    expect(finance.restoreTransaction.calls.mostRecent().args[0].amount).toBe(-45.67);
   });
 });
 

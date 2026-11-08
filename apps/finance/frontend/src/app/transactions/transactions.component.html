@@ -51,7 +51,7 @@
             </div>
           }
         </div>
-      } @else if (transactions.length > 0 && summaryMonth) {
+      } @else if (!listLoading && !listError && allTransactions.length > 0 && summaryMonth) {
         <p class="period-empty">No activity in {{ periodMonthName }}.</p>
       }
     </div>
