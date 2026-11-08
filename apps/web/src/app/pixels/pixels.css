@@ -1,0 +1,92 @@
+.pixels {
+  box-sizing: border-box;
+  width: min(100%, var(--content-max));
+  max-width: 100%;
+  margin: 0 auto;
+  padding: var(--space-6) max(var(--gutter), env(safe-area-inset-right)) var(--space-16)
+    max(var(--gutter), env(safe-area-inset-left));
+  overflow-x: clip;
+}
+
+.pixels h1 {
+  margin: var(--space-1) 0;
+}
+
+.pixels .sub {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.pixels-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  margin: var(--space-4) 0 var(--space-6);
+}
+
+.pixels-tabs a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.pixels-tabs a.is-current {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.pixel {
+  position: relative;
+  box-sizing: border-box;
+  border-radius: 3px;
+  background: var(--pixel-0);
+  display: block;
+}
+
+.pixel.l1 { background: var(--pixel-1); }
+.pixel.l2 { background: var(--pixel-2); }
+.pixel.l3 { background: var(--pixel-3); }
+.pixel.l4 { background: var(--pixel-4); }
+.pixel.future {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--pixel-future);
+}
+.pixel.plan {
+  background: transparent;
+  outline: 2px dashed var(--pixel-plan);
+  outline-offset: -2px;
+}
+.pixel.today { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--pixel-ring); }
+.pixel.selected { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--accent); }
+.pixel.none { background: transparent; box-shadow: none; outline: none; }
+.pixel.trip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30%;
+  height: 30%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--card-bg);
+}
+.pixel.app-town { background: var(--chart-2); }
+.pixel.app-media {
+  background: repeating-linear-gradient(135deg, var(--chart-1) 0 3px, color-mix(in srgb, var(--chart-1) 55%, var(--card-bg)) 3px 5px);
+}
+.pixel.app-travel { background: radial-gradient(circle, var(--card-bg) 0 22%, var(--chart-4) 24%); }
+.pixel.app-finance {
+  background: linear-gradient(var(--chart-3) 0 38%, var(--card-bg) 38% 62%, var(--chart-3) 62%);
+}
+
+.pixels-notice {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
