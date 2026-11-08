@@ -1,0 +1,37 @@
+<div class="life-table-wrap">
+  <table>
+    <caption>Life in weeks by year. Each row sums the 52 weeks of that life year.</caption>
+    <thead>
+      <tr>
+        @if (showAge()) {
+          <th scope="col">Age</th>
+        }
+        <th scope="col">Year</th>
+        <th scope="col">Active weeks</th>
+        @if (showTown()) {
+          <th scope="col">Town</th>
+        }
+        <th scope="col">Episodes</th>
+        <th scope="col">Trip days</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (year of years(); track year.row) {
+        <tr [attr.aria-selected]="selectedRow() === year.row ? 'true' : null">
+          @if (showAge()) {
+            <td>{{ year.row }}</td>
+          }
+          <td>
+            <button type="button" (click)="pick.emit(year.row)">{{ year.label }}</button>
+          </td>
+          <td>{{ year.activeWeeks }}</td>
+          @if (showTown()) {
+            <td>{{ year.town }}</td>
+          }
+          <td>{{ year.media }}</td>
+          <td>{{ year.travel }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

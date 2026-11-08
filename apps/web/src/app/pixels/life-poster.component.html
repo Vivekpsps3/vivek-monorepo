@@ -1,0 +1,56 @@
+<svg
+  class="life-poster-svg"
+  [attr.viewBox]="viewBox()"
+  [attr.width]="size().width"
+  [attr.height]="size().height"
+  aria-hidden="true"
+  focusable="false"
+  (click)="onPosterClick($event)">
+  @for (path of paths(); track path.key) {
+    <path
+      [attr.d]="path.d"
+      [attr.fill]="path.fill"
+      [attr.stroke]="path.stroke"
+      [attr.stroke-width]="path.stroke ? 1 : null"
+      shape-rendering="crispEdges" />
+  }
+  @for (dot of dots(); track dot.row + '-' + dot.week) {
+    <circle
+      [attr.cx]="dot.cx"
+      [attr.cy]="dot.cy"
+      [attr.r]="metrics().dotRadius"
+      [attr.fill]="dot.planned ? 'var(--pixel-plan)' : 'var(--card-bg)'" />
+  }
+  @for (label of labels(); track label.text + label.x + label.y) {
+    <text
+      [attr.x]="label.x"
+      [attr.y]="label.y"
+      [attr.text-anchor]="label.anchor"
+      [attr.font-size]="label.size"
+      fill="var(--text-secondary)"
+      font-family="system-ui, sans-serif"
+      font-weight="600">{{ label.text }}</text>
+  }
+  @if (nowRect(); as ring) {
+    <rect
+      class="life-now"
+      [attr.x]="ring.x"
+      [attr.y]="ring.y"
+      [attr.width]="ring.width"
+      [attr.height]="ring.height"
+      fill="none"
+      stroke="var(--pixel-ring)"
+      [attr.stroke-width]="metrics().tier === 'sm' ? 1.5 : 2" />
+  }
+  @if (selectionRect(); as cursor) {
+    <rect
+      class="life-selection"
+      [attr.x]="cursor.x"
+      [attr.y]="cursor.y"
+      [attr.width]="cursor.width"
+      [attr.height]="cursor.height"
+      fill="none"
+      stroke="var(--accent)"
+      stroke-width="1.5" />
+  }
+</svg>

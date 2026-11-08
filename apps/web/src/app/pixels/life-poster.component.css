@@ -1,0 +1,11 @@
+.life-poster-svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.life-poster-svg text {
+  pointer-events: none;
+}

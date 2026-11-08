@@ -1,0 +1,148 @@
+.life-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.life-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.life-toolbar p,
+.life-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.life-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft-bg);
+  color: var(--text);
+}
+
+.life-banner button,
+.life-keys {
+  font: inherit;
+}
+
+.life-banner button {
+  min-height: 44px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  padding: 0 var(--space-3);
+}
+
+.life-layout {
+  display: grid;
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.life-keys {
+  min-width: 0;
+  border-radius: var(--radius-md);
+}
+
+.life-keys:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.life-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.life-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  padding: var(--space-4);
+}
+
+.life-card h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.life-legend,
+.life-trips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.life-legend li,
+.life-trips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 24px;
+}
+
+.life-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  box-sizing: border-box;
+  background: var(--pixel-0);
+}
+
+.life-swatch-1 { background: var(--pixel-1); }
+.life-swatch-2 { background: var(--pixel-2); }
+.life-swatch-3 { background: var(--pixel-3); }
+.life-swatch-4 { background: var(--pixel-4); }
+.life-swatch-lived { background: var(--pixel-lived); }
+.life-swatch-future {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--pixel-future);
+}
+.life-swatch-now { box-shadow: 0 0 0 2px var(--pixel-ring); }
+.life-swatch-trip { background: var(--pixel-2); box-shadow: inset 0 0 0 4px var(--card-bg); }
+.life-swatch-plan {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--pixel-future);
+  position: relative;
+}
+.life-swatch-plan::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pixel-plan);
+}
+
+.life-card a,
+.life-note a {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+@media (min-width: 1024px) {
+  .life-layout {
+    grid-template-columns: minmax(0, auto) minmax(16rem, 1fr);
+  }
+}
