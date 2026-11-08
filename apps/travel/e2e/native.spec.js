@@ -1,6 +1,6 @@
 import {expect,test} from '../../../tests/e2e/fixtures';
 import AxeBuilder from '@axe-core/playwright';
-import {openTripFromList,ptoChoice} from './dates.mjs';
+import {expectSectionHeading,openTripFromList,ptoChoice} from './dates.mjs';
 
 test.beforeEach(async({request})=>{expect((await request.post('/e2e/reset')).ok()).toBeTruthy();});
 
@@ -55,7 +55,7 @@ test('trip home has one Hub and passes accessibility at 390 and 1280',async({pag
  for(const width of [390,1280]){
   await page.setViewportSize({width,height:900});
   await page.goto('/travel');
-  await expect(page.getByRole('heading',{name:'Trips',exact:true})).toBeVisible();
+  await expectSectionHeading(page,'Trips');
   if(width<=640){
     await page.locator('.app-switcher__toggle').click();
     await expect(page.locator('#app-switcher-menu')).toBeVisible();

@@ -92,9 +92,7 @@ for (const width of [390, 1280]) {
           { tab: 'Home', h1: 'Home' },
         ];
         for (const section of sections) {
-          const nav = width === 390
-            ? page.locator('.mobile-tabbar')
-            : page.getByRole('navigation', { name: 'Finance sections' }).first();
+          const nav = page.getByRole('navigation', { name: 'Finance sections' });
           await nav.getByRole('link', { name: section.tab, exact: true }).click();
           await expect(page.locator('h1')).toHaveText(section.h1);
           await expect(page.locator('h1')).toBeFocused();

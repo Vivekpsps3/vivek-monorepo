@@ -28,8 +28,10 @@
         (entry.year ? ' · ' + entry.year : '')
       "
       [title]="entry.title"
-      [subtitle]="entry.creator || undefined"
     >
+      @if (entry.creator) {
+        <p>{{ entry.creator }}</p>
+      }
       <div uiPageArt class="media-art hero-art">
         @if (entry.artwork_url && !broken()) {
           <img

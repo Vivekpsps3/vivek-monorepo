@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '../../../tests/e2e/fixtures';
-import { addItem, closeFilters, openFilters, resetMedia, watchMediaConsole, expectCleanMediaPage as expectCleanPage } from './media-test';
+import { addItem, closeFilters, expectCleanMediaPage as expectCleanPage, expectSectionHeading, openFilters, resetMedia, watchMediaConsole } from './media-test';
 
 test.beforeEach(async ({ request }) => resetMedia(request));
 
@@ -10,7 +10,7 @@ async function openLibrary(page: Page, theme: string, violations: string[], url 
   await page.addInitScript((t) => localStorage.setItem('suite-theme', t), theme);
   watchMediaConsole(page, violations);
   await page.goto(url);
-  await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Library');
 }
 
 async function tagItem(request: APIRequestContext, id: number, tags: string[]) {

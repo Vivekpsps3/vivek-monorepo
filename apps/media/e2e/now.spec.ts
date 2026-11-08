@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '../../../tests/e2e/fixtures';
-import { addItem, resetMedia, watchMediaConsole, expectCleanMediaPage as expectCleanPage } from './media-test';
+import { addItem, expectCleanMediaPage as expectCleanPage, expectSectionHeading, resetMedia, watchMediaConsole } from './media-test';
 
 test.beforeEach(async ({ request }) => resetMedia(request));
 
@@ -10,7 +10,7 @@ async function openNow(page: Page, theme: string, violations: string[]) {
   await page.addInitScript((t) => localStorage.setItem('suite-theme', t), theme);
   watchMediaConsole(page, violations);
   await page.goto('/media');
-  await expect(page.getByRole('heading', { name: 'Now', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Now');
 }
 
 /** The e2e reset seeds three books; remove them for a truly empty library. */

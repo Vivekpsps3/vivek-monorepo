@@ -1,4 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { expectSectionHeading } from './dates.mjs';
 
 const policy = { balance_days: '10', balance_as_of: '2026-01-01', accrual_amount: '1', accrual_unit: 'day', accrual_cadence: 'monthly', hours_per_day: '8' };
 const travelNav = page => page.getByRole('navigation', { name: 'Travel sections', exact: true });
@@ -61,7 +62,8 @@ test('PTO drafts protect navigation and reload; Keep editing preserves both form
   expect(unsaved.buckets.pto.start_balance_hours).toBe('80');
   await trips.click();
   await page.getByRole('button', { name: 'Leave time off', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeFocused();
+  const tripsHeading = await expectSectionHeading(page, 'Trips');
+  await expect(tripsHeading).toBeFocused();
   await travelNav(page).getByRole('link', { name: 'PTO', exact: true }).click();
   await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
   await expect(page.getByLabel('Starting balance')).toHaveValue('80');
@@ -88,7 +90,7 @@ test('saving and removing leave refreshes totals without replacing an unsaved po
   await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
   expect(await blocksUnload(page)).toBe(false);
   await travelNav(page).getByRole('link', { name: 'Trips', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Trips');
   const stored = await (await request.get('/travel/api/pto')).json();
   expect(stored.buckets.pto.start_balance_hours).toBe('12.5');
   expect(stored.policy.balance_saved).toBe('1.5625');
@@ -143,7 +145,7 @@ test('settings draft protects navigation and unload, stays out of browser storag
   await expect(key).toHaveValue('');
   expect(await blocksUnload(page)).toBe(false);
   await travelNav(page).getByRole('link', { name: 'Trips', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Trips');
 });
 
 test('a late key save and personal-key removal preserve a newer typed key', async ({ page }) => {
@@ -164,7 +166,7 @@ test('a late key save and personal-key removal preserve a newer typed key', asyn
   await expect(key).toHaveValue('synthetic-newer-5678');
   await travelNav(page).getByRole('link', { name: 'Trips', exact: true }).click();
   await page.getByRole('button', { name: 'Leave settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Trips');
   // The user menu no longer has a Travel settings item; /travel/settings still does.
   await page.goto('/travel/settings');
   await expect(key).toHaveValue('');

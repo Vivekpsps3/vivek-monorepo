@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import { formatDateRange, formatDay } from '../../../packages/browser/runtime/calendar-format.mjs';
 
 export { formatDateRange, formatDay };
@@ -6,6 +7,17 @@ export { formatDateRange, formatDay };
 export function ptoChoice(page, day) {
   return page.getByRole('combobox', { name: formatDay(day), exact: true })
     .or(page.getByRole('combobox', { name: day, exact: true }));
+}
+
+/** Section titles stay in the accessibility tree and are clipped out of view. */
+export async function expectSectionHeading(page, name) {
+  const heading = page.getByRole('heading', { level: 1, name, exact: true });
+  await expect(heading).toHaveCount(1);
+  await expect(heading).toHaveClass(/ui-page-header__title--concealed/);
+  const box = await heading.boundingBox();
+  expect(box?.width ?? 0).toBeLessThanOrEqual(2);
+  expect(box?.height ?? 0).toBeLessThanOrEqual(2);
+  return heading;
 }
 
 /** The date line is projected into the page header, not a sibling of the h1. */

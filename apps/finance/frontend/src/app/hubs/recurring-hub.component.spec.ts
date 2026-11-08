@@ -141,6 +141,7 @@ describe('RecurringHubComponent heading (F1)', () => {
     const headings = el.querySelectorAll('h1');
     expect(headings.length).toBe(1);
     expect(headings[0].textContent?.trim()).toBe('Recurring');
+    expect(headings[0].classList.contains('ui-page-header__title--concealed')).toBe(true);
     const bills = el.querySelector('h2#commitments-title');
     expect(bills).not.toBeNull();
     expect(bills!.textContent?.trim()).toBe('Bills & subscriptions');

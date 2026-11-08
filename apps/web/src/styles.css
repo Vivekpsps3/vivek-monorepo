@@ -602,10 +602,6 @@ h2:focus-visible,
 }
 
 @media (max-width: 768px) {
-  :root {
-    --mobile-tab-offset: calc(4.5rem + env(safe-area-inset-bottom, 0px));
-  }
-
   html:has(app-main-layout),
   body:has(app-main-layout) {
     height: 100%;
@@ -724,10 +720,6 @@ h2:focus-visible,
     width: auto;
     max-width: none;
     transform: none;
-  }
-
-  body:has(app-main-layout) .toast-host {
-    bottom: calc(var(--mobile-tab-offset) + var(--space-2));
   }
 }
 

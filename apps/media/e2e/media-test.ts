@@ -12,6 +12,18 @@ export async function savedItem(request: APIRequestContext, id: number) {
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
+/** Section titles stay in the accessibility tree and are clipped out of view. */
+export async function expectSectionHeading(page: Page, name?: string | RegExp) {
+  const heading = name === undefined
+    ? page.locator('main h1')
+    : page.getByRole('heading', { level: 1, name, exact: typeof name === 'string' });
+  await expect(heading).toHaveCount(1);
+  await expect(heading).toHaveClass(/ui-page-header__title--concealed/);
+  const box = await heading.boundingBox();
+  expect(box?.width ?? 0).toBeLessThanOrEqual(2);
+  expect(box?.height ?? 0).toBeLessThanOrEqual(2);
+  return heading;
+}
 export async function openItem(page: Page, id: number, title = 'Browser story') {
   await page.goto('/media/item/' + id);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();

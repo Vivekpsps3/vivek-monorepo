@@ -42,7 +42,7 @@ export interface CommitmentRow {
     MoneyPipe, CommonModule, FormsModule, RouterLink, UiButtonComponent, UiBadgeComponent, UiEmptyStateComponent, UiPageHeaderComponent, IncomeComponent, CompensationReportComponent, FixedExpensesComponent, SubscriptionsComponent],
   template: `
     <div class="page recurring-page">
-      <ui-page-header [title]="'Recurring'" />
+      <ui-page-header [title]="'Recurring'" [concealTitle]="true" />
       <nav class="hub-tabs" aria-label="Recurring sections">
         <a [routerLink]="[]" [queryParams]="{ t: null }" queryParamsHandling="merge" [class.on]="tab === 'pay'" [attr.aria-current]="tab === 'pay' ? 'page' : null">Pay</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'spend' }" queryParamsHandling="merge" [class.on]="tab === 'spend'" [attr.aria-current]="tab === 'spend' ? 'page' : null">Bills and subscriptions</a>

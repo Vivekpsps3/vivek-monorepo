@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { ptoChoice } from './dates.mjs';
+import { expectSectionHeading, ptoChoice } from './dates.mjs';
 
 async function trip(request, extra = {}) {
   const response = await request.post('/travel/api/trips', { data: {
@@ -120,7 +120,8 @@ test('delete cancellation preserves a trip, failure is local, and success closes
   await page.getByRole('button', { name: 'Delete trip', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete trip', exact: true }).click();
   await expect(page).toHaveURL(/\/travel$/);
-  await expect(page.getByRole('heading', { name: 'Trips', exact: true })).toBeFocused();
+  const tripsHeading = await expectSectionHeading(page, 'Trips');
+  await expect(tripsHeading).toBeFocused();
 });
 
 test('successful trip retry clears its error and never creates a second trip', async ({ page, request }) => {

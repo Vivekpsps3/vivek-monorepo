@@ -1,21 +1,4 @@
-<nav class="navbar" aria-label="Finance sections">
-  <div class="nav-content">
-    <ui-section-nav label="Finance sections" [items]="sectionNavItems" />
-  </div>
-</nav>
-
-<nav class="mobile-tabbar" aria-label="Finance sections">
-  @for (group of visibleNavGroups; track group.label) {
-    <a
-      [routerLink]="group.items[0].path"
-      class="mobile-tab"
-      [class.active]="isActiveGroup(group)"
-      [attr.aria-current]="isActiveGroup(group) ? 'page' : null">
-      <ui-icon [name]="group.icon" size="md" />
-      <span class="mobile-tab__label">{{ group.label }}</span>
-    </a>
-  }
-</nav>
+<ui-section-nav label="Finance sections" [items]="sectionNavItems" />
 
 @if (apiOffline) {
   <div class="api-banner-wrap">

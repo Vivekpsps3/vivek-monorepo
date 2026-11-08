@@ -1,4 +1,5 @@
 .ui-page-header {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -69,6 +70,36 @@
   line-height: 34px;
   color: var(--text);
   letter-spacing: -0.02em;
+}
+
+/* Clipped from view, still in the accessibility tree, still focusable. */
+.ui-page-header__title--concealed {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ui-page-header__text:not(:has(.ui-page-header__eyebrow)):not(:has(.ui-page-header__subtitle)):not(:has(.ui-page-header__extra *)):has(.ui-page-header__title--concealed) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ui-page-header:not(:has(.ui-page-header__back)):not(:has(.ui-page-header__actions *)):not(:has(.ui-page-header__extra *)):not(:has(.ui-page-header__art *)):not(:has(.ui-page-header__eyebrow)):not(:has(.ui-page-header__subtitle)):has(.ui-page-header__title--concealed) {
+  margin: 0;
+  gap: 0;
 }
 
 .ui-page-header__subtitle {

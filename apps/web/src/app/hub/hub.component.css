@@ -100,27 +100,9 @@
   font-weight: 600;
 }
 
-.eyebrow {
-  margin: 0 0 var(--space-2);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  font-weight: 650;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .open-link:disabled {
   cursor: progress;
   opacity: 0.65;
-}
-
-h1 {
-  margin: 0;
-  font-size: clamp(2.4rem, 5vw, 4.25rem);
-  font-weight: 560;
-  letter-spacing: -0.045em;
-  line-height: 0.98;
-  overflow-wrap: anywhere;
 }
 
 .lede,
@@ -203,7 +185,7 @@ h1 {
   margin-bottom: var(--space-5);
 }
 
-.panel-head > div {
+.panel-head > h2 {
   min-width: 0;
 }
 
@@ -373,10 +355,6 @@ dd {
   .open-link {
     display: inline-flex;
     align-items: center;
-  }
-
-  h1 {
-    font-size: clamp(1.85rem, 9vw, 2.5rem);
   }
 
   .lede {

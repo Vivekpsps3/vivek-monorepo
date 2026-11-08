@@ -52,11 +52,7 @@ interface Summary {
     UiEmptyStateComponent,
   ],
   template: `<main class="page media-page">
-    <ui-page-header
-      eyebrow="Your media, at your pace"
-      title="Now"
-      subtitle="Pick up where you left off."
-    >
+    <ui-page-header title="Now" [concealTitle]="true">
       <ui-button
         uiPageActions
         variant="primary"

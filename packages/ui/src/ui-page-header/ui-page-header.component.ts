@@ -21,4 +21,9 @@ export class UiPageHeaderComponent {
   /** Stays -1 unless a caller sets one, so the next render does not clear navigation focus. */
   titleTabIndex = input(-1);
   embedded = input(false);
+  /**
+   * Section roots keep one h1 for the shell focus move and assistive tech,
+   * and clip that title out of view. The nav already names the section.
+   */
+  concealTitle = input(false);
 }

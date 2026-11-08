@@ -31,11 +31,7 @@ import {
     UiBadgeComponent,
   ],
   template: `<main class="page media-page">
-    <ui-page-header
-      eyebrow="A little discovery"
-      title="Search Media"
-      subtitle="Find a title or artist. Choose the work you mean."
-    >
+    <ui-page-header title="Search Media" [concealTitle]="true">
       <ui-button
         uiPageActions
         variant="ghost"
