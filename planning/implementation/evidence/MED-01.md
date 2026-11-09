@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#235](https://github.com/Vivekpsps3/vivek-monorepo/issues/235); parents [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) and [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) stay open
 - Agent/context, branch/worktree: Cursor Grok, `agent/med-01`, `/home/vivek/Deployments/worktrees/vivek-med-01`
-- Base main SHA, current tested SHA: base `63bc975ede08967e61c50f78b25176b07dc07d18`; tested SHA is the commit that introduces this file
+- Base main SHA, current tested SHA: base `63bc975ede08967e61c50f78b25176b07dc07d18`; tested implementation `669a5ec40ee25246dba1ec1c0e4350464395180f`
 - Fresh-main/prerequisite/active-PR checks: leaf has no queue dependency. Open PRs #279 (`agent/safe-01`), #280 (`agent/ux-01`), and #281 (`agent/ver-02`) do not use `media-records`, `media-library-api`, or `media-provider-transport`. Claim was already on #235. PR #193 MusicBrainz release-group identity stays on write and on explicit album refresh.
 
 ## Acceptance
@@ -31,7 +31,7 @@ PR #193 identity still holds when refresh is explicit: `test_existing_pressing_r
 
 ## Verification
 
-Commands ran in `/home/vivek/Deployments/worktrees/vivek-med-01` on the tree this commit records. Local execution only. CI, merge, and deployment were not run.
+Commands ran in `/home/vivek/Deployments/worktrees/vivek-med-01` on tested implementation `669a5ec40ee25246dba1ec1c0e4350464395180f`. Local execution only. CI, merge, and deployment were not run.
 
 | Command | Result |
 | --- | --- |
@@ -49,8 +49,8 @@ Commands ran in `/home/vivek/Deployments/worktrees/vivek-med-01` on the tree thi
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened with `Closes #235`. Parents #85 and #200 are referenced and not closed.
-- Roadmap #134 append-only status-note URL: posted after the PR. The issue body was not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/282 (`Closes #235`). Parents #85 and #200 are referenced and not closed.
+- Roadmap #134 append-only status-note URL: posted after this note. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): not merged, not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. MED-02 and later Media leaves still wait on this merge.
 - Next actor: reviewer. Do not merge from this context.
