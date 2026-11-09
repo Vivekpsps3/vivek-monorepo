@@ -1,5 +1,5 @@
 {
-  "base_sha": "495d698aedac5c544119c30c9405c810f8038cba",
+  "base_sha": "29e131821d138bba224e02d5d61b77e23247e08a",
   "validated_on": "2026-11-09",
   "roadmap_issue": 134,
   "parents": [
@@ -112,206 +112,80 @@
   },
   "td_notes": {
     "TD-00": {
-      "primary": "REF-01",
       "contributors": [
         "CON-01",
         "VER-04"
       ],
       "note": "Reference owns change-cost scorecard; graph/timing baselines captured within their own slices. Existing review inventory is initial evidence, not current benchmark."
     },
-    "TD-01": {
-      "primary": "UX-01",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-02": {
-      "primary": "SAFE-01",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-03": {
-      "primary": "SAFE-02",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-04": {
-      "primary": "MED-01",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-05": {
-      "primary": "CON-01",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-06": {
-      "primary": "CON-02",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-07": {
-      "primary": "CON-03",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-08": {
-      "primary": "SAFE-03",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-09": {
-      "primary": "SAFE-04",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-10": {
-      "primary": "SAFE-05",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-11": {
-      "primary": "DEL-03",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-12": {
-      "primary": "TYPE-01",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-13": {
-      "primary": "VER-01",
-      "contributors": [],
-      "note": ""
-    },
     "TD-14": {
-      "primary": "VER-02",
       "contributors": [
         "TOWN-01",
         "UX-01"
       ],
       "note": "VER02 owns guard; product packets own real fixtures and behavior activation."
     },
-    "TD-15": {
-      "primary": "VER-03",
-      "contributors": [],
-      "note": ""
-    },
     "TD-16": {
-      "primary": "VER-03",
       "contributors": [
         "UX-01",
         "UX-03"
-      ],
-      "note": ""
-    },
-    "TD-17": {
-      "primary": "MED-07",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-18": {
-      "primary": "MED-08",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-19": {
-      "primary": "DEL-04",
-      "contributors": [],
-      "note": ""
+      ]
     },
     "TD-20": {
-      "primary": "FIN-04",
       "contributors": [
         "FIN-05"
       ],
       "note": "Custom CSV stays an adapter on the existing import plan. FIN-05 owns residual import races, not a second engine."
     },
-    "TD-21": {
-      "primary": "DEL-03",
-      "contributors": [],
-      "note": ""
-    },
     "TD-22": {
-      "primary": "PTO-01",
       "contributors": [
         "PTO-02"
       ],
       "note": "Combined chart is the presentation boundary. Policy forms stay PTO-02; server math stays put."
     },
     "TD-23": {
-      "primary": "TRIP-02",
       "contributors": [
         "TRIP-01",
         "TRIP-04"
       ],
       "note": "Itinerary/day selection is the orchestration seam. Spending stays TRIP-01; row editors stay later trip leaves."
     },
-    "TD-24": {
-      "primary": "DEL-05",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-25": {
-      "primary": "DEL-05",
-      "contributors": [],
-      "note": ""
-    },
     "TD-26": {
-      "primary": "TYPE-01",
       "contributors": [
         "TOWN-03"
       ],
       "note": "Typed boundary preserves explicit money/date semantics; Town Finance-budget run normalization belongs actual product Treasury packet. Confirm product TOWN03 ID."
     },
     "TD-27": {
-      "primary": "TOWN-07",
       "contributors": [
         "OPS-04"
       ],
       "note": "Composite ownership migration is this leaf. Query-capacity evidence stays with the feature that adds the query and with #125."
     },
     "TD-28": {
-      "primary": "MED-01",
       "contributors": [
         "MED-08"
       ],
       "note": "MED01 fixes read-side IO/UoW; MED08 documents/refactors command transaction owner without dual implementation."
     },
     "TD-29": {
-      "primary": "DEL-01",
       "contributors": [
         "DEL-02",
         "DEL-03"
-      ],
-      "note": ""
+      ]
     },
     "TD-30": {
-      "primary": "REF-01",
       "contributors": [
         "DEL-01"
-      ],
-      "note": ""
-    },
-    "TD-31": {
-      "primary": "REF-01",
-      "contributors": [],
-      "note": ""
-    },
-    "TD-32": {
-      "primary": "VER-04",
-      "contributors": [],
-      "note": ""
+      ]
     },
     "TD-33": {
-      "primary": "OPS-05",
       "contributors": [
         "OPS-01"
       ],
       "note": "Independent monitor and redacted failure labels. OPS-01 keeps the current operations contract from growing a second logger."
     },
     "TD-34": {
-      "primary": "SEC-06",
       "contributors": [
         "SEC-05",
         "OPS-04",
@@ -320,33 +194,20 @@
       "note": "Vault export/restore is #121. Measured server restore, retention and off-host activation stay #125."
     },
     "TD-35": {
-      "primary": "TYPE-01",
       "contributors": [
         "VER-01",
         "DEL-04"
-      ],
-      "note": ""
+      ]
     },
     "TD-36": {
-      "primary": "OPS-01",
-      "contributors": [],
       "note": "Dependency and toolchain cadence stays inside the operations contract. No framework migration."
     },
-    "TD-37": {
-      "primary": "REF-01",
-      "contributors": [],
-      "note": ""
-    },
     "TD-38": {
-      "primary": "REF-01",
       "contributors": [
         "VER-04"
-      ],
-      "note": ""
+      ]
     },
     "TD-39": {
-      "primary": "REF-01",
-      "contributors": [],
       "note": "Lean decision policy; no new framework required."
     }
   },
@@ -2005,7 +1866,7 @@
         85
       ],
       "kind": "implementation",
-      "issue": null,
+      "issue": 284,
       "dependencies": [
         "MED-01"
       ],
@@ -2027,7 +1888,7 @@
         85
       ],
       "kind": "implementation",
-      "issue": null,
+      "issue": 285,
       "dependencies": [
         "MED-01"
       ],

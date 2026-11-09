@@ -1,7 +1,7 @@
 # MED-10 — Resolve retained Media runtime race, cache and no-op findings
 
 - Stable key: `MED-10`
-- GitHub leaf: DRAFT
+- GitHub leaf: [#285](https://github.com/Vivekpsps3/vivek-monorepo/issues/285)
 - Parents: [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.

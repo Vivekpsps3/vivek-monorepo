@@ -1,7 +1,7 @@
 # MED-09 — Finish retained Media library and Add interaction acceptance
 
 - Stable key: `MED-09`
-- GitHub leaf: DRAFT
+- GitHub leaf: [#284](https://github.com/Vivekpsps3/vivek-monorepo/issues/284)
 - Parents: [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.

@@ -85,7 +85,7 @@ features free; success is fewer repeated decisions and a smaller required change
 
 ## Scheduling and scope
 
-Finish/verify active correctness PRs, then prioritize dependency-ready deletion:
+Verify merged correctness PRs #279–#282, then prioritize dependency-ready deletion:
 DEL-03 removes the unused World wrapper; DEL-05 removes proven competing control
 styles (coordinate FIN-02). DEL-04 follows the shared lifecycle contract. MED-07
 and MED-08 follow MED-01 without waiting for unrelated TypeScript work.

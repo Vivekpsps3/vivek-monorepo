@@ -2,7 +2,7 @@
 
 This is the executable backlog for [roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
 Parents stay open as scope ledgers. An agent implements one leaf, in one worktree, through one pull request.
-Packets were checked against `main` `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Fresh-read `main`, the live leaf and open pull requests before editing; this snapshot is not a lock.
+The queue amendment was checked against `main` `29e131821d138bba224e02d5d61b77e23247e08a` on 2026-11-09; individual packets retain their original source snapshot and require fresh validation. Fresh-read `main`, the live leaf and open pull requests before editing; this snapshot is not a lock.
 
 Scheduling metadata (packet prose lives only in Markdown): [`queue.json`](queue.json). Check it with:
 
@@ -12,7 +12,7 @@ python3 planning/implementation/plan.py list
 python3 planning/implementation/plan.py launch SAFE-01
 ```
 
-The validator checks packet/index metadata, required sections, acceptance proof cells, source paths and the dependency graph. It does not prove behavioral or semantic coverage. The launch command prints deduplicated verification commands; add gates for the actual diff.
+The validator checks packet headers against queue metadata, required sections, acceptance/deletion proof cells, source paths and the dependency graph. It does not prove behavioral or semantic coverage. The launch command prints deduplicated verification commands; add gates for the actual diff.
 
 ## How to take a leaf
 
@@ -28,8 +28,8 @@ Discovery leaves (`DISC-01`, `DISC-02`) produce a design pull request and do not
 
 ## Deletion first
 
-Finish or verify the active SAFE-01, MED-01, VER-02 and UX-01 PRs. In parallel,
-choose actual non-conflicting cleanup: DEL-03 deletes the unused World wrapper;
+SAFE-01, MED-01, VER-02 and UX-01 merged through PRs #279–#282. Verify those
+outcomes on current main, then choose actual non-conflicting cleanup: DEL-03 deletes the unused World wrapper;
 DEL-05 resolves repeated control styles and coordinates with FIN-02. Then DEL-04
 uses the merged lifecycle contract. MED-07/MED-08 follow MED-01 without waiting
 for TypeScript decoders. Use the [measured deletion contract](deletion-strategy.md).
@@ -41,43 +41,54 @@ MED-10 owns retained runtime QA. No original acceptance row was dropped.
 
 ## Ready now
 
-Dependency-ready at planning time only; read live issues/PRs before claiming. Conflict groups still serialize actual overlapping files.
+Prerequisite outcomes verified against main 29e1318 (PRs #279–#282). Read live issues/PRs before claiming; this is a planning snapshot, not a lock.
 
 | Leaf | Parents | Conflict groups |
 | --- | --- | --- |
-| [SAFE-01](issues/SAFE-01.md) ([#201](https://github.com/Vivekpsps3/vivek-monorepo/issues/201)) | #198 | finance-vault-lifecycle, pixels-data |
+| [SAFE-02](issues/SAFE-02.md) ([#202](https://github.com/Vivekpsps3/vivek-monorepo/issues/202)) | #198, #90 | finance-vault-lifecycle, health-store |
 | [CON-01](issues/CON-01.md) ([#206](https://github.com/Vivekpsps3/vivek-monorepo/issues/206)) | #197 | architecture-checker, root-typescript-config, server-composition |
+| [CON-02](issues/CON-02.md) ([#207](https://github.com/Vivekpsps3/vivek-monorepo/issues/207)) | #197, #196 | private-routes, server-composition |
 | [VER-01](issues/VER-01.md) ([#209](https://github.com/Vivekpsps3/vivek-monorepo/issues/209)) | #199 | quality-tools, root-typescript-config, eslint-config, quality-docs |
-| [VER-02](issues/VER-02.md) ([#210](https://github.com/Vivekpsps3/vivek-monorepo/issues/210)) | #199, #125 | browser-config, ci-workflow, test-discovery, quality-docs |
 | [VER-03](issues/VER-03.md) ([#211](https://github.com/Vivekpsps3/vivek-monorepo/issues/211)) | #199, #81 | town-api-tests, coverage-tools, quality-docs |
 | [DEL-01](issues/DEL-01.md) ([#213](https://github.com/Vivekpsps3/vivek-monorepo/issues/213)) | #200 | shared-public-api, stale-source-cleanup, quality-docs |
 | [DEL-02](issues/DEL-02.md) ([#214](https://github.com/Vivekpsps3/vivek-monorepo/issues/214)) | #200, #121 | identity-origin, identity-session, vault-compatibility, schema-head |
 | [DEL-03](issues/DEL-03.md) ([#215](https://github.com/Vivekpsps3/vivek-monorepo/issues/215)) | #200, #198 | world-ui, world-controller, world-engine |
 | [DEL-05](issues/DEL-05.md) ([#217](https://github.com/Vivekpsps3/vivek-monorepo/issues/217)) | #200, #196 | shared-controls, root-styles, finance-recurring-editors |
+| [FIN-01](issues/FIN-01.md) ([#220](https://github.com/Vivekpsps3/vivek-monorepo/issues/220)) | #65 | finance-price-shell, finance-home |
 | [FIN-02](issues/FIN-02.md) ([#221](https://github.com/Vivekpsps3/vivek-monorepo/issues/221)) | #65 | finance-recurring-editors |
 | [FIN-03](issues/FIN-03.md) ([#222](https://github.com/Vivekpsps3/vivek-monorepo/issues/222)) | #65 | finance-planning |
+| [FIN-05](issues/FIN-05.md) ([#224](https://github.com/Vivekpsps3/vivek-monorepo/issues/224)) | #65 | finance-vault-lifecycle, finance-imports, finance-transactions |
 | [TRIP-02](issues/TRIP-02.md) ([#226](https://github.com/Vivekpsps3/vivek-monorepo/issues/226)) | #84 | travel-trip-main, travel-itinerary |
 | [PTO-01](issues/PTO-01.md) ([#230](https://github.com/Vivekpsps3/vivek-monorepo/issues/230)) | #110 | travel-pto-main, travel-pto-chart |
 | [PTO-02](issues/PTO-02.md) ([#231](https://github.com/Vivekpsps3/vivek-monorepo/issues/231)) | #110 | travel-pto-main, travel-settings |
 | [PTO-03](issues/PTO-03.md) ([#232](https://github.com/Vivekpsps3/vivek-monorepo/issues/232)) | #110 | travel-home, travel-summary |
-| [MED-01](issues/MED-01.md) ([#235](https://github.com/Vivekpsps3/vivek-monorepo/issues/235)) | #85, #200 | media-records, media-library-api, media-provider-transport |
-| [UX-01](issues/UX-01.md) ([#259](https://github.com/Vivekpsps3/vivek-monorepo/issues/259)) | #196 | private-routes, server-composition, pixels-settings |
+| [MED-02](issues/MED-02.md) ([#236](https://github.com/Vivekpsps3/vivek-monorepo/issues/236)) | #85 | media-detail-form |
+| [MED-05](issues/MED-05.md) ([#239](https://github.com/Vivekpsps3/vivek-monorepo/issues/239)) | #85 | media-discovery, media-provider-transport |
+| [MED-07](issues/MED-07.md) ([#241](https://github.com/Vivekpsps3/vivek-monorepo/issues/241)) | #200, #85 | media-provider-transport, media-provider-family, media-records |
+| [MED-08](issues/MED-08.md) ([#242](https://github.com/Vivekpsps3/vivek-monorepo/issues/242)) | #200, #85 | media-records, media-membership, media-library-api |
 | [UX-02](issues/UX-02.md) ([#260](https://github.com/Vivekpsps3/vivek-monorepo/issues/260)) | #196 | town-main, world-ui, private-shell-focus |
 | [UX-03](issues/UX-03.md) ([#261](https://github.com/Vivekpsps3/vivek-monorepo/issues/261)) | #196 | hub-main, pixels-hub-card |
 | [DISC-01](issues/DISC-01.md) ([#264](https://github.com/Vivekpsps3/vivek-monorepo/issues/264)) | #194 | planning-discovery |
 | [DISC-02](issues/DISC-02.md) ([#265](https://github.com/Vivekpsps3/vivek-monorepo/issues/265)) | #195 | planning-discovery |
 | [SEC-01](issues/SEC-01.md) ([#266](https://github.com/Vivekpsps3/vivek-monorepo/issues/266)) | #121 | identity-origin, schema-head |
 | [OPS-01](issues/OPS-01.md) ([#272](https://github.com/Vivekpsps3/vivek-monorepo/issues/272)) | #125 | ci-release, operations-docs, runner-config |
+| [MED-09](issues/MED-09.md) ([#284](https://github.com/Vivekpsps3/vivek-monorepo/issues/284)) | #85 | media-library, media-add, media-runtime |
+| [MED-10](issues/MED-10.md) ([#285](https://github.com/Vivekpsps3/vivek-monorepo/issues/285)) | #85 | media-detail-form, media-runtime, media-records |
 
-Ready leaves sharing named groups (actual PR diffs can overlap beyond this list):
+Ready leaves sharing named groups (inspect actual diffs for other overlap):
 
 - `finance-recurring-editors`: DEL-05, FIN-02
+- `finance-vault-lifecycle`: SAFE-02, FIN-05
 - `identity-origin`: DEL-02, SEC-01
+- `media-detail-form`: MED-02, MED-10
+- `media-provider-transport`: MED-05, MED-07
+- `media-records`: MED-07, MED-08, MED-10
+- `media-runtime`: MED-09, MED-10
 - `planning-discovery`: DISC-01, DISC-02
-- `quality-docs`: VER-01, VER-02, VER-03, DEL-01
+- `quality-docs`: VER-01, VER-03, DEL-01
 - `root-typescript-config`: CON-01, VER-01
 - `schema-head`: DEL-02, SEC-01
-- `server-composition`: CON-01, UX-01
+- `server-composition`: CON-01, CON-02
 - `travel-pto-main`: PTO-01, PTO-02
 - `world-ui`: DEL-03, UX-02
 
@@ -118,8 +129,8 @@ Ready leaves sharing named groups (actual PR diffs can overlap beyond this list)
 - [MED-06](issues/MED-06.md) ([#240](https://github.com/Vivekpsps3/vivek-monorepo/issues/240)): Finish compact Media detail presentation and preserve progress drafts. Depends on MED-02, MED-03, MED-04.
 - [MED-07](issues/MED-07.md) ([#241](https://github.com/Vivekpsps3/vivek-monorepo/issues/241)): Delete repeated provider orchestration by consolidating real Media transport/adapters. Depends on MED-01.
 - [MED-08](issues/MED-08.md) ([#242](https://github.com/Vivekpsps3/vivek-monorepo/issues/242)): Collapse competing Media catalog/entry/progress/query implementations. Depends on MED-01.
-- [MED-09](issues/MED-09.md) (DRAFT): Finish retained Media library and Add interaction acceptance. Depends on MED-01.
-- [MED-10](issues/MED-10.md) (DRAFT): Resolve retained Media runtime race, cache and no-op findings. Depends on MED-01.
+- [MED-09](issues/MED-09.md) ([#284](https://github.com/Vivekpsps3/vivek-monorepo/issues/284)): Finish retained Media library and Add interaction acceptance. Depends on MED-01.
+- [MED-10](issues/MED-10.md) ([#285](https://github.com/Vivekpsps3/vivek-monorepo/issues/285)): Resolve retained Media runtime race, cache and no-op findings. Depends on MED-01.
 
 ### [#93](https://github.com/Vivekpsps3/vivek-monorepo/issues/93) — Workspace: complete Hub agenda, search, quick add, settings and calendar subscriptions
 

@@ -90,7 +90,7 @@ Keep the merged saved-read correction. Provider transport cleanup has no require
 
 ## Concrete deletion plan
 
-Baseline records.py is 2,177 lines. _catalog_by_source already owns (source, source_id) lookup; _public_catalog repeats that query. Migrate the latter to the existing lookup, retain its kind mismatch rejection, and delete the inline query. _entry_for_catalog and new_entry already own owner-specific entry lookup/creation; do not add a repository or second entry state machine around them.
+At main 29e1318 after MED-01, records.py is 2,356 lines (the earlier 63bc975 snapshot was 2,177). Those extra identity-safety paths are not presumed dead code. _catalog_by_source already owns (source, source_id) lookup; _public_catalog repeats that query. Migrate the latter to the existing lookup, retain its kind mismatch rejection, and delete the inline query. _entry_for_catalog and new_entry already own owner-specific entry lookup/creation; do not add a repository or second entry state machine around them.
 
 Map each remaining runtime operation to its authoritative existing function and direct callers before removing any equivalent serializer/merge branch. catalog_dict, entry_card, _album_payload and _track_payload represent different catalog/personal/nested contracts; field overlap is not proof of equivalence. Preserve owner-specific rating/note/portrait and pressing/release-group identity.
 

@@ -95,15 +95,14 @@ def errors(data, packets=None):
         for name in SECTIONS:
             if not section(text, name):
                 found.append(f"{key}: missing packet section {name}")
-        rows = [line for line in section(text, "Acceptance").splitlines() if line.startswith("|")][
-            2:
-        ]
-        if not rows:
-            found.append(f"{key}: no acceptance rows")
-        for row in rows:
-            cells = re.split(r"(?<!\\)\|", row)[1:-1]
-            if len(cells) != 5 or not all(cell.strip() for cell in cells):
-                found.append(f"{key}: incomplete acceptance row")
+        for name, width in (("Acceptance", 5), ("Deletion", 4)):
+            rows = [line for line in section(text, name).splitlines() if line.startswith("|")][2:]
+            if not rows:
+                found.append(f"{key}: no {name.lower()} rows")
+            for row in rows:
+                cells = re.split(r"(?<!\\)\|", row)[1:-1]
+                if len(cells) != width or not all(cell.strip() for cell in cells):
+                    found.append(f"{key}: incomplete {name.lower()} row")
         for path in re.findall(r"^- `([^`]+)`$", section(text, "Source paths"), re.M):
             if not (ROOT / path).exists():
                 found.append(f"{key}: missing source path {path}")
@@ -144,6 +143,7 @@ def self_test(data):
         "cycle",
         "coverage",
         "acceptance",
+        "deletion",
         "metadata",
         "section",
         "profile",
@@ -162,6 +162,9 @@ def self_test(data):
         elif mutation == "acceptance":
             row = section(texts[key], "Acceptance").splitlines()[2]
             texts[key] = texts[key].replace(row, "| A | given | when | then | |", 1)
+        elif mutation == "deletion":
+            row = section(texts[key], "Deletion").splitlines()[2]
+            texts[key] = texts[key].replace(row, "| candidate | action | required | |", 1)
         elif mutation == "metadata":
             texts[key] = texts[key].replace("- Dependencies:", "- Old dependencies:", 1)
         elif mutation == "section":
@@ -174,7 +177,7 @@ def self_test(data):
             texts.pop(key)
         if not errors(bad, texts):
             raise SystemExit("Negative fixture escaped: " + mutation)
-    print("Ten negative planning fixtures: PASS")
+    print("Eleven negative planning fixtures: PASS")
 
 
 def main():
