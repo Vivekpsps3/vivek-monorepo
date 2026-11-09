@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [VER-02](../issues/VER-02.md) / [#210](https://github.com/Vivekpsps3/vivek-monorepo/issues/210). Parents [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) and [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) stay open.
 - Agent/context, branch/worktree: Cursor Grok, `agent/ver-02`, `/home/vivek/Deployments/worktrees/vivek-ver-02`
-- Base main SHA, current tested SHA: base `63bc975ede08967e61c50f78b25176b07dc07d18`. Tested code SHA `b3325eb29c409b49ed8f7fe28cec1b74b79e7771`. This evidence file is a later docs commit on the same branch and does not change that code.
+- Base main SHA, current tested SHA: base `63bc975ede08967e61c50f78b25176b07dc07d18`. Tested code SHA `b3325eb29c409b49ed8f7fe28cec1b74b79e7771`. Branch HEAD after the evidence and URL record is the commit that last touches this file. That docs change does not alter the tested code.
 - Fresh-main/prerequisite/active-PR checks: `origin/main` is `63bc975ede08967e61c50f78b25176b07dc07d18`. VER-02 has no queue dependency. PR #193 is merged at `495d698aedac5c544119c30c9405c810f8038cba` and is an ancestor of this base. No open pull requests. [#210](https://github.com/Vivekpsps3/vivek-monorepo/issues/210) already had the claim comment for this branch. [#249](https://github.com/Vivekpsps3/vivek-monorepo/issues/249) (TOWN-01) and [#259](https://github.com/Vivekpsps3/vivek-monorepo/issues/259) (UX-01) are open.
 
 ## Acceptance
@@ -70,8 +70,8 @@ Commands ran on the tested code SHA above, from `/home/vivek/Deployments/worktre
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened with `Closes #210`. Parents #199 and #125 are referenced and stay open.
-- Roadmap #134 append-only status-note URL: posted after the PR. The issue body was not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/281 (`Closes #210`). Parents #199 and #125 are referenced and stay open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6733190883. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): not merged. Not deployed. Not activated.
 - Remaining external prerequisites or approved scope decisions: TOWN-01 (#249) and UX-01 (#259) must merge before LOCAL4 can run. Until then the four owned specs stay `not-run`.
 - Next actor: reviewer for the VER-02 pull request. After merge, TOWN-01 and UX-01 select their specs and delete the matching exclusion records in the same change.
@@ -90,7 +90,7 @@ Deletion ledger and current consumer migration: one Town allowlist and one proje
 
 Commands run, results, tested SHA; required checks still pending: see the verification table. All commands required for this leaf passed. LOCAL4 and Finance/Travel/Media browser execution were not required to pass and were not run.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: PR and #134 comment follow this file. Not merged. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/281 and https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6733190883. Not merged. Not deployed.
 
 External prerequisites and next actor: TOWN-01 and UX-01. Reviewer, then those leaf owners.
 
