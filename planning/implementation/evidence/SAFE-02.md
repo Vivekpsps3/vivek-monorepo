@@ -44,8 +44,8 @@ The focused health spec was run once before the final `const` lint fix. The full
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this note
-- Roadmap #134 append-only status-note URL: posted after the PR
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/290
+- Roadmap #134 append-only status-note URL: posted with this evidence update
 - Merged/activation status: not merged, not deployed
 - Remaining external prerequisites or approved scope decisions: none for this leaf. SAFE-03 still depends on this merge.
 - Next actor: review and merge #202
