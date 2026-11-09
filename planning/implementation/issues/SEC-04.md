@@ -6,7 +6,7 @@
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
 - Dependencies: `SEC-03`, `SAFE-03`, `SAFE-04`
-- Conflict groups: `vault-core`, `finance-settings`, `web-session`, `account-ux`
+- Conflict groups: `finance-vault-lifecycle`, `finance-settings`, `web-session`, `account-ux`
 - Verification profiles: `finance_front`, `web_front`, `finance_back`, `server_back`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).
@@ -78,7 +78,7 @@ Complete current/new/confirm passphrase change using the same keys and one persi
 
 ## Risks
 
-
+- Changing passphrase wraps must preserve signing/data-key compatibility and leave the previous usable state intact on failure; avoid publishing stale unlocked state.
 
 ## Completion evidence
 

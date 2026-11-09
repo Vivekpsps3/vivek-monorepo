@@ -91,3 +91,9 @@ Validate the actual Hub/Pixels cross-domain read payloads and remove duplicated 
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Start with the concrete Hub/Pixels response consumption in hub-load.ts and pixels-data.service.ts. Name the unchecked cast and each downstream repeated shape guard for the selected payload before adding a decoder. Migrate those real consumers and delete the replaced assertions/guards in the same PR.
+
+Keep one runtime decoder per owned wire shape, not per widget or a generated schema framework. Preserve absent/null/unknown/locked distinctions and existing date/money meanings. Count the decoder and adapters against removed guards; a justified positive safety delta is reported explicitly rather than called LOC reduction.

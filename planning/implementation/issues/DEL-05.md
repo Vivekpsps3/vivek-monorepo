@@ -92,3 +92,11 @@ Consolidate a bounded repeated field/action-row/footer interaction across existi
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Use UiInput/UiField as the control-state owners. Subscription CSS has local #subscription-form .ui-field__control base/hover/invalid overrides, while packages/ui/src/ui-input/ui-input.component.css and apps/web/src/styles.css also define these states. Fixed-expense and subscription editors are the two real consumers for this tranche.
+
+Inventory computed normal/hover/focus/invalid/disabled styles in both forms before editing. Resolve the actual component/global cascade once, migrate both forms, and delete superseded subscription-specific border overrides plus any proven identical local control declarations. Keep form layout and domain validation local. A new shared abstraction must remove both old copies; adding another global override is not completion.
+
+Both editors already import fieldMessage, focusField, focusErrorSummary and focusDialogAlert from shared/form-validation.ts. Do not extract those again or claim those existing calls as new reuse. Preserve UiField error linkage and the required 44px/focus/phone/zoom/scroll behavior with computed-style and browser proof. Count CSS/TS additions across all owners, not only the cleaned component file.

@@ -15,7 +15,7 @@ the merged work and do not treat an older branch as the baseline.
 | --- | --- |
 | Vault core / lifecycle / credential wraps | One contract owner at a time; consumers use the merged adapter, not a copied draft |
 | Identity/session/origin | Serialize public contract changes; run owner/proof/concurrency regressions |
-| Schema head | Rebase by merging current main, generate a new revision from the actual single head; never edit an applied revision |
+| Schema head (`schema-head`, including identity schema) | Rebase by merging current main, generate a new revision from the actual single head; never edit an applied revision |
 | Browser harness / selectors / reset fixtures | One writer; discovery guards and fixture activation have different owners and coordinate |
 | Shared styles / UI controls | Serialize shared selectors/interaction changes; consuming domains migrate in a defined order |
 | Shell navigation / settings / Hub | Coordinate registry/layout edits; no duplicate cards/routes/forms |
@@ -42,3 +42,13 @@ deliverable merged for its parent. Do not close an operations parent while exter
 configuration/recipient/restore evidence is absent. Independent contexts can use
 the packet's complete acceptance and issue-specific evidence without relying on
 this conversation.
+
+Conflict vocabulary is shared: identity-origin/identity-session, schema-head,
+finance-vault-lifecycle and private-routes. DEL-02 overlaps SEC-01/02 even though
+older packets called those surfaces auth-routes/auth-session. VER-01/02/03 and
+DEL-01 share quality-docs. Always inspect concrete files, not labels alone.
+
+The plan metadata is deliberately small; edit detailed prose only in its owned
+packet and mirror approved issue changes from that file. Run the validator to
+catch header/index drift. Integration owners must fresh-read issue bodies before
+publishing and preserve intervening claims, requirements and comments.

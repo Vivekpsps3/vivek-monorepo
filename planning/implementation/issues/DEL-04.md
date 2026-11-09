@@ -90,3 +90,13 @@ Simplify FinanceService’s dashboard/collection orchestration around the existi
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Start in FinanceService.refreshCollectionViewsFromStore: seven collection branches repeat a read, session check, collection-epoch check and subject publication. getJobIncomes/getFixedExpenses/getSubscriptions and publishReadBackIfUnlocked also publish those same record types through different paths. The store remains the record owner; FinanceService remains the snapshot owner.
+
+Consolidate the equivalent read/eligibility/publication policy in the existing service. Migrate the job-income, fixed-expense and subscription public getters plus their remote refresh branches as the first complete tranche; remove those old branches in this PR. Use direct typed helpers, not a descriptor registry or second cache. Include add/update/delete read-back only if it can adopt the same complete lock/session/collection contract; otherwise document the semantic difference instead of weakening it.
+
+Preserve the session token, per-collection epochs, lock epoch and hasDek checks. _transactions versus _dashboardTransactions have distinct filtered/unfiltered consumers and must not be collapsed by resemblance. loadDashboard caching, import staging and FinanceMarketCoordinator keep their current owners. Any other collection left on its distinct path must have an explicit reason and no duplicated chosen policy.
+
+Measure the replaced getter/remote-refresh blocks before and after, full FinanceService, and every added helper/facade file. Require fewer independent publication policies and negative production delta across that closure. Hold same-collection reads, advance revision/owner/lock, and prove no stale subject publication; unrelated collections must still load independently. Name-only consumers must not trigger loadDashboard.

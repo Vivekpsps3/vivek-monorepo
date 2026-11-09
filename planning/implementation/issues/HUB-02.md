@@ -5,7 +5,7 @@
 - Parents: [#93](https://github.com/Vivekpsps3/vivek-monorepo/issues/93)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Dependencies: `SAFE-04`, `SAFE-05`, `UX-03`, `TOWN-02`
+- Dependencies: `SAFE-04`, `SAFE-05`, `UX-03`
 - Conflict groups: `hub-main`, `travel-summary`, `media-summary`, `finance-public-api`
 - Verification profiles: `web_front`, `travel_back`, `media_back`, `finance_front`
 
@@ -83,3 +83,7 @@ The workspace shows actionable upcoming activity with independent recovery, with
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Dependency rationale
+
+Use merged lifecycle/bounded-load contracts and the compact Pixels card. Passive Town XP calculation changes no required Hub summary shape; preserve the current Town card without waiting for TOWN-02.

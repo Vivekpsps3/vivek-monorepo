@@ -78,7 +78,7 @@ Repair the token transaction once, emit cookies only for committed winning state
 
 ## Risks
 
-
+- A losing repair must not emit an uncommitted token or retry a failed mutation; preserve session ownership while centralizing errors.
 
 ## Completion evidence
 

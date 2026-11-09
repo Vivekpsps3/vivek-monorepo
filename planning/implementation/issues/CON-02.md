@@ -6,7 +6,7 @@
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
 - Dependencies: `UX-01`
-- Conflict groups: `route-contract`, `server-composition`, `root-web-routes`
+- Conflict groups: `private-routes`, `server-composition`
 - Verification profiles: `server_back`, `web_front`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).

@@ -93,3 +93,9 @@ Exercise current contracts with a disposable vertical slice and a compact agent 
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Use the existing work packets, scoped guidance and launch command. Do not add a second scaffold/registry or copy packet details into queue.json. The queue is scheduling metadata; each Markdown packet is the only local source of detailed steps and acceptance.
+
+For the disposable feature proof, record production files and policy owners touched, duplicated decisions introduced/removed, applicable instructions read and executed checks. Remove the toy route/collection/exports after the proof. Compare a second small change against the same owners: a feature is cheaper when fewer independent policies must be edited, not when a component is merely shorter.

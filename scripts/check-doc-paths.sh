@@ -54,3 +54,5 @@ if fail:
     raise SystemExit(1)
 print("check-doc-paths: OK")
 PY
+
+python3 planning/implementation/plan.py validate --self-test

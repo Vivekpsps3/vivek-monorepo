@@ -77,7 +77,7 @@ Use verified backups to restore a temporary database/environment and prove schem
 
 ## Risks
 
-
+- A scrubbed synthetic restore proves the procedure, not production recovery; validate the actual schema chain and never write the fixture back to a live database.
 
 ## Completion evidence
 

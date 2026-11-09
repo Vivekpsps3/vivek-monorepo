@@ -6,7 +6,7 @@
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
 - Dependencies: `SEC-01`, `SEC-02`, `CON-03`
-- Conflict groups: `identity-schema`, `identity-session`, `vault-core`, `schema-head`
+- Conflict groups: `schema-head`, `identity-session`, `finance-vault-lifecycle`
 - Verification profiles: `finance_back`, `server_back`, `schema`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).

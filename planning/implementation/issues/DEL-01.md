@@ -91,3 +91,11 @@ Perform a bounded first deletion pass across obsolete helper/export/comment path
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+At main 63bc975, trip-costs.component.ts still says FinanceTripSpendRegistry/K1 is unmerged, while packages/ui/src/public-api.ts exports the registry. search-dialog.component.ts says Finance name streams do not exist, while FinanceService publishes them. Replace those two obsolete narratives with the current unresolved integration and its owning issue; do not pretend the spending/search features are complete.
+
+Search actual imports, lazy routes, providers, templates and test/config entry points before deleting any runtime symbol. Do not sweep all public reexports. The five-line packages/ui/src/pixels/pixels-score.spec.ts import activates the owned scoring suite in Karma and must remain until discovery changes with executed parity proof. WorldControllerService belongs exclusively to DEL-03.
+
+Report comment cleanup separately from executable deletion. If no runtime candidate survives the consumer check, retain the open deletion requirement or propose its precise disposition. Do not create a helper merely to report a changed production file.

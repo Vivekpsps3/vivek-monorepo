@@ -15,11 +15,17 @@
 
 | Candidate | Previous consumers | Surviving owner | Removed / moved / retained | Proof |
 | --- | --- | --- | --- | --- |
-| Named old path | Actual callers | One live implementation | Exact disposition | Behavior/compatibility evidence |
+| Named old symbol/branch/selector and baseline SHA | Static/lazy/config/test/public callers | One live implementation | Exact disposition and removed dependency closure | Executed behavior/compatibility evidence |
 
-- Production added/deleted/moved:
+- Candidate class and protected counterexamples:
+- Comparison base SHA and full replacement closure (including new files):
+- Production added/deleted/moved; comments/blank-only churn separately:
+- Independent equivalent implementations before/after:
+- State/cache owners and public entry points before/after:
+- Remaining old symbol/path search, including config and discovery:
+- Follow-up change: which production files and independent policy owners now need editing:
 - Tests/docs/generated changes separately:
-- Remaining necessary overhead and why:
+- Net production delta and specific reviewed safety/compatibility exception if positive:
 - No behavior/data/meaningful assertion silently removed:
 
 ## Verification

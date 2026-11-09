@@ -75,7 +75,7 @@ Wire bounded readiness/TLS/backup-freshness checks to configurable heartbeat/web
 
 ## Risks
 
-
+- A configured probe or notification adapter is not verified delivery; retain pending external recipient/access prerequisites without inventing activation evidence.
 
 ## Completion evidence
 

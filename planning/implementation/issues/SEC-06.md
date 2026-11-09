@@ -6,7 +6,7 @@
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
 - Dependencies: `SEC-05`, `SAFE-04`
-- Conflict groups: `vault-core`, `vault-export`, `finance-settings`, `schema-head`
+- Conflict groups: `finance-vault-lifecycle`, `vault-export`, `finance-settings`, `schema-head`
 - Verification profiles: `finance_front`, `web_front`, `finance_back`, `server_back`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).
@@ -82,7 +82,7 @@ Complete merge/replace restore without partial data loss, using the portable bun
 
 ## Risks
 
-
+- Restore must validate owner, formats and all allowed collections before mutation; partial or foreign restores must not overwrite supported ciphertext.
 
 ## Completion evidence
 

@@ -6,7 +6,7 @@
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
 - Dependencies: none
-- Conflict groups: `quality-tools`, `root-typescript-config`, `eslint-config`
+- Conflict groups: `quality-tools`, `root-typescript-config`, `eslint-config`, `quality-docs`
 - Verification profiles: `docs`, `server_back`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).

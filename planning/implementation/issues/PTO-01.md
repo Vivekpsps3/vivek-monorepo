@@ -5,7 +5,7 @@
 - Parents: [#110](https://github.com/Vivekpsps3/vivek-monorepo/issues/110)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Dependencies: `SAFE-05`
+- Dependencies: none
 - Conflict groups: `travel-pto-main`, `travel-pto-chart`
 - Verification profiles: `travel_front`
 
@@ -82,3 +82,7 @@ PTO and Sick history/projection can be understood together, including negative b
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Dependency rationale
+
+The existing /pto/series API supplies the chart. Pixels/Health bounded-work consolidation is not a required Travel API; preserve chart cancellation locally and coordinate travel-pto-main edits.

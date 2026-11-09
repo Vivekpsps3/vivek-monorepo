@@ -79,7 +79,7 @@ Implement the selected retention policy explicitly while keeping hourly and pre-
 
 ## Risks
 
-
+- A local verified snapshot is not an off-host recovery guarantee; keep retention and source validation explicit without logging secrets.
 
 ## Completion evidence
 
