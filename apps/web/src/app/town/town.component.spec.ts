@@ -78,6 +78,31 @@ describe('Town page', () => {
     response.next(snapshot()); fixture.detectChanges();
     expect(el.querySelector('ul')).not.toBeNull();
   });
+  function expectOnePage(el: HTMLElement, heading: string): void {
+    const mains = [...el.querySelectorAll('main')];
+    expect(mains.length).toBe(1);
+    const headings = [...el.querySelectorAll('h1')];
+    expect(headings.length).toBe(1);
+    expect(headings[0].textContent?.trim()).toBe(heading);
+    expect(mains[0].contains(headings[0])).toBeTrue();
+    const banner = el.querySelector('header');
+    expect(banner).not.toBeNull();
+    expect(mains[0].contains(banner)).toBeTrue();
+    expect(el.querySelector('main main')).toBeNull();
+  }
+  it('keeps one main and the page heading through loading, error, and ready', () => {
+    const { fixture, el } = render();
+    expectOnePage(el, 'Town');
+    expect(el.querySelector('main [aria-label="Loading Town"]')).not.toBeNull();
+    response.error({ status: 503 }); fixture.detectChanges();
+    expectOnePage(el, 'Town');
+    expect(el.textContent).toContain('Town is unavailable right now.');
+    response = new Subject();
+    el.querySelector<HTMLButtonElement>('button')!.click();
+    response.next(snapshot()); fixture.detectChanges();
+    expectOnePage(el, 'Terraria-on-Sea');
+    expect(el.querySelector('header a')?.getAttribute('href')).toBe('/town/world');
+  });
   it('does not render a session-expired banner on 401', () => {
     const { fixture, el } = render();
     response.error({ status: 401 }); fixture.detectChanges();

@@ -1,4 +1,4 @@
-<div class="world-page">
+<main class="world-page">
   <h1>World</h1>
   <div class="world-toolbar" role="toolbar" aria-label="World">
     <ui-button variant="secondary" ariaLabel="Previous week" (clicked)="stepWeek(-1)">{{ copy.weekBack }}</ui-button>
@@ -46,7 +46,7 @@
     [class.is-collapsed]="mode() === 'list'" (keydown)="onKey($event)">
     <canvas #canvas aria-hidden="true"></canvas>
   </div>
-  <aside #weekPanel class="world-panel" tabindex="-1" [attr.aria-label]="copy.weekPanel">
+  <section #weekPanel class="world-panel" tabindex="-1" [attr.aria-label]="copy.weekPanel">
     <h2>{{ inTown() ? copy.town : (centerReading()?.label || copy.weekPanel) }}</h2>
     @if (centerReading(); as reading) {
       <ul>
@@ -63,7 +63,7 @@
         }
       </ul>
     }
-  </aside>
+  </section>
   @if (showEmpty()) {
     <ui-empty-state [title]="copy.emptyTitle" [message]="copy.emptyMessage">
       <a href="/town">{{ copy.town }}</a>
@@ -101,4 +101,4 @@
     [creating]="creatingConcept()"
     (closed)="closeConcepts()"
     (changed)="onConceptChanged($event)" />
-</div>
+</main>
