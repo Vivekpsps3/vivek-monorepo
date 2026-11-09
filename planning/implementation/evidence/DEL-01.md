@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#213](https://github.com/Vivekpsps3/vivek-monorepo/issues/213); parent [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) stays open
 - Agent/context, branch/worktree: Cursor Grok, `agent/del-01`, `/home/vivek/Deployments/worktrees/vivek-del-01`
-- Base main SHA, current tested SHA: base `29e131821d138bba224e02d5d61b77e23247e08a`; verified working tree is that base plus the changes in this commit. The PR head SHA is recorded in the pull request after this file lands.
+- Base main SHA, current tested SHA: base `29e131821d138bba224e02d5d61b77e23247e08a`; verified implementation `04ee0045576c6e190f1c51aa92f09fbecf443522`. A later commit on this branch only records that SHA and the pull request URL in this file.
 - Fresh-main/prerequisite/active-PR checks: no queue dependency. PR #145 (K1: ui-menu, trip-spend registry) merged 2026-11-07. PR #193 merged 2026-11-09 and is already in this base. Open PR #283 is planning guidance and does not edit these files. Claim was already on #213. DEL-02 and DEL-03 were not edited.
 
 ## Acceptance
@@ -96,8 +96,8 @@ Toolchain notes, not product changes: this worktree had no `node_modules`, so th
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled in the pull request that contains `Closes #213`. Parent #200 is referenced and not closed.
-- Roadmap #134 append-only status-note URL: posted after the PR exists.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/287 (`Closes #213`). Parent #200 is referenced and not closed.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6735052949
 - Merged/activation status: not merged, not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. TRIP-01 (#225), TRIP-03 (#227), HUB-04 (#246), and HEALTH-02 (#257) still own the unfinished behavior called out above. DEL-05 still owns `controls.css`.
 - Next actor: review. Do not merge from this leaf.
