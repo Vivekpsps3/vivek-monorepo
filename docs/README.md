@@ -4,6 +4,7 @@
 |-----|---------|
 | [OPERATIONS.md](./OPERATIONS.md) | Supported deployment, migration, monitoring and recovery workflow |
 | [MIGRATIONS.md](./MIGRATIONS.md) | Unified Alembic chain, adoption and data preservation |
+| [AGENT_GUIDANCE.md](./AGENT_GUIDANCE.md) | Scoped instruction map, size budgets and maintenance rules |
 | [QUALITY.md](./QUALITY.md) | Local gates, lint ratchets and coverage floors |
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | Setup, `make` targets, repo layout, env |
 | [BACKUP.md](./BACKUP.md) | SQLite backup and restore |
