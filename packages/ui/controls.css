@@ -226,9 +226,10 @@ textarea {
   font-weight: 500;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover:not(:disabled),
-select:hover:not(:disabled),
-textarea:hover:not(:disabled) {
+/* Hover stops at an invalid control so this rule cannot outrank the danger border below. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover:not(:disabled):not([aria-invalid="true"]),
+select:hover:not(:disabled):not([aria-invalid="true"]),
+textarea:hover:not(:disabled):not([aria-invalid="true"]) {
   border-color: var(--border-strong);
 }
 

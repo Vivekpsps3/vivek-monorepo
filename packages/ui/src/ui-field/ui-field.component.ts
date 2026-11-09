@@ -50,9 +50,11 @@ export class UiFieldComponent {
       const hintId = `${id}-hint`;
       if (error) {
         control.setAttribute('aria-invalid', 'true');
+        control.setAttribute('data-field-invalid', 'true');
         control.setAttribute('aria-describedby', [hint ? hintId : '', errorId].filter(Boolean).join(' '));
       } else {
         control.removeAttribute('aria-invalid');
+        control.removeAttribute('data-field-invalid');
         if (hint) control.setAttribute('aria-describedby', hintId);
         else control.removeAttribute('aria-describedby');
       }

@@ -115,7 +115,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   openAddModal(): void {
     this.editingId = null;
     this.form = this.emptyForm();
-    this.saveError = '';
+    this.clearValidation();
     this.showModal = true;
     this.cdr.markForCheck();
     this.setOptionalOpen(false);
@@ -134,7 +134,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       is_active: row.is_active,
       notes: row.notes || '',
     };
-    this.saveError = '';
+    this.clearValidation();
     this.showModal = true;
     this.cdr.markForCheck();
     this.setOptionalOpen(Boolean(row.end_date || row.payment_account || row.notes || (row.category && row.category !== 'Subscriptions')));
@@ -144,8 +144,14 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
-    this.saveError = '';
+    this.clearValidation();
     this.cdr.markForCheck();
+  }
+
+  private clearValidation(): void {
+    this.saveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
   }
 
   saveSubscription(): void {
