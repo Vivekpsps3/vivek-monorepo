@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#217](https://github.com/Vivekpsps3/vivek-monorepo/issues/217) DEL-05. Parents [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) and [#196](https://github.com/Vivekpsps3/vivek-monorepo/issues/196) stay open.
 - Agent/context, branch/worktree: Cursor agent, branch `agent/del-05`, worktree `/home/vivek/Deployments/worktrees/vivek-del-05`.
-- Base main SHA, current tested SHA: base `29e131821d138bba224e02d5d61b77e23247e08a`. Tested implementation `c736b9fddf6d507ca1aa8cc16e365afe320edd7a`. The pull-request head is the commit that adds this evidence file on `agent/del-05`.
+- Base main SHA, current tested SHA: base `29e131821d138bba224e02d5d61b77e23247e08a`. Tested implementation `c736b9fddf6d507ca1aa8cc16e365afe320edd7a`. Evidence landed in `99c60c2c91e715aa490c99fe700dbd49eb6e6730`. Pull request: https://github.com/Vivekpsps3/vivek-monorepo/pull/289.
 - Fresh-main/prerequisite/active-PR checks: no queue dependency. `origin/main` at the base above already contains merged PR #193. No other open PR claimed `shared-controls`, `root-styles`, or `finance-recurring-editors`. FIN-02 (#221) was not edited. `packages/ui/src/public-api.ts` was not edited.
 
 ## Acceptance
@@ -51,8 +51,8 @@ Commands below ran in this worktree. Finance, site, and web Karma used `CHROME_B
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened with `Closes #217`. Parents are referenced and not closed.
-- Roadmap #134 append-only status-note URL: posted after the pull request exists.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/289 (`Closes #217`). Parents are referenced and not closed.
+- Roadmap #134 append-only status-note URL: posted with this pull request.
 - Merged/activation status (actual evidence, not assumption): not merged, not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #200 and #196 stay open.
 - Next actor: reviewer. Do not merge from this change set unless the owner asks.
