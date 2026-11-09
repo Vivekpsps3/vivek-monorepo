@@ -1,0 +1,14 @@
+{
+  "docs": ["make test-fast"],
+  "finance_front": ["make lint-web", "make typecheck-web", "npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI", "npm run test:web -- --watch=false --browsers=ChromeHeadlessCI", "make e2e"],
+  "travel_front": ["make lint-web", "make typecheck-web", "npm run test:web -- --watch=false --browsers=ChromeHeadlessCI", "node --test apps/travel/backend/static/tests/*.test.mjs", "make build-frontends", "npx playwright test --config apps/travel/e2e/playwright.config.js"],
+  "media_front": ["make lint-web", "make typecheck-web", "npm run test:web -- --watch=false --browsers=ChromeHeadlessCI", "node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs", "make build-frontends", "npx playwright test --config apps/media/e2e/playwright.config.ts"],
+  "web_front": ["make lint-web", "make typecheck-web", "npm run test:web -- --watch=false --browsers=ChromeHeadlessCI", "make build-frontends", "npx playwright test --config apps/web/e2e/playwright.config.ts", "npx playwright test --project=suite"],
+  "shared_front": ["make lint-web", "make typecheck-web", "npm test --prefix apps/finance/frontend -- --watch=false --browsers=ChromeHeadlessCI", "npm test --prefix apps/site -- --watch=false --browsers=ChromeHeadlessCI", "npm run test:web -- --watch=false --browsers=ChromeHeadlessCI", "node --test packages/browser/runtime/*.test.mjs packages/ui/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs", "make e2e", "npx playwright test --config apps/media/e2e/playwright.config.ts", "npx playwright test --config apps/travel/e2e/playwright.config.js", "npx playwright test --config apps/web/e2e/playwright.config.ts", "npx playwright test --project=suite"],
+  "finance_back": ["make lint-python", "make typecheck-python", "./scripts/coverage-gate.sh finance"],
+  "travel_back": ["make lint-python", "make typecheck-python", "./scripts/coverage-gate.sh travel", "node --test apps/travel/backend/static/tests/*.test.mjs"],
+  "media_back": ["make lint-python", "make typecheck-python", "./scripts/coverage-gate.sh media", "node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs"],
+  "server_back": ["make lint-python", "make typecheck-python", "./scripts/coverage-gate.sh server"],
+  "schema": ["make lint-python", "make typecheck-python", "make db-check", "make db-validate-seeded"],
+  "ops": ["make lint-python", "make typecheck-python", "node scripts/test-release-manifest.mjs", "make docker-build", "make test-suite-routes", "make db-validate-seeded"]
+}

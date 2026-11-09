@@ -18,7 +18,8 @@
 | [VERIFICATION.md](./VERIFICATION.md) | Test tiers, backup drill, privacy gate |
 | [TRAVEL.md](./TRAVEL.md) | Travel app: trips, calendar, flights, PTO |
 | [MEDIA.md](./MEDIA.md) | Private media journal: library, reviews, releases |
-| [Personal operating system brief](../planning/README.md) | Completed suite refactor evidence and the original product brief |
+| [Product planning](../planning/README.md) | Live GitHub roadmap, dated roadmap review, completed refactor evidence and original brief |
+| [Technical-debt report](../planning/technical-debt/README.md) | Independent antagonistic review, evidence, forty-task remediation plan and future-feature playbook |
 
 Project overview: [../README.md](../README.md).
 
