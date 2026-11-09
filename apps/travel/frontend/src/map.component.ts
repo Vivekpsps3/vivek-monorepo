@@ -207,10 +207,16 @@ export class MapComponent implements OnChanges {
       const { default: library } = await import("../vendor/leaflet.mjs");
       if (this.destroy.destroyed) return;
       this.library = library;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       this.map = library
         .map(this.canvas.nativeElement, {
           zoomControl: false,
           attributionControl: false,
+          // The shell turns CSS transitions off for reduced motion, so Leaflet's
+          // fade never marks the new tiles opaque and the previous zoom stays.
+          zoomAnimation: !reduceMotion,
+          fadeAnimation: !reduceMotion,
+          markerZoomAnimation: !reduceMotion,
         })
         .setView([20, 0], 2);
       this.tiles = library.tileLayer(
