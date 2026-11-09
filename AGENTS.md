@@ -2,6 +2,14 @@
 
 Finance, Travel, and Media live in this repo. Keep each app's data and behavior in its own folder.
 
+## Roadmap implementation
+
+For a roadmap issue, read [planning/AGENTS.md](planning/AGENTS.md), the active
+[implementation queue](planning/implementation/README.md), and that issue's exact
+work packet before editing application files. Those instructions apply by this
+reference even when the changed files are outside `planning/`. Dated reviews and
+completed project records are supporting evidence, not an executable backlog.
+
 ## Before a pull request
 
 Run the tests that cover the change on this machine, and open the pull request only after they pass. CI is the second run, not the first. Leave a failing test failing until the code or the assertion is actually fixed. Do not skip a suite or lower a gate to get the pull request open.

@@ -1,0 +1,30 @@
+Listing tests:
+  hub-pixels.spec.ts:13:7 › Hub year in pixels › birthday stays off the request and the card, cells are not focusable, and a click opens the day
+  pixels-detail.spec.ts:14:7 › Pixels day detail › 390 opens the Portland day in a bottom sheet
+  pixels-detail.spec.ts:26:7 › Pixels day detail › 1280 shows the same day in a side panel
+  pixels-detail.spec.ts:39:7 › Pixels day detail › By app persists across a reload
+  pixels-detail.spec.ts:52:11 › Pixels day detail › axe with the day open at 390 [light]
+  pixels-detail.spec.ts:52:11 › Pixels day detail › axe with the day open at 390 [dark]
+  pixels-detail.spec.ts:52:11 › Pixels day detail › axe with the day open at 1280 [light]
+  pixels-detail.spec.ts:52:11 › Pixels day detail › axe with the day open at 1280 [dark]
+  pixels-life.spec.ts:37:11 › Pixels Life › poster, scroll, and axe at 390 light
+  pixels-life.spec.ts:37:11 › Pixels Life › poster, scroll, and axe at 390 dark
+  pixels-life.spec.ts:37:11 › Pixels Life › poster, scroll, and axe at 1280 light
+  pixels-life.spec.ts:37:11 › Pixels Life › poster, scroll, and axe at 1280 dark
+  pixels-life.spec.ts:54:9 › Pixels Life › keyboard moves the selected week at 390
+  pixels-life.spec.ts:54:9 › Pixels Life › keyboard moves the selected week at 1280
+  pixels-life.spec.ts:76:7 › Pixels Life › no birthday offers profile settings
+  pixels-year.spec.ts:31:7 › Pixels year › clamp notice replaces an unusable year
+  pixels-year.spec.ts:40:7 › Pixels year › leap day exists in 2024 and not in 2100
+  pixels-year.spec.ts:50:11 › Pixels year › year grid at 390 light
+  pixels-year.spec.ts:50:11 › Pixels year › year grid at 390 dark
+  pixels-year.spec.ts:50:11 › Pixels year › year grid at 1280 light
+  pixels-year.spec.ts:50:11 › Pixels year › year grid at 1280 dark
+  pixels-year.spec.ts:104:11 › Pixels year › year table at 390 light
+  pixels-year.spec.ts:104:11 › Pixels year › year table at 390 dark
+  pixels-year.spec.ts:104:11 › Pixels year › year table at 1280 light
+  pixels-year.spec.ts:104:11 › Pixels year › year table at 1280 dark
+  world.spec.ts:41:7 › World explorer › keeps the week query and stays on the allowlist
+  world.spec.ts:53:7 › World explorer › reduced motion prefers the list and jumps without a transition
+  world.spec.ts:71:7 › World explorer › 390px viewport does not scroll sideways
+Total: 28 tests in 5 files

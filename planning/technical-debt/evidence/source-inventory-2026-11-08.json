@@ -1,0 +1,311 @@
+{
+  "revision": "8b53c8005008839208bc3d9160fb2c02078119f7",
+  "method": "Physical lines from rg --files apps/packages/scripts; generated/dependency/vendor directories excluded; tests and migrations classified by paths/names; not a semantic duplication analysis.",
+  "source_suffixes": [
+    ".ts",
+    ".py",
+    ".html",
+    ".css",
+    ".mjs",
+    ".cjs",
+    ".js"
+  ],
+  "totals": {
+    "apps/__init__.py": {
+      "production": 0
+    },
+    "apps/finance": {
+      "production": 35271,
+      "tests": 25339,
+      "migrations": 937
+    },
+    "apps/karma.conf.js": {
+      "production": 104
+    },
+    "apps/media": {
+      "production": 13414,
+      "tests": 9949
+    },
+    "apps/server": {
+      "production": 8971,
+      "migrations": 1274,
+      "tests": 9173
+    },
+    "apps/site": {
+      "production": 873,
+      "tests": 208
+    },
+    "apps/travel": {
+      "tests": 9135,
+      "production": 13236
+    },
+    "apps/web": {
+      "production": 16908,
+      "tests": 10643
+    },
+    "packages/auth": {
+      "production": 165
+    },
+    "packages/browser": {
+      "tests": 186,
+      "production": 744
+    },
+    "packages/time": {
+      "production": 29
+    },
+    "packages/ui": {
+      "production": 5232,
+      "tests": 1513
+    },
+    "scripts": {
+      "production": 2044,
+      "tests": 630
+    }
+  },
+  "largest_production_files": [
+    {
+      "path": "apps/media/backend/services/providers.py",
+      "lines": 2249,
+      "kind": "production"
+    },
+    {
+      "path": "apps/media/backend/services/records.py",
+      "lines": 2177,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/transactions/transactions.component.css",
+      "lines": 1174,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/transactions/transactions.component.ts",
+      "lines": 1170,
+      "kind": "production"
+    },
+    {
+      "path": "apps/travel/frontend/src/pto.component.ts",
+      "lines": 1114,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/planning/planning.component.ts",
+      "lines": 1022,
+      "kind": "production"
+    },
+    {
+      "path": "apps/web/src/app/world/ui/world.component.ts",
+      "lines": 1005,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/services/finance.service.ts",
+      "lines": 926,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/portfolio/portfolio.component.ts",
+      "lines": 899,
+      "kind": "production"
+    },
+    {
+      "path": "apps/media/backend/services/membership.py",
+      "lines": 874,
+      "kind": "production"
+    },
+    {
+      "path": "apps/travel/frontend/src/trip.component.html",
+      "lines": 873,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/income/income.component.ts",
+      "lines": 802,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/planning/planning.component.css",
+      "lines": 759,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/transactions/transactions.component.html",
+      "lines": 758,
+      "kind": "production"
+    },
+    {
+      "path": "apps/travel/frontend/src/trip.component.ts",
+      "lines": 756,
+      "kind": "production"
+    },
+    {
+      "path": "apps/server/identity/routes.py",
+      "lines": 754,
+      "kind": "production"
+    },
+    {
+      "path": "apps/web/src/styles.css",
+      "lines": 740,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/portfolio/portfolio.component.css",
+      "lines": 726,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/crypto/encrypted-store.service.ts",
+      "lines": 722,
+      "kind": "production"
+    },
+    {
+      "path": "apps/travel/backend/services/assemble.py",
+      "lines": 712,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/planning/monte-carlo-fan-chart.component.ts",
+      "lines": 691,
+      "kind": "production"
+    },
+    {
+      "path": "apps/travel/backend/schemas.py",
+      "lines": 688,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/crypto/client-finance.ts",
+      "lines": 687,
+      "kind": "production"
+    },
+    {
+      "path": "apps/server/migrations.py",
+      "lines": 672,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/planning/planning.component.html",
+      "lines": 656,
+      "kind": "production"
+    },
+    {
+      "path": "apps/media/backend/routers/journal.py",
+      "lines": 643,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/investment-insights/investment-insights.component.ts",
+      "lines": 641,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/charts/charts.component.ts",
+      "lines": 629,
+      "kind": "production"
+    },
+    {
+      "path": "apps/server/security_headers.py",
+      "lines": 629,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/income/income.component.html",
+      "lines": 616,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/crypto/vault.service.ts",
+      "lines": 613,
+      "kind": "production"
+    },
+    {
+      "path": "apps/travel/backend/services/pto.py",
+      "lines": 594,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/utils/fidelity-import.util.ts",
+      "lines": 592,
+      "kind": "production"
+    },
+    {
+      "path": "apps/finance/frontend/src/app/crypto/encrypted-store.persistence.ts",
+      "lines": 589,
+      "kind": "production"
+    },
+    {
+      "path": "scripts/seed_dev_db.py",
+      "lines": 585,
+      "kind": "production"
+    }
+  ],
+  "exact_duplicate_production_files_20plus_lines": [],
+  "quality_recorded_baselines": [
+    {
+      "file": "quality/eslint-site-baseline.txt",
+      "recorded_findings": 9,
+      "by_rule": {
+        "@angular-eslint/prefer-inject": 6,
+        "@typescript-eslint/no-explicit-any": 3
+      }
+    },
+    {
+      "file": "quality/eslint-finance-baseline.txt",
+      "recorded_findings": 469,
+      "by_rule": {
+        "@typescript-eslint/no-explicit-any": 360,
+        "@angular-eslint/prefer-inject": 84,
+        "@angular-eslint/template/eqeqeq": 15,
+        "@angular-eslint/template/prefer-control-flow": 9,
+        "@angular-eslint/no-output-native": 1
+      }
+    },
+    {
+      "file": "quality/eslint-world-engine-baseline.txt",
+      "recorded_findings": 0,
+      "by_rule": {}
+    },
+    {
+      "file": "quality/eslint-packages-baseline.txt",
+      "recorded_findings": 1,
+      "by_rule": {
+        "@angular-eslint/no-output-native": 1
+      }
+    },
+    {
+      "file": "quality/mypy-baseline.txt",
+      "recorded_findings": 87,
+      "by_rule": {
+        "arg-type": 40,
+        "assignment": 14,
+        "var-annotated": 7,
+        "list-item": 4,
+        "union-attr": 11,
+        "call-overload": 8,
+        "index": 3
+      }
+    },
+    {
+      "file": "quality/suppressions-baseline.txt",
+      "recorded_findings": 0,
+      "by_rule": {}
+    },
+    {
+      "file": "quality/ruff-baseline.txt",
+      "recorded_findings": 101,
+      "by_rule": {
+        "UP006": 21,
+        "UP035": 6,
+        "UP045": 46,
+        "SIM102": 1,
+        "SIM103": 1,
+        "RUF012": 12,
+        "UP017": 5,
+        "SIM105": 1,
+        "SIM117": 6,
+        "B905": 1,
+        "SIM115": 1
+      }
+    }
+  ]
+}

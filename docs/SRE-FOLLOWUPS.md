@@ -6,14 +6,20 @@ application authorization and a single private data mount are the boundaries.
 
 ## Outstanding decisions and work
 
-- [ ] **Off-host encrypted backups. User explicitly deferred.** Choose destination,
-  independent credentials, retention and recovery-key custody; then perform a full
-  restore from that destination. Current backups protect accidental changes, not
-  host/disk loss or compromise.
-- [ ] **Runner isolation. User chose to retain
-  the existing runner.** The user also requested a stateless deployment; controller/account/timer scaffolding was removed.
-  The active runner retains Docker-equivalent host privilege and access to the
-  operator account's state/config. No new account, sudoers, systemd units, copied config tree, or release history files are installed.
+- [ ] **Off-host encrypted backups.** Implementation is selected in
+  [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125), superseding the
+  historical code-backlog deferral. Destination, independent credentials and
+  recovery-key custody still need configuration and a measured restore. Current
+  local backups do not protect against host/disk loss or compromise; selected
+  off-host support is not evidence of an active destination.
+- [ ] **Runner isolation evidence.** The repository now defines separate test,
+  release and production runner roles; see [Local runner](LOCAL-RUNNER.md).
+  Test workers have no production mount or host Docker socket; release uses a
+  dedicated nested daemon. Verify deployed routing and protection settings in
+  #125. The production runner retains host Docker privilege, and the privileged
+  release daemon shares the host kernel; these are trusted-code boundaries.
+  Stateless deployment still uses no installed controller, sudoers, copied
+  config tree or release history files.
 - [ ] **External availability monitor and notification destination.** Local probes
   and Prometheus rules exist; independent detection and proven recipient delivery
   are not configured. Do not claim paging coverage.
@@ -61,6 +67,8 @@ application authorization and a single private data mount are the boundaries.
   snapshot is kept; historical point-in-time recovery is intentionally unavailable.
   Pre-migration snapshots are the exception: three `premigrate-*` files are kept
   apart from that hourly snapshot.
+  #125 selects a future 30-day/minimum-seven snapshot policy; it is not the
+  current Compose setting. Reconcile and document the policy before rollout.
 
 ## Traceability to the 80-point review
 
