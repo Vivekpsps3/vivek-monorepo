@@ -14,6 +14,7 @@ from apps.travel.backend.services.leave_math import (
     ACCRUAL_COPY,
     CADENCE_COPY,
     CAP_COPY,
+    CARRY_COPY,
     HPD_COPY,
     START_COPY,
     YEAR_COPY,
@@ -26,6 +27,7 @@ _PAINTER = {
     "accrual_cadence": CADENCE_COPY,
     "cap_hours": CAP_COPY,
     "year_start": YEAR_COPY,
+    "carry_forward": CARRY_COPY,
     "hours_per_day": HPD_COPY,
 }
 _LOC_SKIP = ("body", "query", "path")

@@ -21,23 +21,14 @@ for (const viewport of VIEWPORTS) {
       test('five tabs, same words', async ({ page }) => {
         const vault = await syntheticVault(page);
         await vault.open('/');
-        if (viewport.width >= 1024) {
-          const nav = page.getByRole('navigation', { name: 'Finance sections' }).first();
-          for (const label of LABELS) {
-            await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible();
-          }
-        } else {
-          const bar = page.locator('.mobile-tabbar');
-          for (const label of LABELS) {
-            const tab = bar.getByRole('link', { name: label, exact: true });
-            await expect(tab).toBeVisible();
-            const box = await tab.boundingBox();
-            expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-            const labelSize = await tab.locator('.mobile-tab__label').evaluate(el => getComputedStyle(el).fontSize);
-            expect(labelSize).toBe('12px');
-            const iconSize = await tab.locator('svg').first().evaluate(el => el.getBoundingClientRect().width);
-            expect(iconSize).toBe(20);
-          }
+        const nav = page.getByRole('navigation', { name: 'Finance sections' });
+        await expect(page.locator('.mobile-tabbar')).toHaveCount(0);
+        for (const label of LABELS) {
+          const link = nav.getByRole('link', { name: label, exact: true });
+          await link.scrollIntoViewIfNeeded();
+          await expect(link).toBeVisible();
+          const box = await link.boundingBox();
+          expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
         }
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       });

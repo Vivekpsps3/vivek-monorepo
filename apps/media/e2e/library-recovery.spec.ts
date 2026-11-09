@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { addItem, resetMedia } from './media-test';
+import { addItem, expectSectionHeading, resetMedia } from './media-test';
 
 test.beforeEach(async ({ request }) => resetMedia(request));
 
@@ -16,8 +16,7 @@ test('a failed library load returns focus to the heading when retry succeeds', a
   const retry = page.getByRole('button', { name: 'Retry library' });
   await expect(retry).toBeVisible();
   await retry.click();
-  const heading = page.getByRole('heading', { name: 'Library', exact: true });
-  await expect(heading).toBeVisible();
+  const heading = await expectSectionHeading(page, 'Library');
   await expect(heading).toBeFocused();
   await expect(page.getByRole('button', { name: 'Retry library' })).toHaveCount(0);
 });
@@ -28,7 +27,7 @@ test('returning from an item restores the library scroll position', async ({ pag
   }
   await page.setViewportSize({ width: 390, height: 700 });
   await page.goto('/media/library?sort=title');
-  await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Library');
   await page.evaluate(() => window.scrollTo(0, 900));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800);
   const scrolled = await page.evaluate(() => window.scrollY);
@@ -41,6 +40,6 @@ test('returning from an item restores the library scroll position', async ({ pag
   await expect(page.getByRole('heading', { level: 1, name: 'Zebra', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/media\/library/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Library', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Library');
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrolled - 80);
 });

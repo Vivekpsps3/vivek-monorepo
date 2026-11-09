@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { resetMedia } from './media-test';
+import { expectSectionHeading, resetMedia } from './media-test';
 
 test.beforeEach(async ({ request }) => resetMedia(request));
 
@@ -11,6 +11,7 @@ test('manual add validates locally, keeps the draft, and saves after correction'
     if (request.method() === 'POST' && new URL(request.url()).pathname === '/media/api/library') posts++;
   });
   await page.goto('/media/add');
+  await expectSectionHeading(page, 'Add manually');
   const title = page.getByRole('textbox', { name: 'Title', exact: true });
   const submit = page.getByRole('button', { name: 'Add to library' });
   await expect(submit).toBeEnabled();

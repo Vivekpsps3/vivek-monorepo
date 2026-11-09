@@ -1,5 +1,5 @@
 <div class="page dashboard">
-  <ui-page-header [title]="'Home'" />
+  <ui-page-header [title]="'Home'" [concealTitle]="true" />
   @if (!isLoading && !error && priceNoticeVisible) {
     <div class="price-notice" role="status">
       <p>Prices checked automatically. Only ticker symbols are sent.</p>

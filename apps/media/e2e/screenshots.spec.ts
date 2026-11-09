@@ -1,7 +1,7 @@
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { addItem, closeFilters, openFilters, resetMedia } from './media-test';
+import { addItem, closeFilters, expectSectionHeading, openFilters, resetMedia } from './media-test';
 
 const dir = process.env.SCREENSHOT_DIR || 'test-results/artifacts/media-ux';
 test.use({ reducedMotion: 'reduce' });
@@ -24,7 +24,7 @@ for (const width of [390, 768, 1280]) for (const theme of ['light', 'dark'] as c
     for (const item of existing) await request.delete('/media/api/entries/' + item.id);
     for (const [name, route] of [['now-empty', '/media'], ['library-empty', '/media/library'], ['calendar-empty', '/media/calendar'], ['add-empty', '/media/add']]) {
       await page.goto(route);
-      await expect(page.locator('main h1')).toBeVisible();
+      await expectSectionHeading(page);
       await shot(name);
     }
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('A long title that wraps naturally on a narrow screen');

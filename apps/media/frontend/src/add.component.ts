@@ -56,9 +56,8 @@ import {
     <ui-page-header
       backLabel="← Search"
       backLink="/media/search"
-      eyebrow="Make room for a favorite"
       title="Add manually"
-      subtitle="Add the rest when you're ready."
+      [concealTitle]="true"
     />
     <ui-card
       ><form class="media-form" #form="ngForm" novalidate (ngSubmit)="save()">

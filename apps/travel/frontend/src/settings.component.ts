@@ -48,7 +48,7 @@ interface Settings {
     UiPageHeaderComponent,
   ],
   template: `<ng-template #settingsBody>
-    <ui-page-header eyebrow="Travel preferences" [title]="embedded() ? 'Travel' : 'Settings'" />
+    <ui-page-header [title]="embedded() ? 'Travel' : 'Settings'" />
     <ui-card>
       <h2>Flight schedules</h2>
       <p class="muted">

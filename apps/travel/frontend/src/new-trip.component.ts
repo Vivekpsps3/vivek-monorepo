@@ -51,9 +51,7 @@ import { Trip, travelError } from "./travel.models";
     <ui-page-header
       backLabel="← Trips"
       backLink="/travel"
-      eyebrow="Something to look forward to"
       title="Plan a trip"
-      subtitle="Start with dates and a destination. Everything else can wait."
     />
     <ui-card
       ><form class="travel-form" (ngSubmit)="save()" #form="ngForm">

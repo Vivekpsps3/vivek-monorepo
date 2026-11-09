@@ -6,9 +6,10 @@ a ``user_entries`` row. Fetched discography rows do not become saves.
 
 ``catalog_items`` stays unique on (source, source_id), not kind. MusicBrainz
 artist, release-group, release, and recording ids are one UUID space, so the
-same id is one entity. Album search stores a release id and discography stores
-a release-group id; those stay different rows. A source id already used by
-another kind is reported and is not reused. Manual rows are keyed by legacy id
+same id is one entity. A MusicBrainz album's source id is the release group.
+A pressing id stays on that album's extra and is not a second album row. A
+source id already used by another kind is reported and is not reused. Manual
+rows are keyed by legacy id
 (``legacy-album-<id>`` / ``legacy-track-<id>``), never by title.
 
 Nested scores move onto a child entry only when there is one agreed non-null

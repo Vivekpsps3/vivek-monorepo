@@ -39,11 +39,7 @@ type HomeTrip = Trip & {
   ],
   styleUrl: "./travel.component.css",
   template: `<main class="page travel-page">
-    <ui-page-header
-      eyebrow="Your time away"
-      title="Trips"
-      subtitle="A little space for where you're going next."
-    >
+    <ui-page-header title="Trips" [concealTitle]="true">
       @if (!data() || !isEmpty(data()!)) {
         <ui-button
           uiPageActions

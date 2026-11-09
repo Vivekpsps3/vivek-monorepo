@@ -169,21 +169,6 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     return this.navGroups.filter(group => !group.adminOnly || this.isAdmin);
   }
 
-  get activeNavGroup(): NavGroup {
-    return this.visibleNavGroups.find(group => group.items.some(item => this.isActiveItem(item))) ?? this.visibleNavGroups[0];
-  }
-
-  isActiveGroup(group: NavGroup): boolean {
-    return group.items.some(item => this.isActiveItem(item));
-  }
-
-  isActiveItem(item: NavItem): boolean {
-    // Legacy paths redirect in app.routes.ts before render, so plain
-    // prefix matching is enough here.
-    const url = this.router.url.split('?')[0].split('#')[0];
-    return item.exact ? url === item.path || url === '/finance' : url === item.path || url.startsWith(`${item.path}/`);
-  }
-
   get sectionNavItems(): { label: string; link: string; exact?: boolean }[] {
     return this.visibleNavGroups.map(g => ({ label: g.label, link: g.items[0].path, exact: g.items[0].exact }));
   }

@@ -73,6 +73,29 @@ describe('ProfileSettingsComponent (PF6)', () => {
     expect(text()).toContain('Show my age on Life in Pixels');
   });
 
+  it('saves the date in the field when the model is still empty', async () => {
+    load({ birthday: null, show_age: false });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('#birthday-input') as HTMLInputElement;
+    input.value = '1990-05-04';
+    const saving = component.save();
+    const req = http.expectOne(request => request.method === 'PATCH');
+    expect(req.request.body).toEqual({ birthday: '1990-05-04', show_age: false });
+    req.flush({ birthday: '1990-05-04', show_age: false });
+    await saving;
+    expect(toast.success).toHaveBeenCalledWith('Birthday saved.');
+  });
+
+  it('keeps a picked date when a blank input event follows', () => {
+    load({ birthday: null, show_age: false });
+    component.onBirthdayInput('1990-05-04', false);
+    component.onBirthdayInput('', false);
+    expect(component.birthdayInput).toBe('1990-05-04');
+    component.onBirthdayInput('', true);
+    expect(component.birthdayInput).toBe('');
+  });
+
   it('saves and toasts "Birthday saved." without the date', async () => {
     load({ birthday: null, show_age: false });
     component.birthdayInput = '1990-05-04';

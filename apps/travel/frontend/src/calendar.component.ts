@@ -61,7 +61,7 @@ function monthEnd(month: string): string {
     UiEmptyStateComponent,
   ],
   template: `<main class="page travel-page">
-    <ui-page-header eyebrow="See your time away" title="Travel calendar">
+    <ui-page-header title="Travel calendar" [concealTitle]="true">
       <ui-field uiPageActions label="Month"
         ><input
           uiFieldControl

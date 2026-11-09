@@ -41,6 +41,8 @@ export function chartGeometry(points, options = {}) {
       on: point.on,
       ms,
       days,
+      daysText: String(point.days),
+      hours: point.hours == null || point.hours === "" ? "" : String(point.hours),
       kinds: Array.isArray(point.kinds) ? point.kinds : [],
       projected: Boolean(point.projected),
     });
@@ -68,6 +70,8 @@ export function chartGeometry(points, options = {}) {
   const markers = usable.map((p) => ({
     on: p.on,
     days: p.days,
+    daysText: p.daysText,
+    hours: p.hours,
     kinds: p.kinds,
     projected: p.projected,
     x: x(p.ms),
@@ -87,9 +91,43 @@ export function chartGeometry(points, options = {}) {
     zeroY: rawMin < 0 ? y(0) : null,
     minDays,
     maxDays,
+    ticks: dayTicks(minDays, maxDays).map((days) => ({
+      days,
+      y: y(days),
+      label: tickLabel(days),
+    })),
     markers,
     today,
     first: markers[0],
     last: markers[markers.length - 1],
   };
+}
+
+/** About four gaps across the scale. The step is 1, 2, or 5 times a power of ten. */
+function niceStep(rough) {
+  if (!(rough > 0)) return 1;
+  const pow = 10 ** Math.floor(Math.log10(rough));
+  const n = rough / pow;
+  const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return nice * pow;
+}
+
+function tickLabel(value) {
+  const scaled = Math.round(value * 100) / 100;
+  if (Math.abs(scaled) < 1e-9) return "0";
+  if (Math.abs(scaled - Math.round(scaled)) < 1e-6) return String(Math.round(scaled));
+  return String(scaled);
+}
+
+function dayTicks(minDays, maxDays) {
+  const step = niceStep((maxDays - minDays) / 4);
+  const start = Math.ceil((minDays - step * 1e-8) / step) * step;
+  const ticks = [];
+  for (let i = 0; i < 8; i += 1) {
+    const value = Math.round((start + i * step) * 1000) / 1000;
+    if (value > maxDays + step * 1e-8) break;
+    if (value < minDays - step * 1e-8) continue;
+    ticks.push(value);
+  }
+  return ticks.length ? ticks : [minDays];
 }

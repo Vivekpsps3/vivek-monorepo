@@ -201,6 +201,7 @@ describe('SpendingHubComponent heading (F1)', () => {
     const headings = el.querySelectorAll('h1');
     expect(headings.length).toBe(1);
     expect(headings[0].textContent?.trim()).toBe('Spending');
+    expect(headings[0].classList.contains('ui-page-header__title--concealed')).toBe(true);
     const header = el.querySelector('ui-page-header');
     const tabs = el.querySelector('nav.hub-tabs');
     expect(header).not.toBeNull();

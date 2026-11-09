@@ -1,7 +1,7 @@
 import { chooseColorTheme, openUserMenu } from '../../../tests/e2e/user-menu.mjs';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { addItem, closeFilters, openFilters, openItem, resetMedia, savedItem } from './media-test';
+import { addItem, closeFilters, expectSectionHeading, openFilters, openItem, resetMedia, savedItem } from './media-test';
 
 test.beforeEach(async ({ request }) => resetMedia(request));
 
@@ -73,7 +73,7 @@ test('artist expansion is saved-only, survives Back, and removing the artist pre
   expect((await request.get('/media/api/entries/' + artist.id)).ok()).toBeTruthy();
   await page.getByRole('button', { name: 'Remove from library' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Remove item' }).click();
-  await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Library');
   await expect(page.getByRole('link', { name: 'Saved album', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Saved song', exact: true })).toBeVisible();
 });
@@ -185,7 +185,8 @@ test('the main Media screens pass accessibility in both themes at phone and desk
     await page.setViewportSize({ width, height: 900 });
     for (const route of routes) {
       await page.goto(route);
-      await expect(page.locator('main h1')).toBeVisible();
+      if (route.startsWith('/media/item/')) await expect(page.locator('main h1')).toBeVisible();
+      else await expectSectionHeading(page);
       await chooseColorTheme(page, theme);
       await expect.poll(() => page.locator('body').evaluate(node => getComputedStyle(node).color)).toBe(theme === 'dark' ? 'rgb(246, 241, 234)' : 'rgb(28, 25, 22)');
       await page.evaluate(async () => {

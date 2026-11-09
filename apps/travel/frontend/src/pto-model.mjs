@@ -12,6 +12,7 @@ export const CADENCE_COPY = "Pick how often you earn time off.";
 export const CAP_COPY =
   "Cap has to be more than 0 and up to 8784 hours, or blank.";
 export const YEAR_COPY = "Pick a valid date.";
+export const CARRY_COPY = "Choose whether unused hours carry into the next policy year.";
 export const HPD_COPY =
   "Hours in a workday has to be more than 0 and up to 24, with at most 2 decimals.";
 export const NAME_COPY = "Name this time off.";
@@ -29,7 +30,6 @@ export const EMPTY_MESSAGE =
   "Tell Travel your balance and how fast you earn time off, and it will project what's left after each trip.";
 export const LOAD_ERROR = "Couldn't load PTO";
 export const PAGE_TITLE = "PTO";
-export const PAGE_LEDE = "Your time off today and what's left after each trip.";
 export const FIRST_RUN_TITLE = "Track sick time too";
 export const FIRST_RUN_BODY = "Add your sick balance to see it next to PTO.";
 export const SICK_UNSET = "Sick: not set up \u00b7 Set up";
@@ -66,6 +66,7 @@ const FIELD_ORDER = [
   "accrual_cadence",
   "cap_hours",
   "year_start",
+  "carry_forward",
 ];
 
 export function periodWord(cadence) {
@@ -253,6 +254,9 @@ export function policyErrors(draft, stored, today) {
   if (year !== String(kept.year_start || "") && !yearStartOk(draft.year_month, draft.year_day)) {
     errors.year_start = YEAR_COPY;
   }
+  if (draft.carry_forward != null && typeof draft.carry_forward !== "boolean") {
+    errors.carry_forward = CARRY_COPY;
+  }
   return errors;
 }
 
@@ -299,6 +303,7 @@ export function policyBody(draft) {
     accrual_cadence: draft.accrual_cadence,
     cap_hours: !cap.ok || cap.blank ? null : String(draft.cap_hours).trim().replaceAll(MINUS, "-"),
     year_start: yearStartText(draft.year_month, draft.year_day),
+    carry_forward: draft.carry_forward !== false,
   };
 }
 

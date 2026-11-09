@@ -15,6 +15,7 @@
       @if (!embedded()) {
         <h1
           class="ui-page-header__title"
+          [class.ui-page-header__title--concealed]="concealTitle()"
           [attr.id]="titleId() ?? null"
           [attr.tabindex]="titleTabIndex()"
         >

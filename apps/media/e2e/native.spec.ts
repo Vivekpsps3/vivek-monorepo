@@ -1,11 +1,12 @@
 import {expect,test} from '../../../tests/e2e/fixtures';
+import {expectSectionHeading} from './media-test';
 import AxeBuilder from '@axe-core/playwright';
 test.beforeEach(async({request})=>{expect((await request.post('/e2e/reset')).ok()).toBeTruthy();});
 
 test('native library, persistent shell, notes and progress survive reload',async({page,request})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/media/library?sort=title');
-  await expect(page.getByRole('heading',{name:'Library',exact:true})).toBeVisible();
+  await expectSectionHeading(page,'Library');
   await expect(page.locator('media-card h2')).toHaveText(['Alpha','Dune','Zebra']);
   await expect(page.getByRole('link',{name:'Hub',exact:true})).toHaveCount(1);
   await page.getByRole('link',{name:'Dune',exact:true}).click();
@@ -29,7 +30,7 @@ test('search retains successful matches on partial failure and type/query throug
   await page.getByRole('button',{name:'Retry unavailable sources'}).click();
   await expect(page.getByText('Search is incomplete.',{exact:true})).toHaveCount(0);
   await page.getByRole('link',{name:'Add manually',exact:true}).last().click();
-  await expect(page.getByRole('heading',{name:'Add manually',exact:true})).toBeVisible();
+  await expectSectionHeading(page,'Add manually');
   await expect(page.getByLabel('Title')).toHaveValue('The Gentlemen');
   await page.goBack();await page.getByRole('button',{name:'Leave draft',exact:true}).click();await expect(page.getByRole('searchbox')).toHaveValue('The Gentlemen');
   await expect(page.getByRole('combobox',{name:'Type',exact:true})).toHaveValue('all');

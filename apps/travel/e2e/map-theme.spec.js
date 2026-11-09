@@ -169,6 +169,9 @@ async function showMap(page) {
 }
 
 async function samplePinAndTile(canvas, source) {
+  // The filtered tile pane reports boxes that miss the canvas until the map
+  // is actually in view. Scroll first so the sample is a pixel on the map.
+  await canvas.scrollIntoViewIfNeeded();
   const canvasBox = await canvas.boundingBox();
   const pin = canvas.locator('.leaflet-interactive');
   await expect(pin).toHaveCount(1);

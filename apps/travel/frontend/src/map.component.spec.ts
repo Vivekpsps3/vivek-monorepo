@@ -32,4 +32,28 @@ describe('MapComponent theme', () => {
     expect(stroke()).toEqual(['0.2', '#3388ff', '3']);
     expect(filter()).toBe('none');
     expect(ring(canvas)[4]).toBe('none');
-    expect(observers.length).toBe(before + 1); fixture.destroy(); expect(observers.length).toBe(before); }); });
+    expect(observers.length).toBe(before + 1); fixture.destroy(); expect(observers.length).toBe(before); });
+
+  it('skips zoom and fade animation when reduced motion is preferred', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = (query: string) => {
+      const result = original.call(window, query);
+      if (query !== '(prefers-reduced-motion: reduce)') return result;
+      return { matches: true, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } } as MediaQueryList;
+    };
+    try {
+      TestBed.configureTestingModule({ imports: [MapComponent] });
+      const fixture = TestBed.createComponent(MapComponent);
+      fixture.detectChanges();
+      TestBed.inject(ApplicationRef).tick();
+      const component = fixture.componentInstance;
+      for (let i = 0; i < 50 && !component.map && !component.initializationFailed; i++) await new Promise(resolve => setTimeout(resolve, 20));
+      expect(component.map?.options.zoomAnimation).toBe(false);
+      expect(component.map?.options.fadeAnimation).toBe(false);
+      expect(component.map?.options.markerZoomAnimation).toBe(false);
+      fixture.destroy();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});

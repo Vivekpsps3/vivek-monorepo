@@ -3,21 +3,8 @@
   min-height: 100%;
 }
 
-.navbar {
-  background: var(--navbar-bg, color-mix(in srgb, var(--bg-elevated) 90%, transparent));
-  backdrop-filter: blur(var(--backdrop-blur, 10px)) saturate(1.35);
-  -webkit-backdrop-filter: blur(var(--backdrop-blur, 10px)) saturate(1.35);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: var(--space-3) max(var(--space-6), env(safe-area-inset-right)) var(--space-2)
-    max(var(--space-6), env(safe-area-inset-left));
-  position: sticky;
-  top: var(--suite-header-height, 4.5rem);
-  z-index: 10;
-}
-
 .api-banner-wrap,
-.market-banner-wrap,
-.nav-content {
+.market-banner-wrap {
   box-sizing: border-box;
   width: min(100%, 72rem);
   margin: 0 auto;
@@ -104,16 +91,6 @@
 
 .market-banner__failures strong {
   color: var(--text);
-}
-
-.nav-content {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.mobile-tabbar {
-  display: none;
 }
 
 .main-content {
@@ -231,10 +208,6 @@
     max-height: calc(100dvh - var(--suite-header-height, 4rem));
   }
 
-  .navbar {
-    display: none;
-  }
-
   .main-content {
     flex: 1 1 auto;
     min-height: 0;
@@ -243,7 +216,6 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
     touch-action: pan-y;
-    padding-bottom: var(--mobile-tab-offset, 4.5rem);
   }
 
   .main-content > * {
@@ -263,53 +235,6 @@
   .api-banner {
     justify-content: flex-start;
     text-align: left;
-  }
-
-  .mobile-tabbar {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
-    margin: 0;
-    padding: 0.35rem max(0.25rem, env(safe-area-inset-right)) max(0.35rem, env(safe-area-inset-bottom))
-      max(0.25rem, env(safe-area-inset-left));
-    border-top: 1px solid var(--border-subtle);
-    background: var(--navbar-bg, var(--bg-elevated));
-    backdrop-filter: blur(var(--backdrop-blur, 10px)) saturate(1.35);
-    -webkit-backdrop-filter: blur(var(--backdrop-blur, 10px)) saturate(1.35);
-  }
-
-  .mobile-tab {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    min-width: 0;
-    min-height: 3.5rem;
-    padding: 0.375rem 0.125rem;
-    border-radius: var(--radius-md);
-    color: var(--text-tertiary);
-    font-weight: 650;
-    letter-spacing: 0.01em;
-    text-decoration: none;
-  }
-
-  .mobile-tab__label {
-    font-size: 0.75rem;
-    line-height: 1rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-
-  .mobile-tab.active {
-    color: var(--accent);
-    background: var(--accent-glow);
   }
 
   .tutorial-header {

@@ -41,6 +41,19 @@ test("zero line only appears when the balance crosses zero", () => {
   assert.equal(positive.zeroY, null);
 });
 
+test("y-axis ticks use the day scale and markers keep hours", () => {
+  const geo = chartGeometry([
+    { on: "2026-01-01", days: "0", hours: "0", kinds: ["as_of"] },
+    { on: "2026-02-01", days: "10", hours: "80", kinds: ["horizon"], projected: true },
+  ]);
+  assert.ok(geo.ticks.length >= 2);
+  assert.ok(geo.ticks.some((tick) => tick.label === "0"));
+  assert.ok(geo.ticks.every((tick) => tick.y >= 0 && tick.y <= geo.height));
+  assert.equal(geo.markers[1].daysText, "10");
+  assert.equal(geo.markers[1].hours, "80");
+  assert.ok(geo.markers[1].y < geo.markers[0].y);
+});
+
 test("today marker is found by kind", () => {
   const geo = chartGeometry([
     point("2026-01-01", 5, ["as_of"]),

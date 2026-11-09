@@ -12,6 +12,8 @@ async function expectFits(page: Page, label: string): Promise<void> {
       const el = node as HTMLElement;
       const style = getComputedStyle(el);
       if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
+      const sectionScroller = el.closest('.ui-section-nav__scroller');
+      if (sectionScroller && sectionScroller !== el) continue;
       const box = el.getBoundingClientRect();
       if (box.width < 8 || box.height < 8) continue;
       if (box.right > right) {
@@ -50,11 +52,12 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await expect.poll(() => vault.data('holdings')[0]?.current_price).toBe(125);
   await expect(page.locator('.market-banner')).toHaveCount(0);
   await expect(page.getByText(/of \d+ tickers/)).toHaveCount(0);
-  await expect(page.locator('.mobile-tabbar')).toBeVisible();
-  await expect(page.locator('ui-section-nav')).toBeHidden();
+  const sections = page.getByRole('navigation', { name: 'Finance sections' });
+  await expect(sections).toBeVisible();
+  await expect(page.locator('.mobile-tabbar')).toHaveCount(0);
   await expectFits(page, 'home');
 
-  await page.locator('.mobile-tab', { hasText: 'Net worth' }).click();
+  await sections.getByRole('link', { name: 'Net worth', exact: true }).click();
   await expect(page).toHaveURL(/\/have/);
   await expectFits(page, 'assets');
   await page.getByRole('link', { name: 'Holdings' }).click();
@@ -70,7 +73,7 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   expect((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0)).toBeLessThanOrEqual(844 + 0.5);
   await page.keyboard.press('Escape');
 
-  await page.locator('.mobile-tab', { hasText: 'Spending' }).click();
+  await sections.getByRole('link', { name: 'Spending', exact: true }).click();
   await expect(page).toHaveURL(/\/spending/);
   await expectFits(page, 'spending');
   const activity = page.locator('.tx-mobile-row').first();
@@ -83,11 +86,11 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await expect(page.locator('.calendar-grid')).toBeVisible();
   await expectFits(page, 'calendar');
 
-  await page.locator('.mobile-tab', { hasText: 'Recurring' }).click();
+  await sections.getByRole('link', { name: 'Recurring', exact: true }).click();
   await expect(page).toHaveURL(/\/recurring/);
   await expectFits(page, 'recurring');
 
-  await page.locator('.mobile-tab', { hasText: 'Planning' }).click();
+  await sections.getByRole('link', { name: 'Planning', exact: true }).click();
   await expect(page).toHaveURL(/\/planning/);
   await expectFits(page, 'planning');
   const scrolled = await page.evaluate(() => {
@@ -99,7 +102,7 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   expect(scrolled.height).toBeGreaterThan(scrolled.client);
   expect(scrolled.after).toBeGreaterThan(scrolled.before);
 
-  await page.locator('.mobile-tab', { hasText: 'Home' }).click();
+  await sections.getByRole('link', { name: 'Home', exact: true }).click();
   await openUserMenu(page);
   await page.getByRole('button', { name: 'Guide' }).click();
   const tutorial = page.locator('.tutorial-panel');
@@ -112,7 +115,7 @@ test('phone shell scrolls in one column and does not count refreshed tickers', a
   await page.getByRole('button', { name: 'Close', exact: true }).click();
 
   await page.setViewportSize({ width: 320, height: 700 });
-  await expect(page.locator('.mobile-tabbar')).toBeVisible();
-  await expect(page.locator('ui-section-nav')).toBeHidden();
+  await expect(sections).toBeVisible();
+  await expect(page.locator('.mobile-tabbar')).toHaveCount(0);
   await expectFits(page, 'narrow home');
 });

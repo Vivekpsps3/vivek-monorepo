@@ -107,6 +107,11 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     expect(component.drafts.sick.start_balance_hours).toBe("");
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector("travel-pto-chart")).not.toBeNull();
+    expect(root.querySelector("h1.visually-hidden")?.textContent).toContain("PTO");
+    expect(root.querySelector("p.lede")).toBeNull();
+    expect(root.textContent).not.toContain("Your time off today and what's left after each trip.");
+    expect(root.textContent).toContain("Chart runs through");
+    expect(root.textContent).not.toContain("last 60");
     expect(root.textContent).toContain("Balance today");
     expect(root.textContent).toContain("Track sick time too");
   });
@@ -121,6 +126,7 @@ describe("PtoComponent (TPTO2A/2B)", () => {
       cap_hours: "",
       year_month: "01",
       year_day: "01",
+      carry_forward: true,
     };
     component.savePolicy("sick");
     const req = httpMock.expectOne("/travel/api/pto/policies/sick");
@@ -132,6 +138,7 @@ describe("PtoComponent (TPTO2A/2B)", () => {
       accrual_cadence: "monthly",
       cap_hours: null,
       year_start: "01-01",
+      carry_forward: true,
     });
     req.flush(payload());
     httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());

@@ -24,6 +24,8 @@ _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
 _KIND_ORDER = (
     "as_of",
     "month",
+    "year_before",
+    "year",
     "charge_before",
     "cap_before",
     "charge",
@@ -41,6 +43,7 @@ ACCRUAL_COPY = "Accrual has to be between 0 and 8784 hours."
 CADENCE_COPY = "Pick how often you earn time off."
 CAP_COPY = "Cap has to be more than 0 and up to 8784 hours, or blank."
 YEAR_COPY = "Pick a valid date."
+CARRY_COPY = "Choose whether unused hours carry into the next policy year."
 HPD_COPY = "Hours in a workday has to be more than 0 and up to 24, with at most 2 decimals."
 
 # ASCII only. Integer part is at most 6 digits; the length cap stops a long fraction
@@ -59,6 +62,7 @@ class Bucket:
     accrual_cadence: str
     cap_hours: Fraction | None
     year_start: str
+    carry_forward: bool = True
 
     @property
     def daily(self) -> Fraction:
@@ -78,16 +82,22 @@ def bucket_from_row(row) -> Bucket:
         accrual_cadence=row.accrual_cadence,
         cap_hours=cap,
         year_start=row.year_start,
+        carry_forward=bool(getattr(row, "carry_forward", True)),
     )
 
 
 def walk_bucket(bucket: Bucket, charges: dict[date, Fraction], on: date) -> tuple[Fraction, bool]:
-    """End-of-day balance on `on`, and whether `on` is before the balance date."""
+    """End-of-day balance on `on`, and whether `on` is before the balance date.
+
+    With carry forward off, positive unused hours drop to zero at each
+    policy-year start, before that day's accrual and charges.
+    """
     if on < bucket.balance_as_of:
         return bucket.start_balance_hours, True
     balance = bucket.start_balance_hours
     day = bucket.balance_as_of + timedelta(days=1)
     while day <= on:
+        balance = _drop_unused(balance, day, bucket)
         balance, _added = _accrue(balance, bucket.daily, bucket.cap_hours)
         balance -= charges.get(day, Fraction(0))
         day += timedelta(days=1)
@@ -115,18 +125,53 @@ def _decimal(value: Fraction) -> Decimal:
     return Decimal(value.numerator) / Decimal(value.denominator)
 
 
+def _year_parts(year_start: str) -> tuple[int, int]:
+    month, day = year_start.split("-")
+    return int(month), int(day)
+
+
+def _is_year_start(day: date, year_start: str) -> bool:
+    month, dom = _year_parts(year_start)
+    return day.month == month and day.day == dom
+
+
+def _drop_unused(balance: Fraction, day: date, bucket: Bucket) -> Fraction:
+    """Zero positive unused hours on a policy-year start when that bucket opts out."""
+    if bucket.carry_forward or not _is_year_start(day, bucket.year_start) or balance <= 0:
+        return balance
+    return Fraction(0)
+
+
+def year_starts_between(year_start: str, after: date, through: date) -> list[date]:
+    """Policy-year starts in (after, through]."""
+    if through <= after:
+        return []
+    month, dom = _year_parts(year_start)
+    year = after.year
+    candidate = date(year, month, dom)
+    if candidate <= after:
+        candidate = date(year + 1, month, dom)
+    found: list[date] = []
+    while candidate <= through:
+        found.append(candidate)
+        candidate = date(candidate.year + 1, month, dom)
+    return found
+
+
 def policy_year(today: date, year_start: str) -> tuple[date, date, int, bool]:
-    """Return policy-year end, horizon end, days left, and whether the chart rolled."""
-    month, day = (int(part) for part in year_start.split("-"))
-    start = date(today.year, month, day)
+    """Return policy-year end, horizon end, days left, and that the next year is included.
+
+    The horizon is the last day of the following policy year all year long.
+    ``rolled_over`` stays true because the chart no longer waits for the last 60 days.
+    """
+    month, dom = _year_parts(year_start)
+    start = date(today.year, month, dom)
     if start > today:
-        start = date(today.year - 1, month, day)
-    end = date(start.year + 1, month, day) - timedelta(days=1)
+        start = date(today.year - 1, month, dom)
+    end = date(start.year + 1, month, dom) - timedelta(days=1)
+    horizon = date(start.year + 2, month, dom) - timedelta(days=1)
     days_left = (end - today).days
-    if days_left < 60:
-        horizon = date(start.year + 2, month, day) - timedelta(days=1)
-        return end, horizon, days_left, True
-    return end, end, days_left, False
+    return end, horizon, days_left, True
 
 
 def _apply_n(balance: Fraction, days: int, daily: Fraction, cap: Fraction | None) -> Fraction:
@@ -151,6 +196,94 @@ def _cap_on(
     if when > end:
         return None
     return when
+
+
+def _apply_span(
+    balance: Fraction,
+    start: date,
+    end: date,
+    daily: Fraction,
+    cap: Fraction | None,
+    bucket: Bucket,
+) -> Fraction:
+    """Accrue each day after ``start`` through ``end``, dropping unused hours at year starts."""
+    if end <= start:
+        return balance
+    if bucket.carry_forward:
+        return _apply_n(balance, (end - start).days, daily, cap)
+    cursor = start
+    for boundary in year_starts_between(bucket.year_start, start, end):
+        before = boundary - timedelta(days=1)
+        balance = _apply_n(balance, (before - cursor).days, daily, cap)
+        if balance > 0:
+            balance = Fraction(0)
+        balance, _added = _accrue(balance, daily, cap)
+        cursor = boundary
+    return _apply_n(balance, (end - cursor).days, daily, cap)
+
+
+def _mark_years(kinds: dict[date, set[str]], bucket: Bucket, as_of: date, horizon: date) -> None:
+    """The series steps through every policy-year start inside the horizon."""
+    for boundary in year_starts_between(bucket.year_start, as_of, horizon):
+        kinds[boundary].add("year")
+        before = boundary - timedelta(days=1)
+        if as_of < before <= horizon:
+            kinds[before].add("year_before")
+
+
+def _accrue_gap(
+    balance: Fraction,
+    cursor: date,
+    gap_end: date,
+    daily: Fraction,
+    cap: Fraction | None,
+    bucket: Bucket,
+    kinds: dict[date, set[str]],
+    as_of: date,
+    horizon: date,
+) -> Fraction:
+    """Accrue (cursor, gap_end] and mark the days accrual reaches the cap."""
+    if gap_end <= cursor:
+        return balance
+    if bucket.carry_forward:
+        hit = _cap_on(balance, cursor + timedelta(days=1), gap_end, daily, cap)
+        balance = _apply_n(balance, (gap_end - cursor).days, daily, cap)
+        _mark_cap(kinds, hit, as_of, horizon)
+        return balance
+    for boundary in year_starts_between(bucket.year_start, cursor, gap_end):
+        before = boundary - timedelta(days=1)
+        if before > cursor:
+            hit = _cap_on(balance, cursor + timedelta(days=1), before, daily, cap)
+            balance = _apply_n(balance, (before - cursor).days, daily, cap)
+            _mark_cap(kinds, hit, as_of, horizon)
+        if balance > 0:
+            balance = Fraction(0)
+        before_acc = balance
+        balance, _added = _accrue(balance, daily, cap)
+        if cap is not None and before_acc < cap and balance >= cap:
+            _mark_cap(kinds, boundary, as_of, horizon)
+        cursor = boundary
+    if gap_end > cursor:
+        hit = _cap_on(balance, cursor + timedelta(days=1), gap_end, daily, cap)
+        balance = _apply_n(balance, (gap_end - cursor).days, daily, cap)
+        _mark_cap(kinds, hit, as_of, horizon)
+    return balance
+
+
+def _end_of(
+    balance: Fraction,
+    prev: date,
+    when: date,
+    daily: Fraction,
+    cap: Fraction | None,
+    bucket: Bucket,
+    charges: dict[date, Fraction],
+) -> Fraction:
+    """End-of-day balance on ``when`` after finishing ``prev``."""
+    balance = _apply_span(balance, prev, when - timedelta(days=1), daily, cap, bucket)
+    balance = _drop_unused(balance, when, bucket)
+    balance, _added = _accrue(balance, daily, cap)
+    return balance - charges.get(when, Fraction(0))
 
 
 def _mark_cap(kinds: dict[date, set[str]], when: date | None, as_of: date, horizon: date) -> None:
@@ -190,14 +323,14 @@ def segments(
     negative = as_of if bucket.start_balance_hours < 0 else None
     if negative is not None:
         kinds[as_of].add("zero")
+    _mark_years(kinds, bucket, as_of, horizon)
     balance = bucket.start_balance_hours
     cursor = as_of
     upcoming = sorted(day for day in charges if as_of < day <= horizon)
     for day in upcoming:
         gap_end = day - timedelta(days=1)
-        hit = _cap_on(balance, cursor + timedelta(days=1), gap_end, daily, cap)
-        balance = _apply_n(balance, (gap_end - cursor).days, daily, cap)
-        _mark_cap(kinds, hit, as_of, horizon)
+        balance = _accrue_gap(balance, cursor, gap_end, daily, cap, bucket, kinds, as_of, horizon)
+        balance = _drop_unused(balance, day, bucket)
         before = balance
         balance, _added = _accrue(balance, daily, cap)
         reached = cap is not None and before < cap and balance >= cap
@@ -216,9 +349,7 @@ def segments(
         if prior >= as_of:
             kinds[prior].add("charge_before")
         cursor = day
-    tail_start = cursor + timedelta(days=1)
-    hit = _cap_on(balance, tail_start, horizon, daily, cap)
-    _mark_cap(kinds, hit, as_of, horizon)
+    _accrue_gap(balance, cursor, horizon, daily, cap, bucket, kinds, as_of, horizon)
     year, month = as_of.year, as_of.month + 1
     if month == 13:
         year, month = year + 1, 1
@@ -240,10 +371,7 @@ def segments(
     prev = as_of
     for when in sorted(kinds):
         if when != as_of:
-            gap_end = when - timedelta(days=1)
-            balance = _apply_n(balance, (gap_end - prev).days, daily, cap)
-            balance, _added = _accrue(balance, daily, cap)
-            balance -= charges.get(when, Fraction(0))
+            balance = _end_of(balance, prev, when, daily, cap, bucket, charges)
             prev = when
         ordered = [name for name in _KIND_ORDER if name in kinds[when]]
         points.append(_point(when, balance, ordered, today))
@@ -357,6 +485,7 @@ def validate_policy_body(raw: dict, stored, today: date) -> tuple[dict | None, d
     stored_cadence = None if stored is None else stored.accrual_cadence
     stored_year = None if stored is None else stored.year_start
     stored_as_of = None if stored is None else stored.balance_as_of
+    stored_carry = True if stored is None else bool(getattr(stored, "carry_forward", True))
 
     start = parse_loose(raw.get("start_balance_hours"))
     if start is None or (
@@ -417,6 +546,14 @@ def validate_policy_body(raw: dict, stored, today: date) -> tuple[dict | None, d
             errors["year_start"] = YEAR_COPY
         else:
             clean["year_start"] = text
+
+    carry = raw.get("carry_forward")
+    if "carry_forward" not in raw or carry is None:
+        clean["carry_forward"] = stored_carry
+    elif isinstance(carry, bool):
+        clean["carry_forward"] = carry
+    else:
+        errors["carry_forward"] = CARRY_COPY
     if errors:
         return None, errors
     return clean, {}

@@ -13,6 +13,7 @@ import { HistoryDialogComponent } from './history-dialog.component';
 import { TownLotComponent } from './town-lot.component';
 import { TownTodayComponent, liveCheck } from './town-today.component';
 import { stage } from './town-levels';
+import { weeksKeptRun } from './weeks-kept';
 import { applySeen, readSeen } from './town-seen';
 import type { TownResponse } from './town.types';
 import { WORLD_COPY } from '../world/world.types';
@@ -126,4 +127,12 @@ export class TownComponent {
     if (this.data()?.town.today !== day) this.reload();
   }
   habit(id: number | null) { return this.data()?.habits.find(habit => habit.id === id); }
+  weeksKept(data: TownResponse): number | null {
+    if (!Array.isArray(data.habits)) return null;
+    try {
+      return weeksKeptRun(data.habits);
+    } catch {
+      return null;
+    }
+  }
 }

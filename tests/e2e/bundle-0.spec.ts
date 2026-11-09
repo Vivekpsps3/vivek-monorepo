@@ -300,7 +300,7 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   await page.goto('/hub');
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   const bar = page.locator('.app-switcher__bar');
-  for (const name of ['Hub', 'Finance', 'Travel', 'Media', 'Town']) {
+  for (const name of ['Hub', 'Finance', 'Travel', 'Media', 'Town', 'Pixels']) {
     await expect(bar.getByRole('link', { name, exact: true })).toBeVisible();
   }
   await expect(page.locator('.app-switcher__toggle')).toBeHidden();
@@ -313,7 +313,7 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   await page.keyboard.press('Enter');
   const menu = page.locator('#app-switcher-menu');
   await expect(menu).toBeVisible();
-  for (const name of ['Hub', 'Finance', 'Travel', 'Media', 'Town']) {
+  for (const name of ['Hub', 'Finance', 'Travel', 'Media', 'Town', 'Pixels']) {
     await expect(menu.getByRole('link', { name, exact: true })).toBeVisible();
   }
   await page.keyboard.press('ArrowDown');
@@ -323,7 +323,7 @@ test('app switcher lists every app and supports the keyboard', async ({ page }) 
   await page.keyboard.press('ArrowUp');
   await expect(menu.getByRole('link', { name: 'Hub', exact: true })).toBeFocused();
   await page.keyboard.press('End');
-  await expect(menu.getByRole('link', { name: 'Town', exact: true })).toBeFocused();
+  await expect(menu.getByRole('link', { name: 'Pixels', exact: true })).toBeFocused();
   await page.keyboard.press('Home');
   await expect(menu.getByRole('link', { name: 'Hub', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');

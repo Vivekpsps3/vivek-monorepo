@@ -15,9 +15,9 @@
     <ui-page-header
       backLabel="← Trips"
       backLink="/travel"
-      [eyebrow]="trip.status + ' · ' + trip.phase"
       [title]="trip.title"
     >
+      <p>{{ trip.status }} · {{ trip.phase }}</p>
       <p>{{ whenText(trip) }}</p>
       @if (showSubtitle(trip.title, trip.cities)) {
         <p class="muted">{{ trip.cities.join(" → ") }}</p>

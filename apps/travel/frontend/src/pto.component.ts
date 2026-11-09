@@ -38,7 +38,6 @@ import {
   FIRST_RUN_TITLE,
   LOAD_ERROR,
   MONTHS,
-  PAGE_LEDE,
   PAGE_TITLE,
   POLICY_FAILED,
   POLICY_SAVED,
@@ -72,6 +71,7 @@ interface SeriesBucket {
   balance_today_days: string;
   balance_horizon_hours: string;
   balance_horizon_days: string;
+  horizon_end?: string;
   first_negative: {
     on: string;
     hours: string;
@@ -100,6 +100,7 @@ interface PolicyDraft {
   cap_hours: string;
   year_month: string;
   year_day: string;
+  carry_forward: boolean;
 }
 type Busy = "" | "policy" | "entry" | "remove";
 
@@ -121,8 +122,7 @@ type Busy = "" | "policy" | "entry" | "remove";
       <h1>{{ loadError }}</h1>
       <ui-button variant="primary" (clicked)="load()">Retry</ui-button>
     } @else {
-      <h1>{{ pageTitle }}</h1>
-      <p class="lede">{{ pageLede }}</p>
+      <h1 class="visually-hidden">{{ pageTitle }}</h1>
       @if (message()) {
         <p role="status" class="save-status">{{ message() }}</p>
       }
@@ -176,18 +176,16 @@ type Busy = "" | "policy" | "entry" | "remove";
                 <h2>Forecast</h2>
                 <p class="muted">
                   Policy year ends {{ showDay(s.policy_year_end) }} ·
-                  {{ s.days_left_in_policy_year }} days left
-                  @if (s.rolled_over) {
-                    · Chart runs to {{ showDay(s.horizon_end) }} so the next year
-                    stays visible
-                  }
+                  {{ s.days_left_in_policy_year }} days left · Chart runs through
+                  {{ showDay(s.horizon_end) }}
                 </p>
                 @if (s.pto; as bucket) {
                   <h3>PTO</h3>
                   <travel-pto-chart [points]="bucket.points" label="PTO balance" />
                   <p>
                     Today {{ bucket.balance_today_days }} days · By
-                    {{ showDay(s.horizon_end) }} {{ bucket.balance_horizon_days }}
+                    {{ showDay(bucket.horizon_end || s.horizon_end) }}
+                    {{ bucket.balance_horizon_days }}
                     days
                     @if (bucket.at_cap_today) {
                       · At cap
@@ -207,7 +205,8 @@ type Busy = "" | "policy" | "entry" | "remove";
                   <travel-pto-chart [points]="bucket.points" label="Sick balance" />
                   <p>
                     Today {{ bucket.balance_today_days }} days · By
-                    {{ showDay(s.horizon_end) }} {{ bucket.balance_horizon_days }}
+                    {{ showDay(bucket.horizon_end || s.horizon_end) }}
+                    {{ bucket.balance_horizon_days }}
                     days
                     @if (bucket.at_cap_today) {
                       · At cap
@@ -476,6 +475,18 @@ type Busy = "" | "policy" | "entry" | "remove";
                         </select>
                       </span>
                     </ui-field>
+                    <label class="check-row">
+                      <input
+                        type="checkbox"
+                        name="carry-forward"
+                        [(ngModel)]="drafts[name].carry_forward"
+                        (change)="blurField(name, 'carry_forward')"
+                      />
+                      Carry unused hours into the next policy year
+                    </label>
+                    @if (fieldErrors()["carry_forward"]; as carryError) {
+                      <p class="field-error">{{ carryError }}</p>
+                    }
                     <div class="button-row">
                       <ui-button variant="primary" type="submit" [disabled]="busy() === 'policy'">
                         {{ busy() === "policy" ? "Saving…" : "Save" }}
@@ -494,7 +505,24 @@ type Busy = "" | "policy" | "entry" | "remove";
   styles: [
     `
       .pto-page { max-width: 1080px; }
-      .lede { color: var(--text-secondary); }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .check-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 44px;
+        margin: 0.25rem 0 0.75rem;
+      }
       .pto-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
       .tile, .pto-lower ui-card { min-width: 0; }
       .tile-kicker, .chip { display: inline-flex; align-items: center; gap: 0.35rem; }
@@ -552,7 +580,6 @@ export class PtoComponent {
   readonly showDay = showDay;
   readonly showRange = showRange;
   readonly pageTitle = PAGE_TITLE;
-  readonly pageLede = PAGE_LEDE;
   readonly loadError = LOAD_ERROR;
   readonly emptyTitle = EMPTY_TITLE;
   readonly emptyMessage = EMPTY_MESSAGE;
@@ -1020,6 +1047,7 @@ export class PtoComponent {
       accrual_cadence: "cadence",
       cap_hours: "cap",
       year_start: "year-month",
+      carry_forward: "carry-forward",
     };
     const name = map[field];
     const node = root?.querySelector<HTMLElement>(`[name="${name}"]`);
@@ -1044,6 +1072,7 @@ function blankDraft(today: string): PolicyDraft {
     cap_hours: "",
     year_month: "01",
     year_day: "01",
+    carry_forward: true,
   };
 }
 
@@ -1058,6 +1087,7 @@ function fromBucket(row: BucketState | null, today: string): PolicyDraft {
     cap_hours: row.cap_hours || "",
     year_month: year_month || "01",
     year_day: year_day || "01",
+    carry_forward: row.carry_forward !== false,
   };
 }
 

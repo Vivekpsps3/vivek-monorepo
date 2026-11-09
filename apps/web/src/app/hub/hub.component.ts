@@ -7,8 +7,7 @@ import { formatDateRange, todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
 import { LOCK_SIGNAL, VAULT_PRESENCE, financeTabId, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
-import { AppDatePipe } from '@vivek/ui';
-import { MoneyPipe } from '@vivek/ui';
+import { MoneyPipe, UiPageHeaderComponent } from '@vivek/ui';
 import {
   MEDIA_SUMMARY_URL,
   TRAVEL_SUMMARY_URL,
@@ -76,10 +75,10 @@ interface FinanceView {
   selector: 'app-hub',
   standalone: true,
   imports: [
-    AppDatePipe,
     MoneyPipe,
     NextEpisodeButtonComponent,
     RouterLink,
+    UiPageHeaderComponent,
     UiStateComponent,
   ],
   templateUrl: './hub.component.html',
@@ -193,10 +192,6 @@ export class HubComponent implements OnInit {
 
   tripPlace(trip: TravelTrip): string {
     return trip.destination || trip.title;
-  }
-
-  get headingToday(): string {
-    return todayIsoDate();
   }
 
   readonly formatRange = formatDateRange;

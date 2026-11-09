@@ -87,6 +87,10 @@ def library(
     if sort not in {"added", "rating", "activity", "release", "title"}:
         sort = "activity"
     user_id = principal.id
+    # A book or show page must not scan saved albums. Mixed and music pages
+    # repair pressings in one query so an artist card can count its albums.
+    if kind in {None, "artist", "album", "track"}:
+        records.repair_musicbrainz_albums(db, user_id)
     selected = parse_tag_params(tags)
     rows, total = records.list_library(
         db, user_id, kind, status, q, sort, offset, limit, favorite, tags=selected or None
@@ -177,6 +181,7 @@ def discography(
 ):
     """One page of public releases. Nothing here is saved."""
     entry = _discography_artist(db, principal.id, entry_id)
+    records.repair_musicbrainz_albums(db, principal.id)
     chosen = release.strip().lower()
     if chosen not in _DISCOGRAPHY_RELEASES:
         raise HTTPException(status_code=422, detail="That release filter is not available.")
@@ -191,6 +196,7 @@ def discography(
                 group_offset=group_offset,
                 release_offset=release_offset,
                 max_pages=1,
+                db=db,
             )
         else:
             payload = providers.musicbrainz_artist_catalog(
@@ -200,6 +206,7 @@ def discography(
                 release_offset=release_offset,
                 max_pages=1,
                 release_type=chosen,
+                db=db,
             )
     except Exception:
         raise HTTPException(

@@ -72,10 +72,12 @@ describe('MainLayoutComponent navigation (F6)', () => {
     expect(links.map(link => link.textContent?.trim())).toEqual(['Home', 'Net worth', 'Spending', 'Recurring', 'Planning']);
   });
 
-  it('mobile bar uses the same labels and no aria-label override', () => {
-    const tabs = [...fixture.nativeElement.querySelectorAll('.mobile-tab')] as HTMLElement[];
-    expect(tabs.map(tab => tab.textContent?.trim())).toEqual(['Home', 'Net worth', 'Spending', 'Recurring', 'Planning']);
-    for (const tab of tabs) expect(tab.getAttribute('aria-label')).toBeNull();
+  it('mounts one section nav and no mobile tab bar', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.navbar')).toBeNull();
+    expect(root.querySelector('.mobile-tabbar')).toBeNull();
+    expect(root.querySelectorAll('ui-section-nav').length).toBe(1);
+    expect(root.querySelector('.ui-section-nav')?.getAttribute('aria-label')).toBe('Finance sections');
   });
 
   it('Guide shows How Finance works with four steps and three rules', () => {

@@ -10,7 +10,7 @@ import { UiPageHeaderComponent } from '@vivek/ui';
   imports: [RouterLink, AssetsLiabilitiesComponent, PortfolioComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <ui-page-header [title]="'What you have'" />
+      <ui-page-header [title]="'What you have'" [concealTitle]="true" />
       <nav class="hub-tabs" aria-label="Net worth sections">
         <a [routerLink]="[]" [queryParams]="{ t: null }" [class.on]="tab === 'assets'" [attr.aria-current]="tab === 'assets' ? 'page' : null">Assets and debts</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'holdings' }" [class.on]="tab === 'holdings'" [attr.aria-current]="tab === 'holdings' ? 'page' : null">Holdings</a>

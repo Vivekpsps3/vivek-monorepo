@@ -80,8 +80,22 @@ export class ProfileSettingsComponent implements OnInit {
     }
   }
 
+  /** A date-picker `input` event can arrive blank after a real value. Keep the date. */
+  onBirthdayInput(value: string, commit: boolean): void {
+    if (commit || value || !FULL_ISO_DATE.test(this.birthdayInput)) this.birthdayInput = value;
+  }
+
+  /** The control wins when it holds a full date. A blank flicker falls back to the last full date. */
+  chosenBirthday(): string {
+    const typed = this.birthdayField?.nativeElement.value ?? '';
+    if (FULL_ISO_DATE.test(typed)) return typed;
+    if (typed === '' && FULL_ISO_DATE.test(this.birthdayInput)) return this.birthdayInput;
+    return typed || this.birthdayInput;
+  }
+
   async save(): Promise<void> {
     if (this.saving) return;
+    this.birthdayInput = this.chosenBirthday();
     const problem = validateBirthday(this.birthdayInput, new Date());
     if (problem) {
       this.showError(problem, true);

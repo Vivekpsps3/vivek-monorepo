@@ -19,6 +19,7 @@ from apps.travel.backend.services.leave_math import (
     ACCRUAL_COPY,
     CADENCE_COPY,
     CAP_COPY,
+    CARRY_COPY,
     HPD_COPY,
     START_COPY,
     YEAR_COPY,
@@ -312,6 +313,22 @@ def test_bool_hours_per_day_uses_the_painter_copy(client, monkeypatch, value):
     assert body["message"] == "Check the highlighted fields."
     assert body["field_errors"] == {"hours_per_day": HPD_COPY}
     assert client.get("/api/settings").json()["pto"]["hours_per_day"] == "8"
+
+
+def test_carry_forward_defaults_on_and_each_bucket_keeps_its_own_choice(client, monkeypatch):
+    pin(monkeypatch)
+    saved = client.put("/api/pto/policies/pto", json=_policy(start_balance_hours="8"))
+    assert saved.status_code == 200, saved.text
+    assert client.get("/api/pto/policies/pto").json()["carry_forward"] is True
+    off = client.put(
+        "/api/pto/policies/sick", json=_policy(start_balance_hours="4", carry_forward=False)
+    )
+    assert off.status_code == 200, off.text
+    assert client.get("/api/pto/policies/sick").json()["carry_forward"] is False
+    assert client.get("/api/pto/policies/pto").json()["carry_forward"] is True
+    bad = client.put("/api/pto/policies/pto", json=_policy(carry_forward="no"))
+    assert bad.status_code == 422, bad.text
+    assert bad.json()["field_errors"]["carry_forward"] == CARRY_COPY
 
 
 def test_json_integers_still_save_as_numbers(client, monkeypatch):

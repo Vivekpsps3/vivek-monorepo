@@ -52,11 +52,7 @@ interface Calendar {
     UiPageHeaderComponent,
   ],
   template: `<main class="page media-page">
-    <ui-page-header
-      eyebrow="On the horizon"
-      title="Media calendar"
-      subtitle="Known episode dates and anticipated releases. Opening this page uses saved metadata."
-    >
+    <ui-page-header title="Media calendar" [concealTitle]="true">
       <ui-button variant="ghost" [disabled]="refreshing()" (click)="refresh()">
         {{ refreshing() ? "Refreshing releases…" : "Refresh release metadata" }}
       </ui-button>

@@ -126,7 +126,8 @@ def test_mixed_page_has_bounded_queries_and_matches_detail_truth(client, monkeyp
     _seed_mixed(client, monkeypatch)
     page, metrics = _measure(client, sort="title", limit=24)
     assert len(page["items"]) == 24
-    assert metrics["selects"] <= 6, metrics  # available_tags is one extra SELECT.
+    # available_tags and the MusicBrainz album repair are one SELECT each.
+    assert metrics["selects"] <= 7, metrics
     assert "continue" not in page  # Continuation belongs to /summary and Now.
     for card in page["items"]:
         detail = client.get(f"/api/entries/{card['id']}").json()

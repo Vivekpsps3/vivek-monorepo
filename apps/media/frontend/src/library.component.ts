@@ -58,11 +58,10 @@ import {
   styleUrl: "./library-filters.css",
   template: `<main class="page media-page">
     <ui-page-header
-      eyebrow="Your collection"
       title="Library"
       titleId="library-heading"
       [titleTabIndex]="-1"
-      subtitle="Only what you saved. Every story, sound, and favorite."
+      [concealTitle]="true"
     />
     <div class="library-toolbar">
       <form class="library-search" role="search" (ngSubmit)="searchNow()">

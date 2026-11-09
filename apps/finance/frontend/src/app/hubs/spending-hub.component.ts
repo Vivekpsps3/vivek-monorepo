@@ -63,7 +63,7 @@ export function normalizeSpendingHubRoute(params: ParamMap): SpendingHubRouteSta
   imports: [RouterLink, TransactionsComponent, CalendarComponent, UiPageHeaderComponent],
   template: `
     <div class="page">
-      <ui-page-header [title]="'Spending'" />
+      <ui-page-header [title]="'Spending'" [concealTitle]="true" />
       <nav class="hub-tabs" aria-label="Spending sections">
         <a [routerLink]="[]" [queryParams]="{ t: null, v: activityView === 'all' ? null : activityView }" [class.on]="tab === 'activity'" [attr.aria-current]="tab === 'activity' ? 'page' : null">Activity</a>
         <a [routerLink]="[]" [queryParams]="{ t: 'calendar' }" [class.on]="tab === 'calendar'" [attr.aria-current]="tab === 'calendar' ? 'page' : null">Calendar</a>

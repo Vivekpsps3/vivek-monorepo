@@ -1,15 +1,11 @@
 <div class="hub">
   <main id="hub-main">
-    <p class="eyebrow">{{ headingToday | appDate:'heading' }}</p>
-    <h1>{{ name }}</h1>
+    <ui-page-header [title]="name" />
 
     <div class="pair">
       <section class="side-panel" aria-labelledby="travel-heading" [attr.aria-busy]="travelState === 'loading' || travelPending">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Travel</p>
-            <h2 id="travel-heading">Next trip</h2>
-          </div>
+          <h2 id="travel-heading">Next trip</h2>
           <a class="open-link" routerLink="/travel/">Open Travel</a>
         </div>
         <ui-state
@@ -37,10 +33,7 @@
 
       <section class="side-panel" aria-labelledby="media-heading" [attr.aria-busy]="mediaState === 'loading' || mediaPending">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Media</p>
-            <h2 id="media-heading"><a class="panel-title-link" routerLink="/media/">In progress</a></h2>
-          </div>
+          <h2 id="media-heading"><a class="panel-title-link" routerLink="/media/">In progress</a></h2>
           <a class="open-link" routerLink="/media/">Open Media</a>
         </div>
         <ui-state
@@ -92,10 +85,7 @@
 
       <section class="side-panel finance-bar" aria-labelledby="finance-heading" [attr.aria-busy]="financeState === 'loading' || financePending">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Finance</p>
-            <h2 id="finance-heading">Net worth</h2>
-          </div>
+          <h2 id="finance-heading">Net worth</h2>
           <a class="open-link" routerLink="/finance/">Open Finance</a>
         </div>
         <ui-state
@@ -162,10 +152,7 @@
 
       <section class="side-panel town-bar" aria-labelledby="town-heading" [attr.aria-busy]="townState === 'loading' || townPending">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Town</p>
-            <h2 id="town-heading">{{ town?.name || 'Your town' }}</h2>
-          </div>
+          <h2 id="town-heading">{{ town?.name || 'Your town' }}</h2>
           <a class="open-link town-open" routerLink="/town/">Open Town</a>
         </div>
         <ui-state
@@ -199,10 +186,7 @@
 
       <section class="side-panel pixels-bar" aria-labelledby="pixels-heading" [attr.aria-busy]="pixelsState === 'loading' || pixelsPending">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Pixels</p>
-            <h2 id="pixels-heading">Year in Pixels</h2>
-          </div>
+          <h2 id="pixels-heading">Year in Pixels</h2>
           <a class="open-link pixels-open" routerLink="/pixels">Open Pixels</a>
         </div>
         <ui-state

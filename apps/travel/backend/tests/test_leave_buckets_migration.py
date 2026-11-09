@@ -225,6 +225,8 @@ def test_upgrade_is_lossless_and_get_pto_is_unchanged(tmp_path):
         entry = db.execute("SELECT sql FROM sqlite_master WHERE name = 'pto_entries'").fetchone()[0]
         assert "ck_leave_policies_bucket" in sql and "uq_leave_policies_user_bucket" in sql
         assert "ck_pto_entries_bucket" in entry
+    # Current models include later features, including carry_forward. Read only at head.
+    command.upgrade(_cfg(database), "head")
     usage = [Usage(1, date(2026, 3, 2), date(2026, 3, 2), Decimal("1.0000"), "Appointment", None)]
     for index, case in enumerate(CASES, start=1):
         body = _read(database, index)
@@ -248,8 +250,6 @@ def test_upgrade_is_lossless_and_get_pto_is_unchanged(tmp_path):
             assert body["entries"][0]["hours"] == "8"
     assert _read(database, 6)["policy"]["configured"] is False
     assert _read(database, 6)["entries"] == []
-    # Current models include later features; compare only after reaching head.
-    command.upgrade(_cfg(database), "head")
     assert model_diff(database) == []
 
 

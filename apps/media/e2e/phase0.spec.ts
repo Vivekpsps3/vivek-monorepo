@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { addItem, deferred, openItem, reloadDraft, resetMedia, savedItem } from './media-test';
+import { addItem, deferred, expectSectionHeading, openItem, reloadDraft, resetMedia, savedItem } from './media-test';
 
 test.beforeEach(async ({ request }) => resetMedia(request));
 
@@ -9,7 +9,7 @@ test('legacy screen and hash bookmarks resolve to canonical journal screens', as
   expect((await request.get('/screen/library', { maxRedirects: 0 })).status()).toBe(404);
   await page.goto('/media/#/library?sort=title');
   await expect(page).toHaveURL(/\/media\/library\?sort=title$/);
-  await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Library');
 });
 
 test('progress and its unit survive explicit save, state changes and reload', async ({ page, request }) => {
@@ -215,7 +215,7 @@ test('leaving a slow save is deliberate and does not block the next screen', asy
   await entered.promise;
   await page.getByRole('navigation', { name: 'Media sections', exact: true }).getByRole('link', { name: 'Now', exact: true }).click();
   await page.getByRole('button', { name: 'Leave item', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /Now/ })).toBeVisible();
+  await expectSectionHeading(page, 'Now');
   release.resolve();
   await expect(page.locator('main [role=alert]')).toHaveCount(0);
 });
@@ -227,7 +227,7 @@ test('a late library response cannot replace Search and a late old-type search c
   await libraryEntered.promise;
   await page.getByRole('navigation', { name: 'Media sections', exact: true }).getByRole('link', { name: 'Search', exact: true }).click();
   libraryRelease.resolve();
-  await expect(page.getByRole('heading', { name: 'Search Media', exact: true })).toBeVisible();
+  await expectSectionHeading(page, 'Search Media');
   const oldEntered = deferred(), oldRelease = deferred();
   await page.route('**/media/api/search?**', async route => {
     const kind = new URL(route.request().url()).searchParams.get('kind');
@@ -320,7 +320,7 @@ test('Media screens stay quiet under the production content security policy', as
   });
   for (const route of ['/media', '/media/library', '/media/calendar', '/media/search', '/media/add']) {
     await page.goto(route);
-    await expect(page.locator('main h1')).toBeVisible();
+    await expectSectionHeading(page);
     expect(await page.evaluate(() => (window as any).policyFailures)).toEqual([]);
   }
   expect(errors).toEqual([]);
