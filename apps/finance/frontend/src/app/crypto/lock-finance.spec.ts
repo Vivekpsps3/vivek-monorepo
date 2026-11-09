@@ -6,18 +6,44 @@ import { FinanceService } from '../services/finance.service';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { hasDek, holdDek } from './dek-holder';
 import { LOCK_SIGNAL, VAULT_PRESENCE } from './dek-store';
-import { lockFinance, lockLoad } from './lock-finance';
+import { bindLockSnapshots, lockFinance, lockLoad } from './lock-finance';
 import { VaultService } from './vault.service';
 const realLoad = lockLoad.modules;
 
 describe('lockFinance', () => {
+  const releases: Array<() => void> = [];
+
   afterEach(() => {
+    while (releases.length) releases.pop()?.();
     localStorage.removeItem('finance-dek');
     localStorage.removeItem(VAULT_PRESENCE);
     localStorage.removeItem(LOCK_SIGNAL);
     lockLoad.modules = realLoad;
     TestBed.resetTestingModule();
   });
+
+  function track(drop: () => void): () => void {
+    const release = bindLockSnapshots(drop);
+    releases.push(release);
+    return release;
+  }
+
+  async function readyLock(userId?: number): Promise<void> {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [
+        ...(userId == null ? [] : [{ provide: SESSION_CONTEXT, useValue: { currentUser: { id: userId } } as unknown as SessionPort }]),
+        { provide: FinanceService, useValue: { clearSessionState: () => undefined } },
+        { provide: MarketRefreshCoordinatorService, useValue: { endSession: () => undefined } },
+      ],
+    });
+    const vault = TestBed.inject(VaultService);
+    await vault.whenReady();
+    holdDek({} as CryptoKey);
+    vault['unlockedSubject'].next(true);
+    localStorage.setItem('finance-dek', 'raw-key-bytes');
+  }
 
   it('ends refresh, clears caches, then locks storage and memory', async () => {
     const order: string[] = [];
@@ -143,5 +169,115 @@ describe('lockFinance', () => {
       expect(messages.length).toBe(1);
       expect(broadcast).not.toHaveBeenCalled();
     } finally { other.close(); }
+  });
+
+  async function expectBothOrders(first: 'Finance' | 'Pixels', second: 'Finance' | 'Pixels'): Promise<void> {
+    await readyLock();
+    const hits: string[] = [];
+    const releaseFirst = track(() => hits.push(first));
+    const releaseSecond = track(() => hits.push(second));
+    await lockFinance(TestBed.inject(Injector));
+    expect(hits).toEqual([first, second]);
+    hits.length = 0;
+    await lockFinance(TestBed.inject(Injector));
+    expect(hits).toEqual([first, second]);
+    releaseFirst();
+    releaseSecond();
+  }
+
+  it('clears Finance and Pixels once per lock in either registration order (LOCAL1)', async () => {
+    await expectBothOrders('Finance', 'Pixels');
+    await expectBothOrders('Pixels', 'Finance');
+  });
+
+  it('keeps the remaining listener after the other is disposed twice (LOCAL2)', async () => {
+    await readyLock();
+    const hits: string[] = [];
+    const releaseFinance = track(() => hits.push('Finance'));
+    const releasePixels = track(() => hits.push('Pixels'));
+    releasePixels();
+    releasePixels();
+    await lockFinance(TestBed.inject(Injector));
+    expect(hits).toEqual(['Finance']);
+    hits.length = 0;
+    releaseFinance();
+    releaseFinance();
+    await lockFinance(TestBed.inject(Injector));
+    expect(hits).toEqual([]);
+
+    const again: string[] = [];
+    const releasePixelsAgain = track(() => again.push('Pixels'));
+    const releaseFinanceAgain = track(() => again.push('Finance'));
+    releasePixelsAgain();
+    releasePixelsAgain();
+    await lockFinance(TestBed.inject(Injector));
+    expect(again).toEqual(['Finance']);
+    releaseFinanceAgain();
+    releaseFinanceAgain();
+  });
+
+  it('unbind drops only that binding when the same callback is registered twice (LOCAL2)', async () => {
+    await readyLock();
+    let calls = 0;
+    const drop = () => { calls += 1; };
+    const first = track(drop);
+    const second = track(drop);
+    first();
+    first();
+    await lockFinance(TestBed.inject(Injector));
+    expect(calls).toBe(1);
+    second();
+    second();
+    calls = 0;
+    await lockFinance(TestBed.inject(Injector));
+    expect(calls).toBe(0);
+  });
+
+  it('snapshots dispatch membership and defers listeners added during the pass', async () => {
+    await readyLock();
+    const hits: string[] = [];
+    let releasePixels: () => void = () => undefined;
+    const releaseFinance = track(() => {
+      hits.push('Finance');
+      releasePixels();
+      releases.push(bindLockSnapshots(() => hits.push('Late')));
+    });
+    releasePixels = track(() => hits.push('Pixels'));
+    await lockFinance(TestBed.inject(Injector));
+    expect(hits).toEqual(['Finance']);
+    hits.length = 0;
+    await lockFinance(TestBed.inject(Injector));
+    expect(hits).toEqual(['Finance', 'Late']);
+    releaseFinance();
+  });
+
+  it('wipes the key and clears the other listeners before module load when one throws and BroadcastChannel is unavailable (LOCAL3)', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: SESSION_CONTEXT, useValue: { currentUser: { id: 4 } } as unknown as SessionPort },
+      ],
+    });
+    holdDek({} as CryptoKey);
+    localStorage.setItem('finance-dek', 'raw-key-bytes');
+    const hits: string[] = [];
+    track(() => hits.push('Finance'));
+    track(() => { hits.push('Throw'); throw new Error('listener failed'); });
+    track(() => hits.push('Pixels'));
+    const realChannel = globalThis.BroadcastChannel;
+    globalThis.BroadcastChannel = undefined as unknown as typeof BroadcastChannel;
+    lockLoad.modules = (() => {
+      hits.push('modules');
+      return new Promise(() => undefined);
+    }) as typeof lockLoad.modules;
+    try {
+      void lockFinance(TestBed.inject(Injector));
+      expect(hits).toEqual(['Finance', 'Throw', 'Pixels']);
+      hits.length = 0;
+      void lockFinance(TestBed.inject(Injector));
+      expect(hits).toEqual(['Finance', 'Throw', 'Pixels']);
+      expect([hasDek(), localStorage.getItem('finance-dek')]).toEqual([false, null]);
+    } finally {
+      globalThis.BroadcastChannel = realChannel;
+    }
   });
 });

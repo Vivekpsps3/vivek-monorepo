@@ -9,10 +9,26 @@ export const lockLoad = { modules: () => Promise.all([
 ] as const) };
 
 const VAULT_CHANNEL = 'finance-vault-sync-v1';
-let dropSnapshots = () => undefined as void;
+const lockSnapshotBindings = new Set<{ drop: () => void }>();
+
 export function bindLockSnapshots(drop: () => void): () => void {
-  dropSnapshots = drop;
-  return () => { if (dropSnapshots === drop) dropSnapshots = () => undefined as void; };
+  const binding = { drop };
+  lockSnapshotBindings.add(binding);
+  let bound = true;
+  return () => {
+    if (!bound) return;
+    bound = false;
+    lockSnapshotBindings.delete(binding);
+  };
+}
+
+function clearLockSnapshots(): void {
+  // Additions wait for the next lock. A binding removed before its turn does not run.
+  for (const binding of [...lockSnapshotBindings]) {
+    if (!lockSnapshotBindings.has(binding)) continue;
+    try { binding.drop(); }
+    catch { /* one listener must not stop the others */ }
+  }
 }
 
 function postLock(userId: number, originTabId?: string): boolean {
@@ -26,7 +42,7 @@ function postLock(userId: number, originTabId?: string): boolean {
 export async function lockFinance(injector: Injector, originTabId?: string): Promise<void> {
   wipeDek();
   try {
-    dropSnapshots();
+    clearLockSnapshots();
     const load = lockLoad.modules, userId = injector.get(SESSION_CONTEXT, null, { optional: true })?.currentUser?.id;
     // No coordinator fallback when postLock cannot post: the coordinator's
     // channel is open under exactly the same conditions (a signed-in user and
