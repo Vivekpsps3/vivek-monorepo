@@ -39,7 +39,10 @@ listed = subprocess.run(
     check=True, capture_output=True, text=True,
 ).stdout
 files = set(files)
-files.update(root / name for name in listed.split("\0") if name and (root / name).is_file())
+files.update(
+    root / name for name in listed.split("\0")
+    if name and not skip_dirs.intersection(Path(name).parts) and (root / name).is_file()
+)
 
 instruction_words = {}
 
