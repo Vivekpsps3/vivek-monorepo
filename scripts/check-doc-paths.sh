@@ -9,6 +9,7 @@ python3 - <<'PY'
 from pathlib import Path
 import os
 import re
+import subprocess
 
 root = Path(".").resolve()
 fail = 0
@@ -30,6 +31,18 @@ for p in scan_roots:
         for directory, dirnames, filenames in os.walk(p):
             dirnames[:] = [name for name in dirnames if name not in skip_dirs]
             files.extend(Path(directory) / name for name in filenames if name.endswith(".md"))
+
+# Include instructions at future ownership boundaries outside the doc roots.
+listed = subprocess.run(
+    ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--",
+     "AGENTS.md", "AGENTS.override.md", "**/AGENTS.md", "**/AGENTS.override.md"],
+    check=True, capture_output=True, text=True,
+).stdout
+files = set(files)
+files.update(
+    root / name for name in listed.split("\0")
+    if name and not skip_dirs.intersection(Path(name).parts) and (root / name).is_file()
+)
 
 instruction_words = {}
 
@@ -72,3 +85,5 @@ if fail:
     raise SystemExit(1)
 print("check-doc-paths: OK")
 PY
+
+python3 planning/implementation/plan.py validate --self-test

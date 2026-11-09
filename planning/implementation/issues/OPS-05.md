@@ -5,6 +5,7 @@
 - Parents: [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `OPS-01`, `OPS-03`
 - Conflict groups: `monitoring`, `operations-docs`
 - Verification profiles: `ops`, `server_back`
@@ -75,7 +76,7 @@ Wire bounded readiness/TLS/backup-freshness checks to configurable heartbeat/web
 
 ## Risks
 
-
+- A configured probe or notification adapter is not verified delivery; retain pending external recipient/access prerequisites without inventing activation evidence.
 
 ## Completion evidence
 

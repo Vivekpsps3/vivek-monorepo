@@ -5,7 +5,8 @@
 - Parents: [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Dependencies: `MED-03`, `SAFE-05`
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Dependencies: `MED-03`
 - Conflict groups: `media-detail-form`
 - Verification profiles: `media_front`, `media_back`
 
@@ -78,3 +79,7 @@ Related items load when they become relevant, with safe links and local recovery
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Dependency rationale
+
+Preserve the merged detail editor and drafts. Backend Related uses the existing endpoint and bounded transport; the Pixels/Health helper is not a required Media API.

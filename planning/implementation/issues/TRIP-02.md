@@ -5,7 +5,8 @@
 - Parents: [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Dependencies: `TRIP-01`
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Dependencies: none
 - Conflict groups: `travel-trip-main`, `travel-itinerary`
 - Verification profiles: `travel_front`
 
@@ -84,3 +85,7 @@ A traveller can select a day, understand its chronological plans and add a plan 
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Dependency rationale
+
+The itinerary uses existing trip/day data. The Finance spending bridge changes no required itinerary API; coordinate travel-trip-main if actual diffs overlap.

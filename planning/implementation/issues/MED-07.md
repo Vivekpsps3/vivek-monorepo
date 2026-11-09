@@ -5,7 +5,8 @@
 - Parents: [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200), [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Dependencies: `MED-01`, `TYPE-01`
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Dependencies: `MED-01`
 - Conflict groups: `media-provider-transport`, `media-provider-family`, `media-records`
 - Verification profiles: `media_back`, `server_back`
 
@@ -39,8 +40,8 @@ A provider change has one owned parser/identity adapter and one shared policy fo
 ## Steps
 
 1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
-2. Inventory actual provider families and callers, repeated timeout/pacing/cache/provenance/URL/error implementations and their current offline fixtures before moving code.
-3. Keep provider-specific parsing, identity, pagination and ranking with its family; consolidate only demonstrated equivalent transport/deadline/cache behavior used by at least two families.
+2. Inventory current TMDB movie/TV detail callers and the repeated authenticated fetch/404/JSON/projection policy. Existing Pace, MB_PACE, mb_get, _invoke and cache helpers already have owners; do not rebuild them.
+3. Consolidate the equivalent authenticated portions of tmdb_movie_detail and tmdb_tv_detail using one small plain helper in the current service. Keep movie public-HTML fallback, TV-specific lifecycle/network fields, source IDs, errors and provenance semantics in their domain adapters.
 4. Migrate all current public callers through thin stable entry points, then delete old repeated branches and unused helper exports in the same PR. A file split without deletion of independent implementations is insufficient.
 5. Keep explicit search/refresh separate from DB-only saved reads; preserve total budgets, provider-auth versus session401, artwork origins, ordering and partial-source recovery.
 6. Remove the superseded live path in this PR after migrating its consumers. Record actual production/test LOC and independent implementations before/after; added layers need a named safety reason and a real consumer.
@@ -80,3 +81,15 @@ A provider change has one owned parser/identity adapter and one shared policy fo
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Dependency rationale
+
+Wait for database-only saved reads so transport cleanup cannot reintroduce repair-on-read. TYPE-01 is a TypeScript boundary task and supplies no required Python API.
+
+## Concrete deletion plan
+
+Baseline providers.py is 2,249 lines, but that is not a deletion estimate. tmdb_movie_detail (33 lines) and tmdb_tv_detail (33 lines) repeat authenticated HTTP fetch, 404/status/JSON validation, source-id, overview, genres and provenance projection. Consolidate the equivalent portion for these two actual consumers; delete their repeated implementation blocks in the same PR.
+
+Keep movie public-HTML fallback and TV network/lifecycle/episode metadata separate. Reuse current HTTP client, DETAIL_TIMEOUT, _invoke deadlines, Pace/MB_PACE/mb_get and cache owners. Do not add a provider registry, transport class hierarchy, per-provider package scaffolding or broad mechanical file split.
+
+Prove valid/movie-fallback/TV-no-key/404/429/5xx/malformed payload behavior and exact upstream request counts with offline fixtures. Keep supplied-client ownership and database release-before-I/O semantics. Record net production delta including the helper; fewer independent equivalent policy blocks is required. Large provider-specific parsers are retained behavior, not assumed waste.

@@ -5,6 +5,7 @@
 - Parents: [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199), [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `CON-01`, `CON-02`, `CON-03`, `SAFE-03`, `SAFE-04`, `VER-01`, `VER-02`
 - Conflict groups: `planning-guidance`, `architecture-docs`, `deletion-scorecard`
 - Verification profiles: `docs`
@@ -93,3 +94,9 @@ Exercise current contracts with a disposable vertical slice and a compact agent 
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Use the existing work packets, scoped guidance and launch command. Do not add a second scaffold/registry or copy packet details into queue.json. The queue is scheduling metadata; each Markdown packet is the only local source of detailed steps and acceptance.
+
+For the disposable feature proof, record production files and policy owners touched, duplicated decisions introduced/removed, applicable instructions read and executed checks. Remove the toy route/collection/exports after the proof. Compare a second small change against the same owners: a feature is cheaper when fewer independent policies must be edited, not when a component is merely shorter.

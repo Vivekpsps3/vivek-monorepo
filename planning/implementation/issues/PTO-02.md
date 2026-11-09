@@ -5,7 +5,8 @@
 - Parents: [#110](https://github.com/Vivekpsps3/vivek-monorepo/issues/110)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Dependencies: `PTO-01`
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Dependencies: none
 - Conflict groups: `travel-pto-main`, `travel-settings`
 - Verification profiles: `travel_front`, `travel_back`
 
@@ -82,3 +83,7 @@ Editing a time-off policy preserves old values and gives precise inline recovery
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Dependency rationale
+
+Policy forms use existing leave endpoints and validators. The combined chart is a shared-file scheduling concern, not a prerequisite API.

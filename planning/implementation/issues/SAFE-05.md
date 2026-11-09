@@ -5,6 +5,7 @@
 - Parents: [#198](https://github.com/Vivekpsps3/vivek-monorepo/issues/198)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `SAFE-02`, `SAFE-04`
 - Conflict groups: `hub-load`, `pixels-data`, `health-store`, `world-controller`
 - Verification profiles: `shared_front`
@@ -87,3 +88,9 @@ Adopt the smallest reusable deadline/cancellation/publication utility for existi
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Name the actual Hub/Health/Pixels timer, abort-listener and stale-publication paths before extracting anything. Keep source-specific states in their current adapters. Move only equivalent deadline/cleanup mechanics into one plain function, then migrate Health and Pixels and delete both superseded timer/controller paths in the same PR.
+
+One total action deadline must cover sequential windows and Finance joins; a fresh timeout per window is not equivalent. Essential generation/owner checks may add safety LOC, so report that separately. A helper plus both original complete loaders is incomplete. World adoption must preserve its existing controller scope and distinct budget states.

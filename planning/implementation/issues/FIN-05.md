@@ -5,8 +5,9 @@
 - Parents: [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Dependencies: `SAFE-01`, `SAFE-02`
-- Conflict groups: `finance-vault`, `finance-imports`, `finance-transactions`
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Dependencies: `SAFE-01`
+- Conflict groups: `finance-vault-lifecycle`, `finance-imports`, `finance-transactions`
 - Verification profiles: `finance_front`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).
@@ -81,3 +82,7 @@ Finance mutations, import staging and lock/error recovery follow one current beh
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Dependency rationale
+
+This Finance race tranche needs the composable lock binding, not the Health-store implementation. Preserve Finance session/collection eligibility in the actual touched operations.

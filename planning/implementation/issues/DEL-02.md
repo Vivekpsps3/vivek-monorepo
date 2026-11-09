@@ -5,8 +5,9 @@
 - Parents: [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200), [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: none
-- Conflict groups: `auth-routes`, `auth-session`, `vault-compatibility`, `schema-serial`
+- Conflict groups: `identity-origin`, `identity-session`, `vault-compatibility`, `schema-head`
 - Verification profiles: `finance_back`, `server_back`, `finance_front`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).
@@ -93,3 +94,11 @@ Investigate and remove runtime migration/fallback machinery only where supported
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Start with routes.py login_migrate (/auth/login/migrate) and enroll_passwordless (/auth/passwordless/enroll). For each, trace browser/admin callers, startup checks and supported database fixtures. Build a row for each route, request schema, helper and field that becomes unreachable; remove only that dependency closure. Active invitations, bootstrap/signup and /auth/passwordless/wraps are separate supported paths.
+
+Do not equate an old-looking name with dead state. A supported v1/v2 ciphertext fixture, current browser migration, signing wrap or invitation consumer blocks that removal. Immutable revisions AND helper functions imported by them remain intact. A verified 404/410 contract must be deliberate and covered alongside current login/enrollment/reset.
+
+Use the common identity-origin, identity-session and schema-head scheduling groups. SEC-01/02 and this packet overlap even when their original group labels differed. An eligibility report is not runtime deletion evidence.

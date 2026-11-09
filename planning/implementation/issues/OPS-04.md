@@ -5,6 +5,7 @@
 - Parents: [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `OPS-03`
 - Conflict groups: `backup-core`, `migration-tools`, `compose`, `operations-docs`
 - Verification profiles: `ops`, `server_back`, `schema`
@@ -77,7 +78,7 @@ Use verified backups to restore a temporary database/environment and prove schem
 
 ## Risks
 
-
+- A scrubbed synthetic restore proves the procedure, not production recovery; validate the actual schema chain and never write the fixture back to a live database.
 
 ## Completion evidence
 

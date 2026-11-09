@@ -5,8 +5,9 @@
 - Parents: [#93](https://github.com/Vivekpsps3/vivek-monorepo/issues/93)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `HUB-03`, `CON-02`
-- Conflict groups: `account-settings`, `calendar-feeds`, `schema-chain`, `travel-summary`, `media-summary`
+- Conflict groups: `account-settings`, `calendar-feeds`, `schema-head`, `travel-summary`, `media-summary`
 - Verification profiles: `web_front`, `server_back`, `travel_back`, `media_back`, `schema`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).

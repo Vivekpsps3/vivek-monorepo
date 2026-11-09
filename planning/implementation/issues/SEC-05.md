@@ -5,8 +5,9 @@
 - Parents: [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `CON-03`, `SAFE-03`, `SAFE-05`
-- Conflict groups: `vault-export`, `finance-settings`, `vault-core`
+- Conflict groups: `vault-export`, `finance-settings`, `finance-vault-lifecycle`
 - Verification profiles: `finance_front`, `web_front`, `finance_back`
 
 Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md), [the queue index](../README.md), [deletion contract](../deletion-strategy.md) and [verification profiles](../verification.json) before editing. Record proof with the [evidence template](../templates/evidence.md) and end with the [handoff template](../templates/handoff.md).

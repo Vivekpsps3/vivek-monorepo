@@ -5,6 +5,7 @@
 - Parents: [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `SAFE-03`
 - Conflict groups: `vault-collection-policy`, `finance-persistence`, `health-store`, `server-vault`
 - Verification profiles: `finance_back`, `server_back`, `finance_front`, `web_front`
@@ -88,3 +89,11 @@ Use a small explicit collection contract/parity check for backend accepted names
 - Acceptance matrix maps each LOCAL criterion to a concrete test/assertion or recorded observation, with current-main baseline and final commit.
 - Deletion ledger lists removed implementation/comment/compatibility paths, replacement owner and every migrated caller; report production, test, generated and documentation LOC separately. Splitting/moving files is not claimed as deletion.
 - PR description names preserved behavior, actual removed complexity, relevant local test results and any explicit compatibility/safety overhead retained. No skipped meaningful suite, reduced threshold or relabelled failure.
+
+## Concrete deletion plan
+
+Inventory the actual accepted collection set in backend/services/encrypted_storage.py, the Finance subset in encrypted-store.persistence.ts, and HEALTH_STATS_COLLECTION/HEALTH_PRS_COLLECTION in health-store.service.ts. Different subsets encode ownership, so one union replacing every list is incorrect.
+
+Choose a checked declarative policy or a small parity fixture; use it in the real server/client ownership checks and future recovery enumeration. Delete only duplicate membership authorities that have the same purpose. If cross-language literals remain, pin their intentional relation with a negative fixture rather than add runtime registration/codegen.
+
+Evidence must name every old list, its distinct meaning, all migrated callers and the surviving authority. Synthetic Finance/Health/unknown-future records prove that foreign ciphertext is neither decoded by the wrong owner nor silently deleted. No new store, codec or generic collection plugin is justified by this task.

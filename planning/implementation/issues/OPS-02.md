@@ -5,6 +5,7 @@
 - Parents: [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `OPS-01`
 - Conflict groups: `backup-core`, `compose`, `operations-docs`
 - Verification profiles: `ops`, `server_back`
@@ -79,7 +80,7 @@ Implement the selected retention policy explicitly while keeping hourly and pre-
 
 ## Risks
 
-
+- A local verified snapshot is not an off-host recovery guarantee; keep retention and source validation explicit without logging secrets.
 
 ## Completion evidence
 
