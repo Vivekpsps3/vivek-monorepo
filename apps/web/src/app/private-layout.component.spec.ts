@@ -44,6 +44,48 @@ class SectionLayoutComponent {}
 })
 class HavePageComponent {}
 
+@Component({
+  standalone: true,
+  imports: [RouterLink],
+  template: '<a id="town-link" routerLink="/town">Town</a>',
+})
+class TownLinkComponent {}
+
+@Component({
+  standalone: true,
+  template: `
+    <main>
+      <h1>Terraria-on-Sea</h1>
+      <a href="/town/world">Explore the world</a>
+    </main>
+  `,
+})
+class TownPageComponent {}
+
+@Component({
+  standalone: true,
+  template: `
+    <main>
+      <h1>World</h1>
+      <label>Jump to date<input type="date" aria-label="Jump to date"></label>
+    </main>
+  `,
+})
+class WorldPageComponent {}
+
+@Component({
+  standalone: true,
+  template: `
+    <main>
+      <h1>Terraria-on-Sea</h1>
+      <div role="dialog" aria-modal="true" aria-label="New habit">
+        <input aria-label="Habit name">
+      </div>
+    </main>
+  `,
+})
+class TownDialogPageComponent {}
+
 describe('Shared private shell', () => {
   it('destroys a mounted private draft when the signed-in identity changes', async () => {
     const users = new BehaviorSubject({id: 1, display_name: 'Ada'});
@@ -153,6 +195,125 @@ describe('Shared private shell', () => {
     await harness.navigateByUrl('/finance/have');
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(document.activeElement).toBe(document.querySelector('#workspace-content main h1'));
+  });
+  it('moves focus from an outside link to the Town heading', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [
+        {path: 'pixels', component: TownLinkComponent},
+        {path: 'town', component: TownPageComponent},
+      ]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/pixels');
+    (document.getElementById('town-link') as HTMLAnchorElement).focus();
+    await harness.navigateByUrl('/town');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const heading = document.querySelector('#workspace-content main h1');
+    expect(heading?.textContent).toBe('Terraria-on-Sea');
+    expect(document.activeElement).toBe(heading);
+    expect(document.activeElement).not.toBe(document.getElementById('workspace-content'));
+  });
+  it('moves focus from an outside link to the World heading', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [
+        {path: 'town', pathMatch: 'full', component: TownLinkComponent},
+        {path: 'town/world', component: WorldPageComponent},
+      ]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/town');
+    (document.getElementById('town-link') as HTMLAnchorElement).focus();
+    await harness.navigateByUrl('/town/world');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const heading = document.querySelector('#workspace-content main h1');
+    expect(heading?.textContent).toBe('World');
+    expect(document.activeElement).toBe(heading);
+    expect(document.activeElement).not.toBe(document.getElementById('workspace-content'));
+  });
+  it('keeps a World date field focused after the page heading arrives', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'town/world', component: WorldPageComponent}]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/town/world');
+    const input = harness.routeNativeElement?.querySelector('input') as HTMLInputElement;
+    input.focus();
+    await new Promise(resolve => setTimeout(resolve, 450));
+    expect(document.activeElement).toBe(input);
+  });
+  it('keeps a Town dialog field focused after the page heading arrives', async () => {
+    const session = {
+      currentUser: { id: 1, display_name: 'Ada' },
+      user$: of({ id: 1, display_name: 'Ada' }),
+      isAdmin: () => false,
+      logout: () => undefined,
+    };
+    TestBed.configureTestingModule({providers: [
+      provideRouter([{path: '', component: PrivateLayoutComponent, children: [{path: 'town', component: TownDialogPageComponent}]}]),
+      {provide: SessionService, useValue: session},
+    ]});
+    const harness = await RouterTestingHarness.create('/town');
+    const input = harness.routeNativeElement?.querySelector('input') as HTMLInputElement;
+    input.focus();
+    await new Promise(resolve => setTimeout(resolve, 450));
+    expect(document.activeElement).toBe(input);
+  });
+  it('preserves a Town table row when the route heading arrives', async () => {
+    const events = new Subject<NavigationEnd>();
+    const { fixture } = await render(false, events);
+    const main = document.createElement('main');
+    const heading = document.createElement('h1');
+    heading.textContent = 'Terraria-on-Sea';
+    const table = document.createElement('table');
+    const row = table.insertRow();
+    row.tabIndex = 0;
+    row.insertCell().textContent = 'Read 20 pages';
+    main.append(heading, table);
+    fixture.nativeElement.querySelector('#workspace-content').append(main);
+    row.focus();
+
+    events.next(new NavigationEnd(1, '/town', '/town'));
+    await Promise.resolve();
+    expect(document.activeElement).toBe(row);
+  });
+  it('preserves a World grid cell when the route heading arrives', async () => {
+    const events = new Subject<NavigationEnd>();
+    const { fixture } = await render(false, events);
+    const main = document.createElement('main');
+    const heading = document.createElement('h1');
+    heading.textContent = 'World';
+    const grid = document.createElement('div');
+    grid.setAttribute('role', 'grid');
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.setAttribute('role', 'gridcell');
+    cell.textContent = '12';
+    grid.append(cell);
+    main.append(heading, grid);
+    fixture.nativeElement.querySelector('#workspace-content').append(main);
+    cell.focus();
+
+    events.next(new NavigationEnd(1, '/town/world', '/town/world'));
+    await Promise.resolve();
+    expect(document.activeElement).toBe(cell);
   });
   it('provides the app switcher and one account/theme surface', async () => {
     const { fixture } = await render();

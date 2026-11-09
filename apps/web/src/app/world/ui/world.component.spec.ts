@@ -245,6 +245,11 @@ describe('WorldComponent', () => {
     await setup({ reduced: true });
     expect(fixture.nativeElement.dataset['view']).toBe('list');
     expect(fixture.nativeElement.textContent).toContain(WORLD_COPY.reducedMotionNote);
+    const main = fixture.nativeElement.querySelector('main');
+    expect(main).not.toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('main').length).toBe(1);
+    expect(main?.querySelector('h1')?.textContent).toBe('World');
+    expect(main?.textContent).toContain(WORLD_COPY.reducedMotionNote);
     rafSpy.calls.reset();
     pointer('pointerdown', 10);
     pointer('pointermove', 80);
@@ -254,6 +259,36 @@ describe('WorldComponent', () => {
     expect(rafSpy.calls.count()).toBe(scheduled);
     while (frames.length) frames.shift()?.(performance.now());
     expect(rafSpy.calls.count()).toBe(scheduled);
+  });
+
+  it('keeps one main and the World heading through loading and error', async () => {
+    await setup();
+    const root = fixture.nativeElement as HTMLElement;
+    const landmarks = () => {
+      const mains = [...root.querySelectorAll('main')];
+      expect(mains.length).toBe(1);
+      const headings = [...root.querySelectorAll('h1')];
+      expect(headings.length).toBe(1);
+      expect(headings[0].textContent).toBe('World');
+      expect(mains[0].contains(headings[0])).toBeTrue();
+      expect(root.querySelector('main main')).toBeNull();
+      expect(root.querySelector('header')).toBeNull();
+    };
+    landmarks();
+    fixture.componentInstance.busy.set(true);
+    fixture.detectChanges();
+    landmarks();
+    expect(root.textContent).toContain(WORLD_COPY.loading);
+    fixture.componentInstance.busy.set(false);
+    fixture.componentInstance.error.set('World is unavailable right now.');
+    fixture.detectChanges();
+    landmarks();
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('World is unavailable right now.');
+    fixture.componentInstance.error.set(null);
+    fixture.componentInstance.townFailed.set(true);
+    fixture.detectChanges();
+    landmarks();
+    expect(root.textContent).toContain(WORLD_COPY.townUnavailable);
   });
 
   it('does not schedule a frame while idle', async () => {

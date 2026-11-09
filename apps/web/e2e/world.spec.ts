@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '../../../tests/e2e/fixtures';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, type Locator, type Page } from '../../../tests/e2e/fixtures';
 
 // The town project sets reducedMotion: 'reduce' and America/Los_Angeles.
 //
@@ -79,6 +80,163 @@ test.describe('World explorer', () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+test.describe('Town and World landmarks', () => {
+  test.use({ timezoneId: 'America/Los_Angeles' });
+  test.beforeEach(async ({ request }) => {
+    expect((await request.post('/e2e/reset?seed=pixels')).ok()).toBeTruthy();
+  });
+
+  for (const width of [390, 1280]) {
+    for (const theme of ['light', 'dark'] as const) {
+      for (const state of ['loading', 'ready', 'error'] as const) {
+        test(`Town ${state} at ${width} ${theme}`, async ({ page }) => {
+          await showShell(page, width, theme);
+          if (state === 'loading') await holdGets(page, '/api/town');
+          if (state === 'error') await failGets(page, '/api/town');
+          try {
+            await keyboardOpenApp(page, 'Town', width);
+            const heading = page.getByRole('main').getByRole('heading', { level: 1 });
+            if (state === 'ready') {
+              const body = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+              await expect(heading).toHaveText(body.town.name);
+              await expect(page.getByRole('link', { name: 'Explore the world' })).toBeVisible();
+            } else {
+              await expect(heading).toHaveText('Town');
+              if (state === 'loading') await expect(page.getByRole('status', { name: 'Loading Town' })).toBeVisible();
+              else await expect(page.getByText('Town is unavailable right now.')).toBeVisible();
+            }
+            await expect(heading).toBeFocused();
+            await expectPageLandmarks(page, state === 'ready' ? await townName(page) : 'Town');
+            if (state === 'ready') await holdFocus(page.getByRole('link', { name: 'Explore the world' }));
+            else if (state === 'error') await holdFocus(page.getByRole('button', { name: 'Retry' }));
+            else await holdFocus(heading);
+            if (state === 'ready' && width === 1280 && theme === 'light') await keepDialogFocus(page);
+          } finally {
+            await releaseHeld(page);
+          }
+        });
+
+        test(`World ${state} at ${width} ${theme}`, async ({ page }) => {
+          await showShell(page, width, theme);
+          await keyboardOpenApp(page, 'Town', width);
+          await expect(page.getByRole('link', { name: 'Explore the world' })).toBeVisible();
+          if (state === 'loading') await holdGets(page, '/api/world');
+          if (state === 'error') await failGets(page, '/api/world');
+          try {
+            const explore = page.getByRole('link', { name: 'Explore the world' });
+            await explore.focus();
+            await page.keyboard.press('Enter');
+            const heading = page.getByRole('main').getByRole('heading', { level: 1 });
+            await expect(heading).toHaveText('World');
+            await expect(heading).toBeFocused();
+            if (state === 'loading') await expect(page.getByText('Loading…')).toBeVisible();
+            const worldAlert = page.locator('.world-banner[role="alert"]');
+            if (state === 'error') await expect(worldAlert).toContainText('World is unavailable right now.');
+            if (state === 'ready') {
+              await expect(page.getByText('Reduced motion is on, so World opens on the list.')).toBeVisible();
+            }
+            await expectPageLandmarks(page, 'World');
+            if (state === 'error') await holdFocus(worldAlert.getByRole('button', { name: 'Retry' }));
+            else await holdFocus(page.getByLabel('Jump to date'));
+          } finally {
+            await releaseHeld(page);
+          }
+        });
+      }
+    }
+  }
+});
+
+async function showShell(page: Page, width: number, theme: 'light' | 'dark'): Promise<void> {
+  await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
+  await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+  await page.goto('/pixels?year=2026');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  await expect(page.getByRole('heading', { level: 1, name: 'Pixels' })).toBeVisible();
+}
+
+async function keyboardOpenApp(page: Page, name: string, width: number): Promise<void> {
+  if (width <= 640) {
+    const toggle = page.locator('.app-switcher__toggle');
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    const link = page.locator('#app-switcher-menu').getByRole('link', { name, exact: true });
+    await link.focus();
+    await page.keyboard.press('Enter');
+    return;
+  }
+  const link = page.locator('nav.app-switcher__bar').getByRole('link', { name, exact: true });
+  await link.focus();
+  await page.keyboard.press('Enter');
+}
+
+async function townName(page: Page): Promise<string> {
+  const body = await (await page.request.get('/api/town?tz=America%2FLos_Angeles')).json();
+  return body.town.name as string;
+}
+
+async function expectPageLandmarks(page: Page, heading: string): Promise<void> {
+  await expect(page.getByRole('main')).toHaveCount(1);
+  await expect(page.getByRole('banner')).toHaveCount(1);
+  await expect(page.locator('header.suite-header')).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(heading);
+  const scan = await new AxeBuilder({ page }).analyze();
+  const landmark = scan.violations.filter(item =>
+    item.id.startsWith('landmark-') || item.id === 'region' || item.id === 'page-has-heading-one');
+  expect(landmark).toEqual([]);
+}
+
+async function holdFocus(locator: Locator): Promise<void> {
+  await locator.focus();
+  await expect(locator).toBeFocused();
+  await locator.page().waitForTimeout(500);
+  await expect(locator).toBeFocused();
+  await expect(locator).not.toHaveAttribute('id', 'workspace-content');
+}
+
+async function keepDialogFocus(page: Page): Promise<void> {
+  const opener = page.getByRole('button', { name: /Choose a first habit|New habit/ }).first();
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  const field = page.getByRole('textbox', { name: 'Name' });
+  await expect(field).toBeFocused();
+  await page.waitForTimeout(500);
+  await expect(field).toBeFocused();
+}
+
+const held: WeakMap<Page, Array<() => void>> = new WeakMap();
+
+async function holdGets(page: Page, pathname: string): Promise<void> {
+  let release = (): void => undefined;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  held.set(page, [...(held.get(page) ?? []), release]);
+  await page.route(url => new URL(url).pathname === pathname, async route => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await gate;
+    if (!route.request().url()) return;
+    await route.continue().catch(() => undefined);
+  });
+}
+
+async function failGets(page: Page, pathname: string): Promise<void> {
+  await page.route(url => new URL(url).pathname === pathname, async route => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+  });
+}
+
+async function releaseHeld(page: Page): Promise<void> {
+  for (const release of held.get(page) ?? []) release();
+  held.delete(page);
+}
 
 function allowedPath(pathname: string): boolean {
   if (pathname === '/' || pathname === '/index.html' || pathname === '/town/world') return true;
