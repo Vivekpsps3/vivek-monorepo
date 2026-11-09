@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from '@playwright/test';
+import { projectByName } from './discovery.mjs';
 
 export function repositoryRoot() {
   let root = process.cwd();
@@ -19,12 +20,10 @@ export function pythonExecutable() {
 
 export function domainConfig(domain: 'finance' | 'travel' | 'media' | 'town') {
   const root = repositoryRoot();
-  const testDir = domain === 'finance' ? 'apps/finance/frontend/e2e'
-    : domain === 'town' ? 'apps/web/e2e'
-    : `apps/${domain}/e2e`;
+  const project = projectByName(domain);
   return defineConfig({
-    testDir: path.join(root, testDir),
-    ...(domain === 'town' ? { testMatch: /(?:pixels-(?:year|detail|life)|hub-pixels|world)\.spec\.ts/ } : {}),
+    testDir: path.join(root, project.testDir),
+    ...(project.testMatch ? { testMatch: project.testMatch } : {}),
     metadata: { domain },
     outputDir: path.join(root, 'test-results', domain),
     timeout: domain === 'finance' || domain === 'town' ? 60_000 : domain === 'travel' ? 45_000 : 30_000,
