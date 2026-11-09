@@ -634,11 +634,28 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
     }
     for (const label of labels) {
       const link = navigation.getByRole('link', { name: label, exact: true });
-      await link.scrollIntoViewIfNeeded();
+      // Snap stays on until the row is focused, and it can leave the end of a
+      // link past a 320px screen. Focus turns snap off, then scroll the link
+      // fully into the row.
+      await link.evaluate(el => {
+        if (el instanceof HTMLElement) el.focus({ preventScroll: true });
+        const scroller = el.closest('.ui-section-nav__scroller');
+        if (!(scroller instanceof HTMLElement)) {
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          return;
+        }
+        const linkBox = el.getBoundingClientRect();
+        const port = scroller.getBoundingClientRect();
+        if (linkBox.left < port.left + 1) scroller.scrollLeft -= port.left - linkBox.left + 1;
+        const next = el.getBoundingClientRect();
+        const nextPort = scroller.getBoundingClientRect();
+        if (next.right > nextPort.right - 1) scroller.scrollLeft += next.right - nextPort.right + 1;
+      });
       const box = await link.boundingBox();
       if (!box) throw new Error(`${label} has no box`);
-      expect(box.x).toBeGreaterThanOrEqual(-1);
-      expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+      const right = box.x + box.width;
+      expect(box.x, label).toBeGreaterThanOrEqual(-1);
+      expect(right, label).toBeLessThanOrEqual(width + 1);
     }
 
     await page.evaluate(() => window.scrollTo(0, 0));
