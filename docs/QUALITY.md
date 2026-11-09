@@ -20,9 +20,9 @@ Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requireme
 
 ESLint counts warnings as well as errors and passes `--report-unused-disable-directives`. A parse error, including an unused `eslint-disable`, fails the run instead of being absorbed. The `suppressions` tool counts a `# noqa` comment (any case, including `# ruff: noqa` and `# flake8: noqa`). The `#` is required, so the word `noqa` inside a string is not a suppression. It also counts `# type: ignore`, any `# mypy:` inline option (including `ignore-errors` and `disable-error-code`), `eslint-disable`, `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `# pragma: no cover`, and `istanbul` / `c8` / `v8` `ignore` in `apps/`, `scripts/`, and `packages/`. Alembic `versions/` directories are skipped by that path, not because the directory is named `versions`.
 
-Current working baselines after source-path remapping are Ruff 101, mypy 87, Finance/web ESLint 474, public ESLint 9, packages ESLint 0 and suppressions 0. `quality/source-moves.json` maps relocated identity files so the base-branch comparison follows the same debt. Updating a path must not increase an allowance. Exact records live in `quality/*.txt`.
+Allowances are the committed files under `quality/`: `ruff-baseline.txt`, `mypy-baseline.txt`, `eslint-finance-baseline.txt`, `eslint-site-baseline.txt`, `eslint-packages-baseline.txt`, `eslint-world-engine-baseline.txt`, and `suppressions-baseline.txt`. Do not copy those counts into this guide. `eslint-packages` is not an empty allowance. `quality/source-moves.json` maps relocated identity files so the base-branch comparison follows the same debt. Updating a path must not increase an allowance.
 
-The leftover Ruff findings are import order, pyupgrade, and simplify rules, plus `RUF012` on test doubles. The leftover mypy findings are mostly SQLAlchemy `Column` inference. The leftover ESLint findings are `no-explicit-any`, `prefer-inject`, and a handful of template rules. New code still has to stay inside those counts.
+What remains is the rule column of those files. New code still has to stay inside those counts.
 
 ## Python
 
@@ -47,7 +47,7 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 All feature code and the root Angular application compile with `strict`. `make typecheck` runs `tsc --noEmit` for each app (application and spec configs) and for `packages/tsconfig.json` (`packages/browser`, `packages/auth`, `packages/ui`). `noUncheckedIndexedAccess` is not enabled.
 
-ESLint 9 with `angular-eslint` and `typescript-eslint` uses the root `eslint.config.js` and root-installed plugins for all apps and packages. `packages/` has no findings. `no-undef` is off for TypeScript files. Unused names that start with `_` are allowed.
+ESLint 9 with `angular-eslint` and `typescript-eslint` uses the root `eslint.config.js` and root-installed plugins for all apps and packages. Package findings are whatever `quality/eslint-packages-baseline.txt` records. `no-undef` is off for TypeScript files. Unused names that start with `_` are allowed.
 
 Prettier is not a project formatter. Travel and Media templates and CSS were formatted once in `116903ebc22c48c17947200c0e19e4d5f3f56e68`, which is listed in `.git-blame-ignore-revs`. The rest of the tree is unchanged.
 

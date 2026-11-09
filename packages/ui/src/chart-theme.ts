@@ -19,13 +19,8 @@ const CHART_FALLBACKS = [
   '#c3c3cc',
 ] as const;
 
-export function chartPalette(): string[] {
+function chartPalette(): string[] {
   return CHART_VAR_NAMES.map((name, i) => cssVar(name, CHART_FALLBACKS[i]));
-}
-
-/** @deprecated Prefer chartColorAt() — reads CSS variables at runtime */
-export function CHART_COLORS(): readonly string[] {
-  return chartPalette();
 }
 
 export function chartColorAt(index: number): string {
@@ -60,7 +55,7 @@ export function chartDangerColor(): string {
   return cssVar('--danger', '#ef4444');
 }
 
-export function chartGridColor(): string {
+function chartGridColor(): string {
   return cssVar('--border', '#333333');
 }
 

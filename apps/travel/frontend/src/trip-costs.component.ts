@@ -208,13 +208,10 @@ export class TripCostsComponent {
   );
 
   /**
-   * BLOCKED-ON-K1 seam: the spec injects K1's FinanceTripSpendRegistry and
-   * reads `spendState(registry.lookup(), tripId())`. That registry does not
-   * exist on main yet (K1 is PR #145, unmerged), so this seam returns null
-   * today, which is exactly spendState's locked state. Follow-up once K1
-   * lands: inject FinanceTripSpendRegistry and return its lookup() here;
-   * the registry is signal-backed, so the row then flips locked → none/some
-   * (and back) live without a reload, with no other change needed here.
+   * Locked spend row. `null` is spendState's locked state.
+   * FinanceTripSpendRegistry is already on main (PR #145). TRIP-01 (#225,
+   * parent #84) is the owner that reads that registry. Do not add a second
+   * registry or a cross-tab totals store from this seam.
    */
   protected financeSpendLookup(): unknown {
     return null;

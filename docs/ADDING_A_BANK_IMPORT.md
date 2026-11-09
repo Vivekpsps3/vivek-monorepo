@@ -1,13 +1,16 @@
 # Adding a bank CSV import
 
-Bank imports create **expense** transactions (`source=import`). They **do not** change net worth; update liabilities on **Balance sheet** if you track balances there.
+Bank CSV import creates encrypted transactions (`source=import`). It does not update Balance sheet liabilities; record balances there separately. Spending follows `transactionEffects` in `apps/finance/frontend/src/app/crypto/client-finance.ts`: a purchase adds spending, a refund subtracts it, and a payment, transfer, or unclassified credit adds neither income nor spending. Amounts are positive; the `kind` carries the direction.
 
-Parsers live in `apps/finance/frontend/src/app/utils/bank-import.util.ts`. Tests: `apps/finance/frontend/src/app/utils/bank-import.util.spec.ts`.
+Parsers live in `apps/finance/frontend/src/app/utils/bank-import.parsers.ts`. Preview, staged receipts, and commit live in `apps/finance/frontend/src/app/utils/bank-import.util.ts`. Tests: `apps/finance/frontend/src/app/utils/bank-import.util.spec.ts`.
 
-Each parser must produce:
+Each parsed row has:
 
-- `dedupe_key` (`bank|account|date|amount|normalized description` SHA-256)
-- `date`, `account_mask`, `description`, `category`, `amount` (positive number for expenses)
+- `dedupe_key` (SHA-256 of `bank|account|date|amount|normalized description`)
+- `date`, `account_mask`, `description`, `category`, `amount` (positive)
+- `kind`: `purchase`, `refund`, or `ambiguous_credit`
+
+Card payments and transfers are skipped. They are not stored as spending. A credit is classified from the description and the bank type text: payment and transfer language is excluded; refund, return, reversal, or merchant-credit language becomes `refund`; every other credit is `ambiguous_credit`. An unclassified credit stays out of income and spending totals until it is classified as a refund, income, payment, or transfer.
 
 The Transactions import dialog accepts multiple CSV files and requires a bank selection
 for each file. Files can be added or removed independently. It calls
@@ -21,19 +24,19 @@ duplicates before confirmation. Each file retains its own filename, bank,
 preview rows, skipped-row notes, and errors. A failed file does not block valid
 rows from other files. The UI commits the selected new rows together through
 the encrypted store; account labels come from each file's assigned bank.
-
-Commit rechecks existing keys, making retries safe after a partial save failure.
-The dialog preserves the preview/selection after failure and prevents selection
+Commit writes a staged import receipt first and rechecks existing keys, so a
+retry after a partial save can resume that receipt. Ambiguous credits on the
+receipt stay unresolved until classified. The dialog preserves the preview/selection after failure and prevents selection
 changes or dismissal while saving. Returning to file selection clears stale
 previews while retaining files and bank assignments.
 
 | Slug | Notes |
 |------|--------|
-| `capital_one` | Credits/payments skipped; debits become expenses. |
-| `chase` | Sale rows only (credit card export). |
-| `amex` | American Express credit card export. |
-| `citi` | Citi credit card export (Status, Debit/Credit, Member Name). |
-| `bank_of_america` | Bank of America credit card export (Posted Date, Payee, Amount). |
-| `x_money` | Completed negative Card Purchase rows only. |
+| `capital_one` | Debits are purchases. Credits are classified as refunds, or held as ambiguous; payments and transfers are excluded. |
+| `chase` | Purchases are imported. Credits are classified as refunds, or held as ambiguous; payments and transfers are excluded. |
+| `amex` | Purchases are imported. Credits are classified as refunds, or held as ambiguous; payments and transfers are excluded. |
+| `citi` | Cleared purchases are imported. Credits are classified as refunds, or held as ambiguous; payments and transfers are excluded. |
+| `bank_of_america` | Negative amounts are purchases. Positive amounts are classified as refunds, or held as ambiguous; payments and transfers are excluded. |
+| `x_money` | Completed card purchases and recognized refunds are imported. Other rows are skipped. |
 
 Fidelity positions CSV is a **holdings** import (replace positions per account), not expense transactions. Parser: `apps/finance/frontend/src/app/utils/fidelity-import.util.ts`.
