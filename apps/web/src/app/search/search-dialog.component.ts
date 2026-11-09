@@ -26,13 +26,13 @@ import {
 } from './search-recents';
 
 /**
- * Unified search dialog (Bundle S, H5). Ctrl/⌘-K or the header button
- * opens it. Travel and Media results come from GET /api/search; Finance
- * is client-side only and, in this build, contributes its locked row —
- * the FinanceService name streams the spec matches against (assets$,
- * liabilities$, holdings$, fixedExpenses$, subscriptions$) do not exist
- * on main, so unlocked Finance matching is held as an open question
- * rather than guessed at private internals.
+ * Unified search dialog. Ctrl/⌘-K or the header button opens it.
+ * Travel and Media results come from GET /api/search. Finance is
+ * client-side and this dialog contributes only the locked-vault row.
+ * FinanceService already exposes assets$, liabilities$, holdings$,
+ * fixedExpenses$, and subscriptions$. Unlocked name matching belongs to
+ * HUB-04 (#246, parent #93): one narrow facade, not a private service
+ * import or a second matcher here.
  */
 
 export interface SearchResultRow {

@@ -25,27 +25,28 @@ export const PLATE_THRESHOLDS = Object.freeze({
 } as const);
 export const PR_BEATEN_THRESHOLDS = Object.freeze([1, 5, 10, 25, 50] as const);
 export const LOGGED_WEEK_THRESHOLDS = Object.freeze([4, 12, 26, 52] as const);
-// §18.6 names only five badges. The rest keep their id as a placeholder name
-// until Design supplies copy — do not invent user-facing names.
+// Five badges already use settled display names. The other fifteen keep the
+// id as the placeholder string. #90 settled those names; HEALTH-02 (#257)
+// applies that mapping. Do not invent a different name in this file.
 export const HEALTH_BADGES = Object.freeze({
   first_pr_lift: 'First lift PR',
-  first_pr_run: 'first_pr_run', // TODO(design): name
-  first_pr_other: 'first_pr_other', // TODO(design): name
-  pr_beaten_1: 'pr_beaten_1', // TODO(design): name
+  first_pr_run: 'first_pr_run', // TODO(#257): apply the #90 name
+  first_pr_other: 'first_pr_other', // TODO(#257): apply the #90 name
+  pr_beaten_1: 'pr_beaten_1', // TODO(#257): apply the #90 name
   pr_beaten_5: 'PR breaker ×5',
-  pr_beaten_10: 'pr_beaten_10', // TODO(design): name
-  pr_beaten_25: 'pr_beaten_25', // TODO(design): name
-  pr_beaten_50: 'pr_beaten_50', // TODO(design): name
-  plate_135: 'plate_135', // TODO(design): name
+  pr_beaten_10: 'pr_beaten_10', // TODO(#257): apply the #90 name
+  pr_beaten_25: 'pr_beaten_25', // TODO(#257): apply the #90 name
+  pr_beaten_50: 'pr_beaten_50', // TODO(#257): apply the #90 name
+  plate_135: 'plate_135', // TODO(#257): apply the #90 name
   plate_225: 'Two plates',
-  plate_315: 'plate_315', // TODO(design): name
-  plate_405: 'plate_405', // TODO(design): name
-  run_5k: 'run_5k', // TODO(design): name
+  plate_315: 'plate_315', // TODO(#257): apply the #90 name
+  plate_405: 'plate_405', // TODO(#257): apply the #90 name
+  run_5k: 'run_5k', // TODO(#257): apply the #90 name
   run_10k: '10K finisher',
-  run_half: 'run_half', // TODO(design): name
-  run_full: 'run_full', // TODO(design): name
-  logged_weeks_4: 'logged_weeks_4', // TODO(design): name
+  run_half: 'run_half', // TODO(#257): apply the #90 name
+  run_full: 'run_full', // TODO(#257): apply the #90 name
+  logged_weeks_4: 'logged_weeks_4', // TODO(#257): apply the #90 name
   logged_weeks_12: '12-week logger',
-  logged_weeks_26: 'logged_weeks_26', // TODO(design): name
-  logged_weeks_52: 'logged_weeks_52', // TODO(design): name
+  logged_weeks_26: 'logged_weeks_26', // TODO(#257): apply the #90 name
+  logged_weeks_52: 'logged_weeks_52', // TODO(#257): apply the #90 name
 } as const);

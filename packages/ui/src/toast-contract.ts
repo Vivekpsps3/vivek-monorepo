@@ -3,9 +3,6 @@
 export const TOAST_LIMIT = 3;
 export const TOAST_DURATION_MS = 5000;
 export const TOAST_ACTION_DURATION_MS = 8000;
-export const TOAST_INSET_PX = 24;
-export const TOAST_MAX_WIDTH_PX = 400;
-export const TOAST_MOBILE_BREAKPOINT_PX = 768;
 export const HTTP_ERROR_FALLBACK = 'Something went wrong. Reload the page if this keeps happening.';
 
 export function toastRole(kind: 'success' | 'error' | 'info'): 'alert' | 'status' {

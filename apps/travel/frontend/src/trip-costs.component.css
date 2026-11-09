@@ -113,11 +113,9 @@
 }
 
 /*
- * BLOCKED-ON-K1 deviation: the spec's ≤640 layout swaps these inline actions
- * for a ui-menu ("More actions for …"). ui-menu ships with K1 and does not
- * exist on main yet, so the inline actions stay visible at every width
- * instead of inventing a menu component. Once K1 lands: hide
- * .row-actions-inline at ≤640 and show the ui-menu there.
+ * Inline actions stay visible at every width. ui-menu is already on main
+ * (PR #145). A narrower menu swap belongs to TRIP-03 (#227), not to a
+ * missing-component follow-up.
  */
 .row-actions-inline {
   display: flex;

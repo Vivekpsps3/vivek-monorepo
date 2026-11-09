@@ -3,9 +3,8 @@ export { SESSION_CONTEXT, type SessionPort } from './session-context';
 export { UPDATE_NOTICE, type UpdateNotice } from './update-notice';
 export { httpErrorInterceptor, silentErrorToast, SILENT_ERROR_TOAST } from './http-error.interceptor';
 export { AppDatePipe, AppDateRangePipe } from './app-date.pipe';
-export { MoneyPipe, MoneyAriaPipe } from './money.pipe';
+export { MoneyPipe } from './money.pipe';
 export { ThemeService, type Theme } from './theme.service';
-export { SuiteHubLinkComponent } from './suite-hub-link.component';
 export { UiCardComponent } from './ui-card/ui-card.component';
 export { UiInputComponent } from './ui-input/ui-input.component';
 export { UiPageHeaderComponent } from './ui-page-header/ui-page-header.component';
@@ -20,15 +19,12 @@ export { UiSkeletonComponent, type UiSkeletonVariant } from './ui-skeleton/ui-sk
 export { UiDataTableComponent } from './ui-data-table/ui-data-table.component';
 export { UiDialogComponent } from './ui-dialog/ui-dialog.component';
 export {
-  chartPalette,
-  CHART_COLORS,
   chartColorAt,
   chartSliceBorder,
   chartTextMuted,
   chartAccentColor,
   chartSuccessColor,
   chartDangerColor,
-  chartGridColor,
   chartTooltipTheme,
   chartLegendBottom,
   chartCartesianScales,
@@ -38,11 +34,8 @@ export { ConfirmService, type ConfirmState, type ConfirmActionOptions } from './
 export { ToastService, type ToastAction, type ToastKind, type ToastPayload } from './toast.service';
 export {
   HTTP_ERROR_FALLBACK,
-  TOAST_ACTION_DURATION_MS,
   TOAST_DURATION_MS,
-  TOAST_INSET_PX,
   TOAST_LIMIT,
-  TOAST_MAX_WIDTH_PX,
   failureCopy,
   httpErrorMessage,
   successCopy,
