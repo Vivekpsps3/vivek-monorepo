@@ -127,7 +127,7 @@ def ingest_series(db: Session, catalog: CatalogItem, detail: dict) -> None:
     db.flush()
 
 
-def refresh(db: Session, entry: UserEntry, body: dict | None = None) -> None:
+def refresh(db: Session, entry: UserEntry, body: dict | None = None) -> UserEntry:
     from apps.media.backend.services import providers, records
 
     catalog = entry.catalog
@@ -177,7 +177,9 @@ def refresh(db: Session, entry: UserEntry, body: dict | None = None) -> None:
         )
     if linking:
         catalog.source, catalog.source_id = source, identity
-    records._apply_authoritative(db, catalog, detail)
-    if catalog.source == "musicbrainz" and catalog.kind in {"album", "artist"}:
-        records.repair_musicbrainz_albums(db, entry.user_id)
+    if catalog.source == "musicbrainz" and catalog.kind == "album":
+        entry = records.finish_album_refresh(db, entry, detail)
+    else:
+        records._apply_authoritative(db, catalog, detail)
     db.flush()
+    return entry
