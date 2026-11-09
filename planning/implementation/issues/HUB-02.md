@@ -5,6 +5,7 @@
 - Parents: [#93](https://github.com/Vivekpsps3/vivek-monorepo/issues/93)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `SAFE-04`, `SAFE-05`, `UX-03`
 - Conflict groups: `hub-main`, `travel-summary`, `media-summary`, `finance-public-api`
 - Verification profiles: `web_front`, `travel_back`, `media_back`, `finance_front`

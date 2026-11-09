@@ -5,6 +5,7 @@
 - Parents: [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199), [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `CON-01`, `CON-02`, `CON-03`, `SAFE-03`, `SAFE-04`, `VER-01`, `VER-02`
 - Conflict groups: `planning-guidance`, `architecture-docs`, `deletion-scorecard`
 - Verification profiles: `docs`

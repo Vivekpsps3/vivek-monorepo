@@ -5,6 +5,7 @@
 - Parents: [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: `MED-02`, `MED-03`, `MED-04`
 - Conflict groups: `media-detail-form`, `media-library`, `media-add`, `media-runtime`
 - Verification profiles: `media_front`, `media_back`, `web_front`

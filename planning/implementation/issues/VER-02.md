@@ -5,6 +5,7 @@
 - Parents: [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199), [#125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
 - Dependencies: none
 - Conflict groups: `browser-config`, `ci-workflow`, `test-discovery`, `quality-docs`
 - Verification profiles: `docs`, `web_front`
