@@ -73,6 +73,30 @@ describe('ProfileSettingsComponent (PF6)', () => {
     expect(text()).toContain('Show my age on Life in Pixels');
   });
 
+  it('saves from the submit button without leaving the page', async () => {
+    load({ birthday: null, show_age: false });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('#birthday-input') as HTMLInputElement;
+    input.value = '1990-05-04';
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    const submit = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    let leftPage = true;
+    form.addEventListener('submit', (event: Event) => {
+      queueMicrotask(() => {
+        leftPage = !event.defaultPrevented;
+      });
+    });
+    submit.click();
+    await Promise.resolve();
+    const req = http.expectOne(request => request.method === 'PATCH');
+    expect(req.request.body).toEqual({ birthday: '1990-05-04', show_age: false });
+    req.flush({ birthday: '1990-05-04', show_age: false });
+    await fixture.whenStable();
+    expect(toast.success).toHaveBeenCalledWith('Birthday saved.');
+    expect(leftPage).toBeFalse();
+  });
+
   it('saves the date in the field when the model is still empty', async () => {
     load({ birthday: null, show_age: false });
     await fixture.whenStable();

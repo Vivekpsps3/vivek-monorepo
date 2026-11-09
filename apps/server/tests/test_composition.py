@@ -1,6 +1,7 @@
 """One factory, one database, one principal."""
 
 import os
+import re
 import subprocess
 import sys
 from datetime import timedelta
@@ -286,6 +287,10 @@ def test_health_auth_gate_and_validation(tmp_path, monkeypatch):
     monkeypatch.delenv("API_KEY", raising=False)
 
 
+def _policy_shape(policy: str) -> str:
+    return re.sub(r"'nonce-[^']+'", "'nonce'", policy)
+
+
 def _call(client, method, url, token=None, csrf=None, **kwargs):
     # The jar keeps every Set-Cookie, so a later user would still send the first.
     client.cookies.clear()
@@ -425,8 +430,25 @@ def test_startup_checks_schema_frontend_and_static_files(tmp_path):
         settings = client.get("/settings", follow_redirects=False)
         assert settings.status_code == 200
         assert "<app-root" in settings.text
-        assert client.get("/settings/account").status_code == 200
-        assert client.get("/settings/profile").status_code == 404
+        account = client.get("/settings/account")
+        assert account.status_code == 200
+        assert "<app-root" in account.text
+        assert account.headers["cache-control"] == "no-store"
+        profile = client.get("/settings/profile")
+        assert profile.status_code == 200
+        assert "<app-root" in profile.text
+        assert "ngCspNonce=" in profile.text
+        assert profile.headers["cache-control"] == "no-store"
+        profile_policy = profile.headers["content-security-policy"]
+        account_policy = account.headers["content-security-policy"]
+        assert "nonce-" in profile_policy
+        assert "tile.openstreetmap.org" in profile_policy
+        assert "frame-ancestors 'none'" in profile_policy
+        assert "unsafe-eval" not in profile_policy
+        assert _policy_shape(profile_policy) == _policy_shape(account_policy)
+        public_policy = client.get("/").headers["content-security-policy"]
+        assert "tile.openstreetmap.org" not in public_policy
+        assert client.get("/settings/not-a-section").status_code == 404
         assert client.get("/pixels").status_code == 200
         assert "<app-root" in client.get("/pixels").text
         assert client.get("/pixels/life").status_code == 200
