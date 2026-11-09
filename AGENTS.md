@@ -1,6 +1,31 @@
 # Agent handoff
 
-Finance, Travel, and Media live in this repo. Keep each app's data and behavior in its own folder.
+Keep each app's data and behavior in its own folder. Before editing a subtree,
+read its applicable `AGENTS.md`, including when your session started at the root.
+Use the map below to find the owner; read linked detail only when the task needs it.
+
+| Work | Start here |
+| --- | --- |
+| Encrypted Finance, accounting, import | [Finance](apps/finance/AGENTS.md) |
+| Trips and PTO | [Travel](apps/travel/AGENTS.md) |
+| Media catalog and journal | [Media](apps/media/AGENTS.md) |
+| Shell, Hub, search, Town, World, Pixels | [Web](apps/web/AGENTS.md) |
+| Identity, database, server composition | [Server](apps/server/AGENTS.md) |
+| Public pages | [Site](apps/site/AGENTS.md) |
+| Reusable UI and browser utilities | [Packages](packages/AGENTS.md) |
+| Build, quality, migration and operations scripts | [Scripts](scripts/AGENTS.md) |
+
+## Keep changes cheap
+
+Prefer an existing owner and a direct call. Add a shared abstraction for actual
+repeated behavior, migrate its consumers, and delete the old copies in the same PR.
+Keep domain rules local. Do not claim moving code, removing tests or compressing
+formatting as simplification. Safety fixes may add necessary code; report that honestly.
+
+Update applicable guidance in the same PR when an owner, command or invariant
+changes. Keep root instructions under 650 words and each nested file under 300;
+replace stale text instead of appending history. Full maintenance rules and research
+sources are in [Agent guidance](docs/AGENT_GUIDANCE.md).
 
 ## Roadmap implementation
 
