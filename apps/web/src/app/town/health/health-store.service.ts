@@ -1,9 +1,11 @@
-import { Injectable, Injector, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { DestroyRef, Injectable, Injector, inject } from '@angular/core';
+import { Observable } from 'rxjs';
 import {
+  bindLockSnapshots,
   financeVaultPresent,
   openFinanceVault,
 } from '../../../../../finance/frontend/src/public-api';
+import { SessionService } from '../../platform/session.service';
 import type { HealthPr, HealthStat } from './health.types';
 
 /**
@@ -90,12 +92,54 @@ function isConflict(error: unknown): boolean {
   );
 }
 
+function concreteOwner(id: unknown): number | null {
+  return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/** Captured at the start of a load or write. Only a still-matching ticket may publish. */
+interface Publication {
+  readonly generation: number;
+  readonly ownerId: number | null;
+  readonly loadId?: number;
+}
+
+type VaultRow = {
+  client_id: string;
+  ciphertext_b64: string;
+  schema_version: number;
+  key_version: number;
+  revision: number;
+};
+
 @Injectable({ providedIn: 'root' })
 export class HealthStoreService {
   private readonly injector = inject(Injector);
+  private readonly session = inject(SessionService);
   private stats: HealthEntry<HealthStat>[] = [];
   private prs: HealthEntry<HealthPr>[] = [];
   private unreadable = 0;
+  /** Bumped on lock, logout, owner change, and disposal. In-flight work keeps the old value. */
+  private generation = 0;
+  /** The load allowed to publish. Zero means the current load lost its deadline or was invalidated. */
+  private loadOwner = 0;
+  private nextLoadId = 0;
+  private ownerSeen: number | null | undefined;
+  private disposed = false;
+  private stop = new AbortController();
+
+  constructor() {
+    const destroy = inject(DestroyRef);
+    const releaseLock = bindLockSnapshots(() => this.invalidate());
+    const ownerSub = this.session.user$.subscribe(user => this.noteOwner(user?.id));
+    const clearSub = this.session.cleared$.subscribe(() => this.invalidate());
+    destroy.onDestroy(() => {
+      this.disposed = true;
+      releaseLock();
+      ownerSub.unsubscribe();
+      clearSub.unsubscribe();
+      this.invalidate();
+    });
+  }
 
   /** Vault access seam (the Finance public API); tests replace it. */
   protected vault(): Promise<HealthVault> {
@@ -120,12 +164,96 @@ export class HealthStoreService {
     this.unreadable = 0;
   }
 
-  /** Every action checks presence first; a locked vault clears memory. */
-  private requirePresent(): void {
+  private currentOwner(): number | null {
+    return concreteOwner(this.session.currentUser?.id);
+  }
+
+  /** First sighting records the owner. A later id, including logout, drops in-flight plaintext. */
+  private noteOwner(id: unknown): void {
+    const owner = concreteOwner(id);
+    if (this.ownerSeen === undefined) {
+      this.ownerSeen = owner;
+      return;
+    }
+    if (this.ownerSeen === owner) return;
+    this.ownerSeen = owner;
+    this.invalidate();
+  }
+
+  private invalidate(): void {
+    this.generation += 1;
+    this.loadOwner = 0;
+    this.clearMemory();
+    this.stop.abort();
+    this.stop = new AbortController();
+  }
+
+  private publication(load: boolean): Publication {
+    const loadId = load ? (this.nextLoadId += 1) : undefined;
+    if (loadId !== undefined) this.loadOwner = loadId;
+    return { generation: this.generation, ownerId: this.currentOwner(), loadId };
+  }
+
+  private eligible(ticket: Publication): boolean {
+    if (this.disposed || ticket.generation !== this.generation) return false;
+    if (ticket.ownerId !== this.currentOwner()) return false;
+    if (!financeVaultPresent()) return false;
+    if (ticket.loadId !== undefined && ticket.loadId !== this.loadOwner) return false;
+    return true;
+  }
+
+  /** Refuse to store or return a result captured for a lock, owner, or load that has ended. */
+  private guard(ticket: Publication, signal?: AbortSignal): void {
+    if (!signal?.aborted && this.eligible(ticket)) return;
     if (!financeVaultPresent()) {
       this.clearMemory();
       throw new HealthLockedError();
     }
+    throw new Error('Health publication is no longer current.');
+  }
+
+  private link(external?: AbortSignal): AbortSignal {
+    const linked = new AbortController();
+    const abort = () => linked.abort();
+    const watch = (signal?: AbortSignal) => {
+      if (!signal) return;
+      if (signal.aborted) abort();
+      else signal.addEventListener('abort', abort, { once: true });
+    };
+    watch(external);
+    watch(this.stop.signal);
+    return linked.signal;
+  }
+
+  private observe<T>(source: Observable<T>, signal: AbortSignal): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (settle: () => void) => {
+        if (settled) return;
+        settled = true;
+        settle();
+      };
+      const sub = source.subscribe({
+        next: value => finish(() => resolve(value)),
+        error: error => finish(() => reject(error)),
+        complete: () => finish(() => reject(new Error('Health vault returned no row.'))),
+      });
+      if (settled || signal.aborted) sub.unsubscribe();
+      if (signal.aborted) finish(() => reject(new DOMException('Aborted', 'AbortError')));
+      else signal.addEventListener('abort', () => {
+        sub.unsubscribe();
+        finish(() => reject(new DOMException('Aborted', 'AbortError')));
+      }, { once: true });
+    });
+  }
+
+  private lost(ticket: Publication): HealthLoadResult {
+    if (this.loadOwner === ticket.loadId) this.loadOwner = 0;
+    if (!financeVaultPresent()) {
+      this.clearMemory();
+      return { state: 'locked' };
+    }
+    return { state: 'unavailable' };
   }
 
   async load(opts?: { deadlineMs?: number; signal?: AbortSignal }): Promise<HealthLoadResult> {
@@ -133,6 +261,8 @@ export class HealthStoreService {
       this.clearMemory();
       return { state: 'locked' };
     }
+    const ticket = this.publication(true);
+    const signal = this.link(opts?.signal);
     const deadlineMs = opts?.deadlineMs ?? HEALTH_LOAD_DEADLINE_MS;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<'deadline'>(resolve => {
@@ -140,13 +270,13 @@ export class HealthStoreService {
     });
     try {
       const outcome = await Promise.race([
-        this.loadAll(opts?.signal).then(
+        this.loadAll(signal, ticket).then(
           () => 'done' as const,
           () => 'failed' as const,
         ),
         deadline,
       ]);
-      if (outcome !== 'done') return { state: 'unavailable' };
+      if (outcome !== 'done' || !this.eligible(ticket)) return this.lost(ticket);
       return {
         state: 'ready',
         stats: [...this.stats],
@@ -158,18 +288,19 @@ export class HealthStoreService {
     }
   }
 
-  private async loadAll(signal?: AbortSignal): Promise<void> {
+  private async loadAll(signal: AbortSignal, ticket: Publication): Promise<void> {
     const vault = await this.vault();
-    if (signal?.aborted) throw new Error('Aborted');
+    this.guard(ticket, signal);
     const [statRows, prRows] = await Promise.all([
-      firstValueFrom(vault.listRecords(HEALTH_STATS_COLLECTION, { silent: true })),
-      firstValueFrom(vault.listRecords(HEALTH_PRS_COLLECTION, { silent: true })),
+      this.observe(vault.listRecords(HEALTH_STATS_COLLECTION, { silent: true }), signal),
+      this.observe(vault.listRecords(HEALTH_PRS_COLLECTION, { silent: true }), signal),
     ]);
-    if (signal?.aborted) throw new Error('Aborted');
+    this.guard(ticket, signal);
     const [stats, prs] = await Promise.all([
-      this.decryptAll<HealthStat>(vault, HEALTH_STATS_COLLECTION, statRows, STAT_KINDS),
-      this.decryptAll<HealthPr>(vault, HEALTH_PRS_COLLECTION, prRows, PR_KINDS),
+      this.decryptAll<HealthStat>(vault, HEALTH_STATS_COLLECTION, statRows, STAT_KINDS, signal, ticket),
+      this.decryptAll<HealthPr>(vault, HEALTH_PRS_COLLECTION, prRows, PR_KINDS, signal, ticket),
     ]);
+    this.guard(ticket, signal);
     this.stats = stats.entries;
     this.prs = prs.entries;
     this.unreadable = stats.skipped + prs.skipped;
@@ -178,18 +309,15 @@ export class HealthStoreService {
   private async decryptAll<T>(
     vault: HealthVault,
     collection: Collection,
-    rows: readonly {
-      client_id: string;
-      ciphertext_b64: string;
-      schema_version: number;
-      key_version: number;
-      revision: number;
-    }[],
+    rows: readonly VaultRow[],
     kinds: ReadonlySet<string>,
+    signal: AbortSignal,
+    ticket: Publication,
   ): Promise<{ entries: HealthEntry<T>[]; skipped: number }> {
     const entries: HealthEntry<T>[] = [];
     let skipped = 0;
     for (const row of rows) {
+      this.guard(ticket, signal);
       // Security (2026-10-30): the Health client refuses v1 rows.
       if (row.schema_version !== HEALTH_SCHEMA_VERSION) {
         skipped += 1;
@@ -203,6 +331,7 @@ export class HealthStoreService {
           row.schema_version,
           row.key_version,
         );
+        this.guard(ticket, signal);
         if (!parsable(value, kinds)) {
           skipped += 1;
           continue;
@@ -213,7 +342,8 @@ export class HealthStoreService {
           keyVersion: row.key_version,
           value,
         });
-      } catch {
+      } catch (error) {
+        if (signal.aborted || !this.eligible(ticket)) throw error;
         skipped += 1;
       }
     }
@@ -221,11 +351,13 @@ export class HealthStoreService {
   }
 
   private async upsert<T>(
+    ticket: Publication,
     collection: Collection,
     entry: { clientId: string; revision: number | null; keyVersion: number },
     value: T,
   ): Promise<HealthEntry<T>> {
-    this.requirePresent();
+    const signal = this.link();
+    this.guard(ticket, signal);
     const vault = await this.vault();
     const ciphertext = await vault.encryptPayload(
       value,
@@ -234,8 +366,9 @@ export class HealthStoreService {
       HEALTH_SCHEMA_VERSION,
       entry.keyVersion,
     );
+    this.guard(ticket, signal);
     try {
-      const saved = await firstValueFrom(
+      const saved = await this.observe(
         vault.upsertRecords(
           [
             {
@@ -249,7 +382,9 @@ export class HealthStoreService {
           ],
           { silent: true },
         ),
+        signal,
       );
+      this.guard(ticket, signal);
       const row = saved[0];
       return {
         clientId: entry.clientId,
@@ -258,40 +393,45 @@ export class HealthStoreService {
         value,
       };
     } catch (error) {
-      if (isConflict(error)) {
-        await this.refetch(collection);
+      if (isConflict(error) && this.eligible(ticket)) {
+        await this.refetch(collection, ticket, signal);
         throw new HealthConflictError();
       }
       throw error;
     }
   }
 
-  private async refetch(collection: Collection): Promise<void> {
+  private async refetch(collection: Collection, ticket: Publication, signal: AbortSignal): Promise<void> {
     const vault = await this.vault();
-    const rows = await firstValueFrom(vault.listRecords(collection, { silent: true }));
+    const rows = await this.observe(vault.listRecords(collection, { silent: true }), signal);
+    this.guard(ticket, signal);
     if (collection === HEALTH_STATS_COLLECTION) {
       const { entries, skipped } = await this.decryptAll<HealthStat>(
-        vault, collection, rows, STAT_KINDS,
+        vault, collection, rows, STAT_KINDS, signal, ticket,
       );
+      this.guard(ticket, signal);
       this.stats = entries;
       this.unreadable = skipped;
     } else {
       const { entries, skipped } = await this.decryptAll<HealthPr>(
-        vault, collection, rows, PR_KINDS,
+        vault, collection, rows, PR_KINDS, signal, ticket,
       );
+      this.guard(ticket, signal);
       this.prs = entries;
       this.unreadable = skipped;
     }
   }
 
   private async remove<T>(
+    ticket: Publication,
     collection: Collection,
     entry: HealthEntry<T>,
   ): Promise<void> {
-    this.requirePresent();
+    const signal = this.link();
+    this.guard(ticket, signal);
     const vault = await this.vault();
     try {
-      await firstValueFrom(
+      await this.observe(
         vault.deleteRecords(
           [
             {
@@ -302,14 +442,16 @@ export class HealthStoreService {
           ],
           { silent: true },
         ),
+        signal,
       );
     } catch (error) {
-      if (isConflict(error)) {
-        await this.refetch(collection);
+      if (isConflict(error) && this.eligible(ticket)) {
+        await this.refetch(collection, ticket, signal);
         throw new HealthConflictError();
       }
       throw error;
     }
+    this.guard(ticket, signal);
     if (collection === HEALTH_STATS_COLLECTION) {
       this.stats = this.stats.filter(item => item.clientId !== entry.clientId);
     } else {
@@ -318,11 +460,14 @@ export class HealthStoreService {
   }
 
   async createStat(value: HealthStat): Promise<HealthEntry<HealthStat>> {
+    const ticket = this.publication(false);
     const entry = await this.upsert<HealthStat>(
+      ticket,
       HEALTH_STATS_COLLECTION,
       { clientId: newHealthClientId(), revision: null, keyVersion: 1 },
       value,
     );
+    this.guard(ticket);
     this.stats = [...this.stats, entry];
     return entry;
   }
@@ -333,21 +478,26 @@ export class HealthStoreService {
   ): Promise<HealthEntry<HealthStat>> {
     // Edits never move the day the entry was logged (§18.8).
     const value: HealthStat = { ...entry.value, ...changes, logged_on: entry.value.logged_on };
-    const saved = await this.upsert<HealthStat>(HEALTH_STATS_COLLECTION, entry, value);
+    const ticket = this.publication(false);
+    const saved = await this.upsert<HealthStat>(ticket, HEALTH_STATS_COLLECTION, entry, value);
+    this.guard(ticket);
     this.stats = this.stats.map(item => (item.clientId === entry.clientId ? saved : item));
     return saved;
   }
 
   async deleteStat(entry: HealthEntry<HealthStat>): Promise<void> {
-    await this.remove(HEALTH_STATS_COLLECTION, entry);
+    await this.remove(this.publication(false), HEALTH_STATS_COLLECTION, entry);
   }
 
   async createPr(value: HealthPr): Promise<HealthEntry<HealthPr>> {
+    const ticket = this.publication(false);
     const entry = await this.upsert<HealthPr>(
+      ticket,
       HEALTH_PRS_COLLECTION,
       { clientId: newHealthClientId(), revision: null, keyVersion: 1 },
       value,
     );
+    this.guard(ticket);
     this.prs = [...this.prs, entry];
     return entry;
   }
@@ -357,12 +507,14 @@ export class HealthStoreService {
     changes: Partial<HealthPr>,
   ): Promise<HealthEntry<HealthPr>> {
     const value: HealthPr = { ...entry.value, ...changes, logged_on: entry.value.logged_on };
-    const saved = await this.upsert<HealthPr>(HEALTH_PRS_COLLECTION, entry, value);
+    const ticket = this.publication(false);
+    const saved = await this.upsert<HealthPr>(ticket, HEALTH_PRS_COLLECTION, entry, value);
+    this.guard(ticket);
     this.prs = this.prs.map(item => (item.clientId === entry.clientId ? saved : item));
     return saved;
   }
 
   async deletePr(entry: HealthEntry<HealthPr>): Promise<void> {
-    await this.remove(HEALTH_PRS_COLLECTION, entry);
+    await this.remove(this.publication(false), HEALTH_PRS_COLLECTION, entry);
   }
 }

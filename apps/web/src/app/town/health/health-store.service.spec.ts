@@ -1,13 +1,16 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { Observable, of, type ObservedValueOf } from 'rxjs';
+import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { BehaviorSubject, Observable, Subject, of, type ObservedValueOf } from 'rxjs';
+import { lockFinance } from '../../../../../finance/frontend/src/public-api';
+import { SessionService } from '../../platform/session.service';
 import { loadTownHealthStages } from './index';
 import {
   HEALTH_CONFLICT_MESSAGE,
   HealthConflictError,
   HealthStoreService,
   newHealthClientId,
+  type HealthLoadResult,
   type HealthVault,
 } from './health-store.service';
 import type { HealthPr, HealthStat } from './health.types';
@@ -46,11 +49,36 @@ class FakeVault {
   decryptCalls: string[] = [];
   encryptCalls: { value: unknown; schemaVersion: number; keyVersion: number }[] = [];
   hangLists = false;
+  holdList = false;
+  holdDecrypt = false;
+  holdEncrypt = false;
+  holdUpsert = false;
+  holdDelete = false;
+  listCancelled = 0;
+  upsertCancelled = 0;
+  deleteCancelled = 0;
+  readonly listRelease: Array<() => void> = [];
+  readonly decryptRelease: Array<() => void> = [];
+  readonly encryptRelease: Array<() => void> = [];
+  readonly upsertRelease: Array<() => void> = [];
+  readonly deleteRelease: Array<() => void> = [];
 
   listRecords(collection?: string): Observable<EncryptedRecordDto[]> {
     this.listed.push(collection);
-    if (this.hangLists) return new Observable<EncryptedRecordDto[]>(() => undefined);
-    return of(this.rows.filter(item => !collection || item.collection === collection));
+    const rows = this.rows.filter(item => !collection || item.collection === collection);
+    if (this.hangLists || this.holdList) {
+      return new Observable<EncryptedRecordDto[]>(subscriber => {
+        if (!this.hangLists) {
+          this.listRelease.push(() => {
+            if (subscriber.closed) return;
+            subscriber.next(rows);
+            subscriber.complete();
+          });
+        }
+        return () => { this.listCancelled += 1; };
+      });
+    }
+    return of(rows);
   }
 
   async encryptPayload(
@@ -60,69 +88,130 @@ class FakeVault {
     schemaVersion: number,
     keyVersion: number,
   ): Promise<string> {
+    if (this.holdEncrypt) await new Promise<void>(resolve => { this.encryptRelease.push(resolve); });
     this.encryptCalls.push({ value, schemaVersion, keyVersion });
     return encode(value);
   }
 
   async decryptPayload<T>(ciphertextB64: string, _collection: string, clientId: string): Promise<T> {
     this.decryptCalls.push(clientId);
+    if (this.holdDecrypt) await new Promise<void>(resolve => { this.decryptRelease.push(resolve); });
     if (!ciphertextB64.startsWith('ct:')) throw new Error('undecryptable');
     return JSON.parse(atob(ciphertextB64.slice(3))) as T;
   }
 
   upsertRecords(records: Record<string, unknown>[]): Observable<EncryptedRecordDto[]> {
-    this.upserted.push(records);
-    const saved: EncryptedRecordDto[] = [];
-    for (const record of records) {
-      const existing = this.rows.find(
-        item => item.collection === record['collection'] && item.client_id === record['client_id'],
-      );
-      if (existing) {
-        if (record['expected_revision'] !== existing.revision) {
-          throw new HttpErrorResponse({ status: 409 });
+    const run = (): EncryptedRecordDto[] => {
+      this.upserted.push(records);
+      const saved: EncryptedRecordDto[] = [];
+      for (const record of records) {
+        const existing = this.rows.find(
+          item => item.collection === record['collection'] && item.client_id === record['client_id'],
+        );
+        if (existing) {
+          if (record['expected_revision'] !== existing.revision) {
+            throw new HttpErrorResponse({ status: 409 });
+          }
+          existing.ciphertext_b64 = record['ciphertext_b64'] as string;
+          existing.revision += 1;
+          saved.push(existing);
+        } else {
+          if (record['expected_revision'] !== null) throw new HttpErrorResponse({ status: 409 });
+          const created: EncryptedRecordDto = {
+            collection: record['collection'] as string,
+            client_id: record['client_id'] as string,
+            ciphertext_b64: record['ciphertext_b64'] as string,
+            schema_version: record['schema_version'] as number,
+            key_version: record['key_version'] as number,
+            revision: 1,
+            updated_at: '2026-10-29T00:00:00Z',
+          };
+          this.rows.push(created);
+          saved.push(created);
         }
-        existing.ciphertext_b64 = record['ciphertext_b64'] as string;
-        existing.revision += 1;
-        saved.push(existing);
-      } else {
-        if (record['expected_revision'] !== null) throw new HttpErrorResponse({ status: 409 });
-        const created: EncryptedRecordDto = {
-          collection: record['collection'] as string,
-          client_id: record['client_id'] as string,
-          ciphertext_b64: record['ciphertext_b64'] as string,
-          schema_version: record['schema_version'] as number,
-          key_version: record['key_version'] as number,
-          revision: 1,
-          updated_at: '2026-10-29T00:00:00Z',
-        };
-        this.rows.push(created);
-        saved.push(created);
       }
-    }
-    return of(saved);
+      return saved;
+    };
+    if (!this.holdUpsert) return of(run());
+    return new Observable(subscriber => {
+      this.upsertRelease.push(() => {
+        if (subscriber.closed) return;
+        try {
+          subscriber.next(run());
+          subscriber.complete();
+        } catch (error) {
+          subscriber.error(error);
+        }
+      });
+      return () => { this.upsertCancelled += 1; };
+    });
   }
 
   deleteRecords(records: Record<string, unknown>[]): Observable<{ deleted: number }> {
-    this.deleted.push(records);
-    let deleted = 0;
-    for (const record of records) {
-      const index = this.rows.findIndex(
-        item => item.collection === record['collection'] && item.client_id === record['client_id'],
-      );
-      if (index >= 0) {
-        if (record['expected_revision'] !== this.rows[index].revision) {
-          throw new HttpErrorResponse({ status: 409 });
+    const run = (): { deleted: number } => {
+      this.deleted.push(records);
+      let deleted = 0;
+      for (const record of records) {
+        const index = this.rows.findIndex(
+          item => item.collection === record['collection'] && item.client_id === record['client_id'],
+        );
+        if (index >= 0) {
+          if (record['expected_revision'] !== this.rows[index].revision) {
+            throw new HttpErrorResponse({ status: 409 });
+          }
+          this.rows.splice(index, 1);
+          deleted += 1;
         }
-        this.rows.splice(index, 1);
-        deleted += 1;
       }
-    }
-    return of({ deleted });
+      return { deleted };
+    };
+    if (!this.holdDelete) return of(run());
+    return new Observable(subscriber => {
+      this.deleteRelease.push(() => {
+        if (subscriber.closed) return;
+        try {
+          subscriber.next(run());
+          subscriber.complete();
+        } catch (error) {
+          subscriber.error(error);
+        }
+      });
+      return () => { this.deleteCancelled += 1; };
+    });
+  }
+}
+
+/** Session port double. `become` is an owner switch or logout, then the vault can be present again. */
+class SessionDouble {
+  private readonly users = new BehaviorSubject<{ id: number } | null>({ id: 7 });
+  private readonly clearedSubject = new Subject<void>();
+  readonly user$ = this.users.asObservable();
+  readonly cleared$ = this.clearedSubject.asObservable();
+  revision = 1;
+  get currentUser(): { id: number } | null { return this.users.value; }
+  become(id: number | null): void {
+    this.revision += 1;
+    this.users.next(id == null ? null : { id });
+    this.clearedSubject.next();
   }
 }
 
 let fake: FakeVault;
+let session: SessionDouble;
 let vaultCalls = 0;
+
+async function until(ready: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50 && !ready(); attempt += 1) await Promise.resolve();
+  if (!ready()) throw new Error('timed out waiting for the held Health vault call');
+}
+
+function unlockVault(): void {
+  localStorage.setItem('finance-dek', 'present');
+}
+
+function textOf(value: unknown): string {
+  return JSON.stringify(value);
+}
 
 class TestStore extends HealthStoreService {
   protected override vault(): Promise<HealthVault> {
@@ -144,15 +233,20 @@ describe('HealthStoreService', () => {
 
   beforeEach(() => {
     fake = new FakeVault();
+    session = new SessionDouble();
     vaultCalls = 0;
-    localStorage.setItem('finance-dek', 'present');
+    unlockVault();
     TestBed.configureTestingModule({
-      providers: [{ provide: HealthStoreService, useClass: TestStore }],
+      providers: [
+        { provide: HealthStoreService, useClass: TestStore },
+        { provide: SessionService, useValue: session as unknown as SessionService },
+      ],
     });
     store = TestBed.inject(HealthStoreService);
   });
 
   afterEach(() => {
+    TestBed.resetTestingModule();
     localStorage.removeItem('finance-dek');
     localStorage.removeItem('finance-vault-present');
   });
@@ -170,6 +264,8 @@ describe('HealthStoreService', () => {
     expect(result.stats.map(entry => entry.clientId)).toEqual(['hlt_a']);
     expect(result.prs.map(entry => entry.clientId)).toEqual(['hlt_b']);
     expect(result.unreadable).toBe(0);
+    expect(textOf(result)).not.toContain(MARKER);
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
   });
 
   it('skips and counts corrupt, unparsable and v1 rows without deleting them', async () => {
@@ -286,6 +382,193 @@ describe('HealthStoreService', () => {
     expect(fake.upserted[0][0]['collection']).toBe('health_prs');
     expect(store.prsSnapshot.map(item => item.clientId)).toEqual([entry.clientId]);
   });
+
+  it('drops a held decrypt after lock and abort, including once the vault is present again (LOCAL1)', async () => {
+    fake.holdDecrypt = true;
+    fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
+    const controller = new AbortController();
+    const pending = store.load({ signal: controller.signal });
+    await until(() => fake.decryptRelease.length === 1);
+    const locking = lockFinance(TestBed.inject(Injector)).catch(() => undefined);
+    expect(store.statsSnapshot).toEqual([]);
+    expect(store.prsSnapshot).toEqual([]);
+    expect(store.unreadableCount).toBe(0);
+    unlockVault();
+    controller.abort();
+    fake.decryptRelease.shift()?.();
+    const result = await pending;
+    await locking;
+    expect(result.state).not.toBe('ready');
+    expect(store.statsSnapshot).toEqual([]);
+    expect(store.prsSnapshot).toEqual([]);
+    expect(store.unreadableCount).toBe(0);
+    expect(textOf(result)).not.toContain(MARKER);
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+  });
+
+  it('does not let the stage read model publish a held row after lock (LOCAL1)', async () => {
+    fake.holdDecrypt = true;
+    fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
+    const injector = Injector.create({
+      providers: [{ provide: HealthStoreService, useValue: store }],
+    });
+    const pending = loadTownHealthStages(injector, new AbortController().signal, { deadlineMs: 60_000 });
+    await until(() => fake.decryptRelease.length === 1);
+    const locking = lockFinance(TestBed.inject(Injector)).catch(() => undefined);
+    expect(store.statsSnapshot).toEqual([]);
+    expect(store.unreadableCount).toBe(0);
+    fake.decryptRelease.shift()?.();
+    const stage = await pending;
+    await locking;
+    expect(stage).toEqual({ state: 'locked' });
+    expect(textOf(stage)).not.toContain(MARKER);
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+    expect(store.prsSnapshot).toEqual([]);
+  });
+
+  it('does not let an older load overwrite the newest load (LOCAL1)', async () => {
+    fake.holdDecrypt = true;
+    fake.rows = [row('health_stats', 'hlt_old', { ...STAT, note: MARKER })];
+    const older = store.load();
+    await until(() => fake.decryptRelease.length === 1);
+    fake.rows = [row('health_stats', 'hlt_new', { ...STAT, kg: 81 })];
+    const newer = store.load();
+    await until(() => fake.decryptRelease.length === 2);
+    fake.decryptRelease.shift()?.();
+    const olderResult = await older;
+    expect(olderResult.state).not.toBe('ready');
+    expect(store.statsSnapshot).toEqual([]);
+    fake.decryptRelease.shift()?.();
+    const newerResult = await newer;
+    expect(newerResult.state).toBe('ready');
+    if (newerResult.state !== 'ready') return;
+    expect(newerResult.stats.map(entry => entry.clientId)).toEqual(['hlt_new']);
+    expect(store.statsSnapshot.map(entry => entry.clientId)).toEqual(['hlt_new']);
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+  });
+
+  it('keeps A plaintext out of B after a held load, save, and conflict refetch (LOCAL2)', async () => {
+    fake.holdDecrypt = true;
+    fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
+    const pending = store.load();
+    await until(() => fake.decryptRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(8);
+    unlockVault();
+    fake.decryptRelease.shift()?.();
+    const result = await pending;
+    expect(result.state).not.toBe('ready');
+    expect(store.statsSnapshot).toEqual([]);
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+
+    fake.holdDecrypt = false;
+    fake.rows = [row('health_stats', 'hlt_b', { ...STAT, kg: 70 })];
+    const loaded = await store.load();
+    expect(loaded.state).toBe('ready');
+    if (loaded.state !== 'ready') return;
+    expect(loaded.stats.map(entry => entry.clientId)).toEqual(['hlt_b']);
+    expect(textOf(loaded)).not.toContain(MARKER);
+
+    fake.holdEncrypt = true;
+    const saving = store.createStat({ ...STAT, note: MARKER });
+    await until(() => fake.encryptRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(9);
+    unlockVault();
+    fake.encryptRelease.shift()?.();
+    await expectAsync(saving).toBeRejected();
+    expect(store.statsSnapshot).toEqual([]);
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+    expect(textOf(fake.upserted)).not.toContain(MARKER);
+
+    fake.holdEncrypt = false;
+    fake.rows = [row('health_stats', 'hlt_c', STAT, { revision: 2 })];
+    await store.load();
+    const entry = store.statsSnapshot[0];
+    fake.rows[0].revision = 4;
+    fake.rows[0].ciphertext_b64 = encode({ ...STAT, note: MARKER, kg: 61 });
+    fake.holdList = true;
+    const conflict = store.updateStat(entry, { kg: 82 });
+    await until(() => fake.listRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(10);
+    unlockVault();
+    fake.listRelease.shift()?.();
+    await expectAsync(conflict).toBeRejected();
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+    expect(store.statsSnapshot.map(item => item.value.kg)).not.toContain(61);
+  });
+
+  it('cancels a held list, save, and delete without publishing plaintext (LOCAL2)', async () => {
+    fake.holdList = true;
+    fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
+    const controller = new AbortController();
+    const pending = store.load({ signal: controller.signal });
+    await until(() => fake.listed.length === 2);
+    controller.abort();
+    expect(fake.listCancelled).toBeGreaterThan(0);
+    fake.listRelease.splice(0).forEach(release => release());
+    const result = await pending;
+    expect(result).toEqual({ state: 'unavailable' });
+    expect(store.statsSnapshot).toEqual([]);
+    expect(textOf(result)).not.toContain(MARKER);
+
+    fake.holdList = false;
+    await store.load();
+    fake.holdUpsert = true;
+    const saving = store.createStat({ ...STAT, note: MARKER });
+    await until(() => fake.upsertRelease.length === 1);
+    localStorage.removeItem('finance-dek');
+    session.become(null);
+    expect(fake.upsertCancelled).toBe(1);
+    fake.upsertRelease.shift()?.();
+    await expectAsync(saving).toBeRejected();
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+    expect(textOf(fake.upserted)).not.toContain(MARKER);
+
+    unlockVault();
+    session.become(7);
+    fake.holdUpsert = false;
+    fake.rows = [row('health_prs', 'hlt_pr', { ...PR, name: MARKER })];
+    await store.load();
+    expect(store.prsSnapshot).toHaveSize(1);
+    fake.holdDelete = true;
+    const removing = store.deletePr(store.prsSnapshot[0]);
+    await until(() => fake.deleteRelease.length === 1);
+    const retained = store;
+    TestBed.resetTestingModule();
+    expect(retained.prsSnapshot).toEqual([]);
+    expect(fake.deleteCancelled).toBe(1);
+    fake.deleteRelease.shift()?.();
+    await expectAsync(removing).toBeRejected();
+    expect(retained.statsSnapshot).toEqual([]);
+    expect(retained.prsSnapshot).toEqual([]);
+    expect(textOf(retained.prsSnapshot)).not.toContain(MARKER);
+  });
+
+  it('does not publish a load that loses its deadline (LOCAL3)', fakeAsync(() => {
+    fake.holdDecrypt = true;
+    fake.rows = [row('health_stats', 'hlt_a', { ...STAT, note: MARKER })];
+    let result: HealthLoadResult | undefined;
+    const pending = store.load({ deadlineMs: 1_000 });
+    pending.then(value => { result = value; });
+    for (let attempt = 0; attempt < 20 && fake.decryptRelease.length === 0; attempt += 1) flushMicrotasks();
+    expect(fake.decryptRelease.length).toBe(1);
+    tick(999);
+    expect(result).toBeUndefined();
+    tick(1);
+    flushMicrotasks();
+    expect(result).toEqual({ state: 'unavailable' });
+    expect(store.statsSnapshot).toEqual([]);
+    fake.decryptRelease.shift()?.();
+    flushMicrotasks();
+    expect(result).toEqual({ state: 'unavailable' });
+    expect(store.statsSnapshot).toEqual([]);
+    expect(store.prsSnapshot).toEqual([]);
+    expect(store.unreadableCount).toBe(0);
+    expect(textOf(result)).not.toContain(MARKER);
+    expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
+  }));
 });
 
 describe('loadTownHealthStages (barrel)', () => {
