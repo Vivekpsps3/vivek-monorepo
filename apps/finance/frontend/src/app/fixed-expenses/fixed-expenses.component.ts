@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { ConfirmService } from '@vivek/ui';
 import { FinanceService } from '../services/finance.service';
-import { ToastService, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
+import { ToastService, UiFieldComponent, UiFieldControlDirective, failureCopy, successCopy } from '@vivek/ui';
 import {
   FixedExpense,
   FixedExpenseCreate,
@@ -52,7 +52,7 @@ import { AppDatePipe } from '@vivek/ui';
     UiSelectComponent,
     UiBadgeComponent,
     UiDialogComponent,
-    UiFieldControlDirective,
+    UiFieldComponent,
     UiFieldControlDirective,
   ],
   templateUrl: './fixed-expenses.component.html',
@@ -154,7 +154,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   openAddModal(): void {
     this.editingId = null;
     this.form = this.emptyForm();
-    this.saveError = '';
+    this.clearValidation();
     this.showModal = true;
     this.cdr.markForCheck();
   }
@@ -174,7 +174,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       is_active: row.is_active,
       notes: row.notes || '',
     };
-    this.saveError = '';
+    this.clearValidation();
     this.showModal = true;
     this.cdr.markForCheck();
   }
@@ -183,8 +183,14 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
-    this.saveError = '';
+    this.clearValidation();
     this.cdr.markForCheck();
+  }
+
+  private clearValidation(): void {
+    this.saveError = '';
+    this.fieldErrors = [];
+    this.formSubmitted = false;
   }
 
   saveExpense(): void {

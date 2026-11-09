@@ -42,6 +42,7 @@
   color: var(--danger);
 }
 
+/* Fallback when controls.css is absent. That stylesheet owns the invalid border when both load. */
 .ui-field--invalid :where(input, select, textarea) {
   border-color: var(--danger);
 }

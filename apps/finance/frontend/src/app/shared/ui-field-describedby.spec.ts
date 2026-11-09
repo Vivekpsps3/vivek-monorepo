@@ -29,6 +29,8 @@ describe('UiFieldComponent describedby', () => {
 
   it('points at both the hint and the error, then only the hint', async () => {
     const input = fixture.nativeElement.querySelector('#pay') as HTMLInputElement;
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('data-field-invalid')).toBe('true');
     expect(input.getAttribute('aria-describedby')).toBe('pay-hint pay-error');
     expect(fixture.nativeElement.querySelector('#pay-hint')?.textContent).toContain('Shown on statements.');
     expect(fixture.nativeElement.querySelector('#pay-error')?.textContent).toContain('Enter an amount.');
@@ -40,5 +42,6 @@ describe('UiFieldComponent describedby', () => {
 
     expect(input.getAttribute('aria-describedby')).toBe('pay-hint');
     expect(input.hasAttribute('aria-invalid')).toBeFalse();
+    expect(input.hasAttribute('data-field-invalid')).toBeFalse();
   });
 });

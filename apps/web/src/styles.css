@@ -90,16 +90,10 @@
     line-height: 1.3;
   }
 
-  input:hover,
-  select:hover,
-  textarea:hover {
+  input:hover:not([aria-invalid="true"]),
+  select:hover:not([aria-invalid="true"]),
+  textarea:hover:not([aria-invalid="true"]) {
     border-color: var(--border-strong);
-  }
-
-  input[aria-invalid="true"],
-  select[aria-invalid="true"],
-  textarea[aria-invalid="true"] {
-    border-color: var(--danger);
   }
 
   input:focus-visible,
