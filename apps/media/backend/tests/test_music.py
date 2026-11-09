@@ -1016,9 +1016,20 @@ def test_existing_pressing_repairs_by_artist_mbid_not_name(client, monkeypatch, 
         "created_at, updated_at) VALUES (1, ?, 'want', 0, 0, 0, '2020-01-01', '2020-01-01')",
         (catalog_id,),
     )
+    entry_id = stored.execute("select last_insert_rowid()").fetchone()[0]
     stored.commit()
     stored.close()
     monkeypatch.setattr("apps.media.backend.services.providers.lookup_detail", _lookup_petal)
+
+    untouched = client.get(f"/api/entries/{entry_id}").json()
+    assert untouched["catalog"]["source_id"] == PETAL_RELEASE
+    assert untouched["catalog"]["extra"]["metadata_pending"] is True
+    assert client.get(f"/api/entries/{artist['id']}").json()["music"]["albums"] == []
+    assert client.get(f"/api/entries/{decoy['id']}").json()["music"]["albums"] == []
+    refreshed = client.post(f"/api/entries/{entry_id}/refresh")
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["id"] == entry_id
+    assert refreshed.json()["catalog"]["source_id"] == PETAL_GROUP
 
     nested = client.get(f"/api/entries/{artist['id']}").json()
     assert [row["title"] for row in nested["music"]["albums"]] == ["petal"]
@@ -1081,8 +1092,19 @@ def test_pressing_row_merges_into_the_saved_release_group(client, monkeypatch, t
         "created_at, updated_at) VALUES (1, ?, 'completed', 0, 1, 0, '2020-01-01', '2020-01-01')",
         (pressing_id,),
     )
+    pressing_entry = stored.execute("select last_insert_rowid()").fetchone()[0]
     stored.commit()
     stored.close()
+
+    seen = client.get(f"/api/entries/{pressing_entry}").json()
+    assert seen["catalog"]["source_id"] == PETAL_RELEASE
+    assert seen["favorite"] is True
+    assert client.get("/api/library", params={"kind": "album"}).json()["total"] == 2
+    refreshed = client.post(f"/api/entries/{pressing_entry}/refresh")
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["id"] == group["id"]
+    assert refreshed.json()["favorite"] is True
+    assert refreshed.json()["catalog"]["source_id"] == PETAL_GROUP
 
     library = client.get("/api/library").json()["items"]
     albums = [item for item in library if item["kind"] == "album"]

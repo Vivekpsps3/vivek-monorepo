@@ -30,7 +30,7 @@ The UI shows the active type/query, source coverage, partial failure, missing co
 | Wikimedia Commons | Explicit artist portrait search/selection and attribution |
 | Wikidata | Explicit calendar follow-up discovery for saved movie activity |
 
-Keys stay server-side. Source-specific identity, date precision and rating scales remain distinct. Saved library/detail reads remain useful with no provider keys and during outages.
+Keys stay server-side. Source-specific identity, date precision and rating scales remain distinct. Saved library, summary, and detail reads use the database only. They do not call a provider and they do not repair MusicBrainz history before the page is returned. Refreshing one saved album is the explicit repair: it resolves that album's release group, stops if the lookup deadline passes, and can be retried. An unresolved album keeps its saved title and stays metadata-pending. The repair does not change another person's notes or ratings. Discography remains an explicit provider read and does not rewrite saved albums. Saved library/detail reads remain useful with no provider keys and during outages.
 
 ## TV and calendar
 

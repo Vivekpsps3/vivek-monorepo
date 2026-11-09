@@ -14,9 +14,17 @@ test.describe('PF6 profile birthday settings', () => {
 
   function watchNonSelf(page: import('@playwright/test').Page): string[] {
     const nonSelf: string[] = [];
+    // The first document request happens while the page is still about:blank.
+    // That origin is this app; later requests to any other origin are the leak.
+    let selfOrigin: string | null = null;
     page.on('request', req => {
-      const url = new URL(req.url());
-      if (url.origin !== new URL(page.url()).origin && !req.url().startsWith('data:')) nonSelf.push(req.url());
+      if (req.url().startsWith('data:')) return;
+      const origin = new URL(req.url()).origin;
+      if (selfOrigin === null) {
+        selfOrigin = origin;
+        return;
+      }
+      if (origin !== selfOrigin) nonSelf.push(req.url());
     });
     return nonSelf;
   }
@@ -58,8 +66,13 @@ test.describe('PF6 profile birthday settings', () => {
   });
 
   test('remove asks for confirmation and clears the birthday', async ({ page }) => {
-    await page.request.patch('/api/account/birthday', { data: { birthday: '1990-05-04', show_age: false } });
     await page.goto('/settings/profile#birthday');
+    const seeded = await page.request.patch('/api/account/birthday', {
+      headers: { 'X-CSRF-Token': 'synthetic-csrf' },
+      data: { birthday: '1990-05-04', show_age: false },
+    });
+    expect(seeded.ok()).toBeTruthy();
+    await page.reload();
     const section = page.locator('#birthday');
     await section.getByRole('button', { name: 'Remove', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Remove birthday?' });
@@ -82,4 +95,71 @@ test.describe('PF6 profile birthday settings', () => {
       expect(scan.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
     });
   }
+
+  function policyShape(policy: string): string {
+    return policy.replace(/'nonce-[^']+'/g, "'nonce'");
+  }
+
+  // PROFILE1. Town project selection of this file stays with VER-02.
+  test('navigate, refresh, fresh load, back-forward, and Birthday stay on Profile', async ({ page }) => {
+    const unknown = await page.request.get('/no-such-page');
+    expect(unknown.status()).toBe(404);
+    expect(await unknown.json()).toEqual({ detail: 'Not found' });
+    expect((await page.request.get('/settings/not-a-section')).status()).toBe(404);
+    expect((await page.request.get('/not-a-real-asset.js')).status()).toBe(404);
+    expect((await page.request.get('/media/api/missing')).status()).toBe(404);
+
+    const account = await page.goto('/settings/account');
+    expect(account?.status()).toBe(200);
+    await page.getByRole('navigation', { name: 'Settings' })
+      .getByRole('link', { name: 'Profile', exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+
+    const reloaded = await page.reload();
+    expect(reloaded?.status()).toBe(200);
+    expect(reloaded?.headers()['content-type'] ?? '').toContain('text/html');
+    expect(reloaded?.headers()['cache-control'] ?? '').toContain('no-store');
+    const profilePolicy = reloaded?.headers()['content-security-policy'] ?? '';
+    expect(profilePolicy).toContain('nonce-');
+    expect(profilePolicy).toContain('tile.openstreetmap.org');
+    expect(profilePolicy).toContain("frame-ancestors 'none'");
+    expect(profilePolicy).not.toContain('unsafe-eval');
+    const accountDocument = await page.request.get('/settings/account');
+    expect(accountDocument.status()).toBe(200);
+    expect(policyShape(accountDocument.headers()['content-security-policy'])).toBe(policyShape(profilePolicy));
+    const home = await page.request.get('/');
+    expect(home.headers()['content-security-policy']).not.toContain('tile.openstreetmap.org');
+    await expect(page.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+
+    const fresh = await page.goto('/settings/profile');
+    expect(fresh?.status()).toBe(200);
+    expect(fresh?.headers()['cache-control'] ?? '').toContain('no-store');
+    await expect(page.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+
+    await page.goto('/settings/appearance');
+    await expect(page.getByRole('heading', { level: 1, name: 'Appearance' })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL(/\/settings\/appearance$/);
+
+    await page.goto('/pixels');
+    await page.getByRole('link', { name: 'Birthday', exact: true }).click();
+    await expect(page).toHaveURL(/\/settings\/profile#birthday$/);
+    await expect(page.locator('#birthday')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/pixels$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Pixels' })).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL(/\/settings\/profile#birthday$/);
+    const birthdayReload = await page.reload();
+    expect(birthdayReload?.status()).toBe(200);
+    expect(birthdayReload?.headers()['cache-control'] ?? '').toContain('no-store');
+    await expect(page.locator('#birthday')).toBeVisible();
+    expect((await page.request.get('/api/account/birthday')).status()).toBe(200);
+  });
 });
