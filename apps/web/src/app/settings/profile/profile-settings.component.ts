@@ -93,6 +93,12 @@ export class ProfileSettingsComponent implements OnInit {
     return typed || this.birthdayInput;
   }
 
+  /** Stay on Profile. Without this, a submit button reloads the document and the toast never appears. */
+  submitBirthday(event: Event): void {
+    event.preventDefault();
+    void this.save();
+  }
+
   async save(): Promise<void> {
     if (this.saving) return;
     this.birthdayInput = this.chosenBirthday();

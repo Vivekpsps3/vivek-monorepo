@@ -2,7 +2,7 @@
 <ui-card>
   <section id="birthday" class="birthday-section" aria-labelledby="birthday-heading">
     <h2 id="birthday-heading">Birthday</h2>
-    <form class="birthday-form" (ngSubmit)="save()">
+    <form class="birthday-form" (submit)="submitBirthday($event)">
       <div class="birthday-field">
         <label for="birthday-input">Birthday</label>
         <input

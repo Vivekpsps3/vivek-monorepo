@@ -2,8 +2,10 @@
 
 import json
 import math
+import time
+from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime
-from typing import Any, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 from fastapi import HTTPException
 from sqlalchemy import and_, case, func, or_
@@ -1061,92 +1063,271 @@ def create_from_provider(db: Session, user_id: int, body: dict) -> tuple[UserEnt
     return _entry_for_catalog(db, user_id, catalog, body)
 
 
-def repair_musicbrainz_albums(db: Session, user_id: int) -> None:
-    """Point saved pressings at their release group and link the primary artist by MBID."""
-    from apps.media.backend.services import providers
-    from apps.server.database import release_for_provider_io
+# One explicit refresh may repair only a page of albums, and only until this deadline.
+# The cap is the bound: a caller cannot turn the command back into a full-history scan.
+_REPAIR_BATCH = 8
+_REPAIR_DEADLINE_SECONDS = 2.0
 
-    catalog_ids = [
-        row.id
-        for row in db.query(CatalogItem.id)
+
+class _AlbumRepair(NamedTuple):
+    catalog_id: int
+    source_id: str
+    title: str
+    action: str
+    group_id: str | None
+    pressing_id: str | None
+    artist_id: str | None
+    uncredited: bool
+
+
+def _repair_limit(batch_limit: int) -> int:
+    if isinstance(batch_limit, bool) or not isinstance(batch_limit, int) or batch_limit < 1:
+        return 1
+    return min(batch_limit, _REPAIR_BATCH)
+
+
+def _repair_deadline(deadline_seconds: float) -> float:
+    if isinstance(deadline_seconds, bool) or not isinstance(deadline_seconds, (int, float)):
+        return _REPAIR_DEADLINE_SECONDS
+    if deadline_seconds < 0:
+        return _REPAIR_DEADLINE_SECONDS
+    return float(deadline_seconds)
+
+
+def _repair_ids(catalog_ids: Sequence[object]) -> list[int]:
+    chosen: list[int] = []
+    seen: set[int] = set()
+    for item_id in catalog_ids:
+        if isinstance(item_id, bool) or not isinstance(item_id, int) or item_id in seen:
+            continue
+        seen.add(item_id)
+        chosen.append(item_id)
+    return chosen
+
+
+def _repair_roster(db: Session, user_id: int, catalog_ids: list[int]) -> list[CatalogItem]:
+    rows = (
+        db.query(CatalogItem)
         .join(UserEntry, UserEntry.catalog_id == CatalogItem.id)
         .filter(
             UserEntry.user_id == user_id,
+            CatalogItem.id.in_(catalog_ids),
             CatalogItem.kind == "album",
             CatalogItem.source == "musicbrainz",
             CatalogItem.source_id.is_not(None),
         )
         .all()
-    ]
-    for catalog_id in catalog_ids:
-        catalog = db.get(CatalogItem, catalog_id)
-        if catalog is None or catalog.kind != "album" or catalog.source != "musicbrainz":
-            continue
-        if not catalog.source_id:
-            continue
-        extra = _extra(catalog)
-        if extra.get("identity_blocked") is True:
-            _link_saved_artists(db, user_id, catalog, providers.mbid(extra.get("artist_id")))
-            continue
-        group = providers.mbid(extra.get("release_group_id"))
-        artist = providers.mbid(extra.get("artist_id"))
-        uncredited = extra.get("artist_uncredited") is True
-        pressing = providers.mbid(extra.get("release_id"))
-        if group and catalog.source_id != group:
-            if not pressing:
-                pressing = providers.mbid(catalog.source_id)
-            catalog = _place_musicbrainz_album(
-                db,
-                user_id,
-                title=catalog.title,
-                requested_id=catalog.source_id,
-                requested_row=catalog,
-                group_id=group,
-                pressing_id=pressing,
-                artist_id=artist,
-                uncredited=uncredited,
-                detail=None,
-                strict=False,
-            )
-        if _extra(catalog).get("identity_blocked") is True:
-            continue
-        if _album_identity_resolved(catalog):
-            _link_saved_artists(
-                db, user_id, catalog, providers.mbid(_extra(catalog).get("artist_id"))
-            )
-            continue
-        looked_up = catalog.source_id
-        if not isinstance(looked_up, str) or not providers.mbid(looked_up):
-            continue
-        release_for_provider_io(db)
-        detail = providers.lookup_detail("musicbrainz", "album", looked_up)
+    )
+    by_id = {row.id: row for row in rows}
+    return [by_id[item_id] for item_id in catalog_ids if item_id in by_id]
+
+
+def _repair_candidate(catalog: CatalogItem) -> _AlbumRepair:
+    from apps.media.backend.services.providers import mbid as mb
+
+    extra = _extra(catalog)
+    source_id = catalog.source_id or ""
+    artist = mb(extra.get("artist_id"))
+    if extra.get("identity_blocked") is True or _album_identity_resolved(catalog):
+        return _AlbumRepair(catalog.id, source_id, catalog.title, "link", None, None, artist, False)
+    group = mb(extra.get("release_group_id"))
+    pressing = mb(extra.get("release_id"))
+    uncredited = extra.get("artist_uncredited") is True
+    if group and source_id != group:
+        return _AlbumRepair(
+            catalog.id,
+            source_id,
+            catalog.title,
+            "stored",
+            group,
+            pressing or mb(source_id),
+            artist,
+            uncredited,
+        )
+    return _AlbumRepair(catalog.id, source_id, catalog.title, "lookup", None, None, None, False)
+
+
+def _commit_album_repair(
+    db: Session, user_id: int, candidate: _AlbumRepair, detail: dict | None
+) -> str:
+    """Write one album through the save path. Returns repaired, unresolved, linked, or skipped."""
+    catalog = db.get(CatalogItem, candidate.catalog_id)
+    if catalog is None or catalog.source_id != candidate.source_id:
+        return "skipped"
+    if candidate.action == "link":
+        _link_saved_artists(db, user_id, catalog, candidate.artist_id)
+        return "linked"
+    fetched = detail if candidate.action == "lookup" else None
+    if candidate.action == "lookup":
         if (
-            not isinstance(detail, dict)
-            or detail.get("source") != "musicbrainz"
-            or detail.get("kind") != "album"
+            not isinstance(fetched, dict)
+            or fetched.get("source") != "musicbrainz"
+            or fetched.get("kind") != "album"
         ):
-            continue
-        parsed_group, parsed_pressing, parsed_artist, parsed_uncredited = _identity_from_detail(
-            detail, looked_up
+            return "unresolved"
+        group, pressing, artist, uncredited = _identity_from_detail(fetched, candidate.source_id)
+        if not group:
+            return "unresolved"
+    else:
+        group, pressing, artist, uncredited = (
+            candidate.group_id,
+            candidate.pressing_id,
+            candidate.artist_id,
+            candidate.uncredited,
         )
-        if not parsed_group:
-            blocked = _extra(catalog)
-            blocked["identity_blocked"] = True
-            _save_extra(catalog, blocked)
-            continue
-        _place_musicbrainz_album(
-            db,
-            user_id,
-            title=catalog.title,
-            requested_id=looked_up,
-            requested_row=catalog if looked_up != parsed_group else None,
-            group_id=parsed_group,
-            pressing_id=parsed_pressing,
-            artist_id=parsed_artist,
-            uncredited=parsed_uncredited,
-            detail=detail,
-            strict=False,
-        )
+        fetched = None
+        if not group:
+            return "unresolved"
+    claimed = _place_musicbrainz_album(
+        db,
+        user_id,
+        title=catalog.title,
+        requested_id=candidate.source_id,
+        requested_row=None if catalog.source_id == group else catalog,
+        group_id=group,
+        pressing_id=pressing,
+        artist_id=artist,
+        uncredited=uncredited,
+        detail=fetched,
+        strict=False,
+    )
+    if _album_identity_resolved(claimed):
+        return "repaired"
+    return "unresolved"
+
+
+def repair_musicbrainz_albums(
+    db: Session,
+    user_id: int,
+    catalog_ids: Sequence[object],
+    *,
+    batch_limit: int = 1,
+    deadline_seconds: float = _REPAIR_DEADLINE_SECONDS,
+    details: dict[int, dict] | None = None,
+    clock: Callable[[], float] | None = None,
+) -> dict[str, Any]:
+    """Repair release-group identity for the given saved albums.
+
+    The caller lists catalog ids. At most eight are examined, and provider
+    lookups stop when ``deadline_seconds`` has elapsed. Lookups run only after
+    the open transaction is committed. Identity writes start after those lookups
+    return, through ``_place_musicbrainz_album``. A lookup exception writes
+    nothing. A later retry is safe: resolved albums are not looked up again,
+    and each owner's notes, ratings, and membership stay on that owner's row.
+    """
+    from apps.media.backend.services import providers
+    from apps.server.database import release_for_provider_io
+
+    requested = _repair_ids(catalog_ids)
+    if not requested:
+        return {
+            "examined": 0,
+            "processed": 0,
+            "lookups": 0,
+            "repaired": 0,
+            "unresolved": [],
+            "remaining": 0,
+            "stopped": "done",
+        }
+    limit = _repair_limit(batch_limit)
+    deadline = _repair_deadline(deadline_seconds)
+    now = clock or time.monotonic
+    started = now()
+    supplied = details or {}
+    owned = _repair_roster(db, user_id, requested)
+    chosen = owned[:limit]
+    beyond = owned[limit:]
+    candidates = [_repair_candidate(row) for row in chosen]
+    staged: list[tuple[_AlbumRepair, dict | None]] = []
+    lookups = 0
+    released = False
+    for candidate in candidates:
+        if now() - started >= deadline:
+            break
+        detail = supplied.get(candidate.catalog_id)
+        if candidate.action == "lookup" and not isinstance(detail, dict):
+            if not released:
+                release_for_provider_io(db)
+                released = True
+            lookups += 1
+            detail = providers.lookup_detail("musicbrainz", "album", candidate.source_id)
+        staged.append((candidate, detail if isinstance(detail, dict) else None))
+    repaired = 0
+    unresolved: list[int] = []
+    for candidate, detail in staged:
+        outcome = _commit_album_repair(db, user_id, candidate, detail)
+        if outcome == "repaired":
+            repaired += 1
+        elif outcome == "unresolved":
+            unresolved.append(candidate.catalog_id)
+    remaining = len(chosen) - len(staged) + len(beyond)
+    if len(staged) < len(chosen):
+        stopped = "deadline"
+    elif beyond:
+        stopped = "batch"
+    else:
+        stopped = "done"
+    return {
+        "examined": len(chosen),
+        "processed": len(staged),
+        "lookups": lookups,
+        "repaired": repaired,
+        "unresolved": unresolved,
+        "remaining": remaining,
+        "stopped": stopped,
+    }
+
+
+def _entry_on_release_group(db: Session, user_id: int, detail: dict) -> UserEntry | None:
+    from apps.media.backend.services.providers import mbid as mb
+
+    extra = detail.get("extra")
+    if not isinstance(extra, dict):
+        return None
+    group = mb(extra.get("release_group_id"))
+    if not group:
+        return None
+    catalog = _catalog_by_source(db, "musicbrainz", group)
+    if catalog is None:
+        return None
+    return (
+        db.query(UserEntry)
+        .filter(UserEntry.user_id == user_id, UserEntry.catalog_id == catalog.id)
+        .one_or_none()
+    )
+
+
+def finish_album_refresh(db: Session, entry: UserEntry, detail: dict) -> UserEntry:
+    """Place one refreshed album, then fill blank shared fields.
+
+    The saved row stays metadata-pending when the release group is still unknown.
+    A merge keeps the caller's surviving entry, including when the pressing row
+    is folded into a release group this person already saved.
+    """
+    user_id = entry.user_id
+    entry_id = entry.id
+    catalog_id = entry.catalog_id
+    repair_musicbrainz_albums(
+        db,
+        user_id,
+        [catalog_id],
+        batch_limit=1,
+        deadline_seconds=_REPAIR_DEADLINE_SECONDS,
+        details={catalog_id: detail},
+    )
+    survivor = db.query(UserEntry).filter(UserEntry.id == entry_id).one_or_none()
+    if survivor is None:
+        survivor = _entry_on_release_group(db, user_id, detail)
+    if survivor is None:
+        fail_missing()
+    catalog = survivor.catalog
+    resolved = _album_identity_resolved(catalog)
+    _apply_authoritative(db, catalog, detail)
+    if not resolved:
+        extra = _extra(catalog)
+        extra["metadata_pending"] = True
+        _save_extra(catalog, extra)
+    return survivor
 
 
 def save_discovered(
@@ -2115,8 +2296,6 @@ def detail(db: Session, entry: UserEntry) -> dict:
     from apps.media.backend.services.metadata import lifecycle
     from apps.media.backend.services.portraits import attribution
 
-    if entry.catalog.kind in {"artist", "album", "track"}:
-        repair_musicbrainz_albums(db, entry.user_id)
     releases = db.query(Release).filter(Release.catalog_id == entry.catalog_id).all()
     show = episode_state(db, entry.user_id, entry.catalog) if entry.catalog.kind == "tv" else None
     return {
