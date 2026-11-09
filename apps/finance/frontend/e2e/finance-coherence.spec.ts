@@ -636,8 +636,9 @@ test('phone navigation keeps every section in view and supports keyboard Plan na
       const link = navigation.getByRole('link', { name: label, exact: true });
       await link.scrollIntoViewIfNeeded();
       const box = await link.boundingBox();
-      expect(box?.left ?? -1).toBeGreaterThanOrEqual(-1);
-      expect(box?.right ?? 9999).toBeLessThanOrEqual(width + 1);
+      if (!box) throw new Error(`${label} has no box`);
+      expect(box.x).toBeGreaterThanOrEqual(-1);
+      expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
     }
 
     await page.evaluate(() => window.scrollTo(0, 0));

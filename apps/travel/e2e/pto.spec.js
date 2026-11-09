@@ -204,7 +204,10 @@ for (const width of [390, 1280]) {
       await page.goto('/travel/pto');
       await page.locator('.skip-link').focus();
       const seen = [];
-      for (let step = 0; step < 40; step += 1) {
+      // Chart markers are focusable so each balance can be read. The app
+      // switcher and those points sit before the form, so the scan has to
+      // walk past them to reach Last day, Add, and the policy buttons.
+      for (let step = 0; step < 80; step += 1) {
         seen.push(await page.evaluate(() => {
           const el = document.activeElement;
           if (!el) return '';
