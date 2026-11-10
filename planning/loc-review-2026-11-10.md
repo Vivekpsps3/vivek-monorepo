@@ -251,3 +251,18 @@ those tests. Keep independent expected outcomes and safety assertions.
 The maintained standard is now in `docs/QUALITY.md` under test readability and
 parametrization. Apply it across languages incrementally with preserved coverage
 and discovery. A mechanical rewrite or new test DSL would add review cost.
+
+## Delivery verification
+
+After explicit user approval to run checks and merge, `make test-fast` passed:
+80 packets, eleven negative planning fixtures, live-listing fixtures, 44 Python
+script tests, 15 Node tests, boundary checks and browser discovery. Discovery
+does not claim browser journey execution. `make lint-python` and
+`make typecheck-python` passed their existing ratchets; direct Ruff check/format
+also passed for `planning/implementation/plan.py`, outside those targets' paths.
+
+The first fast run exposed a self-test assumption that the highest-priority task
+had a dependent. The fixture now selects an actual dependency edge independently
+of priority, verifies pending versus satisfied prerequisites, and checks listing
+order. The rerun passed. Application source and product behavior are unchanged;
+product browser and coverage suites were not required by this planning/tool diff.

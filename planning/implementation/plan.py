@@ -184,9 +184,16 @@ def self_test(data):
     rows = list(task_rows(data, states))
     assert len(rows) == len(data["tasks"]) - 1
     assert not any(row.startswith(key + " ") for row in rows)
-    dependent = next(task for task in data["tasks"] if key in task["dependencies"])
+    assert [row.split()[0] for row in rows] == [task["id"] for task in data["tasks"][1:]]
+    dependent = next(task for task in data["tasks"] if task["dependencies"])
+    prerequisite = next(
+        task for task in data["tasks"] if task["id"] == dependent["dependencies"][0]
+    )
+    states = {task["issue"]: "CLOSED" for task in data["tasks"]}
+    states[dependent["issue"]] = "OPEN"
+    rows = list(task_rows(data, states))
     assert "wait=" not in next(row for row in rows if row.startswith(dependent["id"] + " "))
-    states[data["tasks"][0]["issue"]] = "OPEN"
+    states[prerequisite["issue"]] = "OPEN"
     assert "wait=" in next(
         row for row in task_rows(data, states) if row.startswith(dependent["id"] + " ")
     )
