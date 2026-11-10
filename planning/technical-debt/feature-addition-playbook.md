@@ -1,7 +1,8 @@
 # Feature-addition playbook
 
-This is the **target workflow** produced by the 2026-11-08–09 review. Contracts,
-generators and inventory guards described as targets do not yet exist. Current
+This is a **design reference** from the 2026-11-08–09 review, not another required
+read path or implementation queue. Some contracts have since merged; verify current
+source through the [queue](../implementation/README.md). No generator is required. Current
 commands/architecture remain in root AGENTS and the maintained docs. Implement
 [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197),
 [#198](https://github.com/Vivekpsps3/vivek-monorepo/issues/198) and
@@ -197,3 +198,169 @@ Success is predictable overhead and strong contracts. A small edit may legitimat
 have many tests. A novel payment/feed/provider/recovery protocol may remain difficult.
 Do not trade away ownership, private data boundaries or useful error states to reduce
 file count or make the happy-path scaffold look shorter.
+
+## 10. Research-backed development practices — 2026-11-10
+
+This is a reference checklist, not another backlog or mandatory read for each edit.
+Apply relevant practices while touching their owner; the queue owns implementation.
+The choices below combine the repository audit with primary documentation. They
+are recommendations for this monorepo, not claims that every source prescribes
+every rule. Existing versions and app-specific contracts govern adoption.
+
+### Ownership and design
+
+1. Name the authoritative owner before adding a field, calculation or command.
+2. Keep a feature's model, rules, UI and adapters discoverable under its app.
+3. Prefer a direct function call; introduce an interface when an actual boundary
+   needs substitution, ownership restriction or multiple implementations.
+4. Extract duplicated behavior after comparing inputs, outputs, errors and side
+   effects. Similar syntax alone is insufficient.
+5. Ship a shared abstraction with real migrated consumers and delete old copies.
+6. Keep domain distinctions explicit: nights versus inclusive days, money versus
+   display strings, catalog identity versus personal entries.
+7. Split a large module around independent reasons to change when navigation
+   improves; measure deletion separately from file movement.
+8. Use explicit composition for a few known providers/features. Add registries,
+   inheritance or code generation only after concrete variation justifies them.
+
+Google's [review guidance](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
+supports reviewing design, unnecessary generality, clarity and test maintenance.
+Its [small-change guidance](https://google.github.io/eng-practices/review/developer/small-cls.html)
+supports self-contained changes that include actual API usage.
+
+### Deletion and readable code
+
+9. For a deletion, check source imports, templates, routes, configuration, tests,
+   public exports, migrations and dynamic lookup before declaring zero consumers.
+10. Give temporary compatibility code an owner, supported input/version and
+    retirement condition. Retire it only with preservation evidence.
+11. Remove unused imports, wrappers, stale comments and dead flags in the same
+    change that makes them obsolete. Keep live issue-linked TODOs.
+12. Use guard clauses and named intermediate values when they reduce nesting or
+    explain units. Avoid clever expressions whose evaluation order matters.
+13. Prefer names that describe the domain fact and units over generic `data`,
+    `manager`, `process` or boolean argument switches.
+14. Comment the invariant, tradeoff or surprising constraint. Express ordinary
+    mechanics in clear code; keep historical narration in Git.
+15. Prefer standard-library/framework primitives already supported by the repo.
+    Compare edge cases before replacing custom behavior.
+16. Keep formatting consistent with the file and existing automated tools.
+
+### Types, validation and state
+
+17. Decode external, stored and decrypted data at its owning boundary. Start from
+    `unknown` in TypeScript and narrow it before use.
+18. Represent mutually exclusive loading/result states with discriminated unions;
+    make impossible combinations unrepresentable where this simplifies callers.
+19. Handle variant exhaustiveness explicitly; preserve unknown-version records
+    through a deliberate unsupported state rather than silently coercing them.
+20. Use explicit null checks for zero, false and empty-string-sensitive fields.
+21. Keep DTOs distinct from database entities when their contracts differ; share
+    an actual contract instead of maintaining handwritten copies of the same fact.
+22. Compute projections from authoritative records instead of storing redundant
+    totals, labels and flags that can drift.
+23. Keep rounding, currency precision, date-only values, instants and time zones
+    explicit. Use existing domain money/date owners.
+24. Validate in the UI for useful feedback and at the server/storage trust boundary
+    for correctness; share semantics only across compatible boundaries.
+
+TypeScript's [narrowing documentation](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)
+explains discriminated unions, control-flow refinement and truthiness pitfalls.
+
+### Async work, resources and failures
+
+25. Give each operation one owner for cancellation, deadline, retry and disposal.
+26. Use framework disposal for subscription lifetime; retain domain generation
+    checks where work can finish after lock, account change or route leave.
+27. Bound overall operations and upstream fan-out. Retry transient failures only
+    within a budget; make repeated writes safe before enabling automatic retries.
+28. Share in-flight work only when owner, key and freshness semantics agree.
+29. Treat caches as derived data: define key, scope, bounds, expiry, invalidation
+    and failure behavior before caching.
+30. Catch errors at the layer that can recover or translate them. Catch specific
+    expected failures and preserve unexpected exceptions for diagnosis.
+31. Make fallback and partial-success states visible where they affect a decision.
+32. Acquire and release resources in the same scope; prefer supported context
+    managers and framework lifetime primitives over copied cleanup scaffolding.
+
+Angular documents [DestroyRef](https://angular.dev/guide/components/lifecycle)
+and [takeUntilDestroyed](https://angular.dev/ecosystem/rxjs-interop/take-until-destroyed)
+for destruction cleanup. Python's [contextlib](https://docs.python.org/3.12/library/contextlib.html)
+provides scoped cleanup utilities. These manage lifetime; application-specific
+publication eligibility still needs its own proof.
+
+### Database and security boundaries
+
+33. Keep transaction completion with the command owner. Avoid hidden commits in
+    serializers, validators or ordinary reads.
+34. Fetch external provider data outside open write transactions, then validate
+    and apply it through the existing command path.
+35. Enforce relational uniqueness and ownership in database constraints as well
+    as request validation where the schema supports the invariant.
+36. Use conditional updates/revisions for concurrent edits; prove conflict and
+    rollback behavior with independent transactions.
+37. Bound query count and rows read. Use eager loading/projections for observed
+    N+1 cases and indexes justified by actual query shapes.
+38. Preserve applied migrations and imported historical helpers. Add a forward
+    migration for schema changes and test representative older data.
+39. Authorize each owner-scoped read/write. A client-supplied identifier is a
+    lookup key, never proof of ownership.
+40. Keep plaintext vault data in its approved browser boundary; sanitize logs,
+    use synthetic fixtures, and expose only capabilities consumers need.
+
+SQLAlchemy's [Session Basics](https://docs.sqlalchemy.org/en/20/orm/session_basics.html)
+describes transaction framing, session lifetime and separate sessions for concurrent
+tasks. Preserve this repository's existing database lifecycle during cleanup.
+
+### UI, tests and developer feedback
+
+41. Keep components focused on presentation and interaction; extract pure rules
+    when they have a clear domain owner and genuine reuse or test value.
+42. Use native controls and existing shared accessible UI. Preserve labels,
+    keyboard behavior, visible focus, error associations and focus return.
+43. Keep drafts through recoverable failures and make pending/error/empty states
+    explicit; prevent accidental duplicate submissions.
+44. Use existing tokens and component styles. Remove superseded CSS after checking
+    responsive states; avoid growing selector overrides for each fix.
+45. Test pure rules with boundary vectors, database/API behavior at integration
+    boundaries, and critical user journeys in the browser.
+46. Prefer observable behavior assertions over private helper calls, source regex
+    or snapshots of implementation structure.
+47. Use controlled clocks, synthetic owners and synchronized concurrency fixtures;
+    avoid arbitrary sleeps and live providers in deterministic tests.
+48. Keep tests concise and independent. Extract fixtures for repeated setup; keep
+    assertions visible. Remove obsolete-only assertions with an explicit reason.
+49. Run the required targeted checks locally and ensure new source/spec files are
+    discovered. Broaden checks for actual cross-owner changes.
+50. Preserve public payload/error/status behavior with contract fixtures during
+    internal refactors; test compatibility and failure paths as well as success.
+
+Apply the shared [test readability and parametrization rules](../../docs/QUALITY.md#test-readability-and-parametrization)
+across all suites; keep parameter tables simpler than the tests they replace.
+
+Angular's [style guide](https://angular.dev/style-guide) recommends consistent,
+feature-oriented organization and focused components. W3C's
+[form-validation tutorial](https://www.w3.org/WAI/tutorials/forms/validation/)
+explains native input capabilities, accessible feedback and server validation.
+
+### Change workflow and useful measurements
+
+51. Start from the live queue and exact owner packet; inspect prerequisite outcomes
+    on current source rather than trusting issue closure alone.
+52. Make each PR independently reviewable with its consumers, cleanup and tests.
+    Separate unrelated formatting, upgrades and feature work.
+53. Update the one authoritative instruction or contract when it changes; link it
+    from indexes rather than copying status and acceptance tables.
+54. Add a dependency when it removes more maintenance than it introduces. Keep
+    installs reproducible and update tooling in bounded changes.
+55. Measure production, tests, generated files and docs separately. Also measure
+    independent implementations, registrations and files touched across owners.
+56. Measure latency, query count or bundle cost before optimizing. Keep the simpler
+    implementation when no material bottleneck is demonstrated.
+57. Make logs useful through bounded operation names, safe error categories and
+    revision identifiers; keep sensitive payloads out of diagnostics.
+58. Report merged, deployed and externally activated states with distinct proof.
+
+Select the next task from the ordered [execution queue](../implementation/README.md).
+Apply these practices inside that scoped leaf. A repo-wide rewrite would make behavior
+preservation and review harder without establishing better deletion results.

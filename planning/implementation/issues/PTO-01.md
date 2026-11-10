@@ -5,7 +5,7 @@
 - Parents: [#110](https://github.com/Vivekpsps3/vivek-monorepo/issues/110)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: none
 - Conflict groups: `travel-pto-main`, `travel-pto-chart`
 - Verification profiles: `travel_front`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-PTO and Sick history/projection can be understood together, including negative balances and missing sources.
 
 PTO and Sick history/projection can be understood together, including negative balances and missing sources.
 
@@ -43,7 +41,7 @@ PTO and Sick history/projection can be understood together, including negative b
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Replace two independent bucket charts with one combined projection consuming existing /pto/series points; remove duplicated chart fetch/render state while leaving forms/tiles independent.
 3. Use PTO circles/accent and Sick squares/series2,2.5px lines, solid history/dashed projection meeting at Today,4–5 y ticks including0, sensible month/year ticks, Today rule, collision-free end labels and below-zero band.
 4. Provide Balance by month equivalent table and correct single-bucket/no-bucket/single-point/rolled horizon behavior using pure geometry helpers and bound SVG only.
@@ -75,7 +73,7 @@ PTO and Sick history/projection can be understood together, including negative b
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

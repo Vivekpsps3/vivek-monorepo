@@ -12,6 +12,52 @@ make coverage-pin  # rewrite quality/coverage.txt from a fresh measurement
 
 Dev tools are locked in `requirements-dev.txt` (hashed; compiled from `requirements-dev.in`). `make install` installs that lock with `--require-hashes`. The production image installs only `apps/server/requirements.lock`. The image-building CI job does not install the dev lock. `pip-audit` is in the dev lock and runs in the Backend job, against `apps/server/requirements.lock`.
 
+## Test readability and parametrization
+
+These review rules apply to Python, Node, Angular, browser and script tests.
+Parametrize variations of the same behavior with the same setup and assertions.
+Keep distinct workflows or failure contracts as separate tests. Prefer the form
+that makes a failing scenario obvious to a reader.
+
+- Give each independently meaningful case its own test result. Use pytest
+  parametrization or generate named `it`/`test` cases outside the test body.
+  A small loop inside a test is fine for checking a collection invariant or steps
+  in one deliberate journey; add case context when a failure would be ambiguous.
+- Use readable case IDs. Simple pytest scalar IDs are often sufficient; use
+  `pytest.param(..., id="...")` for ambiguous values, complex fixtures or boundaries.
+  Browser test names should identify the scenario, viewport and theme when varied.
+- Prefer named case objects for wide tables. Short input/expected pairs can stay
+  tuples; five positional columns or boolean switches usually obscure intent.
+- Keep case data declarative. Split a test whose parameters select unrelated
+  branches, different assertions or different setup lifecycles. Avoid a generic
+  scenario interpreter with callback fields for every test phase.
+- Keep expected outcomes independent of the production calculation under test.
+  Literal golden vectors and a small, explained independent oracle are useful;
+  recomputing the same algorithm in a fixture can repeat the same defect.
+- Allocate fresh mutable objects and reset state for independent cases. Pytest
+  passes parameter objects without copying them. A viewport/theme matrix should
+  not inherit records or drafts changed by a previous matrix cell.
+- Use a Cartesian product only when each combination proves an invariant or a
+  required acceptance dimension. State its purpose; prune redundant work only
+  after preserving all required coverage.
+- Share setup through small domain fixtures. Keep triggers and essential
+  assertions visible. Avoid importing helpers from another test module when a
+  stable fixture module or local helper makes ownership clearer.
+- Name fixture defaults and override only the relevant facts. Avoid broad type
+  casts that let invalid fixtures silently become valid domain records.
+- Synchronize races with observable gates/deferred results or supported fake
+  clocks. Replace fixed sleeps and arbitrary microtask iteration budgets when
+  they make success depend on machine timing.
+- Keep meaningful behavior assertions and test discovery intact during cleanup.
+  Record old-to-surviving cases; test-count reduction is not itself a quality gain.
+- Review tests as maintained code: a reader should understand the input, action,
+  expected observation and failure case without tracing a custom framework.
+
+Pytest documents [parameter values and mutation](https://docs.pytest.org/en/stable/how-to/parametrize.html)
+and [case IDs](https://docs.pytest.org/en/stable/example/parametrize.html).
+Playwright documents [named parameterized cases](https://playwright.dev/docs/test-parameterize)
+and [isolated, user-visible behavior tests](https://playwright.dev/docs/best-practices).
+
 ## Ratchet
 
 `scripts/quality_ratchet.py` records `path<TAB>rule<TAB>count` in `quality/`. CI fails when a live count rises, and when a recorded count is higher than the current one. A fix has to drop the baseline entry (`make lint-baseline`) instead of leaving a stale allowance.

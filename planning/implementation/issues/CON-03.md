@@ -5,7 +5,7 @@
 - Parents: [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `SAFE-03`
 - Conflict groups: `vault-collection-policy`, `finance-persistence`, `health-store`, `server-vault`
 - Verification profiles: `finance_back`, `server_back`, `finance_front`, `web_front`
@@ -45,7 +45,7 @@ Use a small explicit collection contract/parity check for backend accepted names
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Inventory all accepted collection names, current schemas, owner subsets and export/reset obligations; distinguish Finance bags from foreign Health collections. Do not infer equality where subsets intentionally differ.
 3. Choose one small declarative policy table or cross-language parity test; avoid dynamic registration, runtime codegen or a configurable storage framework. Derive/check repeated names only where that removes a real second authority.
 4. Add a synthetic test descriptor/fixture proving unknown collection rejection, supported owner membership and recovery enumeration coverage. Preserve future/foreign ciphertext explicitly; older clients must not delete unknown rows.

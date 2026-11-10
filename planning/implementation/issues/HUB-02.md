@@ -5,7 +5,7 @@
 - Parents: [#93](https://github.com/Vivekpsps3/vivek-monorepo/issues/93)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `SAFE-04`, `SAFE-05`, `UX-03`
 - Conflict groups: `hub-main`, `travel-summary`, `media-summary`, `finance-public-api`
 - Verification profiles: `web_front`, `travel_back`, `media_back`, `finance_front`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-The workspace shows actionable upcoming activity with independent recovery, without duplicate source requests or private Finance payloads.
 
 The workspace shows actionable upcoming activity with independent recovery, without duplicate source requests or private Finance payloads.
 
@@ -43,7 +41,7 @@ The workspace shows actionable upcoming activity with independent recovery, with
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Use a small typed list of app-owned adapters/state contracts, not a plugin framework; preserve enabled Town card and existing Pixels strip.
 3. Travel summary accepts validated optional timezone and owner-scoped14-day/overdue up_next; Media calendar saved reads remain DB-only; Finance returns integer bills-due count only in the browser.
 4. Share each source response between card and compact agenda; keep independent timeout/retry/stale/loading/expired handling and abort old owner work.
@@ -76,7 +74,7 @@ The workspace shows actionable upcoming activity with independent recovery, with
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

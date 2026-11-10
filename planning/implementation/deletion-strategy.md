@@ -31,8 +31,11 @@ checks. A negative consumer search alone does not retire a supported protocol.
 
 ## Count the whole change
 
+Classify the change as feature, safety repair or simplification before implementation.
 Use the merge base with current main, and count the entire replacement closure,
-including new helpers, adapters, styles and all migrated apps. Record:
+including new helpers, adapters, styles and all migrated apps. Physical production
+LOC is the primary size delta; label code-only/AST counts separately and never
+substitute them for a positive physical result. Record:
 
 - production added/deleted/moved, with comments/blank-only churn identified;
 - test and documentation changes separately; generated/bundled output excluded;
@@ -85,11 +88,8 @@ features free; success is fewer repeated decisions and a smaller required change
 
 ## Scheduling and scope
 
-Verify merged correctness PRs #279–#282, then prioritize dependency-ready deletion:
-DEL-03 removes the unused World wrapper; DEL-05 removes proven competing control
-styles (coordinate FIN-02). DEL-04 follows the shared lifecycle contract. MED-07
-and MED-08 follow MED-01 without waiting for unrelated TypeScript work.
-DEL-02 remains conditional on support evidence, not a promised pile of deletions.
+Use the [queue entry point](README.md) for current focus and live candidate lookup.
+Do not maintain a second list of ready or completed leaves in this contract.
 
 Dependencies require a specific merged API/outcome. Shared files alone are conflict
 groups. Read live claims and actual PR diffs; group names are not a lock. The dated

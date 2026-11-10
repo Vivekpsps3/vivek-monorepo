@@ -5,7 +5,7 @@
 - Parents: [#81](https://github.com/Vivekpsps3/vivek-monorepo/issues/81)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `TOWN-02`
 - Conflict groups: `schema-head`, `town-models`, `town-writes`
 - Verification profiles: `server_back`, `schema`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-The database refuses invalid or cross-owner Town child rows while existing habits/history and account deletion continue to work.
 
 The database refuses invalid or cross-owner Town child rows while existing habits/history and account deletion continue to work.
 
@@ -43,7 +41,7 @@ The database refuses invalid or cross-owner Town child rows while existing habit
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Reconcile actual accepted stored styles/cadence/slot/name/key representation and preflight invalid existing data without deleting or coercing it.
 3. Add one new revision with unique parent(id,user_id), composite child ownership FKs for checkins/cadences, RESTRICT habit deletion with children and cadence user_id index.
 4. Add only known finite CHECK invariants: stylesforge/garden/cottage,per_week1–7,slot0–5,bounded nonempty name/key; preserve ordered child deletion/account cascade behavior.
@@ -75,7 +73,7 @@ The database refuses invalid or cross-owner Town child rows while existing habit
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Every trip item is actionable by keyboard/touch and destructive trip deletion is explicit, recoverable and correctly focused.
 
-Every trip item is actionable by keyboard/touch and destructive trip deletion is explicit, recoverable and correctly focused.
-
 ## Requirements
 
 - #84 scope4/T5/T6; all seven Add items, row kinds, typed delete failure/retry/success; preserve cards.
@@ -43,7 +41,7 @@ Every trip item is actionable by keyboard/touch and destructive trip deletion is
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Use existing K1 menu for Add Transport/Activity/Destination/Parking/Reminder/Note/Cost and responsive row menus/inline actions.
 3. Replace duplicated ad-hoc action toggles and danger-at-rest rows with one current action contract; preserve canonical formatted header/money/date text.
 4. Implement exact-title confirm-and-run deletion; disabled until exact title, in-dialog failure, retained input/retry, success returns Trips and focuses its heading/link.
@@ -78,7 +76,7 @@ Every trip item is actionable by keyboard/touch and destructive trip deletion is
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

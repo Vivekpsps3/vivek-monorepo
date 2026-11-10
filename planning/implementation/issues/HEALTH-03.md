@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Clinic and Gym are reachable and reflect private progress through coarse stages, with honest locked/unavailable states.
 
-Clinic and Gym are reachable and reflect private progress through coarse stages, with honest locked/unavailable states.
-
 ## Requirements
 
 - #90 implementation6/#96 lots and Today integration; #90 layout/privacy/unchangedXP acceptance; original #96 https://github.com/Vivekpsps3/vivek-monorepo/issues/96.
@@ -44,7 +42,7 @@ Clinic and Gym are reachable and reflect private progress through coarse stages,
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Consume only loadTownHealthStages through safe lifecycle and current Treasury shared markup; keep Health records/XP/counts out of Town/server public payloads.
 3. Add keyboard links/lots/Today rows to mounted Clinic/Gym; use locked sprites and unavailable status with no Health digits when locked.
 4. Implement11tiles+nonfocusable filler desktop,three columns with final two at narrow widths; reuse existing lot presentation instead of a parallel Health lot renderer.
@@ -75,7 +73,7 @@ Clinic and Gym are reachable and reflect private progress through coarse stages,
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

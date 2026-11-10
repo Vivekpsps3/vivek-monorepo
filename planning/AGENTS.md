@@ -1,14 +1,15 @@
 # Roadmap work
 
-For a roadmap implementation, read the queue's [quick start](implementation/README.md),
+For a roadmap implementation, follow the [execution queue](implementation/README.md),
 the exact issue packet, and the [workflow](implementation/workflow.md). These rules
 apply by root reference to roadmap changes outside this directory. Read only the
 relevant parent scope, prerequisite evidence and source; dated reviews are evidence,
 not another backlog. General instruction maintenance lives in
 [AGENT_GUIDANCE.md](../docs/AGENT_GUIDANCE.md).
 
-- One dependency-ready leaf, isolated worktree and complete PR. Verify prerequisite
-  outcomes on current main; issue status and conflict-group names alone are insufficient.
+- One dependency-ready leaf, isolated worktree and complete PR. Use queue order as
+  default priority when the user has not selected work. Verify prerequisite outcomes
+  on current main; issue status and conflict-group names alone are insufficient.
   Read active PRs and coordinate actual shared files before claiming work.
 - Follow the [deletion contract](implementation/deletion-strategy.md): migrate real
   callers and delete superseded paths in the same PR. File moves and extra abstraction
@@ -21,6 +22,7 @@ not another backlog. General instruction maintenance lives in
   state from a worker's stale checkout. A design, PR or merge does not prove activation.
 - For an unsafe/oversized leaf, prepare a complete scope amendment retaining every
   requirement. For an already-satisfied leaf, record merged proof instead of an empty PR.
-- End a context with the [handoff](implementation/templates/handoff.md). Put temporary
-  status there or on GitHub, never in AGENTS.md. Read the full workflow for claim,
-  compatibility, sensitive-state, completion and concurrent-update requirements.
+- At a context boundary update the evidence file’s handoff section, or use the
+  [handoff template](implementation/templates/handoff.md) before evidence exists.
+  Link existing proof rather than copying tables; keep status out of AGENTS.md.
+  Read the workflow for claim, compatibility, sensitive-state and concurrency rules.

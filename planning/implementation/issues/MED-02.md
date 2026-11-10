@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Media tags can be added, removed, saved and recovered by keyboard without accidentally submitting notes or ratings.
 
-Media tags can be added, removed, saved and recovered by keyboard without accidentally submitting notes or ratings.
-
 ## Requirements
 
 - #85 scope1/M5; Unicode/cap/rollback/Enter and focus acceptance; original #85 source https://github.com/Vivekpsps3/vivek-monorepo/issues/85.
@@ -41,7 +39,7 @@ Media tags can be added, removed, saved and recovered by keyboard without accide
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Adopt the existing tag normalization/model through one chip input; Enter adds, empty Backspace removes last and per-chip remove returns focus sensibly.
 3. Keep trim/collapse, case-insensitive duplicate preserving original spelling, maximum40 Unicode code points/tag and20tags; server/current Unicode behavior remains authoritative.
 4. Save through the existing entry mutation/draft path; isolate tag Enter from unrelated form submission and restore edits on failure.
@@ -72,7 +70,7 @@ Media tags can be added, removed, saved and recovered by keyboard without accide
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

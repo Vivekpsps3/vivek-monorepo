@@ -5,7 +5,7 @@
 - Parents: [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: none
 - Conflict groups: `travel-trip-main`, `travel-itinerary`
 - Verification profiles: `travel_front`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-A traveller can select a day, understand its chronological plans and add a plan on a free day.
 
 A traveller can select a day, understand its chronological plans and add a plan on a free day.
 
@@ -30,26 +28,33 @@ A traveller can select a day, understand its chronological plans and add a plan 
 - `apps/travel/frontend/src/trip.component.ts`
 - `apps/travel/frontend/src/trip.component.html`
 - `apps/travel/frontend/src/trip-header.mjs`
+- `apps/travel/frontend/src/calendar-model.mjs`
 - `apps/travel/frontend/src/travel.models.ts`
+- `apps/travel/backend/static/tests/week.test.mjs`
+- `apps/travel/backend/static/tests/tr3.test.mjs`
 
 ## Target paths
 
 - `apps/travel/frontend/src/trip.component.ts`
 - `apps/travel/frontend/src/trip.component.html`
 - `apps/travel/frontend/src/trip-header.mjs`
+- `apps/travel/frontend/src/calendar-model.mjs`
 - `apps/travel/frontend/src/travel.css`
+- `apps/travel/backend/static/tests/week.test.mjs`
+- `apps/travel/backend/static/tests/tr3.test.mjs`
 - `apps/travel/e2e/`
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Build the day-strip and itinerary from existing trip items with one pure chronological projection; explicit unscheduled/out-of-range groups preserve incomplete records.
 3. Provide weekday labels, busy/free accessible names, roving arrows/Home/End and Enter selecting/focusing the day content.
 4. Handle departure/arrival and linked parking, next-day red-eye arrivals, activities and ties deterministically; persist/deep-link selected date using non-sensitive route state.
 5. At390 use itinerary row menus and remove redundant transport/parking presentation; retain useful desktop sections and existing Undo.
 6. Free day opens Add a plan prefilled with that actual local trip date.
 7. Remove the superseded live path in this PR after migrating its consumers. Record actual production/test LOC and independent implementations before/after; added layers need a named safety reason and a real consumer.
-8. Run all applicable verification profiles expanded by the planning guide, add the specific behavior regressions below, and record exact commands/results and acceptance IDs in issue-specific evidence. Open a PR only after applicable local gates pass.
+8. Reconcile `calendar-model.mjs` with its deliberate preservation in the 2026-10-27 runtime-removal record. Recheck current app imports, the live day strip, and the original accepted trip journey: migrate any still-required behavior to its current owner, then delete obsolete helpers and tests that have no supported consumer. Do not remove the model solely because static imports are currently absent.
+9. Run all applicable verification profiles expanded by the planning guide, add the specific behavior regressions below, and record exact commands/results and acceptance IDs in issue-specific evidence. Open a PR only after applicable local gates pass.
 
 ## Acceptance
 
@@ -65,6 +70,7 @@ A traveller can select a day, understand its chronological plans and add a plan 
 | --- | --- | --- | --- |
 | parallel timeline and redundant phone transport/parking lists | one itinerary projection with distinct responsive presentation | required | each record appears once in phone itinerary; desktop existing details preserved |
 | component-local date sorting/grouping repeated across handlers | one typed pure projection consumed by strip and rows | required | shared projection fixture proves both consumers |
+| preserved but test-only `calendar-model.mjs` behavior | migrate required calendar/day labels into the current trip owner; delete unsupported remainder and obsolete-only assertions | conditional | reconcile 2026-10-27 retention record, fresh production consumer map and live itinerary/day-strip acceptance |
 
 ## Non-goals
 
@@ -77,7 +83,7 @@ A traveller can select a day, understand its chronological plans and add a plan 
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

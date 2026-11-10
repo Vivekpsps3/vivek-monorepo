@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 An owner can understand account errors, sign out this browser and find supported exports/security controls from Settings.
 
-An owner can understand account errors, sign out this browser and find supported exports/security controls from Settings.
-
 ## Requirements
 
 - #93 scope1/account UX, scope2/Sessions/Your data, Account UX from #128; username/login/Retry-After/invite/signup runtime acceptance; source #128 https://github.com/Vivekpsps3/vivek-monorepo/issues/128.
@@ -42,7 +40,7 @@ An owner can understand account errors, sign out this browser and find supported
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Reconcile current username/login/invite/signup acceptance into a single itemized evidence list; keep protocol/origin/security internals with #121.
 3. Use existing account forms to provide integer/HTTP-date Retry-After, polite error live regions, linked hints/field errors, first-invalid focus, autocomplete, safe generic network/5xx and preserved403 handling.
 4. Complete signup idle/progress announcements, invite username/static copy and runtime auth-ux wiring; preserve supported week-start setting without introducing unsupported choices.
@@ -75,7 +73,7 @@ An owner can understand account errors, sign out this browser and find supported
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

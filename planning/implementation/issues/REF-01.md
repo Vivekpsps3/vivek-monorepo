@@ -5,7 +5,7 @@
 - Parents: [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199), [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `CON-01`, `CON-02`, `CON-03`, `SAFE-03`, `SAFE-04`, `VER-01`, `VER-02`
 - Conflict groups: `planning-guidance`, `architecture-docs`, `deletion-scorecard`
 - Verification profiles: `docs`
@@ -49,7 +49,7 @@ Exercise current contracts with a disposable vertical slice and a compact agent 
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Choose three representative changes and record semantic registration sites/unrelated-module edits/check times: a field/filter, one provider fixture adapter and one encrypted record list/editor. Use disposable fixtures/worktree examples; do not ship a fake app.
 3. Exercise the merged route, collection, lifecycle and discovery contracts on the smallest synthetic private-record flow, including create/reload/conflict/lock/export membership and removal/unregistration. Delete all temporary production scaffolding before the PR.
 4. Update one concise feature-addition guide and agent completion checklist from the actual proof. Link authoritative verification/architecture files instead of copying their volatile counts and commands into many independent documents.

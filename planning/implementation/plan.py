@@ -5,6 +5,7 @@ import argparse
 import copy
 import json
 import re
+import subprocess
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
@@ -178,6 +179,55 @@ def self_test(data):
         if not errors(bad, texts):
             raise SystemExit("Negative fixture escaped: " + mutation)
     print("Eleven negative planning fixtures: PASS")
+    states = {task["issue"]: "OPEN" for task in data["tasks"]}
+    states[data["tasks"][0]["issue"]] = "CLOSED"
+    rows = list(task_rows(data, states))
+    assert len(rows) == len(data["tasks"]) - 1
+    assert not any(row.startswith(key + " ") for row in rows)
+    assert [row.split()[0] for row in rows] == [task["id"] for task in data["tasks"][1:]]
+    dependent = next(task for task in data["tasks"] if task["dependencies"])
+    prerequisite = next(
+        task for task in data["tasks"] if task["id"] == dependent["dependencies"][0]
+    )
+    states = {task["issue"]: "CLOSED" for task in data["tasks"]}
+    states[dependent["issue"]] = "OPEN"
+    rows = list(task_rows(data, states))
+    assert "wait=" not in next(row for row in rows if row.startswith(dependent["id"] + " "))
+    states[prerequisite["issue"]] = "OPEN"
+    assert "wait=" in next(
+        row for row in task_rows(data, states) if row.startswith(dependent["id"] + " ")
+    )
+    assert all(
+        row.split()[0] in {task["id"] for task in data["tasks"] if 200 in task["parent_issues"]}
+        for row in task_rows(data, parent=200)
+    )
+    del states[data["tasks"][0]["issue"]]
+    try:
+        list(task_rows(data, states))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Incomplete live issue state accepted")
+    print("Live listing fixtures: PASS (closed leaf, dependency, parent, missing state)")
+
+
+def task_rows(data, states=None, parent=None):
+    tasks = data["tasks"]
+    by_id = {task["id"]: task for task in tasks}
+    if states is not None and any(task["issue"] not in states for task in tasks):
+        raise ValueError("Incomplete GitHub issue state; cannot identify open leaves")
+    for task in tasks:
+        if parent is not None and parent not in task["parent_issues"]:
+            continue
+        if states is not None and states[task["issue"]] != "OPEN":
+            continue
+        deps = task["dependencies"]
+        if states is not None:
+            deps = [key for key in deps if states[by_id[key]["issue"]] != "CLOSED"]
+        status = ("wait=" + ",".join(deps)) if deps else "check-merged-outcomes"
+        if states is None:
+            status = "depends=" + ",".join(deps)
+        yield f"{task['id']} #{task['issue']} {status} conflicts={','.join(task['conflict_groups'])} — {task['title']}"
 
 
 def main():
@@ -185,7 +235,13 @@ def main():
     parser.add_argument("command", choices=["validate", "list", "launch"])
     parser.add_argument("key", nargs="?")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--live", action="store_true", help="List open GitHub leaves; requires gh authentication"
+    )
+    parser.add_argument("--parent", type=int, help="List only leaves owned by this parent issue")
     args = parser.parse_args()
+    if args.command != "list" and (args.live or args.parent is not None):
+        parser.error("--live and --parent apply only to list")
     data = json.loads((BASE / "queue.json").read_text())
     found = errors(data)
     if found:
@@ -197,13 +253,34 @@ def main():
             f"Planning validation: PASS ({len(data['tasks'])} packets, {len(data['parents'])} parents, forty TD owners)"
         )
     elif args.command == "list":
-        for task in data["tasks"]:
-            print(
-                task["id"],
-                "#" + str(task.get("issue") or "DRAFT"),
-                "depends=" + ",".join(task["dependencies"]),
-                "conflicts=" + ",".join(task["conflict_groups"]),
+        states = None
+        if args.live:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "issue",
+                    "list",
+                    "--repo",
+                    "Vivekpsps3/vivek-monorepo",
+                    "--state",
+                    "all",
+                    "--limit",
+                    "1000",
+                    "--json",
+                    "number,state",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
             )
+            states = {issue["number"]: issue["state"] for issue in json.loads(result.stdout)}
+            print(
+                "Open leaves; verify merged prerequisite outcomes and live PRs/claims before starting."
+            )
+        try:
+            print("\n".join(task_rows(data, states, args.parent)))
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
     else:
         task = next((task for task in data["tasks"] if task["id"] == args.key), None)
         if task is None:
@@ -211,6 +288,7 @@ def main():
         print(
             f"Implement {task['id']} / #{task.get('issue') or 'DRAFT'} in one complete PR.\n"
             f"Read AGENTS.md, planning/AGENTS.md and planning/implementation/issues/{task['id']}.md.\n"
+            "Follow planning/implementation/workflow.md; packet prose owns scope, GitHub owns live status.\n"
             "Read applicable subtree AGENTS.md before editing. Verify current main, merged prerequisite outcomes "
             "and live PR/claims. Follow every acceptance/deletion row; record issue evidence and append "
             "a scoped roadmap #134 status note. Do not close parents or assume merge/deployment authorization.\n"

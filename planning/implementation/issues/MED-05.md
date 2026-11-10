@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Popular movies load only after a user chooses, and adding a discovered result safely becomes Open saved item.
 
-Popular movies load only after a user chooses, and adding a discovered result safely becomes Open saved item.
-
 ## Requirements
 
 - #85 scope5/M10; zero-before-click, max20, concurrency, cache-back and error acceptance.
@@ -40,7 +38,7 @@ Popular movies load only after a user chooses, and adding a discovered result sa
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Mount an explicit Popular button using current service; no requests until click, skeletons while pending and at most20 sanitized results with allowed artwork/fallback.
 3. Connect existing provider Add to saved identity and Open saved item; prevent duplicate adds under concurrent activation.
 4. Reuse cached result on back navigation and supply useful empty/error/Retry; remove competing provider fetch/cache flags from the discovery component.
@@ -71,7 +69,7 @@ Popular movies load only after a user chooses, and adding a discovered result sa
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

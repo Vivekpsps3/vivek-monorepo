@@ -5,7 +5,7 @@
 - Parents: [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `MED-03`
 - Conflict groups: `media-detail-form`
 - Verification profiles: `media_front`, `media_back`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-Related items load when they become relevant, with safe links and local recovery instead of speculative requests.
 
 Related items load when they become relevant, with safe links and local recovery instead of speculative requests.
 
@@ -41,7 +39,7 @@ Related items load when they become relevant, with safe links and local recovery
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Connect one sentinel observer to the current Related endpoint; distant content makes zero initial requests and artist detail never requests Related.
 3. Render at most12 safe deduplicated cards from existing helper, linking Add with encoded titles; empty response hides section.
 4. Give local error/Retry and bounded duplicate suppression; dispose observer/cancel obsolete route requests and delete alternate eager request hooks.
@@ -71,7 +69,7 @@ Related items load when they become relevant, with safe links and local recovery
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

@@ -1,54 +1,29 @@
-# Parallel agents and shared surfaces
+# Shared surfaces
 
-Choose dependency-ready leaves whose conflict groups do not overlap. Dependencies
-mean a merged outcome/API is needed. Conflict groups mean simultaneous edits are
-unsafe even when neither job depends on the other. A group is a scheduling aid,
-not an atomic lock or proof the rest of a diff cannot collide.
-
-Use one worktree/branch/PR per leaf and a visible claim on the live issue. Read all
-active PRs before starting. PR #193 merged as `495d698` and is current `main`: saved
-albums, treasury level, PTO carry, phone headers and the birthday field. Treat that
-SHA as landed behavior. Revalidate those surfaces before editing them; do not redo
-the merged work and do not treat an older branch as the baseline.
+Use the claim, worktree and fresh-state procedure in [workflow](workflow.md).
+A conflict group schedules potentially overlapping work; it is neither an API
+dependency nor a lock. Inspect actual files and public contracts before proceeding.
+The same current main is required for every worker; a historical PR is evidence,
+never a permanent base revision.
 
 | Shared surface | Coordination rule |
 | --- | --- |
-| Vault core / lifecycle / credential wraps | One contract owner at a time; consumers use the merged adapter, not a copied draft |
-| Identity/session/origin | Serialize public contract changes; run owner/proof/concurrency regressions |
-| Schema head (`schema-head`, including identity schema) | Rebase by merging current main, generate a new revision from the actual single head; never edit an applied revision |
-| Browser harness / selectors / reset fixtures | One writer; discovery guards and fixture activation have different owners and coordinate |
-| Shared styles / UI controls | Serialize shared selectors/interaction changes; consuming domains migrate in a defined order |
-| Shell navigation / settings / Hub | Coordinate registry/layout edits; no duplicate cards/routes/forms |
-| Media records/providers | Saved-read correction precedes decomposition; do not repair the same identity path twice |
-| Finance services/models/import engine | Agree stable facade/data shape first; preserve one calculation/import owner |
-| Travel PTO math/schema/forms | Exact policy math is server-owned; serialize schema/cadence changes |
-| Town service/schema / World input/render | Keep habit/budget semantics distinct; avoid simultaneous ownership rewrites |
-| CI / quality / release / Compose | One writer for each workflow/config surface, with current baseline/gate checks |
-| Roadmap body / global queue | Integration owner folds verified notes; workers append issue-specific updates and edit only own evidence |
+| Vault / lifecycle / credential wraps | One contract owner; consumers adopt the merged adapter |
+| Identity/session/origin | Serialize public contract changes; retain owner/proof/concurrency tests |
+| Schema head | Generate from the actual single head; never edit applied revisions |
+| Browser harness / selectors / fixtures | Coordinate discovery and journey activation owners |
+| Shared styles / controls | Serialize shared rules and migrate consumers in a defined order |
+| Shell / Hub / navigation | Coordinate composition; domain rules stay with their owner |
+| Media records/providers | Keep saved reads database-only; distinguish identity repair from transport |
+| Finance services/imports | Preserve one store, calculation and import owner |
+| Travel PTO | Server owns exact policy math; serialize schema/cadence changes |
+| Town / World | Keep habit and budget semantics distinct; coordinate render/input changes |
+| CI / quality / release / Compose | One writer per workflow/config surface |
+| Roadmap body / global queue | Integration owner reconciles fresh evidence; leaf workers append scoped notes |
 
-Status notes on #134 should use this shape:
-
-```text
-KEY / #leaf — PR open (or merged / activation pending)
-PR: …
-Tested SHA: …
-Acceptance: rows passed/failed/not run; evidence file
-Deletion: old paths removed, necessary additions
-Dependencies / next actor: …
-```
-
-Do not check an implementation leaf complete when only a helper/design/discovery
-deliverable merged for its parent. Do not close an operations parent while external
-configuration/recipient/restore evidence is absent. Independent contexts can use
-the packet's complete acceptance and issue-specific evidence without relying on
-this conversation.
-
-Conflict vocabulary is shared: identity-origin/identity-session, schema-head,
-finance-vault-lifecycle and private-routes. DEL-02 overlaps SEC-01/02 even though
-older packets called those surfaces auth-routes/auth-session. VER-01/02/03 and
-DEL-01 share quality-docs. Always inspect concrete files, not labels alone.
-
-The plan metadata is deliberately small; edit detailed prose only in its owned
-packet and mirror approved issue changes from that file. Run the validator to
-catch header/index drift. Integration owners must fresh-read issue bodies before
-publishing and preserve intervening claims, requirements and comments.
+A roadmap status note needs only the key/leaf, PR, tested revision, evidence link,
+actual state and next actor. Link acceptance/deletion/tests rather than copying
+those tables again. Merged and activated remain separate states. Use packet
+conflict groups from queue.json; obsolete labels in dated reports are not aliases
+that establish safety. Preserve intervening requirements and claims when updating
+a live issue body.

@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 An owner can record personal records, inspect derived bests/trophies and correct history without exposing private values.
 
-An owner can record personal records, inspect derived bests/trophies and correct history without exposing private values.
-
 ## Requirements
 
 - #90 implementation1/Gym half,4/Gym,5/Gym dialogs,approved20badge mapping; #88 Gym and #127 copy https://github.com/Vivekpsps3/vivek-monorepo/issues/88 https://github.com/Vivekpsps3/vivek-monorepo/issues/127.
@@ -43,7 +41,7 @@ An owner can record personal records, inspect derived bests/trophies and correct
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Mount /town/gym and adopt Clinic’s unit preference/dialog mechanics with Gym-owned typed fields/validators; same loading/8sRetry/corrupt/locked/next contract.
 3. Show lift best-set/e1RM,run distance/time/pace,other-record tables,NewPRlast7days and existing trophy criteria; derive e1RM/pace and never persist them.
 4. Support add/edit/delete lift/run/other; measured date1900-01-01 through localtoday, logged_on immutable, conflict recoverable and deleting current PR reveals previous best.
@@ -78,7 +76,7 @@ An owner can record personal records, inspect derived bests/trophies and correct
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

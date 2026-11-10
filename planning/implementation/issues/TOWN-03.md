@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Treasury reflects completed spending-plan weeks privately, while the Town Hub card reliably reflects actual Town progress.
 
-Treasury reflects completed spending-plan weeks privately, while the Town Hub card reliably reflects actual Town progress.
-
 ## Requirements
 
 - #81 delivery4/Treasury and delivery5/TF5 Hub card; #97 retained scope https://github.com/Vivekpsps3/vivek-monorepo/issues/97; Treasury/Hub state/lock/performance acceptance.
@@ -45,7 +43,7 @@ Treasury reflects completed spending-plan weeks privately, while the Town Hub ca
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Load52 completed ISO weeks through loadFinanceBudgetKept with no current week and safe lifecycle/deadline integration.
 3. Add an explicitly named Finance-budget run normalizer: newest completed week backward until false/null/missing; normalize order, reject duplicate/malformed weeks. Preserve existing habit helper semantics used by World.
 4. Use current treasuryTier/stage; show tier/run with52+ saturation and correct locked/no-plan/no-data/unavailable states/links; clear immediately on lock/logout/owner change and abort obsolete work.
@@ -79,7 +77,7 @@ Treasury reflects completed spending-plan weeks privately, while the Town Hub ca
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

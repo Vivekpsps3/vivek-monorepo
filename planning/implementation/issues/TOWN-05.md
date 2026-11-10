@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Town Hall explains progress and existing habits, with simple previewable seasonal appearance that changes no game facts.
 
-Town Hall explains progress and existing habits, with simple previewable seasonal appearance that changes no game facts.
-
 ## Requirements
 
 - #81 delivery7/Town Hall+appearance; selected #133 https://github.com/Vivekpsps3/vivek-monorepo/issues/133.
@@ -41,7 +39,7 @@ Town Hall explains progress and existing habits, with simple previewable seasona
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Mount /town/hall linked from Town header through current route contract; render current progress and How Town grows from canonical tuning constants and existing API.
 3. Link active/archived habits to existing edit/history rather than building another habit controller or ledger.
 4. Provide Default/Spring/Summer/Autumn/Winter, live preview and explicit automatic browser-local seasonal mode; store only owner-keyed device preference and no XP/server state.
@@ -73,7 +71,7 @@ Town Hall explains progress and existing habits, with simple previewable seasona
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

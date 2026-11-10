@@ -5,7 +5,7 @@
 - Parents: [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200), [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: none
 - Conflict groups: `identity-origin`, `identity-session`, `vault-compatibility`, `schema-head`
 - Verification profiles: `finance_back`, `server_back`, `finance_front`
@@ -49,7 +49,7 @@ Investigate and remove runtime migration/fallback machinery only where supported
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Inventory legacy runtime routes/fields/fallbacks with current supported database generation, startup preflight behavior, browser caller and admin/enrollment caller. Start with login/migrate and passwordless/enroll versus current startup refusal, not active invitation enrollment.
 3. For each candidate record an eligibility decision: already unreachable for all supported states; still needed by a valid fixture/client; or requires an explicit owner support-policy decision. Do not inspect private production contents or purchase/change service configuration.
 4. For eligible runtime-only branches, remove route/helper/schema imports and superseded tests while adding a behavior test for supported current login/invitation/bootstrap/reset and the intentional retired-route result. Keep Alembic history, saved ciphertext/AAD compatibility and still-supported browser rewrites.

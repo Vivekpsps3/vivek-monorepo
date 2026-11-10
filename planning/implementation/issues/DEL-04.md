@@ -5,8 +5,8 @@
 - Parents: [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200), [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
-- Dependencies: `SAFE-04`
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
+- Dependencies: none
 - Conflict groups: `finance-service`, `finance-public-api`, `finance-persistence`, `finance-imports`
 - Verification profiles: `finance_front`, `web_front`
 
@@ -46,7 +46,7 @@ Simplify FinanceService’s dashboard/collection orchestration around the existi
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify current main and inspect live PRs/claims for actual overlap. Preserve unrelated edits.
 2. Inventory service public methods, actual callers and duplicate load/publish/cache paths. Choose one complete bounded consolidation: common collection-read publication and derived refresh ownership, leaving imports and market responsibilities in their existing owners.
 3. Migrate actual query consumers and an existing narrow public summary/name adapter to the canonical collection-read path; ready name lookup must not trigger a whole dashboard load. Do not prebuild facades for hypothetical consumers.
 4. Delete redundant request/publish/cache invalidation branches and unconsumed pass-through methods, retaining collection/session epochs, silent reload behavior, revision conflicts and downstream change notifications.
@@ -101,3 +101,10 @@ Consolidate the equivalent read/eligibility/publication policy in the existing s
 Preserve the session token, per-collection epochs, lock epoch and hasDek checks. _transactions versus _dashboardTransactions have distinct filtered/unfiltered consumers and must not be collapsed by resemblance. loadDashboard caching, import staging and FinanceMarketCoordinator keep their current owners. Any other collection left on its distinct path must have an explicit reason and no duplicated chosen policy.
 
 Measure the replaced getter/remote-refresh blocks before and after, full FinanceService, and every added helper/facade file. Require fewer independent publication policies and negative production delta across that closure. Hold same-collection reads, advance revision/owner/lock, and prove no stale subject publication; unrelated collections must still load independently. Name-only consumers must not trigger loadDashboard.
+
+## Dependency rationale
+
+This bounded collection-read/publication cleanup uses existing session, collection
+and lock epochs. SAFE-04 consolidates browser invalidation message transport in
+Hub/Pixels/World; it supplies no API this change consumes. Preserve those guards
+and coordinate shared files rather than waiting for that unrelated adapter.

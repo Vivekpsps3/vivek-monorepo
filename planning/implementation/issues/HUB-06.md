@@ -5,7 +5,7 @@
 - Parents: [#93](https://github.com/Vivekpsps3/vivek-monorepo/issues/93)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `HUB-03`, `CON-02`
 - Conflict groups: `account-settings`, `calendar-feeds`, `schema-head`, `travel-summary`, `media-summary`
 - Verification profiles: `web_front`, `server_back`, `travel_back`, `media_back`, `schema`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-An owner can subscribe to selected calendar data and revoke access without exposing Finance or Health.
 
 An owner can subscribe to selected calendar data and revoke access without exposing Finance or Health.
 
@@ -45,7 +43,7 @@ An owner can subscribe to selected calendar data and revoke access without expos
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Define bounded read-only Travel/Media feed scopes and per-owner cryptographically random capabilities with hash-only storage, rotate/revoke and HTTPS-only URLs.
 3. Add Settings create/rotate/revoke UI with clear anyone-with-URL disclosure and no public/private-feed URL in issue evidence.
 4. Generate escaped valid ICS from owner-scoped DB-only queries, bounded windows, correct all-day/timezone semantics and safe conditional requests/rate limits.
@@ -77,7 +75,7 @@ An owner can subscribe to selected calendar data and revoke access without expos
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

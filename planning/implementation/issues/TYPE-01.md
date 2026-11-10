@@ -5,7 +5,7 @@
 - Parents: [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200), [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `SAFE-05`
 - Conflict groups: `hub-load`, `pixels-data`, `typed-read-contracts`, `quality-baselines`
 - Verification profiles: `web_front`
@@ -48,7 +48,7 @@ Validate the actual Hub/Pixels cross-domain read payloads and remove duplicated 
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Inventory the required read-model fields actually consumed by Hub and Pixels, identifying nullable/missing/future-version shapes and which source is responsible for decoding. Keep HTTP envelope types separate from feature view models.
 3. Add small app-owned decoders from unknown to the existing typed shape at boundary entry. Share only structurally identical primitives; preserve money/date/ID/owner and absent/locked/expired/partial semantics.
 4. Replace unchecked response.json as T assertions and repeated unsafe local casts/guards in migrated consumers. Keep a cheap generic transport helper but require a real decoder where untrusted shape matters.

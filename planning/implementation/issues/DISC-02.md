@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 A future Finance agent has one coherent card/benefit workflow with explicit facts and reuse instead of another financial ledger.
 
-A future Finance agent has one coherent card/benefit workflow with explicit facts and reuse instead of another financial ledger.
-
 ## Requirements
 
 - Parent#195 complete proposal, all v1 ideas/privacy/architectural constraints and open questions remain preserved; this leaf owns discovery disposition only.
@@ -37,7 +35,7 @@ A future Finance agent has one coherent card/benefit workflow with explicit fact
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Choose gallery+attention-list emphasis, navigation inside Finance and precise statement/benefit/renewal concepts; keep debt balance distinct and unknown values honest.
 3. Write a concrete user journey, small screen/wireframe description, typed conceptual records/source links, reuse-versus-new decision table and excluded scope. No production app code, routes, migrations, endpoints or dependencies.
 4. Map every parent requirement to selected-first-version, later-candidate or explicit unresolved owner decision with reason; do not silently cancel committed scope or treat this proposal as approved implementation.
@@ -69,7 +67,7 @@ A future Finance agent has one coherent card/benefit workflow with explicit fact
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

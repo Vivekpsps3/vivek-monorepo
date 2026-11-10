@@ -49,7 +49,7 @@ Measure current entry points, remove repeated work and make every existing gate 
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Measure actual lint/types/fast/Python/Karma/Node/build/browser commands on the same source/machine and record which work is repeated or omitted. Do not invent timings from old reports.
 3. Build one gate→entrypoint ownership table and wire standalone required checks such as release-manifest fixtures into the canonical path exactly once. Keep fast iteration commands clearly non-gates.
 4. Remove demonstrated redundant installs/builds/lint or duplicate project invocation, keeping current isolated server/database/session fixtures, zero retries and required release rehearsal names. Coordinate active workflow edits explicitly.
