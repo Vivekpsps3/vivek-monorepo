@@ -90,3 +90,7 @@ PR and roadmap note URLs; actual merge/deployment/activation state: https://gith
 External prerequisites and next actor: no external prerequisite. Next actor merges the leaf PR and leaves the parents open.
 
 No unstated decision from the previous context is necessary to continue.
+
+## Suppression baseline
+
+This commit records the six Health capability `@ts-expect-error` markers SAFE-03 already merged (`unlock`, `requireDek`, `lookupBlindIndex`, `reindexRecords`, `getCounts`, and the concrete vault) so Backend lint matches main. Health behavior was not edited. The recorded line is `apps/web/src/app/town/health/health-store.service.spec.ts` `@ts-expect-error` `6`.

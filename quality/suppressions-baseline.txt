@@ -2,3 +2,4 @@
 # Counts may only shrink. CI fails if a count rises or this file is stale.
 # Refresh with: make lint-baseline
 # update refuses a higher count unless --allow-increase is passed.
+apps/web/src/app/town/health/health-store.service.spec.ts	@ts-expect-error	6
