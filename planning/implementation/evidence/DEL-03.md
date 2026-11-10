@@ -3,7 +3,7 @@
 - Leaf issue and parent(s): [#215](https://github.com/Vivekpsps3/vivek-monorepo/issues/215); parents [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) and [#198](https://github.com/Vivekpsps3/vivek-monorepo/issues/198) stay open
 - Agent/context, branch/worktree: Cursor Grok, `agent/del-03`, `/tmp/vivek-del-03`
 - Base main SHA, current tested SHA: base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`; implementation `8e67e6c50ba0b8fd5831853d1f6df860c460be25`. Commands below ran on that tree before the commit. This evidence file is a later docs-only commit.
-- Fresh-main/prerequisite/active-PR checks: no queue dependency. PR #193 is already merged and is not open work. PR #288 is on this base (`71823ff`, one Town/World main landmark) and World was re-read there before editing. Claim comment is on #215. SAFE-04/SAFE-05 were not given a new lifecycle helper.
+- Fresh-main/prerequisite/active-PR checks: no queue dependency. PR #193 is already merged and is not open work. PR #288 is on the original base (`71823ff`, one Town/World main landmark) and World was re-read there before editing. After the PR opened, `origin/main` had moved to `e9cd267b3c047e6e2d5153b5df0378c15ef429e0` (#291, TMDB detail transport). That commit was merged in and did not touch World files. Claim comment is on #215. SAFE-04/SAFE-05 were not given a new lifecycle helper.
 
 ## Acceptance
 
