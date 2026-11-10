@@ -1,11 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { SpriteAtlas } from '../render/atlas';
 import { WORLD_COPY, type ChestOverlay, type LoadedChunk, type WorldWeek } from '../world.types';
 import { SessionService } from '../../platform/session.service';
 import type { TownResponse } from '../../town/town.types';
 import { WorldApi } from '../data/world-api';
+import { WorldController } from '../data/world-controller';
 import { cameraApi, renderApi, WORLD_CONTROLLER, WorldComponent, type ExplorerController, type WorldView } from './world.component';
 
 const NEWEST = '2026-10-26';
@@ -313,6 +314,46 @@ describe('WorldComponent', () => {
     expect(controller.setFog).toHaveBeenCalledWith(false);
   });
 
+  it('jumps today onto that date inside the snapped week', async () => {
+    const apply = spyOn(cameraApi, 'apply').and.callThrough();
+    await setup();
+    apply.calls.reset();
+    const today = [...fixture.nativeElement.querySelectorAll('button')].find(candidate =>
+      candidate.textContent?.includes(WORLD_COPY.today));
+    expect(today).toBeTruthy();
+    today.click();
+    expect(apply.calls.mostRecent().args[1]).toEqual({ type: 'jump', week: '2026-10-26', day: 3 });
+
+    const current = fixture.componentInstance.view();
+    expect(current?.meta).toBeTruthy();
+    fixture.componentInstance.view.set({
+      ...current!,
+      meta: { ...current!.meta!, today: '2020-01-01' },
+    });
+    today.click();
+    expect(apply.calls.mostRecent().args[1]).toEqual({ type: 'jump', week: current!.meta!.start_week, day: 0 });
+
+    fixture.componentInstance.view.set({
+      ...current!,
+      meta: { ...current!.meta!, today: '2030-01-01' },
+    });
+    today.click();
+    expect(apply.calls.mostRecent().args[1]).toEqual({ type: 'jump', week: current!.meta!.current_week, day: 0 });
+  });
+
+  it('keeps the injected controller across the World URL and disposes it once on leave', async () => {
+    const realDispose = spyOn(WorldController.prototype, 'dispose').and.callThrough();
+    await setup();
+    expect(controller.loadInitial).toHaveBeenCalledTimes(1);
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/town/world?week=2026-10-26').catch(() => undefined);
+    expect(controller.dispose).not.toHaveBeenCalled();
+    expect(realDispose).not.toHaveBeenCalled();
+    await router.navigateByUrl('/hub').catch(() => undefined);
+    expect(controller.dispose).toHaveBeenCalledTimes(1);
+    expect(realDispose).not.toHaveBeenCalled();
+  });
+
   it('does not print money in the budget line', async () => {
     await setup();
     const nodes = fixture.nativeElement.querySelectorAll('[data-budget]');
@@ -352,5 +393,170 @@ describe('WorldComponent', () => {
     expect(perFrame.every(count => count <= 2)).toBeTrue();
     expect(perFrame.reduce((sum, count) => sum + count, 0)).toBeGreaterThan(2);
     expect(mondayWeeksBack(0)).toBe(NEWEST);
+  });
+});
+
+describe('World production controller ownership', () => {
+  const stageTypes = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'wheel'];
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  it('opens a new controller on each visit and releases the previous listeners', async () => {
+    const owners: WorldController[] = [];
+    const disposed: WorldController[] = [];
+    const cleared: WorldController[] = [];
+    const originalDispose = WorldController.prototype.dispose;
+    const originalClear = WorldController.prototype.clearFinance;
+    spyOn(WorldController.prototype, 'loadInitial').and.callFake(function (this: WorldController) {
+      owners.push(this);
+      return Promise.resolve();
+    });
+    spyOn(WorldController.prototype, 'dispose').and.callFake(function (this: WorldController) {
+      disposed.push(this);
+      return originalDispose.call(this);
+    });
+    spyOn(WorldController.prototype, 'clearFinance').and.callFake(function (this: WorldController) {
+      cleared.push(this);
+      return originalClear.call(this);
+    });
+    spyOn(SpriteAtlas.prototype, 'ensure').and.resolveTo(undefined);
+    spyOn(window, 'matchMedia').and.callFake((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList);
+
+    let storageAdds = 0;
+    let storageRemoves = 0;
+    const windowAdd = window.addEventListener.bind(window);
+    const windowRemove = window.removeEventListener.bind(window);
+    spyOn(window, 'addEventListener').and.callFake((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => {
+      if (type === 'storage') storageAdds += 1;
+      windowAdd(type, listener, options);
+    });
+    spyOn(window, 'removeEventListener').and.callFake((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => {
+      if (type === 'storage') storageRemoves += 1;
+      windowRemove(type, listener, options);
+    });
+
+    const stageAdded: string[] = [];
+    const stageRemoved: string[] = [];
+    const elementAdd = HTMLElement.prototype.addEventListener;
+    const elementRemove = HTMLElement.prototype.removeEventListener;
+    spyOn(HTMLElement.prototype, 'addEventListener').and.callFake(function (
+      this: HTMLElement,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) {
+      if (this.classList.contains('world-stage') && stageTypes.includes(type)) stageAdded.push(type);
+      return elementAdd.call(this, type, listener, options);
+    });
+    spyOn(HTMLElement.prototype, 'removeEventListener').and.callFake(function (
+      this: HTMLElement,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) {
+      if (this.classList.contains('world-stage') && stageTypes.includes(type)) stageRemoved.push(type);
+      return elementRemove.call(this, type, listener, options);
+    });
+
+    const session = { currentUser: { id: 7 }, cleared$: new Subject<void>() };
+    await TestBed.configureTestingModule({
+      imports: [WorldComponent],
+      providers: [
+        provideRouter([]),
+        { provide: SessionService, useValue: session },
+        {
+          provide: WorldApi,
+          useValue: {
+            timezone: () => 'America/Los_Angeles',
+            getTown: () => Promise.resolve(townFixture()),
+            getWorld: () => Promise.resolve({ meta: null, weeks: [] }),
+            listConcepts: () => Promise.resolve([]),
+            createConcept: () => Promise.resolve(null),
+            patchConcept: () => Promise.resolve(null),
+            deleteConcept: () => Promise.resolve(),
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const open = async (): Promise<ComponentFixture<WorldComponent>> => {
+      const next = TestBed.createComponent(WorldComponent);
+      next.nativeElement.style.display = 'block';
+      next.nativeElement.style.width = '780px';
+      next.detectChanges();
+      await next.whenStable();
+      next.detectChanges();
+      return next;
+    };
+
+    const router = TestBed.inject(Router);
+    let first: ComponentFixture<WorldComponent> | undefined;
+    let second: ComponentFixture<WorldComponent> | undefined;
+    try {
+      first = await open();
+      expect(owners.length).toBe(1);
+      expect(stageAdded).toEqual(stageTypes);
+      expect(storageAdds).toBe(1);
+      expect(disposed).toEqual([]);
+
+      await router.navigateByUrl('/town/world?week=2026-10-12').catch(() => undefined);
+      expect(disposed).toEqual([]);
+      expect(owners.length).toBe(1);
+
+      await router.navigateByUrl('/hub').catch(() => undefined);
+      expect(disposed).toEqual([owners[0]]);
+      expect(stageRemoved).toEqual(stageTypes);
+
+      first.destroy();
+      first = undefined;
+      expect(disposed).toEqual([owners[0]]);
+      expect(storageRemoves).toBe(1);
+
+      session.cleared$.next();
+      window.dispatchEvent(new StorageEvent('storage', { key: 'finance-vault-lock', newValue: '1' }));
+      expect(cleared).toEqual([]);
+
+      second = await open();
+      expect(owners.length).toBe(2);
+      expect(owners[0]).not.toBe(owners[1]);
+      expect(storageAdds - storageRemoves).toBe(1);
+      expect(stageAdded).toEqual([...stageTypes, ...stageTypes]);
+      expect(disposed).toEqual([owners[0]]);
+
+      session.cleared$.next();
+      expect(cleared).toEqual([owners[1]]);
+
+      second.destroy();
+      second = undefined;
+      expect(disposed).toEqual([owners[0], owners[1]]);
+      expect(storageAdds).toBe(storageRemoves);
+      expect(stageRemoved).toEqual(stageAdded);
+
+      session.cleared$.next();
+      window.dispatchEvent(new StorageEvent('storage', { key: 'finance-vault-lock', newValue: '1' }));
+      expect(cleared).toEqual([owners[1]]);
+    } finally {
+      first?.destroy();
+      second?.destroy();
+    }
   });
 });
