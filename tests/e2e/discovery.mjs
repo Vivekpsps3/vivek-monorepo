@@ -1,7 +1,8 @@
-// Intended Playwright projects and the only Town filename allowlist.
+// Intended Playwright projects and the Town filename allowlist.
+// Habit, check-in, and dialog files run with Pixels and World.
 // In-file phone, desktop, and platform skips stay inside a selected spec.
 // A whole spec the allowlist omits needs an owner, issue, and reason below.
-export const townTestMatch = /(?:pixels-(?:year|detail|life)|hub-pixels|world)\.spec\.ts/;
+export const townTestMatch = /(?:pixels-(?:year|detail|life)|hub-pixels|world|town-checkin|town-dialogs|town)\.spec\.ts/;
 
 export const intendedProjects = [
   { name: 'finance', testDir: 'apps/finance/frontend/e2e', domain: 'finance' },
@@ -12,27 +13,6 @@ export const intendedProjects = [
 ];
 
 export const ownedExclusions = [
-  {
-    project: 'town',
-    file: 'apps/web/e2e/town.spec.ts',
-    owner: 'TOWN-01',
-    issue: '#249',
-    reason: 'Town founding stays unselected until TOWN-01 activates the existing fixtures.',
-  },
-  {
-    project: 'town',
-    file: 'apps/web/e2e/town-checkin.spec.ts',
-    owner: 'TOWN-01',
-    issue: '#249',
-    reason: 'Town check-in stays unselected until TOWN-01 activates the existing fixtures.',
-  },
-  {
-    project: 'town',
-    file: 'apps/web/e2e/town-dialogs.spec.ts',
-    owner: 'TOWN-01',
-    issue: '#249',
-    reason: 'Town dialogs stay unselected until TOWN-01 activates the existing fixtures.',
-  },
   {
     project: 'town',
     file: 'apps/web/e2e/pixels-settings.spec.ts',
