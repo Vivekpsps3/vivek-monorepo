@@ -53,7 +53,7 @@ Commands ran in `/tmp/vivek-med-07` on the implementation tree before this evide
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened with `Closes #241`. Parents #200 and #85 are referenced and not closed. URL recorded in the roadmap comment.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/291 (`Closes #241`). Parents #200 and #85 are referenced and not closed.
 - Roadmap #134 append-only status-note URL: posted after the pull request. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): local gates passed. Squash merge is authorized for this leaf. This file does not claim deployment or activation.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. MED-08 and other Media leaves are separate.
@@ -75,7 +75,7 @@ Deletion ledger and current consumer migration: both official detail adapters ca
 
 Commands run, results, tested SHA; required checks still pending: the six commands above passed. CI was not required before the local gates.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: pull request and #134 comment follow this commit. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/291. The #134 comment follows merge. Not deployed.
 
 External prerequisites and next actor: MED-01 is already merged. Next actor is this session for merge and worktree removal.
 
