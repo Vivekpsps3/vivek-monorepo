@@ -12,7 +12,7 @@ import { firstValueFrom, from, Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
 import { ConfirmService } from '@vivek/ui';
 import { ToastService, failureCopy, successCopy } from '@vivek/ui';
-import { IncomePayFrequency, JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation, PaydayFrequency } from '../models/transaction.model';
+import { JobIncome, JobIncomeCreate, JobStockGrant, JobStockPurchase, JobStockValuation, PaydayFrequency } from '../models/transaction.model';
 import {
   annualBasePayAt,
   isCurrentJob,
@@ -23,7 +23,6 @@ import {
   hasPaydaySchedule,
   paydayDatesBetween,
   replaceStockValuation,
-  salaryPeriodsPerYear,
   stockGrantSnapshot,
   stockPurchaseSnapshot,
   stockSnapshotAt,
@@ -32,6 +31,15 @@ import { formatDate, todayIsoDate, toDollars } from '@vivek/browser';
 import { validateJob, validateMoney, type FieldIssue } from '../utils/validators';
 import { formatEstimate } from '../shared/stored-money';
 import { dialogSaveAlert, focusDialogAlert, focusErrorSummary } from '../shared/form-validation';
+import {
+  centsPaySnapshot,
+  convertBasePayUnit,
+  editorPayFromRecord,
+  savedPayFromEditor,
+  storedPayFrequencyLabel,
+  type BasePayUnit,
+  type EditorPay,
+} from './pay-schedule';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { MoneyPipe } from '@vivek/ui';
 import { AppDatePipe } from '@vivek/ui';
@@ -79,7 +87,7 @@ import {
     UiDialogComponent,
   ],
   templateUrl: './income.component.html',
-  styleUrl: './income.component.css',
+  styleUrls: ['./income.component.css', '../shared/recurring-editor.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IncomeComponent implements OnInit, OnDestroy {
@@ -103,23 +111,17 @@ export class IncomeComponent implements OnInit, OnDestroy {
   formSubmitted = false;
   editingId: number | null = null;
   form: JobIncomeCreate = this.emptyForm();
+  moreOptionsOpen = false;
+  taxOptionsOpen = false;
+  historyOptionsOpen = false;
   taxEstimator = {
     state: 'average',
     filingStatus: 'single',
     preTaxDeductionsPerPeriod: 0,
   };
 
-  readonly payFrequencyOptions: UiSelectOption[] = [
-    { value: 'annual', label: 'Annual salary' },
-    { value: 'monthly', label: 'Monthly' },
-    { value: 'semimonthly', label: 'Twice monthly' },
-    { value: 'biweekly', label: 'Every two weeks' },
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'hourly', label: 'Hourly' },
-  ];
-
   readonly paydayFrequencyOptions: UiSelectOption[] = [
-    { value: '', label: 'Not set · use an undated estimate' },
+    { value: '', label: 'Not set' },
     { value: 'weekly', label: 'Weekly' },
     { value: 'biweekly', label: 'Every two weeks' },
     { value: 'semimonthly', label: 'Twice a month' },
@@ -195,31 +197,34 @@ export class IncomeComponent implements OnInit, OnDestroy {
     return this.activeAnnualTotal / 12;
   }
 
-  /** F18 (REC-03): open the first current job without taxes, disclosure open. */
+  /** F18 (REC-03): open the first current job without taxes, More options and taxes open. */
   addTaxes(): void {
     const row = this.incomes.find(
       candidate => isCurrentJob(candidate) && candidate.annual_taxes + candidate.annual_deductions === 0,
     );
     if (!row) return;
     this.openEditModal(row);
-    setTimeout(() => {
-      const disclosure = document.querySelector<HTMLDetailsElement>(
-        'ui-dialog details.pay-disclosure:not(.pay-disclosure--history)',
-      );
-      if (!disclosure) return;
-      disclosure.open = true;
-      disclosure.querySelector('input')?.focus();
-    }, 0);
+    this.moreOptionsOpen = true;
+    this.taxOptionsOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  get editorPay(): EditorPay {
+    return {
+      unit: this.basePayUnit,
+      basePay: this.form.base_pay,
+      hoursPerWeek: this.form.hours_per_week ?? null,
+      taxesPerPeriod: this.form.taxes_per_period,
+      deductionsPerPeriod: this.form.deductions_per_period,
+    };
+  }
+
+  get basePayUnit(): BasePayUnit {
+    return this.form.pay_frequency === 'hourly' ? 'hourly' : 'annual';
   }
 
   get formAnnualBase(): number {
-    const base = Number(this.form.base_pay || 0);
-    if (this.form.pay_frequency === 'monthly') return base * 12;
-    if (this.form.pay_frequency === 'semimonthly') return base * 24;
-    if (this.form.pay_frequency === 'biweekly') return base * 26;
-    if (this.form.pay_frequency === 'weekly') return base * 52;
-    if (this.form.pay_frequency === 'hourly') return base * Number(this.form.hours_per_week || 0) * 52;
-    return base;
+    return toDollars(centsPaySnapshot(this.snapshotInput()).annualBaseCents);
   }
 
   get formAnnualGross(): number {
@@ -232,23 +237,17 @@ export class IncomeComponent implements OnInit, OnDestroy {
   }
 
   get formAnnualAdjustments(): number {
-    return this.formPeriodAdjustments * this.payPeriodsPerYear;
+    const snapshot = centsPaySnapshot(this.snapshotInput());
+    return toDollars(snapshot.annualTaxCents + snapshot.annualDeductionCents);
   }
 
   get formAnnualNet(): number {
     return Math.max(this.formAnnualGross - this.formAnnualAdjustments, 0);
   }
 
-  get formPeriodGross(): number {
-    return this.formAnnualGross / this.payPeriodsPerYear;
-  }
-
-  get formPeriodAdjustments(): number {
-    return Number(this.form.taxes_per_period || 0) + Number(this.form.deductions_per_period || 0);
-  }
-
-  get formPeriodNet(): number {
-    return Math.max(this.formPeriodGross - this.formPeriodAdjustments, 0);
+  get formPaycheck(): number | null {
+    const paycheck = centsPaySnapshot(this.snapshotInput()).paycheckCents;
+    return paycheck == null ? null : toDollars(paycheck);
   }
 
   get estimatedTaxesPerPeriod(): number {
@@ -268,22 +267,12 @@ export class IncomeComponent implements OnInit, OnDestroy {
     return `${((annualEstimate / this.formAnnualGross) * 100).toFixed(1)}%`;
   }
 
-  get basePayLabel(): string {
-    if (this.form.pay_frequency === 'hourly') return 'Hourly rate';
-    if (this.form.pay_frequency === 'annual') return 'Annual base pay';
-    return 'Base pay per period';
-  }
-
-  get payPeriodLabel(): string {
-    if (this.form.pay_frequency === 'annual') return 'annual';
-    if (this.form.pay_frequency === 'monthly') return 'monthly';
-    if (this.form.pay_frequency === 'semimonthly') return 'twice-monthly';
-    if (this.form.pay_frequency === 'biweekly') return 'biweekly';
-    return 'weekly';
+  get withholdingPeriodLabel(): string {
+    return this.basePayUnit === 'hourly' ? 'weekly' : 'annual';
   }
 
   get payPeriodsPerYear(): number {
-    return this.periodsPerYear(this.form.pay_frequency);
+    return this.basePayUnit === 'hourly' ? 52 : 1;
   }
 
   private emptyForm(): JobIncomeCreate {
@@ -323,6 +312,9 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.fieldErrors = [];
     this.formSubmitted = false;
     this.form = this.emptyForm();
+    this.moreOptionsOpen = false;
+    this.taxOptionsOpen = false;
+    this.historyOptionsOpen = false;
     this.taxEstimator = { state: 'average', filingStatus: 'single', preTaxDeductionsPerPeriod: 0 };
     this.showModal = true;
   }
@@ -340,22 +332,23 @@ export class IncomeComponent implements OnInit, OnDestroy {
       stock_purchases: (row.stock_purchases || []).map(item => ({ ...item, sales: (item.sales || []).map(sale => ({ ...sale })) })),
       stock_valuations: (row.stock_valuations || []).map(item => ({ ...item })),
     };
+    const pay = editorPayFromRecord(row);
     this.form = {
       employer: row.employer,
       role_title: row.role_title || '',
-      pay_frequency: row.pay_frequency as IncomePayFrequency,
+      pay_frequency: pay.unit,
       payday_frequency: row.payday_frequency || null,
       first_pay_date: row.first_pay_date || null,
       second_pay_day: row.second_pay_day ?? null,
-      base_pay: row.base_pay,
-      hours_per_week: row.hours_per_week ?? null,
+      base_pay: pay.basePay,
+      hours_per_week: pay.hoursPerWeek,
       annual_bonus: row.annual_bonus,
       annual_equity: row.annual_equity,
       annual_other: row.annual_other,
       annual_taxes: row.annual_taxes,
       annual_deductions: row.annual_deductions,
-      taxes_per_period: row.taxes_per_period,
-      deductions_per_period: row.deductions_per_period,
+      taxes_per_period: pay.taxesPerPeriod,
+      deductions_per_period: pay.deductionsPerPeriod,
       effective_date: row.effective_date,
       end_date: row.end_date || null,
       promotions: (row.promotions || []).map(item => ({ ...item })),
@@ -367,7 +360,25 @@ export class IncomeComponent implements OnInit, OnDestroy {
       is_active: row.is_active,
       notes: row.notes || '',
     };
+    this.syncOptionSections();
     this.showModal = true;
+  }
+
+  setBasePayUnit(unit: string): void {
+    const next: BasePayUnit = unit === 'hourly' ? 'hourly' : 'annual';
+    if (next === this.basePayUnit) return;
+    const converted = convertBasePayUnit(this.editorPay, next);
+    this.applyEditorPay(converted);
+    this.cdr.markForCheck();
+  }
+
+  onEditorSectionToggle(event: Event, section: 'more' | 'tax' | 'history'): void {
+    if (event.target !== event.currentTarget) return;
+    const open = (event.currentTarget as HTMLDetailsElement).open;
+    if (section === 'more') this.moreOptionsOpen = open;
+    if (section === 'tax') this.taxOptionsOpen = open;
+    if (section === 'history') this.historyOptionsOpen = open;
+    this.cdr.markForCheck();
   }
 
   addPromotion(): void {
@@ -630,7 +641,16 @@ export class IncomeComponent implements OnInit, OnDestroy {
     this.jobSaveError = '';
     this.fieldErrors = [];
     this.formSubmitted = false;
+    this.moreOptionsOpen = false;
+    this.taxOptionsOpen = false;
+    this.historyOptionsOpen = false;
     this.form = this.emptyForm();
+  }
+
+  revalidate(): void {
+    if (!this.formSubmitted) return;
+    this.fieldErrors = this.jobIssues();
+    this.cdr.markForCheck();
   }
 
   fieldError(field: string): string | null {
@@ -642,21 +662,11 @@ export class IncomeComponent implements OnInit, OnDestroy {
   }
 
   saveIncome(): void {
-    const jobIssues = validateJob({
-      employer: this.form.employer,
-      basePay: this.form.base_pay,
-      payFrequency: this.form.pay_frequency,
-      hoursPerWeek: this.form.hours_per_week,
-      paydayFrequency: this.form.payday_frequency,
-      nextPayday: this.form.first_pay_date,
-      taxes: this.form.taxes_per_period,
-      deductions: this.form.deductions_per_period,
-    });
-    const historyError = jobHistoryError(this.form);
-    if (historyError) jobIssues.push({ field: 'endDate', label: 'End date', message: historyError });
+    const jobIssues = this.jobIssues();
     this.fieldErrors = jobIssues;
     this.formSubmitted = true;
     if (jobIssues.length) {
+      this.revealSectionsForErrors(jobIssues);
       this.jobSaveError = '';
       this.cdr.markForCheck();
       setTimeout(() => focusErrorSummary(document.getElementById('job-form')));
@@ -668,6 +678,7 @@ export class IncomeComponent implements OnInit, OnDestroy {
       emptyMessage: 'Enter yearly pay above $0.',
     });
     if ('cents' in pay) this.form.base_pay = toDollars(pay.cents);
+    const savedPay = savedPayFromEditor(this.editorPay);
     const wasEditing = this.editingId !== null;
     this.saving = true;
     const payload: JobIncomeCreate = {
@@ -713,15 +724,16 @@ export class IncomeComponent implements OnInit, OnDestroy {
         .sort((a, b) => a.date.localeCompare(b.date)),
       role_title: this.form.role_title?.trim() || '',
       notes: this.form.notes?.trim() || '',
-      base_pay: this.roundMoney(this.form.base_pay),
-      hours_per_week: this.form.pay_frequency === 'hourly' ? this.form.hours_per_week : null,
+      pay_frequency: savedPay.pay_frequency,
+      base_pay: savedPay.base_pay,
+      hours_per_week: savedPay.hours_per_week,
       annual_bonus: this.roundMoney(this.form.annual_bonus || 0),
       annual_equity: this.roundMoney(this.form.annual_equity || 0),
       annual_other: this.roundMoney(this.form.annual_other || 0),
-      taxes_per_period: this.roundMoney(this.form.taxes_per_period || 0),
-      deductions_per_period: this.roundMoney(this.form.deductions_per_period || 0),
-      annual_taxes: this.roundMoney((this.form.taxes_per_period || 0) * this.payPeriodsPerYear),
-      annual_deductions: this.roundMoney((this.form.deductions_per_period || 0) * this.payPeriodsPerYear),
+      taxes_per_period: savedPay.taxes_per_period,
+      deductions_per_period: savedPay.deductions_per_period,
+      annual_taxes: savedPay.annual_taxes,
+      annual_deductions: savedPay.annual_deductions,
     };
     this.jobSaveError = '';
     const saveId = this.editingId;
@@ -774,15 +786,68 @@ export class IncomeComponent implements OnInit, OnDestroy {
   }
 
   payFrequencyLabel(value: string): string {
-    return this.payFrequencyOptions.find(option => option.value === value)?.label || value;
+    return storedPayFrequencyLabel(value);
+  }
+
+  private snapshotInput() {
+    return {
+      pay_frequency: this.basePayUnit,
+      base_pay: this.form.base_pay,
+      hours_per_week: this.form.hours_per_week,
+      taxes_per_period: this.form.taxes_per_period,
+      deductions_per_period: this.form.deductions_per_period,
+      payday_frequency: this.form.payday_frequency,
+    };
+  }
+
+  private applyEditorPay(pay: EditorPay): void {
+    this.form.pay_frequency = pay.unit;
+    this.form.base_pay = pay.basePay;
+    this.form.hours_per_week = pay.hoursPerWeek;
+    this.form.taxes_per_period = pay.taxesPerPeriod;
+    this.form.deductions_per_period = pay.deductionsPerPeriod;
+  }
+
+  private jobIssues(): FieldIssue[] {
+    const jobIssues = validateJob({
+      employer: this.form.employer,
+      basePay: this.form.base_pay,
+      payFrequency: this.form.pay_frequency,
+      hoursPerWeek: this.form.hours_per_week,
+      paydayFrequency: this.form.payday_frequency,
+      nextPayday: this.form.first_pay_date,
+      taxes: this.form.taxes_per_period,
+      deductions: this.form.deductions_per_period,
+    });
+    const historyError = jobHistoryError(this.form);
+    if (historyError) jobIssues.push({ field: 'endDate', label: 'End date', message: historyError });
+    return jobIssues;
+  }
+
+  private revealSectionsForErrors(errors: FieldIssue[]): void {
+    const fields = new Set(errors.map(error => error.field));
+    if (fields.has('endDate') || fields.has('taxes') || fields.has('deductions')) this.moreOptionsOpen = true;
+    if (fields.has('taxes') || fields.has('deductions')) this.taxOptionsOpen = true;
+  }
+
+  private syncOptionSections(): void {
+    const role = this.form.role_title?.trim();
+    const notes = this.form.notes?.trim();
+    const taxes = Number(this.form.taxes_per_period) || Number(this.form.deductions_per_period)
+      || Number(this.form.annual_bonus) || Number(this.form.annual_equity) || Number(this.form.annual_other);
+    const history = (this.form.promotions || []).length
+      || (this.form.compensation_payments || []).length
+      || (this.form.stock_grants || []).length
+      || (this.form.stock_purchases || []).length
+      || (this.form.stock_valuations || []).length
+      || this.form.stock_symbol?.trim();
+    this.taxOptionsOpen = Boolean(taxes);
+    this.historyOptionsOpen = Boolean(history);
+    this.moreOptionsOpen = Boolean(role || notes || this.form.end_date || taxes || history);
   }
 
   private roundMoney(value: number): number {
     return Math.round((value || 0) * 100) / 100;
-  }
-
-  private periodsPerYear(frequency: IncomePayFrequency): number {
-    return salaryPeriodsPerYear(frequency);
   }
 
   private estimatedFederalEffectiveRate(annualIncome: number, filingStatus: string): number {
