@@ -53,7 +53,7 @@
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened from this branch with `Closes #204` and `Refs #198`
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/301 (`Closes #204`, `Refs #198`)
 - Roadmap #134 append-only status-note URL: posted after the squash merge
 - Merged/activation status: not merged at this commit. Not a deployment
 - Remaining external prerequisites or approved scope decisions: parent #198 stays open. Invalidate transport stays on the market coordinator
