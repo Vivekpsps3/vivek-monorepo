@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#226](https://github.com/Vivekpsps3/vivek-monorepo/issues/226); parent [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84) stays open
 - Agent/context, branch/worktree: Cursor Grok, `agent/trip-02`, `/tmp/vivek-trip-02`
-- Base main SHA, current tested SHA: base `80b9ca0e0776297f3addcdfdac78542f6a7ced40`. `origin/main` was fast-forwarded to `9d39d3c1e21948da3fe2f3facbf9adad21efceb9` before the locked gates. Tested product SHA is the `agent/trip-02` commit that contains these product files.
+- Base main SHA, current tested SHA: base `80b9ca0e0776297f3addcdfdac78542f6a7ced40`. `origin/main` was fast-forwarded to `9d39d3c1e21948da3fe2f3facbf9adad21efceb9` before the locked gates. Tested product SHA `62c08ecc31e8bb9e5fc6cb2e7a442e2d6ecb6433`.
 - Fresh-main/prerequisite/active-PR checks: no dependency leaf. Fast-forwarded `origin/main` (including `9d39d3c`) before the gates. Trip product files were not changed by that merge. Media, finance, web, server, and the boundary checker were not edited.
 
 ## Acceptance
