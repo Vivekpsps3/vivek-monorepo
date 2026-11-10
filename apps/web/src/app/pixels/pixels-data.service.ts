@@ -3,15 +3,12 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Subject, firstValueFrom } from 'rxjs';
 import { silentErrorToast } from '@vivek/ui';
 import {
-  LOCK_SIGNAL,
-  VAULT_PRESENCE,
+  bindLockNotices,
   bindLockSnapshots,
-  financeTabId,
   financeVaultPresent,
   loadFinanceBudgetKeptDays,
   type BudgetKeptDaysResult,
 } from '../../../../finance/frontend/src/public-api';
-import { SessionService } from '../platform/session.service';
 import { inclusiveWindows } from './pixels-dates';
 import { composeSnapshot, withoutFinance, type PixelApiBody } from './pixels-model';
 import type { FinanceJoinStatus, PixelsLoadRequest, PixelsLoadResult, PixelsSnapshot, TripSpan } from './pixels.types';
@@ -50,7 +47,6 @@ export class PixelsDataService {
   private readonly injector = inject(Injector);
   private readonly financeDays = inject(PIXELS_FINANCE_DAYS);
   private readonly vaultPresent = inject(PIXELS_VAULT_PRESENT);
-  private readonly session = inject(SessionService);
   private generation = 0;
   private userId: number | null = null;
   readonly financeCleared$ = new Subject<void>();
@@ -58,26 +54,8 @@ export class PixelsDataService {
 
   constructor() {
     const destroy = inject(DestroyRef);
-    const unbind = bindLockSnapshots(() => this.dropFinance());
-    destroy.onDestroy(unbind);
-    if (typeof window === 'undefined') return;
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === null) this.dropFinance();
-      if (event.key === LOCK_SIGNAL && event.newValue !== null) this.dropFinance();
-      if (event.key === VAULT_PRESENCE && event.newValue === null) this.dropFinance();
-    };
-    window.addEventListener('storage', onStorage);
-    let channel: BroadcastChannel | null = null;
-    if (typeof BroadcastChannel !== 'undefined') {
-      channel = new BroadcastChannel('finance-vault-sync-v1');
-      channel.onmessage = (event: MessageEvent<unknown>) => {
-        if (this.isRemoteLock(event.data)) this.dropFinance();
-      };
-    }
-    destroy.onDestroy(() => {
-      window.removeEventListener('storage', onStorage);
-      channel?.close();
-    });
+    destroy.onDestroy(bindLockSnapshots(() => this.dropFinance()));
+    destroy.onDestroy(bindLockNotices(() => this.dropFinance()));
   }
 
   noteUser(userId: number | null): void {
@@ -181,13 +159,6 @@ export class PixelsDataService {
     }
   }
 
-  private isRemoteLock(value: unknown): boolean {
-    const userId = this.session.currentUser?.id;
-    if (userId == null || !value || typeof value !== 'object') return false;
-    const message = value as { version?: unknown; userId?: unknown; kind?: unknown; tabId?: unknown };
-    const kindOk = message.kind === 'lock' || message.kind === 'signout';
-    return message.version === 1 && message.userId === userId && kindOk && message.tabId !== financeTabId();
-  }
 }
 
 function readProfile(body: PixelApiBody): { birthday: string | null; showAge: boolean } {

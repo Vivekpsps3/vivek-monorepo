@@ -4,6 +4,7 @@ import { loadFinanceBudgetKeptDaysGuarded, loadFinanceBudgetKeptGuarded } from '
 import type { VaultRecordCapability } from './app/crypto/vault-record-capability';
 export { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE, financeVaultPresent, clearFinanceSessionStorage } from './app/crypto/dek-store';
 export { bindLockSnapshots, lockFinance } from './app/crypto/lock-finance';
+export { acceptLockNotice, bindLockNotices, storageLocksVault, VAULT_SYNC_CHANNEL, type LockSessionNotice } from './app/crypto/lock-notice';
 export { financeTabId } from './app/crypto/dek-holder';
 export async function loadMarketRefreshCoordinatorService() { return (await import('./app/services/market-refresh-coordinator.service')).MarketRefreshCoordinatorService; }
 export { FinanceLockService, type AutoLockSetting } from './app/core/finance-lock.service';

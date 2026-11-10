@@ -8,11 +8,11 @@ import { DEK_STORE, LOCK_SIGNAL, VAULT_PRESENCE } from '../../../../finance/fron
 import { VaultService } from '../../../../finance/frontend/src/testing';
 import { Asset, Holding, Liability } from '../../../../finance/frontend/src/testing';
 import { FinanceService } from '../../../../finance/frontend/src/testing';
-import { loadMarketRefreshCoordinatorService, type BudgetKeptDaysResult } from '../../../../finance/frontend/src/public-api';
+import { acceptLockNotice, financeTabId, loadMarketRefreshCoordinatorService, type BudgetKeptDaysResult } from '../../../../finance/frontend/src/public-api';
 import { todayIsoDate } from '@vivek/browser';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ThemeService } from '@vivek/ui';
+import { SESSION_CONTEXT, ThemeService } from '@vivek/ui';
 import { PIXELS_FINANCE_DAYS, PixelsDataService } from '../pixels/pixels-data.service';
 import { HubComponent } from './hub.component';
 import { hubStripWindow } from './pixels-hub-card';
@@ -184,6 +184,7 @@ describe('HubComponent', () => {
         { provide: PIXELS_FINANCE_DAYS, useValue: () => Promise.resolve(financeDays) },
         provideRouter([]),
         { provide: AuthService, useValue: auth },
+        { provide: SESSION_CONTEXT, useExisting: AuthService },
         {
           provide: ThemeService,
           useValue: { current: 'system', choice$: new BehaviorSubject('system'), set: jasmine.createSpy('set') },
@@ -482,9 +483,9 @@ describe('HubComponent', () => {
   it('clears a loaded card when another tab broadcasts a lock', async () => {
     await showHarbor();
     const user = fixture.componentInstance['auth'].currentUser;
-    expect(fixture.componentInstance['isRemoteLock']({ version: 1, userId: 1, kind: 'lock' }))
+    expect(acceptLockNotice({ version: 1, userId: 1, kind: 'lock' }, user?.id ?? null))
       .withContext(`currentUser=${JSON.stringify(user)}`)
-      .toBeTrue();
+      .toEqual({ version: 1, userId: 1, kind: 'lock' });
     const heard: unknown[] = [];
     const ear = new BroadcastChannel('finance-vault-sync-v1');
     ear.addEventListener('message', event => heard.push(event.data));
@@ -509,6 +510,27 @@ describe('HubComponent', () => {
     await new Promise(resolve => setTimeout(resolve, 20));
     echo.close();
     expect(fixture.componentInstance['financeGeneration']).toBe(1);
+    await waitForVaultLock();
+    expect(vaultLocks).toBe(1);
+  });
+
+  it('keeps a loaded card on this tab echo and locks when sign-out names this tab', async () => {
+    await showHarbor();
+    const echo = new BroadcastChannel('finance-vault-sync-v1');
+    echo.postMessage({ version: 1, userId: 1, kind: 'lock', tabId: financeTabId() });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    echo.close();
+    expect(fixture.componentInstance['financeGeneration']).toBe(0);
+    expect(fixture.nativeElement.textContent).toContain('HBRX');
+    const signout = new BroadcastChannel('finance-vault-sync-v1');
+    signout.postMessage({ version: 1, userId: 1, kind: 'signout', tabId: financeTabId() });
+    for (let i = 0; i < 10 && fixture.componentInstance.financeState !== 'locked'; i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      fixture.detectChanges();
+    }
+    signout.close();
+    expect(fixture.componentInstance.financeState).toBe('locked');
+    expect(fixture.componentInstance.netWorth).toBeNull();
     await waitForVaultLock();
     expect(vaultLocks).toBe(1);
   });

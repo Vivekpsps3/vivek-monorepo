@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { UiStateComponent } from '@vivek/ui';
 import { formatDateRange, todayIsoDate } from '@vivek/browser';
 import { SessionService as AuthService } from '../platform/session.service';
-import { LOCK_SIGNAL, VAULT_PRESENCE, financeTabId, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
+import { bindLockNotices, financeVaultPresent, lockFinance } from '../../../../finance/frontend/src/public-api';
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
 import { MoneyPipe, UiPageHeaderComponent } from '@vivek/ui';
 import {
@@ -135,10 +135,13 @@ export class HubComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
+  constructor() {
+    this.destroyRef.onDestroy(bindLockNotices(notice => this.applyExternalLock(notice.tabId)));
+  }
+
   ngOnInit(): void {
     this.episodeUndo.restored$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onMediaNextReload());
     this.pixelsData.financeCleared$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onPixelsFinanceCleared());
-    this.watchVaultLock();
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.get('settings') === 'account') {
         void this.router.navigateByUrl('/settings/account', { replaceUrl: true });
@@ -457,38 +460,8 @@ export class HubComponent implements OnInit {
     }
   }
 
-  private watchVaultLock(): void {
-    const onStorage = (event: StorageEvent) => {
-      // Migration removes finance-dek and must not lock the other tab. A lock writes the signal and drops presence.
-      // Clearing the whole store arrives as one event with a null key.
-      if (event.key === null) this.applyExternalLock();
-      if (event.key === LOCK_SIGNAL && event.newValue !== null) this.applyExternalLock();
-      if (event.key === VAULT_PRESENCE && event.newValue === null) this.applyExternalLock();
-    };
-    window.addEventListener('storage', onStorage);
-    let channel: BroadcastChannel | null = null;
-    if (typeof BroadcastChannel !== 'undefined') {
-      channel = new BroadcastChannel('finance-vault-sync-v1');
-      channel.onmessage = (event: MessageEvent<unknown>) => {
-        if (this.isRemoteLock(event.data)) this.applyExternalLock((event.data as { tabId?: string }).tabId);
-      };
-    }
-    this.destroyRef.onDestroy(() => {
-      window.removeEventListener('storage', onStorage);
-      channel?.close();
-    });
-  }
-
-  private isRemoteLock(value: unknown): boolean {
-    const userId = this.auth.currentUser?.id;
-    if (userId == null || !value || typeof value !== 'object') return false;
-    const message = value as { version?: unknown; userId?: unknown; kind?: unknown; tabId?: unknown };
-    const kindOk = message.kind === 'lock' || message.kind === 'signout';
-    return message.version === 1 && message.userId === userId && kindOk && message.tabId !== financeTabId();
-  }
-
   private applyExternalLock(originTabId?: string): void {
-    // lockFinance broadcasts, and this tab's channel hears that echo. The card is already clear.
+    // A second notice after the card is locked must not lock again.
     if (this.financeGeneration > 0 && this.financeState === 'locked') return;
     this.financeGeneration += 1;
     this.financeCtrl?.abort();
