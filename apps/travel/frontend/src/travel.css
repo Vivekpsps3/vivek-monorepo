@@ -153,6 +153,8 @@
 }
 .travel-page .date-strip {
   display: flex;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   gap: 0.5rem;
   padding-block: 0.5rem;
@@ -161,13 +163,48 @@
 }
 .travel-page .date-strip .btn,
 .travel-page .date-strip ui-button,
-.travel-page .date-strip .ui-btn {
+.travel-page .date-strip .ui-btn,
+.travel-page .day-strip-tab {
   flex-shrink: 0;
   scroll-margin-inline: calc(2 * (var(--focus-ring-width) + var(--focus-ring-offset)));
 }
-.travel-page .date-strip [aria-pressed="true"] {
+.travel-page .day-strip-tab {
+  min-height: 44px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.travel-page .day-strip-tab[aria-selected="true"] {
   border-color: var(--accent);
   background: var(--surface-2);
+}
+.travel-page .day-strip-tab:focus-visible,
+.travel-page .itinerary-day:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.travel-page .itinerary-entry {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.travel-page .itinerary-entry > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.travel-page .itinerary-group {
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+}
+.travel-page .itinerary-actions--menu {
+  display: none;
 }
 .travel-page .itinerary-day {
   padding: 1.25rem 0;
@@ -236,11 +273,20 @@
   .travel-page .form-row {
     grid-template-columns: 1fr;
   }
-  .travel-page .trip-row {
+  .travel-page .trip-row,
+  .travel-page .itinerary-entry {
     flex-direction: column;
   }
   .travel-page .trip-row .button-row {
     width: 100%;
+  }
+  .travel-page .trip-detail-transport,
+  .travel-page .trip-detail-parking,
+  .travel-page .itinerary-actions--inline {
+    display: none;
+  }
+  .travel-page .itinerary-actions--menu {
+    display: inline-block;
   }
 }
 .page.travel-page.travel-page--embedded {

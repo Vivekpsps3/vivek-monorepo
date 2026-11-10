@@ -47,7 +47,8 @@ test('retrying parking preserves the Booked value that was chosen', async ({ pag
   const created = await trip(request);
   await request.post('/travel/api/trips/' + created.id + '/parking', { data: { place_name: 'Garage', booked: false, necessary: 'yes' } });
   await page.goto('/travel/trips/' + created.id);
-  await page.getByRole('button', { name: 'Edit parking' }).click();
+  await page.getByRole('button', { name: 'Actions for Garage' }).click();
+  await page.getByRole('menuitem', { name: 'Edit parking' }).click();
   const bodies = [];
   await page.route('**/travel/api/parking/**', route => {
     bodies.push(route.request().postDataJSON());
@@ -61,7 +62,9 @@ test('retrying parking preserves the Booked value that was chosen', async ({ pag
   await page.getByRole('button', { name: 'Save parking' }).click();
   await expect(dialog).toBeHidden();
   expect(bodies.map(body => body.booked)).toEqual([true, true]);
-  await expect(page.getByRole('heading', { name: 'Garage' }).locator('..')).toContainText('Booked');
+  const garage = page.locator('article').filter({ hasText: 'Garage' }).first();
+  await expect(garage).toContainText('Booked');
+  await expect(garage).not.toContainText('Not booked');
 });
 
 test('native date controls support keyboard entry and preserve range through resize', async ({ page }) => {

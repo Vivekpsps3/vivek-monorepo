@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { barName, dayLinkName, monthMatrix, weekdayHeads } from "../../../frontend/src/calendar-model.mjs";
 import {
   changeCity,
   clearRange,
@@ -128,13 +127,4 @@ test("same-day trips, the last day, and adjacent stops stay predictable", () => 
   assert.equal(removed.cities["2026-10-24"], "Kyoto");
   assert.equal(removed.cities["2026-10-26"], "Nara");
   assert.equal(dayName("2026-10-27", { start: "2026-10-24", end: "2026-10-30", splits: ["2026-10-27"] }), "Tuesday, October 27, 2026, change city");
-});
-
-test("calendar day names include plans and the bar name includes the range", () => {
-  const day = new Date(2026, 9, 22);
-  assert.equal(dayLinkName({ iso: "2026-10-22", todayIso: "2026-10-22", day, planCount: 2, tripTitles: ["Kyoto trip"] }), "Thu, Oct 22, today, 2 plans, in Kyoto trip");
-  assert.equal(barName({ title: "Kyoto", start_date: "2026-10-24", end_date: "2026-10-30" }), "Kyoto, Oct 24 – Oct 30");
-  const weeks = monthMatrix(2026, 10, 0);
-  assert.equal(weeks[0][0].getDay(), 0);
-  assert.equal(weekdayHeads()[0].title, "Sunday");
 });

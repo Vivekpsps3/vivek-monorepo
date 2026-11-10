@@ -155,11 +155,14 @@ export interface Trip {
   outside_plans: Plan[];
   parking: {
     id: number;
+    transport_id: number | null;
     place_name: string | null;
     necessary: string;
     booked: boolean;
     arrangement: string;
     address: string | null;
+    start_at: string | null;
+    end_at: string | null;
     cost: string | null;
     currency: string;
     confirmation: string | null;
