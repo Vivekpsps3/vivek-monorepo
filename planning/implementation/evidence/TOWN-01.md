@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#249](https://github.com/Vivekpsps3/vivek-monorepo/issues/249) TOWN-01. Parent [#81](https://github.com/Vivekpsps3/vivek-monorepo/issues/81) stays open.
 - Agent/context, branch/worktree: Cursor Grok, `agent/town-01`, `/tmp/vivek-town-01`.
-- Base main SHA, current tested SHA: base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`. Commands below ran on that base plus the Town seed, allowlist, and spec edits in this commit, before the commit. System Node is 20.20.2; the commands used Node 24.22.1. Python was the repo `.venv` (3.12.3). Chromium was `/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`.
+- Base main SHA, current tested SHA: base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`. Town changes are `2755d97c7963f01bb0aec5f07d3d93ea4bbb41fa`. After those commands, `origin/main` moved to `e9cd267b3c047e6e2d5153b5df0378c15ef429e0` (MED-07). That merge is `e617dde8b2ca44b75aac17343e05d1b68ecec028`. The 15 Town cases were run again on that merge and passed. System Node is 20.20.2; the commands used Node 24.22.1. Python was the repo `.venv` (3.12.3). Chromium was `/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`.
 - Fresh-main/prerequisite/active-PR checks: the worktree started at `08be484ba3b3535dbcb500749245f2e75ee1f2e4`. VER-02 is on this base (orphan specs fail the fast check). UX-02 is on this base (PR #288): Town and World each have one `main` and one page heading, and Town's header is inside `main`. PR #193 is already merged. The claim comment is already on #249. The activated specs assert that landmark. Town and World styles were not changed.
 
 ## Acceptance
@@ -55,7 +55,7 @@ Town config `--list` JSON was `expected: 0, skipped: 67` and was not counted as 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled in the commit that follows `gh pr create`. `Closes #249`. Parent #81 is referenced and not closed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/293 (`Closes #249`). Parent #81 is referenced and not closed.
 - Roadmap #134 append-only status-note URL: added after the squash lands. The roadmap body was not edited.
 - Merged/activation status: not merged at the time of the local commands. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #81 stays open. UX-01 still owns the settings spec.
@@ -63,7 +63,7 @@ Town config `--list` JSON was `expected: 0, skipped: 67` and was not counted as 
 
 Issue / parent / local packet: TOWN-01 / #249 / #81 / `planning/implementation/issues/TOWN-01.md`.
 
-Branch, worktree, base main SHA, current SHA: `agent/town-01`, `/tmp/vivek-town-01`, base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`.
+Branch, worktree, base main SHA, current SHA: `agent/town-01`, `/tmp/vivek-town-01`, base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`, branch HEAD `e617dde8b2ca44b75aac17343e05d1b68ecec028`.
 
 Owned files and conflict groups: `browser-fixture-core`, `town-browser`, `test-discovery`. World controller source, Media providers, Finance vault API, and Finance recurring editors were not edited.
 
@@ -75,7 +75,7 @@ Deletion ledger and current consumer migration: the three files now run through 
 
 Commands run, results, tested SHA; required checks still pending: see Verification. Every required local command passed.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: pull request not opened yet. Not merged. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/293 is open. Not merged. Not deployed. The #134 note is appended after the squash.
 
 External prerequisites and next actor: open the pull request, merge `origin/main` if it moved, squash-merge, then append the #134 note and remove `/tmp/vivek-town-01`.
 
