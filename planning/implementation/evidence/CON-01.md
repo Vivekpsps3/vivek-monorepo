@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#206](https://github.com/Vivekpsps3/vivek-monorepo/issues/206); parent [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197) stays open
 - Agent/context, branch/worktree: Cursor Grok, `agent/con-01`, `/tmp/vivek-con-01`
-- Base main SHA, current tested SHA: packet base `80b9ca0e0776297f3addcdfdac78542f6a7ced40`. `origin/main` fast-forwarded to `3f0304381486682169fb94f4c42875e63452393d` before the gates. The four gates passed on that tree plus the checker diff. `make test-fast` runs again on the evidence commit; that HEAD is the tested SHA.
+- Base main SHA, current tested SHA: packet base `80b9ca0e0776297f3addcdfdac78542f6a7ced40`. `origin/main` fast-forwarded to `3f0304381486682169fb94f4c42875e63452393d` before the gates. Tested SHA `9764c17e48fe6f0668e06de3a7426ac8adf0bedc` (`make test-fast` rerun on that commit; the other three gates passed on the same checker diff).
 - Fresh-main/prerequisite/active-PR checks: no queue dependency. No open pull requests when the leaf started. Conflict groups `architecture-checker`, `root-typescript-config`, and `server-composition` were not edited in product files. `routes.ts`, `main.py`, `schema.py`, and `public-api.ts` were read and left unchanged.
 
 ## Acceptance
@@ -48,7 +48,7 @@ Commands ran from `/tmp/vivek-con-01` with `PATH="/tmp/node24/bin:$PATH"` (`node
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this file; body uses `Closes #206` and `Refs #197` only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/300 (`Closes #206`, `Refs #197`). Parent #197 is not closed.
 - Roadmap #134 append-only status-note URL: posted after merge. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): local gates passed. Squash merge is authorized for this leaf. This file does not claim deployment or activation.
 - Remaining external prerequisites or approved scope decisions: none for this leaf.
@@ -58,7 +58,7 @@ Commands ran from `/tmp/vivek-con-01` with `PATH="/tmp/node24/bin:$PATH"` (`node
 
 Issue / parent / local packet: CON-01, GitHub #206, parent #197, packet `planning/implementation/issues/CON-01.md`.
 
-Branch, worktree, base main SHA, current SHA: `agent/con-01`, `/tmp/vivek-con-01`, merged main `3f0304381486682169fb94f4c42875e63452393d`, original base `80b9ca0e0776297f3addcdfdac78542f6a7ced40`.
+Branch, worktree, base main SHA, current SHA: `agent/con-01`, `/tmp/vivek-con-01`, merged main `3f0304381486682169fb94f4c42875e63452393d`, tested SHA `9764c17e48fe6f0668e06de3a7426ac8adf0bedc`.
 
 Owned files and conflict groups: `architecture-checker`, `root-typescript-config`, `server-composition`. Product files in those groups were not edited.
 
@@ -70,7 +70,7 @@ Deletion ledger and current consumer migration: regex ownership and the server-w
 
 Commands run, results, tested SHA; required checks still pending: the four commands above passed. `make test-fast` is repeated after this evidence file so doc links are checked. CI was not required before the local gates.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: the pull request follows this commit. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/300. The #134 comment follows merge. Not deployed.
 
 External prerequisites and next actor: none. Next actor is the integration owner after squash merge.
 
