@@ -1,18 +1,7 @@
 """Release timing. Month and year precision are never treated as a specific day."""
 
 import os
-from datetime import date, timedelta
-
-WHEN_RANK = {
-    "today": 0,
-    "tomorrow": 1,
-    "this_week": 2,
-    "this_month": 3,
-    "upcoming": 4,
-    "postponed": 5,
-    "unknown": 6,
-    "recent": 7,
-}
+from datetime import date
 
 
 def today() -> date:
@@ -84,35 +73,3 @@ def episode_state(air_date: date | None, today_value: date) -> str:
 
 def is_released(air_date: date | None, today_value: date) -> bool:
     return air_date is None or air_date <= today_value
-
-
-def choose_release(releases: list, today_value: date):
-    """Pick the release to show for an anticipated entry.
-
-    Returns (release or None, when). when is None when every dated release is
-    too old to keep on the upcoming list.
-    """
-    if not releases:
-        return None, "unknown"
-    choices = []
-    for release in releases:
-        label = classify_release(
-            release.precision, release.released_on, release.status, today_value
-        )
-        if label is None:
-            continue
-        choices.append((release, label))
-    if not choices:
-        return None, None
-
-    def sort_key(item):
-        release, label = item
-        stamp = release.released_on.toordinal() if release.released_on else 9_999_999
-        return (WHEN_RANK[label], stamp, release.id or 0)
-
-    choices.sort(key=sort_key)
-    return choices[0]
-
-
-def within_days(day: date, today_value: date, days: int) -> bool:
-    return abs(day - today_value) <= timedelta(days=days)

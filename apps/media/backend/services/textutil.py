@@ -1,36 +1,5 @@
 """Plain-text helpers. Reviews are never treated as HTML."""
 
-import math
-from decimal import Decimal
-from urllib.parse import urlparse
-
-
-def clean_rating(value):
-    """None, or a number from 0 to 10 in half steps. 0 is a real rating."""
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError("Rating must be from 0 to 10 in half steps.")
-    if isinstance(value, float) and not math.isfinite(value):
-        raise ValueError("Rating must be from 0 to 10 in half steps.")
-    number = Decimal(str(value))
-    doubled = number * 2
-    if number < 0 or number > 10 or doubled != doubled.to_integral_value():
-        raise ValueError("Rating must be from 0 to 10 in half steps.")
-    return float(number)
-
-
-def clean_artwork(value: str | None) -> str | None:
-    if value is None:
-        return None
-    text = value.strip()
-    if not text:
-        return None
-    parsed = urlparse(text)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ValueError("Artwork URL must be an http(s) link.")
-    return text
-
 
 def blank(value: str | None, limit: int, *, label: str = "This text") -> str | None:
     if value is None:

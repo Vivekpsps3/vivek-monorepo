@@ -102,6 +102,16 @@ def http_url(value) -> str | None:
     return text
 
 
+def https_artwork(value) -> str | None:
+    """Trimmed case-sensitive https URL up to 1000 characters, or None."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text.startswith("https://") or len(text) > 1000:
+        return None
+    return text
+
+
 def parse_date(value, field: str) -> date | None:
     if value is None or value == "":
         return None

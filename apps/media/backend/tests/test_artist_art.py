@@ -1,5 +1,7 @@
 """Artist portraits are image URLs the browser loads. Album covers stay on albums."""
 
+import httpx
+
 from apps.media.backend.services.providers import image_from_relations, portrait_url
 
 ARIANA = "f4fdbb4c-e4b7-47a0-b83b-d91bbfcfa387"
@@ -48,11 +50,6 @@ def test_lastfm_portrait_is_kept_when_it_is_the_only_image():
 
 
 def test_saved_library_and_detail_do_not_fill_missing_portraits(client, monkeypatch):
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError("Ordinary reads must be database-only")
-
-    monkeypatch.setattr("apps.media.backend.services.providers.wikidata_artist_images", forbidden)
-    monkeypatch.setattr("apps.media.backend.services.providers.musicbrainz_artist_image", forbidden)
     saved = client.post(
         "/api/library/from-provider",
         json={
@@ -62,5 +59,16 @@ def test_saved_library_and_detail_do_not_fill_missing_portraits(client, monkeypa
             "title": "Ariana Grande",
         },
     ).json()
-    assert client.get("/api/library").json()["items"][0]["artwork_url"] is None
-    assert client.get(f"/api/entries/{saved['id']}").json()["artwork_url"] is None
+    opened = []
+
+    def forbidden(*_args, **_kwargs):
+        opened.append(1)
+        raise AssertionError("Ordinary reads must be database-only")
+
+    monkeypatch.setattr(httpx, "Client", forbidden)
+    library = client.get("/api/library").json()
+    detail = client.get(f"/api/entries/{saved['id']}").json()
+    assert library["items"][0]["artwork_url"] is None
+    assert detail["artwork_url"] is None
+    assert detail["catalog"]["artwork_url"] is None
+    assert opened == []
