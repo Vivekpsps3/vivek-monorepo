@@ -993,3 +993,136 @@ def test_tv_add_stores_detail_episodes_only(client, monkeypatch):
     assert [row["title"] for row in show["episodes"]] == ["Pilot"]
     assert saved.json()["catalog"]["title"] == "Show"
     assert saved.json()["catalog"]["extra"]["lifecycle"] == "Ended"
+
+
+def _https_cases():
+    exact = "https://" + ("a" * 992)
+    over = "https://" + ("a" * 993)
+    return [
+        ("  https://cdn.example/art.jpg  ", "https://cdn.example/art.jpg"),
+        ("http://cdn.example/art.jpg", None),
+        ("HTTPS://cdn.example/art.jpg", None),
+        (exact, exact),
+        (over, None),
+        (f"  {over}  ", None),
+        (None, None),
+        (15, None),
+        ("", None),
+        ("   ", None),
+        ("javascript:alert(1)", None),
+        ("https://cdn.example/a b", "https://cdn.example/a b"),
+    ]
+
+
+def test_game_artwork_uses_one_strict_https_policy(monkeypatch):
+    from fastapi import HTTPException
+
+    from apps.media.backend.services import records
+    from apps.media.backend.services.validate import http_url, https_artwork
+
+    assert providers.https_artwork is https_artwork
+    assert records.https_artwork is https_artwork
+    cases = _https_cases()
+    for raw, expected in cases:
+        assert https_artwork(raw) == expected
+    assert http_url("  http://cdn.example/art.jpg  ") == "http://cdn.example/art.jpg"
+    assert https_artwork("  http://cdn.example/art.jpg  ") is None
+    with pytest.raises(HTTPException):
+        http_url("javascript:alert(1)")
+
+    monkeypatch.setenv("RAWG_API_KEY", "secret")
+    for raw, expected in cases:
+
+        def rawg(request, raw=raw):
+            assert request.url.params["key"] == "secret"
+            return httpx.Response(200, json={"id": 1, "name": "Hades", "background_image": raw})
+
+        with _http(rawg) as http:
+            row = rawg_detail(http, "1")
+        assert row is not None
+        assert row["artwork_url"] == expected
+
+        def steam(_request, raw=raw):
+            return httpx.Response(
+                200,
+                json={
+                    "1145360": {
+                        "success": True,
+                        "data": {"name": "Hades", "header_image": raw},
+                    }
+                },
+            )
+
+        with _http(steam) as http:
+            game = steam_detail(http, "1145360")
+        assert game is not None
+        assert game["artwork_url"] == expected
+
+    def marked(value):
+        if value == " https://cdn.example/marked.jpg ":
+            return "https://marked.example/only"
+        return None
+
+    monkeypatch.setattr(providers, "https_artwork", marked)
+
+    def marked_rawg(_request):
+        return httpx.Response(
+            200,
+            json={
+                "id": 1,
+                "name": "Hades",
+                "background_image": " https://cdn.example/marked.jpg ",
+            },
+        )
+
+    def marked_steam(_request):
+        return httpx.Response(
+            200,
+            json={
+                "1145360": {
+                    "success": True,
+                    "data": {
+                        "name": "Hades",
+                        "header_image": " https://cdn.example/marked.jpg ",
+                    },
+                }
+            },
+        )
+
+    with _http(marked_rawg) as http:
+        marked_row = rawg_detail(http, "1")
+    assert marked_row is not None
+    assert marked_row["artwork_url"] == "https://marked.example/only"
+    with _http(marked_steam) as http:
+        marked_game = steam_detail(http, "1145360")
+    assert marked_game is not None
+    assert marked_game["artwork_url"] == "https://marked.example/only"
+
+
+def test_authoritative_artwork_fill_uses_the_same_https_policy(client, monkeypatch):
+    from apps.media.backend.models import CatalogItem
+    from apps.media.backend.services import records
+    from apps.media.backend.services.validate import https_artwork
+
+    saved = client.post("/api/library", json={"kind": "game", "title": "Hades"}).json()
+    with client.app.state.database.sessionmaker() as db:
+        catalog = db.get(CatalogItem, saved["catalog"]["id"])
+        assert catalog is not None
+        assert catalog.artwork_url is None
+        for raw, expected in _https_cases():
+            catalog.artwork_url = None
+            records._apply_authoritative(db, catalog, {"artwork_url": raw})
+            assert catalog.artwork_url == expected
+
+        def marked(value):
+            assert value == " https://cdn.example/marked.jpg "
+            return "https://marked.example/only"
+
+        assert records.https_artwork is https_artwork
+        monkeypatch.setattr(records, "https_artwork", marked)
+        catalog.artwork_url = None
+        records._apply_authoritative(
+            db, catalog, {"artwork_url": " https://cdn.example/marked.jpg "}
+        )
+        assert catalog.artwork_url == "https://marked.example/only"
+        db.rollback()

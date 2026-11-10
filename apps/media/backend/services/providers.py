@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session
 
 from apps.media.backend.models import ProviderCache, utc_now
 from apps.media.backend.services.search_cache import PartialSearchError, SearchCache, SearchResult
+from apps.media.backend.services.validate import https_artwork
 from apps.server.database import release_for_provider_io
 
 UA = "VivekMedia/1.0 (personal media journal)"
@@ -1145,170 +1146,6 @@ def image_from_relations(relations) -> str | None:
     return direct
 
 
-def musicbrainz_artist_image(http: httpx.Client, artist_id: str) -> str | None:
-    """Portrait URL from the artist's image links. The browser loads the file."""
-    artist = mbid(artist_id)
-    if not artist:
-        return None
-    response = mb_get(
-        http,
-        f"https://musicbrainz.org/ws/2/artist/{artist}",
-        params={"inc": "url-rels", "fmt": "json"},
-    )
-    if response.status_code == 404:
-        return None
-    response.raise_for_status()
-    body = response.json()
-    if not isinstance(body, dict):
-        return None
-    return image_from_relations(body.get("relations"))
-
-
-def wikidata_artist_images(http: httpx.Client, mbids: list[str]) -> dict[str, str]:
-    """One lookup for many artists. Wikimedia is already linked from MusicBrainz."""
-    clean = []
-    seen = set()
-    for raw in mbids:
-        artist = mbid(raw if isinstance(raw, str) else "")
-        if not artist:
-            continue
-        key = artist.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        clean.append(key)
-    found: dict[str, str] = {}
-    for start in range(0, len(clean), 40):
-        chunk = clean[start : start + 40]
-        values = " ".join(f'"{item}"' for item in chunk)
-        query = (
-            "SELECT ?mbid ?image WHERE { "
-            f"VALUES ?mbid {{ {values} }} "
-            "?artist wdt:P434 ?mbid. "
-            "?artist wdt:P18 ?image. }"
-        )
-        response = http.get(
-            "https://query.wikidata.org/sparql",
-            params={"query": query, "format": "json"},
-            headers={
-                "Accept": "application/sparql-results+json",
-                # Wikimedia refuses clients whose User-Agent has no contact URL.
-                "User-Agent": "VivekMedia/1.0 (https://vivekpanchagnula.com; personal media journal)",
-            },
-        )
-        response.raise_for_status()
-        payload = response.json()
-        rows = payload.get("results", {}).get("bindings", []) if isinstance(payload, dict) else []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            mbid_value = (row.get("mbid") or {}).get("value")
-            image = (row.get("image") or {}).get("value")
-            if not isinstance(mbid_value, str) or not isinstance(image, str):
-                continue
-            key = mbid_value.lower()
-            if key in found:
-                continue
-            portrait = portrait_url(image)
-            if portrait:
-                found[key] = portrait
-    return found
-
-
-def cached_artist_portraits(
-    db: Session, http: httpx.Client, mbids: list, *, deep: bool = False
-) -> dict[str, str]:
-    wanted = []
-    seen = set()
-    for raw in mbids:
-        artist = mbid(raw if isinstance(raw, str) else "")
-        if not artist:
-            continue
-        key = artist.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        wanted.append(key)
-    resolved: dict[str, str] = {}
-    need_wiki = []
-    need_deep = []
-    for artist_id in wanted:
-        cached = _cache_get(db, f"artist-portrait:{artist_id}")
-        url = cached.get("artwork_url") if isinstance(cached, dict) else None
-        if isinstance(url, str) and url.startswith("https://"):
-            resolved[artist_id] = url
-            continue
-        checked = cached.get("checked") if isinstance(cached, dict) else None
-        if checked == "full":
-            continue
-        if checked == "wiki" and deep:
-            need_deep.append(artist_id)
-            continue
-        if checked == "wiki":
-            continue
-        need_wiki.append(artist_id)
-    if need_wiki:
-        release_for_provider_io(db)
-        try:
-            found = wikidata_artist_images(http, need_wiki)
-        except Exception:
-            found = None
-        if found is None:
-            if deep:
-                need_deep.extend(need_wiki)
-        else:
-            for artist_id in need_wiki:
-                url = found.get(artist_id)
-                if url:
-                    _cache_put(
-                        db, f"artist-portrait:{artist_id}", {"artwork_url": url, "checked": "wiki"}
-                    )
-                    resolved[artist_id] = url
-                elif deep:
-                    need_deep.append(artist_id)
-                else:
-                    _cache_put(
-                        db,
-                        f"artist-portrait:{artist_id}",
-                        {"artwork_url": None, "checked": "wiki"},
-                    )
-    for artist_id in need_deep:
-        release_for_provider_io(db)
-        try:
-            url = musicbrainz_artist_image(http, artist_id)
-        except Exception:
-            continue
-        _cache_put(db, f"artist-portrait:{artist_id}", {"artwork_url": url, "checked": "full"})
-        if url:
-            resolved[artist_id] = url
-    return resolved
-
-
-def attach_artist_portraits(db: Session, results: list) -> None:
-    pending = []
-    for row in results or []:
-        if not isinstance(row, dict):
-            continue
-        if row.get("kind") != "artist" or row.get("source") != "musicbrainz":
-            continue
-        if row.get("artwork_url") or not mbid(row.get("source_id") or ""):
-            continue
-        pending.append(row)
-    if not pending:
-        return
-    http = httpx.Client(timeout=8.0, headers={"User-Agent": UA, "Accept": "application/json"})
-    try:
-        images = cached_artist_portraits(db, http, [row["source_id"] for row in pending])
-    except Exception:
-        return
-    finally:
-        http.close()
-    for row in pending:
-        url = images.get(str(row.get("source_id") or "").lower())
-        if url:
-            row["artwork_url"] = url
-
-
 def artist_name(credit) -> str | None:
     if not isinstance(credit, list) or not credit:
         return None
@@ -1659,15 +1496,6 @@ def _loose_release(text: str | None) -> tuple[int | None, list]:
     return None, []
 
 
-def _https_artwork(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    text = value.strip()
-    if not text.startswith("https://") or len(text) > 1000:
-        return None
-    return text
-
-
 def _genre_names(items) -> list[str]:
     names = []
     for item in items or []:
@@ -2013,7 +1841,7 @@ def rawg_detail(http: httpx.Client, source_id: str) -> dict | None:
     row["year"] = year
     description = item.get("description_raw") or item.get("description")
     row["overview"] = plain_text(description, 4000) if isinstance(description, str) else None
-    row["artwork_url"] = _https_artwork(item.get("background_image"))
+    row["artwork_url"] = https_artwork(item.get("background_image"))
     row["genres"] = _genre_names(item.get("genres"))
     row["external_ratings"] = ratings
     row["extra"] = {"platforms": names} if names else {}
@@ -2076,7 +1904,7 @@ def steam_detail(http: httpx.Client, source_id: str) -> dict | None:
     row = _detail_base("steam", source_id.strip(), "game", item["name"].strip(), "keyless")
     row["year"] = year
     row["overview"] = plain_text(item.get("short_description"), 4000)
-    row["artwork_url"] = _https_artwork(item.get("header_image"))
+    row["artwork_url"] = https_artwork(item.get("header_image"))
     row["extra"] = {"platforms": names} if names else {}
     row["releases"] = releases
     row["external_ratings"] = []

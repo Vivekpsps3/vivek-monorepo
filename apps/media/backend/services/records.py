@@ -35,6 +35,7 @@ from apps.media.backend.services.validate import (
     clean_text,
     fail,
     http_url,
+    https_artwork,
     parse_date,
     rating_value,
     season_number,
@@ -416,15 +417,6 @@ def _text_or_blank(value, limit: int) -> str | None:
     return text[:limit]
 
 
-def _safe_https(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    text = value.strip()
-    if not text.startswith("https://") or len(text) > 1000:
-        return None
-    return text
-
-
 def _apply_authoritative(db: Session, catalog: CatalogItem, detail: dict) -> None:
     """Fill shared fields from the adapter. Leave a written overview alone."""
     title = _text_or_blank(detail.get("title"), 300)
@@ -435,7 +427,7 @@ def _apply_authoritative(db: Session, catalog: CatalogItem, detail: dict) -> Non
     if not catalog.overview:
         catalog.overview = _text_or_blank(detail.get("overview"), 8000)
     if not catalog.artwork_url:
-        catalog.artwork_url = _safe_https(detail.get("artwork_url"))
+        catalog.artwork_url = https_artwork(detail.get("artwork_url"))
     if catalog.year is None and isinstance(detail.get("year"), int):
         year = detail["year"]
         if 1000 <= year <= 3000:
@@ -1877,29 +1869,6 @@ def mark_watched(
     db.flush()
 
 
-def mark_next(db: Session, user_id: int, entry: UserEntry) -> dict:
-    if entry.catalog.kind != "tv":
-        fail("Episode progress is for shows.")
-    state = episode_state(db, user_id, entry.catalog)
-    nxt = state["next_episode"]
-    if nxt is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=409, detail="Add episodes, or you are already caught up.")
-    episode = db.get(Episode, nxt["id"])
-    if episode is None:
-        fail_missing()
-    mark_watched(db, user_id, episode, True, today())
-    entry.updated_at = utc_now()
-    return episode_state(db, user_id, entry.catalog)
-
-
-def needs_collaborators(catalog: CatalogItem) -> bool:
-    if catalog.kind != "artist" or catalog.source != "musicbrainz" or not catalog.source_id:
-        return False
-    return "collaborators" not in _extra(catalog)
-
-
 def store_collaborators(catalog: CatalogItem, rows) -> list[dict]:
     clean = []
     for row in rows or []:
@@ -2334,10 +2303,6 @@ def saved_source_ids(db: Session, user_id: int) -> dict[tuple[str, str], int]:
         .all()
     )
     return {(source, source_id): entry_id for source, source_id, entry_id in rows}
-
-
-def saved_source_keys(db: Session, user_id: int) -> set[tuple[str, str]]:
-    return set(saved_source_ids(db, user_id))
 
 
 def saved_artist_artwork(db: Session, user_id: int) -> dict[tuple[str, str], str]:

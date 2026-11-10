@@ -24,7 +24,6 @@ Media service code with no supported consumer is removed while route responses, 
 
 ## Source paths
 
-- `apps/media/backend/services/jsonstore.py`
 - `apps/media/backend/services/textutil.py`
 - `apps/media/backend/services/when.py`
 - `apps/media/backend/services/records.py`

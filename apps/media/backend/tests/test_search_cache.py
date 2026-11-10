@@ -108,10 +108,11 @@ def test_search_writes_no_catalog_membership_episode_or_query_cache_rows(client,
         ],
     )
 
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError("Search attempted portrait enrichment")
+    class TransportSpy(httpx.Client):
+        def request(self, method, url, *args, **kwargs):
+            raise AssertionError(f"Search made an outbound request: {method} {url}")
 
-    monkeypatch.setattr(providers, "cached_artist_portraits", forbidden)
+    monkeypatch.setattr(httpx, "Client", TransportSpy)
     with client.app.state.database.sessionmaker() as db:
         before = [
             db.query(model).count() for model in (CatalogItem, UserEntry, Episode, ProviderCache)
