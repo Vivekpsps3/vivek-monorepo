@@ -39,6 +39,36 @@ test.describe('World explorer', () => {
     return { urls, unexpected };
   }
 
+  test('leaves World and opens one controller again', async ({ page }) => {
+    await page.goto('/town/world?week=2026-10-12');
+    const world = page.locator('app-world');
+    await expect(world).toHaveCount(1);
+    await expect(page.getByRole('main')).toHaveCount(1);
+    await expect(page).toHaveURL(/\/town\/world\?week=2026-10-12$/);
+    await page.goto('/town');
+    await expect(page.locator('app-world')).toHaveCount(0);
+    await expect(page.getByRole('main')).toHaveCount(1);
+    const explore = page.getByRole('link', { name: 'Explore the world' });
+    await explore.click();
+    await expect(page).toHaveURL(/\/town\/world(?:\?|$)/);
+    await expect(page.locator('app-world')).toHaveCount(1);
+    await expect(page.getByRole('main')).toHaveCount(1);
+    await expect(page.getByRole('heading', { level: 1, name: 'World' })).toBeVisible();
+    const region = page.locator('[role="region"][aria-label="World"]');
+    const live = page.locator('.world-live');
+    await region.focus();
+    await region.press('End');
+    await expect(live).toHaveText('Town');
+    await region.press('Home');
+    await expect(live).not.toHaveText('Town');
+    await page.goBack();
+    await expect(page.locator('app-world')).toHaveCount(0);
+    await page.goForward();
+    await expect(page.locator('app-world')).toHaveCount(1);
+    await expect(page.getByRole('main')).toHaveCount(1);
+    await expect(page.getByRole('heading', { level: 1, name: 'World' })).toBeVisible();
+  });
+
   test('keeps the week query and stays on the allowlist', async ({ page }) => {
     const seen = watch(page);
     await page.goto('/town/world?week=2026-10-12');

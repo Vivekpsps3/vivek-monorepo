@@ -253,9 +253,10 @@ unimplemented whole journeys.
 ### F-12 — World has competing composition paths
 
 **Verified symbol/use search.**
-[WorldControllerService](../../apps/web/src/app/world/data/world-controller.service.ts)
-has no consumers found in the repository; [World UI](../../apps/web/src/app/world/ui/world.component.ts)
-constructs the same controller through `connectController`. The UI also owns keyboard,
+The route [World UI](../../apps/web/src/app/world/ui/world.component.ts)
+constructs the controller through `connectController`. The unused root
+`WorldControllerService` wrapper had no consumers and was removed; do not put it
+back as a singleton. The UI also owns keyboard,
 pointer/camera, animation scheduling, source lifecycle and rendering orchestration.
 
 **Remedy:** TD-11/TD-21. Choose one correctly scoped composition path and remove

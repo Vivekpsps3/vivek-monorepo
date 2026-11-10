@@ -31,7 +31,6 @@ Choose one controller/lifecycle composition path, remove the orphan wrapper, and
 ## Source paths
 
 - `apps/web/src/app/world/ui/world.component.ts`
-- `apps/web/src/app/world/data/world-controller.service.ts`
 - `apps/web/src/app/world/data/world-controller.ts`
 - `apps/web/src/app/world/data/index.ts`
 - `apps/web/src/app/world/logic/camera.ts`

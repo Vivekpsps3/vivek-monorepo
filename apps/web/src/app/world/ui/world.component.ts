@@ -31,9 +31,8 @@ import {
 import { SessionService } from '../../platform/session.service';
 import { FIXED_LOTS, weeksKeptRun, type TownResponse } from '../../town';
 import { loadTownHealthStages, type TownHealthStages } from '../../town/health';
-import { BAND, CHUNK_H, CHUNK_W } from '../engine';
+import { BAND, CHEST_X, CHUNK_H, CHUNK_W, dayIndex } from '../engine';
 import {
-  addIsoDays,
   applyCamera,
   bandAt,
   bitmapKey,
@@ -235,7 +234,6 @@ export class WorldComponent {
   private bootId = 0;
   private slowTimer = 0;
   private paging = false;
-  private scale: 2 | 3 = 2;
   private pointer: { id: number; x: number; y: number; lastX: number } | null = null;
   private anim: { from: number; to: number; start: number; dur: number } | null = null;
   private observer?: ResizeObserver;
@@ -368,10 +366,8 @@ export class WorldComponent {
     const meta = this.view()?.meta;
     if (!meta) return;
     const week = snapWeek(meta.today, meta.start_week, meta.current_week);
-    let day = 0;
-    for (let index = 0; index < 7; index += 1) {
-      if (addIsoDays(week, index) === meta.today) day = index;
-    }
+    const offset = dayIndex(week, meta.today);
+    const day = offset >= 0 && offset < 7 ? offset : 0;
     this.move({ type: 'jump', week, day });
   }
 
@@ -782,8 +778,7 @@ export class WorldComponent {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas || this.disposed) return;
     const cssWidth = Math.max(1, Math.floor(this.cssWidth()));
-    const scale = scaleForWidth(cssWidth);
-    this.scale = scale;
+    const scale = this.scaleNow();
     const cssHeight = CHUNK_H * scale;
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.round(cssWidth * dpr);
@@ -821,7 +816,7 @@ export class WorldComponent {
         renderApi.renderChunkBitmap(bitmap as BitmapCanvas, loaded.chunk, this.atlas, scale, theme);
         if (this.bitmaps.put(key, bitmap, budget)) source = bitmap;
       }
-      if (source) bitmaps.push({ originTile: index * CHUNK_W, source });
+      if (source) bitmaps.push({ originTile: tileOfDay(index, 0), source });
     }
     const fogTiles: { tile: number }[] = [];
     const meta = snap.meta;
@@ -840,7 +835,7 @@ export class WorldComponent {
       if (chest.visual === 'none') continue;
       const index = weeks.findIndex(week => week.week === chest.week);
       if (index < 0) continue;
-      chests.push({ tile: index * CHUNK_W + (byWeek.get(chest.week)?.chunk.chest.x ?? 54), visual: chest.visual });
+      chests.push({ tile: tileOfDay(index, 0) + (byWeek.get(chest.week)?.chunk.chest.x ?? CHEST_X), visual: chest.visual });
     }
     renderApi.paintViewport(ctx as RenderContext, {
       scale,
@@ -852,7 +847,7 @@ export class WorldComponent {
       chests,
       selectionTile: this.selectedTile(),
       district: this.district(),
-      districtOrigin: weeks.length * CHUNK_W,
+      districtOrigin: tileOfDay(weeks.length, 0),
       showPier: true,
       atlas: this.atlas,
     });
