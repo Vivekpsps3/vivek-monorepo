@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#241](https://github.com/Vivekpsps3/vivek-monorepo/issues/241); parents [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) and [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) stay open
 - Agent/context, branch/worktree: Cursor Grok, `agent/med-07`, `/tmp/vivek-med-07`
-- Base main SHA, current tested SHA: base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`; tested implementation recorded after the code commit (see Handoff)
+- Base main SHA, current tested SHA: base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`; tested implementation `3d89ab8a8968cd1e689acc947511c9f5b796d2ae`
 - Fresh-main/prerequisite/active-PR checks: MED-01 is `29e1318` (saved reads stay database-only). PR #193 is ancestor `495d698` (MusicBrainz release-group identity). No open pull requests at implementation time. Claim was already on #241. Worktree base matches `origin/main` at `08be484`.
 
 ## Acceptance
@@ -63,7 +63,7 @@ Commands ran in `/tmp/vivek-med-07` on the implementation tree before this evide
 
 Issue / parent / local packet: MED-07, GitHub #241, parents #200 and #85, packet `planning/implementation/issues/MED-07.md`.
 
-Branch, worktree, base main SHA, current SHA: `agent/med-07`, `/tmp/vivek-med-07`, base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`.
+Branch, worktree, base main SHA, current SHA: `agent/med-07`, `/tmp/vivek-med-07`, base `08be484ba3b3535dbcb500749245f2e75ee1f2e4`, tested implementation `3d89ab8a8968cd1e689acc947511c9f5b796d2ae`.
 
 Owned files and conflict groups: `media-provider-transport`, `media-provider-family`, `media-records`. Other active PRs checked: none open.
 
