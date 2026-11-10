@@ -77,35 +77,36 @@ test('an exclusion with an owner and no reason fails', () => {
 
 test('an owned omission is not-run and a selected file stays listed', () => {
   const report = withTree({
-    'apps/web/e2e/town.spec.ts': 'test.fixme(true, "pending");\n',
+    'apps/web/e2e/pixels-settings.spec.ts': 'test("settings", () => {});\n',
     'apps/web/e2e/pixels-year.spec.ts': 'test("year", () => {});\n',
   }, (root) => evaluateDiscovery({
     root,
     projects: [{ name: 'town', testDir: 'apps/web/e2e', testMatch: townTestMatch }],
     exclusions: [{
       project: 'town',
-      file: 'apps/web/e2e/town.spec.ts',
-      owner: 'TOWN-01',
-      issue: '#249',
-      reason: 'Waiting for TOWN-01.',
+      file: 'apps/web/e2e/pixels-settings.spec.ts',
+      owner: 'UX-01',
+      issue: '#259',
+      reason: 'Profile settings stay unselected.',
     }],
   }));
   assert.equal(report.ok, true, report.errors.join('\n'));
   assert.deepEqual(report.counts, [{ name: 'town', listed: 1 }]);
-  assert.deepEqual(report.notes, ['not-run project=town path=apps/web/e2e/town.spec.ts owner=TOWN-01 issue=#249']);
+  assert.deepEqual(report.notes, ['not-run project=town path=apps/web/e2e/pixels-settings.spec.ts owner=UX-01 issue=#259']);
   assert.match(formatReport(report), /status=listed-not-executed/);
   assert.match(formatReport(report), /discovery list is not execution/);
   assert.doesNotMatch(formatReport(report), /\bpassed\b/i);
 });
 
-test('the town allowlist keeps five files and leaves the owned gaps', () => {
+test('the town allowlist selects habit journeys and leaves the settings gap', () => {
   const town = intendedProjects.find((project) => project.name === 'town');
-  for (const name of ['pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'hub-pixels.spec.ts', 'world.spec.ts']) {
+  for (const name of [
+    'pixels-year.spec.ts', 'pixels-detail.spec.ts', 'pixels-life.spec.ts', 'hub-pixels.spec.ts', 'world.spec.ts',
+    'town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts',
+  ]) {
     assert.equal(selects(town, name), true, name);
   }
-  for (const name of ['town.spec.ts', 'town-checkin.spec.ts', 'town-dialogs.spec.ts', 'pixels-settings.spec.ts']) {
-    assert.equal(selects(town, name), false, name);
-  }
+  assert.equal(selects(town, 'pixels-settings.spec.ts'), false);
 });
 
 test('viewport and platform specs stay selected inside their projects', () => {
@@ -129,9 +130,6 @@ test('the current tree lists every intended project and records exclusion owners
   assert.equal(town.listed, townPresent - ownedExclusions.length);
   assert.deepEqual(report.notes, [
     'not-run project=town path=apps/web/e2e/pixels-settings.spec.ts owner=UX-01 issue=#259',
-    'not-run project=town path=apps/web/e2e/town-checkin.spec.ts owner=TOWN-01 issue=#249',
-    'not-run project=town path=apps/web/e2e/town-dialogs.spec.ts owner=TOWN-01 issue=#249',
-    'not-run project=town path=apps/web/e2e/town.spec.ts owner=TOWN-01 issue=#249',
   ]);
   assert.doesNotMatch(formatReport(report), /\bpassed\b/i);
 });

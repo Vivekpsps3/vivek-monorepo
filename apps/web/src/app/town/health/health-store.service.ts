@@ -3,18 +3,20 @@ import { Observable } from 'rxjs';
 import {
   bindLockSnapshots,
   financeVaultPresent,
-  openFinanceVault,
+  openVaultRecords,
+  type VaultRecordCapability,
+  type VaultRecordEnvelope,
 } from '../../../../../finance/frontend/src/public-api';
 import { SessionService } from '../../platform/session.service';
 import type { HealthPr, HealthStat } from './health.types';
 
 /**
  * Town Health vault store (THC2). Reads and writes only the health_stats
- * and health_prs collections of the Finance vault, through the Finance
- * public API. Decrypted records live in memory only; nothing is cached to
- * storage. Envelope schema_version is always 2 on write, and rows that are
- * not version 2 are refused on read (Security, 2026-10-30): skipped and
- * counted like undecryptable rows, never deleted.
+ * and health_prs collections through Finance's record capability. Decrypted
+ * records live in memory only; nothing is cached to storage. Envelope
+ * schema_version is always 2 on write, and rows that are not version 2 are
+ * refused on read (Security, 2026-10-30): skipped and counted like
+ * undecryptable rows, never deleted.
  */
 
 export const HEALTH_STATS_COLLECTION = 'health_stats';
@@ -23,8 +25,6 @@ export const HEALTH_SCHEMA_VERSION = 2;
 export const HEALTH_LOAD_DEADLINE_MS = 8_000;
 export const HEALTH_CONFLICT_MESSAGE =
   'This entry changed in another tab. Reload and try again.';
-
-export type HealthVault = Awaited<ReturnType<typeof openFinanceVault>>;
 
 export interface HealthEntry<T> {
   clientId: string;
@@ -103,14 +103,6 @@ interface Publication {
   readonly loadId?: number;
 }
 
-type VaultRow = {
-  client_id: string;
-  ciphertext_b64: string;
-  schema_version: number;
-  key_version: number;
-  revision: number;
-};
-
 @Injectable({ providedIn: 'root' })
 export class HealthStoreService {
   private readonly injector = inject(Injector);
@@ -141,9 +133,9 @@ export class HealthStoreService {
     });
   }
 
-  /** Vault access seam (the Finance public API); tests replace it. */
-  protected vault(): Promise<HealthVault> {
-    return openFinanceVault(this.injector);
+  /** Record capability seam. Tests replace it. */
+  protected vault(): Promise<VaultRecordCapability> {
+    return openVaultRecords(this.injector);
   }
 
   get statsSnapshot(): readonly HealthEntry<HealthStat>[] {
@@ -307,9 +299,9 @@ export class HealthStoreService {
   }
 
   private async decryptAll<T>(
-    vault: HealthVault,
+    vault: VaultRecordCapability,
     collection: Collection,
-    rows: readonly VaultRow[],
+    rows: readonly VaultRecordEnvelope[],
     kinds: ReadonlySet<string>,
     signal: AbortSignal,
     ticket: Publication,
