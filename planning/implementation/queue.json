@@ -536,9 +536,7 @@
       ],
       "kind": "implementation",
       "issue": 216,
-      "dependencies": [
-        "SAFE-04"
-      ],
+      "dependencies": [],
       "conflict_groups": [
         "finance-service",
         "finance-public-api",
@@ -1901,6 +1899,26 @@
         "media_front",
         "media_back",
         "web_front"
+      ]
+    },
+    {
+      "id": "MED-11",
+      "title": "Remove verified no-caller Media helpers and artist portrait pipeline",
+      "parent_issues": [
+        200,
+        85
+      ],
+      "kind": "implementation",
+      "issue": 296,
+      "dependencies": [],
+      "conflict_groups": [
+        "media-records",
+        "media-provider-transport",
+        "media-provider-family"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back"
       ]
     }
   ],

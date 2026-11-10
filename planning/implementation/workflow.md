@@ -1,14 +1,13 @@
 # Roadmap implementation workflow
 
-These instructions implement the owner's 2026-11-09 request for a deletion-first,
-agent-ready queue. Root AGENTS and current user instructions remain authoritative.
-Root AGENTS explicitly references this file for roadmap work outside `planning/`.
+Root AGENTS and current user instructions remain authoritative. Root AGENTS
+references this workflow for roadmap implementation outside `planning/`.
 
 ## Read order and authority
 
-1. Read root `AGENTS.md` and this file.
-2. Open `planning/implementation/README.md`, then the exact work packet named by
-   the GitHub issue. Use its stable key, not a similarly titled historical issue.
+1. Read root `AGENTS.md`, `planning/AGENTS.md`, the queue quick start and this file.
+2. Open the exact work packet named by the GitHub issue. Use its stable key,
+   not a similarly titled historical issue.
 3. Read its current parent scope ledger, prerequisite evidence and required source
    files. Historical issue snapshots/reports explain context; they do not override
    current decisions, acceptance or authorization.
@@ -35,15 +34,12 @@ Operational-evidence jobs need their stated real configuration/access/authorizat
   changes. Never reset/clean/stash the shared checkout or force-push to obtain a clean
   state. Use the normal supported `main` base and merge it when needed.
 
-An example after the planning PR is merged:
+For a selected leaf (substitute its key and branch):
 
 ```sh
 git fetch origin main
-git worktree add -b agent/safe-01 /tmp/vivek-safe-01 origin/main
+git worktree add -b agent/med-08 /tmp/vivek-med-08 origin/main
 ```
-
-If the planning PR is still open, fetch its branch explicitly and coordinate the
-base; do not assume untracked planning files exist in another context's checkout.
 
 ## One issue through one complete PR
 
@@ -132,7 +128,9 @@ and record it; do not recreate the implementation or open an empty fake-fix PR.
 For a fully satisfied leaf, the integration owner can close it with exact merged
 evidence and verification instead of manufacturing changes.
 
-End each context with the issue/key, branch/base/current SHA, changed paths,
-acceptance matrix, exact passed/failed/not-run commands, deletion ledger, PR URL,
-remaining prerequisites and next actor. Leave no success claim dependent on private
-conversation history. Use `planning/implementation/templates/handoff.md`.
+Keep one evidence record with issue/key, branch/base/tested revision, changed paths,
+acceptance/deletion proof, exact passed/failed/not-run checks and remaining work.
+At a context boundary update its handoff section with the PR, actual state and next
+action; link the existing tables instead of copying them. Before evidence exists,
+use `planning/implementation/templates/handoff.md`. No private conversation should
+be necessary to resume. These maintenance steps do not wait for REF-01.

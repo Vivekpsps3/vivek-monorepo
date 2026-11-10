@@ -18,8 +18,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 A traveller can select a day, understand its chronological plans and add a plan on a free day.
 
-A traveller can select a day, understand its chronological plans and add a plan on a free day.
-
 ## Requirements
 
 - #84 scope3/T4; timeline ordering, overnight/missing times, selected date and all strip keys acceptance.
@@ -30,14 +28,20 @@ A traveller can select a day, understand its chronological plans and add a plan 
 - `apps/travel/frontend/src/trip.component.ts`
 - `apps/travel/frontend/src/trip.component.html`
 - `apps/travel/frontend/src/trip-header.mjs`
+- `apps/travel/frontend/src/calendar-model.mjs`
 - `apps/travel/frontend/src/travel.models.ts`
+- `apps/travel/backend/static/tests/week.test.mjs`
+- `apps/travel/backend/static/tests/tr3.test.mjs`
 
 ## Target paths
 
 - `apps/travel/frontend/src/trip.component.ts`
 - `apps/travel/frontend/src/trip.component.html`
 - `apps/travel/frontend/src/trip-header.mjs`
+- `apps/travel/frontend/src/calendar-model.mjs`
 - `apps/travel/frontend/src/travel.css`
+- `apps/travel/backend/static/tests/week.test.mjs`
+- `apps/travel/backend/static/tests/tr3.test.mjs`
 - `apps/travel/e2e/`
 
 ## Steps
@@ -49,7 +53,8 @@ A traveller can select a day, understand its chronological plans and add a plan 
 5. At390 use itinerary row menus and remove redundant transport/parking presentation; retain useful desktop sections and existing Undo.
 6. Free day opens Add a plan prefilled with that actual local trip date.
 7. Remove the superseded live path in this PR after migrating its consumers. Record actual production/test LOC and independent implementations before/after; added layers need a named safety reason and a real consumer.
-8. Run all applicable verification profiles expanded by the planning guide, add the specific behavior regressions below, and record exact commands/results and acceptance IDs in issue-specific evidence. Open a PR only after applicable local gates pass.
+8. Reconcile `calendar-model.mjs` with its deliberate preservation in the 2026-10-27 runtime-removal record. Recheck current app imports, the live day strip, and the original accepted trip journey: migrate any still-required behavior to its current owner, then delete obsolete helpers and tests that have no supported consumer. Do not remove the model solely because static imports are currently absent.
+9. Run all applicable verification profiles expanded by the planning guide, add the specific behavior regressions below, and record exact commands/results and acceptance IDs in issue-specific evidence. Open a PR only after applicable local gates pass.
 
 ## Acceptance
 
@@ -65,6 +70,7 @@ A traveller can select a day, understand its chronological plans and add a plan 
 | --- | --- | --- | --- |
 | parallel timeline and redundant phone transport/parking lists | one itinerary projection with distinct responsive presentation | required | each record appears once in phone itinerary; desktop existing details preserved |
 | component-local date sorting/grouping repeated across handlers | one typed pure projection consumed by strip and rows | required | shared projection fixture proves both consumers |
+| preserved but test-only `calendar-model.mjs` behavior | migrate required calendar/day labels into the current trip owner; delete unsupported remainder and obsolete-only assertions | conditional | reconcile 2026-10-27 retention record, fresh production consumer map and live itinerary/day-strip acceptance |
 
 ## Non-goals
 

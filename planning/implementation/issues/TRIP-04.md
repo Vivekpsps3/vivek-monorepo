@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Trip creation/editing explains incomplete input and keeps drafts recoverable instead of disabling Save silently.
 
-Trip creation/editing explains incomplete input and keeps drafts recoverable instead of disabling Save silently.
-
 ## Requirements
 
 - #84 scope5/T7 form half; scope6 noValidate/requestSubmit, transport defaults, chip/choice/skip/focus/mobile and screenshot-path QA; UX-7 form acceptance.

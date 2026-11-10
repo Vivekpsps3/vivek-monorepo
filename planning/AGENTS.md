@@ -21,6 +21,7 @@ not another backlog. General instruction maintenance lives in
   state from a worker's stale checkout. A design, PR or merge does not prove activation.
 - For an unsafe/oversized leaf, prepare a complete scope amendment retaining every
   requirement. For an already-satisfied leaf, record merged proof instead of an empty PR.
-- End a context with the [handoff](implementation/templates/handoff.md). Put temporary
-  status there or on GitHub, never in AGENTS.md. Read the full workflow for claim,
-  compatibility, sensitive-state, completion and concurrent-update requirements.
+- At a context boundary update the evidence file’s handoff section, or use the
+  [handoff template](implementation/templates/handoff.md) before evidence exists.
+  Link existing proof rather than copying tables; keep status out of AGENTS.md.
+  Read the workflow for claim, compatibility, sensitive-state and concurrency rules.

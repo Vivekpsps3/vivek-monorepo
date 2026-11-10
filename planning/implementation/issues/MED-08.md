@@ -18,8 +18,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Media changes touch one authoritative command/query path rather than interleaved catalog repair, personal state and serializers.
 
-Media changes touch one authoritative command/query path rather than interleaved catalog repair, personal state and serializers.
-
 ## Requirements
 
 - #200 TD-18/TD-28 and A03/A10/F-13; preserve #85 owner isolation, no-op edits, progress/Undo and saved-read contracts.

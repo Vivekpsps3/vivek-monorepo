@@ -3,6 +3,9 @@
 The executable queue is [planning/implementation](implementation/README.md): one leaf,
 one worktree, one pull request. [GitHub roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134)
 is the live status board. Parent issues keep scope; they are not implementation jobs.
+The [merged-PR and LOC review](loc-review-2026-11-10.md) measures recent growth,
+explains the tradeoffs and identifies the next bounded reductions. For work
+selection use the queue’s live listing, not a dated review’s task order.
 The [technical-debt report and feature-addition plan](technical-debt/README.md)
 contains the owner-requested independent antagonistic review, evidence and
 forty remediation tasks, completed 2026-11-09. Engineering workstreams
