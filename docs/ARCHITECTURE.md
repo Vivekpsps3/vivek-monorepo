@@ -42,7 +42,24 @@ Current implementation status for fields and flows is documented in [DATA_MODEL.
 `packages/` holds app-neutral reusable code. The source-only `@vivek/browser`
 package provides browser and crypto primitives; `@vivek/ui` provides generic
 Angular presentation components, services, theme preferences, and chart
-colors. Root `tsconfig.json` resolves shared source. Only `apps/web` composes frontend features through their public entrypoints. Domain features inject the neutral session port from `packages/auth`/`packages/ui`; they do not import the web platform implementation or sibling internals. The server factory alone composes domain routers. Domain routes depend on server platform identity/session/database modules, which never import domains. `make test-fast` checks the allowed graph.
+colors. Root `tsconfig.json` resolves shared source. `make test-fast` resolves the
+import graph: Python through `ast`, and TypeScript/JavaScript through the repo's
+TypeScript parser, including aliases, type-only imports, dynamic `import()`,
+reexports, and `require()`. Owners are each package, finance/travel/media/site,
+each feature directory under `apps/web/src/app/`, and server town/world/pixels.
+Server identity and the other top-level server modules are platform. Web code may
+import another app only through that app's `public-api` (Finance `testing` from a
+`*.spec.ts`). `routes.ts` and `private-layout.component.ts` may compose web
+features. Domain code may import server platform modules (`database`, `auth`,
+`errors`, `path_ids`, `identity`, `api_key`, `rate_limit`); tests may also import
+the factory and migrations. Enumerated server composition files are `main.py`,
+`schema.py`, `search.py`, `world/read.py`, `migrate.py`, and the two migration
+revisions that call domain backfills. Other server modules are not exempt.
+Existing cross-feature edges outside those rules are a reviewed baseline with a
+removal owner (`server-identity`, `web-hub`, `web-platform`, `web-town`,
+`web-world`, `web-settings`, `web-search`); a new edge fails. Specs and e2e may import another
+feature in the same app. The sink scan covers Finance frontend and package `src`
+only.
 
 Tax document storage was removed. Do not add document vault/BLOB storage back without a fresh product/security decision.
 
