@@ -181,6 +181,294 @@ def test_tmdb_series_detail_needs_a_key_and_keeps_lifecycle(monkeypatch):
     assert row["releases"][0]["precision"] == "day"
 
 
+def _watch(monkeypatch):
+    seen = []
+    real = providers._tmdb_official_detail
+
+    def spy(http, media, media_id, source_id):
+        seen.append(media)
+        return real(http, media, media_id, source_id)
+
+    monkeypatch.setattr(providers, "_tmdb_official_detail", spy)
+    return seen
+
+
+def _requests(handler):
+    seen = []
+
+    def wrapped(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.host, request.url.path))
+        return handler(request)
+
+    return seen, wrapped
+
+
+def test_tmdb_official_detail_is_one_shared_transport(monkeypatch):
+    """Valid, fallback, no-key, 404, 429, 5xx, and malformed payloads share one policy."""
+    shared = _watch(monkeypatch)
+    movie = {
+        "id": 27205,
+        "title": "Inception",
+        "overview": "<b>A dream.</b>",
+        "release_date": "2010-07-16",
+        "poster_path": "/poster.jpg",
+        "vote_average": 8.4,
+        "vote_count": 10,
+        "genres": [{"name": "Science Fiction"}],
+    }
+    series = {
+        "id": 1396,
+        "name": "Breaking Bad",
+        "overview": "A teacher.",
+        "first_air_date": "2008-01-20",
+        "poster_path": "/bb.jpg",
+        "status": "Ended",
+        "in_production": False,
+        "number_of_episodes": 62,
+        "networks": [{"name": "AMC"}],
+        "genres": [{"name": "Drama"}],
+    }
+
+    def official(body):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.params["api_key"] == "secret"
+            assert request.url.host == "api.themoviedb.org"
+            return httpx.Response(200, json=body)
+
+        return handler
+
+    monkeypatch.setenv("TMDB_API_KEY", "secret")
+    seen, handler = _requests(official(movie))
+    with _http(handler) as http:
+        row = tmdb_movie_detail(http, "movie:27205")
+    assert row is not None
+    assert shared == ["movie"]
+    assert seen == [("GET", "api.themoviedb.org", "/3/movie/27205")]
+    assert row["source_id"] == "movie:27205"
+    assert row["kind"] == "movie"
+    assert row["overview"] == "A dream."
+    assert row["genres"] == ["Science Fiction"]
+    assert row["artwork_url"] == "https://image.tmdb.org/t/p/w342/poster.jpg"
+    assert row["extra"] == {}
+    assert row["provenance"]["provider"] == "tmdb"
+    assert row["provenance"]["coverage"] == "official"
+    assert "secret" not in json.dumps(row)
+
+    seen, handler = _requests(official(series))
+    with _http(handler) as http:
+        show = tmdb_tv_detail(http, "tv:1396")
+    assert show is not None
+    assert shared == ["movie", "tv"]
+    assert seen == [("GET", "api.themoviedb.org", "/3/tv/1396")]
+    assert show["creator"] == "AMC"
+    assert show["kind"] == "tv"
+    assert show["source_id"] == "tv:1396"
+    assert show["genres"] == ["Drama"]
+    assert show["extra"] == {"lifecycle": "Ended", "in_production": False, "episode_count": 62}
+    assert show["provenance"]["coverage"] == "official"
+    assert show["artwork_url"] == "https://image.tmdb.org/t/p/w342/bb.jpg"
+
+    def status_case(status, body=None, text=None):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.host == "api.themoviedb.org"
+            if text is not None:
+                return httpx.Response(status, text=text)
+            return httpx.Response(status, json=body if body is not None else {})
+
+        return handler
+
+    for function, source_id, path in (
+        (tmdb_movie_detail, "movie:27205", "/3/movie/27205"),
+        (tmdb_tv_detail, "tv:1396", "/3/tv/1396"),
+    ):
+        for status, body, text, outcome in (
+            (404, {"status_code": 34}, None, "missing"),
+            (200, [], None, "missing"),
+            (200, {"title": "Nope"}, None, "missing"),
+            (429, {"status_code": 25}, None, "raise"),
+            (500, {"status_code": 11}, None, "raise"),
+            (401, {"status_code": 7}, None, "raise"),
+            (200, None, "not-json", "raise"),
+        ):
+            before = len(shared)
+            seen, handler = _requests(status_case(status, body, text))
+            with _http(handler) as http:
+                if outcome == "raise":
+                    with pytest.raises(
+                        httpx.HTTPStatusError if status != 200 else json.JSONDecodeError
+                    ):
+                        function(http, source_id)
+                else:
+                    assert function(http, source_id) is None
+            assert seen == [("GET", "api.themoviedb.org", path)]
+            assert shared[before:] == [path.split("/")[2]]
+
+    monkeypatch.delenv("TMDB_API_KEY", raising=False)
+    before = len(shared)
+    page = """
+    <html>
+      <meta property="og:title" content="Inception (2010) | The Movie Database">
+      <meta property="og:description" content="A dream.">
+      <meta property="og:image" content="https://media.themoviedb.org/t/p/w500/poster.jpg">
+    </html>
+    """
+
+    def public(status, text=""):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.host == "www.themoviedb.org"
+            assert request.headers["accept"] == "text/html"
+            assert "api_key" not in request.url.params
+            return httpx.Response(status, text=text)
+
+        return handler
+
+    seen, handler = _requests(public(200, page))
+    with _http(handler) as http:
+        extracted = tmdb_movie_detail(http, "movie:27205")
+    assert extracted is not None
+    assert extracted["provenance"]["coverage"] == "extraction"
+    assert extracted["artwork_url"] == "https://image.tmdb.org/t/p/w342/poster.jpg"
+    assert seen == [("GET", "www.themoviedb.org", "/movie/27205")]
+    assert shared[before:] == []
+
+    seen, handler = _requests(public(404))
+    with _http(handler) as http:
+        assert tmdb_movie_detail(http, "movie:27205") is None
+    assert seen == [("GET", "www.themoviedb.org", "/movie/27205")]
+
+    for status in (429, 500):
+        seen, handler = _requests(public(status))
+        with _http(handler) as http, pytest.raises(httpx.HTTPStatusError):
+            tmdb_movie_detail(http, "movie:27205")
+        assert seen == [("GET", "www.themoviedb.org", "/movie/27205")]
+    assert shared[before:] == []
+
+    def forbidden(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("series detail needs a key")
+
+    with _http(forbidden) as http:
+        assert tmdb_tv_detail(http, "tv:1396") is None
+    assert shared[before:] == []
+
+    def search_handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/3/search/movie"
+        return httpx.Response(
+            200,
+            json={"results": [{"id": 27205, "title": "Inception", "release_date": "2010-07-16"}]},
+        )
+
+    monkeypatch.setenv("TMDB_API_KEY", "secret")
+    before = len(shared)
+    seen, handler = _requests(search_handler)
+    with _http(handler) as http:
+        found = providers.tmdb_search(http, "inception", "movie")
+    assert [item["source_id"] for item in found] == ["movie:27205"]
+    assert "provenance" not in found[0]
+    assert seen == [("GET", "api.themoviedb.org", "/3/search/movie")]
+    assert shared[before:] == []
+
+
+def test_lookup_detail_uses_the_shared_tmdb_transport_once(monkeypatch):
+    monkeypatch.setattr(providers, "lookup_detail", live_lookup)
+    monkeypatch.setenv("TMDB_API_KEY", "secret")
+    shared = _watch(monkeypatch)
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/3/movie/8":
+            raise httpx.ReadTimeout("slow", request=request)
+        if request.url.path == "/3/movie/111":
+            return httpx.Response(200, text="{")
+        status = {
+            "/3/movie/404404": 404,
+            "/3/movie/429429": 429,
+            "/3/tv/429429": 429,
+            "/3/movie/500500": 500,
+            "/3/tv/500500": 500,
+            "/3/movie/401401": 401,
+        }.get(request.url.path, 200)
+        if status != 200:
+            return httpx.Response(status, json={"status_code": status})
+        if request.url.path.startswith("/3/tv/"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": 1396,
+                    "name": "Breaking Bad",
+                    "overview": "A teacher.",
+                    "first_air_date": "2008-01-20",
+                    "networks": [{"name": "AMC"}],
+                    "status": "Ended",
+                    "number_of_episodes": 62,
+                    "in_production": False,
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "id": 27205,
+                "title": "Inception",
+                "overview": "A dream.",
+                "release_date": "2010-07-16",
+            },
+        )
+
+    original = httpx.Client
+
+    def client_factory(*args, **kwargs):
+        assert kwargs["timeout"] == providers.DETAIL_TIMEOUT
+        assert kwargs["headers"]["User-Agent"] == providers.UA
+        assert kwargs["headers"]["Accept"] == "application/json"
+        assert kwargs["follow_redirects"] is True
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(providers.httpx, "Client", client_factory)
+    cases = [
+        ("movie", "movie:27205", "movie", "/3/movie/27205"),
+        ("tv", "tv:1396", "tv", "/3/tv/1396"),
+        ("movie", "movie:404404", None, "/3/movie/404404"),
+        ("movie", "movie:429429", None, "/3/movie/429429"),
+        ("tv", "tv:429429", None, "/3/tv/429429"),
+        ("movie", "movie:500500", None, "/3/movie/500500"),
+        ("tv", "tv:500500", None, "/3/tv/500500"),
+        ("movie", "movie:401401", None, "/3/movie/401401"),
+        ("movie", "movie:111", None, "/3/movie/111"),
+        ("movie", "movie:8", None, "/3/movie/8"),
+    ]
+    for kind, source_id, media, path in cases:
+        before_requests = len(seen)
+        before_shared = len(shared)
+        row = live_lookup("tmdb", kind, source_id)
+        assert seen[before_requests:] == [path]
+        assert shared[before_shared:] == [media if media is not None else kind]
+        if source_id == "movie:27205":
+            assert row is not None
+            assert row["title"] == "Inception"
+            assert row["provenance"]["coverage"] == "official"
+        elif source_id == "tv:1396":
+            assert row is not None
+            assert row["creator"] == "AMC"
+            assert row["extra"]["lifecycle"] == "Ended"
+        else:
+            assert row is None
+
+
+def test_saved_read_does_not_call_official_tmdb_detail(client, monkeypatch):
+    def explode(*_args, **_kwargs):
+        raise AssertionError("saved read used official TMDB detail")
+
+    monkeypatch.setattr(providers, "_tmdb_official_detail", explode)
+    monkeypatch.setattr(providers, "lookup_detail", explode)
+    saved = client.post("/api/library", json={"kind": "movie", "title": "Local Film"})
+    assert saved.status_code == 200, saved.text
+    entry_id = saved.json()["id"]
+    assert client.get("/api/library").status_code == 200
+    assert client.get(f"/api/entries/{entry_id}").status_code == 200
+    assert client.get("/api/summary").status_code == 200
+
+
 def test_tvmaze_detail_includes_lifecycle_and_episodes(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/episodes"):
