@@ -56,7 +56,7 @@ import { AppDatePipe } from '@vivek/ui';
     UiFieldControlDirective,
   ],
   templateUrl: './fixed-expenses.component.html',
-  styleUrl: './fixed-expenses.component.css',
+  styleUrls: ['./fixed-expenses.component.css', '../shared/recurring-editor.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FixedExpensesComponent implements OnInit, OnDestroy {
@@ -70,6 +70,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   formSubmitted = false;
   readonly needsFixing = needsFixing;
   editingId: number | null = null;
+  moreOptionsOpen = false;
   form: FixedExpenseCreate = this.emptyForm();
 
   readonly frequencyOptions: UiSelectOption[] = [
@@ -155,6 +156,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     this.editingId = null;
     this.form = this.emptyForm();
     this.clearValidation();
+    this.moreOptionsOpen = false;
     this.showModal = true;
     this.cdr.markForCheck();
   }
@@ -175,7 +177,14 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
       notes: row.notes || '',
     };
     this.clearValidation();
+    this.moreOptionsOpen = billHasOptions(row);
     this.showModal = true;
+    this.cdr.markForCheck();
+  }
+
+  onMoreToggle(event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    this.moreOptionsOpen = (event.currentTarget as HTMLDetailsElement).open;
     this.cdr.markForCheck();
   }
 
@@ -183,6 +192,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
+    this.moreOptionsOpen = false;
     this.clearValidation();
     this.cdr.markForCheck();
   }
@@ -199,6 +209,7 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
     this.fieldErrors = errors;
     this.formSubmitted = true;
     if (errors.length) {
+      if (errors.some(error => error.field === 'dueDay')) this.moreOptionsOpen = true;
       this.cdr.markForCheck();
       setTimeout(() => focusErrorSummary(document.getElementById('bill-form')));
       return;
@@ -261,6 +272,10 @@ export class FixedExpensesComponent implements OnInit, OnDestroy {
   frequencyLabel(value: string): string {
     return this.frequencyOptions.find(option => option.value === value)?.label || value;
   }
+}
+
+function billHasOptions(row: FixedExpense): boolean {
+  return Boolean(row.due_day || row.end_date || row.payment_account?.trim() || row.notes?.trim() || row.autopay);
 }
 
 function countedBillTotal(values: unknown[]): number {

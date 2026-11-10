@@ -198,14 +198,12 @@
   .tax-helper__header,
   .tax-helper__result,
   .history-heading,
-  .form-actions,
   .tax-helper__actions,
   .stock-quote-controls__actions {
     align-items: center;
     flex-wrap: wrap;
   }
 
-  .form-actions,
   .tax-helper__actions {
     justify-content: flex-end;
   }
@@ -216,7 +214,6 @@
 
   .tax-helper__actions ui-button,
   .tax-helper__actions ::ng-deep .ui-btn,
-  .form-actions ::ng-deep .ui-btn,
   .history-heading ::ng-deep .ui-btn,
   .stock-quote-controls__actions ::ng-deep .ui-btn,
   :host ::ng-deep .header-actions .ui-btn,
@@ -234,12 +231,6 @@
 
   :host ::ng-deep .ui-data-table tbody td {
     grid-column: 1 / -1 !important;
-  }
-
-  :host ::ng-deep .ui-dialog-panel,
-  :host ::ng-deep .ui-dialog-panel.ui-dialog-panel--wide {
-    width: 100%;
-    max-width: 100%;
   }
 }
 
@@ -377,15 +368,20 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-:host ::ng-deep .ui-dialog-panel {
-  box-sizing: border-box;
+.base-pay-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  border: 0;
+  margin: 0 0 var(--space-4);
+  padding: 0;
   min-width: 0;
-  max-width: min(560px, 100%);
-  overflow-x: auto;
 }
 
-:host ::ng-deep .ui-dialog-panel.ui-dialog-panel--wide {
-  max-width: min(52rem, 100%);
+.base-pay-choice legend {
+  padding: 0;
+  font-weight: 650;
 }
 
 @media (max-width: 768px) {

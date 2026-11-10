@@ -101,13 +101,6 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-:host ::ng-deep .ui-dialog-panel {
-  box-sizing: border-box;
-  min-width: 0;
-  max-width: min(560px, 100%);
-  overflow-x: auto;
-}
-
 @media (max-width: 768px) {
   .fixed-summary {
     flex-direction: column;
@@ -128,13 +121,6 @@ textarea {
     align-self: stretch;
   }
 
-  .form-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: center;
-  }
-
-  .form-actions ::ng-deep .ui-btn,
   :host ::ng-deep .header-actions .ui-btn,
   :host ::ng-deep td.actions .ui-btn {
     width: auto;
@@ -144,10 +130,5 @@ textarea {
 
   :host ::ng-deep .ui-data-table tbody td {
     grid-column: 1 / -1 !important;
-  }
-
-  :host ::ng-deep .ui-dialog-panel {
-    width: 100%;
-    max-width: 100%;
   }
 }

@@ -107,6 +107,36 @@ describe('SubscriptionsComponent field errors', () => {
     expect(component.formSubmitted).toBeFalse();
     expect(finance.addSubscription).not.toHaveBeenCalled();
   });
+
+  it('REC3 keeps the renew date, hides bill-only fields, and preserves More options', async () => {
+    const component = fixture.componentInstance;
+    const row = {
+      id: 4, name: 'Stream', category: 'Video', amount: 15.99, frequency: 'monthly',
+      next_bill_date: '2026-10-20', end_date: null, payment_account: 'Visa', is_active: true, notes: 'Family plan',
+    };
+    component.openEditModal(row as never);
+    fixture.detectChanges();
+    await flushTurn();
+    const form = document.getElementById('subscription-form')!;
+    expect((form.querySelector('[name="next_bill_date"]') as HTMLInputElement).value).toBe('2026-10-20');
+    expect(form.textContent).not.toContain('Autopay');
+    expect(form.textContent).not.toContain('Due day');
+    expect(form.querySelector('[name="autopay"]')).toBeNull();
+    expect(form.querySelector('[name="due_day"]')).toBeNull();
+    const more = form.querySelector('details.more-options') as HTMLDetailsElement;
+    expect(more.open).toBeTrue();
+    expect(more.querySelector('summary')?.textContent).toContain('More options');
+    expect((form.querySelector('[name="notes"]') as HTMLTextAreaElement).value).toBe('Family plan');
+    expect((form.querySelector('[name="category"]') as HTMLInputElement).value).toBe('Video');
+    const cancel = [...form.querySelectorAll('button')].find(node => node.textContent?.trim() === 'Cancel') as HTMLButtonElement;
+    cancel.click();
+    fixture.detectChanges();
+    await flushTurn();
+    expect(component.showModal).toBeFalse();
+    expect(finance.updateSubscription).not.toHaveBeenCalled();
+    expect(row.amount).toBe(15.99);
+    expect(row.notes).toBe('Family plan');
+  });
 });
 
 function flushTurn(): Promise<void> {

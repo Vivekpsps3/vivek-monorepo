@@ -70,7 +70,8 @@
   <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="subscription-modal-title" (closed)="closeModal()">
       @if (saveError) { <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ saveError }}</p> }
       <h2 id="subscription-modal-title">{{ editingId ? 'Edit subscription' : 'Add subscription' }}</h2>
-      <form id="subscription-form" novalidate (ngSubmit)="saveSubscription()" class="form-grid">
+      <form id="subscription-form" class="recurring-editor" novalidate (ngSubmit)="saveSubscription()">
+        <div class="recurring-editor__body form-grid" data-editor-body>
         @if (formSubmitted && fieldErrors.length) {
           <div class="form-error-summary" role="alert" tabindex="-1" data-error-summary>
             <p>Fix {{ fieldErrors.length }} {{ fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
@@ -99,8 +100,8 @@
           <input name="is_active" type="checkbox" [(ngModel)]="form.is_active" />
           <span>Active</span>
         </label>
-        <details class="more-details">
-          <summary>More details</summary>
+        <details class="more-options" [open]="moreOptionsOpen" (toggle)="onMoreToggle($event)">
+          <summary>More options</summary>
           <ui-field label="Category" [optional]="true">
             <input uiFieldControl name="category" [(ngModel)]="form.category" />
           </ui-field>
@@ -114,7 +115,8 @@
             <textarea uiFieldControl name="notes" rows="3" [(ngModel)]="form.notes"></textarea>
           </ui-field>
         </details>
-        <div class="modal-actions">
+        </div>
+        <div class="form-actions">
           <ui-button type="button" variant="secondary" (clicked)="closeModal()">Cancel</ui-button>
           <ui-button type="submit" variant="primary" [disabled]="saving">
             {{ saving ? 'Saving…' : 'Save' }}
