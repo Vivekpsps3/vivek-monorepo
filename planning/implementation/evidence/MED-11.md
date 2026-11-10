@@ -55,7 +55,7 @@ Commands ran from `/tmp/vivek-med-11` with `PATH="/tmp/node24/bin:$PATH"` (`node
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): PR_URL (`Closes #296`). Parents #200 and #85 are referenced and not closed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/299 (`Closes #296`). Parents #200 and #85 are referenced and not closed.
 - Roadmap #134 append-only status-note URL: posted after the pull request. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): local gates passed. Squash merge is authorized for this leaf. This file does not claim deployment or activation.
 - Remaining external prerequisites or approved scope decisions: none for this leaf.
@@ -77,6 +77,6 @@ Deletion ledger and current consumer migration: orphans are gone; both strict-HT
 
 Commands run, results, tested SHA; required checks still pending: the six commands above passed. CI was not required before the local gates.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: PR_URL. The #134 comment follows merge. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/299. The #134 comment follows merge. Not deployed.
 
 External prerequisites and next actor: none. Next actor is the integration owner after merge.
