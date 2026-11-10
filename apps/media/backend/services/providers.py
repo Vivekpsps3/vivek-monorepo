@@ -1752,25 +1752,19 @@ def _detail_base(source: str, source_id: str, kind: str, title: str, coverage: s
     }
 
 
-def tmdb_movie_detail(http: httpx.Client, source_id: str) -> dict | None:
-    movie_id = _media_id(source_id, "movie")
-    if not movie_id:
-        return None
+def _tmdb_official_detail(
+    http: httpx.Client, media: str, media_id: str, source_id: str
+) -> tuple[dict, dict] | None:
+    """Authenticated TMDB detail shared by the movie and TV adapters.
+
+    Public movie HTML and TV network/lifecycle stay in those adapters. A missing
+    key, 404, or payload without an id returns None. Other HTTP statuses propagate.
+    """
     key = os.getenv("TMDB_API_KEY", "").strip()
     if not key:
-        response = http.get(
-            f"https://www.themoviedb.org/movie/{movie_id}",
-            headers={"Accept": "text/html", "User-Agent": UA},
-        )
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
-        row = parse_tmdb_public_detail(response.text, movie_id)
-        if row is not None:
-            row["source_id"] = source_id.strip()
-        return row
+        return None
     response = http.get(
-        f"https://api.themoviedb.org/3/movie/{movie_id}",
+        f"https://api.themoviedb.org/3/{media}/{media_id}",
         params={"api_key": key},
     )
     if response.status_code == 404:
@@ -1779,11 +1773,31 @@ def tmdb_movie_detail(http: httpx.Client, source_id: str) -> dict | None:
     item = response.json()
     if not isinstance(item, dict) or not item.get("id"):
         return None
-    row = tmdb_media_hit(item, "movie")
+    row = tmdb_media_hit(item, media)
     row["source_id"] = source_id.strip()
     row["overview"] = plain_text(item.get("overview"), 4000)
     row["genres"] = _genre_names(item.get("genres"))
     row["provenance"] = provenance("tmdb", "official")
+    return row, item
+
+
+def tmdb_movie_detail(http: httpx.Client, source_id: str) -> dict | None:
+    movie_id = _media_id(source_id, "movie")
+    if not movie_id:
+        return None
+    if os.getenv("TMDB_API_KEY", "").strip():
+        loaded = _tmdb_official_detail(http, "movie", movie_id, source_id)
+        return None if loaded is None else loaded[0]
+    response = http.get(
+        f"https://www.themoviedb.org/movie/{movie_id}",
+        headers={"Accept": "text/html", "User-Agent": UA},
+    )
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    row = parse_tmdb_public_detail(response.text, movie_id)
+    if row is not None:
+        row["source_id"] = source_id.strip()
     return row
 
 
@@ -1791,18 +1805,10 @@ def tmdb_tv_detail(http: httpx.Client, source_id: str) -> dict | None:
     show_id = _media_id(source_id, "tv")
     if not show_id or not os.getenv("TMDB_API_KEY", "").strip():
         return None
-    key = os.getenv("TMDB_API_KEY", "").strip()
-    response = http.get(f"https://api.themoviedb.org/3/tv/{show_id}", params={"api_key": key})
-    if response.status_code == 404:
+    loaded = _tmdb_official_detail(http, "tv", show_id, source_id)
+    if loaded is None:
         return None
-    response.raise_for_status()
-    item = response.json()
-    if not isinstance(item, dict) or not item.get("id"):
-        return None
-    row = tmdb_media_hit(item, "tv")
-    row["source_id"] = source_id.strip()
-    row["overview"] = plain_text(item.get("overview"), 4000)
-    row["genres"] = _genre_names(item.get("genres"))
+    row, item = loaded
     networks = item.get("networks") if isinstance(item.get("networks"), list) else []
     if networks and isinstance(networks[0], dict):
         name = networks[0].get("name")
@@ -1818,7 +1824,6 @@ def tmdb_tv_detail(http: httpx.Client, source_id: str) -> dict | None:
     if isinstance(count, int) and count >= 0:
         extra["episode_count"] = count
     row["extra"] = extra
-    row["provenance"] = provenance("tmdb", "official")
     return row
 
 
