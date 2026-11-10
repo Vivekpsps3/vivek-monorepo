@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 A supported custom statement can be mapped, previewed, committed and undone through the same receipt workflow as banks.
 
-A supported custom statement can be mapped, previewed, committed and undone through the same receipt workflow as banks.
-
 ## Requirements
 
 - #65 scope4/custom CSV portion #132; all custom mapping, currency and lock/atomicity acceptance.
@@ -42,7 +40,7 @@ A supported custom statement can be mapped, previewed, committed and undone thro
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Add an explicit Custom CSV adapter for date/description/amount or split debit-credit/account/optional category; detect delimiter/header deterministically and preview the selected date/sign/refund mapping.
 3. Validate any currency column against current USD support and reject mixed/foreign rows with actionable row errors before commit.
 4. Let users revise mappings/select valid rows; persist versioned encrypted mapping metadata using an approved additive format and preserve current bank/Fidelity paths.
@@ -78,7 +76,7 @@ A supported custom statement can be mapped, previewed, committed and undone thro
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

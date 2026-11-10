@@ -45,11 +45,11 @@
     },
     {
       "number": 194,
-      "title": "Proposal: Sidequests — a private field guide to tiny adventures and memorable firsts"
+      "title": "Proposal: Sidequests \u2014 a private field guide to tiny adventures and memorable firsts"
     },
     {
       "number": 195,
-      "title": "Proposal: Cards — a beautiful private credit-card, benefits and renewal tracker"
+      "title": "Proposal: Cards \u2014 a beautiful private credit-card, benefits and renewal tracker"
     },
     {
       "number": 198,
@@ -213,6 +213,91 @@
   },
   "tasks": [
     {
+      "id": "MED-11",
+      "title": "Remove verified no-caller Media helpers and artist portrait pipeline",
+      "parent_issues": [
+        200,
+        85
+      ],
+      "kind": "implementation",
+      "issue": 296,
+      "dependencies": [],
+      "conflict_groups": [
+        "media-records",
+        "media-provider-transport",
+        "media-provider-family"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back"
+      ]
+    },
+    {
+      "id": "MED-01",
+      "title": "Keep saved Media reads database-only and move repair to explicit bounded work",
+      "parent_issues": [
+        85,
+        200
+      ],
+      "kind": "implementation",
+      "issue": 235,
+      "dependencies": [],
+      "conflict_groups": [
+        "media-records",
+        "media-library-api",
+        "media-provider-transport"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back",
+        "media_front"
+      ]
+    },
+    {
+      "id": "MED-08",
+      "title": "Collapse competing Media catalog/entry/progress/query implementations",
+      "parent_issues": [
+        200,
+        85
+      ],
+      "kind": "implementation",
+      "issue": 242,
+      "dependencies": [
+        "MED-01"
+      ],
+      "conflict_groups": [
+        "media-records",
+        "media-membership",
+        "media-library-api"
+      ],
+      "verification_profiles": [
+        "media_back",
+        "server_back",
+        "media_front"
+      ]
+    },
+    {
+      "id": "DEL-04",
+      "title": "Remove redundant Finance orchestration while preserving one store",
+      "parent_issues": [
+        200,
+        65
+      ],
+      "kind": "implementation",
+      "issue": 216,
+      "dependencies": [],
+      "conflict_groups": [
+        "finance-service",
+        "finance-public-api",
+        "finance-persistence",
+        "finance-imports"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front"
+      ]
+    },
+    {
       "id": "SAFE-01",
       "title": "Fix colliding lock cleanup registrations with owned fan-out",
       "parent_issues": [
@@ -333,6 +418,25 @@
       ],
       "verification_profiles": [
         "docs",
+        "server_back"
+      ]
+    },
+    {
+      "id": "UX-01",
+      "title": "Repair Profile direct loads and the obsolete404 assertion",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 259,
+      "dependencies": [],
+      "conflict_groups": [
+        "private-routes",
+        "server-composition",
+        "pixels-settings"
+      ],
+      "verification_profiles": [
+        "web_front",
         "server_back"
       ]
     },
@@ -528,27 +632,6 @@
       ]
     },
     {
-      "id": "DEL-04",
-      "title": "Remove redundant Finance orchestration while preserving one store",
-      "parent_issues": [
-        200,
-        65
-      ],
-      "kind": "implementation",
-      "issue": 216,
-      "dependencies": [],
-      "conflict_groups": [
-        "finance-service",
-        "finance-public-api",
-        "finance-persistence",
-        "finance-imports"
-      ],
-      "verification_profiles": [
-        "finance_front",
-        "web_front"
-      ]
-    },
-    {
       "id": "DEL-05",
       "title": "Delete duplicate control/form styling and reuse real interaction behavior",
       "parent_issues": [
@@ -711,7 +794,7 @@
     },
     {
       "id": "TRIP-01",
-      "title": "Connect encrypted trip tags to the live Finance–Travel spending bridge",
+      "title": "Connect encrypted trip tags to the live Finance\u2013Travel spending bridge",
       "parent_issues": [
         84
       ],
@@ -909,27 +992,6 @@
       ]
     },
     {
-      "id": "MED-01",
-      "title": "Keep saved Media reads database-only and move repair to explicit bounded work",
-      "parent_issues": [
-        85,
-        200
-      ],
-      "kind": "implementation",
-      "issue": 235,
-      "dependencies": [],
-      "conflict_groups": [
-        "media-records",
-        "media-library-api",
-        "media-provider-transport"
-      ],
-      "verification_profiles": [
-        "media_back",
-        "server_back",
-        "media_front"
-      ]
-    },
-    {
       "id": "MED-02",
       "title": "Mount the existing tag editor and preserve unrelated detail drafts",
       "parent_issues": [
@@ -950,7 +1012,7 @@
     },
     {
       "id": "MED-03",
-      "title": "Replace numeric Media rating input with one accessible 0–10 editor",
+      "title": "Replace numeric Media rating input with one accessible 0\u201310 editor",
       "parent_issues": [
         85
       ],
@@ -1053,26 +1115,143 @@
       ]
     },
     {
-      "id": "MED-08",
-      "title": "Collapse competing Media catalog/entry/progress/query implementations",
+      "id": "SEC-01",
+      "title": "Unify configured-origin challenge binding and prove auth ownership",
       "parent_issues": [
-        200,
-        85
+        121
       ],
       "kind": "implementation",
-      "issue": 242,
-      "dependencies": [
-        "MED-01"
-      ],
+      "issue": 266,
+      "dependencies": [],
       "conflict_groups": [
-        "media-records",
-        "media-membership",
-        "media-library-api"
+        "identity-origin",
+        "schema-head"
       ],
       "verification_profiles": [
-        "media_back",
+        "finance_back",
+        "server_back"
+      ]
+    },
+    {
+      "id": "SEC-02",
+      "title": "Make CSRF repair commit/CAS and refresh errors deterministic",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 267,
+      "dependencies": [
+        "SEC-01"
+      ],
+      "conflict_groups": [
+        "identity-session",
+        "identity-origin",
+        "web-session",
+        "account-ux"
+      ],
+      "verification_profiles": [
+        "finance_back",
         "server_back",
-        "media_front"
+        "web_front"
+      ]
+    },
+    {
+      "id": "SEC-03",
+      "title": "Persist both credential wraps atomically with proof and revision",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 268,
+      "dependencies": [
+        "SEC-01",
+        "SEC-02",
+        "CON-03"
+      ],
+      "conflict_groups": [
+        "schema-head",
+        "identity-session",
+        "finance-vault-lifecycle"
+      ],
+      "verification_profiles": [
+        "finance_back",
+        "server_back",
+        "schema"
+      ]
+    },
+    {
+      "id": "SEC-04",
+      "title": "Ship passphrase change UI through the atomic rotation contract",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 269,
+      "dependencies": [
+        "SEC-03",
+        "SAFE-03",
+        "SAFE-04"
+      ],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "finance-settings",
+        "web-session",
+        "account-ux"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front",
+        "finance_back",
+        "server_back"
+      ]
+    },
+    {
+      "id": "SEC-05",
+      "title": "Export every vault collection as one encrypted portable bundle",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 270,
+      "dependencies": [
+        "CON-03",
+        "SAFE-03",
+        "SAFE-05"
+      ],
+      "conflict_groups": [
+        "vault-export",
+        "finance-settings",
+        "finance-vault-lifecycle"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front",
+        "finance_back"
+      ]
+    },
+    {
+      "id": "SEC-06",
+      "title": "Restore encrypted bundles with validated atomic or resumable staging",
+      "parent_issues": [
+        121
+      ],
+      "kind": "implementation",
+      "issue": 271,
+      "dependencies": [
+        "SEC-05",
+        "SAFE-04"
+      ],
+      "conflict_groups": [
+        "finance-vault-lifecycle",
+        "vault-export",
+        "finance-settings",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "finance_front",
+        "web_front",
+        "finance_back",
+        "server_back"
       ]
     },
     {
@@ -1097,6 +1276,23 @@
       "verification_profiles": [
         "web_front",
         "server_back"
+      ]
+    },
+    {
+      "id": "UX-03",
+      "title": "Make the Hub miniature compact and equivalent across input modes",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 261,
+      "dependencies": [],
+      "conflict_groups": [
+        "hub-main",
+        "pixels-hub-card"
+      ],
+      "verification_profiles": [
+        "web_front"
       ]
     },
     {
@@ -1222,6 +1418,24 @@
         "travel_back",
         "media_back",
         "schema"
+      ]
+    },
+    {
+      "id": "UX-02",
+      "title": "Give Town and World one main landmark and reliable arrival focus",
+      "parent_issues": [
+        196
+      ],
+      "kind": "implementation",
+      "issue": 260,
+      "dependencies": [],
+      "conflict_groups": [
+        "town-main",
+        "world-ui",
+        "private-shell-focus"
+      ],
+      "verification_profiles": [
+        "web_front"
       ]
     },
     {
@@ -1469,60 +1683,6 @@
       ]
     },
     {
-      "id": "UX-01",
-      "title": "Repair Profile direct loads and the obsolete404 assertion",
-      "parent_issues": [
-        196
-      ],
-      "kind": "implementation",
-      "issue": 259,
-      "dependencies": [],
-      "conflict_groups": [
-        "private-routes",
-        "server-composition",
-        "pixels-settings"
-      ],
-      "verification_profiles": [
-        "web_front",
-        "server_back"
-      ]
-    },
-    {
-      "id": "UX-02",
-      "title": "Give Town and World one main landmark and reliable arrival focus",
-      "parent_issues": [
-        196
-      ],
-      "kind": "implementation",
-      "issue": 260,
-      "dependencies": [],
-      "conflict_groups": [
-        "town-main",
-        "world-ui",
-        "private-shell-focus"
-      ],
-      "verification_profiles": [
-        "web_front"
-      ]
-    },
-    {
-      "id": "UX-03",
-      "title": "Make the Hub miniature compact and equivalent across input modes",
-      "parent_issues": [
-        196
-      ],
-      "kind": "implementation",
-      "issue": 261,
-      "dependencies": [],
-      "conflict_groups": [
-        "hub-main",
-        "pixels-hub-card"
-      ],
-      "verification_profiles": [
-        "web_front"
-      ]
-    },
-    {
       "id": "UX-04",
       "title": "Make World week navigation visibly directional",
       "parent_issues": [
@@ -1590,146 +1750,6 @@
       ],
       "verification_profiles": [
         "docs"
-      ]
-    },
-    {
-      "id": "SEC-01",
-      "title": "Unify configured-origin challenge binding and prove auth ownership",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 266,
-      "dependencies": [],
-      "conflict_groups": [
-        "identity-origin",
-        "schema-head"
-      ],
-      "verification_profiles": [
-        "finance_back",
-        "server_back"
-      ]
-    },
-    {
-      "id": "SEC-02",
-      "title": "Make CSRF repair commit/CAS and refresh errors deterministic",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 267,
-      "dependencies": [
-        "SEC-01"
-      ],
-      "conflict_groups": [
-        "identity-session",
-        "identity-origin",
-        "web-session",
-        "account-ux"
-      ],
-      "verification_profiles": [
-        "finance_back",
-        "server_back",
-        "web_front"
-      ]
-    },
-    {
-      "id": "SEC-03",
-      "title": "Persist both credential wraps atomically with proof and revision",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 268,
-      "dependencies": [
-        "SEC-01",
-        "SEC-02",
-        "CON-03"
-      ],
-      "conflict_groups": [
-        "schema-head",
-        "identity-session",
-        "finance-vault-lifecycle"
-      ],
-      "verification_profiles": [
-        "finance_back",
-        "server_back",
-        "schema"
-      ]
-    },
-    {
-      "id": "SEC-04",
-      "title": "Ship passphrase change UI through the atomic rotation contract",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 269,
-      "dependencies": [
-        "SEC-03",
-        "SAFE-03",
-        "SAFE-04"
-      ],
-      "conflict_groups": [
-        "finance-vault-lifecycle",
-        "finance-settings",
-        "web-session",
-        "account-ux"
-      ],
-      "verification_profiles": [
-        "finance_front",
-        "web_front",
-        "finance_back",
-        "server_back"
-      ]
-    },
-    {
-      "id": "SEC-05",
-      "title": "Export every vault collection as one encrypted portable bundle",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 270,
-      "dependencies": [
-        "CON-03",
-        "SAFE-03",
-        "SAFE-05"
-      ],
-      "conflict_groups": [
-        "vault-export",
-        "finance-settings",
-        "finance-vault-lifecycle"
-      ],
-      "verification_profiles": [
-        "finance_front",
-        "web_front",
-        "finance_back"
-      ]
-    },
-    {
-      "id": "SEC-06",
-      "title": "Restore encrypted bundles with validated atomic or resumable staging",
-      "parent_issues": [
-        121
-      ],
-      "kind": "implementation",
-      "issue": 271,
-      "dependencies": [
-        "SEC-05",
-        "SAFE-04"
-      ],
-      "conflict_groups": [
-        "finance-vault-lifecycle",
-        "vault-export",
-        "finance-settings",
-        "schema-head"
-      ],
-      "verification_profiles": [
-        "finance_front",
-        "web_front",
-        "finance_back",
-        "server_back"
       ]
     },
     {
@@ -1900,30 +1920,10 @@
         "media_back",
         "web_front"
       ]
-    },
-    {
-      "id": "MED-11",
-      "title": "Remove verified no-caller Media helpers and artist portrait pipeline",
-      "parent_issues": [
-        200,
-        85
-      ],
-      "kind": "implementation",
-      "issue": 296,
-      "dependencies": [],
-      "conflict_groups": [
-        "media-records",
-        "media-provider-transport",
-        "media-provider-family"
-      ],
-      "verification_profiles": [
-        "media_back",
-        "server_back"
-      ]
     }
   ],
   "format_version": 2,
-  "packet_authority": "issues/KEY.md owns detailed requirements, steps, deletion and evidence; this file contains scheduling metadata only.",
+  "packet_authority": "Task array order is default execution priority, with dependencies before consumers. issues/KEY.md owns requirements, steps, deletion and evidence; this file owns scheduling metadata.",
   "scope_moves": {
     "MED-06 DET1": "MED-06",
     "MED-06 LIB1": "MED-09",

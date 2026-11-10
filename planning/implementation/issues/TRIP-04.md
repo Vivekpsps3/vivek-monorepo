@@ -41,7 +41,7 @@ Trip creation/editing explains incomplete input and keeps drafts recoverable ins
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Make Save usable on empty forms; ngSubmit/requestSubmit reveals inline errors linked by aria-describedby and focuses the first invalid field.
 3. Clear corrected errors live after submit and reset errors on reopening while retaining same-session failed drafts; retry preserves original intent.
 4. Require explicit transport mode selection; keep parking genuinely optional.
@@ -75,7 +75,7 @@ Trip creation/editing explains incomplete input and keeps drafts recoverable ins
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

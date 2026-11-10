@@ -5,7 +5,7 @@
 - Parents: [#110](https://github.com/Vivekpsps3/vivek-monorepo/issues/110)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `PTO-02`, `PTO-04`
 - Conflict groups: `travel-leave-math`, `travel-leave-api`, `schema-head`, `travel-pto-main`
 - Verification profiles: `travel_front`, `travel_back`, `server_back`, `schema`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-A policy can opt into posted accrual on a clear schedule while all existing balances keep their established semantics.
 
 A policy can opt into posted accrual on a clear schedule while all existing balances keep their established semantics.
 
@@ -43,7 +41,7 @@ A policy can opt into posted accrual on a clear schedule while all existing bala
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Add additive versioned accrual_mode and explicit first-posting anchor; retain daily-prorated default for existing and new policies.
 3. Implement scheduled posting only in the existing exact Fraction/Decimal policy math, with cadence anchor, half-month/month-end/leap rules, caps and same-day event order.
 4. Mode changes show impact preview and require confirmation; prevent duplicate posting or retrospective reinterpretation.
@@ -75,7 +73,7 @@ A policy can opt into posted accrual on a clear schedule while all existing bala
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

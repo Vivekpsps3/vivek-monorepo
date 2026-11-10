@@ -48,7 +48,7 @@ Retire speculative Town xfails and misleading coverage summaries through current
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Map current coverage modes/source denominators and known xfails to actual live requirements. Keep root floors unchanged; state clearly that Karma covers loaded source and Python currently measures statements.
 3. Resolve the two optional UTC-clamp xfails against the accepted local-day contract: do not invent a dead _server_day helper just to satisfy historical speculation. Replace/remove only with documented current date-window behavior tests that retain real timezone/trusted-clock protection.
 4. Audit stale assertion references relevant to this queue; Profile404 and pointer-only Hub expectations stay owned by UX-01/UX-03. Link their surviving evidence rather than implementing those fixes here.

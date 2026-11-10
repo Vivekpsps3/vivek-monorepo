@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 New and existing trips use the same Full/Half/None allocation behavior with immediate accurate totals.
 
-New and existing trips use the same Full/Half/None allocation behavior with immediate accurate totals.
-
 ## Requirements
 
 - #84 scope5/T8 picker half; existing/new trip pickers, local dates, immediate totals and390 no-scroll; PTO decimal-cache legacy portion #128.
@@ -41,7 +39,7 @@ New and existing trips use the same Full/Half/None allocation behavior with imme
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Use a small shared trip-allocation presentation/helper for Full/Half/None, adopted by both new-trip and existing-trip controls; remove their duplicated selection state/markup where semantics match.
 3. Format dates locally, update totals immediately and preserve current server allocation and overlap rules.
 4. Verify quarter/decimal cache behavior and last edited allocation survives appropriate retry while stale previews invalidate; coordinate policy-only changes with #110.
@@ -72,7 +70,7 @@ New and existing trips use the same Full/Half/None allocation behavior with imme
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

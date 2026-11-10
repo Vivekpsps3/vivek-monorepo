@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 An owner can control unlock-time price checks from Finance and understand exactly which ticker symbols leave the browser.
 
-An owner can control unlock-time price checks from Finance and understand exactly which ticker symbols leave the browser.
-
 ## Requirements
 
 - #65 scope1/F7; acceptance price toggle, one-time notice/Details, held-symbol agreement and zero research fetch on open.
@@ -39,7 +37,7 @@ An owner can control unlock-time price checks from Finance and understand exactl
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Mount the existing per-user preference as a menuitemcheckbox with aria-checked, checked icon and in-place toggling; retain default-on and throwing-storage behavior.
 3. Connect Home Turn off automatic checks/OK, ticker counts, one-time dismissal and About price checks disclosure to that same preference.
 4. Use the existing refresh coordinator for held symbols; manual refresh remains available when auto is off and research pages make no opening request.
@@ -71,7 +69,7 @@ An owner can control unlock-time price checks from Finance and understand exactl
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

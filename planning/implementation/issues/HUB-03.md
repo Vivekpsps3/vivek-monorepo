@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 An owner can explore upcoming and recent Travel/Media activity through one accessible agenda and mini-month.
 
-An owner can explore upcoming and recent Travel/Media activity through one accessible agenda and mini-month.
-
 ## Requirements
 
 - #93 scope5/#133 Timeline; filters/date-window/history/authoritative dates and compact overlap/no-duplicate-request acceptance.
@@ -43,7 +41,7 @@ An owner can explore upcoming and recent Travel/Media activity through one acces
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Mount /hub/agenda using the same typed source adapters as compact Up next; add mini-month/list, source filters and previous/next date-window navigation.
 3. Add only necessary additive owner-scoped bounded window parameters/endpoints, preserving existing summary defaults; support recent history only from authoritative source dates and explicitly omit unsupported event kinds.
 4. Keep date/filters in URL and browser history; Finance remains browser-only count row with no names/amounts/IDs in URL/server.
@@ -74,7 +72,7 @@ An owner can explore upcoming and recent Travel/Media activity through one acces
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

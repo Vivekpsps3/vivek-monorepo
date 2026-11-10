@@ -361,7 +361,6 @@ explains native input capabilities, accessible feedback and server validation.
     revision identifiers; keep sensitive payloads out of diagnostics.
 58. Report merged, deployed and externally activated states with distinct proof.
 
-For the next development session, the highest-confidence deletion work is MED-11;
-MED-08 and DEL-04 consolidate already identified decision paths. Apply these
-practices inside each scoped leaf. A repo-wide rewrite would make behavior
+Select the next task from the ordered [execution queue](../implementation/README.md).
+Apply these practices inside that scoped leaf. A repo-wide rewrite would make behavior
 preservation and review harder without establishing better deletion results.

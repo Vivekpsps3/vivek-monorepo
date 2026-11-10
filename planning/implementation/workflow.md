@@ -3,9 +3,10 @@
 Root AGENTS and current user instructions remain authoritative. Root AGENTS
 references this workflow for roadmap implementation outside `planning/`.
 
-## Read order and authority
+## After selecting a leaf
 
-1. Read root `AGENTS.md`, `planning/AGENTS.md`, the queue quick start and this file.
+1. Use the selection rule in the [execution queue](README.md); root `AGENTS.md`
+   and `planning/AGENTS.md` govern the selected work.
 2. Open the exact work packet named by the GitHub issue. Use its stable key,
    not a similarly titled historical issue.
 3. Read its current parent scope ledger, prerequisite evidence and required source

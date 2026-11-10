@@ -1,9 +1,14 @@
-# Making future features cheaper
+# Technical-debt review — reference
+
+For the next implementation task, start with the [execution queue](../implementation/README.md).
+This folder preserves assessment evidence and design guidance; its dated task
+recommendations do not override the ordered queue or current issue status.
 
 This report answers the owner's request for an independent antagonistic review,
 a roadmap update, and a detailed account of technical-debt reduction. Review
 started 2026-11-08 UTC and the synthesis was completed 2026-11-09. The live queue
-remains [roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
+is [the execution queue](../implementation/README.md), with live status on
+[roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
 
 **Assessment:** useful domain and security foundations exist, but inconsistent
 contracts, repeated lifecycle code, incomplete quality discovery and concentrated
@@ -12,7 +17,7 @@ come before broad cleanup: colliding lock callbacks, late Health publication aft
 invalidation, and provider-backed repair on the local Media saved-library read path.
 A confirmed callback/state defect is not evidence of a production data leak.
 
-Read the report in this order:
+When the selected packet needs this report's evidence, read the relevant entries:
 
 1. [Assessment and finding register](2026-11-09-assessment.md): evidence, confidence,
    root causes, architecture target, inventory and limitations.

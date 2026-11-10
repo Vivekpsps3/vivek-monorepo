@@ -5,7 +5,7 @@
 - Parents: [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: none
 - Conflict groups: `travel-trip-main`, `travel-itinerary`
 - Verification profiles: `travel_front`
@@ -46,7 +46,7 @@ A traveller can select a day, understand its chronological plans and add a plan 
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Build the day-strip and itinerary from existing trip items with one pure chronological projection; explicit unscheduled/out-of-range groups preserve incomplete records.
 3. Provide weekday labels, busy/free accessible names, roving arrows/Home/End and Enter selecting/focusing the day content.
 4. Handle departure/arrival and linked parking, next-day red-eye arrivals, activities and ties deterministically; persist/deep-link selected date using non-sensitive route state.
@@ -83,7 +83,7 @@ A traveller can select a day, understand its chronological plans and add a plan 
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

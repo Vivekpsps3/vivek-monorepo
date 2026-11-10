@@ -5,7 +5,7 @@
 - Parents: [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: none
 - Conflict groups: `quality-tools`, `root-typescript-config`, `eslint-config`, `quality-docs`
 - Verification profiles: `docs`, `server_back`
@@ -47,7 +47,7 @@ Close tool inclusion gaps with a small source inventory check and expanded exist
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Enumerate actual shipped Python/TS/JS/MJS/templates and current lint/type/build owners; classify generated/declaration/vendor/config/test sources separately. Base it on resolved production entries, not every tracked markdown or cache file.
 3. Extend the existing ESLint/typecheck/checkJs targets only for real uncovered shipped sources and support code; use correct environments and current ratchet rules. Do not replace all tool configs with a new orchestration framework.
 4. Add a negative fixture for a new shipped-but-unowned source module and a positive fixture for intentional generated/vendor exclusions. Detect orphan production candidates explicitly instead of silently trusting app import traversal.

@@ -1,82 +1,75 @@
-# Implementation queue
+# Execution queue
 
-Executable packets for [roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
-Parents retain scope; implement one dependency-ready leaf per worktree and PR.
+Start here for [roadmap #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
+Follow the steps below for each task. One leaf produces one complete PR.
 
-## Find work
+## 1. Select the next leaf
 
-Run from the repository root:
+If the user named a task, use that packet. Otherwise run from the repo root:
 
 ```sh
-python3 planning/implementation/plan.py list --live --parent 200
-python3 planning/implementation/plan.py launch MED-08
+python3 planning/implementation/plan.py list --live
 ```
 
-Omit `--parent` to see all open leaves. `--live` reads GitHub through authenticated
-`gh`, hides closed leaves and marks open prerequisites as `wait=...`. It fails if
-issue state is incomplete. `check-merged-outcomes` is a candidate, not authorization
-or proof: verify the prerequisite's actual merged outcome on current main, read the
-live leaf/claims, and inspect open PRs and actual overlapping files. Closed issues
-can be superseded rather than implemented. `list` without `--live` is an offline
-metadata inventory, including completed packets; it makes no readiness claim.
+Read top to bottom: `queue.json` task order is the default priority. Select the
+first open leaf without `wait=...` whose prerequisite outcomes are present on
+current main and whose live issue has no competing claim or overlapping PR.
+`check-merged-outcomes` means verify those facts before claiming. A closed
+prerequisite can have been superseded; closure alone does not prove implementation.
 
-## Implement
+If the first candidate is claimed or externally blocked, record the concrete
+reason and continue down the same list. Do not invent a new backlog or dependency.
+An explicit user-selected domain can narrow the list with `--parent NUMBER`.
+Without `--live`, listing is an offline inventory including completed leaves.
 
-Read [planning instructions](../AGENTS.md), the exact packet under `issues/`,
-[workflow](workflow.md) and applicable app instructions. Read parent scope and
-prerequisite evidence only as needed. The launch command prints deduplicated
-verification commands; add gates required by the actual diff.
+## 2. Open its exact packet
 
-Claim the leaf, create a worktree from fresh `origin/main`, implement its complete
-acceptance and deletion contract, and record [evidence](templates/evidence.md).
-Run required local gates before opening the PR. Close only the leaf and append its
-scoped status to #134; the integration owner reconciles the roadmap body.
-For interrupted work, use the evidence file's handoff section; the
-[handoff template](templates/handoff.md) is for work without an evidence file.
+For example, the current first deletion candidate is MED-11:
 
-## Focus
+```sh
+python3 planning/implementation/plan.py launch MED-11
+```
 
-The [merged-PR review](../loc-review-2026-11-10.md) distinguishes production growth
-from test and planning growth. Choose a bounded removal with real consumers:
+Substitute the selected key as work progresses. Launch prints the packet path and
+deduplicated verification commands. Read `issues/KEY.md`, applicable app AGENTS,
+and only the parent requirements/prerequisite evidence that packet needs.
+If local packet and live issue scope conflict, reconcile them before editing code.
 
-- **MED-08:** reuse `_catalog_by_source` in `_public_catalog`, preserving kind
-  rejection; consolidate additional runtime operations only if proven equivalent.
-  Keep migration SQL and distinct catalog/personal projections.
-- **MED-11:** remove verified no-caller Media helpers and portrait enrichment;
-  retain migration/cache behavior and the live episode command.
-- **DEL-04:** consolidate repeated Finance collection publication in the existing
-  service. It does not require SAFE-04's browser notification adapter; preserve
-  current session/collection/lock guards and serialize actual overlapping files.
-- **SAFE-04:** remove the Hub/Pixels/World notification parsers after adopting one
-  existing-owner adapter. SAFE-01 and SAFE-03 are merged; verify current outcomes.
-- **DEL-02:** remove only compatibility paths proved unreachable for supported
-  users/data. It is conditional, with no promised LOC windfall.
+## 3. Claim and implement
 
-MED-07, DEL-03, DEL-05 and FIN-02 have merged. Do not repeat their completed
-tranches. Their broader parents remain open. Unrelated product fixes can proceed
-with their actual dependencies; this focus is not a whole-platform prerequisite.
-`DISC-01`/`DISC-02` deliver designs. `OPS-06` needs a real destination, recovery key
-and alert recipient; a code adapter alone cannot establish activation.
+Follow [workflow](workflow.md) to fresh-read source/claims, create an isolated
+worktree and implement every acceptance/deletion requirement. Use the
+[deletion contract](deletion-strategy.md) for simplification and compatibility.
+Keep public behavior, domain rules, privacy and migration guarantees intact.
 
-## Authority and maintenance
+## 4. Verify and record
 
-| Information | Authority |
+Run launch's commands plus root AGENTS gates required by the actual diff. Record
+results and acceptance/deletion proof once in `evidence/KEY.md` using the
+[evidence template](templates/evidence.md). Keep test cases readable under
+[Quality](../../docs/QUALITY.md#test-readability-and-parametrization).
+Checks must pass locally before a PR; an unrun or rejected check remains unrun.
+
+## 5. Deliver and continue
+
+Open the PR closing only the leaf, with parent references. Merge/deploy only with
+user authorization. Append a scoped status note to #134; the integration owner
+reconciles its body and parent ledgers from fresh evidence. Rerun step 1 after
+merge. For interrupted work, update the evidence file's handoff section with the
+exact next action; use [handoff](templates/handoff.md) before evidence exists.
+
+## Authority
+
+| Question | Single authority |
 | --- | --- |
-| Detailed requirements, acceptance, deletion | `issues/KEY.md`; mirror approved scope changes to its GitHub leaf |
-| Dependencies, parent/TD ownership, conflicts, verification profile names | [queue.json](queue.json) |
-| Live status, claims, merged PRs | GitHub leaf and linked PRs; verify current source |
-| Required procedures and measured deletion | [workflow](workflow.md), [deletion contract](deletion-strategy.md) |
-| Verification commands | [profiles](verification.json), plus root AGENTS gates for the actual diff |
-| Acceptance and local test results | `evidence/KEY.md`, tied to a tested revision |
+| What goes next by default? | Ordered tasks in [queue.json](queue.json), filtered by live status and actual prerequisites/claims |
+| What must this task deliver? | `issues/KEY.md`, mirrored to its GitHub leaf |
+| What dependencies/conflicts/profiles apply? | `queue.json` |
+| What is its live execution state? | GitHub leaf, PR and current source |
+| How is it performed? | [Workflow](workflow.md), root/app AGENTS and deletion contract |
+| Which commands and results prove it? | [Profiles](verification.json), actual-diff root gates, then `evidence/KEY.md` |
 
-Do not maintain another ready table, parent-to-leaf list, TD map or completed-key
-ledger here. Query metadata/status instead. Dated reviews are evidence, not jobs.
-
-```sh
-python3 planning/implementation/plan.py validate --self-test
-```
-
-Validation covers metadata/packet parity, required sections/proof cells, source
-paths and the dependency graph. It does not establish semantic coverage, test
-execution, merged readiness or deployment. See [coordination](coordination.md)
-for shared surfaces when other workers are active.
+Dated reviews and completed packets are supporting evidence. Keep task order out
+of their recommendations and out of additional ready tables. The planner's
+`validate --self-test` checks packet/metadata structure and fixtures; it does not
+establish merged readiness, product correctness or deployment.

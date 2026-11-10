@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Ratings are easy to choose or clear while legacy half ratings and unsaved drafts remain intact.
 
-Ratings are easy to choose or clear while legacy half ratings and unsaved drafts remain intact.
-
 ## Requirements
 
 - #85 scope3/M7; legacy-half, null, keyboard, layout and unsaved-leave acceptance.
@@ -40,7 +38,7 @@ Ratings are easy to choose or clear while legacy half ratings and unsaved drafts
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Use the existing rating model and shared segmented/radio behavior for integer0–10 selection with out-of-10 accessible names and arrow keys.
 3. Provide clear-to-null; preserve existing7.5-like values with an explanatory note until the owner explicitly chooses, never round on render/save.
 4. Use two rows at390 and one at1280; maintain existing note/rating draft protection and persistence. Remove the superseded number input/parallel interpretation.
@@ -70,7 +68,7 @@ Ratings are easy to choose or clear while legacy half ratings and unsaved drafts
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

@@ -5,7 +5,7 @@
 - Parents: [#197](https://github.com/Vivekpsps3/vivek-monorepo/issues/197), [#196](https://github.com/Vivekpsps3/vivek-monorepo/issues/196)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `UX-01`
 - Conflict groups: `private-routes`, `server-composition`
 - Verification profiles: `server_back`, `web_front`
@@ -45,7 +45,7 @@ Add a small route parity contract over existing declarations; do not build a rou
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. After UX-01 merges, inventory current routes with owner and representative examples, explicitly separating mounted routes, reserved document patterns, aliases and unknown paths. Preserve existing code-shaped lazy route declarations.
 3. Implement a small checked example table or parity test that exercises the real server handler and the Angular registered route contract. Reuse settings registry entries rather than hand-maintaining another settings list where feasible.
 4. Cover parameterized paths, public/private CSP and auth policy, assets/API404s, aliases and deep query fragments. Keep app-switcher placement optional; not every page is a top-level app.

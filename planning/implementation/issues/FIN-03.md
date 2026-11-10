@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Planning explains which records supplied its facts without confusing gross/net or unknown prices.
 
-Planning explains which records supplied its facts without confusing gross/net or unknown prices.
-
 ## Requirements
 
 - #65 scope3/F18/#73 and all count/copy acceptance; zero-valued records count.
@@ -38,7 +36,7 @@ Planning explains which records supplied its facts without confusing gross/net o
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Add source-record counts to the existing typed preview and client calculation at the authoritative fact assembly point.
 3. Render singular/plural asset/debt/holding/active-job/active-recurring parentheticals; count zero-valued records but exclude inactive inputs according to current rules.
 4. Remove duplicated count inference in templates/helpers, retain the undated-price warning, accurate gross/net/source/no-tax/error/saved-scenario copy.
@@ -69,7 +67,7 @@ Planning explains which records supplied its facts without confusing gross/net o
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

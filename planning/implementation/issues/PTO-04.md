@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 A user can remove and later reconfigure Sick policy without losing historical leave, future allocations or PTO.
 
-A user can remove and later reconfigure Sick policy without losing historical leave, future allocations or PTO.
-
 ## Requirements
 
 - #110 scope5/#126 safe Reset Sick, impact preview and owner-isolation acceptance.
@@ -39,7 +37,7 @@ A user can remove and later reconfigure Sick policy without losing historical le
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Use existing confirm-and-run for Remove Sick policy and explain policy/setup/dismissal changes exactly; balance correction stays in dated editor with impact preview.
 3. Add the smallest owner/revision-aware command needed to unconfigure Sick and reset its setup state; preserve all history, future leave allocations and PTO.
 4. Guard stale/double requests so a removed/reconfigured policy cannot be erased by an old retry; allow reconfiguration over retained history.
@@ -71,7 +69,7 @@ A user can remove and later reconfigure Sick policy without losing historical le
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

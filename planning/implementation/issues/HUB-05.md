@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Common workflows can start quickly by keyboard or touch without duplicating their forms or revealing admin diagnostics to users.
 
-Common workflows can start quickly by keyboard or touch without duplicating their forms or revealing admin diagnostics to users.
-
 ## Requirements
 
 - #93 scope3 greeting,touchtargets,Quick add,N/? shortcuts/help/search,admin-only health chip; acceptance manual transaction date; weekly review link is owned by TOWN-06.
@@ -41,7 +39,7 @@ Common workflows can start quickly by keyboard or touch without duplicating thei
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Route Quick add to existing app-owned creation workflows; preserve selected/default manual transaction date and session/locked behavior.
 3. Implement N/? shortcuts and help including existing search, with editable-field/modal guards, explicit focus return and touch actions.
 4. Provide greeting and admin-only service health chip using current authorized data; do not build a second diagnostic endpoint or duplicate app forms.
@@ -72,7 +70,7 @@ Common workflows can start quickly by keyboard or touch without duplicating thei
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

@@ -5,7 +5,7 @@
 - Parents: [#198](https://github.com/Vivekpsps3/vivek-monorepo/issues/198)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `SAFE-01`, `SAFE-03`
 - Conflict groups: `finance-vault-lifecycle`, `private-shell`, `pixels-data`, `world-ui`
 - Verification profiles: `shared_front`
@@ -45,7 +45,7 @@ Use one small validated lifecycle notification adapter and remove the independen
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Inventory existing storage key, channel version, owner ID, tab ID and event kinds. Specify one accepted notification format; preserve existing on-wire compatibility and same-tab dispatch.
 3. Implement a small listener adapter beside the current lifecycle owner; reuse existing session port and SAFE-01 subscriber collection. Keep sensitive values out of messages/storage.
 4. Migrate Hub, Pixels and World to subscribe to the same validated invalidation event, retaining their feature-specific clear/abort behavior. Delete their duplicated channel construction, key branches, isRemoteLock copies and independent teardown.

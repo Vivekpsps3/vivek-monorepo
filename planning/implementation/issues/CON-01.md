@@ -45,7 +45,7 @@ Replace regex-only ownership shortcuts with the smallest language-aware graph ch
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Capture the current actual edges by owner; declare shell/platform/feature/composition roles below apps/web and apps/server. Enumerate legitimate composition files instead of exempting all server source.
 3. Use Python ast with package-relative resolution and TypeScript’s already-installed parser/module resolver for TS/JS aliases, type-only/dynamic/reexport/require forms actually used. Do not add a graph service or package-per-folder.
 4. Preserve the existing private-sink and generic UI checks while expressing their scopes honestly. Adopt a reviewed baseline only for real existing violations with named removal owners; block new violations immediately.

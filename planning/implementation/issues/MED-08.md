@@ -5,7 +5,7 @@
 - Parents: [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200), [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `MED-01`
 - Conflict groups: `media-records`, `media-membership`, `media-library-api`
 - Verification profiles: `media_back`, `server_back`, `media_front`
@@ -40,7 +40,7 @@ Media changes touch one authoritative command/query path rather than interleaved
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Map existing catalog identity lookup, owner entry creation, progress and projections to their actual functions. membership.py is applied-migration support, not a competing runtime store. Keep its imported behavior unchanged.
 3. Use the existing _catalog_by_source identity lookup from _public_catalog instead of its inline query; preserve the caller-specific kind check. Inventory remaining runtime duplication and consolidate only proven equivalent operations; new_entry and _entry_for_catalog are already owners, not new seams to invent.
 4. Delete old serializers/lookup/mutation/merge branches after callers migrate; keep global catalog and personal entry concerns distinct and preserve request commit-before-response.
@@ -74,7 +74,7 @@ Media changes touch one authoritative command/query path rather than interleaved
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

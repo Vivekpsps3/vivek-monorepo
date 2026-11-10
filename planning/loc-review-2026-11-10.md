@@ -1,5 +1,9 @@
 # Code growth and roadmap review — 2026-11-10
 
+This is dated evidence. Select work through the ordered
+[execution queue](implementation/README.md); the recommendations below do not
+create a second task order.
+
 Reviewed main `8c37ce2`, 16 merged PRs from #278 through #295 (numbers are not
 continuous), their diffs and evidence, current GitHub leaves/#134, and the local
 planning workflow. No open PRs at inspection. This is a focused maintenance review,

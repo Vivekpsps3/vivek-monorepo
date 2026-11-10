@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 An owner can inspect and correct health measurements with useful history, safe drafts and clear locked/retry behavior.
 
-An owner can inspect and correct health measurements with useful history, safe drafts and clear locked/retry behavior.
-
 ## Requirements
 
 - #90 implementation1/Clinic half,2/shared units+dialog,3/all Clinic kinds,5/Clinic dialog/privacy; #88/#96 retained supporting source; no new collection/endpoint.
@@ -44,7 +42,7 @@ An owner can inspect and correct health measurements with useful history, safe d
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Mount /town/clinic using existing store/validators and approved narrow vault adapter; skeleton/8s unavailable+Retry/corrupt count/locked states, unlock/setup next returns to origin.
 3. Use one display-only owner/device units preference town.health.units.v1 defaultlb/mi and a small reusable entry dialog shell; conversions never rewrite persisted records/revisions.
 4. Render latest value/date,12point accessible sparkline/equivalent text, lab groups with in/below/above/no-range text, checkups and100-per-kind initial window with Show more.
@@ -78,7 +76,7 @@ An owner can inspect and correct health measurements with useful history, safe d
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

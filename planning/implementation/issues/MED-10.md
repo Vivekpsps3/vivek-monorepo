@@ -5,7 +5,7 @@
 - Parents: [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `MED-01`
 - Conflict groups: `media-detail-form`, `media-runtime`, `media-records`
 - Verification profiles: `media_front`, `media_back`, `web_front`
@@ -40,7 +40,7 @@ Prove each retained #128 Media runtime finding on current main and remove only i
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Build retained #128 evidence table for third-item late failure suppression, Monday composer header, preflight timeout, toast retirement, dead sticky_status cache and duplicate-review no-op; fix residuals at their owner and remove obsolete cache/branches.
 3. For each retained finding, identify the current trigger, state owner, existing test and disposition before changing code. Hold responses deterministically; require request/write counts for duplicate-review no-op. Do not invent a replacement cache, new retry layer or source-string-only proof.
 4. Remove the superseded live path in this PR after migrating its consumers. Record actual production/test LOC and independent implementations before/after; added layers need a named safety reason and a real consumer.
@@ -70,7 +70,7 @@ Prove each retained #128 Media runtime finding on current main and remove only i
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

@@ -5,7 +5,7 @@
 - Parents: [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `SAFE-01`
 - Conflict groups: `finance-vault-lifecycle`, `finance-imports`, `finance-transactions`
 - Verification profiles: `finance_front`
@@ -15,8 +15,6 @@ Read [root AGENTS](../../../AGENTS.md), [planning instructions](../../AGENTS.md)
 This file is the executable packet. The parent issue is a scope ledger. Close only this leaf, with `Closes` on this leaf and a reference to each parent.
 
 ## Outcome
-
-Finance mutations, import staging and lock/error recovery follow one current behavior instead of stale special cases.
 
 Finance mutations, import staging and lock/error recovery follow one current behavior instead of stale special cases.
 
@@ -41,7 +39,7 @@ Finance mutations, import staging and lock/error recovery follow one current beh
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Build an item-by-item retained #128 evidence table from original source/current tests; label proven current behavior rather than reimplementing historical findings.
 3. Add held-promise behavioral regressions for failed/queued rewrites, A→B session change and422 feedback, locked bank/brokerage lookup, deleteHolding command routing and stage snapshot changes.
 4. Fix genuine residuals at the current authoritative operation queue/snapshot boundary and remove obsolete fallback/race branches that no longer have a supported state.
@@ -74,7 +72,7 @@ Finance mutations, import staging and lock/error recovery follow one current beh
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

@@ -5,7 +5,7 @@
 - Parents: [#198](https://github.com/Vivekpsps3/vivek-monorepo/issues/198)
 - Kind: `implementation`
 - Base checked: `495d698aedac5c544119c30c9405c810f8038cba` on 2026-11-09. Re-read current `main` before editing.
-- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286). Use its branch if the amendment is not yet on main.
+- Plan source: [amendment #286](https://github.com/Vivekpsps3/vivek-monorepo/pull/286).
 - Dependencies: `SAFE-02`, `SAFE-04`
 - Conflict groups: `hub-load`, `pixels-data`, `health-store`, `world-controller`
 - Verification profiles: `shared_front`
@@ -44,7 +44,7 @@ Adopt the smallest reusable deadline/cancellation/publication utility for existi
 
 ## Steps
 
-1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare active PR #193 before assuming the reviewed source is current. Preserve unrelated edits.
+1. Read root AGENTS.md, planning/AGENTS.md, this packet and the retained parent requirements. Work from fresh main in an isolated branch/worktree; verify dependencies are merged and compare current overlapping open PRs before assuming the reviewed source is current. Preserve unrelated edits.
 2. Compare Hub/Health/Pixels deadlines, caller abort and publication checks; retain the smallest shared mechanism only where semantics match. Prefer a local reusable function over a new service hierarchy.
 3. Give one user action a total deadline across Pixels source windows and Finance joins; connect caller/lifecycle abort to actual HTTP subscriptions and local controllers. Preserve request batching/range limits and partial source outcomes.
 4. Migrate at least Pixels and Health’s equivalent timeout/eligibility mechanics and remove obsolete timer/race/controller copies. World may reuse the mechanism where equivalent without changing existing budget states.

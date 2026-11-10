@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Travel shows correct tagged Finance spending while unlocked and clears it immediately on lock, including Travel-first navigation.
 
-Travel shows correct tagged Finance spending while unlocked and clears it immediately on lock, including Travel-first navigation.
-
 ## Requirements
 
 - #84 scope1/F15/#68 and scope2/private spend bridge; acceptance tags, USD/refunds, privacy and no duplicate starts.
@@ -44,7 +42,7 @@ Travel shows correct tagged Finance spending while unlocked and clears it immedi
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Add optional nullable positive-integer trip_id only inside encrypted transaction JSON/editor/load/save; load owner trips through existing /travel/api/home with stable current/upcoming/past ordering.
 3. Support No trip and retained orphan Earlier trip; a trip-list failure is nonblocking and explains saving without a tag.
 4. Compute totals once using existing transaction effects: refunds subtract, income/invalid IDs excluded, explicit USD/count; keep Travel multi-currency costs separate.
@@ -79,7 +77,7 @@ Travel shows correct tagged Finance spending while unlocked and clears it immedi
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

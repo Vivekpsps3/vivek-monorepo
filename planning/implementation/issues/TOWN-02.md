@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Town grows from real owner Media/Travel activity, retracts reversed actions and labels source status honestly.
 
-Town grows from real owner Media/Travel activity, retracts reversed actions and labels source status honestly.
-
 ## Requirements
 
 - #81 delivery2/PassiveDays, delivery3/completion timestamps; acceptance owner/founding/LA/source/caps/600ms; UX-8 source labels.
@@ -44,7 +42,7 @@ Town grows from real owner Media/Travel activity, retracts reversed actions and 
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Implement grouped bounded per-source PassiveDays queries: watched episodes require watched_on, completed movie/tv/book/game require completed_on, reminders join owner trip and request timezone.
 3. Credit booked/done trip on end_date+1 only if logged by its end; planning trips never credit and no source credits before Town founding.
 4. Ensure existing completion writes set/clear timestamps without changing response keys/contracts; derive credits so Undo/delete/toggle retract instead of accumulate.
@@ -79,7 +77,7 @@ Town grows from real owner Media/Travel activity, retracts reversed actions and 
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 

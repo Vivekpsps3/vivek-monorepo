@@ -17,8 +17,6 @@ This file is the executable packet. The parent issue is a scope ledger. Close on
 
 Town check-in/history/edit/Undo interactions are understandable and safe across keyboard, touch and both themes.
 
-Town check-in/history/edit/Undo interactions are understandable and safe across keyboard, touch and both themes.
-
 ## Requirements
 
 - #81 delivery6; #115 all20 historical findings and31 mutation survivors https://github.com/Vivekpsps3/vivek-monorepo/issues/115; all corresponding #81 responsive/a11y/error acceptance.
@@ -48,7 +46,7 @@ Town check-in/history/edit/Undo interactions are understandable and safe across 
 
 ## Steps
 
-1. Read fresh main, the parent retained scope and this packet; inspect active PR193 and current consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
+1. Read fresh main, the parent retained scope and this packet; inspect current open PRs and consumers before editing. Capture baseline behavior and mark each owned requirement as already proved or requiring a change.
 2. Read preserved #115 source/comments and enumerate every20finding/31survivor into a current trigger/invariant/test/disposition matrix before implementation.
 3. Fix genuine residuals: done/rest/missed/pending history legend with shape/patterns;≥3:1 glyph/control contrast across states/themes/hover; Mark yesterday disabled/guarded during load/failure/in-flight/duplicate intent.
 4. Finish readable linked field errors, focus return, Undo reannouncement, responsive lot labels and meaningful accessible building names.
@@ -80,7 +78,7 @@ Town check-in/history/edit/Undo interactions are understandable and safe across 
 
 ## Risks
 
-- Current main/PR193 may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
+- Current main or an overlapping open PR may already change part of this surface. Preserve landed behavior and user edits; do not recreate a stale implementation or claim acceptance from an old snapshot.
 
 ## Completion evidence
 
