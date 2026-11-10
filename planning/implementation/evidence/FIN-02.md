@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#221](https://github.com/Vivekpsps3/vivek-monorepo/issues/221) FIN-02. Parent [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65) stays open.
 - Agent/context, branch/worktree: Cursor agent, branch `agent/fin-02`, worktree `/tmp/vivek-fin-02`.
-- Base main SHA, current tested SHA: base `08be484ba3b3535dbcb500749245f2e75ee1f2e4` (includes DEL-05 / PR #289 and PR #193). Local gates ran on this working tree before the pull request. The pull request head is the commit that contains this file.
+- Base main SHA, current tested SHA: base `08be484ba3b3535dbcb500749245f2e75ee1f2e4` (includes DEL-05 / PR #289 and PR #193). Local gates ran on the tree committed as `58c0b866400a9cbbb90fff3b16956942d99ba738`. Pull request: https://github.com/Vivekpsps3/vivek-monorepo/pull/295.
 - Fresh-main/prerequisite/active-PR checks: no queue dependency. DEL-05 is in the base: bills and subscriptions still use `ui-field` for error text, `aria-invalid`, `aria-describedby`, and `data-field-invalid`. `controls.css` still owns the danger border; this change does not edit it. No edit to the vault public API or the Health store.
 
 ## Acceptance
@@ -49,7 +49,7 @@ Browser exercise, not a screenshot-only check: the Playwright spec opens all thr
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): recorded on the pull request that contains `Closes #221`. Parent #65 is referenced and not closed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/295 (`Closes #221`). Parent #65 is referenced and not closed.
 - Roadmap #134 append-only status-note URL: posted after the squash merge.
 - Merged/activation status: not merged at the time these local gates passed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #65 stays open.
