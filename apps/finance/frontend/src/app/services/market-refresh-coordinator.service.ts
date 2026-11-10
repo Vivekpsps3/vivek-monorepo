@@ -7,6 +7,7 @@ import { authNavigation } from '@vivek/ui';
 import { SESSION_CONTEXT } from '@vivek/ui';
 import { EncryptedCollection } from '../crypto/encrypted-store.service';
 import { financeTabId, lockedHere, wipeDek } from '../crypto/dek-holder';
+import { acceptLockNotice, VAULT_SYNC_CHANNEL, type LockSessionNotice } from '../crypto/lock-notice';
 import { VaultService } from '../crypto/vault.service';
 import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import { MarketPriceQuote } from '../models/transaction.model';
@@ -95,7 +96,7 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
 
   constructor() {
     if (typeof BroadcastChannel !== 'undefined') {
-      this.channel = new BroadcastChannel('finance-vault-sync-v1');
+      this.channel = new BroadcastChannel(VAULT_SYNC_CHANNEL);
       this.channel.onmessage = event => void this.receiveTabMessage(event.data);
     }
     this.auth.user$.pipe(takeUntil(this.destroy$)).subscribe(user => {
@@ -383,44 +384,49 @@ export class MarketRefreshCoordinatorService implements OnDestroy {
   }
 
   private async receiveTabMessage(message: unknown): Promise<void> {
-    if (!isTabMessage(message) || message.userId !== this.auth.currentUser?.id) return;
-    if (message.kind === 'lock' && message.tabId === financeTabId()) return;
-    if (message.kind === 'lock' && lockedHere()) {
-      wipeDek();
+    const notice = acceptLockNotice(message, this.auth.currentUser?.id ?? null);
+    if (notice) {
+      await this.applyRemoteLifecycle(notice);
       return;
     }
-    if (message.kind === 'invalidate') {
-      if (!this.vault.isUnlocked || !message.collections?.length) return;
-      try {
-        await this.finance.refreshCollectionsFromAnotherTab(message.collections);
-      } catch {
-        if (this.vault.isUnlocked) {
-          this.toast.error(failureCopy('refresh', 'this vault'), {
-            label: 'Reload',
-            run: () => window.location.reload(),
-          });
-        }
+    if (!isInvalidateMessage(message) || message.userId !== this.auth.currentUser?.id) return;
+    if (!this.vault.isUnlocked || !message.collections?.length) return;
+    try {
+      await this.finance.refreshCollectionsFromAnotherTab(message.collections);
+    } catch {
+      if (this.vault.isUnlocked) {
+        this.toast.error(failureCopy('refresh', 'this vault'), {
+          label: 'Reload',
+          run: () => window.location.reload(),
+        });
       }
+    }
+  }
+
+  /** Finance's own reaction. Shell subscribers keep theirs. Lock acceptance lives in acceptLockNotice. */
+  private async applyRemoteLifecycle(notice: LockSessionNotice): Promise<void> {
+    if (notice.kind === 'lock' && lockedHere()) {
+      wipeDek();
       return;
     }
     this.endSession();
     this.finance.clearSessionState();
-    if (message.kind === 'signout') {
+    if (notice.kind === 'signout') {
       await Promise.resolve()
         .then(() => this.auth.clearLocalSession())
         .then(() => { authNavigation.goToLogin(false); })
         .catch(() => undefined);
-    } else {
-      // Remote lock (F5 §1): on a Finance route, go to unlock keeping the
-      // return path; on Hub/Settings don't navigate — those surfaces read
-      // vault.isUnlocked themselves. An unknown URL means the embedded
-      // Finance context, which always lands on the unlock screen.
-      const url = this.router.url || '';
-      if (url.startsWith('/finance/') && !url.startsWith('/finance/vault/')) {
-        await this.router.navigateByUrl(`/finance/vault/unlock?next=${encodeURIComponent(url)}`);
-      } else if (url === '' || url.startsWith('/finance/vault/')) {
-        await this.router.navigateByUrl('/finance/vault/unlock');
-      }
+      return;
+    }
+    // Remote lock (F5 §1): on a Finance route, go to unlock keeping the
+    // return path; on Hub/Settings don't navigate — those surfaces read
+    // vault.isUnlocked themselves. An unknown URL means the embedded
+    // Finance context, which always lands on the unlock screen.
+    const url = this.router.url || '';
+    if (url.startsWith('/finance/') && !url.startsWith('/finance/vault/')) {
+      await this.router.navigateByUrl(`/finance/vault/unlock?next=${encodeURIComponent(url)}`);
+    } else if (url === '' || url.startsWith('/finance/vault/')) {
+      await this.router.navigateByUrl('/finance/vault/unlock');
     }
   }
 }
@@ -431,12 +437,11 @@ function isValidDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function isTabMessage(value: unknown): value is TabMessage {
+function isInvalidateMessage(value: unknown): value is TabMessage {
   const item = value as Partial<TabMessage> | null;
-  return !!item && item.version === 1 && Number.isInteger(item.userId)
-    && ['invalidate', 'lock', 'signout'].includes(String(item.kind))
-    && (item.collections === undefined || (Array.isArray(item.collections) && item.collections.every(collection => [
+  return !!item && item.version === 1 && Number.isInteger(item.userId) && item.kind === 'invalidate'
+    && Array.isArray(item.collections) && item.collections.every(collection => [
       'transactions', 'assets', 'liabilities', 'holdings', 'job_incomes', 'fixed_expenses', 'subscriptions',
       'bank_accounts', 'brokerage_accounts', 'import_batches', 'planning_profiles', 'stock_lab_scenarios',
-    ].includes(collection))));
+    ].includes(collection));
 }

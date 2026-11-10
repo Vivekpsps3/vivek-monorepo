@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { Subject } from 'rxjs';
+import { SESSION_CONTEXT } from '@vivek/ui';
+import { financeTabId } from '../../../../../finance/frontend/src/public-api';
 import { SpriteAtlas } from '../render/atlas';
 import { WORLD_COPY, type ChestOverlay, type LoadedChunk, type WorldWeek } from '../world.types';
 import { SessionService } from '../../platform/session.service';
@@ -483,6 +485,7 @@ describe('World production controller ownership', () => {
       providers: [
         provideRouter([]),
         { provide: SessionService, useValue: session },
+        { provide: SESSION_CONTEXT, useValue: session },
         {
           provide: WorldApi,
           useValue: {
@@ -545,6 +548,19 @@ describe('World production controller ownership', () => {
       session.cleared$.next();
       expect(cleared).toEqual([owners[1]]);
 
+      const channel = new BroadcastChannel('finance-vault-sync-v1');
+      channel.postMessage({ version: 1, userId: 9, kind: 'lock', tabId: 'other' });
+      channel.postMessage({ version: 1, kind: 'lock' });
+      channel.postMessage({ version: 1, userId: 7, kind: 'lock', tabId: financeTabId() });
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(cleared).toEqual([owners[1]]);
+      channel.postMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'other-tab' });
+      channel.postMessage({ version: 1, userId: 7, kind: 'lock', tabId: 'other-tab-2' });
+      channel.postMessage({ version: 1, userId: 7, kind: 'signout', tabId: financeTabId() });
+      await new Promise(resolve => setTimeout(resolve, 30));
+      channel.close();
+      expect(cleared).toEqual([owners[1], owners[1], owners[1], owners[1]]);
+
       second.destroy();
       second = undefined;
       expect(disposed).toEqual([owners[0], owners[1]]);
@@ -553,7 +569,7 @@ describe('World production controller ownership', () => {
 
       session.cleared$.next();
       window.dispatchEvent(new StorageEvent('storage', { key: 'finance-vault-lock', newValue: '1' }));
-      expect(cleared).toEqual([owners[1]]);
+      expect(cleared).toEqual([owners[1], owners[1], owners[1], owners[1]]);
     } finally {
       first?.destroy();
       second?.destroy();

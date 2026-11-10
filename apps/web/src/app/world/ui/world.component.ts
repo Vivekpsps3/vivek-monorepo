@@ -17,14 +17,14 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationStart, Router } from '@angular/router';
-import { filter, fromEvent } from 'rxjs';
+import { filter } from 'rxjs';
 import {
   ThemeService,
   UiButtonComponent,
   UiEmptyStateComponent,
 } from '@vivek/ui';
 import {
-  LOCK_SIGNAL,
+  bindLockNotices,
   financeVaultPresent,
   loadFinanceBudgetKept,
 } from '../../../../../finance/frontend/src/public-api';
@@ -313,11 +313,7 @@ export class WorldComponent {
       this.work = new AbortController();
       this.onFinanceCleared();
     });
-    if (typeof window !== 'undefined') {
-      fromEvent<StorageEvent>(window, 'storage').pipe(takeUntilDestroyed()).subscribe(event => {
-        if (event.key === LOCK_SIGNAL && event.newValue !== null) this.onFinanceCleared();
-      });
-    }
+    this.destroyRef.onDestroy(bindLockNotices(() => this.onFinanceCleared()));
     this.router.events.pipe(
       filter((event): event is NavigationStart => event instanceof NavigationStart),
       takeUntilDestroyed(),
