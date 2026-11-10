@@ -14,8 +14,11 @@ notes, ratings, progress and Undo across owners. Public metadata is not a person
 
 Consolidate proven repeated policy in small functions. Do not build a provider plugin
 framework or merge different transport/cache semantics. The current pacing/client
-helpers are already shared: reuse them. API payloads with similar fields can represent
-different privacy/identity contracts; prove equivalence before combining serializers.
+helpers are already shared: reuse them. Official TMDB movie and series detail share
+one authenticated fetch and common projection. Public movie HTML and series
+network, lifecycle, and episode fields stay in their adapters. API payloads with
+similar fields can represent different privacy/identity contracts; prove
+equivalence before combining serializers.
 
 [membership.py](backend/services/membership.py) contains migration SQL imported by
 applied revisions. It is not an orphan runtime store; preserve historical migration
