@@ -1,6 +1,7 @@
 import type { Injector } from '@angular/core';
 import { SESSION_CONTEXT, ToastService } from '@vivek/ui';
 import { financeTabId, wipeDek } from './dek-holder';
+import { VAULT_SYNC_CHANNEL } from './lock-notice';
 
 export const lockLoad = { modules: () => Promise.all([
   import('./vault.service'),
@@ -8,7 +9,6 @@ export const lockLoad = { modules: () => Promise.all([
   import('../services/market-refresh-coordinator.service'),
 ] as const) };
 
-const VAULT_CHANNEL = 'finance-vault-sync-v1';
 const lockSnapshotBindings = new Set<{ drop: () => void }>();
 
 export function bindLockSnapshots(drop: () => void): () => void {
@@ -33,7 +33,7 @@ function clearLockSnapshots(): void {
 
 function postLock(userId: number, originTabId?: string): boolean {
   if (typeof BroadcastChannel === 'undefined') return false;
-  const channel = new BroadcastChannel(VAULT_CHANNEL);
+  const channel = new BroadcastChannel(VAULT_SYNC_CHANNEL);
   try { channel.postMessage({ version: 1, userId, kind: 'lock', tabId: originTabId ?? financeTabId() }); }
   finally { channel.close(); }
   return true;
