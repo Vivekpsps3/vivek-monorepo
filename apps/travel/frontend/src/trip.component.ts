@@ -8,6 +8,7 @@ import {
   signal,
 } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
+import { NgTemplateOutlet } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
@@ -22,6 +23,8 @@ import {
   UiDialogComponent,
   UiFieldComponent,
   UiFieldControlDirective,
+  UiMenuComponent,
+  UiMenuItemDirective,
   UiPageHeaderComponent,
 } from "@vivek/ui";
 import { MapComponent, TravelPlace } from "./map.component";
@@ -37,10 +40,15 @@ import {
 } from "./trip-header.mjs";
 import { formatDateRange, formatDay, formatMoney, fromDollars } from "@vivek/browser";
 import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
+import {
+  projectItinerary,
+  type ItineraryEntry,
+} from "./calendar-model.mjs";
 @Component({
   standalone: true,
   imports: [
     FormsModule,
+    NgTemplateOutlet,
     RouterLink,
     UiBadgeComponent,
     UiButtonComponent,
@@ -48,6 +56,8 @@ import { Plan, Stay, Transport, Trip, travelError } from "./travel.models";
     UiDialogComponent,
     UiFieldComponent,
     UiFieldControlDirective,
+    UiMenuComponent,
+    UiMenuItemDirective,
     UiPageHeaderComponent,
     MapComponent,
     TransportEditorComponent,
@@ -170,6 +180,10 @@ export class TripComponent {
   private readonly toast = inject(ToastService);
   private loadingRequest?: Subscription;
   readonly data = signal<Trip | null>(null);
+  readonly itinerary = computed(() => {
+    const trip = this.data();
+    return trip ? projectItinerary(trip) : null;
+  });
   readonly mapPlaces = computed<TravelPlace[]>(() => {
     const trip = this.data();
     return trip
@@ -210,10 +224,151 @@ export class TripComponent {
   editingId: number | null = null;
   mapOpen = false;
   selectedDay = "";
+  rovingDay = "";
 
   revealChip(event: Event): void {
     const target = event.target;
     if (target instanceof HTMLElement) target.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }
+
+  private applyRouteDay(): void {
+    const trip = this.data();
+    if (!trip) return;
+    const day = this.route.snapshot.queryParamMap.get("day") || "";
+    if (day && trip.days.some((item) => item.on_date === day)) {
+      this.selectedDay = day;
+      this.rovingDay = day;
+      return;
+    }
+    if (!day) this.selectedDay = "";
+  }
+
+  stripTabIndex(iso: string, index: number): number {
+    const current = this.rovingDay || this.selectedDay;
+    if (!current) return index === 0 ? 0 : -1;
+    return current === iso ? 0 : -1;
+  }
+
+  onStripKey(event: KeyboardEvent): void {
+    const key = event.key;
+    const moving =
+      key === "ArrowLeft" ||
+      key === "ArrowRight" ||
+      key === "ArrowUp" ||
+      key === "ArrowDown" ||
+      key === "Home" ||
+      key === "End";
+    if (!moving && key !== "Enter") return;
+    const days = this.itinerary()?.days ?? [];
+    if (!days.length) return;
+    event.preventDefault();
+    const current = this.rovingDay || this.selectedDay || days[0].onDate;
+    let index = days.findIndex((day) => day.onDate === current);
+    if (index < 0) index = 0;
+    if (key === "End") index = days.length - 1;
+    else if (key === "Home") index = 0;
+    else if (key === "ArrowRight" || key === "ArrowDown") index = Math.min(days.length - 1, index + 1);
+    else if (key === "ArrowLeft" || key === "ArrowUp") index = Math.max(0, index - 1);
+    const iso = days[index].onDate;
+    if (key === "Enter") {
+      this.selectDay(iso, true);
+      return;
+    }
+    this.rovingDay = iso;
+    document.getElementById("trip-day-" + iso)?.focus();
+  }
+
+  selectDay(iso: string, focusContent = false): void {
+    const trip = this.data();
+    if (!trip?.days.some((day) => day.on_date === iso)) return;
+    this.selectedDay = iso;
+    this.rovingDay = iso;
+    if (this.route.snapshot.queryParamMap.get("day") !== iso) {
+      void this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { day: iso },
+        queryParamsHandling: "merge",
+      });
+    }
+    if (focusContent) {
+      setTimeout(() => {
+        document.getElementById("itinerary-day-" + iso)?.focus();
+      });
+    }
+  }
+
+  addPlan(iso: string): void {
+    this.selectDay(iso);
+    this.open("activity");
+  }
+
+  cityOn(iso: string): string {
+    return this.data()?.days.find((day) => day.on_date === iso)?.city || "";
+  }
+
+  planFor(entry: ItineraryEntry): Plan | null {
+    if (entry.source !== "plan") return null;
+    const trip = this.data();
+    if (!trip) return null;
+    return (
+      trip.days.flatMap((day) => day.items).find((plan) => plan.id === entry.id) ||
+      trip.outside_plans.find((plan) => plan.id === entry.id) ||
+      null
+    );
+  }
+
+  transportFor(entry: ItineraryEntry): Transport | null {
+    if (entry.source !== "transport") return null;
+    return this.data()?.transports.find((item) => item.id === entry.id) ?? null;
+  }
+
+  parkingFor(entry: ItineraryEntry): Trip["parking"][number] | null {
+    if (entry.source !== "parking") return null;
+    return this.data()?.parking.find((item) => item.id === entry.id) ?? null;
+  }
+
+  transportEntryText(entry: ItineraryEntry, transport: Transport): string {
+    if (!entry.primary && entry.part === "arrival") {
+      const when = transportWhen(transport.depart_at, transport.arrive_at);
+      return when.arrive ? "Arrives " + this.clockText(when.arrive.time) : "Arrives";
+    }
+    return this.transportWhenText(transport);
+  }
+
+  transportEntryCost(entry: ItineraryEntry, transport: Transport): string {
+    if (!entry.primary) return "";
+    return this.transportCostText(transport);
+  }
+
+  entryAction(entry: ItineraryEntry): string {
+    if (entry.source === "plan") return "Edit activity";
+    if (entry.source === "transport") return "Edit transport";
+    return "Edit parking";
+  }
+
+  editEntry(entry: ItineraryEntry): void {
+    if (entry.source === "plan") {
+      const plan = this.planFor(entry);
+      if (plan) this.open("activity", plan);
+      return;
+    }
+    if (entry.source === "transport") {
+      const transport = this.transportFor(entry);
+      if (transport) this.open("transport", transport);
+      return;
+    }
+    const parking = this.parkingFor(entry);
+    if (parking) this.open("parking", parking);
+  }
+
+  removeEntry(entry: ItineraryEntry): void {
+    if (entry.source === "plan") void this.remove("/plans/" + entry.id, "activity");
+    else if (entry.source === "transport") void this.remove("/transports/" + entry.id, "transport");
+    else void this.remove("/parking/" + entry.id, "parking");
+  }
+
+  dayOpen(day: { onDate: string; entries: unknown[]; unscheduled: unknown[] }): boolean {
+    return day.entries.length > 0 || day.unscheduled.length > 0 || this.selectedDay === day.onDate;
   }
   transport: Record<string, unknown> | null = null;
   charges: Record<string, number> = {};
@@ -276,8 +431,13 @@ export class TripComponent {
       this.id = Number(p.get("id"));
       this.editor = "";
       this.saving.set(false);
+      this.selectedDay = "";
+      this.rovingDay = "";
       this.data.set(null);
       this.load(false);
+    });
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.applyRouteDay();
     });
   }
   private path(): string {
@@ -309,6 +469,7 @@ export class TripComponent {
             status: d.status,
             counts_as_pto: d.counts_as_pto,
           };
+          this.applyRouteDay();
         },
         error: (e) => this.error.set(travelError(e)),
       });
@@ -751,6 +912,12 @@ export class TripComponent {
     return this.path() + suffix;
   }
   hasPlans(): boolean {
-    return this.data()?.days.some((day) => day.items.length > 0) || false;
+    const projected = this.itinerary();
+    if (!projected) return false;
+    return (
+      projected.unscheduled.length > 0 ||
+      projected.outOfRange.length > 0 ||
+      projected.days.some((day) => day.entries.length > 0 || day.unscheduled.length > 0)
+    );
   }
 }

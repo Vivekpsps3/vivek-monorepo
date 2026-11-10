@@ -107,7 +107,7 @@
       }
     </ui-card>
     @if (trip.transports.length) {
-      <ui-card>
+      <ui-card class="trip-detail-transport">
         <h2>Transport</h2>
         @for (transport of trip.transports; track transport.id) {
           <article class="trip-row">
@@ -146,99 +146,154 @@
         }
       </ui-card>
     }
-    <ui-card>
-      <h2>Itinerary</h2>
-      <p class="muted">Choose a date to add a plan. Empty days stay open.</p>
-      <div class="date-strip" aria-label="Trip dates" (focusin)="revealChip($event)">
-        @for (day of trip.days; track day.on_date) {
-          <ui-button
-            variant="ghost"
-            size="sm"
-            [pressed]="selectedDay === day.on_date"
-            (click)="selectedDay = day.on_date"
-          >
-            {{ showDay(day.on_date) }}
-            @if (day.items.length) {
-              · {{ day.items.length }} plans
-            }
-          </ui-button>
+    @if (itinerary(); as projected) {
+      <ui-card>
+        <h2>Itinerary</h2>
+        <p class="muted">Choose a date to add a plan. Empty days stay open.</p>
+        <div
+          class="date-strip"
+          role="tablist"
+          aria-label="Trip dates"
+          aria-orientation="horizontal"
+          (focusin)="revealChip($event)"
+          (keydown)="onStripKey($event)"
+        >
+          @for (day of projected.days; track day.onDate; let index = $index) {
+            <button
+              type="button"
+              class="day-strip-tab"
+              role="tab"
+              [id]="'trip-day-' + day.onDate"
+              [attr.aria-selected]="selectedDay === day.onDate"
+              [attr.aria-controls]="dayOpen(day) ? 'itinerary-day-' + day.onDate : null"
+              [attr.tabindex]="stripTabIndex(day.onDate, index)"
+              [attr.aria-label]="day.accessibleName"
+              (click)="selectDay(day.onDate)"
+              (focus)="rovingDay = day.onDate"
+            >
+              {{ day.label }}
+            </button>
+          }
+        </div>
+        @for (day of projected.days; track day.onDate) {
+          @if (dayOpen(day)) {
+            <section
+              class="itinerary-day"
+              [id]="'itinerary-day-' + day.onDate"
+              [attr.role]="selectedDay === day.onDate ? 'tabpanel' : null"
+              [attr.aria-labelledby]="selectedDay === day.onDate ? 'trip-day-' + day.onDate : null"
+              [attr.tabindex]="selectedDay === day.onDate ? -1 : null"
+            >
+              <h3>
+                {{ day.label }}
+                @if (cityOn(day.onDate)) {
+                  · {{ cityOn(day.onDate) }}
+                }
+              </h3>
+              <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: day.entries }" />
+              @if (day.unscheduled.length) {
+                <h4 class="itinerary-group">Unscheduled</h4>
+                <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: day.unscheduled }" />
+              }
+              @if (!day.entries.length && !day.unscheduled.length) {
+                <p class="muted">A free day. Add something when you're ready.</p>
+                <ui-button variant="ghost" size="sm" (click)="addPlan(day.onDate)">
+                  Add a plan
+                </ui-button>
+              } @else {
+                <ui-button variant="ghost" size="sm" (click)="addPlan(day.onDate)">
+                  Add activity on {{ day.label }}
+                </ui-button>
+              }
+            </section>
+          }
         }
-      </div>
-      @for (day of trip.days; track day.on_date) {
-        @if (day.items.length || selectedDay === day.on_date) {
-          <section class="itinerary-day">
-            <h3>{{ showDay(day.on_date) }} · {{ day.city }}</h3>
-            @for (plan of day.items; track plan.id) {
-              <article class="trip-row">
-                <div>
+        @if (projected.unscheduled.length) {
+          <section class="itinerary-day" aria-label="Unscheduled">
+            <h3>Unscheduled</h3>
+            <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: projected.unscheduled }" />
+          </section>
+        }
+        @if (projected.outOfRange.length) {
+          <section class="itinerary-day" aria-label="Outside trip dates">
+            <h3>Outside trip dates ({{ projected.outOfRange.length }})</h3>
+            <ng-container *ngTemplateOutlet="itineraryRows; context: { entries: projected.outOfRange }" />
+          </section>
+        }
+        @if (!hasPlans() && !selectedDay) {
+          <p class="muted">
+            No activities yet. Your dates and destinations are saved.
+          </p>
+        }
+        <ng-template #itineraryRows let-entries="entries">
+          @for (entry of entries; track entry.key) {
+            <article [class]="entry.source === 'plan' ? 'trip-row' : 'itinerary-entry'">
+              <div>
+                @if (planFor(entry); as plan) {
                   <strong>{{ plan.start_time }} {{ plan.title }}</strong>
-                  <p class="muted">
-                    {{ plan.place_name }}
-                    @if (plan.cost) {
-                      ·
-                      <span class="money">{{
-                        showMoney(plan.cost, plan.currency)
-                      }}</span>
-                    }
-                  </p>
+                  @if (plan.place_name || plan.cost) {
+                    <p class="muted">
+                      {{ plan.place_name }}
+                      @if (plan.cost) {
+                        @if (plan.place_name) {
+                          ·
+                        }
+                        <span class="money">{{ showMoney(plan.cost, plan.currency) }}</span>
+                      }
+                    </p>
+                  }
                   @if (plan.notes) {
                     <p>{{ plan.notes }}</p>
                   }
-                </div>
-                <div class="button-row">
-                  <ui-button
-                    variant="ghost"
-                    size="sm"
-                    (click)="open('activity', plan)"
-                  >
-                    Edit activity</ui-button
-                  ><ui-button
-                    variant="ghost"
-                    size="sm"
-                    (click)="remove('/plans/' + plan.id, 'activity')"
-                  >
-                    Remove
-                  </ui-button>
-                </div>
-              </article>
-            } @empty {
-              <p class="muted">A free day. Add something when you're ready.</p>
-            }
-            <ui-button
-              variant="ghost"
-              size="sm"
-              (click)="selectedDay = day.on_date; open('activity')"
-            >
-              Add activity on {{ showDay(day.on_date) }}
-            </ui-button>
-          </section>
-        }
-      }
-      @if (!hasPlans() && !selectedDay) {
-        <p class="muted">
-          No activities yet. Your dates and destinations are saved.
-        </p>
-      }
-      @if (trip.outside_plans.length) {
-        <details open>
-          <summary>
-            Plans outside current trip dates ({{ trip.outside_plans.length }})
-          </summary>
-          @for (plan of trip.outside_plans; track plan.id) {
-            <p>
-              {{ showDay(plan.on_date) }} · {{ plan.title }}
-              <ui-button
-                variant="ghost"
-                size="sm"
-                (click)="open('activity', plan)"
+                }
+                @if (transportFor(entry); as transport) {
+                  <strong>{{ entry.part === 'arrival' ? 'Arrive' : entry.part === 'departure' ? 'Depart' : 'Transport' }} · {{ transport.label }}</strong>
+                  @if (entry.primary && (transport.depart_place || transport.arrive_place)) {
+                    <p>{{ transport.depart_place }} → {{ transport.arrive_place }}</p>
+                  }
+                  <p>{{ transportEntryText(entry, transport) }}</p>
+                  @if (transportEntryCost(entry, transport); as cost) {
+                    <p class="muted">
+                      <span class="money">{{ cost }}</span>
+                      @if (transport.paid) {
+                        · Paid
+                      }
+                    </p>
+                  }
+                }
+                @if (parkingFor(entry); as parking) {
+                  <strong>{{ parking.place_name || parking.arrangement }}</strong>
+                  <p>{{ parkingLine(parking) }}</p>
+                  @if (parking.notes) {
+                    <p>{{ parking.notes }}</p>
+                  }
+                }
+              </div>
+              <div class="button-row itinerary-actions itinerary-actions--inline">
+                <ui-button variant="ghost" size="sm" (click)="editEntry(entry)">
+                  {{ entryAction(entry) }}
+                </ui-button>
+                <ui-button variant="ghost" size="sm" (click)="removeEntry(entry)">
+                  Remove
+                </ui-button>
+              </div>
+              <ui-menu
+                class="itinerary-actions itinerary-actions--menu"
+                [label]="'Actions for ' + entry.title"
+                [iconOnly]="true"
               >
-                Edit activity
-              </ui-button>
-            </p>
+                <button type="button" uiMenuItem (select)="editEntry(entry)">
+                  {{ entryAction(entry) }}
+                </button>
+                <button type="button" uiMenuItem (select)="removeEntry(entry)">
+                  Remove
+                </button>
+              </ui-menu>
+            </article>
           }
-        </details>
-      }
-    </ui-card>
+        </ng-template>
+      </ui-card>
+    }
     <ui-card>
       <details>
         <summary>PTO · {{ trip.pto_days_effective }} days</summary>
@@ -294,7 +349,7 @@
       </details>
     </ui-card>
     @if (trip.parking.length) {
-      <ui-card>
+      <ui-card class="trip-detail-parking">
         <h2>Parking</h2>
         @for (parking of trip.parking; track parking.id) {
           <article class="trip-row">
