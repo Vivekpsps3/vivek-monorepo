@@ -65,9 +65,9 @@ IDE browser: `cursor-ide-browser` opened `https://example.com` and could not ope
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after `gh pr create`; this note is committed before the PR exists
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/292 (`Closes #215` only)
 - Roadmap #134 append-only status-note URL: filled after the comment
-- Merged/activation status (actual evidence, not assumption): not merged at the time this file was written
+- Merged/activation status (actual evidence, not assumption): PR #292 is open. Not merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Parents #200 and #198 stay open. SAFE-04/SAFE-05 still own shared lifecycle adoption
 - Next actor: merge this PR after the local gates above, then the integration owner reconciles #134 from the merged evidence
 
@@ -85,7 +85,7 @@ Deletion ledger and current consumer migration: service file deleted; no callers
 
 Commands run, results, tested SHA; required checks still pending: see the verification table. All required local gates passed on the implementation tree. CI is the second run.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: not deployed. PR and #134 comment follow this commit.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/292 is open. Not deployed. The #134 comment follows merge.
 
 External prerequisites and next actor: no external prerequisite. Next actor merges the leaf PR and leaves the parents open.
 
