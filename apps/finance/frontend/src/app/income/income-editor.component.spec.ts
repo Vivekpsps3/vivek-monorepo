@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, throwError } from 'rxjs';
+import { centsPaySnapshot } from './pay-schedule';
 import { IncomeComponent } from './income.component';
 import { MarketRefreshCoordinatorService } from '../services/market-refresh-coordinator.service';
 import { FinanceService } from '../services/finance.service';
@@ -453,5 +454,99 @@ describe('Jobs and pay editor regressions', () => {
     expectField('taxes', "Taxes can't be negative.");
     expectField('deductions', "Deductions can't be negative.");
     expectField('endDate', 'End date must be on or after the start date.');
+  });
+
+  it('REC2 and REC3 convert one legacy schedule and keep optional values', async () => {
+    const legacy = enrichJobIncome({
+      id: 44,
+      employer: 'Legacy Co',
+      role_title: 'Analyst',
+      pay_frequency: 'monthly',
+      base_pay: 100.01,
+      taxes_per_period: 10.01,
+      deductions_per_period: 0.01,
+      payday_frequency: 'biweekly',
+      first_pay_date: '2026-10-16',
+      effective_date: '2026-01-01',
+      end_date: null,
+      is_active: true,
+      notes: 'Keep the note',
+      annual_bonus: 0,
+      annual_equity: 0,
+      annual_other: 0,
+      annual_taxes: 0,
+      annual_deductions: 0,
+    } as JobIncome);
+    const before = centsPaySnapshot(legacy);
+    incomes.next([legacy]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    button('Edit', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const form = (fixture.nativeElement.querySelector('#job-form') || document.querySelector('#job-form')) as HTMLFormElement;
+    expect(form).toBeTruthy();
+    const scheduleLabels = [...form.querySelectorAll('.ui-field__label')].map(node => node.textContent?.trim());
+    expect(scheduleLabels.filter(label => label === 'How often are you paid?')).toEqual(['How often are you paid?']);
+    expect(form.textContent).not.toContain('Pay frequency');
+    expect(form.textContent).not.toContain('Paycheck schedule');
+    expect(form.querySelectorAll('input[name="base_pay_unit"]').length).toBe(2);
+    expect((form.querySelector('input[name="base_pay"]') as HTMLInputElement).value).toBe(String(fixture.componentInstance.form.base_pay));
+    const more = form.querySelector('details.more-options') as HTMLDetailsElement;
+    expect(more.open).toBeTrue();
+    expect((form.querySelector('input[name="role_title"]') as HTMLInputElement).value).toBe('Analyst');
+    expect((form.querySelector('input[name="notes"]') as HTMLInputElement).value).toBe('Keep the note');
+    expect((form.querySelector('input[name="first_pay_date"]') as HTMLInputElement).value).toBe('2026-10-16');
+
+    (form.querySelector('input[name="notes"]') as HTMLInputElement).value = 'Changed note';
+    (form.querySelector('input[name="notes"]') as HTMLInputElement).dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    button('Cancel', fixture).click();
+    fixture.detectChanges();
+    expect(finance.updateJobIncome).not.toHaveBeenCalled();
+    expect(legacy.notes).toBe('Keep the note');
+
+    fixture.componentInstance.openEditModal(legacy);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    finance.updateJobIncome.and.returnValue(throwError(() => new Error('offline')));
+    button('Save', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showModal).toBeTrue();
+    expect(fixture.componentInstance.form.employer).toBe('Legacy Co');
+    expect(fixture.componentInstance.form.base_pay).toBe(before.annualBaseCents / 100);
+    expect(document.querySelector('[data-dialog-alert]')?.textContent).toContain("Couldn't save");
+
+    finance.updateJobIncome.and.callFake((id, body) => {
+      const updated = enrichJobIncome({ ...legacy, ...body, id });
+      incomes.next([updated, priorJob]);
+      return of(updated);
+    });
+    button('Save', fixture).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const saved = finance.updateJobIncome.calls.mostRecent().args[1];
+    expect(centsPaySnapshot({ ...legacy, ...saved })).toEqual(before);
+    expect(saved.pay_frequency).toBe('annual');
+    expect(saved.notes).toBe('Keep the note');
+    expect(saved.role_title).toBe('Analyst');
+
+    fixture.componentInstance.openEditModal(enrichJobIncome({ ...legacy, ...saved, id: 44 }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const reopened = (fixture.nativeElement.querySelector('#job-form') || document.querySelector('#job-form')) as HTMLFormElement;
+    expect(reopened).toBeTruthy();
+    expect(fixture.componentInstance.form.pay_frequency).toBe('annual');
+    expect(centsPaySnapshot({ ...legacy, ...saved })).toEqual(before);
+    expect(reopened.querySelectorAll('input[name="base_pay_unit"]').length).toBe(2);
+    expect(reopened.textContent).not.toContain('Pay frequency');
   });
 });

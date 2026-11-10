@@ -43,7 +43,7 @@ import { AppDatePipe } from '@vivek/ui';
     UiFieldControlDirective,
   ],
   templateUrl: './subscriptions.component.html',
-  styleUrl: './subscriptions.component.css',
+  styleUrls: ['./subscriptions.component.css', '../shared/recurring-editor.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SubscriptionsComponent implements OnInit, OnDestroy {
@@ -58,6 +58,7 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
   readonly amountProblem = amountProblem;
   readonly needsFixing = needsFixing;
   editingId: number | null = null;
+  moreOptionsOpen = false;
   form: SubscriptionCreate = this.emptyForm();
 
   readonly frequencyOptions: UiSelectOption[] = [
@@ -116,9 +117,9 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     this.editingId = null;
     this.form = this.emptyForm();
     this.clearValidation();
+    this.moreOptionsOpen = false;
     this.showModal = true;
     this.cdr.markForCheck();
-    this.setOptionalOpen(false);
   }
 
   openEditModal(row: Subscription): void {
@@ -135,15 +136,22 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       notes: row.notes || '',
     };
     this.clearValidation();
+    this.moreOptionsOpen = subscriptionHasOptions(row);
     this.showModal = true;
     this.cdr.markForCheck();
-    this.setOptionalOpen(Boolean(row.end_date || row.payment_account || row.notes || (row.category && row.category !== 'Subscriptions')));
+  }
+
+  onMoreToggle(event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    this.moreOptionsOpen = (event.currentTarget as HTMLDetailsElement).open;
+    this.cdr.markForCheck();
   }
 
   closeModal(): void {
     this.showModal = false;
     this.editingId = null;
     this.form = this.emptyForm();
+    this.moreOptionsOpen = false;
     this.clearValidation();
     this.cdr.markForCheck();
   }
@@ -218,13 +226,6 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
     return this.frequencyOptions.find(option => option.value === value)?.label || value;
   }
 
-  private setOptionalOpen(open: boolean): void {
-    setTimeout(() => {
-      const details = document.querySelector('#subscription-form details.more-details');
-      if (details instanceof HTMLDetailsElement) details.open = open;
-    });
-  }
-
   private emptyForm(): SubscriptionCreate {
     return {
       name: '',
@@ -238,6 +239,10 @@ export class SubscriptionsComponent implements OnInit, OnDestroy {
       notes: '',
     };
   }
+}
+
+function subscriptionHasOptions(row: { end_date?: string | null; payment_account?: string | null; notes?: string | null; category?: string | null }): boolean {
+  return Boolean(row.end_date || row.payment_account?.trim() || row.notes?.trim() || (row.category && row.category !== 'Subscriptions'));
 }
 
 function countedTotal(values: unknown[]): number {

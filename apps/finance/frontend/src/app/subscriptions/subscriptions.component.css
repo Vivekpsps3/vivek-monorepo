@@ -81,25 +81,15 @@
   max-width: 100%;
 }
 
-.more-details {
+.form-error-summary,
+.checkbox-row,
+.more-options {
   grid-column: 1 / -1;
+}
+
+.more-options {
   display: grid;
   gap: var(--space-4);
-}
-
-.more-details summary {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.wide,
-.modal-actions {
-  grid-column: 1 / -1;
 }
 
 .checkbox-row {
@@ -127,21 +117,8 @@
   max-width: 100%;
 }
 
-:host ::ng-deep .ui-dialog-panel {
-  box-sizing: border-box;
-  min-width: 0;
-  max-width: min(560px, 100%);
-  overflow-x: auto;
-}
-
 .metric-value {
   overflow-wrap: anywhere;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
 }
 
 @media (max-width: 768px) {
@@ -151,29 +128,20 @@
   }
 
   .subscription-row,
-  .row-actions,
-  .modal-actions {
+  .row-actions {
     align-items: center;
     flex-wrap: wrap;
   }
 
-  .modal-actions,
   .row-actions {
     justify-content: flex-end;
   }
 
-  .modal-actions ui-button,
-  .modal-actions ::ng-deep .ui-btn,
   .row-actions ui-button,
   .row-actions ::ng-deep .ui-btn,
   :host ::ng-deep .ui-page-header__actions .ui-btn {
     width: auto;
     max-width: 100%;
     min-height: 44px;
-  }
-
-  :host ::ng-deep .ui-dialog-panel {
-    width: 100%;
-    max-width: 100%;
   }
 }

@@ -82,7 +82,8 @@
 <ui-dialog scrollTarget=".main-content" [open]="showModal" labelledBy="fixed-expense-modal-title" (closed)="closeModal()">
       <h3 id="fixed-expense-modal-title">{{ editingId ? 'Edit bill' : 'Add bill' }}</h3>
       @if (saveError) { <p class="dialog-save-alert" role="alert" tabindex="-1" data-dialog-alert>{{ saveError }}</p> }
-      <form id="bill-form" novalidate (ngSubmit)="saveExpense()" #expenseForm="ngForm">
+      <form id="bill-form" class="recurring-editor" novalidate (ngSubmit)="saveExpense()" #expenseForm="ngForm">
+        <div class="recurring-editor__body" data-editor-body>
         @if (formSubmitted && fieldErrors.length) {
           <div class="form-error-summary" role="alert" tabindex="-1" data-error-summary>
             <p>Fix {{ fieldErrors.length }} {{ fieldErrors.length === 1 ? 'field' : 'fields' }} to save:</p>
@@ -117,42 +118,41 @@
             [(value)]="form.frequency" />
         </div>
 
-        <div class="form-row">
-          <label class="form-group">
-            <span>Start date</span>
-            <input name="start_date" type="date" [(ngModel)]="form.start_date" required />
-          </label>
-          <ui-field class="form-group" label="Due day" [error]="fieldError('dueDay')">
-            <input id="bill-due-day" uiFieldControl data-field="dueDay" name="due_day" type="text" inputmode="numeric" [(ngModel)]="form.due_day" (blur)="revalidate()" />
-          </ui-field>
-        </div>
+        <label class="form-group">
+          <span>Start date</span>
+          <input name="start_date" type="date" [(ngModel)]="form.start_date" required />
+        </label>
 
-        <div class="form-row">
-          <label class="form-group">
-            <span>End date</span>
-            <input name="end_date" type="date" [(ngModel)]="form.end_date" />
-          </label>
+        <label class="checkbox-field">
+          <input name="is_active" type="checkbox" [(ngModel)]="form.is_active" />
+          <span>Active</span>
+        </label>
+
+        <details class="more-options" [open]="moreOptionsOpen" (toggle)="onMoreToggle($event)">
+          <summary>More options</summary>
+          <div class="form-row">
+            <ui-field class="form-group" label="Due day" [error]="fieldError('dueDay')">
+              <input id="bill-due-day" uiFieldControl data-field="dueDay" name="due_day" type="text" inputmode="numeric" [(ngModel)]="form.due_day" (blur)="revalidate()" />
+            </ui-field>
+            <label class="form-group">
+              <span>End date</span>
+              <input name="end_date" type="date" [(ngModel)]="form.end_date" />
+            </label>
+          </div>
           <label class="form-group">
             <span>Payment account</span>
             <input name="payment_account" [(ngModel)]="form.payment_account" />
           </label>
-        </div>
-
-        <div class="form-row">
           <label class="checkbox-field">
             <input name="autopay" type="checkbox" [(ngModel)]="form.autopay" />
             <span>Autopay</span>
           </label>
-          <label class="checkbox-field">
-            <input name="is_active" type="checkbox" [(ngModel)]="form.is_active" />
-            <span>Active</span>
+          <label class="form-group">
+            <span>Notes</span>
+            <input name="notes" [(ngModel)]="form.notes" />
           </label>
+        </details>
         </div>
-
-        <label class="form-group">
-          <span>Notes</span>
-          <input name="notes" [(ngModel)]="form.notes" />
-        </label>
 
         <div class="form-actions">
           <ui-button type="submit" variant="primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</ui-button>
