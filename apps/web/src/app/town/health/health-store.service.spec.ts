@@ -1,8 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
 import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
-import { BehaviorSubject, Observable, Subject, of, type ObservedValueOf } from 'rxjs';
-import { lockFinance } from '../../../../../finance/frontend/src/public-api';
+import { BehaviorSubject, Observable, Subject, of } from 'rxjs';
+import {
+  lockFinance,
+  type VaultRecordCapability,
+  type VaultRecordEnvelope,
+  type VaultRecordUpsert,
+} from '../../../../../finance/frontend/src/public-api';
+import type { VaultService } from '../../../../../finance/frontend/src/testing';
 import { SessionService } from '../../platform/session.service';
 import { loadTownHealthStages } from './index';
 import {
@@ -11,11 +17,10 @@ import {
   HealthStoreService,
   newHealthClientId,
   type HealthLoadResult,
-  type HealthVault,
 } from './health-store.service';
 import type { HealthPr, HealthStat } from './health.types';
 
-type EncryptedRecordDto = ObservedValueOf<ReturnType<HealthVault['listRecords']>>[number];
+type EncryptedRecordDto = VaultRecordEnvelope;
 
 const MARKER = 'PLAINTEXT_MARKER_719';
 
@@ -41,11 +46,11 @@ function row(
   };
 }
 
-class FakeVault {
+class FakeVault implements VaultRecordCapability {
   rows: EncryptedRecordDto[] = [];
-  listed: (string | undefined)[] = [];
-  upserted: Record<string, unknown>[][] = [];
-  deleted: Record<string, unknown>[][] = [];
+  listed: string[] = [];
+  upserted: VaultRecordUpsert[][] = [];
+  deleted: { collection: string; client_id: string; expected_revision: number }[][] = [];
   decryptCalls: string[] = [];
   encryptCalls: { value: unknown; schemaVersion: number; keyVersion: number }[] = [];
   hangLists = false;
@@ -63,7 +68,7 @@ class FakeVault {
   readonly upsertRelease: Array<() => void> = [];
   readonly deleteRelease: Array<() => void> = [];
 
-  listRecords(collection?: string): Observable<EncryptedRecordDto[]> {
+  listRecords(collection: string, _options?: { silent?: boolean }): Observable<EncryptedRecordDto[]> {
     this.listed.push(collection);
     const rows = this.rows.filter(item => !collection || item.collection === collection);
     if (this.hangLists || this.holdList) {
@@ -93,36 +98,42 @@ class FakeVault {
     return encode(value);
   }
 
-  async decryptPayload<T>(ciphertextB64: string, _collection: string, clientId: string): Promise<T> {
+  async decryptPayload<T>(
+    ciphertextB64: string,
+    _collection: string,
+    clientId: string,
+    _schemaVersion: number,
+    _keyVersion: number,
+  ): Promise<T> {
     this.decryptCalls.push(clientId);
     if (this.holdDecrypt) await new Promise<void>(resolve => { this.decryptRelease.push(resolve); });
     if (!ciphertextB64.startsWith('ct:')) throw new Error('undecryptable');
     return JSON.parse(atob(ciphertextB64.slice(3))) as T;
   }
 
-  upsertRecords(records: Record<string, unknown>[]): Observable<EncryptedRecordDto[]> {
+  upsertRecords(records: readonly VaultRecordUpsert[], _options?: { silent?: boolean }): Observable<EncryptedRecordDto[]> {
     const run = (): EncryptedRecordDto[] => {
-      this.upserted.push(records);
+      this.upserted.push([...records]);
       const saved: EncryptedRecordDto[] = [];
       for (const record of records) {
         const existing = this.rows.find(
-          item => item.collection === record['collection'] && item.client_id === record['client_id'],
+          item => item.collection === record.collection && item.client_id === record.client_id,
         );
         if (existing) {
-          if (record['expected_revision'] !== existing.revision) {
+          if (record.expected_revision !== existing.revision) {
             throw new HttpErrorResponse({ status: 409 });
           }
-          existing.ciphertext_b64 = record['ciphertext_b64'] as string;
+          existing.ciphertext_b64 = record.ciphertext_b64;
           existing.revision += 1;
           saved.push(existing);
         } else {
-          if (record['expected_revision'] !== null) throw new HttpErrorResponse({ status: 409 });
+          if (record.expected_revision !== null) throw new HttpErrorResponse({ status: 409 });
           const created: EncryptedRecordDto = {
-            collection: record['collection'] as string,
-            client_id: record['client_id'] as string,
-            ciphertext_b64: record['ciphertext_b64'] as string,
-            schema_version: record['schema_version'] as number,
-            key_version: record['key_version'] as number,
+            collection: record.collection,
+            client_id: record.client_id,
+            ciphertext_b64: record.ciphertext_b64,
+            schema_version: record.schema_version,
+            key_version: record.key_version,
             revision: 1,
             updated_at: '2026-10-29T00:00:00Z',
           };
@@ -147,16 +158,19 @@ class FakeVault {
     });
   }
 
-  deleteRecords(records: Record<string, unknown>[]): Observable<{ deleted: number }> {
+  deleteRecords(
+    records: readonly { collection: string; client_id: string; expected_revision: number }[],
+    _options?: { silent?: boolean },
+  ): Observable<{ deleted: number }> {
     const run = (): { deleted: number } => {
-      this.deleted.push(records);
+      this.deleted.push([...records]);
       let deleted = 0;
       for (const record of records) {
         const index = this.rows.findIndex(
-          item => item.collection === record['collection'] && item.client_id === record['client_id'],
+          item => item.collection === record.collection && item.client_id === record.client_id,
         );
         if (index >= 0) {
-          if (record['expected_revision'] !== this.rows[index].revision) {
+          if (record.expected_revision !== this.rows[index].revision) {
             throw new HttpErrorResponse({ status: 409 });
           }
           this.rows.splice(index, 1);
@@ -214,9 +228,9 @@ function textOf(value: unknown): string {
 }
 
 class TestStore extends HealthStoreService {
-  protected override vault(): Promise<HealthVault> {
+  protected override vault(): Promise<VaultRecordCapability> {
     vaultCalls += 1;
-    return Promise.resolve(fake as unknown as HealthVault);
+    return Promise.resolve(fake);
   }
 }
 
@@ -227,6 +241,49 @@ const PR: HealthPr = {
   v: 1, kind: 'lift', measured_on: '2026-10-28', logged_on: '2026-10-28',
   exercise: 'Squat', kg: 100, reps: 5,
 };
+
+/** The capability Health's vault() returns. A Finance-only method must not typecheck. */
+class HealthCapabilityProbe extends HealthStoreService {
+  taken(): Promise<VaultRecordCapability> {
+    return this.vault();
+  }
+}
+
+type HealthCapability = Awaited<ReturnType<HealthCapabilityProbe['taken']>>;
+type HealthCiphertext = Awaited<ReturnType<HealthCapability['encryptPayload']>>;
+const healthCiphertextIsString: HealthCiphertext extends string ? true : never = true;
+
+function rejectFinanceOnlyOnHealthCapability(capability: HealthCapability): void {
+  void capability.listRecords('health_stats', { silent: true });
+  void capability.encryptPayload({ kind: 'weight' }, 'health_stats', 'hlt_a', 2, 1);
+  void capability.decryptPayload<unknown>('cipher', 'health_stats', 'hlt_a', 2, 1);
+  void capability.upsertRecords([{
+    collection: 'health_stats',
+    client_id: 'hlt_a',
+    ciphertext_b64: 'cipher',
+    schema_version: 2,
+    key_version: 1,
+    expected_revision: null,
+  }], { silent: true });
+  void capability.deleteRecords([{
+    collection: 'health_stats',
+    client_id: 'hlt_a',
+    expected_revision: 1,
+  }], { silent: true });
+  // @ts-expect-error unlock is a Finance vault method and is not on the Health capability
+  void capability.unlock('passphrase');
+  // @ts-expect-error requireDek would expose a CryptoKey
+  void capability.requireDek();
+  // @ts-expect-error lookupBlindIndex is not a Health record operation
+  void capability.lookupBlindIndex('health_stats', 'record', 'token');
+  // @ts-expect-error reindexRecords is a Finance migration method
+  void capability.reindexRecords([]);
+  // @ts-expect-error getCounts is not consumed by Health
+  void capability.getCounts();
+  // @ts-expect-error the Health capability is not the concrete Finance vault
+  const concrete: VaultService = capability;
+  void concrete;
+}
 
 describe('HealthStoreService', () => {
   let store: HealthStoreService;
@@ -243,6 +300,11 @@ describe('HealthStoreService', () => {
       ],
     });
     store = TestBed.inject(HealthStoreService);
+  });
+
+  it('rejects a Finance-only method on the Health capability (LOCAL1)', () => {
+    expect(healthCiphertextIsString).toBeTrue();
+    expect(rejectFinanceOnlyOnHealthCapability).toEqual(jasmine.any(Function));
   });
 
   afterEach(() => {
