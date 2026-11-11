@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#238](https://github.com/Vivekpsps3/vivek-monorepo/issues/238); parent [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) stays open
 - Agent/context, branch/worktree: implementer, `agent/med-04`, `/tmp/vivek-med-04`
-- Base main SHA, current tested SHA: base `85212152bda3ce6cab5cbfcc9c787b564214fc69`. Commands below ran against that base plus the product diff in this file's commit. Karma used port 9993 in this worktree only; that line was reverted and is not in the commit.
+- Base main SHA, current tested SHA: base `85212152bda3ce6cab5cbfcc9c787b564214fc69`. Product commit `ea07cda29c59febfe4a9982e159562c57abefe02` contains the code these commands ran against. Karma used port 9993 in this worktree only; that line was reverted and is not in the commit.
 - Fresh-main/prerequisite/active-PR checks: this branch matched `origin/main` at the base above. MED-03 #237 is on that base as squash `fdce45e1d792f54315160d4d9b3b15ae15d16812` (#345), which is an ancestor. Open pull requests were none. #238 had no earlier claim. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/238#issuecomment-6808754554
 
 ## Acceptance
@@ -53,10 +53,10 @@ Not run: Finance, site, and Travel Karma; Finance, Travel, and Town Playwright; 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet. The next commit records it. Closure keyword is only `Closes #238`.
-- Roadmap #134 append-only status-note URL: not posted yet.
-- Merged/activation status: not merged. Local verification passed. CI is not recorded yet.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/349 (`Closes #238` only). #85 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6808931512. The issue body was not edited.
+- Merged/activation status: PR #349 is open. Not merged. Local verification passed. CI is not recorded yet.
 - Remaining external prerequisites or approved scope decisions: none. Parent #85 stays open.
-- Next actor: open the pull request, append the #134 note, watch Backend, Frontend, Unified Site Release, and Playwright, squash-merge, then record the squash SHA on #238 and #134.
+- Next actor: watch Backend, Frontend, Unified Site Release, and Playwright on #349, squash-merge, then record the squash SHA on #238 and #134.
 
 No unstated decision from the previous context is necessary to continue.
