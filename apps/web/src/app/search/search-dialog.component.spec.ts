@@ -1,9 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
+import { SESSION_CONTEXT } from '@vivek/ui';
+import { Subject } from 'rxjs';
 import {
-  SEARCH_FINANCE_PROBE,
+  SEARCH_FINANCE,
   SearchDialogComponent,
-  type SearchFinanceState,
+  type SearchFinanceName,
+  type SearchFinancePort,
+  type SearchFinanceQueryResult,
+  type SearchFinanceRecentResult,
 } from './search-dialog.component';
 import { SEARCH_RECENT_KEY, type SearchRecentRef } from './search-recents';
 
@@ -27,7 +32,13 @@ describe('SearchDialogComponent', () => {
   let fetchSpy: jasmine.Spy;
   let navigated: string[];
   let closedCount: number;
-  let financeState: SearchFinanceState;
+  let financeAnswer: SearchFinanceQueryResult;
+  let financeRecents: SearchFinanceRecentResult;
+  let financeQueries: string[];
+  let lockHandlers: Array<() => void>;
+  let cleared: Subject<void>;
+  let users: Subject<{ id: number } | null>;
+  let financeQueryImpl: (q: string) => Promise<SearchFinanceQueryResult>;
   let lastSignal: AbortSignal | null;
   let hangSearch: boolean;
 
@@ -65,7 +76,13 @@ describe('SearchDialogComponent', () => {
   beforeEach(() => {
     navigated = [];
     closedCount = 0;
-    financeState = 'none';
+    financeAnswer = { status: 'none' };
+    financeRecents = { status: 'none', names: [], missing: [] };
+    financeQueries = [];
+    lockHandlers = [];
+    cleared = new Subject<void>();
+    users = new Subject<{ id: number } | null>();
+    financeQueryImpl = () => Promise.resolve(financeAnswer);
     lastSignal = null;
     hangSearch = false;
     localStorage.removeItem(SEARCH_RECENT_KEY);
@@ -76,8 +93,22 @@ describe('SearchDialogComponent', () => {
       imports: [SearchDialogComponent],
       providers: [
         {
-          provide: SEARCH_FINANCE_PROBE,
-          useValue: { state: () => Promise.resolve(financeState) },
+          provide: SEARCH_FINANCE,
+          useValue: {
+            query: (q: string) => {
+              financeQueries.push(q);
+              return financeQueryImpl(q);
+            },
+            resolveRecents: () => Promise.resolve(financeRecents),
+            onLock: (handler: () => void) => {
+              lockHandlers.push(handler);
+              return () => undefined;
+            },
+          } satisfies SearchFinancePort,
+        },
+        {
+          provide: SESSION_CONTEXT,
+          useValue: { cleared$: cleared, user$: users, currentUser: null },
         },
         { provide: ActivatedRoute, useValue: {} },
         {
@@ -269,7 +300,7 @@ describe('SearchDialogComponent', () => {
   });
 
   it('shows the Finance locked row when the vault is present but locked', async () => {
-    financeState = 'locked';
+    financeAnswer = { status: 'locked' };
     openDialog();
     await settle();
     typeQuery('kyoto');
@@ -286,7 +317,7 @@ describe('SearchDialogComponent', () => {
   });
 
   it('shows no Finance group when there is no vault on the device', async () => {
-    financeState = 'none';
+    financeAnswer = { status: 'none' };
     openDialog();
     await settle();
     typeQuery('kyoto');
@@ -294,5 +325,191 @@ describe('SearchDialogComponent', () => {
     await settle();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('#search-group-Finance')).toBeNull();
+  });
+
+  it('does not query finance or the server for one character', async () => {
+    openDialog();
+    await settle();
+    typeQuery('s');
+    await settle(200);
+    expect(financeQueries).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('debounces a burst to one finance query and one server request', async () => {
+    openDialog();
+    await settle();
+    typeQuery('s');
+    typeQuery('sa');
+    typeQuery('sav');
+    await settle(200);
+    await settle();
+    expect(financeQueries).toEqual(['sav']);
+    expect(fetchSpy.calls.count()).toBe(1);
+    const urls = fetchSpy.calls.allArgs().map(args => String(args[0]));
+    expect(urls.every(url => url.startsWith('/api/search'))).toBeTrue();
+  });
+
+  it('renders at most the ready name rows the facade returns', async () => {
+    const names: SearchFinanceName[] = [1, 2, 3, 4, 5].map(id => ({
+      kind: 'account', id, title: `Cash ${id}`, href: '/finance/have',
+    }));
+    financeAnswer = { status: 'ready', names };
+    openDialog();
+    await settle();
+    typeQuery('ca');
+    await settle(200);
+    await settle();
+    fixture.detectChanges();
+    const finance = component.options().filter(option => option.group === 'Finance');
+    expect(finance.map(option => option.title)).toEqual(['Cash 1', 'Cash 2', 'Cash 3', 'Cash 4', 'Cash 5']);
+    expect(finance.every(option => option.detail == null && option.ref?.app === 'finance')).toBeTrue();
+    expect(fixture.nativeElement.textContent).not.toContain('Cash 6');
+    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    component.onKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    fixture.detectChanges();
+    expect(inputEl().getAttribute('aria-activedescendant')).toBe('search-opt-2');
+  });
+
+  it('shows no Finance names when the streams are not loaded', async () => {
+    financeAnswer = { status: 'unloaded' };
+    openDialog();
+    await settle();
+    typeQuery('kyoto');
+    await settle(200);
+    await settle();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#search-group-Finance')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Kyoto');
+  });
+
+  it('records a finance recent as ids only', async () => {
+    const savings: SearchFinanceName = { kind: 'account', id: 4, title: 'Savings', href: '/finance/have' };
+    financeAnswer = { status: 'ready', names: [savings] };
+    openDialog();
+    await settle();
+    typeQuery('sa');
+    await settle(200);
+    await settle();
+    fixture.detectChanges();
+    const option = component.options().find(row => row.ref?.app === 'finance')!;
+    component.activate(option);
+    expect(navigated).toEqual(['/finance/have']);
+    expect(localStorage.getItem(SEARCH_RECENT_KEY)).toBe(JSON.stringify([
+      { app: 'finance', kind: 'account', id: 4 },
+    ]));
+  });
+
+  it('resolves unlocked finance recents locally and prunes missing ids', async () => {
+    const refs: SearchRecentRef[] = [
+      { app: 'finance', kind: 'account', id: 4 },
+      { app: 'finance', kind: 'account', id: 9 },
+      { app: 'travel', kind: 'trip', id: 12 },
+    ];
+    localStorage.setItem(SEARCH_RECENT_KEY, JSON.stringify(refs));
+    financeRecents = {
+      status: 'ready',
+      names: [{ kind: 'account', id: 4, title: 'Checking', href: '/finance/have' }],
+      missing: [{ kind: 'account', id: 9 }],
+    };
+    openDialog();
+    await settle(50);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Checking');
+    expect(fixture.nativeElement.textContent).toContain('Kyoto');
+    expect(localStorage.getItem(SEARCH_RECENT_KEY)).toBe(JSON.stringify([refs[0], refs[2]]));
+    expect(localStorage.getItem(SEARCH_RECENT_KEY)).not.toContain('Checking');
+    expect(fetchSpy.calls.allArgs().map(args => String(args[0])).join(' ')).not.toContain('finance');
+  });
+
+  it('keeps finance recent ids while locked or unloaded', async () => {
+    const refs: SearchRecentRef[] = [{ app: 'finance', kind: 'account', id: 4 }];
+    localStorage.setItem(SEARCH_RECENT_KEY, JSON.stringify(refs));
+    financeRecents = { status: 'locked', names: [], missing: [{ kind: 'account', id: 4 }] };
+    openDialog();
+    await settle(50);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Checking');
+    expect(localStorage.getItem(SEARCH_RECENT_KEY)).toBe(JSON.stringify(refs));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not publish finance names that resolve after lock', async () => {
+    const savings: SearchFinanceName = { kind: 'account', id: 4, title: 'Savings', href: '/finance/have' };
+    let release: (result: SearchFinanceQueryResult) => void = () => undefined;
+    financeQueryImpl = () => new Promise(resolve => { release = resolve; });
+    openDialog();
+    await settle();
+    typeQuery('sa');
+    await settle(200);
+    financeAnswer = { status: 'locked' };
+    financeQueryImpl = () => Promise.resolve(financeAnswer);
+    lockHandlers.forEach(handler => handler());
+    release({ status: 'ready', names: [savings] });
+    await settle(50);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Savings');
+    expect(fixture.nativeElement.textContent).toContain('Finance results hidden: locked · Unlock');
+  });
+
+  it('clears every row on logout and ignores a late finance result', async () => {
+    const savings: SearchFinanceName = { kind: 'account', id: 4, title: 'Savings', href: '/finance/have' };
+    let release: (result: SearchFinanceQueryResult) => void = () => undefined;
+    financeQueryImpl = () => new Promise(resolve => { release = resolve; });
+    openDialog();
+    await settle();
+    typeQuery('sa');
+    await settle(200);
+    fixture.detectChanges();
+    cleared.next();
+    fixture.detectChanges();
+    release({ status: 'ready', names: [savings] });
+    await settle(50);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Savings');
+    expect(fixture.nativeElement.textContent).not.toContain('Kyoto');
+  });
+
+  it('clears rows when the signed-in identity changes', async () => {
+    const savings: SearchFinanceName = { kind: 'account', id: 4, title: 'Savings', href: '/finance/have' };
+    users.next({ id: 1 });
+    financeAnswer = { status: 'ready', names: [savings] };
+    openDialog();
+    await settle();
+    typeQuery('sa');
+    await settle(200);
+    await settle();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Savings');
+    users.next({ id: 2 });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Savings');
+    expect(fixture.nativeElement.textContent).not.toContain('Kyoto');
+  });
+
+  it('stops a stalled search at the shared eight-second deadline', async () => {
+    jasmine.clock().install();
+    try {
+      fetchSpy.and.callFake((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+      }));
+      openDialog();
+      typeQuery('kyoto');
+      jasmine.clock().tick(149);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      jasmine.clock().tick(1);
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+      expect(fetchSpy).toHaveBeenCalled();
+      jasmine.clock().tick(7999);
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain("Couldn't load search results.");
+      jasmine.clock().tick(1);
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain("Couldn't load search results.");
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 });
