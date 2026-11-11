@@ -190,9 +190,10 @@ python -m apps.server.migrations --check
 The URL must be an absolute SQLite path. Set `SITE_BACKUP_DIR` to take a
 verified `premigrate-<revision>-<timestamp>` backup before touching a database
 that already has tables. A backup failure aborts before the stamp or upgrade.
-Hourly `site-*` snapshots stay on their own retention (`SITE_BACKUP_KEEP`,
-one in production) and are not deleted by the pre-migration backup. The site
-service does not mount `/backups` and does not migrate on startup.
+Hourly `site-*` snapshots stay on their own retention (`SITE_BACKUP_KEEP` and
+`SITE_BACKUP_KEEP_DAYS`, seven and 30 in Compose) and are not deleted by the
+pre-migration backup. The site service does not mount `/backups` and does not
+migrate on startup.
 
 ## Removal candidates
 
