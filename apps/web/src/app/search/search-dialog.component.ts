@@ -90,13 +90,30 @@ export const SEARCH_FINANCE = new InjectionToken<SearchFinancePort>('SEARCH_FINA
   providedIn: 'root',
   factory: () => {
     const injector = inject(Injector);
+    const destroyRef = inject(DestroyRef);
     const handlers = new Set<() => void>();
     const fire = () => {
       for (const handler of [...handlers]) handler();
     };
+    let release: (() => void) | null = null;
+    let destroyed = false;
+    destroyRef.onDestroy(() => {
+      destroyed = true;
+      release?.();
+      release = null;
+    });
     void import('../../../../finance/frontend/src/public-api').then(api => {
-      runInInjectionContext(injector, () => api.bindLockNotices(() => fire()));
-      api.bindLockSnapshots(() => fire());
+      if (destroyed) return;
+      const unbindNotices = runInInjectionContext(injector, () => api.bindLockNotices(() => fire()));
+      const unbindSnapshots = api.bindLockSnapshots(() => fire());
+      release = () => {
+        unbindNotices();
+        unbindSnapshots();
+      };
+      if (destroyed) {
+        release();
+        release = null;
+      }
     }).catch(() => undefined);
     const namesOf = (rows: { kind: SearchFinanceName['kind']; id: number; title: string; href: string }[]): SearchFinanceName[] =>
       rows.map(name => ({ kind: name.kind, id: name.id, title: name.title, href: name.href }));

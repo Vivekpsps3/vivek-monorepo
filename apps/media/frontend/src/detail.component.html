@@ -142,16 +142,22 @@
               }
             </select></ui-field
           >
-          <ui-field label="Rating (optional, 0–10)"
-            ><input
-              uiFieldControl
-              type="number"
-              min="0"
-              max="10"
-              step="0.5"
-              name="rating"
-              [(ngModel)]="rating"
-          /></ui-field>
+          <div class="rating-editor">
+            <p id="media-rating-label" class="rating-label">Rating</p>
+            <ui-segmented
+              label="Rating"
+              labelledBy="media-rating-label"
+              [options]="ratingChoices"
+              [value]="ratingChoice"
+              (valueChange)="chooseRating($event)"
+            />
+            @if (ratingNote) {
+              <p class="rating-note">{{ ratingNote }}</p>
+            }
+            <ui-button variant="ghost" (clicked)="clearRating()"
+              >Clear rating</ui-button
+            >
+          </div>
         </div>
         @if (entry.kind !== "artist") {
           <div class="form-row">
