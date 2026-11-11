@@ -183,6 +183,43 @@
             placeholder="What stayed with you?"
           ></textarea>
         </ui-field>
+        <div class="tag-editor">
+          @if (tags.length) {
+            <ul class="tag-chips" aria-label="Current tags">
+              @for (tag of tags; track tag; let i = $index) {
+                <li class="tag-chip">
+                  <span class="tag-chip-text">{{ tag }}</span>
+                  <button
+                    type="button"
+                    class="tag-chip-remove"
+                    [attr.aria-label]="'Remove tag ' + tag"
+                    (click)="removeTagAt(i, true)"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+          <ui-field
+            label="Tags"
+            hint="Press Enter to add a tag. Backspace removes the last one."
+            [error]="tagError"
+          >
+            <input
+              uiFieldControl
+              #tagInput
+              type="text"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              [ngModel]="tagText"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="onTagText($event)"
+              (keydown)="onTagKey($event)"
+            />
+          </ui-field>
+        </div>
         <div class="button-row">
           <label class="check-label"
             ><input type="checkbox" name="favorite" [(ngModel)]="favorite" />
