@@ -1,12 +1,20 @@
-import { ChangeDetectorRef, Injectable, OnDestroy } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { ChangeDetectorRef, Injectable, OnDestroy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { FinanceService } from '../services/finance.service';
-import { ToastService, successCopy } from '@vivek/ui';
+import { ToastService, silentErrorToast, successCopy } from '@vivek/ui';
 import { Transaction, TransactionCreate } from '../models/transaction.model';
 import { todayIsoDate, toDollars } from '@vivek/browser';
 import { validateMoney, validateTransaction, type FieldIssue } from '../utils/validators';
 import { dialogSaveAlert, fieldMessage, focusDialogAlert, focusErrorSummary } from '../shared/form-validation';
+import {
+  TRIP_LIST_UNAVAILABLE,
+  normalizeTripId,
+  tripTagChoices,
+  type TripTagChoice,
+  type TripTagHome,
+} from './trip-tag';
 
 @Injectable()
 export class TransactionsEditorWorkflow implements OnDestroy {
@@ -18,6 +26,10 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   transactionSaveError = '';
   fieldErrors: FieldIssue[] = [];
   formSubmitted = false;
+  tripChoices: TripTagChoice[] = tripTagChoices(null, null);
+  tripListNote = '';
+  private tripLoad = 0;
+  private readonly http = inject(HttpClient, { optional: true });
   private originalAmount: number | null = null;
   private amountDirty = false;
   private readonly destroy$ = new Subject<void>();
@@ -31,7 +43,14 @@ export class TransactionsEditorWorkflow implements OnDestroy {
   ) {}
 
   private emptyTx(): TransactionCreate {
-    return { date: todayIsoDate(), type: 'expense', category: '', amount: '' as unknown as number, description: '' };
+    return {
+      date: todayIsoDate(),
+      type: 'expense',
+      category: '',
+      amount: '' as unknown as number,
+      description: '',
+      trip_id: null,
+    };
   }
 
   openAddModal(selectedCalendarDate: string | null): void {
@@ -44,6 +63,7 @@ export class TransactionsEditorWorkflow implements OnDestroy {
     this.formSubmitted = false;
     this.newTx = { ...this.emptyTx(), ...(selectedCalendarDate ? { date: selectedCalendarDate } : {}) };
     this.showModal = true;
+    this.loadTripChoices();
   }
 
   onAmountChange(value: number | string): void {
@@ -87,6 +107,7 @@ export class TransactionsEditorWorkflow implements OnDestroy {
       ...this.newTx,
       category: this.newTx.category.trim(),
       amount,
+      trip_id: normalizeTripId(this.newTx.trip_id),
     };
     const request = this.editingTxId !== null
       ? this.financeService.updateTransaction(this.editingTxId, payload, true)
@@ -125,8 +146,10 @@ export class TransactionsEditorWorkflow implements OnDestroy {
       description: tx.description || '',
       merchant: tx.merchant || null,
       kind: tx.kind || (tx.type === 'income' ? 'income' : 'purchase'),
+      trip_id: normalizeTripId(tx.trip_id),
       ...(tx.reviewed !== undefined ? { reviewed: tx.reviewed } : {}),
     };
+    this.loadTripChoices();
     this.showModal = true;
     this.cdr.markForCheck();
   }
@@ -146,6 +169,32 @@ export class TransactionsEditorWorkflow implements OnDestroy {
         replaceUrl: true,
       });
     }
+    this.cdr.markForCheck();
+  }
+
+  private loadTripChoices(): void {
+    const request = ++this.tripLoad;
+    const selected = this.newTx.trip_id;
+    if (!this.http) {
+      this.applyTripHome(null, selected, true);
+      return;
+    }
+    this.tripListNote = '';
+    this.http.get<TripTagHome>('/travel/api/home', { context: silentErrorToast() }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: home => {
+        if (request !== this.tripLoad) return;
+        this.applyTripHome(home, this.newTx.trip_id, false);
+      },
+      error: () => {
+        if (request !== this.tripLoad) return;
+        this.applyTripHome(null, this.newTx.trip_id, true);
+      },
+    });
+  }
+
+  private applyTripHome(home: TripTagHome | null, selected: unknown, failed: boolean): void {
+    this.tripChoices = tripTagChoices(home, selected);
+    this.tripListNote = failed ? TRIP_LIST_UNAVAILABLE : '';
     this.cdr.markForCheck();
   }
 

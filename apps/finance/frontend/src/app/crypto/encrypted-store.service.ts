@@ -43,6 +43,11 @@ function sameTransactionContent(a: Transaction, b: Transaction): boolean {
   return stableRecordText(a) === stableRecordText(b);
 }
 
+/** Absent, null, and non-positive values are the same unset trip tag. */
+function storedTripId(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class EncryptedStoreService {
   private generation = 0;
@@ -133,11 +138,13 @@ export class EncryptedStoreService {
       if (!current) throw new Error('Transaction not found');
       const contentFields: Array<keyof Transaction> = [
         'date', 'type', 'category', 'amount', 'description', 'merchant', 'kind', 'account_display',
-        'bank_account_key', 'source_bank', 'source_account_mask', 'reviewed', 'review_reason',
+        'bank_account_key', 'source_bank', 'source_account_mask', 'reviewed', 'review_reason', 'trip_id',
       ];
-      const edited = current.source === 'import' && contentFields.some(
-        key => tx[key] !== undefined && tx[key] !== current[key]
-      );
+      const edited = current.source === 'import' && contentFields.some(key => {
+        if (tx[key] === undefined) return false;
+        if (key === 'trip_id') return storedTripId(tx.trip_id) !== storedTripId(current.trip_id);
+        return tx[key] !== current[key];
+      });
       return this.upsert('transactions', {
         ...current,
         ...tx,

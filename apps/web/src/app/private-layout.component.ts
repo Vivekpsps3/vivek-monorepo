@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, ViewChild, inject, isDevMode, signal } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, HostListener, Injector, ViewChild, inject, isDevMode, signal } from '@angular/core';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
 import { UiIconComponent, UiStateComponent, UserMenuContent, safeNextPathFrom } from '@vivek/ui';
+import { startFinanceTripSpend } from '../../../finance/frontend/src/public-api';
 import { SessionService } from './platform/session.service';
 import { SearchDialogComponent } from './search/search-dialog.component';
 
@@ -63,16 +64,21 @@ export class PrivateLayoutComponent {
   /** Drops a heading-focus retry when a newer navigation starts. */
   private focusAttempt = 0;
 
+  private readonly tripSpend = startFinanceTripSpend(inject(Injector));
+
   constructor() {
     const destroy = inject(DestroyRef);
+    destroy.onDestroy(() => this.tripSpend.stop());
     this.session.user$.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
       this.closeMenu(false);
       this.closeSwitcher(false);
+      this.tripSpend.sync();
     });
     if (typeof document === 'undefined') return;
     this.router.events.pipe(filter(event => event instanceof NavigationEnd), takeUntilDestroyed(destroy)).subscribe(event => {
       this.closeMenu(false);
       this.closeSwitcher(false);
+      this.tripSpend.sync();
       this.change.markForCheck();
       const path = event.urlAfterRedirects.split(/[?#]/)[0];
       if (path === this.lastFocusedPath) return;

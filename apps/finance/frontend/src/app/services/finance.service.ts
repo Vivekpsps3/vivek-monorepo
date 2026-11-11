@@ -383,6 +383,20 @@ export class FinanceService {
     return from(this.encStore.getTransactions());
   }
 
+  /**
+   * Full unlocked ledger for the Travel spend bridge.
+   * A lock or session change before the read returns publishes nothing.
+   */
+  readTripSpendLedger(): Promise<Transaction[] | null> {
+    if (!hasDek()) return Promise.resolve(null);
+    const lock = readLockEpoch();
+    const session = this.encStore.sessionToken;
+    return this.encStore.getTransactions().then(rows => {
+      if (lock !== readLockEpoch() || !hasDek() || session !== this.encStore.sessionToken) return null;
+      return rows;
+    }, () => null);
+  }
+
   getDashboardTransactions(_options?: { limit?: number }): Observable<Transaction[]> {
     const epoch = this.dataEpoch(['transactions']);
     // Dashboard totals must use the complete ledger; visible pagination is a component concern.

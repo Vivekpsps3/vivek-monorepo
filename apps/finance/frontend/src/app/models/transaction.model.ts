@@ -22,6 +22,8 @@ export interface Transaction {
   /** Snapshot of the source values used to safely distinguish unchanged imports for undo. */
   import_snapshot?: Pick<Transaction, 'date' | 'type' | 'category' | 'amount' | 'description' | 'merchant' | 'kind' | 'account_display' | 'bank_account_key' | 'source_bank' | 'source_account_mask' | 'reviewed' | 'review_reason'>;
   dedupe_key?: string;
+  /** Travel trip tag. Positive integer inside encrypted JSON, or null when unset. */
+  trip_id?: number | null;
 }
 
 export interface ImportPreviewRow {
@@ -457,6 +459,7 @@ export interface TransactionCreate {
   kind?: Transaction['kind'];
   merchant?: string | null;
   reviewed?: boolean;
+  trip_id?: number | null;
 }
 
 export interface HoldingCreate {

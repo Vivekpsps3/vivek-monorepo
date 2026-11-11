@@ -9,6 +9,8 @@ Start with the existing owner:
   bank/brokerage import modules own preview, deduplication, receipts and Undo.
 - [Public API](frontend/src/public-api.ts) is the cross-app entry point. Consumers
   receive narrow projections; they must not instantiate private stores or copy math.
+  The private shell starts one trip-spend producer from that API when a vault is
+  present. It republishes through the existing spend registry and clears on lock.
 
 Decrypted financial data stays in the browser. Preserve owner/session/collection
 eligibility at publication, immediate lock clearing, expected revisions and encrypted
