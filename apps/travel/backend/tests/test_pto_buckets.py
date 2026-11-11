@@ -380,6 +380,27 @@ def test_hours_per_day_limits_and_combined_field_errors(client, monkeypatch):
     }
 
 
+def test_comma_decimal_stays_exact_and_is_not_quarter_rounded(client, monkeypatch):
+    pin(monkeypatch)
+    saved = client.put(
+        "/api/pto/policies/pto",
+        json=_policy(start_balance_hours="12,5", accrual_hours="12,3"),
+    )
+    assert saved.status_code == 200, saved.text
+    bucket = saved.json()["buckets"]["pto"]
+    assert bucket["start_balance_hours"] == "12.5"
+    assert bucket["accrual_hours"] == "12.3"
+    rejected = client.put(
+        "/api/pto/policies/pto",
+        json=_policy(start_balance_hours="12.5", accrual_hours="1,2,3"),
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["field_errors"]["accrual_hours"] == ACCRUAL_COPY
+    hours = client.put("/api/settings/pto", json={"hours_per_day": "7,5"})
+    assert hours.status_code == 200, hours.text
+    assert hours.json()["hours_per_day"] == "7.5"
+
+
 def test_grandfather_keeps_an_out_of_range_stored_value(client, monkeypatch):
     pin(monkeypatch)
     db = _db(client)

@@ -114,6 +114,7 @@ for (const width of [390, 1280]) {
       await page.getByLabel('You earn').fill('4');
       await page.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(page.getByText(ACCRUAL_COPY)).toBeVisible();
+      await expect(page.getByLabel('You earn')).toBeFocused();
       await expect(page.getByLabel('You earn')).toHaveValue('4');
       await expect(page.getByLabel('Starting balance')).toHaveValue('16');
     });
@@ -137,6 +138,7 @@ for (const width of [390, 1280]) {
       await expect(alert).toContainText("Couldn't save your PTO policy.");
       await expect(alert.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
       await expect(page.getByLabel('Starting balance')).toHaveValue('40');
+      await page.getByLabel('Starting balance').fill('99');
       await alert.getByRole('button', { name: 'Retry', exact: true }).click();
       await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Edit PTO', exact: true })).toBeFocused();
@@ -280,7 +282,9 @@ for (const width of [390, 1280]) {
       await page.getByRole('button', { name: 'Save hours', exact: true }).click();
       await expect(page.getByText(HPD_COPY)).toBeVisible();
       expect((await (await request.get('/travel/api/settings')).json()).pto.hours_per_day).toBe('8');
-      await hours.fill('7.5');
+      await hours.fill('7,5');
+      await hours.blur();
+      await expect(hours).toHaveValue('7.5');
       await page.getByRole('button', { name: 'Save hours', exact: true }).click();
       await expect(page.getByText('Hours in a workday saved.', { exact: true })).toBeVisible();
       const link = page.getByRole('link', { name: 'PTO policy', exact: true });
@@ -371,6 +375,40 @@ for (const width of [390, 1280]) {
       await page.getByRole('radio', { name: 'Sick', exact: true }).check();
       await page.getByRole('button', { name: 'Preview balance', exact: true }).click();
       await expect.poll(() => seen).toEqual(['pto', 'sick']);
+    });
+
+    test('edited hours round and an untouched value stays exact', async ({ page, request }) => {
+      await putBucket(request, 'pto', { start_balance_hours: '12.3', accrual_hours: '8' });
+      await page.goto('/travel/pto');
+      await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
+      const start = page.getByLabel('Starting balance');
+      await expect(start).toHaveValue('12.3');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.getByText('PTO policy saved.', { exact: true })).toBeVisible();
+      let saved = await (await request.get('/travel/api/pto')).json();
+      expect(saved.buckets.pto.start_balance_hours).toBe('12.3');
+      expect(saved.buckets.pto.accrual_hours).toBe('8');
+      await page.getByRole('button', { name: 'Edit PTO', exact: true }).click();
+      const earn = page.getByLabel('You earn');
+      await earn.fill('12,3');
+      await earn.blur();
+      await expect(earn).toHaveValue('12.25');
+      await expect(page.getByText('Rounded to 12.25 h.', { exact: true })).toBeVisible();
+      await expect(start).toHaveValue('12.3');
+      await page.getByLabel('Name', { exact: true }).fill('Family visit');
+      await page.getByLabel('First day', { exact: true }).fill('2026-12-01');
+      await page.getByLabel('Last day', { exact: true }).fill('2026-12-02');
+      await page.getByRole('button', { name: 'Preview balance', exact: true }).click();
+      await expect(page.getByText(/Before:/)).toBeVisible();
+      const put = page.waitForResponse((response) => (
+        response.url().includes('/travel/api/pto/policies/pto') && response.request().method() === 'PUT' && response.ok()
+      ));
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await put;
+      await expect(page.getByText(/Before:/)).toHaveCount(0);
+      saved = await (await request.get('/travel/api/pto')).json();
+      expect(saved.buckets.pto.start_balance_hours).toBe('12.3');
+      expect(saved.buckets.pto.accrual_hours).toBe('12.25');
     });
   });
 }

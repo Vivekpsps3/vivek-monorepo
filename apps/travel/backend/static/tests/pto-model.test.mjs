@@ -11,11 +11,15 @@ import {
   YEAR_COPY,
   asOfCopy,
   blurHours,
+  blurHoursPerDay,
+  commitHour,
   entryErrors,
+  fieldErrorMap,
   fieldHint,
   formatBalance,
   hoursPerDayError,
   periodWord,
+  policyBody,
   policyErrors,
   previewKey,
   softAccrual,
@@ -100,4 +104,54 @@ test("entry copy and the preview key follow the inputs", () => {
   const sick = previewKey({ start_date: "2026-05-01", end_date: "2026-05-02", days: "", bucket: "sick" });
   assert.notEqual(first, second);
   assert.notEqual(first, sick);
+  const deps = {
+    start_date: "2026-05-01",
+    end_date: "2026-05-02",
+    days: "",
+    bucket: "pto",
+    hours_per_day: "8",
+    policy: { accrual_hours: "8", start_balance_hours: "80" },
+    entries: [{ id: 1, days: "2" }],
+  };
+  assert.notEqual(previewKey(deps), previewKey({ ...deps, hours_per_day: "7.5" }));
+  assert.notEqual(previewKey(deps), previewKey({ ...deps, policy: { accrual_hours: "9", start_balance_hours: "80" } }));
+  assert.notEqual(previewKey(deps), previewKey({ ...deps, entries: [{ id: 1, days: "3" }] }));
+  assert.equal(previewKey(deps), previewKey({ ...deps, label: "ignored" }));
+});
+
+test("edited hours round on quarter ties and untouched stored text does not", () => {
+  assert.equal(blurHours("12,3").text, "12.25");
+  assert.equal(blurHours("12.3").note, "Rounded to 12.25 h.");
+  assert.equal(blurHours("12.125").text, "12.25");
+  assert.equal(blurHours("-0.125").text, "-0.25");
+  assert.equal(blurHours("0.125").note, "Rounded to 0.25 h.");
+  assert.equal(commitHour("12,3", "12.3", true).text, "12.3");
+  assert.equal(commitHour("12,3", "12.3", true).note, "");
+  assert.equal(commitHour("12.3", "8", true).text, "12.25");
+  assert.equal(commitHour("12.3", "12.3", false).text, "12.3");
+  const draft = {
+    start_balance_hours: "12.3",
+    balance_as_of: "2026-01-01",
+    accrual_hours: "10000",
+    accrual_cadence: "yearly",
+    cap_hours: "",
+    year_month: "01",
+    year_day: "01",
+    carry_forward: true,
+  };
+  const stored = { start_balance_hours: "12.3", accrual_hours: "10000", cap_hours: "", year_start: "01-01" };
+  const kept = policyBody(draft, stored, new Set());
+  assert.equal(kept.start_balance_hours, "12.3");
+  assert.equal(kept.accrual_hours, "10000");
+  assert.equal(kept.cap_hours, null);
+  const changed = policyBody({ ...draft, accrual_hours: "12,3" }, stored, new Set(["accrual_hours"]));
+  assert.equal(changed.start_balance_hours, "12.3");
+  assert.equal(changed.accrual_hours, "12.25");
+  assert.equal(blurHoursPerDay("7,5", "8").text, "7.5");
+  assert.equal(blurHoursPerDay("7,5", "8").error, "");
+  assert.equal(blurHoursPerDay("7.125", "8").error, HPD_COPY);
+  assert.equal(blurHoursPerDay("7,125", "7.125").text, "7.125");
+  assert.equal(blurHoursPerDay("7,125", "7.125").error, "");
+  assert.deepEqual(fieldErrorMap({ field_errors: { accrual_hours: ACCRUAL_COPY } }), { accrual_hours: ACCRUAL_COPY });
+  assert.equal(fieldErrorMap({ message: "no" }), null);
 });
