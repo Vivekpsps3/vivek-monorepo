@@ -4,9 +4,81 @@
   max-width: 100%;
 }
 
-/* Twelve month rows in the DOM. At max-width 640px the same cells are placed
-   as 31 day rows by 12 month columns, matching adjacentYearDate. */
+/* Labels read the cells' month and day metadata. Desktop is months down and
+   days across. At max-width 640px the same cells are 31 day rows by 12 month
+   columns, and the labels swap sides to match. */
+.year-frame {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, auto);
+  column-gap: 4px;
+  row-gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+
+.year-scroll {
+  display: contents;
+}
+
+.year-months,
+.year-days {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.year-months {
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-rows: repeat(12, minmax(0, 1fr));
+}
+
+.year-days {
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-columns: repeat(31, minmax(0, 1fr));
+}
+
+.year-axis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.year-axis::before {
+  content: "";
+}
+
+.year-axis--day::before {
+  content: attr(data-day);
+}
+
+.year-axis--month[data-month="1"]::before { content: "Jan"; }
+.year-axis--month[data-month="2"]::before { content: "Feb"; }
+.year-axis--month[data-month="3"]::before { content: "Mar"; }
+.year-axis--month[data-month="4"]::before { content: "Apr"; }
+.year-axis--month[data-month="5"]::before { content: "May"; }
+.year-axis--month[data-month="6"]::before { content: "Jun"; }
+.year-axis--month[data-month="7"]::before { content: "Jul"; }
+.year-axis--month[data-month="8"]::before { content: "Aug"; }
+.year-axis--month[data-month="9"]::before { content: "Sep"; }
+.year-axis--month[data-month="10"]::before { content: "Oct"; }
+.year-axis--month[data-month="11"]::before { content: "Nov"; }
+.year-axis--month[data-month="12"]::before { content: "Dec"; }
+
 .year-grid {
+  grid-column: 2;
+  grid-row: 2;
   display: grid;
   grid-template-columns: repeat(31, minmax(0, 1fr));
   gap: 2px;
@@ -41,7 +113,44 @@
 }
 
 @media (max-width: 640px) {
+  .year-frame {
+    max-height: calc(100dvh - var(--header-h) - 24rem);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .year-months {
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-rows: none;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    padding-block: 2px;
+    overflow: hidden;
+    scrollbar-gutter: stable;
+    background: var(--bg);
+  }
+
+  .year-scroll {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: subgrid;
+    grid-template-rows: auto;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .year-days {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: none;
+    grid-template-rows: repeat(31, minmax(0, 1fr));
+  }
+
   .year-grid {
+    grid-column: 2;
+    grid-row: 1;
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 }
