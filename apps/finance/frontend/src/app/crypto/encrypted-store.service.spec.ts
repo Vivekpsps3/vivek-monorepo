@@ -532,4 +532,24 @@ describe('EncryptedStoreService', () => {
     expect(rows.length).toBe(1);
     expect(rows[0].description).toBe('Edited elsewhere');
   });
+
+  it('round-trips a trip tag through the encrypted transaction payload and keeps an unchanged tag from marking an import edited', async () => {
+    const { store } = createStoreHarness();
+    const created = await store.addTransaction({
+      date: '2026-04-01', type: 'expense', category: 'Food', amount: 12, description: 'Lunch', trip_id: 7,
+    });
+    expect((await store.getTransactions())[0].trip_id).toBe(7);
+
+    const imported = await store.addTransaction({
+      date: '2026-04-02', type: 'expense', category: 'Food', amount: 4, description: 'Tea',
+      source: 'import', kind: 'purchase',
+    });
+    await store.updateTransaction(imported.id, { trip_id: null });
+    expect((await store.getTransactions()).find(row => row.id === imported.id)?.import_edited).toBeFalsy();
+    await store.updateTransaction(imported.id, { trip_id: 9 });
+    const tagged = (await store.getTransactions()).find(row => row.id === imported.id);
+    expect(tagged).toEqual(jasmine.objectContaining({ trip_id: 9, import_edited: true }));
+    await store.updateTransaction(created.id, { trip_id: null });
+    expect((await store.getTransactions()).find(row => row.id === created.id)?.trip_id).toBeNull();
+  });
 });
