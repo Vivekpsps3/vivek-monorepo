@@ -1,6 +1,6 @@
 import {expect,test} from '../../../tests/e2e/fixtures';
 import AxeBuilder from '@axe-core/playwright';
-import {expectSectionHeading,openTripFromList,ptoChoice} from './dates.mjs';
+import {expectSectionHeading,openTripAdd,openTripFromList,ptoChoice} from './dates.mjs';
 
 test.beforeEach(async({request})=>{expect((await request.post('/e2e/reset')).ok()).toBeTruthy();});
 
@@ -32,10 +32,10 @@ test('failed trip save retains cities and renamed title; retry saves',async({pag
 
 test('quiet itinerary, manual transport, and per-date PTO survive reload',async({page,request})=>{
  const created=await(await request.post('/travel/api/trips',{data:{title:'Native trip',start_date:'2026-11-06',end_date:'2026-11-09',stays:[{city:'Kyoto',arrive_on:'2026-11-06',leave_on:'2026-11-09'}]}})).json();
- await page.goto('/travel/trips/'+created.id);await expect(page.locator('travel-transport-editor')).toHaveCount(0);await page.getByRole('button',{name:'Add transport',exact:true}).click();
+ await page.goto('/travel/trips/'+created.id);await expect(page.locator('travel-transport-editor')).toHaveCount(0);await openTripAdd(page,'Transport');
  await page.getByRole('combobox',{name:'Mode',exact:true}).selectOption('drive');await page.getByLabel('From',{exact:true}).fill('Home');await page.getByLabel('To',{exact:true}).fill('Kyoto');
  await page.getByRole('button',{name:'Save transport',exact:true}).click();await expect(page.getByRole('heading',{name:'Drive',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Add activity',exact:true}).click();await page.getByLabel('Activity title').fill('Museum');await page.getByRole('button',{name:'Save activity'}).click();await expect(page.getByText('Museum',{exact:false}).first()).toBeVisible();
+ await openTripAdd(page,'Activity');await page.getByLabel('Activity title').fill('Museum');await page.getByRole('button',{name:'Save activity'}).click();await expect(page.getByText('Museum',{exact:false}).first()).toBeVisible();
  await page.getByText('PTO · 2 days',{exact:true}).click();await ptoChoice(page,'2026-11-06').selectOption({label:'Not PTO'});await page.getByRole('button',{name:'Save PTO dates'}).click();
  await page.reload();const saved=await(await request.get('/travel/api/trips/'+created.id)).json();expect(saved.pto_days_effective).toBe('1');expect(saved.transports[0].mode).toBe('drive');expect(saved.days.flatMap(day=>day.items).map(item=>item.title)).toEqual(['Museum']);
 });

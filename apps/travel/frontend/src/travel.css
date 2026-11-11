@@ -203,7 +203,8 @@
   margin: 0.75rem 0 0;
   font-size: 0.95rem;
 }
-.travel-page .itinerary-actions--menu {
+.travel-page .itinerary-actions--menu,
+.travel-page .row-actions--menu {
   display: none;
 }
 .travel-page .itinerary-day {
@@ -282,10 +283,12 @@
   }
   .travel-page .trip-detail-transport,
   .travel-page .trip-detail-parking,
-  .travel-page .itinerary-actions--inline {
+  .travel-page .itinerary-actions--inline,
+  .travel-page .row-actions--inline {
     display: none;
   }
-  .travel-page .itinerary-actions--menu {
+  .travel-page .itinerary-actions--menu,
+  .travel-page .row-actions--menu {
     display: inline-block;
   }
 }

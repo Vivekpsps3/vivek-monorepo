@@ -1,4 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { openTripAdd } from './dates.mjs';
 
 test.beforeEach(async ({ request }) => {
   expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
@@ -25,9 +26,14 @@ function field(page, name) {
 }
 
 async function more(page, name) {
-  const menu = page.locator('details.add-menu');
-  if (await menu.getAttribute('open') === null) await menu.locator('summary').click();
-  await page.getByRole('button', { name, exact: true }).click();
+  const item = {
+    'Add note': 'Note',
+    'Add reminder': 'Reminder',
+    'Add parking': 'Parking',
+    'Add cost': 'Cost',
+    'Add destination': 'Destination',
+  }[name];
+  await openTripAdd(page, item);
 }
 
 async function retrySave(page, saveName, input, value) {
@@ -51,14 +57,14 @@ test('failed optional editors keep their draft and a retry saves one item', asyn
   });
   const trip = await openTrip(page, request);
 
-  await page.getByRole('button', { name: 'Add transport', exact: true }).click();
+  await openTripAdd(page, 'Transport');
   await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('drive');
   await page.getByLabel('From', { exact: true }).fill('Kyoto');
   await page.getByLabel('To', { exact: true }).fill('Osaka');
   await retrySave(page, 'Save transport', page.getByLabel('From', { exact: true }), 'Kyoto');
   await expect(page.getByRole('heading', { name: 'Drive', exact: true })).toHaveCount(1);
 
-  await page.getByRole('button', { name: 'Add activity', exact: true }).click();
+  await openTripAdd(page, 'Activity');
   await field(page, 'Activity title').fill('Tea');
   await dialog(page).getByText('Optional details', { exact: true }).click();
   await field(page, 'Place').fill('Gion');

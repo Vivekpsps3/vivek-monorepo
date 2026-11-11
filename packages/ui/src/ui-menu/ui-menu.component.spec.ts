@@ -89,6 +89,7 @@ describe("ui-menu", () => {
     keydown(trigger(index), key);
     fixture.detectChanges();
     await nextFrame();
+    await nextFrame();
     fixture.detectChanges();
   }
 
@@ -138,6 +139,18 @@ describe("ui-menu", () => {
     expect(document.activeElement).toBe(items(0)[0]);
     keydown(items(0)[0], "ArrowUp"); // wraps backwards, skipping disabled
     expect(document.activeElement).toBe(items(0)[2]);
+  });
+
+  it("Escape on the open trigger closes the menu", async () => {
+    const button = trigger(0);
+    button.focus();
+    button.click();
+    fixture.detectChanges();
+    expect(menus[0].open()).toBeTrue();
+    expect(document.activeElement).toBe(button);
+    keydown(button, "Escape");
+    expect(menus[0].open()).toBeFalse();
+    expect(document.activeElement).toBe(button);
   });
 
   it("Escape closes and returns focus to the trigger", async () => {

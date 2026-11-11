@@ -95,6 +95,11 @@ export class UiMenuComponent implements OnDestroy {
         event.preventDefault();
         if (!this.open()) this.openMenu("last");
         break;
+      case "Escape":
+        if (!this.open()) break;
+        event.preventDefault();
+        this.close();
+        break;
     }
   }
 
@@ -172,16 +177,20 @@ export class UiMenuComponent implements OnDestroy {
     this.openUp.set(false);
     this.open.set(true);
     this.opened.emit(true);
+    // Zone event coalescing paints on the next frame. Focusing in that same
+    // frame runs before the panel leaves `hidden`, so the browser drops it.
     requestAnimationFrame(() => {
-      if (!this.open()) return;
-      this.measureFlip();
-      if (focus === "none") return;
-      const enabled = this.enabledItems();
-      if (!enabled.length) {
-        this.panel().nativeElement.focus();
-        return;
-      }
-      (focus === "last" ? enabled[enabled.length - 1] : enabled[0]).focus();
+      requestAnimationFrame(() => {
+        if (!this.open()) return;
+        this.measureFlip();
+        if (focus === "none") return;
+        const enabled = this.enabledItems();
+        if (!enabled.length) {
+          this.panel().nativeElement.focus();
+          return;
+        }
+        (focus === "last" ? enabled[enabled.length - 1] : enabled[0]).focus();
+      });
     });
   }
 

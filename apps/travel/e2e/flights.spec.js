@@ -1,4 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { openTripAdd } from './dates.mjs';
 
 const morning = {
   ident: 'UAL837', ident_iata: 'UA837', status: 'Scheduled',
@@ -20,7 +21,7 @@ async function openFlight(page, request) {
   expect(created.ok(), await created.text()).toBeTruthy();
   const trip = await created.json();
   await page.goto('/travel/trips/' + trip.id);
-  await page.getByRole('button', { name: 'Add transport', exact: true }).click();
+  await openTripAdd(page, 'Transport');
   await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('flight');
   return trip;
 }
@@ -64,7 +65,7 @@ test('a date-line flight says the arrival is on an earlier local date', async ({
   expect(created.ok(), await created.text()).toBeTruthy();
   const trip = await created.json();
   await page.goto('/travel/trips/' + trip.id);
-  await page.getByRole('button', { name: 'Add transport', exact: true }).click();
+  await openTripAdd(page, 'Transport');
   await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('flight');
   await page.getByLabel('Flight number').fill('NH 1');
   await expect(page.getByRole('heading', { name: 'Flight schedule', exact: true })).toBeVisible();

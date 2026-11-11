@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { ptoChoice } from './dates.mjs';
+import { ptoChoice, removeRow } from './dates.mjs';
 
 const cases = [
   ['stays', 'destination', { city: 'Restore destination', arrive_on: '2026-12-01', leave_on: '2026-12-03', notes: 'Keep lodging note' }],
@@ -21,9 +21,11 @@ for (const [collection, label, body] of cases) test(`removing ${label} offers Un
   expect(added.ok(), await added.text()).toBeTruthy();
   const before = rows(await added.json(), collection)[0];
   await page.goto('/travel/trips/' + trip.id);
-  const row = page.locator('article.trip-row').filter({ hasText: 'Restore ' + label });
+  const row = page.locator('article').filter({ hasText: 'Restore ' + label }).filter({
+    has: page.getByRole('button', { name: /^Remove|^Actions for / }),
+  });
   await expect(row).toHaveCount(1);
-  await row.getByRole('button', { name: /^Remove/ }).click();
+  await removeRow(row);
   await expect(row).toHaveCount(0);
   let failed = false;
   await page.route('**' + endpoint, async route => {
@@ -32,9 +34,11 @@ for (const [collection, label, body] of cases) test(`removing ${label} offers Un
     await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Restore unavailable' }) });
   });
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('Restore unavailable');
+  const restoreAlert = page.getByRole('alert').filter({ hasText: 'Restore unavailable' });
+  await expect(restoreAlert).toHaveCount(1);
+  await expect(restoreAlert).toContainText('Restore unavailable');
   await expect(row).toHaveCount(0);
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await restoreAlert.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(row).toHaveCount(1);
   const saved = await (await request.get('/travel/api/trips/' + trip.id)).json();
   expect(rows(saved, collection)).toHaveLength(1);

@@ -17,6 +17,7 @@ import {
   SESSION_CONTEXT,
   ConfirmService,
   ToastService,
+  silentErrorToast,
   UiBadgeComponent,
   UiButtonComponent,
   UiCardComponent,
@@ -797,25 +798,23 @@ export class TripComponent {
       });
   }
   async deleteTrip(): Promise<void> {
-    if (
-      !(await this.confirm.ask(
-        "Delete " + this.data()!.title + "?",
-        "This removes the trip, bookings, notes and its PTO usage.",
-        "Delete trip",
-        "Keep trip",
-      ))
-    )
-      return;
-    this.http
-      .delete("/travel/api" + this.path())
-      .pipe(takeUntilDestroyed(this.destroy))
-      .subscribe({
-        next: () => {
-          this.editor = "";
-          this.router.navigateByUrl("/travel");
-        },
-        error: (e) => this.error.set(travelError(e)),
-      });
+    const trip = this.data();
+    if (!trip || !this.ownsSession) return;
+    const title = trip.title;
+    const url = "/travel/api" + this.path();
+    const deleted = await this.confirm.confirmAction({
+      title: "Delete " + title + "?",
+      message: "This removes the trip, bookings, notes and its PTO usage.",
+      confirmLabel: "Delete trip",
+      cancelLabel: "Keep trip",
+      busyLabel: "Deleting trip",
+      phrase: title,
+      errorMessage: "Couldn't delete this trip. Nothing was deleted. Try again.",
+      run: () => firstValueFrom(this.http.delete(url, { context: silentErrorToast() })),
+    });
+    if (!deleted || !this.ownsSession) return;
+    this.editor = "";
+    await this.router.navigateByUrl("/travel");
   }
   chooseLocation(stay: Stay): void {
     this.placeSearchChanged();

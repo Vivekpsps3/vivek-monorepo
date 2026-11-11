@@ -74,6 +74,27 @@
   text-decoration: line-through;
 }
 
+.row-actions--inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.row-actions--menu {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .row-actions--inline {
+    display: none;
+  }
+
+  .row-actions--menu {
+    display: inline-block;
+  }
+}
+
 @media (max-width: 640px) {
   .reminder-add ui-button {
     flex: 1 0 100%;

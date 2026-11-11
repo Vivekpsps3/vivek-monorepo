@@ -1,4 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { removeRow, runRowAction } from './dates.mjs';
 
 // Cost arithmetic edge cases belong to backend tests. This browser journey
 // checks their presentation once; row controls cover both responsive layouts.
@@ -117,8 +118,70 @@ for (const width of [390, 1280]) test.describe(`cost actions at ${width}px`, () 
     const { section } = await openCosts(page, request);
     const row = section.locator('article.trip-row').filter({ hasText: 'Manual lodging' });
     await expect(row).toHaveCount(1);
-    await row.getByRole('button', { name: 'Edit cost', exact: true }).click();
+    const menu = row.locator('.row-actions--menu');
+    const inline = row.locator('.row-actions--inline');
+    if (width <= 640) {
+      await expect(menu).toBeVisible();
+      await expect(inline).toBeHidden();
+      await expect(row.getByRole('button', { name: 'Edit cost', exact: true })).toHaveCount(0);
+    } else {
+      await expect(inline).toBeVisible();
+      await expect(menu).toBeHidden();
+      await expect(row.getByRole('button', { name: /^Actions for / })).toHaveCount(0);
+    }
+    await runRowAction(row, 'Edit cost');
     await expect(page.getByRole('dialog').getByLabel('Cost label')).toHaveValue('Manual lodging');
+    await expectClean(page, violations);
+  });
+
+  test('inline add posts one cost and a failed undo can retry', async ({ page, request }) => {
+    const violations = watchConsole(page);
+    const trip = await seedEmptyTrip(request);
+    await page.goto('/travel/trips/' + trip.id);
+    const section = page.locator('travel-trip-costs');
+    let posted = null;
+    await page.route('**/travel/api/trips/' + trip.id + '/budget-lines', async route => {
+      if (route.request().method() === 'POST') posted = route.request().postDataJSON();
+      await route.continue();
+    });
+    await section.getByRole('button', { name: 'Add a cost', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Cost label', { exact: true }).fill('Museum pass');
+    await dialog.getByLabel('Amount', { exact: true }).fill('12.50');
+    await dialog.getByRole('button', { name: 'Save cost', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect(posted.label).toBe('Museum pass');
+    expect(posted.currency).toBe('USD');
+    expect(Number(posted.amount)).toBeCloseTo(12.5);
+    const row = section.locator('article.trip-row').filter({ hasText: 'Museum pass' });
+    await expect(row).toHaveCount(1);
+    await expect(section.locator('.cost-total')).toContainText('12.50');
+
+    let failed = false;
+    await page.unroute('**/travel/api/trips/' + trip.id + '/budget-lines');
+    await page.route('**/travel/api/trips/' + trip.id + '/budget-lines', async route => {
+      if (route.request().method() !== 'POST') return route.continue();
+      if (!failed) {
+        failed = true;
+        return route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'Restore unavailable' }),
+        });
+      }
+      return route.continue();
+    });
+    await removeRow(row);
+    await expect(row).toHaveCount(0);
+    await expect(section.locator('.cost-currency')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    const restoreAlert = page.getByRole('alert').filter({ hasText: 'Restore unavailable' });
+    await expect(restoreAlert).toHaveCount(1);
+    await expect(restoreAlert).toContainText('Restore unavailable');
+    await expect(row).toHaveCount(0);
+    await restoreAlert.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(row).toHaveCount(1);
+    await expect(section.locator('.cost-total')).toContainText('12.50');
     await expectClean(page, violations);
   });
 });

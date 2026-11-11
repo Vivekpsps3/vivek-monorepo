@@ -2,7 +2,7 @@ import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { openTripFromList, ptoChoice } from './dates.mjs';
+import { openTripAdd, openTripFromList, ptoChoice, runRowAction } from './dates.mjs';
 import AxeBuilder from '@axe-core/playwright';
 
 const tile = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
@@ -124,8 +124,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     await page.getByRole('button', { name: 'Show map', exact: true }).click();
     const map = mapRegion(page);
     await expect(map.getByRole('button', { name: 'Retry map' })).toBeVisible();
-    await page.getByText('Add more', { exact: true }).click();
-    await page.getByRole('button', { name: 'Add note', exact: true }).click();
+    await openTripAdd(page, 'Note');
     await page.getByRole('textbox', { name: 'Note', exact: true }).fill('Keep the map state while saving this note');
     await page.getByRole('button', { name: 'Save note', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -152,7 +151,7 @@ for (const [width, theme] of [[390, 'light'], [1280, 'dark']]) test.describe(`ma
     await expect(mapRegion(page).getByText('Location has not been chosen.', { exact: true })).toBeVisible();
     await expect(mapRegion(page).locator('.leaflet-interactive')).toHaveCount(0);
     expect(tiles).toBe(0);
-    await page.getByRole('button', { name: 'Choose location', exact: true }).click();
+    await runRowAction(page.locator('article').filter({ hasText: 'Springfield' }).first(), 'Choose location');
     const dialog = page.getByRole('dialog', { name: 'Choose location', exact: true });
     await dialog.getByLabel('Place search').fill('  ');
     await dialog.getByRole('button', { name: 'Find places' }).click();
@@ -196,7 +195,7 @@ test('changing a place query cancels the old request and cannot select an obsole
     if (old) finished();
   });
   await page.goto('/travel/trips/' + trip.id);
-  await page.getByRole('button', { name: 'Choose location', exact: true }).click();
+  await runRowAction(page.locator('article').filter({ hasText: 'Zero Island' }).first(), 'Choose location');
   const dialog = page.getByRole('dialog', { name: 'Choose location', exact: true });
   await dialog.getByLabel('Place search').fill('Old city');
   await dialog.getByRole('button', { name: 'Find places' }).click();

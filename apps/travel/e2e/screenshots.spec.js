@@ -1,6 +1,7 @@
 import { chooseColorTheme } from '../../../tests/e2e/user-menu.mjs';
 import path from 'node:path';
 import { expect, test } from '../../../tests/e2e/fixtures';
+import { openTripAdd } from './dates.mjs';
 
 const dir = process.env.SCREENSHOT_DIR || 'test-results/artifacts/travel-ux';
 const widths = (process.env.SHOT_WIDTHS || '390,768,1280').split(',').map(Number);
@@ -64,31 +65,39 @@ for (const width of widths) for (const theme of themes) {
     await page.getByRole('button', { name: 'Keep trip' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    for (const [button, field, value] of [
-      ['Edit trip','Trip name','Autumn in Japan'],
-      ['Add activity','Activity title','Long museum visit'],
-      ['Add destination','Destination city','Puerto Viejo de la Costa Rica Sur'],
-      ['Add parking','Address','Terminal long term parking'],
-      ['Add note','Note','Window seat if it is free.'],
-      ['Add reminder','Reminder','Book the airport shuttle'],
-      ['Add cost','Cost label','Airport shuttle'],
-    ]) {
-      if (button.startsWith('Add ') && !['Add activity'].includes(button)) await page.getByText('Add more', { exact: true }).click();
-      await page.getByRole('button', { name: button, exact: true }).click();
+    await page.getByRole('button', { name: 'Edit trip', exact: true }).click();
+    {
       const dialog = page.getByRole('dialog');
-      await shot(button.toLowerCase().replaceAll(' ','-') + '-blank');
+      await shot('edit-trip-blank');
+      const input = dialog.getByLabel('Trip name', { exact: false });
+      await input.fill('Autumn in Japan');
+      await input.focus();
+      await shot('edit-trip-focused-filled');
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('dialog', { name: 'Discard this draft?' }).getByRole('button', { name: 'Discard changes' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    }
+    for (const [item, field, value] of [
+      ['Activity','Activity title','Long museum visit'],
+      ['Destination','Destination city','Puerto Viejo de la Costa Rica Sur'],
+      ['Parking','Address','Terminal long term parking'],
+      ['Note','Note','Window seat if it is free.'],
+      ['Reminder','Reminder','Book the airport shuttle'],
+      ['Cost','Cost label','Airport shuttle'],
+    ]) {
+      await openTripAdd(page, item);
+      const dialog = page.getByRole('dialog');
+      await shot('add-' + item.toLowerCase() + '-blank');
       if (field === 'Address') await dialog.getByText('Optional details', { exact: true }).click();
       const input = dialog.getByLabel(field, { exact: false });
       await input.fill(value);
       await input.focus();
-      await shot(button.toLowerCase().replaceAll(' ','-') + '-focused-filled');
+      await shot('add-' + item.toLowerCase() + '-focused-filled');
       await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.getByRole('dialog', { name: 'Discard this draft?' }).getByRole('button', { name: 'Discard changes' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
-      const addMore = page.locator('details.add-menu');
-      if (await addMore.getAttribute('open') !== null) await addMore.locator('summary').click();
     }
-    await page.getByRole('button', { name: 'Add transport', exact: true }).click();
+    await openTripAdd(page, 'Transport');
     await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('drive');
     await page.getByLabel('From', { exact: true }).fill('Home');
     await page.getByLabel('To', { exact: true }).fill('Airport');

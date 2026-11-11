@@ -1,5 +1,5 @@
 import { expect, test } from '../../../tests/e2e/fixtures';
-import { expectSectionHeading, ptoChoice } from './dates.mjs';
+import { expectSectionHeading, openTripAdd, ptoChoice } from './dates.mjs';
 
 async function trip(request, extra = {}) {
   const response = await request.post('/travel/api/trips', { data: {
@@ -33,7 +33,7 @@ test('quick transport starts with a visible mode choice and hides flight fields 
   const created = await trip(request);
   await page.goto('/travel/trips/' + created.id);
   await expect(page.locator('travel-transport-editor')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Add transport', exact: true }).click();
+  await openTripAdd(page, 'Transport');
   const mode = page.getByRole('combobox', { name: 'Mode', exact: true });
   await expect(mode).toHaveValue('');
   await expect(page.getByLabel('Flight number')).toHaveCount(0);
@@ -106,25 +106,50 @@ test('changing PTO cadence keeps a typed balance and native dates ignore unrelat
   await expect(page.getByRole('radio', { name: 'Mo', exact: true })).toBeChecked();
 });
 
-test('delete cancellation preserves a trip, failure is local, and success closes the dialog', async ({ page, request }) => {
+test('delete cancellation preserves a trip, a failed delete stays in the dialog, and success focuses Trips', async ({ page, request }) => {
   const created = await trip(request);
   await page.goto('/travel/trips/' + created.id);
-  await page.getByRole('button', { name: 'Delete trip', exact: true }).click();
-  await page.getByRole('button', { name: 'Keep trip', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeHidden();
+  const deletes = [];
+  await page.route('**/travel/api/trips/' + created.id, async route => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    deletes.push({ method: route.request().method(), body: route.request().postData() });
+    if (deletes.length === 1) {
+      return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ message: 'Delete unavailable' }) });
+    }
+    return route.continue();
+  });
+  const openDelete = () => page.getByRole('button', { name: 'Delete trip', exact: true }).click();
+  await openDelete();
+  const dialog = page.getByRole('dialog', { name: 'Delete Kyoto?', exact: true });
+  const phrase = dialog.getByRole('textbox', { name: 'Type Kyoto to confirm', exact: true });
+  await dialog.getByRole('button', { name: 'Keep trip', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(deletes).toEqual([]);
   expect((await request.get('/travel/api/trips/' + created.id)).ok()).toBeTruthy();
-  await page.route('**/travel/api/trips/' + created.id, route => route.request().method() === 'DELETE'
-    ? route.fulfill({ status: 502, json: { message: 'Delete unavailable' } }) : route.continue());
-  await page.getByRole('button', { name: 'Delete trip', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete trip', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(page.locator('main [role=alert]')).toContainText('Delete unavailable');
-  await page.unroute('**/travel/api/trips/' + created.id);
-  await page.getByRole('button', { name: 'Delete trip', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete trip', exact: true }).click();
+
+  await openDelete();
+  await expect(dialog.getByRole('button', { name: 'Delete trip', exact: true })).toHaveAttribute('aria-disabled', 'true');
+  await phrase.fill('Kyot');
+  await dialog.getByRole('button', { name: 'Delete trip', exact: true }).click({ force: true });
+  await phrase.press('Enter');
+  await expect(dialog).toBeVisible();
+  expect(deletes).toEqual([]);
+
+  await phrase.fill('Kyoto');
+  await dialog.getByRole('button', { name: 'Delete trip', exact: true }).click();
+  const failure = dialog.getByRole('alert').filter({ hasText: "Couldn't delete this trip. Nothing was deleted. Try again." });
+  await expect(failure).toHaveCount(1);
+  await expect(phrase).toHaveValue('Kyoto');
+  await expect(phrase).toBeFocused();
+  expect(deletes).toEqual([{ method: 'DELETE', body: null }]);
+  expect((await request.get('/travel/api/trips/' + created.id)).ok()).toBeTruthy();
+
+  await dialog.getByRole('button', { name: 'Delete trip', exact: true }).click();
   await expect(page).toHaveURL(/\/travel$/);
   const tripsHeading = await expectSectionHeading(page, 'Trips');
   await expect(tripsHeading).toBeFocused();
+  expect(deletes).toHaveLength(2);
+  expect((await request.get('/travel/api/trips/' + created.id)).status()).toBe(404);
 });
 
 test('successful trip retry clears its error and never creates a second trip', async ({ page, request }) => {
