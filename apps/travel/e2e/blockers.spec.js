@@ -179,7 +179,7 @@ test('an unnamed retained city blocks saving through resize and does not lose a 
   await page.getByText('Add destination', { exact: true }).first().click();
   await page.getByLabel('Change city on date').fill('2026-11-02');
   await page.getByRole('button', { name: 'Add destination', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Save trip', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save trip', exact: true })).toBeEnabled();
   await page.setViewportSize({ width: 768, height: 900 });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByLabel('Next destination city')).toHaveValue('');

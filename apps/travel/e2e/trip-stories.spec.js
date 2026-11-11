@@ -67,17 +67,26 @@ test('a two-city trip saves both cities under one name', async ({ page }) => {
 });
 
 test('a return before departure stays on the draft', async ({ page }) => {
+  const writes = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/travel/api/trips')) writes.push(request.url());
+  });
   await page.goto('/travel/trips/new');
   await page.getByLabel('Departure date').fill('2026-12-20');
   await page.getByLabel('Return date').fill('2026-12-10');
-  await expect(page.locator('main .local-error')).toHaveText('Return date must be on or after departure.');
-  await expect(page.getByRole('button', { name: 'Save trip', exact: true })).toBeDisabled();
   await expect(page.getByText('Now pick the day you come back.', { exact: true })).toBeVisible();
-  await page.getByLabel('Return date').fill('2026-12-22');
-  await expect(page.locator('main .local-error')).toHaveCount(0);
+  const save = page.getByRole('button', { name: 'Save trip', exact: true });
+  await expect(save).toBeEnabled();
+  await save.click();
+  const returning = page.getByLabel('Return date');
+  await expect(returning).toBeFocused();
+  await expect(returning).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText('The return date has to be on or after the day you leave.')).toBeVisible();
+  expect(writes).toEqual([]);
+  await returning.fill('2026-12-22');
+  await expect(returning).not.toHaveAttribute('aria-invalid', 'true');
   await page.getByLabel('Destination city').fill('Oslo');
-  await expect(page.getByRole('button', { name: 'Save trip', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Save trip', exact: true }).click();
+  await save.click();
   await expect(header(page, 'Oslo')).toContainText(formatDateRange('2026-12-20', '2026-12-22'));
 });
 

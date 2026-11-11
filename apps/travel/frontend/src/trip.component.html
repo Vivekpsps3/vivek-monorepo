@@ -454,8 +454,8 @@
         />
       } @else {
         @if (editor === "trip") {
-          <form class="travel-form" #editForm="ngForm" (ngSubmit)="saveMeta()">
-            <ui-field label="Trip name" [required]="true"
+          <form class="travel-form" novalidate (ngSubmit)="saveMeta()" (input)="live()" (change)="live()">
+            <ui-field label="Trip name" [required]="true" [error]="field('title')"
               ><input
                 uiFieldControl
                 required
@@ -464,14 +464,14 @@
                 maxlength="200"
             /></ui-field>
             <div class="form-row">
-              <ui-field label="Departure date" [required]="true"
+              <ui-field label="Departure date" [required]="true" [error]="field('start')"
                 ><input
                   uiFieldControl
                   required
                   type="date"
                   name="start"
                   [(ngModel)]="meta.start_date" /></ui-field
-              ><ui-field label="Return date" [required]="true"
+              ><ui-field label="Return date" [required]="true" [error]="field('end')"
                 ><input
                   uiFieldControl
                   required
@@ -487,25 +487,21 @@
                 <option value="booked">Booked</option>
                 <option value="done">Done</option>
               </select></ui-field
-            ><ui-button
-              variant="primary"
-              type="submit"
-              [disabled]="saving() || !editForm.valid"
-            >
+            ><ui-button variant="primary" type="submit" [disabled]="saving()">
               Save trip
             </ui-button>
           </form>
         }
         @if (editor === "activity") {
-          <form class="travel-form" #activity="ngForm" (ngSubmit)="savePlan()">
-            <ui-field label="Activity title" [required]="true"
+          <form class="travel-form" novalidate (ngSubmit)="savePlan()" (input)="live()" (change)="live()">
+            <ui-field label="Activity title" [required]="true" [error]="field('title')"
               ><input
                 uiFieldControl
                 required
                 name="title"
                 maxlength="200"
                 [(ngModel)]="plan.title" /></ui-field
-            ><ui-field label="Date" [required]="true"
+            ><ui-field label="Date" [required]="true" [error]="field('date')"
               ><input
                 uiFieldControl
                 required
@@ -580,22 +576,14 @@
                 ></textarea>
               </ui-field>
             </details>
-            <ui-button
-              variant="primary"
-              type="submit"
-              [disabled]="saving() || !activity.valid"
-            >
+            <ui-button variant="primary" type="submit" [disabled]="saving()">
               Save activity
             </ui-button>
           </form>
         }
         @if (editor === "destination") {
-          <form
-            class="travel-form"
-            #destination="ngForm"
-            (ngSubmit)="saveStay()"
-          >
-            <ui-field label="Destination city" [required]="true"
+          <form class="travel-form" novalidate (ngSubmit)="saveStay()" (input)="live()" (change)="live()">
+            <ui-field label="Destination city" [required]="true" [error]="field('city')"
               ><input
                 uiFieldControl
                 required
@@ -604,7 +592,7 @@
                 [(ngModel)]="stay.city"
             /></ui-field>
             <div class="form-row">
-              <ui-field label="First day" [required]="true"
+              <ui-field label="First day" [required]="true" [error]="field('arrive')"
                 ><input
                   uiFieldControl
                   type="date"
@@ -613,7 +601,7 @@
                   [(ngModel)]="stay.arrive_on"
                   [min]="trip.start_date"
                   [max]="trip.end_date" /></ui-field
-              ><ui-field label="Last day" [required]="true"
+              ><ui-field label="Last day" [required]="true" [error]="field('leave')"
                 ><input
                   uiFieldControl
                   type="date"
@@ -644,18 +632,14 @@
                 ></textarea>
               </ui-field>
             </details>
-            <ui-button
-              variant="primary"
-              type="submit"
-              [disabled]="saving() || !destination.valid"
-            >
+            <ui-button variant="primary" type="submit" [disabled]="saving()">
               Save destination
             </ui-button>
           </form>
         }
         @if (editor === "location") {
-          <form #locationForm="ngForm" (ngSubmit)="findPlaces()">
-            <ui-field label="Place search" [required]="true"
+          <form novalidate (ngSubmit)="findPlaces()" (input)="live()" (change)="live()">
+            <ui-field label="Place search" [required]="true" [error]="field('query')"
               ><input
                 uiFieldControl
                 required
@@ -664,11 +648,7 @@
                 name="query"
                 minlength="2"
                 maxlength="200" /></ui-field
-            ><ui-button
-              variant="ghost"
-              type="submit"
-              [disabled]="finding() || saving() || !locationForm.valid"
-            >
+            ><ui-button variant="ghost" type="submit" [disabled]="finding() || saving()">
               Find places
             </ui-button>
           </form>
@@ -700,12 +680,8 @@
           }
         }
         @if (editor === "note") {
-          <form
-            class="travel-form"
-            #noteForm="ngForm"
-            (ngSubmit)="mutate(endpoint('/notes'), note)"
-          >
-            <ui-field label="Note" [required]="true">
+          <form class="travel-form" novalidate (ngSubmit)="saveNote()" (input)="live()" (change)="live()">
+            <ui-field label="Note" [required]="true" [error]="field('body')">
               <textarea
                 uiFieldControl
                 required
@@ -724,22 +700,14 @@
                   [(ngModel)]="note.on_date"
               /></ui-field>
             </details>
-            <ui-button
-              variant="primary"
-              type="submit"
-              [disabled]="saving() || !noteForm.valid"
-            >
+            <ui-button variant="primary" type="submit" [disabled]="saving()">
               Save note
             </ui-button>
           </form>
         }
         @if (editor === "reminder") {
-          <form
-            class="travel-form"
-            #reminderForm="ngForm"
-            (ngSubmit)="mutate(endpoint('/reminders'), reminder)"
-          >
-            <ui-field label="Reminder" [required]="true"
+          <form class="travel-form" novalidate (ngSubmit)="saveReminder()" (input)="live()" (change)="live()">
+            <ui-field label="Reminder" [required]="true" [error]="field('title')"
               ><input
                 uiFieldControl
                 required
@@ -763,17 +731,13 @@
                 ></textarea>
               </ui-field>
             </details>
-            <ui-button
-              variant="primary"
-              type="submit"
-              [disabled]="saving() || !reminderForm.valid"
-            >
+            <ui-button variant="primary" type="submit" [disabled]="saving()">
               Save reminder
             </ui-button>
           </form>
         }
         @if (editor === "parking") {
-          <form class="travel-form" (ngSubmit)="saveParking()">
+          <form class="travel-form" novalidate (ngSubmit)="saveParking()" (input)="live()" (change)="live()">
             <ui-field label="Parking place"
               ><input
                 uiFieldControl
@@ -854,8 +818,8 @@
           </form>
         }
         @if (editor === "budget") {
-          <form class="travel-form" #cost="ngForm" (ngSubmit)="saveBudget()">
-            <ui-field label="Cost label" [required]="true"
+          <form class="travel-form" novalidate (ngSubmit)="saveBudget()" (input)="live()" (change)="live()">
+            <ui-field label="Cost label" [required]="true" [error]="field('label')"
               ><input
                 uiFieldControl
                 required
@@ -864,7 +828,7 @@
                 maxlength="200"
             /></ui-field>
             <div class="form-row">
-              <ui-field label="Amount" [required]="true"
+              <ui-field label="Amount" [required]="true" [error]="field('amount')"
                 ><input
                   uiFieldControl
                   type="number"
@@ -873,7 +837,7 @@
                   step="0.01"
                   name="amount"
                   [(ngModel)]="budget.amount" /></ui-field
-              ><ui-field label="Currency" [required]="true"
+              ><ui-field label="Currency" [required]="true" [error]="field('currency')"
                 ><input
                   uiFieldControl
                   name="currency"
@@ -910,11 +874,7 @@
                 ></textarea>
               </ui-field>
             </details>
-            <ui-button
-              variant="primary"
-              type="submit"
-              [disabled]="saving() || !cost.valid"
-            >
+            <ui-button variant="primary" type="submit" [disabled]="saving()">
               Save cost
             </ui-button>
           </form>

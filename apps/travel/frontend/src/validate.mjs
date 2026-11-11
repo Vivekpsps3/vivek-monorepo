@@ -39,68 +39,144 @@ export function ptoDaysError(value) {
   return "";
 }
 
+const TRANSPORT_MODES = ["flight", "drive", "train", "bus", "ferry", "other"];
+
+function has(data, name) {
+  return Object.prototype.hasOwnProperty.call(data, name);
+}
+
+function text(value) {
+  return String(value ?? "").trim();
+}
+
 /**
- * Inline errors for one form, keyed by data-form.
- * Returns { name, message } for the first problem, or null.
+ * Every current problem for one mounted form, keyed by the control name.
+ * Parking has no required field. Transport requires a known mode and nothing else.
+ * @param {string} kind
+ * @param {Record<string, unknown>} [data]
+ * @returns {Record<string, string>}
  */
-export function formError(kind, data) {
-  const value = (name) => String(data[name] ?? "").trim();
+export function fieldErrors(kind, data) {
+  const source = data || {};
+  /** @type {Record<string, string>} */
+  const errors = {};
+  const set = (name, message) => {
+    if (message) errors[name] = message;
+  };
+  const value = (name) => text(source[name]);
   if (kind === "trip") {
-    if (!value("title")) return { name: "title", message: "Give the trip a name." };
-    const order = dateOrderError(value("start_date"), value("end_date"), "The return date has to be on or after the day you leave.");
-    if (order) return { name: "end_date", message: order };
-    const days = ptoDaysError(data.pto_days);
-    if (days) return { name: "pto_days", message: days };
-    return null;
+    set("title", requiredText(source.title, "Give the trip a name."));
+    if (has(source, "start_date") && !value("start_date")) {
+      set("start_date", "Pick the day you leave and the day you come back.");
+    }
+    if (has(source, "end_date") && !value("end_date")) {
+      set("end_date", "Pick the day you leave and the day you come back.");
+    }
+    if (value("start_date") && value("end_date")) {
+      set(
+        "end_date",
+        dateOrderError(
+          value("start_date"),
+          value("end_date"),
+          "The return date has to be on or after the day you leave.",
+        ),
+      );
+    }
+    set("pto_days", ptoDaysError(source.pto_days));
+    return errors;
   }
   if (kind === "stay") {
-    if (!value("city")) return { name: "city", message: "Name the city." };
-    return null;
+    set("city", requiredText(source.city, "Name the city."));
+    if (has(source, "arrive_on") && !value("arrive_on")) {
+      set("arrive_on", "Pick the first day and the last day.");
+    }
+    if (has(source, "leave_on") && !value("leave_on")) {
+      set("leave_on", "Pick the first day and the last day.");
+    }
+    if (value("arrive_on") && value("leave_on")) {
+      set(
+        "leave_on",
+        dateOrderError(
+          value("arrive_on"),
+          value("leave_on"),
+          "The city departure has to be on or after the arrival.",
+        ),
+      );
+    }
+    return errors;
   }
   if (kind === "transport") {
-    if (!value("mode")) return { name: "mode", message: "Choose a way to travel." };
-    if (!value("depart_place")) return { name: "depart_place", message: "Name where this ride leaves from." };
-    return null;
+    if (!TRANSPORT_MODES.includes(value("mode"))) set("mode", "Choose a way to travel.");
+    return errors;
   }
   if (kind === "plan") {
-    if (!value("title")) return { name: "title", message: "Name this plan." };
-    return null;
+    set("title", requiredText(source.title, "Name this plan."));
+    if (has(source, "on_date") && !value("on_date")) set("on_date", "Pick the date.");
+    return errors;
   }
-  if (kind === "parking") {
-    if (!value("place_name")) return { name: "place_name", message: "Name this parking." };
-    return null;
+  if (kind === "parking" || kind === "location") {
+    if (kind === "location") {
+      const query = value("query");
+      if (query.length < 2 || query.length > 200) {
+        set("query", "Enter a place name between 2 and 200 characters.");
+      }
+    }
+    return errors;
   }
   if (kind === "note") {
-    if (!value("body")) return { name: "body", message: "Write the note." };
-    return null;
+    set("body", requiredText(source.body, "Write the note."));
+    return errors;
   }
   if (kind === "reminder") {
-    if (!value("title")) return { name: "title", message: "Name the reminder." };
-    return null;
+    set("title", requiredText(source.title, "Name the reminder."));
+    return errors;
   }
   if (kind === "budget") {
-    if (!value("label")) return { name: "label", message: "Name this cost." };
-    if (!value("amount")) return { name: "amount", message: "Enter an amount." };
-    return null;
+    set("label", requiredText(source.label, "Name this cost."));
+    const amount = source.amount;
+    if (amount === null || amount === undefined || text(amount) === "") {
+      set("amount", "Enter an amount.");
+    } else {
+      const number = Number(amount);
+      if (!Number.isFinite(number) || number < 0) set("amount", "Use a zero or positive amount.");
+    }
+    if (has(source, "currency") && !/^[A-Za-z]{3}$/.test(value("currency"))) {
+      set("currency", "Use a 3-letter currency code, such as USD.");
+    }
+    return errors;
   }
   if (kind === "flight-key") {
-    if (!value("api_key")) return { name: "api_key", message: "Paste your AeroAPI key." };
-    return null;
+    set("api_key", requiredText(source.api_key, "Paste your AeroAPI key."));
+    return errors;
   }
   if (kind === "pto-policy") {
-    const balance = balanceError(data.balance_days);
-    if (balance) return { name: "balance_days", message: balance };
-    if (!value("balance_as_of")) return { name: "balance_as_of", message: "Pick the date this balance is from." };
-    const accrual = accrualError(data.accrual_amount);
-    if (accrual) return { name: "accrual_amount", message: accrual };
-    return null;
+    set("balance_days", balanceError(source.balance_days));
+    set("balance_as_of", requiredText(source.balance_as_of, "Pick the date this balance is from."));
+    set("accrual_amount", accrualError(source.accrual_amount));
+    return errors;
   }
   if (kind === "pto-entry") {
-    if (!value("label")) return { name: "label", message: "Name this PTO." };
-    if (!value("start_date") || !value("end_date")) return { name: "start_date", message: "Pick the first day and the last day." };
-    const order = dateOrderError(value("start_date"), value("end_date"), "The end date has to be on or after the start date.");
-    if (order) return { name: "end_date", message: order };
-    return null;
+    set("label", requiredText(source.label, "Name this PTO."));
+    if (!value("start_date") || !value("end_date")) {
+      set("start_date", "Pick the first day and the last day.");
+    } else {
+      set(
+        "end_date",
+        dateOrderError(
+          value("start_date"),
+          value("end_date"),
+          "The end date has to be on or after the start date.",
+        ),
+      );
+    }
+    return errors;
   }
-  return null;
+  return errors;
+}
+
+/** First problem from fieldErrors, or null. Kept for callers that only need one sentence. */
+export function formError(kind, data) {
+  const errors = fieldErrors(kind, data);
+  const name = Object.keys(errors)[0];
+  return name ? { name, message: errors[name] } : null;
 }
