@@ -154,7 +154,7 @@ def test_snapshot_shape_one_query_and_quiet_logs(world, caplog):
         building = body["buildings"][key]
         assert (building["xp"], building["source"], building["today_cap"], building["level"]) == (
             0,
-            "ok",
+            "unavailable",
             cap,
             1,
         )

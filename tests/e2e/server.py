@@ -13,6 +13,7 @@ import tempfile
 import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -34,6 +35,14 @@ from apps.travel.backend.models import Base as TravelBase
 ROOT = Path(__file__).resolve().parents[2]
 # 12:00 Pacific on 2026-10-29. The same instant is 11:00 after the November fallback.
 TOWN_CLOCK = datetime(2026, 10, 29, 19, 0, tzinfo=UTC)
+_LA = ZoneInfo("America/Los_Angeles")
+
+
+def _align_media_today(moment: datetime) -> None:
+    """Media completion stamps use MEDIA_TODAY. Keep that day on the town clock."""
+    os.environ["MEDIA_TODAY"] = moment.astimezone(_LA).date().isoformat()
+
+
 COVER = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9i8AAAAASUVORK5CYII="
 )
@@ -234,6 +243,7 @@ def fixture_app(directory: Path, suite: str):
                 )
         if suite == "town":
             clock_box["now"] = TOWN_CLOCK
+            _align_media_today(TOWN_CLOCK)
         seed = request.query_params.get("seed") or ""
         if seed in {"pixels", "pixels-empty"}:
             seed_pixels(empty=seed == "pixels-empty")
@@ -249,6 +259,7 @@ def fixture_app(directory: Path, suite: str):
         raw = payload.get("iso") if isinstance(payload, dict) else None
         moment = datetime.fromisoformat(raw) if isinstance(raw, str) else TOWN_CLOCK
         clock_box["now"] = moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+        _align_media_today(clock_box["now"])
         return {"ok": True}
 
     @fixtures.get("/synthetic-cover.png")
@@ -285,6 +296,7 @@ def fixture_app(directory: Path, suite: str):
     )
     if suite == "town":
         application.dependency_overrides[get_town_clock] = lambda: clock_box["now"]
+        _align_media_today(TOWN_CLOCK)
 
     if suite != "finance":
         with database.sessionmaker.begin() as db:

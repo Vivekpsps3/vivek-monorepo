@@ -50,7 +50,7 @@ describe('Today panel', () => {
     return { fixture, el: fixture.nativeElement as HTMLElement };
   }
 
-  it('renders rows, auto credits, a locked treasury, and the rest-day note', () => {
+  it('renders rows, named source credits, a locked treasury, and the rest-day note', () => {
     const read = habit({ id: 1, name: 'Read 20 pages', slot: 0 });
     const walk = habit({
       id: 2, name: 'Walk 30 minutes', slot: 1, building_style: 'garden',
@@ -66,9 +66,11 @@ describe('Today panel', () => {
     expect(el.textContent).toContain('Forge');
     expect(el.textContent).toContain('3-day streak');
     expect(el.textContent).toContain('2/3 this week');
-    expect(el.textContent).toContain('Auto · +10/10 XP today');
-    expect(el.textContent).toContain('Auto · +5/15 XP today');
-    expect(el.textContent).toContain('Auto ✓');
+    expect(el.textContent).toContain('Media · +10/10 XP today');
+    expect(el.textContent).toContain('Travel · +5/15 XP today');
+    expect(el.textContent).not.toContain('Auto');
+    expect(el.querySelectorAll('.passive ui-badge')[0]?.textContent?.trim()).toBe('Media');
+    expect(el.querySelectorAll('.passive ui-badge')[1]?.textContent?.trim()).toBe('Travel');
     expect(el.querySelector('.treasury ui-badge')?.textContent?.trim()).toBe('Finance vault locked');
     expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(el.textContent).toContain('Rest days: Forge ✓, Cottage used');
@@ -94,6 +96,18 @@ describe('Today panel', () => {
     expect(el.querySelector('ui-skeleton')).toBeNull();
     expect(el.querySelector('.treasury')?.textContent).toContain('Unavailable');
     expect(el.querySelector('.treasury')?.textContent).not.toMatch(/Lv \d/);
+  });
+
+  it('names an unavailable source beside a usable one', () => {
+    const down = snapshot();
+    down.buildings.library = { ...down.buildings.library, source: 'unavailable', today_xp: 0, xp: 0 };
+    const { el } = render(down);
+    expect(el.textContent).toContain('Media unavailable');
+    expect(el.textContent).toContain('Travel · +5/15 XP today');
+    expect(el.textContent).not.toContain('Auto');
+    expect(el.textContent).not.toContain('Media · +');
+    const badges = [...el.querySelectorAll('.passive ui-badge')].map(badge => badge.textContent?.trim());
+    expect(badges).toEqual(['Travel', 'Finance vault locked']);
   });
 
   it('disables a new habit when no lot is free and keeps the helper copy', () => {
