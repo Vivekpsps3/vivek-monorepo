@@ -68,6 +68,8 @@ export class DetailComponent {
   private loadingRequest?: Subscription;
   private photoRequest?: Subscription;
   private linkRequest?: Subscription;
+  private mutation?: Subscription;
+  private progressRequest?: Subscription;
   private generation = 0;
   private pendingId: number | null = null;
   private baseFields: ItemFields | null = null;
@@ -128,7 +130,8 @@ export class DetailComponent {
   private refreshEpisodeProgress(entryId: number): void {
     if (this.item()?.id !== entryId) return;
     const generation = this.generation;
-    this.http.get<Detail>(`/media/api/entries/${entryId}`)
+    this.progressRequest?.unsubscribe();
+    this.progressRequest = this.http.get<Detail>(`/media/api/entries/${entryId}`)
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (detail) => {
@@ -150,9 +153,12 @@ export class DetailComponent {
     // the form and drop a save that had just been edited.
     if (!force && (this.pendingId === id || this.item()?.id === id)) return;
     this.pendingId = id;
+    const generation = ++this.generation;
     this.loadingRequest?.unsubscribe();
     this.photoRequest?.unsubscribe();
     this.linkRequest?.unsubscribe();
+    this.mutation?.unsubscribe();
+    this.progressRequest?.unsubscribe();
     this.photoLoading.set(false);
     this.linking.set(false);
     this.photos.set([]);
@@ -161,7 +167,6 @@ export class DetailComponent {
     clearTimeout(this.skeletonTimer);
     this.loading.set(false);
     this.skeletonTimer = setTimeout(() => this.loading.set(true), 150);
-    const generation = ++this.generation;
     this.photoOpen = false;
     this.childOpen = false;
     this.episodeOpen = false;
@@ -390,7 +395,8 @@ export class DetailComponent {
     if (!Object.keys(body).length) return;
     this.busy.set(true);
     this.error.set("");
-    this.http
+    this.mutation?.unsubscribe();
+    this.mutation = this.http
       .patch<Detail>(this.endpoint(), body)
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
@@ -430,7 +436,8 @@ export class DetailComponent {
     const generation = this.generation;
     this.busy.set(true);
     this.error.set("");
-    this.http
+    this.mutation?.unsubscribe();
+    this.mutation = this.http
       .request<Detail>(method, this.endpoint() + path, { body })
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
@@ -619,7 +626,8 @@ export class DetailComponent {
       !this.ownsSession
     )
       return;
-    this.http
+    this.mutation?.unsubscribe();
+    this.mutation = this.http
       .delete(this.endpoint())
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({

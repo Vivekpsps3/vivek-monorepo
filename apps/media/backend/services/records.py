@@ -1493,24 +1493,26 @@ def progress_number(value) -> float | None:
 _REVIEW_KEYS = {"review", "review_base"}
 
 
-def assert_review_base(entry: UserEntry, body: dict) -> None:
+def assert_review_base(entry: UserEntry, body: dict) -> bool:
     """409 when a note save started from a review the server no longer has.
 
-    An identical review, and nothing else, is a no-op success: a client can
-    time out after the server stored the note, then retry with the base it
-    started from. Other fields in the same body are still checked against
-    that base, so a stale note cannot ride along with a status change.
+    An identical review, and nothing else, returns True so the caller can skip
+    the write. A client can time out after the server stored the note, then
+    retry with the base it started from. Other fields in the same body are
+    still checked against that base, so a stale note cannot ride along with a
+    status change.
     """
     if "review" not in body or "review_base" not in body:
-        return
+        return False
     same_review = clean_text(body.get("review"), 20000, "Review") == entry.review
     other_fields = any(key not in _REVIEW_KEYS for key in body)
     if same_review and not other_fields:
-        return
+        return True
     current = iso(entry.review_updated_at) or ""
     incoming = body.get("review_base")
     if ("" if incoming is None else str(incoming)) != current:
         raise HTTPException(status_code=409, detail="This note changed in another tab.")
+    return False
 
 
 def _entry_snapshot(entry: UserEntry) -> tuple:
@@ -1534,7 +1536,8 @@ def _entry_snapshot(entry: UserEntry) -> tuple:
 
 
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
-    assert_review_base(entry, body)
+    if assert_review_base(entry, body):
+        return entry
     before = _entry_snapshot(entry)
     before_review = entry.review
     records_release = any(
