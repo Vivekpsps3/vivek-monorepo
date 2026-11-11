@@ -198,6 +198,9 @@ test('Back drops a pending filter instead of applying it later', async ({ page, 
   expect(requests).toBe(before);
   await page.goBack();
   await expect(page).not.toHaveURL(/kind=/);
+  // The paused clock must not apply the pending type. Zero-delay router work
+  // can still be due, and the select stays stale until that work runs.
+  await page.clock.runFor(0);
   await expect(type).toHaveValue('');
   const afterBack = requests;
   expect(afterBack).toBe(before + 1);

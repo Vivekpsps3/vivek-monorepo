@@ -223,6 +223,17 @@ export interface Trip {
     }[];
   };
 }
+export interface HomeNextPto {
+  trip_id: number;
+  title: string;
+  start_date: string;
+  days: string;
+  hours: string;
+  balance_when_you_leave: string;
+  balance_when_you_leave_hours: string;
+  leftover_after: string;
+  leftover_after_hours: string;
+}
 export interface Home {
   in_progress: Trip[];
   upcoming: Trip[];
@@ -231,6 +242,7 @@ export interface Home {
     configured: boolean;
     balance_today: string | null;
   };
+  next_pto: HomeNextPto | null;
   attention: {
     kind: string;
     trip_id: number;

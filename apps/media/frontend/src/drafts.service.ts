@@ -1,6 +1,11 @@
 import { DestroyRef, Injectable, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { SESSION_CONTEXT } from "@vivek/ui";
+import {
+  MAX_TAG_LENGTH,
+  MAX_TAGS,
+  normaliseTags,
+} from "./tag-model.mjs";
 export interface ItemFields {
   review: string;
   rating: number | null;
@@ -9,6 +14,10 @@ export interface ItemFields {
   unit: string;
   favorite: boolean;
   anticipated: boolean;
+  /** Absent on drafts written before the tag editor. Empty means the user cleared every tag. */
+  tags?: string[];
+  /** Uncommitted tag-field text. It is not a tag until Enter. */
+  tagText?: string;
 }
 export interface ItemDraft {
   base: string;
@@ -67,6 +76,9 @@ export class MediaDrafts {
         typeof fields.anticipated !== "boolean"
       )
         return null;
+      const tags = draftTags(fields);
+      const tagText = draftTagText(fields);
+      if (tags === null || tagText === null) return null;
       return {
         base: draft.base,
         fields: {
@@ -77,6 +89,8 @@ export class MediaDrafts {
           unit: fields.unit,
           favorite: fields.favorite,
           anticipated: fields.anticipated,
+          ...(tags !== undefined ? { tags } : {}),
+          ...(tagText !== undefined ? { tagText } : {}),
         },
       };
     } catch {
@@ -103,4 +117,24 @@ export class MediaDrafts {
       /* private mode */
     }
   }
+}
+
+/** `undefined` keeps a pre-tag draft. `null` rejects a corrupt tag list. */
+function draftTags(fields: { tags?: unknown }): string[] | undefined | null {
+  if (!Object.prototype.hasOwnProperty.call(fields, "tags")) return undefined;
+  const value = fields.tags;
+  if (!Array.isArray(value) || value.length > MAX_TAGS) return null;
+  if (value.some((tag) => typeof tag !== "string")) return null;
+  const tags = normaliseTags(value);
+  if (tags.some((tag) => [...tag].length > MAX_TAG_LENGTH)) return null;
+  return tags;
+}
+
+function draftTagText(fields: {
+  tagText?: unknown;
+}): string | undefined | null {
+  if (!Object.prototype.hasOwnProperty.call(fields, "tagText")) return undefined;
+  const value = fields.tagText;
+  if (typeof value !== "string" || value.length > 500) return null;
+  return value;
 }

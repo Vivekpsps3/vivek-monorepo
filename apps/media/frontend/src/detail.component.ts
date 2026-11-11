@@ -3,7 +3,9 @@ import { MediaDrafts, ItemDraft, ItemFields } from "./drafts.service";
 import {
   Component,
   DestroyRef,
+  ElementRef,
   HostListener,
+  ViewChild,
   inject,
   signal,
 } from "@angular/core";
@@ -33,6 +35,7 @@ import {
 import { showDay } from "./display";
 import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
+import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
 @Component({
   standalone: true,
   imports: [
@@ -100,12 +103,21 @@ export class DetailComponent {
   unit = "";
   favorite = false;
   anticipated = false;
+  tags: string[] = [];
+  tagText = "";
+  tagError = "";
   episode = { season_number: 1, episode_number: 1, title: "", air_date: "" };
+  @ViewChild("tagInput") private tagInput?: ElementRef<HTMLInputElement>;
+  private tagFocusTimer: ReturnType<typeof setTimeout> | undefined;
+  private suppressSubmit = false;
   readonly recovery = signal<ItemDraft | null>(null);
   private saved = "";
   readonly statusLabel = statusLabel;
   constructor() {
-    this.destroy.onDestroy(() => clearTimeout(this.skeletonTimer));
+    this.destroy.onDestroy(() => {
+      clearTimeout(this.skeletonTimer);
+      clearTimeout(this.tagFocusTimer);
+    });
     inject(NextEpisodeUndoService).restored$
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe((entryId) => this.refreshEpisodeProgress(entryId));
@@ -197,6 +209,8 @@ export class DetailComponent {
       unit: this.unit,
       favorite: this.favorite,
       anticipated: this.anticipated,
+      tags: this.tags,
+      tagText: this.tagText,
     };
   }
   @HostListener("input")
@@ -218,6 +232,7 @@ export class DetailComponent {
     const draft = this.recovery();
     if (draft) {
       Object.assign(this, draft.fields);
+      this.tagError = "";
       this.recovery.set(null);
       this.rememberDraft();
     }
@@ -239,7 +254,14 @@ export class DetailComponent {
       this.unit,
       this.favorite,
       this.anticipated,
+      this.tags,
+      this.tagText,
     ]);
+  }
+  private sameTags(left: string[] | undefined, right: string[] | undefined): boolean {
+    const a = left ?? [];
+    const b = right ?? [];
+    return a.length === b.length && a.every((tag, index) => tag === b[index]);
   }
   get dirty(): boolean {
     return !!this.item() && this.saved !== this.snapshot();
@@ -266,6 +288,8 @@ export class DetailComponent {
     }
   }
   private adopt(d: Detail): void {
+    const composer = this.tagText;
+    const keepComposer = this.item()?.id === d.id;
     this.item.set(d);
     this.review = d.review || "";
     this.rating = d.rating;
@@ -274,13 +298,76 @@ export class DetailComponent {
     this.unit = d.progress_unit || "";
     this.favorite = d.favorite;
     this.anticipated = d.anticipated;
+    this.tags = normaliseTags(d.tags);
+    this.tagText = keepComposer ? composer : "";
+    this.tagError = "";
     this.saved = this.snapshot();
     this.baseFields = this.fields();
     this.baseVersion = d.updated_at;
     this.reviewBase = d.review_updated_at || "";
   }
+  onTagText(value: string): void {
+    this.tagText = value;
+    if (this.tagError) this.tagError = "";
+  }
+  onTagKey(event: KeyboardEvent): void {
+    if (event.isComposing) return;
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (event.key === "Enter") {
+      // Enter adds a chip. It must not submit notes, ratings, or the rest of the form.
+      event.preventDefault();
+      event.stopPropagation();
+      this.tagText = input.value;
+      this.suppressSubmit = true;
+      queueMicrotask(() => {
+        this.suppressSubmit = false;
+      });
+      this.commitTag();
+      return;
+    }
+    if (event.key === "Backspace" && input.value === "" && this.tags.length) {
+      event.preventDefault();
+      this.removeTagAt(this.tags.length - 1, false);
+    }
+  }
+  removeTagAt(index: number, fromButton: boolean): void {
+    if (index < 0 || index >= this.tags.length) return;
+    const focusIndex = fromButton && index < this.tags.length - 1 ? index : -1;
+    this.tags = removeTag(this.tags, index);
+    this.tagError = "";
+    this.rememberDraft();
+    clearTimeout(this.tagFocusTimer);
+    this.tagFocusTimer = setTimeout(() => this.focusTagRemoval(focusIndex));
+  }
+  private commitTag(): void {
+    const result = addTag(this.tags, this.tagText);
+    if (result.error) {
+      this.tagError = result.error;
+      this.tagInput?.nativeElement.focus();
+      return;
+    }
+    this.tags = result.tags;
+    this.tagText = "";
+    this.tagError = "";
+    const input = this.tagInput?.nativeElement;
+    if (input) input.value = "";
+    this.rememberDraft();
+  }
+  private focusTagRemoval(index: number): void {
+    const input = this.tagInput?.nativeElement;
+    if (!input) return;
+    if (index < 0) {
+      input.focus();
+      return;
+    }
+    const button = input
+      .closest(".tag-editor")
+      ?.querySelectorAll<HTMLButtonElement>("button.tag-chip-remove")[index];
+    (button ?? input).focus();
+  }
   save(): void {
-    if (this.busy() || !this.item()) return;
+    if (this.suppressSubmit || this.busy() || !this.item()) return;
     const generation = this.generation;
     const submitted = this.snapshot();
     const fields = this.fields();
@@ -299,6 +386,7 @@ export class DetailComponent {
       body["progress_value"] = fields.progress;
       body["progress_unit"] = fields.unit || null;
     }
+    if (!this.sameTags(fields.tags, base.tags)) body["tags"] = fields.tags ?? [];
     if (!Object.keys(body).length) return;
     this.busy.set(true);
     this.error.set("");
@@ -310,7 +398,8 @@ export class DetailComponent {
           if (generation !== this.generation) return;
           if (this.snapshot() === submitted) {
             this.adopt(d);
-            this.drafts.remove(d.id);
+            if (this.tagText) this.rememberDraft();
+            else this.drafts.remove(d.id);
           } else {
             const current = this.fields();
             this.adopt(d);

@@ -170,6 +170,47 @@
 .media-page .media-editor {
   max-width: 720px;
 }
+.media-page .tag-editor {
+  margin-bottom: 1rem;
+}
+.media-page .tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+.media-page .tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0 0 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.media-page .tag-chip-text {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.media-page .tag-chip-remove {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.media-page .tag-chip-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .media-page .media-form {
   max-width: 650px;
 }
