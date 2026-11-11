@@ -60,7 +60,7 @@ Commands ran in `/tmp/vivek-med-08` on the implementation tree before this evide
 ## Handoff
 
 - PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/328 (`Closes #242`). Parents #200 and #85 are referenced and not closed.
-- Roadmap #134 append-only status-note URL: posted after the pull request. The issue body was not edited.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6788740837. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): pull request #328 is open. Not merged, not deployed. Squash merge waits for required CI.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Other Media leaves stay separate.
 - Next actor: this session pushes, opens the pull request, waits for green CI, then squash-merges.
