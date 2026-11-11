@@ -88,29 +88,92 @@ export function asOfCopy(today) {
   return `Pick a date from Jan 1, 2000 to ${longDate(addDays(today, 366))}.`;
 }
 
-/** Blank, a finite number, or unusable text. A single comma is a decimal point. */
-export function parseHours(raw) {
-  if (typeof raw === "number") {
-    if (!Number.isFinite(raw)) return { ok: false };
-    return { ok: true, value: raw, text: trimNumber(raw), places: placesOf(trimNumber(raw)) };
-  }
-  const text = String(raw ?? "")
+function cleanHourText(raw) {
+  return String(raw ?? "")
     .trim()
     .replaceAll(MINUS, "-")
     .replaceAll("\u2013", "-");
+}
+
+function canonicalFrom(sign, whole, frac) {
+  const body = frac ? `${whole}.${frac}` : `${whole}`;
+  if (body === "0") return "0";
+  return sign < 0 ? `-${body}` : body;
+}
+
+function scaled(whole, frac, scale) {
+  return BigInt(whole) * 10n ** BigInt(scale) + BigInt((frac || "").padEnd(scale, "0") || "0");
+}
+
+function compareAbs(aWhole, aFrac, bWhole, bFrac) {
+  const scale = Math.max(aFrac.length, bFrac.length);
+  const left = scaled(aWhole, aFrac, scale);
+  const right = scaled(bWhole, bFrac, scale);
+  return left > right ? 1 : left < right ? -1 : 0;
+}
+
+function isZero(parsed) {
+  return parsed.whole === "0" && parsed.frac === "";
+}
+
+/** Blank, a finite decimal, or unusable text. A single comma is a decimal point. */
+export function parseHours(raw) {
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw)) return { ok: false };
+    return parseHours(trimNumber(raw));
+  }
+  const text = cleanHourText(raw);
   if (!text) return { ok: true, blank: true, text: "" };
   if ((text.match(/,/g) || []).length > 1 || (text.includes(",") && text.includes("."))) {
     return { ok: false };
   }
-  const normalized = text.replace(",", ".");
-  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return { ok: false };
-  const value = Number(normalized);
-  if (!Number.isFinite(value)) return { ok: false };
-  return { ok: true, value, text: normalized, places: placesOf(normalized) };
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(text.replace(",", "."));
+  if (!match) return { ok: false };
+  const sign = match[1] === "-" ? -1 : 1;
+  const whole = match[2].replace(/^0+(?=\d)/, "") || "0";
+  const frac = (match[3] || "").replace(/0+$/, "");
+  return { ok: true, sign, whole, frac, places: frac.length, text: canonicalFrom(sign, whole, frac) };
 }
 
-function placesOf(text) {
-  return ((String(text).split(".")[1] || "").replace(/0+$/, "")).length;
+function cmpParsed(parsed, limitText) {
+  const limit = parseHours(limitText);
+  if (parsed.sign !== limit.sign) return parsed.sign < limit.sign ? -1 : 1;
+  const abs = compareAbs(parsed.whole, parsed.frac, limit.whole, limit.frac);
+  return parsed.sign < 0 ? -abs : abs;
+}
+
+function spoken(text) {
+  return text.startsWith("-") ? MINUS + text.slice(1) : text;
+}
+
+function divideRound(numer, denom, places) {
+  if (isZero(denom)) return "";
+  const scale = 10n ** BigInt(places);
+  const nScale = numer.frac.length;
+  const dScale = denom.frac.length;
+  const numerator = scaled(numer.whole, numer.frac, nScale) * 10n ** BigInt(dScale) * scale;
+  const denominator = scaled(denom.whole, denom.frac, dScale) * 10n ** BigInt(nScale);
+  const rounded = (numerator + denominator / 2n) / denominator;
+  const whole = rounded / scale;
+  const frac = (rounded % scale).toString().padStart(places, "0").replace(/0+$/, "");
+  const sign = numer.sign * denom.sign;
+  return canonicalFrom(sign < 0 ? -1 : 1, whole.toString(), frac);
+}
+
+function signedDays(hours, hoursPerDay) {
+  const parsed = parseHours(hours);
+  const hpd = parseHours(hoursPerDay);
+  if (!parsed.ok || parsed.blank || !hpd.ok || hpd.blank || isZero(hpd)) return "";
+  return spoken(divideRound(parsed, hpd, 2));
+}
+
+const QUARTER_FRAC = ["", "25", "5", "75"];
+
+function quarterText(parsed) {
+  const scale = parsed.frac.length;
+  const ten = 10n ** BigInt(scale);
+  const rounded = (scaled(parsed.whole, parsed.frac, scale) * 4n + ten / 2n) / ten;
+  return canonicalFrom(parsed.sign, (rounded / 4n).toString(), QUARTER_FRAC[Number(rounded % 4n)]);
 }
 
 export function roundHalfUp(value, places) {
@@ -118,13 +181,6 @@ export function roundHalfUp(value, places) {
   const factor = 10 ** places;
   const scaled = Math.abs(value) * factor;
   return (sign * Math.floor(scaled + 0.5 + 1e-8)) / factor;
-}
-
-/** Quarter-hour ties move away from zero. */
-export function roundQuarter(value) {
-  const sign = value < 0 ? -1 : 1;
-  const steps = Math.abs(value) / 0.25;
-  return sign * Math.floor(steps + 0.5 + 1e-8) * 0.25;
 }
 
 export function trimNumber(value) {
@@ -137,37 +193,29 @@ export function trimNumber(value) {
 }
 
 export function formatBalance(hours, hoursPerDay) {
-  const days = roundHalfUp(Number(hours) / Number(hoursPerDay), 2);
-  const dayText = trimNumber(days).replace(MINUS, "");
-  const signedDays = days < 0 && dayText !== "0" ? MINUS + dayText : trimNumber(days);
-  return `${signedDays} days ${DOT} ${trimNumber(Number(hours))} h`;
+  const parsed = parseHours(hours);
+  const hourText = parsed.ok && !parsed.blank ? spoken(parsed.text) : trimNumber(Number(hours));
+  return `${signedDays(hours, hoursPerDay)} days ${DOT} ${hourText} h`;
 }
 
 export function daysHelper(hours, hoursPerDay) {
-  const parsed = typeof hours === "number" ? { ok: true, value: hours } : parseHours(hours);
-  const hpd = Number(hoursPerDay);
-  if (!parsed.ok || parsed.blank || !hpd) return "";
-  const days = trimNumber(roundHalfUp(parsed.value / hpd, 2));
-  return `= ${days} days`;
+  const days = signedDays(hours, hoursPerDay);
+  return days ? `= ${days} days` : "";
 }
 
 export function softStart(hours, hoursPerDay) {
-  const parsed = typeof hours === "number" ? { ok: true, value: hours } : parseHours(hours);
-  const hpd = Number(hoursPerDay);
-  if (!parsed.ok || parsed.blank || !hpd || Math.abs(parsed.value) <= 2000) return "";
-  const days = trimNumber(roundHalfUp(parsed.value / hpd, 2));
-  return `That's ${days} days. Double-check the hours.`;
+  const parsed = parseHours(hours);
+  const hpd = parseHours(hoursPerDay);
+  if (!parsed.ok || parsed.blank || !hpd.ok || hpd.blank || isZero(hpd)) return "";
+  if (compareAbs(parsed.whole, parsed.frac, "2000", "") <= 0) return "";
+  return `That's ${signedDays(hours, hoursPerDay)} days. Double-check the hours.`;
 }
 
 export function softAccrual(hours, cadence) {
-  const parsed = typeof hours === "number" ? { ok: true, value: hours } : parseHours(hours);
-  if (!parsed.ok || parsed.blank || parsed.value <= 400) return "";
+  const parsed = parseHours(hours);
+  if (!parsed.ok || parsed.blank || parsed.sign < 0) return "";
+  if (compareAbs(parsed.whole, parsed.frac, "400", "") <= 0) return "";
   return `That's a lot per ${periodWord(cadence)}. Double-check.`;
-}
-
-export function roundingNote(before, after) {
-  if (!Number.isFinite(before) || !Number.isFinite(after) || before === after) return "";
-  return `Rounded to ${trimNumber(after)} h.`;
 }
 
 export function fieldHint(field, raw, hoursPerDay, cadence, note) {
@@ -181,17 +229,17 @@ export function fieldHint(field, raw, hoursPerDay, cadence, note) {
 export function capLine(capHours) {
   const parsed = parseHours(capHours);
   if (!parsed.ok || parsed.blank) return "";
-  return `At the ${trimNumber(parsed.value)} h cap. You stop earning until you use some.`;
+  return `At the ${spoken(parsed.text)} h cap. You stop earning until you use some.`;
 }
 
 function sameStored(raw, stored) {
   if (stored == null || stored === "") return false;
-  const left = String(raw ?? "").trim().replaceAll(MINUS, "-");
-  const right = String(stored).trim().replaceAll(MINUS, "-");
+  const left = cleanHourText(raw);
+  const right = cleanHourText(stored);
   if (left === right) return true;
   const a = parseHours(left);
   const b = parseHours(right);
-  return Boolean(a.ok && !a.blank && b.ok && !b.blank && a.value === b.value);
+  return Boolean(a.ok && !a.blank && b.ok && !b.blank && a.text === b.text);
 }
 
 export function yearStartOk(month, day) {
@@ -217,7 +265,7 @@ export function policyErrors(draft, stored, today) {
   const start = parseHours(draft.start_balance_hours);
   if (
     !sameStored(draft.start_balance_hours, kept.start_balance_hours) &&
-    (!start.ok || start.blank || start.places > 6 || start.value < -8784 || start.value > 8784)
+    (!start.ok || start.blank || start.places > 6 || cmpParsed(start, "-8784") < 0 || cmpParsed(start, "8784") > 0)
   ) {
     errors.start_balance_hours = START_COPY;
   }
@@ -232,7 +280,7 @@ export function policyErrors(draft, stored, today) {
   const accrual = parseHours(draft.accrual_hours);
   if (
     !sameStored(draft.accrual_hours, kept.accrual_hours) &&
-    (!accrual.ok || accrual.blank || accrual.places > 6 || accrual.value < 0 || accrual.value > 8784)
+    (!accrual.ok || accrual.blank || accrual.places > 6 || cmpParsed(accrual, "0") < 0 || cmpParsed(accrual, "8784") > 0)
   ) {
     errors.accrual_hours = ACCRUAL_COPY;
   }
@@ -245,7 +293,7 @@ export function policyErrors(draft, stored, today) {
     const cap = parseHours(capRaw);
     if (
       !sameStored(capRaw, kept.cap_hours) &&
-      (!cap.ok || cap.blank || cap.places > 6 || cap.value <= 0 || cap.value > 8784)
+      (!cap.ok || cap.blank || cap.places > 6 || cmpParsed(cap, "0") <= 0 || cmpParsed(cap, "8784") > 0)
     ) {
       errors.cap_hours = CAP_COPY;
     }
@@ -267,7 +315,9 @@ export function firstInvalid(errors) {
 export function hoursPerDayError(raw, stored) {
   if (sameStored(raw, stored)) return "";
   const parsed = parseHours(raw);
-  if (!parsed.ok || parsed.blank || parsed.places > 2 || parsed.value <= 0 || parsed.value > 24) return HPD_COPY;
+  if (!parsed.ok || parsed.blank || parsed.places > 2 || cmpParsed(parsed, "0") <= 0 || cmpParsed(parsed, "24") > 0) {
+    return HPD_COPY;
+  }
   return "";
 }
 
@@ -278,30 +328,76 @@ export function entryErrors(entry) {
   return errors;
 }
 
+export function dateErrors(entry) {
+  const errors = {};
+  if (!entry.start_date) errors.start_date = RANGE_COPY;
+  if (!entry.end_date || entry.end_date < entry.start_date) errors.end_date = RANGE_COPY;
+  return errors;
+}
+
+export function fieldErrorMap(body) {
+  const fields = body && typeof body === "object" ? body.field_errors : undefined;
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return null;
+  const mapped = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value === "string") mapped[key] = value;
+  }
+  return mapped;
+}
+
 export function previewKey(input) {
+  const source = input || {};
   return JSON.stringify({
-    start: input.start_date || "",
-    end: input.end_date || "",
-    days: input.days == null || input.days === "" ? null : String(input.days),
-    bucket: input.bucket || "pto",
+    start: source.start_date || "",
+    end: source.end_date || "",
+    days: source.days == null || source.days === "" ? null : String(source.days),
+    bucket: source.bucket || "pto",
+    hours_per_day: source.hours_per_day == null ? "" : String(source.hours_per_day),
+    policy: source.policy ?? null,
+    entries: source.entries ?? null,
   });
 }
 
 export function blurHours(raw) {
   const parsed = parseHours(raw);
-  if (!parsed.ok || parsed.blank) return { text: String(raw ?? ""), note: "" };
-  const next = roundQuarter(parsed.value);
-  return { text: trimNumber(next).replaceAll(MINUS, "-"), note: roundingNote(parsed.value, next) };
+  if (!parsed.ok || parsed.blank) return { text: cleanHourText(raw), note: "" };
+  const next = quarterText(parsed);
+  return { text: next, note: next === parsed.text ? "" : `Rounded to ${spoken(next)} h.` };
 }
 
-export function policyBody(draft) {
-  const cap = parseHours(draft.cap_hours);
+/** Quarter-round an edited hour. An equal stored value is returned unchanged. */
+export function commitHour(raw, stored, edited) {
+  const text = cleanHourText(raw);
+  if (stored != null && stored !== "" && sameStored(text, stored)) {
+    return { text: cleanHourText(stored), note: "" };
+  }
+  if (!edited) return { text, note: "" };
+  return blurHours(text);
+}
+
+/** Hours in a workday keep their decimals. Only an edited value is canonicalized. */
+export function blurHoursPerDay(raw, stored) {
+  if (sameStored(raw, stored)) return { text: cleanHourText(stored), error: "" };
+  const parsed = parseHours(raw);
+  const text = parsed.ok && !parsed.blank ? parsed.text : cleanHourText(raw);
+  return { text, error: hoursPerDayError(raw, stored) };
+}
+
+function submittedHour(raw, stored, edited) {
+  const next = commitHour(raw, stored, edited);
+  return next.text;
+}
+
+export function policyBody(draft, stored, edited) {
+  const kept = stored || {};
+  const touched = edited && typeof edited.has === "function" ? edited : new Set(edited || []);
+  const cap = submittedHour(draft.cap_hours, kept.cap_hours, touched.has("cap_hours"));
   return {
-    start_balance_hours: String(draft.start_balance_hours ?? "").trim().replaceAll(MINUS, "-"),
+    start_balance_hours: submittedHour(draft.start_balance_hours, kept.start_balance_hours, touched.has("start_balance_hours")),
     balance_as_of: draft.balance_as_of,
-    accrual_hours: String(draft.accrual_hours ?? "").trim().replaceAll(MINUS, "-"),
+    accrual_hours: submittedHour(draft.accrual_hours, kept.accrual_hours, touched.has("accrual_hours")),
     accrual_cadence: draft.accrual_cadence,
-    cap_hours: !cap.ok || cap.blank ? null : String(draft.cap_hours).trim().replaceAll(MINUS, "-"),
+    cap_hours: cap === "" ? null : cap,
     year_start: yearStartText(draft.year_month, draft.year_day),
     carry_forward: draft.carry_forward !== false,
   };

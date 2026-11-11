@@ -22,7 +22,7 @@ import {
   UiPageHeaderComponent,
   silentErrorToast,
 } from "@vivek/ui";
-import { hoursPerDayError } from "./pto-model.mjs";
+import { blurHoursPerDay, fieldErrorMap } from "./pto-model.mjs";
 import { travelError, type PtoSettings } from "./travel.models";
 interface Settings {
   flightaware: {
@@ -216,14 +216,21 @@ export class SettingsComponent {
     this.hoursError.set("");
   }
   checkHours(): void {
-    this.hoursError.set(hoursPerDayError(this.hours, this.savedHours));
+    if (!this.hoursEdited) {
+      this.hoursError.set(blurHoursPerDay(this.hours, this.savedHours).error);
+      return;
+    }
+    const next = blurHoursPerDay(this.hours, this.savedHours);
+    this.hours = next.text;
+    this.hoursError.set(next.error);
   }
   saveHours(): void {
     if (this.savingHours() || !this.ownsSession) return;
-    const problem = hoursPerDayError(this.hours, this.savedHours);
-    this.hoursError.set(problem);
-    if (problem || !this.hoursDirty()) return;
-    const submitted = this.hours.trim();
+    const next = blurHoursPerDay(this.hours, this.savedHours);
+    this.hours = next.text;
+    this.hoursError.set(next.error);
+    if (next.error || !this.hoursDirty()) return;
+    const submitted = next.text;
     this.savingHours.set(true);
     this.http
       .put<PtoSettings>(
@@ -246,8 +253,7 @@ export class SettingsComponent {
         error: (e: HttpErrorResponse) => {
           this.savingHours.set(false);
           if (e.status === 401) return;
-          const fields = (e.error as { field_errors?: Record<string, unknown> } | null)?.field_errors;
-          const message = fields?.["hours_per_day"];
+          const message = fieldErrorMap(e.error)?.["hours_per_day"];
           if (e.status === 422 && typeof message === "string") {
             this.hoursError.set(message);
             return;

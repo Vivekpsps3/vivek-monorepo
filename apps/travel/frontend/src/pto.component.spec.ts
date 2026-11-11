@@ -5,7 +5,8 @@ import {
 } from "@angular/common/http/testing";
 import { provideHttpClient } from "@angular/common/http";
 import { provideRouter } from "@angular/router";
-import { SESSION_CONTEXT } from "@vivek/ui";
+import { SESSION_CONTEXT, ToastService } from "@vivek/ui";
+import { ACCRUAL_COPY } from "./pto-model.mjs";
 import { PtoComponent } from "./pto.component";
 
 function payload(overrides: Record<string, unknown> = {}) {
@@ -76,7 +77,7 @@ function seriesBody() {
 describe("PtoComponent (TPTO2A/2B)", () => {
   let httpMock: HttpTestingController;
 
-  function setup() {
+  function setup(board = payload()) {
     TestBed.configureTestingModule({
       imports: [PtoComponent],
       providers: [
@@ -92,7 +93,7 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     httpMock = TestBed.inject(HttpTestingController);
     const fixture = TestBed.createComponent(PtoComponent);
     fixture.detectChanges();
-    httpMock.expectOne("/travel/api/pto").flush(payload());
+    httpMock.expectOne("/travel/api/pto").flush(board);
     httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
     fixture.detectChanges();
     const component = fixture.componentInstance as PtoComponent;
@@ -201,6 +202,94 @@ describe("PtoComponent (TPTO2A/2B)", () => {
     httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
     fixture.detectChanges();
     expect(root.querySelectorAll("travel-pto-chart").length).toBe(1);
+  });
+
+  it("keeps a grandfathered hour and rounds only the edited field", () => {
+    const board = payload({
+      buckets: {
+        pto: {
+          ...payload().buckets.pto,
+          start_balance_hours: "12.3",
+          accrual_hours: "10000",
+        },
+        sick: null,
+      },
+    });
+    const { component } = setup(board);
+    component.savePolicy("pto");
+    const kept = httpMock.expectOne("/travel/api/pto/policies/pto");
+    expect(kept.request.body.start_balance_hours).toBe("12.3");
+    expect(kept.request.body.accrual_hours).toBe("10000");
+    kept.flush(board);
+    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
+    component.editHour("pto", "accrual_hours", "12,3");
+    component.blurHour("pto", "accrual_hours");
+    expect(component.drafts.pto.accrual_hours).toBe("12.25");
+    expect(component.drafts.pto.start_balance_hours).toBe("12.3");
+    expect(component.hintFor("pto", "accrual_hours")).toBe("Rounded to 12.25 h.");
+    component.savePolicy("pto");
+    const changed = httpMock.expectOne("/travel/api/pto/policies/pto");
+    expect(changed.request.body.start_balance_hours).toBe("12.3");
+    expect(changed.request.body.accrual_hours).toBe("12.25");
+    changed.flush(board);
+    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
+  });
+
+  it("keeps the original policy body when retry follows a later edit", () => {
+    const { component } = setup();
+    const toast = TestBed.inject(ToastService);
+    let retry: (() => void) | undefined;
+    spyOn(toast, "error").and.callFake((_message: string, action?: { run?: () => void }) => {
+      retry = action?.run;
+    });
+    component.editHour("pto", "start_balance_hours", "40");
+    component.savePolicy("pto");
+    const failed = httpMock.expectOne("/travel/api/pto/policies/pto");
+    expect(failed.request.body.start_balance_hours).toBe("40");
+    failed.flush({ message: "down" }, { status: 502, statusText: "down" });
+    component.editHour("pto", "start_balance_hours", "99");
+    retry?.();
+    const again = httpMock.expectOne("/travel/api/pto/policies/pto");
+    expect(again.request.body.start_balance_hours).toBe("40");
+    again.flush(payload());
+    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
+  });
+
+  it("maps a 422 onto the field and drops a preview whose policy changed", () => {
+    const { component } = setup();
+    component.leave = { label: "Trip", start_date: "2026-07-01", end_date: "2026-07-02", days: "", notes: "" };
+    component.preview();
+    const preview = httpMock.expectOne((req) => req.url.startsWith("/travel/api/pto/preview"));
+    preview.flush({
+      balance_when_you_leave: "10",
+      leftover_after: "8",
+      note: "",
+      days: "2",
+      auto: true,
+      configured: true,
+    });
+    expect(component.visiblePreview()?.balance_when_you_leave).toBe("10");
+    component.editHour("pto", "accrual_hours", "4");
+    component.savePolicy("pto");
+    const rejected = httpMock.expectOne("/travel/api/pto/policies/pto");
+    rejected.flush(
+      { field_errors: { accrual_hours: ACCRUAL_COPY } },
+      { status: 422, statusText: "invalid" },
+    );
+    expect(component.fieldErrors()["accrual_hours"]).toBe(ACCRUAL_COPY);
+    expect(component.drafts.pto.accrual_hours).toBe("4");
+    expect(component.visiblePreview()?.balance_when_you_leave).toBe("10");
+    const saved = payload({
+      buckets: {
+        pto: { ...payload().buckets.pto, accrual_hours: "4" },
+        sick: null,
+      },
+    });
+    component.editHour("pto", "accrual_hours", "6");
+    component.savePolicy("pto");
+    httpMock.expectOne("/travel/api/pto/policies/pto").flush(saved);
+    httpMock.expectOne("/travel/api/pto/series").flush(seriesBody());
+    expect(component.visiblePreview()).toBeNull();
   });
 
   it("dismisses the sick prompt through PTO settings", () => {

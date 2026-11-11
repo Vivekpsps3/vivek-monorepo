@@ -406,8 +406,15 @@ def fractional_digits(value: Decimal) -> int:
 
 
 def parse_hour_token(raw: str) -> Decimal | None:
-    """Shared hours text gate. Rejects long, non-ASCII, and underscore numerals."""
-    text = raw.strip()
+    """Shared hours text gate. Rejects long, non-ASCII, and underscore numerals.
+
+    One comma is a decimal point. The value is not quarter-rounded here; blur
+    rounding belongs to the form that edited the field.
+    """
+    text = raw.strip().replace("\u2212", "-").replace("\u2013", "-")
+    if text.count(",") > 1 or ("," in text and "." in text):
+        return None
+    text = text.replace(",", ".")
     if len(text) > _HOUR_TEXT_MAX or _HOUR_TOKEN.fullmatch(text) is None:
         return None
     try:

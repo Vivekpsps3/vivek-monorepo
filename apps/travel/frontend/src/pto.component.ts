@@ -42,14 +42,15 @@ import {
   PAGE_TITLE,
   POLICY_FAILED,
   POLICY_SAVED,
-  RANGE_COPY,
   SICK_HINT,
   SICK_UNSET,
-  blurHours,
   bucketLabel,
   capLine,
   chipText,
+  commitHour,
+  dateErrors,
   entryErrors,
+  fieldErrorMap,
   fieldHint,
   firstInvalid,
   formatBalance,
@@ -678,8 +679,7 @@ export class PtoComponent {
   visiblePreview(): PtoPreview | null {
     const stored = this.forecast();
     const stamped = this.forecastFor();
-    const current = previewKey({ ...this.leave, days: this.leave.days, bucket: this.entryBucket });
-    return stamped === current ? stored : null;
+    return stamped && stamped === previewKey(this.previewInput()) ? stored : null;
   }
 
   load(): void {
@@ -740,11 +740,7 @@ export class PtoComponent {
   }
 
   blurHour(name: BucketName, field: "start_balance_hours" | "accrual_hours" | "cap_hours"): void {
-    if (this.edited[name].has(field)) {
-      const next = blurHours(this.drafts[name][field]);
-      this.drafts[name][field] = next.text;
-      this.notes.update((notes) => ({ ...notes, [field]: next.note }));
-    }
+    this.settleHour(name, field);
     this.blurField(name, field);
   }
 
@@ -759,6 +755,9 @@ export class PtoComponent {
   }
 
   savePolicy(name: BucketName): void {
+    this.settleHour(name, "start_balance_hours");
+    this.settleHour(name, "accrual_hours");
+    this.settleHour(name, "cap_hours");
     const errors = policyErrors(this.drafts[name], this.stored[name], localTodayIso());
     this.fieldErrors.set(errors);
     const invalid = firstInvalid(errors);
@@ -766,7 +765,7 @@ export class PtoComponent {
       this.focusPolicy(invalid);
       return;
     }
-    const body = policyBody(this.drafts[name]);
+    const body = policyBody(this.drafts[name], this.stored[name], this.edited[name]);
     this.policyAttempt = { bucket: name, body, draft: JSON.stringify(this.drafts[name]) };
     this.sendPolicy();
   }
@@ -787,9 +786,7 @@ export class PtoComponent {
   }
 
   saveEntry(): void {
-    const errors = entryErrors(this.leave);
-    if (!this.leave.start_date) errors["start_date"] = errors["start_date"] || RANGE_COPY;
-    if (!this.leave.end_date && !errors["end_date"]) errors["end_date"] = RANGE_COPY;
+    const errors = { ...entryErrors(this.leave), ...dateErrors(this.leave) };
     this.entryFieldErrors.set(errors);
     if (errors["label"]) {
       this.entryName?.nativeElement.focus();
@@ -829,15 +826,13 @@ export class PtoComponent {
   }
 
   preview(): void {
-    if (!this.leave.start_date || !this.leave.end_date || this.leave.end_date < this.leave.start_date) {
-      this.entryFieldErrors.set({
-        ...(!this.leave.start_date ? { start_date: RANGE_COPY } : {}),
-        ...(!this.leave.end_date || this.leave.end_date < this.leave.start_date ? { end_date: RANGE_COPY } : {}),
-      });
-      (this.leave.start_date ? this.entryEnd : this.entryStart)?.nativeElement.focus();
+    const dates = dateErrors(this.leave);
+    if (dates["start_date"] || dates["end_date"]) {
+      this.entryFieldErrors.set(dates);
+      (dates["start_date"] ? this.entryStart : this.entryEnd)?.nativeElement.focus();
       return;
     }
-    const key = previewKey({ ...this.leave, bucket: this.entryBucket });
+    const key = previewKey(this.previewInput());
     const params: Record<string, string> = {
       start: this.leave.start_date,
       end: this.leave.end_date,
@@ -849,6 +844,7 @@ export class PtoComponent {
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: (body) => {
+          if (previewKey(this.previewInput()) !== key) return;
           this.forecastFor.set(key);
           this.forecast.set(body);
         },
@@ -949,7 +945,7 @@ export class PtoComponent {
         error: (error: HttpErrorResponse) => {
           this.busy.set("");
           if (error.status === 401) return;
-          const fields = fieldMap(error);
+          const fields = fieldErrorMap(error.error);
           if (error.status === 422 && fields) {
             this.entryFieldErrors.set(fields);
             return;
@@ -962,7 +958,7 @@ export class PtoComponent {
   private failPolicy(error: HttpErrorResponse): void {
     this.busy.set("");
     if (error.status === 401) return;
-    const fields = fieldMap(error);
+    const fields = fieldErrorMap(error.error);
     if (error.status === 422 && fields) {
       this.fieldErrors.set(fields);
       const invalid = firstInvalid(fields);
@@ -990,6 +986,7 @@ export class PtoComponent {
     this.data.set(board);
     this.phase.set("ready");
     if (!this.editing()) this.editing.set(board.buckets?.pto?.configured ? null : "pto");
+    this.dropStalePreview();
   }
 
   private clearLeave(): void {
@@ -1017,6 +1014,51 @@ export class PtoComponent {
 
   private leaveState(): string {
     return JSON.stringify({ ...this.leave, bucket: this.entryBucket });
+  }
+
+  private settleHour(name: BucketName, field: "start_balance_hours" | "accrual_hours" | "cap_hours"): void {
+    const next = commitHour(this.drafts[name][field], this.stored[name]?.[field] ?? null, this.edited[name].has(field));
+    this.drafts[name][field] = next.text;
+    this.notes.update((notes) => ({ ...notes, [field]: next.note }));
+  }
+
+  private previewInput() {
+    const board = this.data();
+    const bucket = this.entryBucket;
+    const row = board?.buckets?.[bucket];
+    return {
+      start_date: this.leave.start_date,
+      end_date: this.leave.end_date,
+      days: this.leave.days,
+      bucket,
+      hours_per_day: board?.hours_per_day || "",
+      policy: row
+        ? {
+            configured: !!row.configured,
+            start_balance_hours: row.start_balance_hours || "",
+            balance_as_of: row.balance_as_of || "",
+            accrual_hours: row.accrual_hours || "",
+            accrual_cadence: row.accrual_cadence || "",
+            cap_hours: row.cap_hours || "",
+            year_start: row.year_start || "",
+            carry_forward: row.carry_forward !== false,
+          }
+        : null,
+      entries: (board?.entries || []).map((entry) => ({
+        id: entry.id,
+        bucket: entry.bucket || "pto",
+        start_date: entry.start_date,
+        end_date: entry.end_date,
+        days: entry.days,
+      })),
+    };
+  }
+
+  private dropStalePreview(): void {
+    if (this.forecastFor() !== previewKey(this.previewInput())) {
+      this.forecast.set(null);
+      this.forecastFor.set("");
+    }
   }
 
   private focusPolicy(field: string): void {
@@ -1084,12 +1126,3 @@ function storedOf(row: BucketState | null): Record<string, string> | null {
   };
 }
 
-function fieldMap(error: HttpErrorResponse): Record<string, string> | null {
-  const fields = (error.error as { field_errors?: unknown } | null)?.field_errors;
-  if (!fields || typeof fields !== "object") return null;
-  const mapped: Record<string, string> = {};
-  for (const [key, value] of Object.entries(fields)) {
-    if (typeof value === "string") mapped[key] = value;
-  }
-  return mapped;
-}

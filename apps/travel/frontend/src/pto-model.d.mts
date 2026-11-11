@@ -29,15 +29,21 @@ export function periodWord(cadence: string): string;
 export function addDays(iso: string, count: number): string;
 export function longDate(iso: string): string;
 export function asOfCopy(today: string): string;
-export function parseHours(raw: unknown): { ok: boolean; blank?: boolean; value?: number; text?: string; places?: number };
+export function parseHours(raw: unknown): {
+  ok: boolean;
+  blank?: boolean;
+  sign?: number;
+  whole?: string;
+  frac?: string;
+  text?: string;
+  places?: number;
+};
 export function roundHalfUp(value: number, places: number): number;
-export function roundQuarter(value: number): number;
 export function trimNumber(value: number): string;
 export function formatBalance(hours: number | string, hoursPerDay: number | string): string;
 export function daysHelper(hours: unknown, hoursPerDay: number | string): string;
 export function softStart(hours: unknown, hoursPerDay: number | string): string;
 export function softAccrual(hours: unknown, cadence: string): string;
-export function roundingNote(before: number, after: number): string;
 export function fieldHint(field: string, raw: unknown, hoursPerDay: number | string, cadence: string, note?: string): string;
 export function capLine(capHours: unknown): string;
 export function yearStartOk(month: string, day: string): boolean;
@@ -46,9 +52,25 @@ export function policyErrors(draft: object, stored: object | null, today: string
 export function firstInvalid(errors: Record<string, string>): string;
 export function hoursPerDayError(raw: unknown, stored: string | null | undefined): string;
 export function entryErrors(entry: { label?: string; start_date?: string; end_date?: string }): Record<string, string>;
-export function previewKey(input: { start_date?: string; end_date?: string; days?: string | number | null; bucket?: string }): string;
+export function dateErrors(entry: { start_date?: string; end_date?: string }): Record<string, string>;
+export function fieldErrorMap(body: unknown): Record<string, string> | null;
+export function previewKey(input: {
+  start_date?: string;
+  end_date?: string;
+  days?: string | number | null;
+  bucket?: string;
+  hours_per_day?: string;
+  policy?: object | null;
+  entries?: object[] | null;
+}): string;
 export function blurHours(raw: unknown): { text: string; note: string };
-export function policyBody(draft: object): {
+export function commitHour(raw: unknown, stored: string | null | undefined, edited: boolean): { text: string; note: string };
+export function blurHoursPerDay(raw: unknown, stored: string | null | undefined): { text: string; error: string };
+export function policyBody(
+  draft: object,
+  stored?: object | null,
+  edited?: { has(field: string): boolean } | string[],
+): {
   start_balance_hours: string;
   balance_as_of: unknown;
   accrual_hours: string;
