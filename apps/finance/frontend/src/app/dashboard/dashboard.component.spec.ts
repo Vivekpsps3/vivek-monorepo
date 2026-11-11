@@ -177,7 +177,7 @@ describe('Dashboard', () => {
       loadDashboard: jasmine.createSpy('loadDashboard').and.returnValue(of([])),
       getLiabilities: jasmine.createSpy('getLiabilities').and.returnValue(of([])),
     } as unknown as FinanceService;
-    const firstAutoCheck = new ReplaySubject<void>(1);
+    const firstAutoCheck = new ReplaySubject<readonly string[]>(1);
     const coordinator = {
       firstAutoCheck$: firstAutoCheck.asObservable(),
       refreshNow: jasmine.createSpy('refreshNow').and.resolveTo({}),
@@ -208,14 +208,56 @@ describe('Dashboard', () => {
     fixture.detectChanges();
     expect(fixture.componentInstance.priceNoticeVisible).toBeFalse();
 
-    firstAutoCheck.next();
+    firstAutoCheck.next(['voo']);
     fixture.detectChanges();
     expect(fixture.componentInstance.priceNoticeVisible).toBeTrue();
-    expect(fixture.nativeElement.textContent).toContain('Prices checked automatically. Only ticker symbols are sent.');
+    expect(fixture.nativeElement.textContent).toContain('Prices checked automatically for 1 ticker symbol (VOO). Only ticker symbols are sent.');
+    expect(fixture.nativeElement.textContent).toContain('Turn off automatic checks');
+    expect(fixture.nativeElement.textContent).toContain('OK');
 
-    fixture.componentInstance.dismissPriceNotice();
+    const ok = [...fixture.nativeElement.querySelectorAll('button')].find(button => (button as HTMLButtonElement).textContent?.trim() === 'OK') as HTMLButtonElement;
+    ok.click();
+    fixture.detectChanges();
     expect(fixture.componentInstance.priceNoticeVisible).toBeFalse();
     expect(prefs.noticeSeen(7)).toBeTrue();
+    expect(prefs.autoCheck(7)).toBeTrue();
+    expect(fixture.componentInstance.autoPricesOff).toBeFalse();
+    fixture.destroy();
+    localStorage.clear();
+  });
+
+  it('turns automatic checks off from the notice and shows manual Refresh', async () => {
+    localStorage.clear();
+    const { finance, firstAutoCheck, coordinator, prefs, session } = priceStubs(true);
+    await TestBed.configureTestingModule({
+      imports: [DashboardComponent],
+      providers: [
+        { provide: FinanceService, useValue: finance },
+        { provide: MarketRefreshCoordinatorService, useValue: coordinator },
+        { provide: FinancePricePrefsService, useValue: prefs },
+        { provide: SESSION_CONTEXT, useValue: session },
+        provideRouter([]),
+      ],
+    }).overrideComponent(DashboardComponent, {
+      remove: { imports: [ChartsComponent] },
+      add: { imports: [DashboardChartsStubComponent] },
+    }).compileComponents();
+    const fixture: ComponentFixture<DashboardComponent> = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    firstAutoCheck.next(['VOO']);
+    fixture.detectChanges();
+    const turnOff = [...fixture.nativeElement.querySelectorAll('button')].find(button => (button as HTMLButtonElement).textContent?.includes('Turn off automatic checks')) as HTMLButtonElement;
+    turnOff.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.priceNoticeVisible).toBeFalse();
+    expect(prefs.noticeSeen(7)).toBeTrue();
+    expect(prefs.autoCheck(7)).toBeFalse();
+    expect(fixture.componentInstance.autoPricesOff).toBeTrue();
+    expect((fixture.nativeElement.querySelector('.home-tile--balance') as HTMLElement).textContent).toContain('Automatic price checks are off');
+    expect(fixture.nativeElement.querySelector('.home-refresh-prices')).not.toBeNull();
     fixture.destroy();
     localStorage.clear();
   });
