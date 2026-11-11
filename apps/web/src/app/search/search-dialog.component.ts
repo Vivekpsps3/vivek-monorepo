@@ -6,16 +6,17 @@ import {
   ElementRef,
   InjectionToken,
   Injector,
-  ViewChild,
   computed,
   inject,
   input,
   output,
+  runInInjectionContext,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { formatDay } from '@vivek/browser';
-import { UiDialogComponent, UiInputComponent, UiStateComponent } from '@vivek/ui';
+import { SESSION_CONTEXT, UiDialogComponent, UiInputComponent, UiStateComponent } from '@vivek/ui';
 import { fetchHubSummary } from '../hub/hub-load';
 import {
   pruneSearchRecents,
@@ -27,12 +28,9 @@ import {
 
 /**
  * Unified search dialog. Ctrl/⌘-K or the header button opens it.
- * Travel and Media results come from GET /api/search. Finance is
- * client-side and this dialog contributes only the locked-vault row.
- * FinanceService already exposes assets$, liabilities$, holdings$,
- * fixedExpenses$, and subscriptions$. Unlocked name matching belongs to
- * HUB-04 (#246, parent #93): one narrow facade, not a private service
- * import or a second matcher here.
+ * Travel and Media come from GET /api/search. Finance names come from the
+ * lazy public facade over already-loaded account, holding, and bill streams.
+ * Persisted recents stay {app, kind, id}.
  */
 
 export interface SearchResultRow {
@@ -63,29 +61,76 @@ export interface SearchOption {
   ref: SearchRecentRef | null;
 }
 
-export type SearchFinanceState = 'none' | 'locked' | 'unlocked';
-
-export interface SearchFinanceProbe {
-  state(): Promise<SearchFinanceState>;
+export interface SearchFinanceName {
+  kind: 'account' | 'holding' | 'bill';
+  id: number;
+  title: string;
+  href: string;
 }
 
-export const SEARCH_FINANCE_PROBE = new InjectionToken<SearchFinanceProbe>(
-  'SEARCH_FINANCE_PROBE',
-  {
-    providedIn: 'root',
-    factory: () => {
-      const injector = inject(Injector);
-      return {
-        async state(): Promise<SearchFinanceState> {
+export type SearchFinanceQueryResult =
+  | { status: 'none' | 'locked' | 'unloaded' }
+  | { status: 'ready'; names: SearchFinanceName[] };
+
+export interface SearchFinanceRecentResult {
+  status: 'none' | 'locked' | 'unloaded' | 'ready';
+  names: SearchFinanceName[];
+  missing: { kind: string; id: number }[];
+}
+
+export interface SearchFinancePort {
+  query(q: string): Promise<SearchFinanceQueryResult>;
+  resolveRecents(refs: readonly { kind: string; id: number }[]): Promise<SearchFinanceRecentResult>;
+  onLock(handler: () => void): () => void;
+}
+
+const EMPTY_RECENTS: SearchFinanceRecentResult = { status: 'none', names: [], missing: [] };
+
+export const SEARCH_FINANCE = new InjectionToken<SearchFinancePort>('SEARCH_FINANCE', {
+  providedIn: 'root',
+  factory: () => {
+    const injector = inject(Injector);
+    const handlers = new Set<() => void>();
+    const fire = () => {
+      for (const handler of [...handlers]) handler();
+    };
+    void import('../../../../finance/frontend/src/public-api').then(api => {
+      runInInjectionContext(injector, () => api.bindLockNotices(() => fire()));
+      api.bindLockSnapshots(() => fire());
+    }).catch(() => undefined);
+    const namesOf = (rows: { kind: SearchFinanceName['kind']; id: number; title: string; href: string }[]): SearchFinanceName[] =>
+      rows.map(name => ({ kind: name.kind, id: name.id, title: name.title, href: name.href }));
+    return {
+      async query(q: string): Promise<SearchFinanceQueryResult> {
+        try {
           const api = await import('../../../../finance/frontend/src/public-api');
-          if (!api.financeVaultPresent()) return 'none';
-          const vault = await api.openFinanceVault(injector);
-          return vault.isUnlocked ? 'unlocked' : 'locked';
-        },
-      };
-    },
+          const result = await api.searchFinanceNames(injector, q);
+          if (result.status !== 'ready') return { status: result.status };
+          return { status: 'ready', names: namesOf(result.names) };
+        } catch {
+          return { status: 'none' };
+        }
+      },
+      async resolveRecents(refs): Promise<SearchFinanceRecentResult> {
+        try {
+          const api = await import('../../../../finance/frontend/src/public-api');
+          const result = await api.resolveFinanceSearchRecents(injector, refs);
+          return {
+            status: result.status,
+            names: namesOf(result.names),
+            missing: result.missing.map(ref => ({ kind: ref.kind, id: ref.id })),
+          };
+        } catch {
+          return EMPTY_RECENTS;
+        }
+      },
+      onLock(handler: () => void): () => void {
+        handlers.add(handler);
+        return () => handlers.delete(handler);
+      },
+    };
   },
-);
+});
 
 type DialogStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'expired';
 
@@ -108,7 +153,7 @@ export class SearchDialogComponent implements AfterViewChecked {
   }
 
   private readonly router = inject(Router);
-  private readonly financeProbe = inject(SEARCH_FINANCE_PROBE);
+  private readonly finance = inject(SEARCH_FINANCE);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly query = signal('');
@@ -120,6 +165,7 @@ export class SearchDialogComponent implements AfterViewChecked {
   private debounce: ReturnType<typeof setTimeout> | null = null;
   private ctrl: AbortController | null = null;
   private generation = 0;
+  private ownerId: number | null | undefined = undefined;
 
   readonly groups = computed(() => {
     const grouped = new Map<SearchOption['group'], SearchOption[]>();
@@ -141,13 +187,17 @@ export class SearchDialogComponent implements AfterViewChecked {
   );
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => {
+    const destroy = inject(DestroyRef);
+    destroy.onDestroy(() => {
       if (this.debounce !== null) clearTimeout(this.debounce);
       this.ctrl?.abort();
     });
+    destroy.onDestroy(this.finance.onLock(() => this.onVaultLock()));
+    const session = inject(SESSION_CONTEXT, { optional: true });
+    if (!session) return;
+    session.cleared$.pipe(takeUntilDestroyed()).subscribe(() => this.onSessionClear());
+    session.user$.pipe(takeUntilDestroyed()).subscribe(user => this.onIdentity(user?.id ?? null));
   }
-
-  @ViewChild(UiInputComponent) private inputRef?: UiInputComponent;
 
   /** Called by the host when the dialog opens. */
   onOpened(): void {
@@ -177,26 +227,51 @@ export class SearchDialogComponent implements AfterViewChecked {
     const generation = ++this.generation;
     const refs = readSearchRecents();
     const serverRefs = refs.filter(ref => ref.app === 'travel' || ref.app === 'media');
-    if (!serverRefs.length) {
+    const financeRefs = refs.filter(ref => ref.app === 'finance');
+    if (!serverRefs.length && !financeRefs.length) {
       if (generation === this.generation) this.options.set([]);
       return;
     }
+    this.ctrl?.abort();
     const ctrl = new AbortController();
-    const result = await fetchHubSummary<SearchResponse>(
-      `/api/search?recent=${encodeURIComponent(recentRefsParam(serverRefs))}`,
-      ctrl.signal,
-    );
+    this.ctrl = ctrl;
+    const serverPromise = serverRefs.length
+      ? fetchHubSummary<SearchResponse>(
+        `/api/search?recent=${encodeURIComponent(recentRefsParam(serverRefs))}`,
+        ctrl.signal,
+      )
+      : Promise.resolve({ status: 'ok' as const, body: { q: null, results: [] as SearchResultRow[], truncated: false } });
+    const financePromise = financeRefs.length
+      ? this.finance.resolveRecents(financeRefs).catch((): SearchFinanceRecentResult => EMPTY_RECENTS)
+      : Promise.resolve(EMPTY_RECENTS);
+    const [result, finance] = await Promise.all([serverPromise, financePromise]);
     if (generation !== this.generation || result.status === 'cancelled') return;
-    if (result.status !== 'ok') {
-      this.options.set([]);
-      return;
+    const serverOptions = result.status === 'ok'
+      ? result.body.results.map(row => this.toOption(row, 'Recent'))
+      : [];
+    if (result.status === 'ok') {
+      pruneSearchRecents(
+        serverRefs,
+        serverOptions.map(option => option.ref).filter((ref): ref is SearchRecentRef => ref !== null),
+      );
     }
-    const resolved = result.body.results.map(row => this.toOption(row, 'Recent'));
-    pruneSearchRecents(
-      serverRefs,
-      resolved.map(option => option.ref).filter((ref): ref is SearchRecentRef => ref !== null),
-    );
-    this.options.set(resolved);
+    const financeNames = finance.status === 'ready' ? finance.names : [];
+    if (finance.status === 'ready' && finance.missing.length) {
+      pruneSearchRecents(
+        finance.missing.map(ref => ({ app: 'finance', kind: ref.kind, id: ref.id })),
+        [],
+      );
+    }
+    const byKey = new Map<string, SearchOption>();
+    for (const option of serverOptions) byKey.set(option.key, option);
+    for (const name of financeNames) {
+      const option = this.financeNameOption(name, 'Recent');
+      byKey.set(option.key, option);
+    }
+    this.options.set(refs.flatMap(ref => {
+      const option = byKey.get(`${ref.app}:${ref.kind}:${ref.id}`);
+      return option ? [option] : [];
+    }));
     this.activeIndex.set(0);
     this.applyComboboxAttrs();
   }
@@ -209,7 +284,7 @@ export class SearchDialogComponent implements AfterViewChecked {
     this.status.set('loading');
     const [result, finance] = await Promise.all([
       fetchHubSummary<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`, ctrl.signal),
-      this.financeProbe.state().catch((): SearchFinanceState => 'none'),
+      this.finance.query(q).catch((): SearchFinanceQueryResult => ({ status: 'none' })),
     ]);
     if (generation !== this.generation || result.status === 'cancelled') return;
     if (result.status === 'expired') {
@@ -225,21 +300,77 @@ export class SearchDialogComponent implements AfterViewChecked {
     const options = result.body.results.map(row =>
       this.toOption(row, row.app === 'media' ? 'Media' : 'Travel'),
     );
-    if (finance === 'locked') {
-      options.push({
-        key: 'finance-locked',
-        group: 'Finance',
-        title: 'Finance results hidden: locked · Unlock',
-        detail: null,
-        date: null,
-        href: `/finance/vault/unlock?next=${encodeURIComponent(this.currentPath())}`,
-        ref: null,
-      });
+    if (finance.status === 'locked') options.push(this.lockedFinanceOption());
+    else if (finance.status === 'ready') {
+      for (const name of finance.names) options.push(this.financeNameOption(name, 'Finance'));
     }
     this.options.set(options);
     this.activeIndex.set(0);
     this.status.set('ready');
     this.applyComboboxAttrs();
+  }
+
+  private financeNameOption(name: SearchFinanceName, group: SearchOption['group']): SearchOption {
+    return {
+      key: `finance:${name.kind}:${name.id}`,
+      group,
+      title: name.title,
+      detail: null,
+      date: null,
+      href: name.href,
+      ref: { app: 'finance', kind: name.kind, id: name.id },
+    };
+  }
+
+  private lockedFinanceOption(): SearchOption {
+    return {
+      key: 'finance-locked',
+      group: 'Finance',
+      title: 'Finance results hidden: locked · Unlock',
+      detail: null,
+      date: null,
+      href: `/finance/vault/unlock?next=${encodeURIComponent(this.currentPath())}`,
+      ref: null,
+    };
+  }
+
+  /** Drop finance names immediately. A search still in flight cannot publish them. */
+  private onVaultLock(): void {
+    this.generation += 1;
+    this.ctrl?.abort();
+    if (this.debounce !== null) {
+      clearTimeout(this.debounce);
+      this.debounce = null;
+    }
+    this.options.set(this.options().filter(option => option.ref?.app !== 'finance'));
+    this.activeIndex.set(0);
+    const q = this.query().trim();
+    if (q.length >= 2) void this.runSearch(q);
+    else this.applyComboboxAttrs();
+  }
+
+  /** Logout and identity change drop every row, including Travel and Media. */
+  private onSessionClear(): void {
+    this.generation += 1;
+    this.ctrl?.abort();
+    if (this.debounce !== null) {
+      clearTimeout(this.debounce);
+      this.debounce = null;
+    }
+    this.options.set([]);
+    this.status.set('idle');
+    this.activeIndex.set(0);
+    this.applyComboboxAttrs();
+  }
+
+  private onIdentity(id: number | null): void {
+    if (this.ownerId === undefined) {
+      this.ownerId = id;
+      return;
+    }
+    if (this.ownerId === id) return;
+    this.ownerId = id;
+    this.onSessionClear();
   }
 
   private toOption(row: SearchResultRow, group: SearchOption['group']): SearchOption {

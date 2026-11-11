@@ -86,6 +86,22 @@ export interface MarketQuoteApplyResult {
   failedRecords: string[];
 }
 
+/** Names already published into the unlocked streams. Amounts stay out. */
+export interface FinanceLoadedNames {
+  assets: { id: number; name: string }[];
+  liabilities: { id: number; name: string }[];
+  holdings: { id: number; symbol: string; name: string | null }[];
+  fixedExpenses: { id: number; name: string }[];
+  subscriptions: { id: number; name: string }[];
+  ready: {
+    assets: boolean;
+    liabilities: boolean;
+    holdings: boolean;
+    fixedExpenses: boolean;
+    subscriptions: boolean;
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class FinanceService {
   private dataChangesSubject = new Subject<FinanceDataChange>();
@@ -116,6 +132,13 @@ export class FinanceService {
 
   private isLoading = new BehaviorSubject<boolean>(false);
   isLoading$ = this.isLoading.asObservable();
+  private readonly publishedNameStreams = {
+    assets: false,
+    liabilities: false,
+    holdings: false,
+    fixedExpenses: false,
+    subscriptions: false,
+  };
 
   private dashboardLoad$: Observable<DashboardLoadResult> | null = null;
   private market: FinanceMarketCoordinator;
@@ -132,7 +155,7 @@ export class FinanceService {
     this.market = new FinanceMarketCoordinator(this.encStore, {
       sessionToken: () => this.encStore.sessionToken,
       dataEpoch: collections => this.dataEpoch(collections),
-      publishHoldings: rows => this._holdings.next(rows),
+      publishHoldings: rows => this.publishLoaded(this._holdings, rows),
       publishJobIncomes: rows => this._jobIncomes.next(rows),
       afterQuoteChanges: () => {
         this.invalidateDashboardCache();
@@ -192,7 +215,43 @@ export class FinanceService {
 
   /** A write-back publishes only when the vault stayed unlocked for the whole write. */
   private publishValueIfUnlocked<T>(lock: number, subject: BehaviorSubject<T>, value: T): void {
-    if (lock === readLockEpoch() && hasDek()) subject.next(value);
+    if (lock === readLockEpoch() && hasDek()) this.publishLoaded(subject, value);
+  }
+
+  /** A real vault read, not the initial empty subject and not lock clearing. */
+  private publishLoaded<T>(subject: BehaviorSubject<T>, value: T): void {
+    this.markNameStream(subject);
+    subject.next(value);
+  }
+
+  private markNameStream(subject: object): void {
+    if (subject === this._assets) this.publishedNameStreams.assets = true;
+    else if (subject === this._liabilities) this.publishedNameStreams.liabilities = true;
+    else if (subject === this._holdings) this.publishedNameStreams.holdings = true;
+    else if (subject === this._fixedExpenses) this.publishedNameStreams.fixedExpenses = true;
+    else if (subject === this._subscriptions) this.publishedNameStreams.subscriptions = true;
+  }
+
+  /**
+   * Account, holding, and bill names already in memory.
+   * Does not call loadDashboard, the encrypted store, or a provider.
+   * Null when the vault is locked. Ready flags stay false until a real publish.
+   */
+  peekLoadedNames(): FinanceLoadedNames | null {
+    if (!hasDek()) return null;
+    const ready = { ...this.publishedNameStreams };
+    return {
+      assets: ready.assets ? this._assets.value.map(row => ({ id: row.id, name: row.name })) : [],
+      liabilities: ready.liabilities ? this._liabilities.value.map(row => ({ id: row.id, name: row.name })) : [],
+      holdings: ready.holdings ? this._holdings.value.map(row => ({
+        id: row.id,
+        symbol: row.symbol,
+        name: row.company_name?.trim() ? row.company_name : null,
+      })) : [],
+      fixedExpenses: ready.fixedExpenses ? this._fixedExpenses.value.map(row => ({ id: row.id, name: row.name })) : [],
+      subscriptions: ready.subscriptions ? this._subscriptions.value.map(row => ({ id: row.id, name: row.name })) : [],
+      ready,
+    };
   }
 
   private async publishReadBackIfUnlocked<T>(
@@ -251,17 +310,17 @@ export class FinanceService {
     if (unique.includes('holdings')) {
       const rows = await this.encStore.getHoldings();
       if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['holdings'])) this._holdings.next(rows);
+      if (isCurrent(['holdings'])) this.publishLoaded(this._holdings, rows);
     }
     if (unique.includes('assets')) {
       const rows = await this.encStore.getAssets();
       if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['assets'])) this._assets.next(rows);
+      if (isCurrent(['assets'])) this.publishLoaded(this._assets, rows);
     }
     if (unique.includes('liabilities')) {
       const rows = await this.encStore.getLiabilities();
       if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['liabilities'])) this._liabilities.next(rows);
+      if (isCurrent(['liabilities'])) this.publishLoaded(this._liabilities, rows);
     }
     if (unique.includes('job_incomes')) {
       const rows = await this.encStore.getJobIncomes();
@@ -271,12 +330,12 @@ export class FinanceService {
     if (unique.includes('fixed_expenses')) {
       const rows = await this.encStore.getFixedExpenses();
       if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['fixed_expenses'])) this._fixedExpenses.next(rows);
+      if (isCurrent(['fixed_expenses'])) this.publishLoaded(this._fixedExpenses, rows);
     }
     if (unique.includes('subscriptions')) {
       const rows = await this.encStore.getSubscriptions();
       if (sessionToken !== this.encStore.sessionToken) return;
-      if (isCurrent(['subscriptions'])) this._subscriptions.next(rows);
+      if (isCurrent(['subscriptions'])) this.publishLoaded(this._subscriptions, rows);
     }
     const cashflowCollections: EncryptedCollection[] = ['transactions', 'job_incomes', 'fixed_expenses', 'subscriptions'];
     const balanceCollections: EncryptedCollection[] = ['holdings', 'assets', 'liabilities'];
@@ -500,14 +559,14 @@ export class FinanceService {
   getFixedExpenses(): Observable<FixedExpense[]> {
     const epoch = this.dataEpoch(['fixed_expenses']);
     return this.guardedRead(() => this.encStore.getFixedExpenses(), rows => {
-      if (epoch === this.dataEpoch(['fixed_expenses'])) this._fixedExpenses.next(rows);
+      if (epoch === this.dataEpoch(['fixed_expenses'])) this.publishLoaded(this._fixedExpenses, rows);
     });
   }
 
   getSubscriptions(): Observable<Subscription[]> {
     const epoch = this.dataEpoch(['subscriptions']);
     return this.guardedRead(() => this.encStore.getSubscriptions(), rows => {
-      if (epoch === this.dataEpoch(['subscriptions'])) this._subscriptions.next(rows);
+      if (epoch === this.dataEpoch(['subscriptions'])) this.publishLoaded(this._subscriptions, rows);
     });
   }
 
@@ -546,6 +605,11 @@ export class FinanceService {
     this.encStore.clear();
     this.vault.lock();
     this.dashboardLoad$ = null;
+    this.publishedNameStreams.assets = false;
+    this.publishedNameStreams.liabilities = false;
+    this.publishedNameStreams.holdings = false;
+    this.publishedNameStreams.fixedExpenses = false;
+    this.publishedNameStreams.subscriptions = false;
     this._transactions.next([]);
     this._dashboardTransactions.next([]);
     this._holdings.next([]);
@@ -638,7 +702,7 @@ export class FinanceService {
   getHoldings(_refreshPrices = false): Observable<Holding[]> {
     const epoch = this.dataEpoch(['holdings']);
     return this.guardedRead(() => this.encStore.getHoldings(), rows => {
-      if (epoch === this.dataEpoch(['holdings'])) this._holdings.next(rows);
+      if (epoch === this.dataEpoch(['holdings'])) this.publishLoaded(this._holdings, rows);
     });
   }
 
@@ -754,7 +818,7 @@ export class FinanceService {
     return new Observable(subscriber => {
       void this.encStore.getAssets().then(rows => {
         if (lock !== readLockEpoch() || !hasDek()) return subscriber.complete();
-        if (epoch === this.dataEpoch(['assets'])) this._assets.next(rows);
+        if (epoch === this.dataEpoch(['assets'])) this.publishLoaded(this._assets, rows);
         subscriber.next(rows);
         subscriber.complete();
       }, (error: unknown) => subscriber.error(error));
@@ -794,7 +858,7 @@ export class FinanceService {
   getLiabilities(): Observable<Liability[]> {
     const epoch = this.dataEpoch(['liabilities']);
     return this.guardedRead(() => this.encStore.getLiabilities(), rows => {
-      if (epoch === this.dataEpoch(['liabilities'])) this._liabilities.next(rows);
+      if (epoch === this.dataEpoch(['liabilities'])) this.publishLoaded(this._liabilities, rows);
     });
   }
 

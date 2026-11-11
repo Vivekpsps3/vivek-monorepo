@@ -46,6 +46,25 @@ export function loadFinanceBudgetKeptDays(
 }
 export type { BudgetKeptWeek, BudgetKeptResult, BudgetKeptDay, BudgetKeptDaysResult } from './app/budget/budget-kept';
 
+/**
+ * Unlocked Finance name search. The module reads already-published streams and
+ * does not load the dashboard or call a provider.
+ */
+export async function searchFinanceNames(injector: Injector, query: string) {
+  const mod = await import('./app/services/finance-search');
+  return mod.searchFinanceNames(injector, query);
+}
+
+export async function resolveFinanceSearchRecents(
+  injector: Injector,
+  refs: readonly { kind: string; id: number }[],
+) {
+  const mod = await import('./app/services/finance-search');
+  return mod.resolveFinanceSearchRecents(injector, refs);
+}
+
+export type { FinanceSearchName, FinanceSearchQuery, FinanceSearchRecents } from './app/services/finance-search';
+
 export const tripSpendLoad = {
   module: () => import('./app/services/trip-spend-producer'),
 };
