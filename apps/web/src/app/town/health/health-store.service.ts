@@ -20,8 +20,10 @@ import type { HealthPr, HealthStat } from './health.types';
  * undecryptable rows, never deleted.
  */
 
-export const HEALTH_STATS_COLLECTION = 'health_stats';
-export const HEALTH_PRS_COLLECTION = 'health_prs';
+/** Health-owned collections. Finance bags are a different subset. */
+export const HEALTH_OWNER_COLLECTIONS = ['health_stats', 'health_prs'] as const;
+export const HEALTH_STATS_COLLECTION = HEALTH_OWNER_COLLECTIONS[0];
+export const HEALTH_PRS_COLLECTION = HEALTH_OWNER_COLLECTIONS[1];
 export const HEALTH_SCHEMA_VERSION = 2;
 export const HEALTH_LOAD_DEADLINE_MS = 8_000;
 export const HEALTH_CONFLICT_MESSAGE =

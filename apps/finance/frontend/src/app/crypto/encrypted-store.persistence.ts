@@ -2,19 +2,29 @@ import { firstValueFrom, Subject } from 'rxjs';
 import { randomClientId } from './vault-crypto';
 import { VaultService, type VaultWriteOptions } from './vault.service';
 
-export type EncryptedCollection =
-  | 'transactions'
-  | 'assets'
-  | 'liabilities'
-  | 'holdings'
-  | 'job_incomes'
-  | 'fixed_expenses'
-  | 'subscriptions'
-  | 'bank_accounts'
-  | 'brokerage_accounts'
-  | 'import_batches'
-  | 'planning_profiles'
-  | 'stock_lab_scenarios';
+/**
+ * Finance-owned bags. Health collections are a different subset and stay out
+ * of these bags. `FINANCE_FOREIGN_COLLECTIONS` is the language-boundary copy
+ * of the Health owner subset: Finance must not decrypt those names even if a
+ * bag is added by mistake. Unknown future names are in neither subset and are
+ * left sealed. scripts/check_collection_policy.py pins the copies.
+ */
+export const FINANCE_COLLECTIONS = [
+  'transactions',
+  'assets',
+  'liabilities',
+  'holdings',
+  'job_incomes',
+  'fixed_expenses',
+  'subscriptions',
+  'bank_accounts',
+  'brokerage_accounts',
+  'import_batches',
+  'planning_profiles',
+  'stock_lab_scenarios',
+] as const;
+
+export type EncryptedCollection = (typeof FINANCE_COLLECTIONS)[number];
 
 export type CollectionName = EncryptedCollection;
 
@@ -62,6 +72,12 @@ interface InflightWork {
   toasted: boolean;
 }
 
+function emptyFinanceBags(): Record<EncryptedCollection, Map<string, StoredEnvelope<never>>> {
+  const bags = {} as Record<EncryptedCollection, Map<string, StoredEnvelope<never>>>;
+  for (const name of FINANCE_COLLECTIONS) bags[name] = new Map();
+  return bags;
+}
+
 export class EncryptedRecordPersistence {
   private changesSubject = new Subject<EncryptedStoreChange>();
   readonly changes$ = this.changesSubject.asObservable();
@@ -75,20 +91,7 @@ export class EncryptedRecordPersistence {
   private recordQueues = new Map<string, Promise<unknown>>();
   private reloadQueues = new Map<CollectionName, Promise<void>>();
   private collectionVersions = new Map<CollectionName, number>();
-  private bags: Record<string, Map<string, StoredEnvelope<any>>> = {
-    transactions: new Map(),
-    assets: new Map(),
-    liabilities: new Map(),
-    holdings: new Map(),
-    job_incomes: new Map(),
-    fixed_expenses: new Map(),
-    subscriptions: new Map(),
-    bank_accounts: new Map(),
-    brokerage_accounts: new Map(),
-    import_batches: new Map(),
-    planning_profiles: new Map(),
-    stock_lab_scenarios: new Map(),
-  };
+  private bags: Record<string, Map<string, StoredEnvelope<any>>> = emptyFinanceBags();
 
   constructor(private vault: VaultService, private getSessionToken: () => number) {}
 
@@ -114,6 +117,12 @@ export class EncryptedRecordPersistence {
 
   private bumpCollectionVersion(collection: CollectionName): void {
     this.collectionVersions.set(collection, (this.collectionVersions.get(collection) ?? 0) + 1);
+  }
+
+  /** Finance plaintext only. Foreign Health rows and unknown future rows stay sealed. */
+  private isFinanceOwned(collection: string): collection is EncryptedCollection {
+    return (FINANCE_COLLECTIONS as readonly string[]).includes(collection)
+      && !FINANCE_FOREIGN_COLLECTIONS.has(collection);
   }
 
   runRecordUpdate<T>(
@@ -238,8 +247,7 @@ export class EncryptedRecordPersistence {
     for (const key of Object.keys(this.bags)) this.bags[key] = new Map();
     const decoded: Array<{ row: any; data: any }> = [];
     for (const row of rows) {
-      if (FINANCE_FOREIGN_COLLECTIONS.has(row.collection)) continue;
-      if (!this.bags[row.collection]) continue;
+      if (!this.isFinanceOwned(row.collection)) continue;
       const data = await this.vault.decryptPayload<any>(
         row.ciphertext_b64,
         row.collection,
@@ -296,7 +304,7 @@ export class EncryptedRecordPersistence {
     if (generation !== this.getSessionToken()) throw new Error('Vault session changed');
     const decoded: T[] = [];
     for (const record of records.filter(
-      row => row.collection === collection && !FINANCE_FOREIGN_COLLECTIONS.has(row.collection),
+      row => row.collection === collection && this.isFinanceOwned(row.collection),
     )) {
       const data = await this.vault.decryptPayload<T>(
         record.ciphertext_b64,

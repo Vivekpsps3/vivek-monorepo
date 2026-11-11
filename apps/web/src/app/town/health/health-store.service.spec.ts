@@ -330,6 +330,56 @@ describe('HealthStoreService', () => {
     expect(textOf(store.statsSnapshot)).not.toContain(MARKER);
   });
 
+  it('LOCAL2: only the health codec decrypts health plaintext and finance rows stay preserved', async () => {
+    const finance = row('transactions', 'txn_1', { note: MARKER });
+    const financeCipher = finance.ciphertext_b64;
+    fake.rows = [
+      row('health_stats', 'hlt_a', STAT),
+      row('health_prs', 'hlt_b', PR),
+      finance,
+    ];
+    const result = await store.load();
+    expect(result.state).toBe('ready');
+    if (result.state !== 'ready') return;
+    expect(result.stats.map(entry => entry.clientId)).toEqual(['hlt_a']);
+    expect(result.prs.map(entry => entry.clientId)).toEqual(['hlt_b']);
+    expect(fake.listed).toEqual(['health_stats', 'health_prs']);
+    expect(fake.decryptCalls).toEqual(['hlt_a', 'hlt_b']);
+    expect(fake.deleted).toEqual([]);
+    expect(fake.upserted).toEqual([]);
+    expect(finance.ciphertext_b64).toBe(financeCipher);
+    expect(finance.revision).toBe(1);
+    expect(textOf(result)).not.toContain(MARKER);
+  });
+
+  it('LOCAL3: an older health load or save does not decrypt, delete, or rewrite an unknown row', async () => {
+    const future = row(
+      'future_private',
+      'future_private_1',
+      { note: MARKER },
+      { schema_version: 1, revision: 4 },
+    );
+    const futureCipher = future.ciphertext_b64;
+    fake.rows = [
+      row('health_stats', 'hlt_a', STAT),
+      future,
+    ];
+    const result = await store.load();
+    expect(result.state).toBe('ready');
+    if (result.state !== 'ready') return;
+    expect(fake.listed).toEqual(['health_stats', 'health_prs']);
+    expect(fake.decryptCalls).toEqual(['hlt_a']);
+    expect(fake.deleted).toEqual([]);
+    await store.createStat(STAT);
+    expect(fake.deleted).toEqual([]);
+    expect(fake.decryptCalls).toEqual(['hlt_a']);
+    expect(fake.upserted.every(batch => batch.every(item => item.collection === 'health_stats'))).toBeTrue();
+    expect(future.ciphertext_b64).toBe(futureCipher);
+    expect(future.revision).toBe(4);
+    expect(future.schema_version).toBe(1);
+    expect(fake.rows.find(item => item.client_id === 'future_private_1')).toBe(future);
+  });
+
   it('skips and counts corrupt, unparsable and v1 rows without deleting them', async () => {
     fake.rows = [
       row('health_stats', 'hlt_good', STAT),
