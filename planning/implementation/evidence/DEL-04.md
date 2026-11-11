@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#216](https://github.com/Vivekpsps3/vivek-monorepo/issues/216) DEL-04. Parents [#200](https://github.com/Vivekpsps3/vivek-monorepo/issues/200) and [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65) stay open.
 - Agent/context, branch/worktree: Cursor agent, branch `agent/del-04`, worktree `/tmp/vivek-del-04`.
-- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Tested source is this commit's `finance.service.ts` and `finance.service.spec.ts`. Evidence is documentation only.
+- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Tested implementation `39fd9ab3423b7bb8c55d0b51260bc4a4a802d254`. The follow-up evidence commit records the pull request only.
 - Fresh-main/prerequisite/active-PR checks: origin/main at the base above. HUB-04 #246 / PR #340 `779f1679827de7e45f1ce3d3f09fe5d8715c3ceb` and TYPE-01 #218 / PR #338 `e3ff785e1e65315425fd24fc733b88bdf0337857` are ancestors. No queue dependency. No open pull request edited these files at implementation time. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/216#issuecomment-6806644696.
 
 ## Acceptance
@@ -58,8 +58,8 @@ Headless Karma and Playwright are the UI proof. No shared desktop browser was us
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this evidence, `Closes #216` only. Parents are referenced without a closing keyword.
-- Roadmap #134 append-only status-note URL: posted after the pull request exists.
-- Merged/activation status (actual evidence, not assumption): not merged and not deployed at this commit.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/342 (`Closes #216` only). Parents #200 and #65 are referenced and not closed.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6806892487
+- Merged/activation status (actual evidence, not assumption): not merged and not deployed. CI was still pending when this note was written.
 - Remaining external prerequisites or approved scope decisions: none. #200 and #65 stay open.
 - Next actor: CI, then squash-merge of this leaf. No unstated decision is required to continue.
