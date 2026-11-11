@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#220](https://github.com/Vivekpsps3/vivek-monorepo/issues/220), parent [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65)
 - Agent/context, branch/worktree: Cursor Grok, `agent/fin-01`, `/tmp/vivek-fin-01`
-- Base main SHA, current tested SHA: assigned base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Product checks below ran on that base plus the FIN-01 diff, before this file. Head SHA is the commit that contains this file.
+- Base main SHA, current tested SHA: assigned base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Product checks below ran on that base plus the FIN-01 diff. Product revision `7e589300770991ee127848cd50b7e8511f088b28`. The follow-up commit only records that SHA in this file.
 - Fresh-main/prerequisite/active-PR checks: SAFE-01 (#201) is merged. `gh pr list --state open` was empty at start. Issue #220 had no earlier claim. Conflict groups `finance-price-shell` and `finance-home` were not taken by another open PR. During the run, `origin/main` advanced to `c252b4d` (planning PLACE packets, #319). That commit does not touch Finance. It was not merged into this branch.
 
 ## Acceptance
