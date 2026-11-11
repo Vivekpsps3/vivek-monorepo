@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#211](https://github.com/Vivekpsps3/vivek-monorepo/issues/211). Parents [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) and [#81](https://github.com/Vivekpsps3/vivek-monorepo/issues/81) stay open.
 - Agent/context, branch/worktree: VER-03 implementer, branch `agent/ver-03`, worktree `/tmp/vivek-ver-03`.
-- Base main SHA, current tested SHA: base `85212152bda3ce6cab5cbfcc9c787b564214fc69`. The gates below ran on that base plus this diff, before the commit. The commit SHA is the handoff line updated after `git rev-parse HEAD`.
+- Base main SHA, current tested SHA: base `85212152bda3ce6cab5cbfcc9c787b564214fc69`. Implementation commit `b8fd8993a14e9774c864ace36b3c9dadb8735e6e`. The gates ran on that diff before the commit; this SHA line is the only later edit.
 - Fresh-main/prerequisite/active-PR checks: `HEAD` matched `origin/main` at `85212152bda3ce6cab5cbfcc9c787b564214fc69`. VER-01 (#209) is closed. No open pull requests. Issue #211 had no earlier claim. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/211#issuecomment-6808747732
 
 ## Acceptance
