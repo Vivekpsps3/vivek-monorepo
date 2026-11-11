@@ -37,6 +37,14 @@ import { showDay } from "./display";
 import { MediaCardComponent } from "./media-card.component";
 import { NextEpisodeUndoService } from "./next-episode-undo.service";
 import { halfNote, ratingOptions, segmentValue } from "./rating-model.mjs";
+import {
+  RELATED_ATTEMPT_LIMIT,
+  RELATED_KINDS,
+  cleanNodes,
+  relatedHref,
+  relationLabel,
+  type RelatedNode,
+} from "./related.mjs";
 import { addTag, normaliseTags, removeTag } from "./tag-model.mjs";
 @Component({
   standalone: true,
@@ -114,15 +122,29 @@ export class DetailComponent {
   tagError = "";
   episode = { season_number: 1, episode_number: 1, title: "", air_date: "" };
   @ViewChild("tagInput") private tagInput?: ElementRef<HTMLInputElement>;
+  @ViewChild("relatedSentinel")
+  private relatedSentinel?: ElementRef<HTMLElement>;
   private tagFocusTimer: ReturnType<typeof setTimeout> | undefined;
+  private relatedTimer: ReturnType<typeof setTimeout> | undefined;
+  private relatedRequest?: Subscription;
+  private relatedObserver?: IntersectionObserver;
+  private relatedStarted = false;
+  private relatedAttempts = 0;
+  private relatedAlive = true;
+  readonly relatedWatch = signal(false);
+  readonly relatedNodes = signal<RelatedNode[]>([]);
+  readonly relatedError = signal("");
+  readonly relatedLoading = signal(false);
   private suppressSubmit = false;
   readonly recovery = signal<ItemDraft | null>(null);
   private saved = "";
   readonly statusLabel = statusLabel;
   constructor() {
     this.destroy.onDestroy(() => {
+      this.relatedAlive = false;
       clearTimeout(this.skeletonTimer);
       clearTimeout(this.tagFocusTimer);
+      this.releaseRelated();
     });
     inject(NextEpisodeUndoService).restored$
       .pipe(takeUntilDestroyed(this.destroy))
@@ -158,6 +180,7 @@ export class DetailComponent {
     if (!force && (this.pendingId === id || this.item()?.id === id)) return;
     this.pendingId = id;
     const generation = ++this.generation;
+    this.releaseRelated();
     this.loadingRequest?.unsubscribe();
     this.photoRequest?.unsubscribe();
     this.linkRequest?.unsubscribe();
@@ -333,6 +356,100 @@ export class DetailComponent {
     this.baseFields = this.fields();
     this.baseVersion = d.updated_at;
     this.reviewBase = d.review_updated_at || "";
+    this.armRelated(d);
+  }
+  private releaseRelated(): void {
+    clearTimeout(this.relatedTimer);
+    this.relatedTimer = undefined;
+    this.relatedObserver?.disconnect();
+    this.relatedObserver = undefined;
+    this.relatedRequest?.unsubscribe();
+    this.relatedRequest = undefined;
+    this.relatedStarted = false;
+    this.relatedAttempts = 0;
+    this.relatedWatch.set(false);
+    this.relatedNodes.set([]);
+    this.relatedError.set("");
+    this.relatedLoading.set(false);
+  }
+  private armRelated(detail: Detail): void {
+    if (!(RELATED_KINDS as readonly string[]).includes(detail.kind)) return;
+    this.relatedWatch.set(true);
+    const generation = this.generation;
+    const id = detail.id;
+    clearTimeout(this.relatedTimer);
+    this.relatedTimer = setTimeout(() => this.attachRelated(id, generation, 0));
+  }
+  private attachRelated(id: number, generation: number, waits: number): void {
+    if (!this.relatedAlive || generation !== this.generation || this.relatedStarted) return;
+    const element = this.relatedSentinel?.nativeElement;
+    if (!element) {
+      if (waits < 3) {
+        this.relatedTimer = setTimeout(() => this.attachRelated(id, generation, waits + 1));
+      }
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      if (this.relatedObserver === observer) this.relatedObserver = undefined;
+      if (!this.relatedAlive || generation !== this.generation || this.item()?.id !== id) return;
+      if (this.relatedStarted) return;
+      this.relatedStarted = true;
+      this.fetchRelated(id, generation);
+    });
+    this.relatedObserver = observer;
+    observer.observe(element);
+  }
+  private fetchRelated(id: number, generation: number): void {
+    if (!this.relatedAlive || generation !== this.generation || this.item()?.id !== id) return;
+    if (this.relatedAttempts >= RELATED_ATTEMPT_LIMIT) return;
+    this.relatedAttempts += 1;
+    this.relatedRequest?.unsubscribe();
+    this.relatedError.set("");
+    this.relatedLoading.set(true);
+    this.relatedRequest = this.http
+      .get<{ nodes?: unknown }>("/media/api/entries/" + id + "/web")
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (body) => {
+          if (!this.relatedAlive || generation !== this.generation || this.item()?.id !== id) return;
+          this.relatedNodes.set(cleanNodes(body?.nodes));
+          this.relatedLoading.set(false);
+          this.relatedError.set("");
+        },
+        error: (error) => {
+          if (!this.relatedAlive || generation !== this.generation || this.item()?.id !== id) return;
+          this.relatedNodes.set([]);
+          this.relatedLoading.set(false);
+          this.relatedError.set(errorCopy(error));
+        },
+      });
+  }
+  get relatedCanRetry(): boolean {
+    return (
+      !!this.relatedError() &&
+      !this.relatedLoading() &&
+      this.relatedAttempts < RELATED_ATTEMPT_LIMIT
+    );
+  }
+  retryRelated(): void {
+    const item = this.item();
+    if (!item || !this.relatedCanRetry) return;
+    this.fetchRelated(item.id, this.generation);
+  }
+  relatedLink(node: { title: string }): string {
+    return relatedHref(node);
+  }
+  relatedMeta(node: RelatedNode): string {
+    const label = relationLabel(node.relation);
+    if (label && node.year !== null) return label + " · " + node.year;
+    return label || (node.year !== null ? String(node.year) : "");
+  }
+  openRelated(event: MouseEvent, node: { title: string }): void {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    void this.router.navigateByUrl(relatedHref(node));
   }
   onTagText(value: string): void {
     this.tagText = value;

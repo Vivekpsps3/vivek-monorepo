@@ -1,5 +1,8 @@
 export const RELATED_KINDS = ["movie", "tv", "book"];
 
+/** One visible load plus two explicit retries. Further clicks do not call /web. */
+export const RELATED_ATTEMPT_LIMIT = 3;
+
 const RELATION_LABELS = {
   sequel: "Sequel",
   spinoff: "Spin-off",
