@@ -52,8 +52,8 @@ Local gates on this worktree, `PYTHON=/home/vivek/Deployments/vivek-monorepo/.ve
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
-- Roadmap #134 append-only status-note URL: not posted yet.
-- Merged/activation status (actual evidence, not assumption): not merged. Local gates above passed. CI has not run.
-- Remaining external prerequisites or approved scope decisions: none for this packet. #346 is an in-flight edit to the same world listener assertion; merge will need a trivial resolution if both land.
-- Next actor: open the PR with `Closes #250`, watch CI, squash-merge, then record the squash SHA.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/347 (`Closes #250` only).
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6807406790
+- Merged/activation status (actual evidence, not assumption): PR #347 is open. Local gates passed. CI has not been recorded yet.
+- Remaining external prerequisites or approved scope decisions: none for this packet. #346 also edits the world listener assertion; merge may need a trivial resolution if both land.
+- Next actor: watch CI, squash-merge, then record the squash SHA.
