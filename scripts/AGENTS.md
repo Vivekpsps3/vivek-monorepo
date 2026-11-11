@@ -10,7 +10,9 @@ replace behavior evidence with a source substring that merely resembles it.
 Keep policy in its existing gate; reuse a small check instead of creating a registry.
 
 Operations and migration commands must use disposable synthetic fixtures for local
-verification. Preserve backup retention/recovery and transaction invariants. A passing
+verification. Preserve backup retention/recovery and transaction invariants. Hourly
+backups keep a 30-day window and at least seven verified copies. Pre-migration backups
+keep the newest file of each of the last three revisions. A passing
 fixture or configured adapter is not proof a live destination, recipient or restore
 has been activated. Use [OPERATIONS](../docs/OPERATIONS.md) and
 [MIGRATIONS](../docs/MIGRATIONS.md) for those changes.

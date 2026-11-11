@@ -2,13 +2,7 @@
 
 See [Operations — backup and recovery](OPERATIONS.md#backup-and-recovery).
 The unified site database is backed up online about hourly by the maintenance container and before deployment;
-each backup is integrity-checked and restored into a separate verification copy.
-Backups are private. Current Compose configuration keeps one verified hourly
-snapshot (`SITE_BACKUP_KEEP=1`), plus pre-migration snapshots that retain the newest
-copy for each of at least three revisions. There is no 30-day hourly history today.
+each backup is integrity-checked and restored into a separate verification copy before it is published.
+Backups are private. Hourly `site-*` snapshots use one retention rule. A verified copy within 30 days stays, and at least seven verified copies stay when that many exist. Compose sets `SITE_BACKUP_KEEP` to `7` and `SITE_BACKUP_KEEP_DAYS` to `30`. Unset variables mean those same defaults. A snapshot counts only when its manifest records a successful restore check and the checksum matches the file. A failed checksum does not take a slot and is not deleted by this rule. Pre-migration snapshots use the `premigrate-*` prefix, stay outside that rule, and keep the newest file of each of the last three revisions.
 
-[Operations #125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) selects
-off-host encrypted backups, recovery drills and a future 30-day/minimum-seven
-snapshot policy. That backlog does not change the current retention setting or
-prove an off-host destination is active. All current copies remain vulnerable
-to loss or compromise of this machine.
+Applying this Compose file is a host rollout. A process still running with the previous minimum of one keeps that minimum until the new file is the one it was started from. This tree does not rewrite snapshots already stored on a machine, and it does not prove an off-host destination. [Operations #125](https://github.com/Vivekpsps3/vivek-monorepo/issues/125) still owns off-host encrypted backups and recovery drills. Copies on this machine can be lost with the machine.

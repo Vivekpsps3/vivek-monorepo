@@ -120,9 +120,8 @@ export class SessionService {
     } catch (err) {
       const mapped = this.asUsernameError(err);
       if (mapped.status !== 403) throw mapped;
-      this.requireCurrentSession(epoch);
-      const refreshed = await this.refreshCsrf(epoch);
-      if (!refreshed) throw mapped;
+      const failure = await this.refreshCsrf(epoch);
+      if (failure) throw failure;
       try {
         return await this.submitUsernameChange(requested, passphrase);
       } catch (retryErr) {
@@ -140,21 +139,29 @@ export class SessionService {
     return new UsernameChangeError(0);
   }
 
-  /** Re-read the session so a stale CSRF cookie can be replaced, then the caller retries once. */
-  private async refreshCsrf(epoch: number): Promise<boolean> {
+  /**
+   * Re-read this browser's session so a stale CSRF cookie can be replaced.
+   * Null means the same user still has a cookie and the caller may retry once.
+   * Any failure is the error to show; the caller must not send the mutation again.
+   */
+  private async refreshCsrf(epoch: number): Promise<UsernameChangeError | null> {
     try {
+      this.requireCurrentSession(epoch);
       const res = await firstValueFrom(
         this.http.get<MeResponse>(apiUrl('/auth/me'), { withCredentials: true, context: silentErrorToast() })
       );
       this.requireCurrentSession(epoch);
-      if (res?.user && res.user.id === this.currentUser?.id) {
-        this.checkedSession = true;
-        this.userSubject.next(res.user);
-        return !!this.csrfToken;
+      if (!res?.user || res.user.id !== this.currentUser?.id || !this.csrfToken) {
+        return new UsernameChangeError(403);
       }
-      return false;
-    } catch {
-      return false;
+      this.checkedSession = true;
+      this.userSubject.next(res.user);
+      return null;
+    } catch (err) {
+      if (err instanceof UsernameChangeError) return err;
+      const classified = this.asUsernameError(err);
+      if (classified.status === 401 || classified.status === 403) return new UsernameChangeError(403);
+      return classified;
     }
   }
 

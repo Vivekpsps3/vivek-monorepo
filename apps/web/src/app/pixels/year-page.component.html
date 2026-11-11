@@ -24,28 +24,30 @@
     @if (stats(); as stats) {
       <app-year-stats [stats]="stats" [financeStatus]="snapshot.financeStatus" />
     }
-    @if (preferences.view() === 'table') {
-      <app-year-table [days]="snapshot.days" (selected)="selectDay($event)" />
-    } @else {
-      <app-year-grid
-        [year]="year()"
-        [days]="snapshot.days"
-        [selected]="day()"
-        [colorBy]="preferences.colorBy()"
-        [today]="today"
-        [phone]="phone()"
-        (picked)="selectDay($event)"
-      />
-      @if (selectedDay(); as current) {
-        <app-day-detail
-          [day]="current"
-          [financeStatus]="snapshot.financeStatus"
+    <div class="year-body">
+      @if (preferences.view() === 'table') {
+        <app-year-table [days]="snapshot.days" (selected)="selectDay($event)" />
+      } @else {
+        <app-year-grid
+          [year]="year()"
+          [days]="snapshot.days"
+          [selected]="day()"
+          [colorBy]="preferences.colorBy()"
           [today]="today"
           [phone]="phone()"
-          (closed)="clearDay()"
+          (picked)="selectDay($event)"
         />
+        @if (selectedDay(); as current) {
+          <app-day-detail
+            [day]="current"
+            [financeStatus]="snapshot.financeStatus"
+            [today]="today"
+            [phone]="phone()"
+            (closed)="clearDay()"
+          />
+        }
       }
-    }
-    <app-pixels-legend [colorBy]="preferences.colorBy()" />
+      <app-pixels-legend [colorBy]="preferences.colorBy()" />
+    </div>
   }
 </ui-state>

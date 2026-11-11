@@ -3,3 +3,15 @@
   min-width: 0;
   max-width: 100%;
 }
+
+@media (max-width: 640px) {
+  .year-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .year-body > app-pixels-legend {
+    order: -1;
+  }
+}

@@ -3,13 +3,17 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
+import sqlite3
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 from fastapi import Depends, HTTPException, Request, Response, status
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from apps.server.database import get_db
 from apps.server.identity.models import AuditEvent, User, UserRole, UserSession
@@ -124,13 +128,79 @@ def clear_session_cookie(response: Response) -> None:
     )
 
 
+def committed_csrf_hash(db: Session, session_id: int) -> str | None:
+    """Read the committed hash without taking another connection from the request pool.
+
+    A file database opens its own SQLite connection, so this request cannot
+    deadlock the pool while it waits to see another transaction's winner.
+    The shared memory pool is one connection; a second session would roll
+    the request back, so that path reads the current session.
+    """
+    bind = db.get_bind()
+    engine = bind.engine if isinstance(bind, Connection) else bind
+    if isinstance(getattr(engine, "pool", None), StaticPool):
+        stored = db.query(UserSession.csrf_token_hash).filter(UserSession.id == session_id).scalar()
+        return stored if isinstance(stored, str) else None
+    database = getattr(engine.url, "database", None)
+    if not isinstance(database, str) or not database:
+        return None
+    raw = sqlite3.connect(database, timeout=5)
+    try:
+        row = raw.execute(
+            "SELECT csrf_token_hash FROM user_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+    finally:
+        raw.close()
+    if row is None or not isinstance(row[0], str):
+        return None
+    return row[0]
+
+
+def emit_committed_csrf(db: Session, response: Response, session_id: int, csrf: str) -> None:
+    """Publish a CSRF cookie only when that token is the committed winner."""
+    if not csrf:
+        return
+    winner = committed_csrf_hash(db, session_id)
+    if isinstance(winner, str) and secrets.compare_digest(_hash_secret(csrf), winner):
+        set_csrf_cookie(response, csrf)
+
+
+def commit_csrf_repair(db: Session, session: UserSession, observed_hash: str, fresh: str) -> bool:
+    """Compare-and-set the observed hash and commit that winner.
+
+    The observed hash is the revision. A lost update does not commit ``fresh``.
+    """
+    fresh_hash = _hash_secret(fresh)
+    updated = (
+        db.query(UserSession)
+        .filter(UserSession.id == session.id, UserSession.csrf_token_hash == observed_hash)
+        .update({"csrf_token_hash": fresh_hash}, synchronize_session=False)
+    )
+    if updated != 1:
+        return False
+    session.csrf_token_hash = fresh_hash
+    try:
+        db.commit()
+    except Exception:
+        session.csrf_token_hash = observed_hash
+        with suppress(Exception):
+            db.rollback()
+        return False
+    winner = committed_csrf_hash(db, int(session.id))
+    return isinstance(winner, str) and secrets.compare_digest(winner, fresh_hash)
+
+
 def repair_csrf_cookie(db: Session, request: Request, response: Response) -> None:
-    """Replace a CSRF cookie that was sent and does not match the live session.
+    """Replace a mismatched CSRF cookie with the committed winner only.
 
     ``GET /auth/me`` does not require the CSRF header. The raw token is only
     stored in the cookie, so a mismatch cannot be repaired by echoing it.
     A missing cookie is left alone: rewriting the hash would reject a later
     write that still sends the original header. A matching cookie stays.
+    The update matches the hash observed before the write. The winner is
+    committed before its cookie is attached. A lost compare-and-set does
+    not publish its token.
     """
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
@@ -150,18 +220,26 @@ def repair_csrf_cookie(db: Session, request: Request, response: Response) -> Non
     csrf = request.cookies.get(CSRF_COOKIE_NAME) or ""
     if not csrf:
         return
-    stored = getattr(session, "csrf_token_hash", None)
-    if isinstance(stored, str) and secrets.compare_digest(_hash_secret(csrf), stored):
+    observed = session.csrf_token_hash
+    if not isinstance(observed, str):
+        return
+    if secrets.compare_digest(_hash_secret(csrf), observed):
         return
     fresh = secrets.token_urlsafe(32)
-    db.query(UserSession).filter(UserSession.id == session.id).update(
-        {"csrf_token_hash": _hash_secret(fresh)}, synchronize_session=False
-    )
-    set_csrf_cookie(response, fresh)
+    if not commit_csrf_repair(db, session, observed, fresh):
+        return
+    emit_committed_csrf(db, response, int(session.id), fresh)
 
 
-def refresh_session_cookies(request: Request, response: Response, session: UserSession) -> None:
-    """Keep a browser that is still in use signed in for another SESSION_DAYS."""
+def refresh_session_cookies(
+    db: Session, request: Request, response: Response, session: UserSession
+) -> None:
+    """Slide the session lifetime, then echo a CSRF cookie that is still committed.
+
+    Only the lifetime attributes are changed, so the flush cannot write a
+    stale CSRF hash over a winner committed on another connection. The cookie
+    is published from a separate read of that committed hash.
+    """
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
         return
@@ -169,9 +247,7 @@ def refresh_session_cookies(request: Request, response: Response, session: UserS
     session.expires_at = now + timedelta(days=SESSION_DAYS)
     session.last_seen_at = now
     set_session_cookie(response, token)
-    csrf = request.cookies.get(CSRF_COOKIE_NAME)
-    if csrf and secrets.compare_digest(_hash_secret(csrf), session.csrf_token_hash):
-        set_csrf_cookie(response, csrf)
+    emit_committed_csrf(db, response, int(session.id), request.cookies.get(CSRF_COOKIE_NAME) or "")
 
 
 def create_session(
@@ -244,7 +320,7 @@ def get_current_user(
             raise
         return open_local_dev_session(db, request, response)
     require_csrf(request, session)
-    refresh_session_cookies(request, response, session)
+    refresh_session_cookies(db, request, response, session)
     return user
 
 
@@ -258,7 +334,7 @@ def get_current_migration_user(
             detail="Passwordless enrollment is only available during migration",
         )
     require_csrf(request, session)
-    refresh_session_cookies(request, response, session)
+    refresh_session_cookies(db, request, response, session)
     return user
 
 
