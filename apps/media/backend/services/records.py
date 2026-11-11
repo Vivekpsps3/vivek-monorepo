@@ -1437,6 +1437,23 @@ def personal_status(kind: str, body: dict) -> str:
     )
 
 
+_FINISHED_KINDS = frozenset({"movie", "tv", "book", "game"})
+
+
+def apply_completion_day(entry: UserEntry, kind: str, previous_status: str | None) -> None:
+    """Stamp completed_on when a finished kind becomes completed, and clear it otherwise.
+
+    The column is not a response field. Credit is derived from the current row,
+    so leaving completed or deleting the entry retracts it.
+    """
+    if kind not in _FINISHED_KINDS:
+        return
+    if entry.status == "completed" and previous_status != "completed":
+        entry.completed_on = today()
+    elif entry.status != "completed":
+        entry.completed_on = None
+
+
 def new_entry(db: Session, user_id: int, catalog: CatalogItem, body: dict) -> UserEntry:
     status = personal_status(catalog.kind, body)
     entry = UserEntry(
@@ -1460,6 +1477,7 @@ def new_entry(db: Session, user_id: int, catalog: CatalogItem, body: dict) -> Us
         entry.follow_provenance = "explicit"
     if entry.review:
         entry.review_updated_at = utc_now()
+    apply_completion_day(entry, catalog.kind, None)
     if (
         entry.progress_unit == "percent"
         and entry.progress_value is not None
@@ -1538,6 +1556,7 @@ def _entry_snapshot(entry: UserEntry) -> tuple:
 def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
     if assert_review_base(entry, body):
         return entry
+    previous_status = entry.status
     before = _entry_snapshot(entry)
     before_review = entry.review
     records_release = any(
@@ -1591,6 +1610,7 @@ def patch_entry(db: Session, entry: UserEntry, body: dict) -> UserEntry:
         fail("Percent progress is between 0 and 100.")
     if entry.review != before_review:
         entry.review_updated_at = utc_now()
+    apply_completion_day(entry, entry.catalog.kind, previous_status)
     fill_only = entry.catalog.source != "manual"
     apply_catalog_fields(
         entry.catalog,

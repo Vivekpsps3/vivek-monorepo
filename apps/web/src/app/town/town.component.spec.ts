@@ -174,6 +174,8 @@ describe('Town page', () => {
     tick(60_000);
     expect(localDay(new Date())).toBe('2026-10-30');
     expect(api.getTown).toHaveBeenCalledTimes(2);
+    tick(300_000);
+    expect(api.getTown).toHaveBeenCalledTimes(2);
     data.town.today = '2026-10-30'; response.next(data); tick(300_000);
     expect(localDay(new Date())).toBe('2026-10-30');
     expect(api.getTown).toHaveBeenCalledTimes(2);

@@ -5,14 +5,16 @@ from decimal import Decimal
 from fractions import Fraction
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.server.auth import Principal, require_principal
 from apps.server.errors import APIError
 from apps.travel.backend.database import get_db
-from apps.travel.backend.models import LeavePolicy
+from apps.travel.backend.deps import settings_key
+from apps.travel.backend.models import LeavePolicy, Setting
 from apps.travel.backend.routers.pto import _payload
-from apps.travel.backend.schemas import LeavePolicyIn, PtoSettingsIn
+from apps.travel.backend.schemas import LeavePolicyIn, PtoSettingsIn, SickRemovalIn
 from apps.travel.backend.services.leave_buckets import (
     dual_write_pto_policy,
     hours_per_day,
@@ -24,6 +26,7 @@ from apps.travel.backend.services.leave_buckets import (
     store_hours,
 )
 from apps.travel.backend.services.leave_math import (
+    Bucket,
     bucket_from_row,
     fmt_hours,
     policy_year,
@@ -40,6 +43,9 @@ router = APIRouter()
 _BUCKETS = ("pto", "sick")
 _CHECK = "Check the highlighted fields."
 _MISSING = "That leave bucket is not here."
+_SICK_REVISION = "sick_policy_revision"
+_SICK_CONFLICT = "Sick policy changed. Nothing was removed."
+_SICK_ABSENT = "Sick policy is not set up."
 
 
 def _known(bucket: str) -> None:
@@ -73,6 +79,99 @@ def _configured(row: LeavePolicy | None) -> bool:
     return row is not None and bool(row.configured)
 
 
+def _sick_revision_key(user_id: int) -> str:
+    return settings_key(user_id, _SICK_REVISION)
+
+
+def _sick_revision(db: Session, user_id: int) -> int:
+    row = db.get(Setting, _sick_revision_key(user_id))
+    if row is None:
+        return 0
+    try:
+        value = int(row.value)
+    except (TypeError, ValueError):
+        return 0
+    return value if value >= 0 else 0
+
+
+def _bump_sick_revision(db: Session, user_id: int) -> int:
+    """Advance this owner's Sick revision after a successful save."""
+    key = _sick_revision_key(user_id)
+    for _attempt in range(4):
+        row = db.get(Setting, key)
+        if row is None:
+            try:
+                with db.begin_nested():
+                    db.add(Setting(key=key, value="1"))
+                    db.flush()
+            except IntegrityError:
+                continue
+            return 1
+        try:
+            current = int(row.value)
+        except (TypeError, ValueError):
+            current = 0
+        updated = (
+            db.query(Setting)
+            .filter(Setting.key == key, Setting.value == str(current))
+            .update({Setting.value: str(current + 1)}, synchronize_session="fetch")
+        )
+        if updated == 1:
+            return current + 1
+        db.expire(row)
+    raise APIError(409, "sick_policy_conflict", _SICK_CONFLICT)
+
+
+def _claim_sick_revision(db: Session, user_id: int, expected: int) -> None:
+    """Apply a removal only when the confirmed revision is still current."""
+    if expected < 0:
+        raise APIError(409, "sick_policy_conflict", _SICK_CONFLICT)
+    key = _sick_revision_key(user_id)
+    updated = (
+        db.query(Setting)
+        .filter(Setting.key == key, Setting.value == str(expected))
+        .update({Setting.value: str(expected + 1)}, synchronize_session="fetch")
+    )
+    if updated == 1:
+        return
+    existing = db.get(Setting, key)
+    if existing is None and expected == 0:
+        try:
+            with db.begin_nested():
+                db.add(Setting(key=key, value="1"))
+                db.flush()
+        except IntegrityError:
+            raise APIError(409, "sick_policy_conflict", _SICK_CONFLICT) from None
+        return
+    raise APIError(409, "sick_policy_conflict", _SICK_CONFLICT)
+
+
+def _reset_sick_setup(row: LeavePolicy, today: date) -> None:
+    row.configured = False
+    row.start_balance_hours = "0"
+    row.balance_as_of = today
+    row.accrual_hours = "0"
+    row.accrual_cadence = "yearly"
+    row.cap_hours = None
+    row.year_start = "01-01"
+    row.carry_forward = True
+
+
+def _bucket_from_clean(bucket: str, clean: dict) -> Bucket:
+    cap = clean["cap_hours"]
+    return Bucket(
+        bucket=bucket,
+        configured=True,
+        start_balance_hours=Fraction(clean["start_balance_hours"]),
+        balance_as_of=clean["balance_as_of"],
+        accrual_hours=Fraction(clean["accrual_hours"]),
+        accrual_cadence=clean["accrual_cadence"],
+        cap_hours=None if cap is None else Fraction(cap),
+        year_start=clean["year_start"],
+        carry_forward=bool(clean["carry_forward"]),
+    )
+
+
 def bucket_state(db: Session, user_id: int, bucket: str, usages, today: date, hpd: Decimal):
     row = _leave_row(db, user_id, bucket)
     if not _configured(row):
@@ -82,7 +181,7 @@ def bucket_state(db: Session, user_id: int, bucket: str, usages, today: date, hp
     charges = _charges([usage for usage in usages if usage.bucket == bucket], hpd)
     balance, before = walk_bucket(parsed, charges, today)
     cap = parsed.cap_hours
-    return {
+    state = {
         "bucket": bucket,
         "configured": True,
         "start_balance_hours": row.start_balance_hours,
@@ -97,6 +196,9 @@ def bucket_state(db: Session, user_id: int, bucket: str, usages, today: date, hp
         "at_cap": cap is not None and balance >= cap,
         "today_before_balance_date": before,
     }
+    if bucket == "sick":
+        state["revision"] = _sick_revision(db, user_id)
+    return state
 
 
 def series_body(db: Session, user_id: int, today: date) -> dict:
@@ -219,12 +321,62 @@ def save_policy(
     row.year_start = clean["year_start"]
     row.carry_forward = clean["carry_forward"]
     db.flush()
+    if bucket == "sick":
+        _bump_sick_revision(db, principal.id)
     if bucket == "pto":
         if hours_setting_text(db, principal.id) is None:
             set_hours_per_day(db, principal.id, store_hours(Decimal("8")))
         dual_write_pto_policy(db, principal.id)
         db.flush()
     return _payload(db, principal.id)
+
+
+@router.post("/pto/policies/sick/removal")
+def remove_sick_policy(
+    body: SickRemovalIn,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    """Unconfigure this owner's Sick policy. Ledger rows and PTO stay."""
+    row = _leave_row(db, principal.id, "sick")
+    if row is None:
+        raise APIError(404, "sick_policy_missing", _SICK_ABSENT)
+    if not row.configured:
+        raise APIError(409, "sick_policy_conflict", _SICK_CONFLICT)
+    _claim_sick_revision(db, principal.id, body.revision)
+    _reset_sick_setup(row, date.today())
+    set_sick_prompt(db, principal.id, False)
+    db.flush()
+    return _payload(db, principal.id)
+
+
+@router.post("/pto/policies/{bucket}/impact")
+def preview_policy_impact(
+    bucket: str,
+    body: LeavePolicyIn,
+    db: Session = Depends(get_db, scope="function"),
+    principal: Principal = Depends(require_principal),
+):
+    """Project a dated balance correction. Does not write policy or ledger rows."""
+    _known(bucket)
+    row = _leave_row(db, principal.id, bucket)
+    if not _configured(row):
+        raise HTTPException(status_code=404, detail=_MISSING)
+    clean, errors = validate_policy_body(body.model_dump(), row, date.today())
+    if errors:
+        _fail(errors)
+    assert clean is not None
+    assert row is not None
+    hpd = hours_per_day(db, principal.id)
+    _stored, usages = load_usages(db, principal.id)
+    charges = _charges([usage for usage in usages if usage.bucket == bucket], hpd)
+    balance, _before = walk_bucket(_bucket_from_clean(bucket, clean), charges, date.today())
+    return {
+        "bucket": bucket,
+        "balance_today_hours": fmt_hours(balance),
+        "balance_today_days": fmt_days(_days(balance, hpd)),
+        "entries_rewritten": False,
+    }
 
 
 @router.get("/pto/series")

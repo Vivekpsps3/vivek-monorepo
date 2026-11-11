@@ -1,5 +1,6 @@
 """Trips and everything that belongs to one trip."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -75,6 +76,19 @@ def _check_transport_link(db: Session, trip_id: int, transport_id: int | None) -
     row = db.get(Transport, transport_id)
     if row is None or row.trip_id != trip_id:
         raise HTTPException(status_code=422, detail="Pick a flight or ride on this trip.")
+
+
+def _stamp_done(row: Reminder, previously_done: bool) -> None:
+    """Record the instant a reminder becomes done, and clear it when undone.
+
+    done_at is not a response field. Town credits the current timestamp, so
+    undo and delete retract the reminder instead of stacking another day.
+    """
+    if row.done:
+        if not previously_done or row.done_at is None:
+            row.done_at = datetime.now(UTC)
+        return
+    row.done_at = None
 
 
 def _check_stay_link(db: Session, trip_id: int, stay_id: int | None) -> None:
@@ -442,6 +456,7 @@ def create_reminder(
     trip = _trip_or_404(db, trip_id, principal.id)
     row = Reminder(trip_id=trip.id)
     apply_reminder(row, body)
+    _stamp_done(row, False)
     db.add(row)
     touch(trip)
     db.flush()
@@ -459,7 +474,9 @@ def update_reminder(
     if row is None:
         raise HTTPException(status_code=404, detail="That reminder is not here.")
     trip = _trip_or_404(db, row.trip_id, principal.id)
+    previously_done = bool(row.done)
     apply_reminder(row, body)
+    _stamp_done(row, previously_done)
     touch(trip)
     db.flush()
     return _detail(db, trip.id, principal.id)
