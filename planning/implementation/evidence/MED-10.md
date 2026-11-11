@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#285](https://github.com/Vivekpsps3/vivek-monorepo/issues/285); parent [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) stays open
 - Agent/context, branch/worktree: implementer, `agent/med-10`, `/tmp/vivek-med-10`
-- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1`. Local gates below ran on this working tree immediately before the commit that adds this file.
+- Base main SHA, current tested SHA: base `a7e16c6fa5bd5543514081e0834022fe38dcd1d1`. Local gates below ran on product commit `3d3819127b19a31208430dbaab50aab787f5143e` before this evidence SHA line.
 - Fresh-main/prerequisite/active-PR checks: worktree HEAD matched `origin/main` at the base above. `gh issue view` showed MED-01 #235, MED-08 #242, and MED-02 #236 closed, and #285 open with no prior claim. No open pull requests. MED-08 (`d858f3d`) and MED-02 (`0c6e6bf`) are in this base. Catalog lookup and the tag editor were not reworked.
 
 ## Acceptance
@@ -62,8 +62,8 @@ Focused `detail-races.spec.ts` was 4 passed before the full Media run. Not run: 
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending in this commit; `Closes #285` only. #85 is referenced and stays open.
-- Roadmap #134 append-only status-note URL: pending until the PR exists.
-- Merged/activation status: not merged. Local verification only.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/336 (`Closes #285` only). #85 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: posted when this PR opened; merge note follows squash.
+- Merged/activation status: PR #336 open. Not merged. Local verification passed; CI not yet recorded.
 - Remaining external prerequisites or approved scope decisions: none. Monday composer header was already implemented (`weekdayHeads` / `weekDayLabels`); this leaf did not add a second calendar.
-- Next actor: open the PR, watch CI, squash-merge, then record the squash SHA here and on #285 and #134.
+- Next actor: watch CI on #336, squash-merge, then record the squash SHA here and on #285 and #134.
