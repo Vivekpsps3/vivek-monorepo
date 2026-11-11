@@ -33,8 +33,8 @@ for (const viewport of VIEWPORTS) {
         await vault.open('/');
         const trigger = page.getByRole('banner').getByRole('button', { name: 'synthetic', exact: true });
         const menu = await openUserMenu(page);
-        await menu.getByRole('button', { name: 'Details', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: 'Price checks' });
+        await menu.getByRole('button', { name: 'About price checks', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'About price checks' });
         await expect(dialog).toBeVisible();
         await expect(dialog.getByText('Price checks send ticker symbols only. Shares, balances and plans stay encrypted in this browser.')).toBeVisible();
         await expect(dialog.getByText("Prices come from a public market-data service, requested by Finance's server.")).toBeVisible();

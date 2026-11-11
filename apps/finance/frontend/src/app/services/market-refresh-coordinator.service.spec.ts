@@ -10,6 +10,7 @@ import { clearFinanceSessionStorage } from '../crypto/dek-store';
 import { VaultService } from '../crypto/vault.service';
 import type { SessionUser } from '@vivek/auth';
 import type { MarketPriceQuote } from '../models/transaction.model';
+import { FinancePricePrefsService } from '../core/finance-price-prefs.service';
 import { FinanceService, type FinanceDataChange } from './finance.service';
 import { MarketRefreshCoordinatorService } from './market-refresh-coordinator.service';
 
@@ -89,7 +90,10 @@ describe('MarketRefreshCoordinatorService', () => {
     coordinator = TestBed.inject(MarketRefreshCoordinatorService);
   });
 
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
 
   async function waitForFinished(): Promise<any> {
     return new Promise(resolve => {
@@ -117,7 +121,8 @@ describe('MarketRefreshCoordinatorService', () => {
   });
 
   it('skips the automatic check when the user turned it off, but manual refresh still works', async () => {
-    localStorage.setItem('finance-auto-price-check:7', 'off');
+    const prefs = TestBed.inject(FinancePricePrefsService);
+    prefs.setAutoCheck(7, false);
     let autoCheckEmissions = 0;
     coordinator.firstAutoCheck$.subscribe(() => { autoCheckEmissions += 1; });
     coordinator.startForSession(7, 11);
@@ -127,21 +132,69 @@ describe('MarketRefreshCoordinatorService', () => {
     expect(finance.lookupSharePrice).not.toHaveBeenCalled();
     expect(autoCheckEmissions).toBe(0);
     expect(coordinator.currentState.phase).toBe('idle');
+    expect(coordinator.automaticCheckAnnounced).toBeFalse();
 
     const state = await coordinator.refreshNow();
     expect(state.phase).toBe('complete');
     expect(finance.lookupSharePrice.calls.count()).toBe(2);
-    localStorage.removeItem('finance-auto-price-check:7');
+    expect(coordinator.disclosedSymbols).toEqual(['AAPL', 'FORMERCO']);
+    expect(localStorage.getItem('finance-auto-price-check:7')).toBe('off');
+    expect(prefs.autoCheck(8)).toBeTrue();
   });
 
-  it('emits firstAutoCheck$ once when the automatic check starts', async () => {
-    let emissions = 0;
-    coordinator.firstAutoCheck$.subscribe(() => { emissions += 1; });
+  it('does not refresh on the next unlock while that user stays off (PRICE1)', async () => {
+    const prefs = TestBed.inject(FinancePricePrefsService);
+    prefs.setAutoCheck(7, false);
+    coordinator.startForSession(7, 11);
+    await Promise.resolve();
+    coordinator.endSession();
+    finance.sessionToken = 12;
+    coordinator.startForSession(7, 12);
+    await Promise.resolve();
+    expect(finance.lookupSharePrice).not.toHaveBeenCalled();
+    expect(prefs.autoCheck(7)).toBeFalse();
+  });
+
+  it('keeps the off preference for one user and checks prices for another (PRICE1)', async () => {
+    const prefs = TestBed.inject(FinancePricePrefsService);
+    prefs.setAutoCheck(7, false);
+    coordinator.startForSession(7, 11);
+    await Promise.resolve();
+    expect(finance.lookupSharePrice).not.toHaveBeenCalled();
+    coordinator.endSession();
+    finance.sessionToken = 12;
+    const finished = waitForFinished();
+    coordinator.startForSession(8, 12);
+    const state = await finished;
+    expect(state.phase).toBe('complete');
+    expect(finance.lookupSharePrice.calls.count()).toBe(2);
+    expect(prefs.autoCheck(7)).toBeFalse();
+    expect(prefs.autoCheck(8)).toBeTrue();
+    expect(coordinator.disclosedSymbols).toEqual(['AAPL', 'FORMERCO']);
+  });
+
+  it('checks prices when preference storage throws, because the default stays on', async () => {
+    spyOn(Storage.prototype, 'getItem').and.throwError('blocked');
+    const finished = waitForFinished();
+    coordinator.startForSession(7, 11);
+    const state = await finished;
+    expect(state.phase).toBe('complete');
+    expect(finance.lookupSharePrice.calls.count()).toBe(2);
+  });
+
+  it('emits firstAutoCheck$ once with the held symbols when the automatic check starts', async () => {
+    const seen: string[][] = [];
+    coordinator.firstAutoCheck$.subscribe(symbols => seen.push([...symbols]));
     const finished = waitForFinished();
     coordinator.startForSession(7, 11);
     await finished;
     coordinator.startForSession(7, 11);
-    expect(emissions).toBe(1);
+    expect(seen).toEqual([['AAPL', 'FORMERCO']]);
+    expect(coordinator.disclosedSymbols).toEqual(['AAPL', 'FORMERCO']);
+    expect(coordinator.automaticCheckAnnounced).toBeTrue();
+    coordinator.endSession();
+    expect(coordinator.disclosedSymbols).toEqual([]);
+    expect(coordinator.automaticCheckAnnounced).toBeFalse();
   });
 
   it('continues after one symbol fails and reports a partial outcome', async () => {
@@ -440,6 +493,18 @@ describe('ST-03 zero-symbol refresh (F10)', () => {
   }
 
   afterEach(() => TestBed.resetTestingModule());
+
+  it('announces an empty ticker list and does not request a quote', async () => {
+    setup([]);
+    const seen: string[][] = [];
+    coordinator.firstAutoCheck$.subscribe(symbols => seen.push([...symbols]));
+    coordinator.startForSession(7, 11);
+    for (let i = 0; i < 5 && seen.length === 0; i += 1) await Promise.resolve();
+    expect(seen).toEqual([[]]);
+    expect(coordinator.disclosedSymbols).toEqual([]);
+    expect(coordinator.automaticCheckAnnounced).toBeTrue();
+    expect(finance.lookupSharePrice).not.toHaveBeenCalled();
+  });
 
   it('zero configured symbols → never emits refreshing, ends idle, no quote request', async () => {
     setup([]);
