@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#222](https://github.com/Vivekpsps3/vivek-monorepo/issues/222) FIN-03. Parent [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65) stays open. Source scope is #65 item 3 (F18 / #73).
 - Agent/context, branch/worktree: Cursor agent, branch `agent/fin-03`, worktree `/tmp/vivek-fin-03`.
-- Base main SHA, current tested SHA: base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Product gates ran on that base plus the FIN-03 product diff, before this evidence file. The commit SHA is recorded in the handoff after the commit.
+- Base main SHA, current tested SHA: base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Product gates ran on `f41c7d3d00df6f17552390f54b8f35d18cdb0585`. This handoff edit is documentation only.
 - Fresh-main/prerequisite/active-PR checks: no queue dependency. Open PR #319 was planning docs only and merged as `c252b4d` after this branch was cut. It does not edit Planning source. No other open PR touches `finance-planning`. Claim base remains `0ed83e95a3727acc4f512dd2ac77211d8a622407`.
 
 ## Acceptance
@@ -48,8 +48,8 @@ A focused Karma run of the three Planning specs (21/21, coverage off) was iterat
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending the pull request. `Closes #222`. Parent #65 is referenced and not closed.
-- Roadmap #134 append-only status-note URL: posted after the pull request exists.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/320 (`Closes #222`). Parent #65 is referenced and not closed.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786145705
 - Merged/activation status: not merged. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #65 stays open. `origin/main` also contains `c252b4d` (living-world planning docs, #319); this branch does not edit those files.
 - Next actor: review this pull request. The integration owner reconciles roadmap #134 after merge.
