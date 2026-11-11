@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#228](https://github.com/Vivekpsps3/vivek-monorepo/issues/228); parent [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84) stays open
 - Agent/context, branch/worktree: Cursor Grok, `agent/trip-04`, `/tmp/vivek-trip-04`
-- Base main SHA, current tested SHA: base `85212152bda3ce6cab5cbfcc9c787b564214fc69`. The gates below ran on the product and test tree in the commit that introduces this file. The commit SHA is filled in the handoff after `git rev-parse HEAD`.
+- Base main SHA, current tested SHA: base `85212152bda3ce6cab5cbfcc9c787b564214fc69`. Product and test commit `3b986d7dc6334d81f405ac77876c89f30974d20d` is the tree those gates ran against. This SHA line is the only later documentation change.
 - Fresh-main/prerequisite/active-PR checks: the branch was created from that base, which is origin/main at claim time. Before commit, open PRs were #348 (VER-03, Town coverage), #350 (CON-03, vault ownership), and #351 (PTO-05, `pto.spec.js` and PTO accrual). None of those diffs edit the trip forms, `validate.mjs`, or the trip end-to-end specs this leaf changes. `pto.spec.js` was not edited and was not executed.
 
 ## Acceptance
