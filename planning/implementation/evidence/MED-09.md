@@ -78,8 +78,8 @@ Local execution on product revision `ab4b4ba52d14e033bddd7f872f7e94b1eaa6915c` b
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this file, with `Closes #284`. Parent #85 is referenced and not closed.
-- Roadmap #134 append-only status-note URL: posted after the pull request. The issue body was not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/321 (`Closes #284`). Parent #85 is referenced and not closed.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786251037. The issue body was not edited.
 - Merged/activation status (actual evidence, not assumption): local gates passed. Merge is not done. This file does not claim deployment or activation.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. MED-06 owns detail presentation. MED-10 owns retained runtime QA.
 - Next actor: reviewer. Do not merge from this work.
@@ -100,6 +100,6 @@ Deletion ledger and current consumer migration: popstate clears the existing tim
 
 Commands run, results, tested SHA; required checks still pending: the table above. CI was not run here.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: the pull request and #134 note follow this commit. Not merged. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/321 and https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786251037. Not merged. Not deployed.
 
 External prerequisites and next actor: MED-01 is already on the base. Next actor is the reviewer.
