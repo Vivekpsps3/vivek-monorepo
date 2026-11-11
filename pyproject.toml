@@ -41,6 +41,9 @@ exclude = [
 ]
 
 [tool.coverage.run]
+# Statement mode. branch = false is the current measurement, not branch coverage.
+# omit is the denominator exclusion: tests and Alembic stay out. The fail-under
+# floors live in quality/coverage.txt and are separate from the last pin.
 branch = false
 omit = [
   "*/tests/*",
