@@ -413,6 +413,160 @@ for (const width of [390, 1280]) {
   });
 }
 
+test('remove sick keeps history and a dated correction previews it', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  expect((await request.post('/e2e/reset')).ok()).toBeTruthy();
+  await putBucket(request, 'pto', { start_balance_hours: '100', accrual_hours: '0' });
+  await putBucket(request, 'sick', { start_balance_hours: '80', accrual_hours: '0', balance_as_of: '2026-01-01' });
+  for (const entry of [
+    { label: 'Clinic', start_date: '2026-02-02', end_date: '2026-02-02', days: '1', bucket: 'sick' },
+    { label: 'Flu', start_date: '2026-12-04', end_date: '2026-12-05', days: '2', bucket: 'sick' },
+    { label: 'Family', start_date: '2026-12-01', end_date: '2026-12-01', days: '1', bucket: 'pto' },
+  ]) {
+    const saved = await request.post('/travel/api/pto/entries', { data: entry });
+    expect(saved.ok(), await saved.text()).toBeTruthy();
+  }
+  const trip = await request.post('/travel/api/trips', {
+    data: { title: 'Kyoto', start_date: '2026-12-10', end_date: '2026-12-12', counts_as_pto: true },
+  });
+  expect(trip.ok(), await trip.text()).toBeTruthy();
+  const tripId = (await trip.json()).id;
+  expect((await request.put('/travel/api/settings/pto', { data: { sick_prompt_dismissed: true } })).ok()).toBeTruthy();
+
+  async function ledger() {
+    const board = await (await request.get('/travel/api/pto')).json();
+    const detail = await (await request.get('/travel/api/trips/' + tripId)).json();
+    return {
+      entries: board.entries.map(row => ({
+        id: row.id, label: row.label, bucket: row.bucket, days: row.days,
+        start_date: row.start_date, end_date: row.end_date, trip_id: row.trip_id,
+      })),
+      pto: board.buckets.pto.start_balance_hours,
+      sick: board.buckets.sick,
+      dismissed: board.pto_sick_prompt_dismissed,
+      allocations: detail.pto_dates,
+    };
+  }
+
+  const before = await ledger();
+  expect(before.entries.filter(row => row.bucket === 'sick')).toHaveLength(2);
+  expect(before.allocations.length).toBeGreaterThan(0);
+  expect(before.dismissed).toBe(true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/travel/pto');
+  const remove = page.getByRole('button', { name: 'Remove Sick policy', exact: true });
+  await expect(remove).toBeVisible();
+  expect((await remove.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  let removals = 0;
+  page.on('request', hit => {
+    if (hit.method() === 'POST' && new URL(hit.url()).pathname.endsWith('/pto/policies/sick/removal')) removals += 1;
+  });
+  await remove.click();
+  const dialog = page.getByRole('dialog', { name: 'Remove Sick policy' });
+  await expect(dialog).toContainText('clears its saved setup');
+  await expect(dialog).toContainText('shows the sick-time prompt again');
+  await expect(dialog).toContainText('Past sick leave, future allocations, and every PTO row stay.');
+  await dialog.getByRole('button', { name: 'Keep Sick policy', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(removals).toBe(0);
+  expect(await ledger()).toEqual(before);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/travel/pto');
+  await page.getByRole('button', { name: 'Remove Sick policy', exact: true }).click();
+  const conflicted = await request.put('/travel/api/pto/policies/sick', {
+    data: { ...base, start_balance_hours: '64', accrual_hours: '0' },
+  });
+  expect(conflicted.ok(), await conflicted.text()).toBeTruthy();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove Sick policy', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
+    "Couldn't remove the Sick policy. Nothing was changed. Try again.",
+  );
+  let duringConflict = await ledger();
+  expect(duringConflict.entries).toEqual(before.entries);
+  expect(duringConflict.allocations).toEqual(before.allocations);
+  expect(duringConflict.pto).toBe('100');
+  expect(duringConflict.sick.start_balance_hours).toBe('64');
+  expect(duringConflict.sick.configured).toBe(true);
+  const refreshed = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET' && url.pathname.endsWith('/travel/api/pto') && response.ok();
+  });
+  await page.getByRole('dialog').getByRole('button', { name: 'Keep Sick policy', exact: true }).click();
+  await refreshed;
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit Sick', exact: true }).click();
+  await expect(page.getByLabel('Starting balance')).toHaveValue('64');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  let failures = 0;
+  await page.route('**/travel/api/pto/policies/sick/removal', route => {
+    failures += 1;
+    if (failures === 1) return route.fulfill({ status: 502, json: { message: 'down' } });
+    return route.continue();
+  });
+  const duringFailure = await ledger();
+  await page.getByRole('button', { name: 'Remove Sick policy', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove Sick policy', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
+    "Couldn't remove the Sick policy. Nothing was changed. Try again.",
+  );
+  expect(await ledger()).toEqual(duringFailure);
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove Sick policy', exact: true }).click();
+  await expect(page.getByText('Sick policy removed.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Track sick time too', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Clinic', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Flu', exact: true })).toBeVisible();
+  const removed = await ledger();
+  expect(removed.entries).toEqual(before.entries);
+  expect(removed.allocations).toEqual(before.allocations);
+  expect(removed.pto).toBe('100');
+  expect(removed.sick).toBeNull();
+  expect(removed.dismissed).toBe(false);
+
+  await page.getByRole('button', { name: 'Set up Sick', exact: true }).click();
+  await page.getByLabel('Starting balance').fill('80');
+  await page.getByLabel('You earn').fill('0');
+  await page.getByLabel('Balance as of').fill('2026-01-01');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('Sick policy saved.', { exact: true })).toBeVisible();
+  const restored = await ledger();
+  expect(restored.entries).toEqual(before.entries);
+
+  await page.getByRole('button', { name: 'Edit Sick', exact: true }).click();
+  const start = page.getByLabel('Starting balance');
+  const firstImpact = page.waitForResponse(response => (
+    response.url().includes('/travel/api/pto/policies/sick/impact') && response.ok()
+  ));
+  await start.fill('40');
+  await start.blur();
+  const firstBody = await (await firstImpact).json();
+  expect(firstBody.entries_rewritten).toBe(false);
+  await expect(page.getByText(/Balance today would be .* Past leave stays recorded\./)).toBeVisible();
+  expect(await ledger()).toMatchObject({ entries: before.entries, allocations: before.allocations });
+  const movedImpact = page.waitForResponse(response => (
+    response.url().includes('/travel/api/pto/policies/sick/impact')
+    && response.request().postData()?.includes('2026-11-01')
+    && response.ok()
+  ));
+  await page.getByLabel('Balance as of').fill('2026-11-01');
+  await page.getByLabel('Balance as of').blur();
+  const movedBody = await (await movedImpact).json();
+  expect(movedBody.entries_rewritten).toBe(false);
+  expect(movedBody.balance_today_hours).not.toBe(firstBody.balance_today_hours);
+  await expect(page.getByText(new RegExp('Balance today would be .*' + movedBody.balance_today_hours + ' h'))).toBeVisible();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('Sick policy saved.', { exact: true })).toBeVisible();
+  const corrected = await ledger();
+  expect(corrected.entries).toEqual(before.entries);
+  expect(corrected.allocations).toEqual(before.allocations);
+  expect(corrected.sick.start_balance_hours).toBe('40');
+  expect(corrected.sick.balance_as_of).toBe('2026-11-01');
+  await expect(page.getByRole('heading', { name: 'Clinic', exact: true })).toBeVisible();
+});
+
 test('painter scenes for the stacked review', async ({ page, request }) => {
   test.setTimeout(180_000);
   const widths = (process.env.SHOT_WIDTHS || '390,1280').split(',').map(Number);

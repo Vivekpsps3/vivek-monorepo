@@ -24,7 +24,7 @@ import {
   silentErrorToast,
 } from "@vivek/ui";
 import { localTodayIso } from "@vivek/browser";
-import { Subscription } from "rxjs";
+import { Subscription, firstValueFrom } from "rxjs";
 import { showRange } from "./display";
 import { PtoChartComponent } from "./pto-chart.component";
 import { CHART_ERROR } from "./pto-chart.mjs";
@@ -319,12 +319,17 @@ type Busy = "" | "policy" | "entry" | "remove";
                 <h2>{{ label(name) }}</h2>
                 @if (board.buckets[name]?.configured) {
                   <p>{{ balanceText(board, name) }}</p>
-                  <ui-button
-                    variant="ghost"
-                    [ariaLabel]="'Edit ' + label(name) + ' policy'"
-                    (clicked)="openForm(name, $event)"
-                    >Edit</ui-button
-                  >
+                  <div class="button-row">
+                    <ui-button
+                      variant="ghost"
+                      [ariaLabel]="'Edit ' + label(name) + ' policy'"
+                      (clicked)="openForm(name, $event)"
+                      >Edit</ui-button
+                    >
+                    @if (name === "sick") {
+                      <ui-button variant="ghost" (clicked)="removeSick()">Remove Sick policy</ui-button>
+                    }
+                  </div>
                 } @else if (name === "sick") {
                   <button type="button" class="text-link" (click)="openForm('sick', $event)">
                     {{ sickUnset }}
@@ -360,6 +365,9 @@ type Busy = "" | "policy" | "entry" | "remove";
                         (blur)="blurField(name, 'balance_as_of')"
                       />
                     </ui-field>
+                    @if (correctionPreview()) {
+                      <p class="save-status" role="status">{{ correctionPreview() }}</p>
+                    }
                     <ui-field
                       label="You earn"
                       [required]="true"
@@ -583,7 +591,9 @@ export class PtoComponent {
   readonly entryFieldErrors = signal<Record<string, string>>({});
   readonly notes = signal<Record<string, string>>({});
   readonly forecast = signal<PtoPreview | null>(null);
+  readonly correctionPreview = signal("");
   private readonly forecastFor = signal("");
+  private correctionEpoch = 0;
   entryBucket: BucketName = "pto";
   leave = { label: "", start_date: "", end_date: "", days: "", notes: "" };
   drafts: Record<BucketName, PolicyDraft> = { pto: blankDraft(""), sick: blankDraft("") };
@@ -752,6 +762,7 @@ export class PtoComponent {
       else delete next[field];
       return next;
     });
+    if (field === "start_balance_hours" || field === "balance_as_of") this.loadCorrectionImpact(name);
   }
 
   savePolicy(name: BucketName): void {
@@ -775,6 +786,7 @@ export class PtoComponent {
     this.edited[name].clear();
     this.fieldErrors.set({});
     this.notes.set({});
+    this.clearCorrection();
     const keepEmptyPto = name === "pto" && !this.configured("pto") && !this.openedByPointer;
     if (keepEmptyPto) {
       setTimeout(() => this.startBalance?.nativeElement.focus());
@@ -853,6 +865,32 @@ export class PtoComponent {
           this.toast.error("Couldn't preview that time off.", { label: "Retry", run: () => this.preview() });
         },
       });
+  }
+
+  async removeSick(): Promise<void> {
+    if (this.busy() || !this.ownsSession) return;
+    const revision = this.sickRevision();
+    if (revision === null) return;
+    let failed = false;
+    const removed = await this.confirm.confirmAction({
+      title: "Remove Sick policy",
+      message:
+        "This removes the Sick policy, clears its saved setup, and shows the sick-time prompt again. Past sick leave, future allocations, and every PTO row stay.",
+      confirmLabel: "Remove Sick policy",
+      cancelLabel: "Keep Sick policy",
+      busyLabel: "Removing…",
+      errorMessage: "Couldn't remove the Sick policy. Nothing was changed. Try again.",
+      run: () =>
+        this.sendSickRemoval(revision).catch((error: unknown) => {
+          failed = true;
+          throw error;
+        }),
+    });
+    if (!removed || this.destroy.destroyed || !this.ownsSession) {
+      if (failed && !this.destroy.destroyed && this.ownsSession) this.load();
+      return;
+    }
+    this.toast.success("Sick policy removed.");
   }
 
   async remove(id: number): Promise<void> {
@@ -971,6 +1009,7 @@ export class PtoComponent {
 
   private adopt(board: PtoBoard, bucket?: BucketName, submittedDraft?: string): void {
     if (!this.ownsSession) return;
+    this.clearCorrection();
     const today = localTodayIso();
     for (const name of this.bothBuckets) {
       const next = fromBucket(board.buckets?.[name] ?? null, today);
@@ -1000,6 +1039,77 @@ export class PtoComponent {
 
   private configured(name: BucketName): boolean {
     return !!this.data()?.buckets?.[name]?.configured;
+  }
+
+  private sickRevision(): number | null {
+    const row = this.data()?.buckets?.sick as (BucketState & { revision?: number }) | null | undefined;
+    if (!row?.configured || typeof row.revision !== "number" || !Number.isInteger(row.revision) || row.revision < 0) {
+      return null;
+    }
+    return row.revision;
+  }
+
+  private sendSickRemoval(revision: number): Promise<unknown> {
+    return firstValueFrom(
+      this.http.post<PtoBoard>(
+        "/travel/api/pto/policies/sick/removal",
+        { revision },
+        { context: silentErrorToast() },
+      ),
+    ).then((board) => {
+      if (this.destroy.destroyed || !this.ownsSession) return;
+      this.drafts.sick = { ...this.savedDrafts.sick };
+      this.edited.sick.clear();
+      this.adopt(board);
+      if (this.editing() === "sick") {
+        this.editing.set(this.configured("pto") ? null : "pto");
+        this.openedByPointer = false;
+      }
+      this.loadSeries();
+    });
+  }
+
+  private loadCorrectionImpact(name: BucketName): void {
+    const draft = this.drafts[name];
+    const saved = this.savedDrafts[name];
+    const datedChanged =
+      draft.start_balance_hours !== saved.start_balance_hours || draft.balance_as_of !== saved.balance_as_of;
+    if (!datedChanged || !this.configured(name)) {
+      this.clearCorrection();
+      return;
+    }
+    const errors = policyErrors(draft, this.stored[name], localTodayIso());
+    if (errors["start_balance_hours"] || errors["balance_as_of"]) {
+      this.clearCorrection();
+      return;
+    }
+    const epoch = ++this.correctionEpoch;
+    const body = policyBody(draft, this.stored[name], this.edited[name]);
+    this.http
+      .post<{ balance_today_hours: string; entries_rewritten: boolean }>(
+        "/travel/api/pto/policies/" + name + "/impact",
+        body,
+        { context: silentErrorToast() },
+      )
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({
+        next: (impact) => {
+          if (epoch !== this.correctionEpoch || impact.entries_rewritten) return;
+          const hours = this.data()?.hours_per_day || "8";
+          this.correctionPreview.set(
+            `Balance today would be ${formatBalance(impact.balance_today_hours, hours)}. Past leave stays recorded.`,
+          );
+        },
+        error: (error: HttpErrorResponse) => {
+          if (epoch !== this.correctionEpoch || error.status === 401) return;
+          this.correctionPreview.set("");
+        },
+      });
+  }
+
+  private clearCorrection(): void {
+    this.correctionEpoch += 1;
+    this.correctionPreview.set("");
   }
 
   private policyDirty(): boolean {
