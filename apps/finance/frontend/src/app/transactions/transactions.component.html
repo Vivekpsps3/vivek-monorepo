@@ -750,6 +750,17 @@
           </select>
         </div>
       </div>
+      <div class="form-group">
+        <label for="tx-trip">Trip</label>
+        <select id="tx-trip" [(ngModel)]="transactionEditor.newTx.trip_id" name="trip_id" [attr.aria-describedby]="transactionEditor.tripListNote ? 'tx-trip-note' : null">
+          @for (choice of transactionEditor.tripChoices; track choice.key) {
+            <option [ngValue]="choice.id">{{ choice.label }}</option>
+          }
+        </select>
+        @if (transactionEditor.tripListNote) {
+          <p id="tx-trip-note" class="muted">{{ transactionEditor.tripListNote }}</p>
+        }
+      </div>
       <div class="form-actions">
         <ui-button type="submit" variant="primary" [disabled]="transactionEditor.saving">{{ transactionEditor.saving ? 'Saving…' : 'Save' }}</ui-button>
         <ui-button variant="secondary" (clicked)="transactionEditor.closeModal()">Cancel</ui-button>
