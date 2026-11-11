@@ -12,9 +12,9 @@ import type {
 
 export interface PixelApiDay {
   date: string;
-  town?: number;
-  media?: number;
-  trip?: number;
+  town?: number | null;
+  media?: number | null;
+  trip?: number | null;
 }
 
 export interface PixelApiBody {
@@ -156,6 +156,153 @@ export function yearScreenState(snapshot: PixelsSnapshot | null, phase: HubCardS
   return phase === 'stale' ? 'stale' : 'ready';
 }
 
-function countOrZero(value: number | undefined): number {
+function countOrZero(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const invalid = Symbol('invalid');
+
+/** GET /api/pixels. Null means the body is not a supported shape. */
+export function decodePixelApiBody(value: unknown): PixelApiBody | null {
+  const body = record(value);
+  if (!body) return null;
+  const from = requiredDate(body, 'from');
+  const to = requiredDate(body, 'to');
+  const days = pixelDays(body['days']);
+  const sources = pixelSources(body['sources']);
+  const first = requiredNullableDate(body, 'first_activity_on');
+  const profile = pixelProfile(body);
+  if (!from || !to || !days || !sources || first === undefined || profile === invalid) return null;
+  const decoded: PixelApiBody = { from, to, days, sources, first_activity_on: first };
+  if (profile !== undefined) decoded.profile = profile;
+  return decoded;
+}
+
+/** Trip titles from GET /travel/api/home. Money and PTO fields are not read. */
+export function decodeHomeTrips(value: unknown): TripSpan[] | null {
+  const body = record(value);
+  if (!body) return null;
+  const current = tripList(body, 'in_progress');
+  const upcoming = tripList(body, 'upcoming');
+  const past = tripList(body, 'past');
+  if (!current || !upcoming || !past) return null;
+  return [...current, ...upcoming, ...past];
+}
+
+function pixelDays(value: unknown): PixelApiDay[] | null {
+  if (!Array.isArray(value)) return null;
+  const days: PixelApiDay[] = [];
+  for (const entry of value) {
+    const day = pixelDay(entry);
+    if (!day) return null;
+    days.push(day);
+  }
+  return days;
+}
+
+function pixelDay(value: unknown): PixelApiDay | null {
+  const row = record(value);
+  if (!row) return null;
+  const date = isoDate(row['date']);
+  if (!date) return null;
+  const day: PixelApiDay = { date };
+  for (const key of ['town', 'media', 'trip'] as const) {
+    const count = optionalNullableNumber(row, key);
+    if (count === invalid) return null;
+    if (count !== undefined) day[key] = count;
+  }
+  return day;
+}
+
+function pixelSources(value: unknown): PixelSources | null {
+  const row = record(value);
+  if (!row) return null;
+  const town = sourceStatus(row['town']);
+  const media = sourceStatus(row['media']);
+  const travel = sourceStatus(row['travel']);
+  if (!town || !media || !travel) return null;
+  return { town, media, travel };
+}
+
+function sourceStatus(value: unknown): PixelSources['town'] | null {
+  if (value === 'ok' || value === 'absent' || value === 'unavailable') return value;
+  return null;
+}
+
+function pixelProfile(body: Record<string, unknown>): PixelApiBody['profile'] | undefined | typeof invalid {
+  if (!Object.hasOwn(body, 'profile')) return undefined;
+  if (body['profile'] === null) return null;
+  const row = record(body['profile']);
+  if (!row) return invalid;
+  const birthday = requiredNullableDate(row, 'birthday');
+  if (birthday === undefined || typeof row['show_age'] !== 'boolean') return invalid;
+  return { birthday, show_age: row['show_age'] };
+}
+
+function tripList(body: Record<string, unknown>, key: string): TripSpan[] | null {
+  if (!Object.hasOwn(body, key)) return [];
+  const value = body[key];
+  if (!Array.isArray(value)) return null;
+  const trips: TripSpan[] = [];
+  for (const entry of value) {
+    const trip = tripSpan(entry);
+    if (!trip) return null;
+    trips.push(trip);
+  }
+  return trips;
+}
+
+function tripSpan(value: unknown): TripSpan | null {
+  const row = record(value);
+  if (!row) return null;
+  const id = requiredId(row, 'id');
+  const title = typeof row['title'] === 'string' ? row['title'] : undefined;
+  const start = isoDate(row['start_date']);
+  const end = isoDate(row['end_date']);
+  if (id === undefined || title === undefined || !start || !end) return null;
+  return { id, title, start, end };
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function requiredDate(source: Record<string, unknown>, key: string): string | undefined {
+  return isoDate(source[key]);
+}
+
+function requiredNullableDate(source: Record<string, unknown>, key: string): string | null | undefined {
+  if (!Object.hasOwn(source, key)) return undefined;
+  const value = source[key];
+  if (value === null) return null;
+  return isoDate(value);
+}
+
+function requiredId(source: Record<string, unknown>, key: string): number | undefined {
+  const value = source[key];
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
+function optionalNullableNumber(
+  source: Record<string, unknown>,
+  key: string,
+): number | null | undefined | typeof invalid {
+  if (!Object.hasOwn(source, key)) return undefined;
+  const value = source[key];
+  if (value === null) return null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : invalid;
+}
+
+function isoDate(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const match = ISO_DATE.exec(value);
+  if (!match) return undefined;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  if (utc.getUTCFullYear() !== year || utc.getUTCMonth() !== month - 1 || utc.getUTCDate() !== day) return undefined;
+  return value;
 }

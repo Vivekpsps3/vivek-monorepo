@@ -20,11 +20,25 @@ export type HubFetch<T> =
 export async function fetchHubSummary<T>(
   url: string,
   signal: AbortSignal,
+  deadlineMs?: number,
+): Promise<HubFetch<T>>;
+export async function fetchHubSummary<T>(
+  url: string,
+  signal: AbortSignal,
+  decode: (value: unknown) => T | null,
+  deadlineMs?: number,
+): Promise<HubFetch<T>>;
+export async function fetchHubSummary<T>(
+  url: string,
+  signal: AbortSignal,
+  decodeOrDeadline?: number | ((value: unknown) => T | null),
   deadlineMs = HUB_SUMMARY_DEADLINE_MS,
 ): Promise<HubFetch<T>> {
+  const decode = typeof decodeOrDeadline === 'function' ? decodeOrDeadline : undefined;
+  const deadline = typeof decodeOrDeadline === 'number' ? decodeOrDeadline : deadlineMs;
   if (signal.aborted) return { status: 'cancelled' };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), deadlineMs);
+  const timer = setTimeout(() => ctrl.abort(), deadline);
   const onAbort = () => ctrl.abort();
   signal.addEventListener('abort', onAbort, { once: true });
   try {
@@ -37,7 +51,14 @@ export async function fetchHubSummary<T>(
     if (signal.aborted) return { status: 'cancelled' };
     if (response.status === 401) return { status: 'expired' };
     if (!response.ok) return { status: 'unavailable' };
-    return { status: 'ok', body: await response.json() as T };
+    const payload: unknown = await response.json();
+    if (signal.aborted) return { status: 'cancelled' };
+    // Search still calls this helper without a decoder. That dialog is outside this tranche.
+    if (!decode) return { status: 'ok', body: payload as T };
+    const body = decode(payload);
+    if (signal.aborted) return { status: 'cancelled' };
+    if (body == null) return { status: 'unavailable' };
+    return { status: 'ok', body };
   } catch {
     if (signal.aborted) return { status: 'cancelled' };
     return { status: 'unavailable' };

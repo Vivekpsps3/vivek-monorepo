@@ -11,7 +11,7 @@ import {
   type BudgetKeptDaysResult,
 } from '../../../../finance/frontend/src/public-api';
 import { inclusiveWindows } from './pixels-dates';
-import { composeSnapshot, withoutFinance, type PixelApiBody } from './pixels-model';
+import { composeSnapshot, decodeHomeTrips, decodePixelApiBody, withoutFinance, type PixelApiBody } from './pixels-model';
 import type { FinanceJoinStatus, PixelsLoadRequest, PixelsLoadResult, PixelsSnapshot, TripSpan } from './pixels.types';
 
 /** Inclusive days allowed by GET /api/pixels when profile=1. (end - start).days <= 36525. */
@@ -36,13 +36,6 @@ export const PIXELS_FINANCE_DAYS = new InjectionToken<FinanceDaysLoader>('PIXELS
 export const PIXELS_VAULT_PRESENT = new InjectionToken<() => boolean>('PIXELS_VAULT_PRESENT', {
   factory: () => financeVaultPresent,
 });
-
-interface HomeTrip {
-  id: number;
-  title: string;
-  start_date: string;
-  end_date: string;
-}
 
 @Injectable({ providedIn: 'root' })
 export class PixelsDataService {
@@ -190,7 +183,7 @@ export class PixelsDataService {
       if (work.signal.aborted) return { status: 'unavailable' };
       const params: Record<string, string> = { from: window.from, to: window.to };
       if (request.profile) params['profile'] = '1';
-      const outcome = await work.run(() => this.getJson<PixelApiBody>(work.signal, '/api/pixels', params));
+      const outcome = await work.run(() => this.getJson(work.signal, '/api/pixels', decodePixelApiBody, params));
       if (this.left(work, generation)) return { status: 'dropped' };
       if (outcome.status !== 'ok') return { status: 'unavailable' };
       if (outcome.value.status !== 'ready') return outcome.value;
@@ -200,20 +193,24 @@ export class PixelsDataService {
   }
 
   private async fetchTrips(signal: AbortSignal): Promise<TripSpan[]> {
-    const result = await this.getJson<{ in_progress?: HomeTrip[]; upcoming?: HomeTrip[]; past?: HomeTrip[] }>(signal, '/travel/api/home');
+    const result = await this.getJson(signal, '/travel/api/home', decodeHomeTrips);
     if (result.status !== 'ready') return [];
-    const rows = [...(result.body.in_progress ?? []), ...(result.body.upcoming ?? []), ...(result.body.past ?? [])];
-    return rows
-      .filter(row => typeof row.id === 'number' && typeof row.title === 'string' && typeof row.start_date === 'string' && typeof row.end_date === 'string')
-      .map(row => ({ id: row.id, title: row.title, start: row.start_date.slice(0, 10), end: row.end_date.slice(0, 10) }));
+    return result.body;
   }
 
-  private async getJson<T>(signal: AbortSignal, url: string, params?: Record<string, string>): Promise<{ status: 'ready'; body: T } | { status: 'expired' } | { status: 'unavailable' }> {
+  private async getJson<T>(
+    signal: AbortSignal,
+    url: string,
+    decode: (value: unknown) => T | null,
+    params?: Record<string, string>,
+  ): Promise<{ status: 'ready'; body: T } | { status: 'expired' } | { status: 'unavailable' }> {
     try {
-      const body = await firstValueFrom(
-        this.http.get<T>(url, { params, context: silentErrorToast() }).pipe(takeUntil(abort$(signal))),
+      const payload: unknown = await firstValueFrom(
+        this.http.get(url, { params, context: silentErrorToast() }).pipe(takeUntil(abort$(signal))),
       );
+      const body = decode(payload);
       if (signal.aborted) return { status: 'unavailable' };
+      if (body == null) return { status: 'unavailable' };
       return { status: 'ready', body };
     } catch (error) {
       if (signal.aborted) return { status: 'unavailable' };
@@ -241,10 +238,8 @@ function abort$(signal: AbortSignal): Observable<void> {
 }
 
 function readProfile(body: PixelApiBody): { birthday: string | null; showAge: boolean } {
-  return {
-    birthday: body.profile?.birthday ?? null,
-    showAge: body.profile?.show_age === true,
-  };
+  if (body.profile == null) return { birthday: null, showAge: false };
+  return { birthday: body.profile.birthday, showAge: body.profile.show_age };
 }
 
 function mergeBodies(bodies: PixelApiBody[], request: PixelsLoadRequest): PixelApiBody {

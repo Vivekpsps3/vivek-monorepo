@@ -666,6 +666,52 @@ describe('HubComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Change username');
   });
 
+  it('keeps the other cards when the travel summary has the wrong shape', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, { next_trip: { id: '7', title: 'Lisbon', days_until: '0' } }));
+    takeCall('/media/').resolve(json(200, mediaBody()));
+    resolveTown();
+    await paint();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain("Couldn't load trips.");
+    expect(text).toContain('The Wire');
+    expect(text).toContain('Terraria-on-Sea');
+    expect(text).not.toContain('Lisbon');
+    expect(text).not.toMatch(/\$0/);
+  });
+
+  it('shows a null trip date count, an unknown release, and a maxed town without inventing numbers', async () => {
+    await render();
+    takeCall('/travel/').resolve(json(200, {
+      next_trip: {
+        id: 7,
+        title: 'Lisbon',
+        destination: null,
+        start_date: '2026-11-02',
+        end_date: '2026-11-06',
+        phase: 'upcoming',
+        days_until: 0,
+        next_action: 'Open the trip',
+      },
+    }));
+    takeCall('/media/').resolve(json(200, {
+      currently: [],
+      recent_reviews: [{ id: 4, kind: 'book', title: 'Kindred', rating: null, review_excerpt: null }],
+      upcoming: [{ id: 9, kind: 'movie', title: 'Later', when: 'unknown', precision: 'unknown', release_on: null }],
+      next_episodes: [],
+    }));
+    resolveTown({ ...townBody(), next_level_xp: null, founded_on: null });
+    await paint();
+    const text = (fixture.nativeElement.textContent as string).replaceAll('\u2060', '');
+    expect(text).toContain('Lisbon');
+    expect(text).toContain('Leaves today');
+    expect(text).toContain('Unrated');
+    expect(text).toContain('No date');
+    expect(text).toContain('Lv 3 · Max');
+    expect(text).not.toContain('NaN');
+    expect(text).not.toMatch(/\$0/);
+  });
+
   it('shows the town card with level, today, and streak while finance stays locked', async () => {
     await render();
     takeCall('/travel/').resolve(json(200, { next_trip: null }));

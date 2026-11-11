@@ -1,3 +1,4 @@
+import { decodeTravelSummary } from './hub-decode';
 import { fetchHubSummary, settleHubCard } from './hub-load';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -37,13 +38,13 @@ describe('hub summary loading', () => {
     spyOn(window, 'fetch').and.callFake((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(new DOMException('timed out', 'AbortError')));
     }));
-    const result = await fetchHubSummary('/travel/api/summary', new AbortController().signal, 20);
+    const result = await fetchHubSummary('/travel/api/summary', new AbortController().signal, decodeTravelSummary, 20);
     expect(result).toEqual({ status: 'unavailable' });
   });
 
   it('reports an expired session without throwing', async () => {
     spyOn(window, 'fetch').and.resolveTo(jsonResponse(401, { detail: 'nope' }));
-    const result = await fetchHubSummary('/media/api/summary', new AbortController().signal, 1000);
+    const result = await fetchHubSummary('/media/api/summary', new AbortController().signal, decodeTravelSummary, 1000);
     expect(result).toEqual({ status: 'expired' });
   });
 
@@ -52,7 +53,7 @@ describe('hub summary loading', () => {
     spyOn(window, 'fetch').and.callFake((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
     }));
-    const pending = fetchHubSummary('/travel/api/summary', ctrl.signal, 5000);
+    const pending = fetchHubSummary('/travel/api/summary', ctrl.signal, decodeTravelSummary, 5000);
     ctrl.abort();
     await expectAsync(pending).toBeResolvedTo({ status: 'cancelled' });
   });
@@ -63,9 +64,53 @@ describe('hub summary loading', () => {
     spyOn(window, 'fetch').and.returnValue(new Promise<Response>(resolve => {
       finish = resolve;
     }));
-    const pending = fetchHubSummary<{ next_trip: { title: string } | null }>('/travel/api/summary', ctrl.signal, 5000);
+    const pending = fetchHubSummary('/travel/api/summary', ctrl.signal, decodeTravelSummary, 5000);
     ctrl.abort();
     finish(jsonResponse(200, { next_trip: { title: 'Previous user' } }));
+    await expectAsync(pending).toBeResolvedTo({ status: 'cancelled' });
+  });
+
+  it('publishes a decoded empty trip', async () => {
+    spyOn(window, 'fetch').and.resolveTo(jsonResponse(200, { today: '2026-11-11', next_trip: null }));
+    const empty = await fetchHubSummary('/travel/api/summary', new AbortController().signal, decodeTravelSummary, 1000);
+    expect(empty).toEqual({ status: 'ok', body: { next_trip: null } });
+  });
+
+  it('turns a malformed summary into unavailable without throwing', async () => {
+    spyOn(window, 'fetch').and.resolveTo(jsonResponse(200, { next_trip: { id: '7', title: 'Lisbon' } }));
+    const malformed = await fetchHubSummary('/travel/api/summary', new AbortController().signal, decodeTravelSummary, 1000);
+    expect(malformed).toEqual({ status: 'unavailable' });
+  });
+
+  it('drops a body that decodes after the caller aborts', async () => {
+    const ctrl = new AbortController();
+    let finishFetch: (value: Response) => void = () => undefined;
+    let finishJson: (value: unknown) => void = () => undefined;
+    spyOn(window, 'fetch').and.returnValue(new Promise<Response>(resolve => {
+      finishFetch = resolve;
+    }));
+    const pending = fetchHubSummary('/travel/api/summary', ctrl.signal, decodeTravelSummary, 5000);
+    finishFetch({
+      ok: true,
+      status: 200,
+      json: () => new Promise(resolve => {
+        finishJson = resolve;
+      }),
+    } as Response);
+    await Promise.resolve();
+    ctrl.abort();
+    finishJson({
+      next_trip: {
+        id: 7,
+        title: 'Previous user',
+        destination: null,
+        start_date: '2026-11-02',
+        end_date: '2026-11-06',
+        phase: 'upcoming',
+        days_until: 0,
+        next_action: 'Open the trip',
+      },
+    });
     await expectAsync(pending).toBeResolvedTo({ status: 'cancelled' });
   });
 });
