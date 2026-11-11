@@ -212,18 +212,34 @@ test('Back drops a pending filter instead of applying it later', async ({ page, 
 test('Escape flushes a pending filter and returns focus', async ({ page, request }) => {
   const violations: string[] = [];
   await addItem(request, { kind: 'movie', title: 'Escape movie' });
+  let reads = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'GET' && req.url().includes('/media/api/library')) reads++;
+  });
   await page.clock.install({ time: new Date('2026-10-15T12:00:00Z') });
   await openLibrary(page, theme, violations);
   await openFilters(page);
   await page.clock.pauseAt(new Date('2026-10-15T12:02:00Z'));
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Type').selectOption('movie');
-  await dialog.getByRole('heading', { name: 'Filters' }).click();
+  const type = dialog.getByLabel('Type');
+  const before = reads;
+  await type.selectOption('movie');
+  expect(reads).toBe(before);
+  await expect(page).not.toHaveURL(/kind=movie/);
+  // Leave the native type menu before Escape. A click on the heading does not
+  // reliably do that while the menu is open, and then Escape closes the menu.
+  await type.blur();
   await page.keyboard.press('Escape');
+  // Event coalescing paints the closed sheet on the next timer. The clock is
+  // paused, so run that callback without reaching the 250ms filter debounce.
+  await page.clock.runFor(1);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('button[aria-controls="library-filters"]')).toBeFocused();
   await expect(page).toHaveURL(/kind=movie/);
   await expect(page.getByText('Escape movie')).toBeVisible();
+  expect(reads).toBe(before + 1);
+  await page.clock.runFor(1000);
+  expect(reads).toBe(before + 1);
   await expectCleanPage(page, violations);
 });
 

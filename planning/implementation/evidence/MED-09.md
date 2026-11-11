@@ -23,7 +23,7 @@ Packet row LIB1 is the retained M8/M11 library and Add behavior. Each original c
 | LIB1 / live URL filters | choosing Type Movie sets the button to `Filters (1)` and `kind=movie` without closing the sheet | PASS | `filters apply live and count updates` |
 | LIB1 / AND tags | items tagged x+y and x; checking both shows only the first; the URL has `tag=x` and `tag=y` | PASS | `tags multi-select uses AND` |
 | LIB1 / clear keeps search and sort | Clear filters removes `kind` and leaves `q=story` and `sort=title` | PASS | `clear filters keeps search and sort` |
-| LIB1 / keyboard focus | Done returns focus to the Filters button; Escape flushes a pending type change, closes the sheet, and returns focus to that button | PASS | `Done returns focus to Filters button` and `Escape flushes a pending filter and returns focus` |
+| LIB1 / keyboard focus | Done returns focus to the Filters button; Escape flushes a pending type change, closes the sheet, and returns focus to that button. The type change is still pending (`kind` absent, no extra GET). After Escape the sheet is gone, focus is on Filters, `kind=movie` is set, and one library GET happened. Another 1000ms adds no GET | PASS | `Done returns focus to Filters button` and `Escape flushes a pending filter and returns focus` |
 | LIB1 / favorite alias | `/media/library?fav=1` shows only the favorite, the button reads `Filters (1)`, and Favorites only is checked | PASS | `old fav=1 link still works` |
 | LIB1 / no tags hint | an item with no tags shows the sheet hint | PASS | `no tags shows hint` |
 | LIB1 / empty filtered result | `kind=movie` with only a book shows the clear action, and clearing it restores the cards | PASS | `empty filtered result shows clear button` |
@@ -58,7 +58,7 @@ Packet row LIB1 is the retained M8/M11 library and Add behavior. Each original c
 
 ## Verification
 
-Local execution on product revision `ab4b4ba52d14e033bddd7f872f7e94b1eaa6915c` before this evidence file. CI, merge, and deployment were not run. Playwright used `PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright` because the sandbox browser cache had no Chromium. Karma port 9876 was already taken by another `ng test web`; the suite ran on port 55941 instead. `CHROME_BIN` was Playwright's Chromium because no system Chrome was on `PATH`. Coverage floors were not changed.
+Product revision `ab4b4ba52d14e033bddd7f872f7e94b1eaa6915c` is unchanged. CI on `4ab3c5485e736146aefeebd37a065fc5c3be76c8` (run 42953815730): Backend, Frontend, and Unified Site Release passed. Playwright failed one spec, `Escape flushes a pending filter and returns focus`: the Filters dialog was still open after Escape (559 passed, 1 failed). A heading click does not leave the native type menu, so Escape closes that menu. With the clock paused, event coalescing also paints the closed sheet only on the next timer, which does not run. The spec now blurs the type control, then advances the paused clock 1ms so that paint can happen without reaching the 250ms debounce. The read count stays at one after a further 1000ms. Playwright used `PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright` and Chromium `chromium-1248`. Coverage floors were not changed. Merge and deployment are not done.
 
 | Command | Result |
 | --- | --- |
@@ -69,7 +69,7 @@ Local execution on product revision `ab4b4ba52d14e033bddd7f872f7e94b1eaa6915c` b
 | `CHROME_BIN=$HOME/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome SUITE_TEST_PROJECT=web npx ng test web --watch=false --browsers=ChromeHeadlessCI --karma-config=/tmp/karma-med-09.cjs` (port 55941) | PASS. 653 SUCCESS. Statements 82.41%, branches 68.65%, functions 81.92%, lines 85.93%. |
 | `node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs` | PASS. 53 passed, 0 failed. |
 | `make build-frontends` | PASS. Production bundle written to `dist/web`. |
-| `npx playwright test --config apps/media/e2e/playwright.config.ts` | PASS on the rerun after the Escape test clicked the sheet heading before Escape. 77 passed. The first full run failed that one new test because Escape closed the native type menu; the assertion was not weakened. |
+| `npx playwright test --config apps/media/e2e/playwright.config.ts apps/media/e2e/library-filters.spec.ts --repeat-each=3 --workers=2` | PASS after the Escape spec blurred the type control and ran the paused clock for 1ms. 39 passed. Dialog count, focus, `kind=movie`, and a single library GET are still required. |
 | `make lint-python` | PASS. 211 files formatted. Ruff 101 and suppressions 6 match the baseline. |
 | `make typecheck-python` | PASS. mypy 87 findings match the baseline. |
 | `./scripts/coverage-gate.sh media` | PASS. 204 passed. Total coverage 84.15% (floor 70.60%). Floor file not edited. |
@@ -80,7 +80,7 @@ Local execution on product revision `ab4b4ba52d14e033bddd7f872f7e94b1eaa6915c` b
 
 - PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/321 (`Closes #284`). Parent #85 is referenced and not closed.
 - Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786251037. The issue body was not edited.
-- Merged/activation status (actual evidence, not assumption): local gates passed. Merge is not done. This file does not claim deployment or activation.
+- Merged/activation status (actual evidence, not assumption): local gates passed on `ab4b4ba`. CI on `4ab3c54` was red only on the Escape spec. Merge is not done. This file does not claim deployment or activation.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. MED-06 owns detail presentation. MED-10 owns retained runtime QA.
 - Next actor: reviewer. Do not merge from this work.
 
@@ -94,11 +94,11 @@ Owned files and conflict groups: `media-library`, `media-add`, `media-runtime`. 
 
 Completed acceptance rows with direct evidence: LIB1 and every original M8/M11 clause in the table above.
 
-Unfinished/failed rows and exact next action: none in the leaf. The Escape spec was fixed and the Media Playwright suite was rerun to 77 passed.
+Unfinished/failed rows and exact next action: acceptance rows are covered. CI Playwright on `4ab3c54` failed the Escape spec; the spec fix is in this commit and CI has not finished on it.
 
 Deletion ledger and current consumer migration: popstate clears the existing timer. `searchSoon`, `searchNow`, and `validateAdd` stay. Search `.media-filters` stays with search.
 
-Commands run, results, tested SHA; required checks still pending: the table above. CI was not run here.
+Commands run, results, tested SHA; required checks still pending: the table above. CI on `4ab3c54` failed Playwright on the Escape spec. This commit's CI is still pending.
 
 PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/321 and https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786251037. Not merged. Not deployed.
 
