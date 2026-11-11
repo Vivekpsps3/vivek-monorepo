@@ -2,8 +2,8 @@
 
 - Leaf issue and parent(s): #225, parent #84
 - Agent/context, branch/worktree: agent/trip-01, `/tmp/vivek-trip-01`
-- Base main SHA, current tested SHA: `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`; local gates below ran on this tree immediately before the commit
-- Fresh-main/prerequisite/active-PR checks: base matches the assigned origin/main. SAFE-01/03/04 outcomes are on that main (`FinanceTripSpendRegistry`, vault presence, lock notices). Open overlap checked: FIN-01 #322 on `agent/fin-01` only. This change does not edit price prefs, the market coordinator, main layout, or the Finance dashboard.
+- Base main SHA, current tested SHA: gates ran on `6ab81180d8aaad1494eed091b7b422b56582d115` (parent `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`). Before push, origin/main moved to `1b4f35a80784a3181da809784fa80b33c13c6e60` (#322) and was merged with no conflicts.
+- Fresh-main/prerequisite/active-PR checks: SAFE-01/03/04 outcomes are on that main (`FinanceTripSpendRegistry`, vault presence, lock notices). FIN-01 #322 merged into this branch. This change does not edit price prefs, the market coordinator, main layout, or the Finance dashboard.
 
 ## Acceptance
 
@@ -52,7 +52,7 @@ CI, merge, and deployment are not claimed here.
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending the push of this commit (`Closes #225`; parent #84 referenced only)
+- PR URL (leaf closure keyword only): opening after this note (`Closes #225`; parent #84 referenced only)
 - Roadmap #134 append-only status-note URL: not posted yet
 - Merged/activation status: not merged, not deployed
 - Remaining external prerequisites or approved scope decisions: none for this leaf. FIN-01 may still land; do not take its files
