@@ -59,9 +59,9 @@ Commands ran in `/tmp/vivek-med-08` on the implementation tree before this evide
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this file; `Closes #242`. Parents #200 and #85 are referenced and not closed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/328 (`Closes #242`). Parents #200 and #85 are referenced and not closed.
 - Roadmap #134 append-only status-note URL: posted after the pull request. The issue body was not edited.
-- Merged/activation status (actual evidence, not assumption): not merged, not deployed. Squash merge is authorized for this leaf after required CI is green.
+- Merged/activation status (actual evidence, not assumption): pull request #328 is open. Not merged, not deployed. Squash merge waits for required CI.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Other Media leaves stay separate.
 - Next actor: this session pushes, opens the pull request, waits for green CI, then squash-merges.
 
@@ -81,7 +81,7 @@ Deletion ledger and current consumer migration: `_public_catalog` calls `_catalo
 
 Commands run, results, tested SHA; required checks still pending: the table above passed locally. CI was not run yet.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: not opened at this writing. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/328. The #134 comment follows. Not merged and not deployed.
 
 External prerequisites and next actor: MED-01 is already merged. Next actor is this session for the pull request and merge.
 
