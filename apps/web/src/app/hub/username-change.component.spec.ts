@@ -24,14 +24,25 @@ describe('usernameChangeMessage', () => {
     expect(usernameChangeMessage(0)).toBe('A server or network error prevented the change.');
   });
 
-  it('shows a string detail for a server error and keeps the mapped copy', () => {
-    expect(usernameChangeMessage(500, 'disk is full')).toBe('disk is full');
+  it('redacts network and 5xx details and keeps mapped or typed field copy', () => {
+    const leaked = 'disk is full at /tmp/secret.db';
+    expect(usernameChangeMessage(500, leaked)).toBe('A server or network error prevented the change.');
+    expect(usernameChangeMessage(503, { detail: leaked })).toBe('A server or network error prevented the change.');
+    expect(usernameChangeMessage(0, 'Failed to fetch')).toBe('A server or network error prevented the change.');
+    expect(usernameChangeMessage(500, [{ loc: ['body', 'username'], msg: leaked, type: 'value_error' }]))
+      .toBe('A server or network error prevented the change.');
     expect(usernameChangeMessage(403, 'Invalid CSRF token')).toBe('Session expired, sign in again.');
+    expect(usernameChangeMessage(401, leaked)).toBe('That passphrase is wrong.');
     expect(usernameChangeMessage(422, [{ msg: 'field required' }])).toBe('That username change request is invalid.');
+    expect(usernameChangeMessage(404, [{ loc: ['body', 'username'], msg: leaked, type: 'value_error' }]))
+      .toBe('That username change request is invalid.');
+    expect(usernameChangeMessage(404, 'That account was not found.')).toBe('That account was not found.');
     expect(usernameChangeMessage(400)).toBe('That username is not valid.');
     expect(usernameChangeMessage(401)).toBe('That passphrase is wrong.');
     expect(usernameChangeMessage(409)).toBe('That username is already taken.');
     expect(usernameChangeMessage(429)).toBe('Too many attempts. Try again later.');
+    expect(usernameChangeMessage(500, leaked)).not.toContain('secret');
+    expect(usernameChangeMessage(404, [{ field: 'username', msg: leaked, type: 'missing' }])).not.toContain(leaked);
   });
 });
 
@@ -84,6 +95,29 @@ describe('UsernameChangeComponent', () => {
     expect(toast.success).not.toHaveBeenCalled();
     expect(JSON.stringify(localStorage)).not.toContain('secret-passphrase');
     expect(JSON.stringify(sessionStorage)).not.toContain('secret-passphrase');
+  });
+
+  it('shows the generic server copy when a 5xx detail is present', async () => {
+    auth.changeUsername.and.rejectWith(new UsernameChangeError(500, 'disk is full at /tmp/secret.db'));
+    fixture.componentInstance.nextName = 'next.name';
+    fixture.componentInstance.passphrase = 'secret-passphrase';
+    fixture.componentInstance.save();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(errorRegion().textContent.trim()).toBe('A server or network error prevented the change.');
+    expect(errorRegion().textContent).not.toContain('secret');
+    expect(fixture.componentInstance.passphrase).toBe('');
+  });
+
+  it('does not show a raw thrown message', async () => {
+    auth.changeUsername.and.rejectWith(new Error('disk is full at /tmp/secret.db'));
+    fixture.componentInstance.nextName = 'next.name';
+    fixture.componentInstance.passphrase = 'secret-passphrase';
+    fixture.componentInstance.save();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(errorRegion().textContent.trim()).toBe('A server or network error prevented the change.');
+    expect(errorRegion().textContent).not.toContain('/tmp/secret.db');
   });
 
   it('shows the session, invalid-request, and server copy', async () => {
