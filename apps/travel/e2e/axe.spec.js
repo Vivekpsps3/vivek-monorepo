@@ -15,7 +15,8 @@ test('axe on all native Travel screens in light and dark at phone and desktop wi
     for (const route of routes) {
       const endpoint=route.includes('/trips/new')?null:route.includes('/trips/')?'/travel/api/trips/':route.includes('/calendar')?'/travel/api/calendar':route.includes('/pto')?'/travel/api/pto':route.includes('/settings')?'/travel/api/settings':'/travel/api/home';
       const ready=endpoint?page.waitForResponse(response=>response.url().includes(endpoint)&&response.ok()):Promise.resolve();
-      await page.goto(route);await ready;
+      const leave=route==='/travel'?page.waitForResponse(response=>response.url().endsWith('/travel/api/pto')&&response.ok()):Promise.resolve();
+      await page.goto(route);await ready;await leave;
       await chooseColorTheme(page, theme);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await expect.poll(()=>page.locator('body').evaluate(node=>getComputedStyle(node).color)).toBe(theme==='dark'?'rgb(246, 241, 234)':'rgb(28, 25, 22)');
