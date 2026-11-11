@@ -6,7 +6,15 @@ from decimal import Decimal
 from math import isfinite
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    field_validator,
+    model_validator,
+)
 
 from apps.travel.backend.services.money import clean_currency, parse_money
 
@@ -648,6 +656,12 @@ class LeavePolicyIn(BaseModel):
     cap_hours: bool | str | int | float | None = None
     year_start: bool | str | int | float | None = None
     carry_forward: bool | str | int | float | None = None
+
+
+class SickRemovalIn(BaseModel):
+    """The Sick revision the user confirmed. A stale or foreign value must not apply."""
+
+    revision: StrictInt
 
 
 class PtoSettingsIn(BaseModel):
