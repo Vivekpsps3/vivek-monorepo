@@ -2,8 +2,8 @@
 
 - Leaf issue and parent(s): [#220](https://github.com/Vivekpsps3/vivek-monorepo/issues/220), parent [#65](https://github.com/Vivekpsps3/vivek-monorepo/issues/65)
 - Agent/context, branch/worktree: Cursor Grok, `agent/fin-01`, `/tmp/vivek-fin-01`
-- Base main SHA, current tested SHA: assigned base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Product checks below ran on that base plus the FIN-01 diff. Product revision `7e589300770991ee127848cd50b7e8511f088b28`. The follow-up commit only records that SHA in this file.
-- Fresh-main/prerequisite/active-PR checks: SAFE-01 (#201) is merged. `gh pr list --state open` was empty at start. Issue #220 had no earlier claim. Conflict groups `finance-price-shell` and `finance-home` were not taken by another open PR. During the run, `origin/main` advanced to `c252b4d` (planning PLACE packets, #319). That commit does not touch Finance. It was not merged into this branch.
+- Base main SHA, current tested SHA: assigned base `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Product checks below ran on that base plus the FIN-01 diff. Product revision `7e589300770991ee127848cd50b7e8511f088b28`. Later `origin/main` (`939984de389b9e33510aecb12a80eb50ff3ef06b`) was merged in so CI includes the Town day-refetch waiter fix. That merge does not change the price preference.
+- Fresh-main/prerequisite/active-PR checks: SAFE-01 (#201) is merged. `gh pr list --state open` was empty at start. Issue #220 had no earlier claim. Conflict groups `finance-price-shell` and `finance-home` were not taken by another open PR. `origin/main` later gained planning packets, FIN-03, PTO-01, OPS-01, MED-09, UX-03, and SEC-01. Those are in this branch via the merge above.
 
 ## Acceptance
 
@@ -33,7 +33,9 @@
 
 ## Verification
 
-Local execution only. CI, merge, and deployment were not run.
+Local gates below passed on product revision `7e589300770991ee127848cd50b7e8511f088b28`. Deployment has not run.
+
+CI on `8b3eb32e8b2acb0df943edb046dfd48a5e48aacf` (run 42953824444): Backend, Frontend, and Unified Site Release passed. Playwright did not run the first time because `/opt/ci-dist` no longer held that merge commit's frontend bundle. The next full run reached the suite: 559 passed, 8 skipped, and one failure in `apps/web/e2e/town-checkin.spec.ts` (`visibility after the local date changes refetches unchecked rows`, 60s `waitForResponse` timeout). Finance price specs passed, including the scoped `app-charts` VOO assertion. A rerun with this branch as the only Playwright job failed the same Town test. That race is fixed on main by arming the response waiter before `setFixedTime` (SEC-01, #324). This branch now contains that main history. Price-preference behavior was not changed to clear the Town failure.
 
 | Command | Result |
 | --- | --- |
@@ -50,10 +52,10 @@ An earlier Finance and web Karma launch failed before any spec because `SUITE_KA
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/322 (`Closes #220`, non-closing reference to #65). Not merged.
-- Roadmap #134 append-only status-note URL: posted after this commit. The issue body was not edited.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/322 (`Closes #220`, non-closing reference to #65). Not merged. `origin/main` was merged in so CI includes the Town waiter fix.
+- Roadmap #134 append-only status-note URL: posted after merge. The issue body was not edited.
 - Merged/activation status: not merged, not deployed, not activated.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Parent #65 stays open.
-- Next actor: reviewer. Integration owner folds the roadmap body after merge.
+- Next actor: CI on this merge, then squash-merge. Integration owner folds the roadmap body after merge.
 
 No unstated decision from this context is required to continue.
