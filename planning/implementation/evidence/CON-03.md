@@ -56,7 +56,7 @@
 ## Handoff
 
 - PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/350 (`Closes #208` only). Parents #197 and #121 are named in the body and stay open.
-- Roadmap #134 append-only status-note URL: posted with this handoff update.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6809156487
 - Merged/activation status: pull request #350 is open. Not merged. Not a deployment. No SEC export/restore UI.
 - Remaining external prerequisites or approved scope decisions: parents #197 and #121 stay open. A future SEC packet owns restore. No new collection shipped here.
 - Next actor: wait for Backend, Frontend, Unified Site Release, and Playwright, then squash-merge.
