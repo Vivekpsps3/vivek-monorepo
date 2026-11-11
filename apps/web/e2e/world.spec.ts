@@ -99,6 +99,34 @@ test.describe('World explorer', () => {
     await expect(live).not.toHaveText('');
   });
 
+  for (const width of [390, 1280]) {
+    for (const theme of ['light', 'dark'] as const) {
+      test(`week directions at ${width} ${theme}`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+        await page.goto('/town/world?week=2026-10-12');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        const previous = page.getByRole('button', { name: 'Previous week', exact: true });
+        const next = page.getByRole('button', { name: 'Next week', exact: true });
+        await expect(previous).toHaveText('Previous week');
+        await expect(next).toHaveText('Next week');
+        await expect(previous).toBeVisible();
+        await expect(next).toBeVisible();
+        await previous.focus();
+        await page.keyboard.press('Enter');
+        await expect(page).toHaveURL(/week=2026-10-05$/);
+        await expect(page.getByLabel('Jump to date')).toHaveValue('2026-10-05');
+        await next.click();
+        await expect(page).toHaveURL(/week=2026-10-12$/);
+        await expect(page.getByLabel('Jump to date')).toHaveValue('2026-10-12');
+        await page.reload();
+        await expect(page.getByLabel('Jump to date')).toHaveValue('2026-10-12');
+        await expect(previous).toHaveText('Previous week');
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      });
+    }
+  }
+
   test('390px viewport does not scroll sideways', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/town/world?week=2026-10-12');
