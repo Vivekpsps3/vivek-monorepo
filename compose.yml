@@ -57,7 +57,7 @@ services:
   backup:
     <<: *runtime
     profiles: [ops]
-    environment: {SITE_BACKUP_KEEP: "1"}
+    environment: {SITE_BACKUP_KEEP: "7", SITE_BACKUP_KEEP_DAYS: "30"}
     command: [python, /app/backup-site.py, --source, /data/site.db, --directory, /backups]
     volumes: [data:/data, backups:/backups]
     network_mode: none
@@ -81,7 +81,8 @@ services:
     command: [python, -m, apps.server.monitor]
     environment:
       SITE_BACKUP_INTERVAL_SECONDS: "3600"
-      SITE_BACKUP_KEEP: "1"
+      SITE_BACKUP_KEEP: "7"
+      SITE_BACKUP_KEEP_DAYS: "30"
     volumes: [data:/data, backups:/backups]
     networks:
       monitoring: {aliases: [personal-site-probe]}

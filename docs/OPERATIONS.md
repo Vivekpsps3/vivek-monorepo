@@ -141,9 +141,10 @@ Docker restart policies restore containers after reboot without source files.
 The old `_control` finance-tracker stack must stay stopped; do not start its old
 containers against retired databases or compete for :8085.
 
-By explicit user choice, legacy recovery copies and old backups are removed.
-Only the latest verified unified backup is retained; there is no historical
-point-in-time recovery window. Any future secrets must remain outside Git.
+By explicit user choice, legacy finance-tracker recovery copies are removed.
+Hourly history follows the 30-day and minimum-seven rule in Backup and
+recovery. It is not an unbounded archive. Any future secrets must remain
+outside Git.
 
 ## First database consolidation
 
@@ -165,22 +166,30 @@ backup material; do not treat old database files as active production databases.
 Maintenance checks once a minute and backs up when the most recent verified
 backup is an hour old. It uses SQLite's online backup API, checks integrity and
 foreign keys, restores into a separate verification copy, and atomically publishes
-a private snapshot with a checksum/verification manifest. `SITE_BACKUP_KEEP: "1"`
-in Compose retains only the latest hourly `site-*` snapshot, by user choice.
-Pre-migration snapshots use the `premigrate-<revision>-<timestamp>` prefix,
-which that glob does not match, and at least three of them are kept so a bad
-revision can still be restored after the hourly snapshot has rotated. The
-manifest records the revision. Scheduled and manual jobs lock the backup
-directory to serialize publication and pruning.
-Older snapshots are removed only after the replacement passes verification and
-a separate restore check. Failed backups preserve the preceding snapshot. Missing
-source databases fail rather than silently skip.
+a private snapshot with a checksum manifest. Hourly `site-*` retention keeps
+every verified snapshot within `SITE_BACKUP_KEEP_DAYS` (30 in Compose) and at
+least `SITE_BACKUP_KEEP` verified snapshots (seven in Compose). A snapshot is
+verified when the manifest records a successful restore check and the checksum
+matches the file. Files that fail that check do not fill the minimum and are
+not removed. Snapshots older than the window are removed only when more than
+the minimum remain, and only after the replacement passed verification and a
+separate restore check. A failed, missing, or interrupted backup leaves the
+last good snapshot and does not publish a success manifest. Scheduled and
+manual jobs lock the backup directory so one job cannot delete the other's
+published snapshot or write that snapshot's manifest.
+Pre-migration snapshots use the `premigrate-<revision>-<timestamp>` prefix and
+are not part of the hourly set. Retention keeps the newest snapshot of each of
+the last three revisions, including revisions older than 30 days. The manifest
+records the revision. Missing source databases fail rather than silently skip.
 Backup files and manifests live in the backup volume; no separate status file is
 needed. Logs use the bounded Docker driver.
 
-The intended recovery point is about one hour plus scheduling delay. All copies
-remain on this machine by user choice. Off-host encrypted backup and a measured
-replacement-host recovery time are explicit TODOs.
+The newest recovery point is about one hour plus scheduling delay. Older hourly
+copies stay under the 30-day/seven rule once those backups exist. All copies
+remain on this machine. The checked-in Compose file is what the next deploy
+starts; a host that has not applied it still uses the environment it was
+started with. Off-host encrypted backup and a measured replacement-host
+recovery time are not established by this policy.
 
 For restore: stop site and maintenance, preserve the current database together
 with WAL/SHM, verify the chosen backup, restore into a new empty data volume with
