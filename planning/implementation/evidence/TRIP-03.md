@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#227](https://github.com/Vivekpsps3/vivek-monorepo/issues/227); parent [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84) stays open
 - Agent/context, branch/worktree: Cursor Grok, `agent/trip-03`, `/tmp/vivek-trip-03`
-- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Gates below ran on this working tree before the commit that adds them. The product commit SHA is recorded in the handoff after that commit.
+- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Product commit `161010305164f568102eb1facff7751c4945541c` is the tree those gates ran against. This handoff line is the only later documentation change.
 - Fresh-main/prerequisite/active-PR checks: TRIP-02 #226 is closed via squash `9e1f582b2f5651a96268b66d779f319ce1744aed`, an ancestor of the base. At claim time no other PR was open. Before commit, open PRs were #342 (DEL-04, finance service only), #343 (PTO-04, leave router, `pto.component.ts`, `pto.spec.js`, PTO evidence), and #344 (VER-01, lint ownership and scripts). None of those diffs edit the trip page, trip costs, trip reminders, `packages/ui` menu or confirm, or the trip end-to-end specs this leaf owns.
 
 ## Acceptance
