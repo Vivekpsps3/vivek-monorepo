@@ -98,8 +98,8 @@ import {
       <ui-field label="Type"
         ><select
           uiFieldControl
-          [ngModel]="kind"
-          (ngModelChange)="onKind($event)"
+          [(ngModel)]="kind"
+          (ngModelChange)="applySoon()"
         >
           <option value="">All types</option>
           @for (k of kinds; track k.value) {
@@ -341,9 +341,6 @@ export class LibraryComponent {
   get tagOptionsList(): string[] {
     return tagOptions(this.availableTags(), this.tags);
   }
-  /** True after Back until the trailing timer. A late select write in that gap is discarded. */
-  private backPending = false;
-  private detachBackGuard: () => void = () => undefined;
   readonly expanded = signal<number | null>(null);
   readonly children = signal<MediaCard[]>([]);
   readonly childrenError = signal("");
@@ -352,7 +349,6 @@ export class LibraryComponent {
     this.destroy.onDestroy(() => {
       this.active = false;
       clearTimeout(this.filterTimer);
-      this.detachBackGuard();
     });
     this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
       if (
@@ -361,8 +357,6 @@ export class LibraryComponent {
       ) {
         clearTimeout(this.filterTimer);
         this.filterTimer = undefined;
-        this.armBackGuard();
-        this.restoreFilters(event.url);
       }
       if (
         event instanceof NavigationStart &&
@@ -442,63 +436,9 @@ export class LibraryComponent {
       onSameUrlNavigation: "reload",
     });
   }
-  onKind(value: string): void {
-    if (this.backPending) {
-      this.restoreFilters(`${window.location.pathname}${window.location.search}`);
-      return;
-    }
-    this.kind = value;
-    this.applySoon();
-  }
-
   applySoon(): void {
-    if (this.backPending) {
-      this.restoreFilters(`${window.location.pathname}${window.location.search}`);
-      return;
-    }
     clearTimeout(this.filterTimer);
     this.filterTimer = setTimeout(() => this.applyNow(), 250);
-  }
-
-  /** Ignore a late filter-select event until the next timer turn. */
-  private armBackGuard(): void {
-    this.detachBackGuard();
-    this.backPending = true;
-    const onEvent = (event: Event): void => {
-      if (!this.backPending) return;
-      const target = event.target;
-      if (!(target instanceof HTMLSelectElement) || !target.closest("#library-filters")) return;
-      event.stopImmediatePropagation();
-      this.restoreFilters(`${window.location.pathname}${window.location.search}`);
-      target.value = this.kind;
-    };
-    document.addEventListener("input", onEvent, true);
-    document.addEventListener("change", onEvent, true);
-    this.detachBackGuard = () => {
-      document.removeEventListener("input", onEvent, true);
-      document.removeEventListener("change", onEvent, true);
-      this.detachBackGuard = () => undefined;
-    };
-    setTimeout(() => {
-      this.backPending = false;
-      this.detachBackGuard();
-    }, 0);
-  }
-
-  private restoreFilters(url: string): void {
-    const search = new URL(url, window.location.origin).searchParams;
-    const filters = readFilters({
-      get: (key: string) => search.get(key),
-      getAll: (key: string) => search.getAll(key),
-    });
-    this.q = filters.q;
-    this.kind = filters.kind;
-    this.status = filters.status;
-    this.sort = filters.sort;
-    this.favorite = filters.favorite;
-    this.tags = filters.tags;
-    const select = document.getElementById("library-filters")?.querySelector("select");
-    if (select instanceof HTMLSelectElement) select.value = filters.kind;
   }
   searchSoon(): void {
     this.applySoon();

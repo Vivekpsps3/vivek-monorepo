@@ -1,4 +1,3 @@
-import { openBoundedWork } from '@vivek/browser';
 import type { HubCardState } from '@vivek/ui';
 
 export type { HubCardState };
@@ -24,23 +23,27 @@ export async function fetchHubSummary<T>(
   deadlineMs = HUB_SUMMARY_DEADLINE_MS,
 ): Promise<HubFetch<T>> {
   if (signal.aborted) return { status: 'cancelled' };
-  const work = openBoundedWork({ parents: [signal], deadlineMs });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), deadlineMs);
+  const onAbort = () => ctrl.abort();
+  signal.addEventListener('abort', onAbort, { once: true });
   try {
     const response = await fetch(url, {
       credentials: 'same-origin',
       cache: 'no-store',
       headers: { accept: 'application/json' },
-      signal: work.signal,
+      signal: ctrl.signal,
     });
-    if (work.callerAborted()) return { status: 'cancelled' };
+    if (signal.aborted) return { status: 'cancelled' };
     if (response.status === 401) return { status: 'expired' };
     if (!response.ok) return { status: 'unavailable' };
     return { status: 'ok', body: await response.json() as T };
   } catch {
-    if (work.callerAborted()) return { status: 'cancelled' };
+    if (signal.aborted) return { status: 'cancelled' };
     return { status: 'unavailable' };
   } finally {
-    work.dispose();
+    clearTimeout(timer);
+    signal.removeEventListener('abort', onAbort);
   }
 }
 
