@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#209](https://github.com/Vivekpsps3/vivek-monorepo/issues/209), parent [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) (not closed)
 - Agent/context, branch/worktree: VER-01 implementer, branch `agent/ver-01`, worktree `/tmp/vivek-ver-01`
-- Base main SHA, current tested SHA: `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Gates below ran on that base plus this change before the evidence commit; the tested code SHA is filled in the handoff after that commit.
+- Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Implementation and the gates below are `38deea9ab8321b010558863da42fd8a342a80733`.
 - Fresh-main/prerequisite/active-PR checks: `origin/main` was `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. TYPE-01 #218 / PR #338 `e3ff785e1e65315425fd24fc733b88bdf0337857` is an ancestor. No dependency leaves. Open PRs #342 (DEL-04) and #343 (PTO-04) do not edit these files. Issue #209 had no earlier claim.
 
 ## Acceptance
@@ -56,4 +56,4 @@ Karma and Playwright were not run locally. This change does not alter a screen, 
 - Roadmap #134 append-only status-note URL: not posted yet
 - Merged/activation status (actual evidence, not assumption): not merged, not deployed
 - Remaining external prerequisites or approved scope decisions: `checkJs` stays false so strict implicit-any on existing MJS helpers is not a new typing program. Handwritten `.d.mts` files are in the typecheck includes. pyproject `files` still lists `apps` and `scripts`; CI mypy/ruff ownership is `PYTHON_TARGETS`, which also includes `packages`.
-- Next actor: open the PR with `Closes #209`, comment on #134, watch CI, squash-merge, then record the squash SHA here if this handoff is still the latest note.
+- Next actor: open the PR with `Closes #209`, comment on #134, watch CI, and squash-merge. Record the squash SHA on #209 and #134 after merge.
