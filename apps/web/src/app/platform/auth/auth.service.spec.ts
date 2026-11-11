@@ -1,7 +1,7 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { createSigningKey } from '@vivek/auth';
-import { SESSION_CONTEXT } from '@vivek/ui';
+import { SESSION_CONTEXT, authNavigation } from '@vivek/ui';
 import { AuthService } from './auth.service';
 import { UsernameChangeError } from './username-change';
 import { SessionService } from '../session.service';
@@ -57,6 +57,7 @@ describe('AuthService passwordless login', () => {
     environment.localDevAuth = false;
     document.cookie = 'finance_csrf=; Max-Age=0';
     localStorage.removeItem('suite-session-ended');
+    localStorage.removeItem('finance-dek');
     http.verify();
   });
 
@@ -421,6 +422,146 @@ describe('AuthService passwordless login', () => {
     );
     http.expectNone(`${api}/auth/passwordless/lookup`);
     http.expectNone(`${api}/auth/me`);
+  });
+
+  async function answerChallenge(material: Awaited<ReturnType<typeof createSigningKey>>, id: string): Promise<void> {
+    const lookup = await nextRequest(http, `${api}/auth/passwordless/lookup`);
+    lookup.flush({ auth: material.wrapped });
+    await Promise.resolve();
+    const challenge = await nextRequest(http, `${api}/auth/passwordless/challenge`);
+    challenge.flush({
+      challenge_id: id,
+      challenge: 'raw-challenge-value-32-characters',
+      message: `vault-auth-v1\nhttp://127.0.0.1\n${id}\nusername_change\n2099-01-01T00:00:00`,
+    });
+  }
+
+  it('does not retry the mutation when refresh fails and keeps this browser session', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createSigningKey(passphrase, 1_000);
+    await signInAs('legacy.user@example.com');
+    localStorage.setItem('finance-dek', 'synthetic-key');
+    const userId = service.currentUser?.id;
+    const epoch = sessionState.revision;
+    const failures = [
+      { label: '5xx', status: 500, statusText: 'Error', body: { detail: 'disk is full at /tmp/secret.db' } },
+      { label: 'auth', status: 401, statusText: 'Unauthorized', body: { detail: 'session row missing' } },
+    ];
+    for (const failure of failures) {
+      const pending = service.changeUsername('next.name', passphrase);
+      await answerChallenge(material, `challenge-${failure.label}`);
+      const patch = await nextRequest(http, `${api}/account/username`);
+      patch.flush({ detail: 'Invalid CSRF token' }, { status: 403, statusText: 'Forbidden' });
+      const refresh = await nextRequest(http, `${api}/auth/me`);
+      expect(refresh.request.method).toBe('GET');
+      refresh.flush(failure.body, { status: failure.status, statusText: failure.statusText });
+      const message = failure.status === 401
+        ? 'Session expired, sign in again.'
+        : 'A server or network error prevented the change.';
+      await expectAsync(pending).toBeRejectedWith(jasmine.objectContaining({ message }));
+      http.expectNone(`${api}/auth/passwordless/lookup`);
+      http.expectNone(`${api}/account/username`);
+      http.expectNone(`${api}/auth/me`);
+      expect(service.currentUser?.id).toBe(userId);
+      expect(localStorage.getItem('finance-dek')).toBe('synthetic-key');
+      expect(sessionState.revision).toBe(epoch);
+    }
+
+    const offline = service.changeUsername('next.name', passphrase);
+    await answerChallenge(material, 'challenge-offline');
+    const offlinePatch = await nextRequest(http, `${api}/account/username`);
+    offlinePatch.flush({ detail: 'Invalid CSRF token' }, { status: 403, statusText: 'Forbidden' });
+    const offlineRefresh = await nextRequest(http, `${api}/auth/me`);
+    offlineRefresh.error(new ProgressEvent('error'));
+    await expectAsync(offline).toBeRejectedWith(jasmine.objectContaining({
+      message: 'A server or network error prevented the change.',
+    }));
+    http.expectNone(`${api}/auth/passwordless/lookup`);
+    http.expectNone(`${api}/account/username`);
+    expect(service.currentUser?.id).toBe(userId);
+    expect(localStorage.getItem('finance-dek')).toBe('synthetic-key');
+  });
+
+  it('does not retry after another tab ends the session during refresh', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createSigningKey(passphrase, 1_000);
+    await signInAs('legacy.user@example.com');
+    const goToLogin = spyOn(authNavigation, 'goToLogin');
+    const pending = service.changeUsername('next.name', passphrase);
+    await answerChallenge(material, 'challenge-other-tab');
+    const patch = await nextRequest(http, `${api}/account/username`);
+    patch.flush({ detail: 'Invalid CSRF token' }, { status: 403, statusText: 'Forbidden' });
+    const refresh = await nextRequest(http, `${api}/auth/me`);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'suite-session-ended', newValue: '1:other-tab' }));
+    refresh.flush({
+      user: {
+        id: 4,
+        email: 'legacy.seed@pending.local',
+        username: 'legacy.user@example.com',
+        display_name: 'Vivek',
+        role: 'user',
+        is_active: true,
+        must_change_password: false,
+        created_at: '2026-10-14T00:00:00',
+        updated_at: '2026-10-14T00:00:00',
+      },
+    });
+    await expectAsync(pending).toBeRejected();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    http.expectNone(`${api}/auth/passwordless/lookup`);
+    http.expectNone(`${api}/account/username`);
+    expect(service.currentUser).toBeNull();
+    expect(goToLogin).toHaveBeenCalled();
+  });
+
+  it('keeps this browser session when refresh names another account', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createSigningKey(passphrase, 1_000);
+    await signInAs('legacy.user@example.com');
+    localStorage.setItem('finance-dek', 'synthetic-key');
+    const pending = service.changeUsername('next.name', passphrase);
+    await answerChallenge(material, 'challenge-other-user');
+    const patch = await nextRequest(http, `${api}/account/username`);
+    patch.flush({ detail: 'Invalid CSRF token' }, { status: 403, statusText: 'Forbidden' });
+    const refresh = await nextRequest(http, `${api}/auth/me`);
+    refresh.flush({
+      user: {
+        id: 99,
+        email: 'other@example.test',
+        username: 'other.person',
+        display_name: 'Other',
+        role: 'user',
+        is_active: true,
+        must_change_password: false,
+        created_at: '2026-10-14T00:00:00',
+        updated_at: '2026-10-14T00:00:00',
+      },
+    });
+    await expectAsync(pending).toBeRejectedWith(jasmine.objectContaining({
+      status: 403,
+      message: 'Session expired, sign in again.',
+    }));
+    http.expectNone(`${api}/auth/passwordless/lookup`);
+    expect(service.currentUser?.id).toBe(4);
+    expect(service.currentUser?.username).toBe('legacy.user@example.com');
+    expect(localStorage.getItem('finance-dek')).toBe('synthetic-key');
+  });
+
+  it('shows the generic copy for a 5xx mutation and does not refresh', async () => {
+    const passphrase = 'correct horse battery staple';
+    const material = await createSigningKey(passphrase, 1_000);
+    await signInAs('legacy.user@example.com');
+    const pending = service.changeUsername('next.name', passphrase);
+    await answerChallenge(material, 'challenge-mutation-5xx');
+    const patch = await nextRequest(http, `${api}/account/username`);
+    patch.flush({ detail: 'disk is full at /tmp/secret.db' }, { status: 500, statusText: 'Error' });
+    await expectAsync(pending).toBeRejectedWith(jasmine.objectContaining({
+      status: 500,
+      message: 'A server or network error prevented the change.',
+    }));
+    http.expectNone(`${api}/auth/me`);
+    http.expectNone(`${api}/auth/passwordless/lookup`);
+    http.expectNone(`${api}/account/username`);
   });
 
   it('does not store a key when login locks during the status fetch', async () => {

@@ -36,3 +36,13 @@
 .pixels-legend__note {
   flex-basis: 100%;
 }
+
+@media (max-width: 640px) {
+  :host {
+    background: var(--bg);
+  }
+
+  .pixels-legend {
+    margin: 0 0 var(--space-3);
+  }
+}
