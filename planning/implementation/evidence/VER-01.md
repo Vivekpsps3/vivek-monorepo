@@ -3,7 +3,7 @@
 - Leaf issue and parent(s): [#209](https://github.com/Vivekpsps3/vivek-monorepo/issues/209), parent [#199](https://github.com/Vivekpsps3/vivek-monorepo/issues/199) (not closed)
 - Agent/context, branch/worktree: VER-01 implementer, branch `agent/ver-01`, worktree `/tmp/vivek-ver-01`
 - Base main SHA, current tested SHA: base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. Implementation and the gates below are `38deea9ab8321b010558863da42fd8a342a80733`.
-- Fresh-main/prerequisite/active-PR checks: `origin/main` was `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. TYPE-01 #218 / PR #338 `e3ff785e1e65315425fd24fc733b88bdf0337857` is an ancestor. No dependency leaves. Open PRs #342 (DEL-04) and #343 (PTO-04) do not edit these files. Issue #209 had no earlier claim.
+- Fresh-main/prerequisite/active-PR checks: implementation base `bc2d79ebabab7d2b719bcbff920a4f256dbeb9f6`. TYPE-01 #218 / PR #338 `e3ff785e1e65315425fd24fc733b88bdf0337857` is an ancestor. No dependency leaves. `origin/main` later moved to `fdce45e` (DEL-04 #342 and MED-03 #345) and was merged into this branch. Those commits do not edit the VER-01 files. Open PRs #343, #346, and #347 do not edit these files. Issue #209 had no earlier claim.
 
 ## Acceptance
 
@@ -47,13 +47,15 @@
 | `quality_ratchet.py check-base TOOL origin/main` for all seven tools | PASS. Each allowance is within `origin/main`. |
 | `./scripts/coverage-gate.sh server` | PASS. 874 passed, 2 xfailed. Total 79.02% against floor 61.53%. Floor not changed. |
 | `npm run build` | PASS. Application bundle generation complete. Pre-existing NG8113 unused-import warnings only. |
+| `make test-fast`, `make lint-web`, `make typecheck-web` after merging `origin/main` `fdce45e` | PASS. Inventory 98 OK. ESLint counts unchanged. All seven `tsc -p` projects pass. |
+| `npx playwright test apps/web/e2e/town-checkin.spec.ts --project=town -g "visibility after the local date"` | PASS in 719ms. The same test timed out once in CI; the production bundle for this tree still refetches. |
 
-Karma and Playwright were not run locally. This change does not alter a screen, route, or component. CI still runs those jobs. No suite was skipped, relabelled, or given a lower gate.
+Karma was not run. This change does not alter a screen, route, or component. No suite was skipped, relabelled, or given a lower gate.
 
 ## Handoff
 
 - PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/344 (`Closes #209` only)
 - Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6807028243
-- Merged/activation status (actual evidence, not assumption): PR #344 is open. Not merged and not deployed.
+- Merged/activation status (actual evidence, not assumption): PR #344 is open. The first Playwright attempt failed on the town visibility refetch timeout. A failed-job rerun looked for a frontend bundle under a newer merge SHA and exited before the tests. This branch now contains `origin/main` `fdce45e`. Not squash-merged and not deployed.
 - Remaining external prerequisites or approved scope decisions: `checkJs` stays false so strict implicit-any on existing MJS helpers is not a new typing program. Handwritten `.d.mts` files are in the typecheck includes. pyproject `files` still lists `apps` and `scripts`; CI mypy/ruff ownership is `PYTHON_TARGETS`, which also includes `packages`.
-- Next actor: open the PR with `Closes #209`, comment on #134, watch CI, and squash-merge. Record the squash SHA on #209 and #134 after merge.
+- Next actor: push `HEAD:agent/ver-01`, watch CI until Backend, Frontend, Unified Site Release, and Playwright are green, then squash-merge. Record the squash SHA on #209 and #134 after merge.
