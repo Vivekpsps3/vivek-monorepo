@@ -11,7 +11,8 @@
 | [DEPLOY.md](./DEPLOY.md) | Production checklist, GitHub Actions deployment, auth, CORS, Docker |
 | [DATA_MODEL.md](./DATA_MODEL.md) | Net worth, tables, cashflow, planning |
 | [FRONTEND.md](./FRONTEND.md) | Angular routes, tokens, shared UI, page rules |
-| [DESIGN_GUIDE.md](./DESIGN_GUIDE.md) | Product/UI metrics, charts, and page standards |
+| [DESIGN_GUIDE.md](./DESIGN_GUIDE.md) | Finance metrics/charts and shared visual conventions |
+| [Living World plan](../planning/living-world/README.md) | Selected Town/World/Pixels experience, interaction, architecture and release requirements; planned work |
 | [SECURITY_MODEL.md](./SECURITY_MODEL.md) | Server-blind encryption threat model |
 | [ADDING_A_BANK_IMPORT.md](./ADDING_A_BANK_IMPORT.md) | New bank CSV importer |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | One-page system architecture |

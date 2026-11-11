@@ -9,6 +9,14 @@ scope and progress. Parent issues retain product requirements; executable leaves
 under `implementation/issues/` define the work for one PR. Queue order supplies
 the default priority when the user has not selected a task.
 
+## Active product specifications
+
+[Living World](living-world/README.md) / [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304)
+defines the selected Town/World/Pixels expansion: beautiful coastal scenes,
+meaningful interaction and informative dated memories. Read its scope reconciliation
+for retained Town/UX/Health/Hub commitments. PLACE-01–14 packets are in the same
+execution queue; they add future scope without reopening completed #100/#102.
+
 ## Reference only
 
 Read these when the selected packet needs their context:

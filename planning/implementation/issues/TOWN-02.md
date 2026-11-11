@@ -85,3 +85,7 @@ Town grows from real owner Media/Travel activity, retracts reversed actions and 
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Living World scope boundary — 2026-11-11
+
+Retain every passive-credit/date/cap/query/reversal requirement. PLACE-02 consumes these facts and explains intentional source-count differences; PLACE-10/11 add derived keepsakes without a new credit ledger. See [scope reconciliation](../../living-world/scope.md) and [parent #304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). This is planned extension scope; it neither closes nor enlarges this packet's retained implementation acceptance.

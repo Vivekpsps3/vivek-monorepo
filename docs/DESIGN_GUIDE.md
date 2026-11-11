@@ -1,8 +1,14 @@
 # Design Guide
 
-This app is an operational finance dashboard, not a marketing site. Every page
-should answer useful money questions quickly with dense, readable metrics and
-clear graphs.
+The dashboard, metrics, money and chart rules below govern Finance. Shared theme,
+legibility, focus and control conventions apply across the suite. Town, World and
+Pixels are experiential views, with the selected [Living World direction](../planning/living-world/README.md):
+beautiful scenes, purposeful interaction and truthful source/date information.
+They should not inherit Finance's dense dashboard composition. The plan describes
+future work; existing behavior remains authoritative until its packets land.
+
+Finance pages should answer useful money questions quickly with readable metrics
+and clear graphs.
 
 ## Product Principles
 
