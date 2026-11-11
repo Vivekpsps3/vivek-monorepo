@@ -53,11 +53,11 @@ Local execution from `/tmp/vivek-pto-05` with `CHROME_BIN` and `PLAYWRIGHT_CHROM
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after the pull request is opened. The body uses `Closes #234` only. Parent #110 is named and stays open.
-- Roadmap #134 append-only status-note URL: filled after the comment is posted. The roadmap body is not edited.
-- Merged/activation status (actual evidence, not assumption): not merged. Not deployed. Local gates above passed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/351 (`Closes #234`). Parent #110 is named in the body and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6809336590. The roadmap body was not edited.
+- Merged/activation status (actual evidence, not assumption): PR #351 is open. Not merged. Not deployed. Local gates above passed on `8c2c041ae2fafd0a6d0a88e104692663c9a14a2d`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #110 stays open.
-- Next actor: push `agent/pto-05`, open the pull request, watch CI, and squash-merge only after Backend, Frontend, Unified Site Release, and Playwright are green.
+- Next actor: watch CI on PR #351 and squash-merge only after Backend, Frontend, Unified Site Release, and Playwright are green.
 
 Issue / parent / local packet: PTO-05 / #234 / #110 / `planning/implementation/issues/PTO-05.md`.
 
@@ -73,8 +73,8 @@ Deletion ledger and current consumer migration: one server schedule owner. No co
 
 Commands run, results, tested SHA; required checks still pending: local commands in the verification table. The first seeded rehearsal failed on a stale image and the rerun after `make docker-build` passed. CI, merge, and deployment are pending.
 
-PR and roadmap note URLs; actual merge/deployment/activation state: not opened yet. Not merged. Not deployed.
+PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/351 is open. #134 note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6809336590. Not merged. Not deployed.
 
-External prerequisites and next actor: open the pull request. #110 remains the open parent ledger.
+External prerequisites and next actor: watch CI on PR #351. #110 remains the open parent ledger.
 
 No unstated decision from the previous context is necessary to continue.
