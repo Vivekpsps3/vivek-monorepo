@@ -1,4 +1,4 @@
-import { Component, DestroyRef, HostListener, inject, signal } from "@angular/core";
+import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import {
@@ -98,8 +98,8 @@ import {
       <ui-field label="Type"
         ><select
           uiFieldControl
-          [(ngModel)]="kind"
-          (ngModelChange)="applySoon()"
+          [ngModel]="kind"
+          (ngModelChange)="onKind($event)"
         >
           <option value="">All types</option>
           @for (k of kinds; track k.value) {
@@ -341,7 +341,7 @@ export class LibraryComponent {
   get tagOptionsList(): string[] {
     return tagOptions(this.availableTags(), this.tags);
   }
-  /** True after Back until the next pointer or key gesture. A late select update in that gap is discarded. */
+  /** True after Back until the trailing timer. A late select write in that gap is discarded. */
   private backPending = false;
   readonly expanded = signal<number | null>(null);
   readonly children = signal<MediaCard[]>([]);
@@ -361,6 +361,7 @@ export class LibraryComponent {
         this.filterTimer = undefined;
         this.backPending = true;
         this.restoreFilters(event.url);
+        this.reassertFilters(8);
       }
       if (
         event instanceof NavigationStart &&
@@ -440,20 +441,35 @@ export class LibraryComponent {
       onSameUrlNavigation: "reload",
     });
   }
-  @HostListener("document:pointerdown")
-  @HostListener("document:keydown")
-  allowFilterEdits(): void {
-    this.backPending = false;
+  onKind(value: string): void {
+    if (this.backPending) {
+      this.restoreFilters(`${window.location.pathname}${window.location.search}`);
+      return;
+    }
+    this.kind = value;
+    this.applySoon();
   }
 
   applySoon(): void {
-    // Back can win the race against the select's model update. That update is not a new edit.
     if (this.backPending) {
       this.restoreFilters(`${window.location.pathname}${window.location.search}`);
       return;
     }
     clearTimeout(this.filterTimer);
     this.filterTimer = setTimeout(() => this.applyNow(), 250);
+  }
+
+  /** Re-apply the URL after Back so a late select write cannot stick. */
+  private reassertFilters(left: number): void {
+    this.restoreFilters(`${window.location.pathname}${window.location.search}`);
+    if (left > 0) {
+      queueMicrotask(() => this.reassertFilters(left - 1));
+      return;
+    }
+    // After the queued select write. A paused test clock holds this until time moves.
+    setTimeout(() => {
+      this.backPending = false;
+    }, 0);
   }
 
   private restoreFilters(url: string): void {
