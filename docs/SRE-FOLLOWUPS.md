@@ -12,14 +12,14 @@ application authorization and a single private data mount are the boundaries.
   recovery-key custody still need configuration and a measured restore. Current
   local backups do not protect against host/disk loss or compromise; selected
   off-host support is not evidence of an active destination.
-- [ ] **Runner isolation evidence.** The repository now defines separate test,
-  release and production runner roles; see [Local runner](LOCAL-RUNNER.md).
-  Test workers have no production mount or host Docker socket; release uses a
-  dedicated nested daemon. Verify deployed routing and protection settings in
-  #125. The production runner retains host Docker privilege, and the privileged
-  release daemon shares the host kernel; these are trusted-code boundaries.
-  Stateless deployment still uses no installed controller, sudoers, copied
-  config tree or release history files.
+- [ ] **Runner isolation evidence.** Test, release, and production label routing
+  is defined in [Local runner](LOCAL-RUNNER.md) and the workflows. Unmodified
+  fork pull requests are sent to GitHub-hosted runners. A pull request that
+  edits the workflow can request another label. Fork approval and branch
+  protection are repository settings, not files in this tree. The production
+  runner's host Docker privilege and the privileged release daemon remain
+  trusted-code boundaries. No installed controller, sudoers, copied config tree,
+  or release history file was added.
 - [ ] **External availability monitor and notification destination.** Local probes
   and Prometheus rules exist; independent detection and proven recipient delivery
   are not configured. Do not claim paging coverage.
@@ -37,16 +37,20 @@ application authorization and a single private data mount are the boundaries.
 - [ ] **Provider-wide budgets and capacity exercises.** Existing provider timeouts
   and budget helpers remain. Test saturation, quota exhaustion, disconnects, and
   database contention with representative workloads before increasing workers.
-- [ ] **GitHub governance.** Branch protection, workflow CODEOWNERS, reviewer policy,
-  credential rotation, and environment deployment restrictions need owner review.
-  The workflow itself restricts deployment to tested trusted main commits.
+- [ ] **GitHub governance.** Branch protection, rulesets, workflow CODEOWNERS, and
+  production-environment reviewers are not defined in the tracked workflows.
+  The deploy job's own conditions are the code guard. Record a fresh read-only
+  check before treating those settings as present. Credential rotation remains
+  a separate owner action.
 - [ ] **Broader homelab controls.** Other published service ports, Grafana anonymous
   LAN Admin access, unrelated cron upgrades, host patching, firewall rules, legacy
   host certbot failure, and non-site nginx logs require a separate host-wide change.
   They were not modified as collateral changes to the website.
-- [ ] **Image/OS and frontend dependency security policy.** Runtime Python lock is
-  audited and base images are pinned. Maintain scheduled scans and digest updates;
-  a pin is reproducible, not permanently secure. Review npm advisories before updates.
+- [ ] **Image/OS and frontend dependency security policy.** The manual review
+  cadence is [Dependency and image review](OPERATIONS.md#dependency-and-image-review).
+  CI audits the runtime lock and production npm dependencies. No scheduled
+  scanner or update bot is installed. A pin is reproducible, not a current
+  advisory clearance.
 - [ ] **Retention for local Docker images and build cache.** Keep preceding
   image digests for rollback and establish a measured disk budget before pruning.
   CI no longer uploads GitHub Actions artifacts. Deployment rebuilds each tested
@@ -94,4 +98,4 @@ application authorization and a single private data mount are the boundaries.
 | 71–72 external providers | Existing timeout/budget behavior retained; quotas, total deadlines and stress exercises remain TODOs. |
 | 73–76 ownership / docs / TLS / bootstrap | Current operations map and image/Compose bootstrap; broader TLS/host cleanup and full replacement-machine proof remain TODOs. |
 | 77–78 production coverage / exercises | Both production frontends, all-domain release checks, real migration rehearsal and browser checks; comprehensive fault-injection remains TODO. |
-| 79–80 patch policy / objectives | Vulnerable runtime updated and audited, pins and tested-source deployment added; ongoing patch/scan ownership and explicit SLO/RTO still require decisions. |
+| 79–80 patch policy / objectives | Pins, lockfile audits, and the manual review cadence in Operations are the current policy. No update bot is installed. SLO/RTO and a scheduled advisory feed remain open. |

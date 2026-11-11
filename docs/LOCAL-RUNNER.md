@@ -1,26 +1,26 @@
 # Local GitHub Actions runner pool
 
-Trusted main/master pushes and same-repository pull requests can execute all four
-CI jobs on amd7600-server:
+Tracked configuration is `ops/actions-runner/compose.yml`. The commands are `ops/actions-runner/pool.sh` and `ops/actions-runner/register.sh`. Job routing is `.github/workflows/ci.yml` and `.github/workflows/deploy.yml`. This page does not install a runner, and it does not describe the live machine.
 
-- Three CI runners, `amd7600-ci-01` through `amd7600-ci-03`, have labels
-  `self-hosted`, `linux`, `x64`, and `monorepo-ci`. Backend, Frontend, and
-  Playwright each take one of these runners.
-- One release runner, `amd7600-ci`, has labels `self-hosted`, `linux`, `x64`,
-  and `monorepo-ci-release`. Only Unified Site Release targets this runner.
-- Fork pull requests continue to use GitHub-hosted runners. The separate
-  `amd7600-prod` runner has the `monorepo-prod` label and handles production
-  deployment only.
+Release promotion, the exact-SHA check, the seeded rehearsal, and rollback stay in [Operations](./OPERATIONS.md#release-and-rollback).
 
-Each registered runner executes one job at a time. The Backend, Frontend, and
-Playwright jobs use the test workers; Playwright waits for the Frontend bundle.
-Unified Site Release uses the release runner. Additional workflow runs queue
-until slots are available. On this 12-thread, 64 GiB host, parallel jobs share
-CPU capacity. All containers restart after host reboots. Their project-specific
-volumes preserve registration and caches.
+## Who runs where
 
-The Ubuntu 24.04 runner image includes Chrome, Python, build tools, and Docker CLI.
-Existing setup-python and setup-node actions select each job's language versions.
+`ci.yml` repeats one selector because `runs-on` cannot call shared shell and a called workflow would rename Unified Site Release. For a push, and for a pull request whose head repository full name equals this repository, the job uses its trusted labels. Any other pull request, including a missing head repository, uses `ubuntu-latest`.
+
+| Role | Code | Labels the workflow requests |
+| --- | --- | --- |
+| Test workers | `register.sh worker` slots `01` through `03` | `self-hosted`, `linux`, `x64`, `monorepo-ci` |
+| Release rehearsal | `register.sh release` | `self-hosted`, `linux`, `x64`, `monorepo-ci-release` |
+| Production | not registered or started by this pool | `self-hosted`, `linux`, `monorepo-prod` |
+
+Backend, Frontend, and Playwright request `monorepo-ci`. Unified Site Release requests `monorepo-ci-release`. Deploy requests `monorepo-prod` and its job condition is in the deploy workflow.
+
+The selector is not repository access control. A pull request can replace the workflow and request another label. Fork-approval policy is not something this tree can turn on. Branch protection is not a file in this repository. Those stay owner settings until a fresh read-only check shows them.
+
+Same-repository pull requests use the trusted labels, including a bot that opens the pull request from this repository. Only a different head repository is sent to `ubuntu-latest`.
+
+## Commands
 
 From the repository root:
 
@@ -28,90 +28,36 @@ From the repository root:
 docker compose -f ops/actions-runner/compose.yml build runner
 ./ops/actions-runner/pool.sh start
 ./ops/actions-runner/pool.sh status
+./ops/actions-runner/pool.sh stop
+```
+
+`start` registers a runner only when `/opt/runner/.runner` is absent, then starts it. A new registration needs an administrator `gh` login for this repository. The short-lived token is read on stdin and is not written to a dotenv file. Do not print it or copy a runner volume into the repository.
+
+`stop` stops the release runner and the three workers. It does not delete volumes, and it does not stop the nested daemon or the production runner. Avoid `down -v`.
+
+One test worker: `./ops/actions-runner/register.sh worker 01`. The release runner: `./ops/actions-runner/register.sh release`.
+
+Local logs, not for an issue or a public note:
+
+```sh
 docker compose -f ops/actions-runner/compose.yml logs --tail 60 runner
 docker compose -f ops/actions-runner/compose.yml -p monorepo-ci-01 logs --tail 60 worker
 ```
 
-Starting the pool is idempotent: existing registrations are reused. To add or
-restart a single test worker, run `./ops/actions-runner/register.sh worker 01`
-(the accepted slots are `01` through `03`). The release runner uses
-`./ops/actions-runner/register.sh release`.
+## Capacity and isolation
 
-New registrations require an administrator GitHub CLI login with repository
-access. A short-lived token is piped to configuration, never saved in a dotenv
-file. Credentials live in each private runner volume; do not publish or copy
-these volumes into a repository. Avoid `down -v`, which deletes state and caches.
+CPU, memory, and log caps are the `cpus`, `mem_limit`, and `logging` fields in `ops/actions-runner/compose.yml`. Those fields are the code configuration. They are not a measurement of a host.
 
-## Resource and isolation boundaries
+Each worker project has its own registration, workspace, home, tool cache, temporary directory, and network namespace. Workers do not mount a Docker socket. They share the external volume `monorepo-ci-dist` at `/opt/ci-dist` for the one frontend bundle.
 
-Every worker has its own Compose project, registration, workspace, home, tool
-cache, temporary directory, and network namespace. Parallel browser tests can
-use the same localhost ports without collisions. Test workers have no Docker
-socket, host mount, or privileged sidecar. They share the Docker volume
-`monorepo-ci-dist`, mounted at `/opt/ci-dist`, which carries the one production
-bundle from Frontend to Playwright.
+The release service uses the nested daemon declared in the same Compose file. That daemon is `privileged` and shares the host kernel. The release runner uses `network_mode: service:docker` so rehearsals can reach loopback ports published by the nested daemon. It does not mount the host Docker socket or a production data volume. This is a trusted-code boundary, not a boundary against hostile code.
 
-Each test runner is capped at 4 CPUs and 6 GiB RAM. Backend and Playwright each
-use one of these runners. The release runner and its nested Docker daemon each
-retain a 2 CPU and 6 GiB cap. The combined quotas are 16 logical CPUs and 30 GiB
-RAM on the 12-thread host; concurrent jobs share the available CPU capacity.
-All CI containers have reduced CPU scheduling
-weight. Angular uses
-at most two build workers, Node's heap is capped at 2560 MiB, and each runner
-has 2 GiB of shared memory for Chromium. Logs rotate at 10 MiB with three files.
+Refreshing the image does not replace a registered runner copy under `/opt/runner`. Recreate that volume only on purpose. Never copy one slot's volume to another slot.
 
-Backend coverage gates and Playwright each default to four test workers within
-that existing allocation. Pytest distributes whole files; each browser worker
-owns a separate disposable server and database. Keep the worker count at four
-unless the container CPU and memory budget is revisited. Performance gates run
-serially after the server coverage workers have exited.
-
-The release runner uses a dedicated Docker-in-Docker daemon, storage, socket,
-and network namespace. No host home, production data volume, or host Docker
-socket is mounted. This matters because release rehearsals use production's
-Compose project and volume names, and cleanup deletes those disposable volumes.
-The release runner shares its nested daemon's network namespace so tests can
-reach loopback-published ports. Its work and temporary paths are shared with the
-daemon so schema rehearsal bind mounts resolve correctly.
-
-Docker-in-Docker requires a privileged container and shares the host kernel;
-it is not a security boundary for hostile code. Use trusted contributors only,
-and a separate VM for untrusted code. Workflow routing keeps normal fork CI off
-this machine but is not repository-wide access control: someone able to modify
-workflows could request any repository runner label. The existing production
-runner retains its established host Docker privileges.
-
-When refreshing the base image, drain jobs first. Persistent `/opt/runner`
-volumes retain the installed runner application, including automatic updates;
-recreating a registration volume deliberately is necessary to replace that copy.
-Image rebuilds refresh system packages. Never copy one runner's registered volume
-to another slot: each slot needs a unique identity.
-
-After jobs finish, stop accepting jobs without deleting state:
-
-```sh
-./ops/actions-runner/pool.sh stop
-```
-
-Do not prune host Docker volumes or images as part of CI cleanup. Inspect CI image
-usage **inside** the release daemon before targeted cleanup:
+Nested-daemon disk use, still local:
 
 ```sh
 docker compose -f ops/actions-runner/compose.yml exec runner docker system df
 ```
 
-## GitHub storage remains separate
-
-Self-hosted execution avoids hosted compute usage. CI builds and checks the
-production image but does not upload release archives or Playwright traces to
-GitHub Actions. Deploy requires successful trusted main CI, checks out the exact
-tested SHA, and rebuilds its Docker image on the production runner each time.
-Image verification, backup, migration, readiness probes, and image rollback
-remain in place. See [Release and rollback](./OPERATIONS.md#release-and-rollback).
-
-npm/pip and Playwright dependency caches remain enabled; GitHub accounts for
-cache storage separately from artifact storage. Test output and job logs remain
-available, but downloadable Playwright traces are no longer uploaded. Existing
-artifacts must be deleted separately; GitHub storage accounting can take 6–12
-hours to reflect deletion. No tests or deployment verification gates are disabled
-by this setup.
+Do not prune host Docker volumes or images as pool cleanup.
