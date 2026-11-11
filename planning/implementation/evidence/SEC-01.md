@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#266](https://github.com/Vivekpsps3/vivek-monorepo/issues/266); parent [#121](https://github.com/Vivekpsps3/vivek-monorepo/issues/121) stays open
 - Agent/context, branch/worktree: SEC-01 in `/tmp/vivek-sec-01`, branch `agent/sec-01`
-- Base main SHA, current tested SHA: `origin/main` `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Gates below ran on that base plus the product diff, before this evidence file. Head SHA is the commit that contains this record; it does not change product code.
+- Base main SHA, current tested SHA: `origin/main` `0ed83e95a3727acc4f512dd2ac77211d8a622407`. Product revision under the gates: `59de1b9ff0ae7baf72c8c5b63a85749794442d77`. The follow-up commit only fills the PR and roadmap URLs below.
 - Fresh-main/prerequisite/active-PR checks: no dependencies. Open PR at implementation time was #320 (`agent/fin-03`, Planning facts), which does not edit these files. Issue #266 had no claim comment.
 
 ## Acceptance
@@ -46,8 +46,8 @@ Not run: browser Karma and Playwright. This leaf does not change a screen. Deplo
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): filled after `gh pr create` (`Closes #266`, reference #121)
-- Roadmap #134 append-only status-note URL: filled after the comment
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/324 (`Closes #266`, reference #121)
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6786269916
 - Merged/activation status: not merged. Not deployed
 - Remaining external prerequisites or approved scope decisions: parent #121 stays open. SEC-02 still owns CSRF commit/CAS
 - Next actor: reviewer. Integration owner updates the roadmap body after merge
