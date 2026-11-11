@@ -350,6 +350,8 @@ export class DetailComponent {
     this.tags = result.tags;
     this.tagText = "";
     this.tagError = "";
+    const input = this.tagInput?.nativeElement;
+    if (input) input.value = "";
     this.rememberDraft();
   }
   private focusTagRemoval(index: number): void {

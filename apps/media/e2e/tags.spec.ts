@@ -93,6 +93,7 @@ test('Backspace and remove move focus to the input or the next tag', async ({ pa
   await input.press('Enter');
   await input.fill('Beta');
   await input.press('Enter');
+  await expect(input).toHaveValue('');
   await expect(input).toBeFocused();
   await input.press('Backspace');
   await expect(page.getByRole('button', { name: 'Remove tag Beta' })).toHaveCount(0);
@@ -101,6 +102,7 @@ test('Backspace and remove move focus to the input or the next tag', async ({ pa
 
   await input.fill('Beta');
   await input.press('Enter');
+  await expect(input).toHaveValue('');
   await page.getByRole('button', { name: 'Remove tag Alpha' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Remove tag Alpha' })).toHaveCount(0);
