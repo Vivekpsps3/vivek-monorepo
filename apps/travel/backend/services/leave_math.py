@@ -2,6 +2,15 @@
 
 Balances stay Fractions until a response is formatted. `segments` jumps from
 event to event: it never walks every day.
+
+Daily mode, the default, spreads accrual from the day after ``balance_as_of``.
+Scheduled mode posts the whole amount on ``accrual_anchor`` and on each later
+cadence date. Dates on or before the balance date are not posted. Weekly and
+biweekly step by 7 and 14 days. Monthly and yearly keep the anchor day, and a
+month-end anchor stays on month end; a missing day, including Feb 29, uses the
+month's last day. Semimonthly uses the 15th and month end when the anchor is
+the 15th or a month end, and otherwise day D and day D+15. On one date the
+order is policy-year drop, then accrual, then that day's charge.
 """
 
 from __future__ import annotations
@@ -26,6 +35,7 @@ _KIND_ORDER = (
     "month",
     "year_before",
     "year",
+    "post",
     "charge_before",
     "cap_before",
     "charge",
@@ -45,6 +55,11 @@ CAP_COPY = "Cap has to be more than 0 and up to 8784 hours, or blank."
 YEAR_COPY = "Pick a valid date."
 CARRY_COPY = "Choose whether unused hours carry into the next policy year."
 HPD_COPY = "Hours in a workday has to be more than 0 and up to 24, with at most 2 decimals."
+MODE_COPY = "Pick daily accrual or a posting schedule."
+ANCHOR_COPY = "Pick the first posting date."
+_MODES = ("daily", "scheduled")
+_MIN_ANCHOR = date(2000, 1, 1)
+_MAX_ANCHOR = date(2100, 12, 31)
 
 # ASCII only. Integer part is at most 6 digits; the length cap stops a long fraction
 # before Decimal() parses it. Default-context normalize() is never used for the dp count.
@@ -63,6 +78,8 @@ class Bucket:
     cap_hours: Fraction | None
     year_start: str
     carry_forward: bool = True
+    accrual_mode: str = "daily"
+    accrual_anchor: date | None = None
 
     @property
     def daily(self) -> Fraction:
@@ -83,6 +100,8 @@ def bucket_from_row(row) -> Bucket:
         cap_hours=cap,
         year_start=row.year_start,
         carry_forward=bool(getattr(row, "carry_forward", True)),
+        accrual_mode=_row_mode(row),
+        accrual_anchor=_row_anchor(row),
     )
 
 
@@ -95,10 +114,14 @@ def walk_bucket(bucket: Bucket, charges: dict[date, Fraction], on: date) -> tupl
     if on < bucket.balance_as_of:
         return bucket.start_balance_hours, True
     balance = bucket.start_balance_hours
+    posts = set(posting_dates(bucket, bucket.balance_as_of, on)) if _scheduled(bucket) else None
     day = bucket.balance_as_of + timedelta(days=1)
     while day <= on:
         balance = _drop_unused(balance, day, bucket)
-        balance, _added = _accrue(balance, bucket.daily, bucket.cap_hours)
+        if posts is None:
+            balance, _added = _accrue(balance, bucket.daily, bucket.cap_hours)
+        elif day in posts:
+            balance, _added = _accrue(balance, bucket.accrual_hours, bucket.cap_hours)
         balance -= charges.get(day, Fraction(0))
         day += timedelta(days=1)
     return balance, False
@@ -156,6 +179,131 @@ def year_starts_between(year_start: str, after: date, through: date) -> list[dat
         found.append(candidate)
         candidate = date(candidate.year + 1, month, dom)
     return found
+
+
+def _row_mode(row) -> str:
+    mode = getattr(row, "accrual_mode", None) or "daily"
+    return mode if mode in _MODES else "daily"
+
+
+def _row_anchor(row) -> date | None:
+    if _row_mode(row) != "scheduled":
+        return None
+    anchor = getattr(row, "accrual_anchor", None)
+    return anchor if isinstance(anchor, date) else None
+
+
+def _scheduled(bucket: Bucket) -> bool:
+    return bucket.accrual_mode == "scheduled" and bucket.accrual_anchor is not None
+
+
+def _month_last(year: int, month: int) -> int:
+    if month == 12:
+        return 31
+    return (date(year, month + 1, 1) - timedelta(days=1)).day
+
+
+def _is_month_end(day: date) -> bool:
+    return day.day == _month_last(day.year, day.month)
+
+
+def _add_months(anchor: date, count: int) -> date:
+    """Keep a month-end anchor on month end. Otherwise clamp a missing day."""
+    index = anchor.month - 1 + count
+    year = anchor.year + index // 12
+    month = index % 12 + 1
+    last = _month_last(year, month)
+    day = last if _is_month_end(anchor) else min(anchor.day, last)
+    return date(year, month, day)
+
+
+def _add_years(anchor: date, count: int) -> date:
+    year = anchor.year + count
+    return date(year, anchor.month, min(anchor.day, _month_last(year, anchor.month)))
+
+
+def _semimonthly_days(year: int, month: int, anchor: date) -> tuple[int, int]:
+    """15th and month end, or day D and day D+15, clamped to the month."""
+    last = _month_last(year, month)
+    if anchor.day == 15 or _is_month_end(anchor):
+        return 15, last
+    if anchor.day < 15:
+        return anchor.day, min(anchor.day + 15, last)
+    return anchor.day - 15, min(anchor.day, last)
+
+
+def posting_dates(bucket: Bucket, after: date, through: date) -> list[date]:
+    """Scheduled post dates in ``(after, through]``.
+
+    The anchor is the first date of the schedule. Nothing on or before
+    ``after`` is returned, so a saved balance is not reinterpreted and missed
+    periods are not backfilled. Daily mode returns no dates.
+    """
+    if through <= after or not _scheduled(bucket) or bucket.accrual_hours <= 0:
+        return []
+    anchor = bucket.accrual_anchor
+    assert anchor is not None
+    cadence = bucket.accrual_cadence
+    if cadence in ("weekly", "biweekly"):
+        return _step_dates(anchor, 7 if cadence == "weekly" else 14, after, through)
+    if cadence == "monthly":
+        return _offset_dates(anchor, after, through, _add_months)
+    if cadence == "yearly":
+        return _offset_dates(anchor, after, through, _add_years)
+    if cadence == "semimonthly":
+        return _semimonthly_dates(anchor, after, through)
+    return []
+
+
+def _step_dates(anchor: date, step: int, after: date, through: date) -> list[date]:
+    if anchor > through:
+        return []
+    index = 0 if anchor > after else (after - anchor).days // step + 1
+    found: list[date] = []
+    while index < 6000:
+        current = anchor + timedelta(days=step * index)
+        if current > through:
+            break
+        found.append(current)
+        index += 1
+    return found
+
+
+def _offset_dates(anchor: date, after: date, through: date, add) -> list[date]:
+    if anchor > through:
+        return []
+    found: list[date] = []
+    index = 0
+    while index < 5000:
+        current = add(anchor, index)
+        if current > through:
+            break
+        if current > after:
+            found.append(current)
+        index += 1
+    return found
+
+
+def _semimonthly_dates(anchor: date, after: date, through: date) -> list[date]:
+    if anchor > through:
+        return []
+    start = anchor if anchor > after else after
+    year, month = start.year, start.month
+    found: list[date] = []
+    while date(year, month, 1) <= through and len(found) < 5000:
+        early, late = _semimonthly_days(year, month, anchor)
+        for dom in (early, late) if early != late else (early,):
+            current = date(year, month, dom)
+            if anchor <= current <= through and current > after:
+                found.append(current)
+        month += 1
+        if month == 13:
+            year, month = year + 1, 1
+    return found
+
+
+def _posts_on(bucket: Bucket, day: date) -> bool:
+    return bool(posting_dates(bucket, day - timedelta(days=1), day))
 
 
 def policy_year(today: date, year_start: str) -> tuple[date, date, int, bool]:
@@ -231,6 +379,41 @@ def _mark_years(kinds: dict[date, set[str]], bucket: Bucket, as_of: date, horizo
             kinds[before].add("year_before")
 
 
+def _scheduled_apply(
+    balance: Fraction,
+    start: date,
+    end: date,
+    bucket: Bucket,
+    kinds: dict[date, set[str]] | None = None,
+    as_of: date | None = None,
+    horizon: date | None = None,
+) -> Fraction:
+    """Drop unused hours, then post, on each schedule date in ``(start, end]``."""
+    if end <= start or not _scheduled(bucket):
+        return balance
+    posts = set(posting_dates(bucket, start, end))
+    events = set(posts)
+    if not bucket.carry_forward:
+        events.update(year_starts_between(bucket.year_start, start, end))
+    cap = bucket.cap_hours
+    for when in sorted(events):
+        balance = _drop_unused(balance, when, bucket)
+        if when not in posts:
+            continue
+        before = balance
+        balance, _added = _accrue(balance, bucket.accrual_hours, cap)
+        if (
+            kinds is not None
+            and as_of is not None
+            and horizon is not None
+            and cap is not None
+            and before < cap
+            and balance >= cap
+        ):
+            _mark_cap(kinds, when, as_of, horizon)
+    return balance
+
+
 def _accrue_gap(
     balance: Fraction,
     cursor: date,
@@ -243,6 +426,8 @@ def _accrue_gap(
     horizon: date,
 ) -> Fraction:
     """Accrue (cursor, gap_end] and mark the days accrual reaches the cap."""
+    if _scheduled(bucket):
+        return _scheduled_apply(balance, cursor, gap_end, bucket, kinds, as_of, horizon)
     if gap_end <= cursor:
         return balance
     if bucket.carry_forward:
@@ -280,6 +465,12 @@ def _end_of(
     charges: dict[date, Fraction],
 ) -> Fraction:
     """End-of-day balance on ``when`` after finishing ``prev``."""
+    if _scheduled(bucket):
+        balance = _scheduled_apply(balance, prev, when - timedelta(days=1), bucket)
+        balance = _drop_unused(balance, when, bucket)
+        if _posts_on(bucket, when):
+            balance, _added = _accrue(balance, bucket.accrual_hours, bucket.cap_hours)
+        return balance - charges.get(when, Fraction(0))
     balance = _apply_span(balance, prev, when - timedelta(days=1), daily, cap, bucket)
     balance = _drop_unused(balance, when, bucket)
     balance, _added = _accrue(balance, daily, cap)
@@ -324,6 +515,9 @@ def segments(
     if negative is not None:
         kinds[as_of].add("zero")
     _mark_years(kinds, bucket, as_of, horizon)
+    if _scheduled(bucket):
+        for when in posting_dates(bucket, as_of, horizon):
+            kinds[when].add("post")
     balance = bucket.start_balance_hours
     cursor = as_of
     upcoming = sorted(day for day in charges if as_of < day <= horizon)
@@ -332,7 +526,11 @@ def segments(
         balance = _accrue_gap(balance, cursor, gap_end, daily, cap, bucket, kinds, as_of, horizon)
         balance = _drop_unused(balance, day, bucket)
         before = balance
-        balance, _added = _accrue(balance, daily, cap)
+        if _scheduled(bucket):
+            if _posts_on(bucket, day):
+                balance, _added = _accrue(balance, bucket.accrual_hours, bucket.cap_hours)
+        else:
+            balance, _added = _accrue(balance, daily, cap)
         reached = cap is not None and before < cap and balance >= cap
         balance -= charges[day]
         if reached:
@@ -561,6 +759,77 @@ def validate_policy_body(raw: dict, stored, today: date) -> tuple[dict | None, d
         clean["carry_forward"] = carry
     else:
         errors["carry_forward"] = CARRY_COPY
+
+    stored_mode, stored_anchor = _stored_schedule(stored)
+    mode_raw = raw.get("accrual_mode")
+    if mode_raw is None:
+        mode = stored_mode
+    elif isinstance(mode_raw, str) and mode_raw in _MODES:
+        mode = mode_raw
+    else:
+        errors["accrual_mode"] = MODE_COPY
+        mode = stored_mode
+    if "accrual_mode" not in errors:
+        clean["accrual_mode"] = mode
+        if mode == "daily":
+            clean["accrual_anchor"] = None
+        else:
+            anchor_raw = raw.get("accrual_anchor")
+            if anchor_raw is None and mode_raw is None and stored_anchor is not None:
+                clean["accrual_anchor"] = stored_anchor
+            else:
+                parsed = _parse_anchor(anchor_raw)
+                if parsed is None or (
+                    parsed != stored_anchor and (parsed < _MIN_ANCHOR or parsed > _MAX_ANCHOR)
+                ):
+                    errors["accrual_anchor"] = ANCHOR_COPY
+                else:
+                    clean["accrual_anchor"] = parsed
     if errors:
         return None, errors
     return clean, {}
+
+
+def _stored_schedule(stored) -> tuple[str, date | None]:
+    if stored is None:
+        return "daily", None
+    mode = _row_mode(stored)
+    if mode != "scheduled":
+        return "daily", None
+    return "scheduled", _row_anchor(stored)
+
+
+def _parse_anchor(raw: object) -> date | None:
+    if not isinstance(raw, str) or len(raw.strip()) != 10:
+        return None
+    try:
+        return date.fromisoformat(raw.strip())
+    except ValueError:
+        return None
+
+
+def schedule_changed(stored, clean: dict) -> bool:
+    """True when the saved mode or anchor would change. Other edits do not."""
+    mode, anchor = _stored_schedule(stored)
+    return clean["accrual_mode"] != mode or clean["accrual_anchor"] != anchor
+
+
+def stored_accrual_version(stored) -> int:
+    if stored is None:
+        return 0
+    try:
+        value = int(getattr(stored, "accrual_version", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return value if value >= 0 else 0
+
+
+def confirmed_accrual_version(raw: object) -> int | None:
+    """The version a confirm sent. Booleans and partial numbers are not versions."""
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw if raw >= 0 else None
+    if isinstance(raw, str) and raw.strip().isdigit():
+        return int(raw.strip())
+    return None
