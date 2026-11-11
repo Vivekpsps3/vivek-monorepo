@@ -427,3 +427,36 @@
     grid-template-columns: repeat(11, minmax(0, 1fr));
   }
 }
+
+.media-page .related-sentinel {
+  height: 1px;
+  width: 100%;
+}
+.media-page .related {
+  margin-top: 1.5rem;
+  min-width: 0;
+}
+.media-page .related-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.media-page .related-card {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.media-page .related-card a {
+  overflow-wrap: anywhere;
+}
+.media-page .related-card p,
+.media-page .related-status {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}

@@ -478,6 +478,48 @@
         Remove from library
       </ui-button>
     </div>
+    @if (relatedWatch()) {
+      <div
+        #relatedSentinel
+        class="related-sentinel"
+        data-related-sentinel
+      ></div>
+    }
+    @if (relatedLoading()) {
+      <p class="related-status" role="status">Loading related items…</p>
+    }
+    @if (relatedError()) {
+      <div class="local-error related-error" role="alert">
+        <p>{{ relatedError() }}</p>
+        @if (relatedCanRetry) {
+          <ui-button variant="ghost" (clicked)="retryRelated()"
+            >Retry related</ui-button
+          >
+        }
+      </div>
+    }
+    @if (relatedNodes().length) {
+      <section class="related" aria-labelledby="related-heading">
+        <h2 id="related-heading">Related</h2>
+        <ul class="related-list">
+          @for (
+            node of relatedNodes();
+            track node.title + "|" + (node.year ?? "")
+          ) {
+            <li class="related-card">
+              <a
+                [attr.href]="relatedLink(node)"
+                (click)="openRelated($event, node)"
+                >{{ node.title }}</a
+              >
+              @if (relatedMeta(node); as meta) {
+                <p>{{ meta }}</p>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
   }
   <ui-dialog
     [open]="photoOpen"

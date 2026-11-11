@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  RELATED_ATTEMPT_LIMIT,
+  RELATED_KINDS,
   cleanNodes,
   relatedHref,
   relationLabel,
 } from "../../../frontend/src/related.mjs";
+
+test("related kinds are movie, series and book, never an artist", () => {
+  assert.deepEqual(RELATED_KINDS, ["movie", "tv", "book"]);
+  assert.equal(RELATED_KINDS.includes("artist"), false);
+  assert.equal(RELATED_ATTEMPT_LIMIT, 3);
+});
 
 test("relationLabel maps known relations and blanks unknown", () => {
   assert.equal(relationLabel("sequel"), "Sequel");
