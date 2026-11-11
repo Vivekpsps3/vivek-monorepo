@@ -9,6 +9,14 @@ import { bindLockNotices, financeVaultPresent, lockFinance } from '../../../../f
 import { NetWorth } from '../../../../finance/frontend/src/public-api';
 import { MoneyPipe, UiPageHeaderComponent } from '@vivek/ui';
 import {
+  decodeMediaSummary,
+  decodeTownSummary,
+  decodeTravelSummary,
+  type MediaItem,
+  type MediaSummary,
+  type TravelTrip,
+} from './hub-decode';
+import {
   MEDIA_SUMMARY_URL,
   TRAVEL_SUMMARY_URL,
   fetchHubSummary,
@@ -34,39 +42,6 @@ import {
   mediaReleaseLabel,
 } from './hub-summary';
 import { NextEpisodeButtonComponent, NextEpisodeUndoService, type NextResult } from '../../../../media/frontend/src/public-api';
-interface TravelTrip {
-  id: number;
-  title: string;
-  destination?: string | null;
-  origin_label?: string | null;
-  start_date: string;
-  end_date: string;
-  phase: string;
-  days_until: number;
-  next_action: string;
-  href?: string;
-}
-
-interface MediaItem {
-  id: number;
-  kind: string;
-  title: string;
-  creator?: string | null;
-  status?: string;
-  progress_label?: string | null;
-  rating?: number | null;
-  review_excerpt?: string | null;
-  release_on?: string | null;
-  precision?: string | null;
-  when?: string | null;
-}
-
-interface MediaSummary {
-  currently: MediaItem[];
-  recent_reviews: MediaItem[];
-  upcoming: MediaItem[];
-  next_episodes: Array<{ entry_id: number; episode_id: number; show_title: string; season: number; episode: number; title?: string | null; air_date: string | null; state?: string }>;
-}
 
 interface FinanceView {
   status: 'locked' | 'ready' | 'unavailable' | 'expired' | 'cancelled';
@@ -397,11 +372,11 @@ export class HubComponent implements OnInit {
     if (!this.trip) this.travelState = 'loading';
     this.cdr.markForCheck();
     try {
-      const result = await fetchHubSummary<{ next_trip?: TravelTrip | null }>(TRAVEL_SUMMARY_URL, ctrl.signal);
+      const result = await fetchHubSummary(TRAVEL_SUMMARY_URL, ctrl.signal, decodeTravelSummary);
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(
         this.trip,
-        result.status === 'ok' ? { status: 'ok', body: result.body.next_trip ?? null } : result,
+        result.status === 'ok' ? { status: 'ok', body: result.body.next_trip } : result,
         trip => trip == null,
       );
       if (!settled) return;
@@ -422,7 +397,7 @@ export class HubComponent implements OnInit {
     if (!this.media) this.mediaState = 'loading';
     this.cdr.markForCheck();
     try {
-      const result = await fetchHubSummary<MediaSummary>(MEDIA_SUMMARY_URL, ctrl.signal);
+      const result = await fetchHubSummary(MEDIA_SUMMARY_URL, ctrl.signal, decodeMediaSummary);
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(this.media, result, mediaIsEmpty);
       if (!settled) return;
@@ -443,7 +418,7 @@ export class HubComponent implements OnInit {
     if (!this.town) this.townState = 'loading';
     this.cdr.markForCheck();
     try {
-      const result = await fetchHubSummary<TownSummary>(townSummaryUrl(), ctrl.signal);
+      const result = await fetchHubSummary(townSummaryUrl(), ctrl.signal, decodeTownSummary);
       if (generation !== this.generation || ctrl.signal.aborted) return;
       const settled = settleHubCard(this.town, result, townIsEmpty);
       if (!settled) return;

@@ -1,7 +1,7 @@
 import { HttpClient, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
-import { throwError } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 import { Injector } from '@angular/core';
 import { SESSION_CONTEXT, ToastService } from '@vivek/ui';
 import { FinanceService, VaultService } from '../../../../finance/frontend/src/testing';
@@ -303,5 +303,79 @@ describe('PixelsDataService', () => {
     service.release();
     expect(result.snapshot.sources.town).toBe('ok');
     expect(result.snapshot.financeStatus).toBe('locked');
+  });
+
+  it('rejects a string activity count instead of publishing a zero day', async () => {
+    const pending = service.load({ from: '2026-08-01', to: '2026-08-02', profile: false, includeTrips: false, today: '2026-10-29' });
+    http.expectOne(request => request.url === '/api/pixels').flush({
+      ...pixelsBody(),
+      days: [{ date: '2026-08-01', town: '1' }],
+    });
+    await expectAsync(pending).toBeResolvedTo({ status: 'unavailable' });
+  });
+
+  it('keeps a null activity count while finance stays locked', async () => {
+    const pending = service.load({ from: '2026-08-01', to: '2026-08-02', profile: false, includeTrips: false, today: '2026-10-29' });
+    http.expectOne(request => request.url === '/api/pixels').flush({
+      ...pixelsBody(),
+      days: [{ date: '2026-08-01', town: null }],
+      first_activity_on: null,
+      sources: { town: 'ok', media: 'absent', travel: 'unavailable' },
+    });
+    const result = await pending;
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.snapshot.days[0]?.channels.town).toBe(0);
+    expect(result.snapshot.days[0]?.channels.fin).toBeNull();
+    expect(result.snapshot.financeStatus).toBe('locked');
+    expect(result.snapshot.sources).toEqual({ town: 'ok', media: 'absent', travel: 'unavailable' });
+    expect(result.snapshot.firstActivityOn).toBeNull();
+  });
+
+  it('attaches trip dates and ignores home money', fakeAsync(() => {
+    let result: Awaited<ReturnType<PixelsDataService['load']>> | undefined;
+    void service.load({ from: '2026-08-01', to: '2026-08-02', profile: false, includeTrips: true, today: '2026-10-29' })
+      .then(value => { result = value; });
+    http.expectOne(request => request.url === '/api/pixels').flush(pixelsBody());
+    tick();
+    http.expectOne(request => request.url === '/travel/api/home').flush({
+      in_progress: [{ id: 4, title: 'Lisbon', start_date: '2026-08-01', end_date: '2026-08-02', budget: { total_cents: 2500 } }],
+      upcoming: [],
+      past: [],
+    });
+    tick();
+    expect(result?.status).toBe('ready');
+    if (result?.status !== 'ready') return;
+    expect(result.snapshot.trips).toEqual([{ id: 4, title: 'Lisbon', start: '2026-08-01', end: '2026-08-02' }]);
+    expect(JSON.stringify(result.snapshot)).not.toContain('2500');
+    expect(result.snapshot.days[0]?.channels.town).toBe(1);
+  }));
+
+  it('keeps the grid and invents no trip when home is malformed', fakeAsync(() => {
+    let result: Awaited<ReturnType<PixelsDataService['load']>> | undefined;
+    void service.load({ from: '2026-08-01', to: '2026-08-02', profile: false, includeTrips: true, today: '2026-10-29' })
+      .then(value => { result = value; });
+    http.expectOne(request => request.url === '/api/pixels').flush(pixelsBody());
+    tick();
+    http.expectOne(request => request.url === '/travel/api/home').flush({
+      in_progress: [{ id: '4', title: 'Lisbon', start_date: '2026-08-01', end_date: '2026-08-02' }],
+    });
+    tick();
+    expect(result?.status).toBe('ready');
+    if (result?.status !== 'ready') return;
+    expect(result.snapshot.trips).toEqual([]);
+    expect(result.snapshot.days.some(day => day.channels.town === 1)).toBeTrue();
+  }));
+
+  it('drops a decoded pixels body when the owner changes before publication', async () => {
+    service.noteUser(7);
+    const client = TestBed.inject(HttpClient);
+    spyOn(client, 'get').and.returnValue(new Observable(subscriber => {
+      subscriber.next(pixelsBody());
+      service.noteUser(8);
+      subscriber.complete();
+    }));
+    const result = await service.load({ from: '2026-08-01', to: '2026-08-02', profile: false, includeTrips: false, today: '2026-10-29' });
+    expect(result).toEqual({ status: 'dropped' });
   });
 });
