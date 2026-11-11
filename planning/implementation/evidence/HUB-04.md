@@ -55,8 +55,8 @@ Focused iterations before those full commands: `finance-search.spec.ts` 7 passed
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): pending push
-- Roadmap #134 append-only status-note URL: pending PR
-- Merged/activation status: not merged. Local verification only. Not deployed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/340 (`Closes #246` only). Parent #93 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6804764859
+- Merged/activation status: pull request open. Local verification passed. CI not yet green. Not deployed.
 - Remaining external prerequisites or approved scope decisions: none. SAFE-03, SAFE-04, and SAFE-05 are merged on this base. #93 and #103 stay open.
-- Next actor: open the pull request, watch CI, squash-merge, then comment the squash SHA on #246 and append a note to #134.
+- Next actor: watch CI for Backend, Frontend, Unified Site Release, and Playwright, then squash-merge.
