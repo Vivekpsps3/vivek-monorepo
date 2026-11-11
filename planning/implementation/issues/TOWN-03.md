@@ -85,3 +85,7 @@ Treasury reflects completed spending-plan weeks privately, while the Town Hub ca
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Living World scope boundary — 2026-11-11
+
+Retain Finance-only budget weeks, lifecycle and existing Hub-card acceptance. PLACE-04 must project the same approved building/Treasury facts in Town and World; cosmetics cannot replace this correction. See [scope reconciliation](../../living-world/scope.md) and [parent #304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). This is planned extension scope; it neither closes nor enlarges this packet's retained implementation acceptance.

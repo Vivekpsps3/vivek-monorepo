@@ -66,6 +66,10 @@
     {
       "number": 200,
       "title": "Engineering: simplify domain modules and retire competing implementations"
+    },
+    {
+      "number": 304,
+      "title": "Living World: make Town, World and Pixels beautiful, interactive and informative"
     }
   ],
   "td_coverage": {
@@ -1920,6 +1924,341 @@
         "media_back",
         "web_front"
       ]
+    },
+    {
+      "id": "PLACE-01",
+      "title": "Create the coastal art direction, interaction storyboard and measured baseline",
+      "parent_issues": [
+        304
+      ],
+      "kind": "discovery",
+      "issue": 305,
+      "dependencies": [],
+      "conflict_groups": [
+        "town-main",
+        "world-ui",
+        "pixels-year"
+      ],
+      "verification_profiles": [
+        "docs"
+      ]
+    },
+    {
+      "id": "PLACE-02",
+      "title": "Expose bounded dated facts and learning annotations with honest provenance",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 306,
+      "dependencies": [
+        "PLACE-01",
+        "TOWN-02",
+        "SAFE-05"
+      ],
+      "conflict_groups": [
+        "pixels-year",
+        "town-read-service",
+        "world-read-service"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "PLACE-03",
+      "title": "Connect exact-date visits and reliable return across Town, World and Pixels",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 307,
+      "dependencies": [
+        "PLACE-01",
+        "CON-02"
+      ],
+      "conflict_groups": [
+        "private-routes",
+        "world-ui",
+        "pixels-year",
+        "pixels-life"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "PLACE-04",
+      "title": "Replace the Town tile scene with a composed interactive coastal garden",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 308,
+      "dependencies": [
+        "PLACE-01",
+        "TOWN-03",
+        "TOWN-04",
+        "TOWN-05"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-lots",
+        "world-ui",
+        "town-hall"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "PLACE-05",
+      "title": "Make confirmed habit actions produce specific, reversible garden feedback",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 309,
+      "dependencies": [
+        "PLACE-03",
+        "PLACE-04"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-today",
+        "town-browser"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ]
+    },
+    {
+      "id": "PLACE-06",
+      "title": "Make World objects inspectable and unrecorded landscapes welcoming",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 310,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-03",
+        "PLACE-05",
+        "UX-04"
+      ],
+      "conflict_groups": [
+        "world-ui",
+        "world-render",
+        "world-camera"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "PLACE-07",
+      "title": "Turn Pixels into an informative, orientable memory atlas",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 311,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-03",
+        "PLACE-06",
+        "UX-05"
+      ],
+      "conflict_groups": [
+        "pixels-year",
+        "pixels-life",
+        "pixels-grid"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ]
+    },
+    {
+      "id": "PLACE-08",
+      "title": "Persist and edit a bounded personal Town layout with revision safety",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 312,
+      "dependencies": [
+        "PLACE-04",
+        "TOWN-07",
+        "CON-03"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-models",
+        "town-writes",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "schema"
+      ]
+    },
+    {
+      "id": "PLACE-09",
+      "title": "Offer bounded milestone ornaments through existing progression",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 313,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-05",
+        "PLACE-08"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "town-lots",
+        "town-read-service"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "PLACE-10",
+      "title": "Bring completed Media home as source-linked library keepsakes",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 314,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-06",
+        "PLACE-09",
+        "TOWN-02"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "world-read-service",
+        "media-records"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "media_back"
+      ]
+    },
+    {
+      "id": "PLACE-11",
+      "title": "Make trips inspectable souvenirs with truthful spans and destinations",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 315,
+      "dependencies": [
+        "PLACE-02",
+        "PLACE-06",
+        "PLACE-09",
+        "TOWN-02"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "world-read-service",
+        "travel-summary"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "travel_back"
+      ]
+    },
+    {
+      "id": "PLACE-12",
+      "title": "Give residents purposeful authored vignettes and restrained ambience",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 316,
+      "dependencies": [
+        "PLACE-04",
+        "PLACE-06",
+        "PLACE-10",
+        "PLACE-11"
+      ],
+      "conflict_groups": [
+        "town-main",
+        "world-render",
+        "town-hall"
+      ],
+      "verification_profiles": [
+        "web_front"
+      ]
+    },
+    {
+      "id": "PLACE-13",
+      "title": "Unify compact Hub arrivals, dated navigation and factual recaps",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 317,
+      "dependencies": [
+        "PLACE-03",
+        "PLACE-07",
+        "PLACE-10",
+        "PLACE-11",
+        "UX-03",
+        "HUB-02"
+      ],
+      "conflict_groups": [
+        "hub-main",
+        "private-shell",
+        "pixels-hub-card",
+        "town-hall"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back"
+      ]
+    },
+    {
+      "id": "PLACE-14",
+      "title": "Prove integrated beauty, interaction, information and release readiness",
+      "parent_issues": [
+        304
+      ],
+      "kind": "implementation",
+      "issue": 318,
+      "dependencies": [
+        "PLACE-07",
+        "PLACE-08",
+        "PLACE-09",
+        "PLACE-10",
+        "PLACE-11",
+        "PLACE-12",
+        "PLACE-13"
+      ],
+      "conflict_groups": [
+        "town-browser",
+        "world-ui",
+        "pixels-year",
+        "hub-main",
+        "schema-head"
+      ],
+      "verification_profiles": [
+        "web_front",
+        "server_back",
+        "schema"
+      ]
     }
   ],
   "format_version": 2,
@@ -1928,6 +2267,7 @@
     "MED-06 DET1": "MED-06",
     "MED-06 LIB1": "MED-09",
     "MED-06 MQA1": "MED-10",
-    "TD-11 live lifecycle adoption": "SAFE-04 and SAFE-05; orphan deletion stays DEL-03"
+    "TD-11 live lifecycle adoption": "SAFE-04 and SAFE-05; orphan deletion stays DEL-03",
+    "2026-11-11 Living World extension": "PLACE-01\u201314 under #304; original #100/#102 stay closed, TOWN/UX/Health/Hub requirements retained; planning/living-world/scope.md"
   }
 }

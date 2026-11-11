@@ -81,3 +81,7 @@ Clinic and Gym are reachable and reflect private progress through coarse stages,
 - The PR lists migrated callers, removed paths/duplicate state, actual before/after production and test LOC, and any retained compatibility with reason.
 - Applicable local commands pass before PR creation; issue evidence distinguishes local execution, CI, merge and deployment.
 - After merge, freshly read the roadmap and update only this packet row and owning parent checklist; do not close its parent until all retained scope is disposed.
+
+## Living World scope boundary — 2026-11-11
+
+Retain stage-only Health lots, Today rows and no XP change. PLACE-04 must preserve these consumers when available; Health plaintext and private eligibility never enter cosmetic layout records. See [scope reconciliation](../../living-world/scope.md) and [parent #304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304). This is planned extension scope; it neither closes nor enlarges this packet's retained implementation acceptance.

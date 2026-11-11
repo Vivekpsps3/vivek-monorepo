@@ -1,5 +1,7 @@
 # Roadmap review — 2026-11-08
 
+> Forward scope note, 2026-11-11: the selected [Living World plan](living-world/README.md) and [#304](https://github.com/Vivekpsps3/vivek-monorepo/issues/304) now own the Town/World/Pixels experience expansion. This historical record is preserved as evidence; its maintenance-only recommendations do not limit the new scope. Existing acceptance is retained through [scope reconciliation](living-world/scope.md).
+
 The live roadmap is [GitHub #134](https://github.com/Vivekpsps3/vivek-monorepo/issues/134).
 This is a dated review of its evidence and priorities, not a second implementation
 queue. Detailed acceptance stays in the nine remaining delivery issues.
