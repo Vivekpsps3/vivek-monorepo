@@ -3,7 +3,9 @@
 Start with [routes](src/app/routes.ts), [platform session](src/app/platform/session.service.ts)
 and the affected [Hub](src/app/hub/) or [search](src/app/search/) owner.
 Domain applications expose their own public APIs. Shell code composes those APIs;
-it must not become a second Finance, Travel or Media store.
+it must not become a second Finance, Travel or Media store. Private layout starts
+Finance trip spend from the Finance public API when a vault is present and stops
+it on lock, sign-out, and owner change.
 
 Read the narrower guidance for [Town/Health](src/app/town/AGENTS.md),
 [World](src/app/world/AGENTS.md) or [Pixels](src/app/pixels/AGENTS.md) when editing them.

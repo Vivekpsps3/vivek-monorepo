@@ -2,12 +2,14 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  inject,
   input,
   output,
 } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { formatMoney } from "@vivek/browser";
 import {
+  FinanceTripSpendRegistry,
   UiBadgeComponent,
   UiButtonComponent,
   UiIconComponent,
@@ -198,24 +200,15 @@ export class TripCostsComponent {
 
   readonly formatMoney = formatMoney;
   readonly countLabel = countLabel;
+  private readonly tripSpend = inject(FinanceTripSpendRegistry);
 
   readonly isEmpty = computed(
     () => !this.budget().currencies.length && !this.budget().manual.length,
   );
 
   readonly spend = computed<SpendState>(() =>
-    spendState(this.financeSpendLookup(), this.tripId()),
+    spendState(this.tripSpend.lookup(), this.tripId()),
   );
-
-  /**
-   * Locked spend row. `null` is spendState's locked state.
-   * FinanceTripSpendRegistry is already on main (PR #145). TRIP-01 (#225,
-   * parent #84) is the owner that reads that registry. Do not add a second
-   * registry or a cross-tab totals store from this seam.
-   */
-  protected financeSpendLookup(): unknown {
-    return null;
-  }
 
   splitFor(item: CurrencyItem): { paid: number; unpaid: number } | null {
     return splitWidths(item.paid_cents, item.total_cents);
