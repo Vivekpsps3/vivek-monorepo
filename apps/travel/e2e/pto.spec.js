@@ -535,28 +535,41 @@ test('remove sick keeps history and a dated correction previews it', async ({ pa
   const restored = await ledger();
   expect(restored.entries).toEqual(before.entries);
 
+  const impacts = [];
+  await page.route('**/travel/api/pto/policies/sick/impact', async route => {
+    const upstream = await route.fetch();
+    const raw = await upstream.text();
+    let body = null;
+    try { body = JSON.parse(raw); } catch { body = null; }
+    impacts.push({ post: route.request().postData() || '', status: upstream.status(), body });
+    await route.fulfill({
+      status: upstream.status(),
+      contentType: upstream.headers()['content-type'] || 'application/json',
+      body: raw,
+    });
+  });
   await page.getByRole('button', { name: 'Edit Sick', exact: true }).click();
   const start = page.getByLabel('Starting balance');
-  const firstImpact = page.waitForResponse(response => (
-    response.url().includes('/travel/api/pto/policies/sick/impact') && response.ok()
-  ));
   await start.fill('40');
   await start.blur();
-  const firstBody = await (await firstImpact).json();
+  await expect.poll(() => impacts.filter(row => row.status === 200).length).toBeGreaterThan(0);
+  const firstBody = impacts.filter(row => row.status === 200).at(-1).body;
   expect(firstBody.entries_rewritten).toBe(false);
   await expect(page.getByText(/Balance today would be .* Past leave stays recorded\./)).toBeVisible();
   expect(await ledger()).toMatchObject({ entries: before.entries, allocations: before.allocations });
-  const movedImpact = page.waitForResponse(response => (
-    response.url().includes('/travel/api/pto/policies/sick/impact')
-    && response.request().postData()?.includes('2026-11-01')
-    && response.ok()
-  ));
+  const seen = impacts.length;
   await page.getByLabel('Balance as of').fill('2026-11-01');
   await page.getByLabel('Balance as of').blur();
-  const movedBody = await (await movedImpact).json();
+  await expect.poll(() => impacts.slice(seen).some(row => (
+    row.status === 200 && row.post.includes('2026-11-01')
+  ))).toBe(true);
+  const movedBody = impacts.slice(seen).filter(row => (
+    row.status === 200 && row.post.includes('2026-11-01')
+  )).at(-1).body;
   expect(movedBody.entries_rewritten).toBe(false);
   expect(movedBody.balance_today_hours).not.toBe(firstBody.balance_today_hours);
-  await expect(page.getByText(new RegExp('Balance today would be .*' + movedBody.balance_today_hours + ' h'))).toBeVisible();
+  const hours = String(movedBody.balance_today_hours).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await expect(page.getByText(new RegExp('Balance today would be .*' + hours + ' h'))).toBeVisible();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Sick policy saved.', { exact: true })).toBeVisible();
   const corrected = await ledger();

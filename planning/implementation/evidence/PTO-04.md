@@ -46,7 +46,8 @@ Local execution on the application tree above. CI, merge, and deployment were no
 | `make typecheck-web` | PASS |
 | `CHROME_BIN=$HOME/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 710 SUCCESS. Statements 83.28% (5521/6629), branches 70.25% (2123/3022), functions 83% (1109/1336), lines 86.93% (4777/5495). Karma listened on port 9976; that line was removed before commit. |
 | `make build-frontends` | PASS |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=$CHROME_BIN npx playwright test --config apps/travel/e2e/playwright.config.js` | PASS. 156 passed. |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=$CHROME_BIN npx playwright test --config apps/travel/e2e/playwright.config.js` | PASS. 156 passed on the first application tree. |
+| `npx playwright test --config apps/travel/e2e/playwright.config.js apps/travel/e2e/pto.spec.js` | PASS. 24 passed after the impact assertion was changed. CI job 130794118664 had failed the new test with `Network.getResponseBody`: Chrome had already given the impact body to the page. The test now copies that JSON inside the route and fulfills the page from the copy. |
 
 ## Handoff
 
@@ -54,7 +55,7 @@ Local execution on the application tree above. CI, merge, and deployment were no
 - Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6806896982. The roadmap body was not edited.
 - Merged/activation status (actual evidence, not assumption): PR #343 is open. Not merged. Not deployed. Local verification passed on `ae822f10377899b0c5bd6b60fcabc77f10f07a4d`.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #110 stays open for the rest of its scope, including PTO-05.
-- Next actor: watch CI on PR #343 and squash-merge only after Backend, Frontend, Unified Site Release, and Playwright are green.
+- Next actor: watch the follow-up CI on PR #343 and squash-merge only after Backend, Frontend, Unified Site Release, and Playwright are green. The first Playwright run failed only on the impact response body; Frontend's first failure was the existing World controller test, which also failed on docs-only main `bc2d79e` and passed on rerun.
 
 Issue / parent / local packet: PTO-04 / #233 / #110 / `planning/implementation/issues/PTO-04.md`.
 
