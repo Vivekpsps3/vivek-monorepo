@@ -284,10 +284,10 @@ def backup_if_configured(path: Path) -> None:
     if not path.is_file() or path.stat().st_size == 0:
         return
     revision = current_revision(path) or "none"
-    # Retention is separate from hourly SITE_BACKUP_KEEP. The backup tool keeps
-    # the newest premigrate snapshot of each of the last PREMIGRATE_KEEP
-    # revisions and does not prune site-* snapshots. Repeated snapshots of one
-    # revision collapse to that newest file.
+    # Retention is separate from the hourly age window and SITE_BACKUP_KEEP.
+    # The backup tool keeps the newest premigrate snapshot of each of the last
+    # PREMIGRATE_KEEP revisions and does not prune site-* snapshots. Repeated
+    # snapshots of one revision collapse to that newest file.
     _load_backup().backup(path, Path(directory), kind="premigrate", revision=revision)
 
 

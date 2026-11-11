@@ -66,13 +66,13 @@ application authorization and a single private data mount are the boundaries.
   before it is merged.
   Do not run `create_all` or the historical Finance Alembic chain against `site.db`.
 
-- [x] **Recovery-copy retention decision.** User explicitly requested deletion of
-  old backups and legacy recovery material. Only the latest verified unified
-  snapshot is kept; historical point-in-time recovery is intentionally unavailable.
-  Pre-migration snapshots are the exception: three `premigrate-*` files are kept
-  apart from that hourly snapshot.
-  #125 selects a future 30-day/minimum-seven snapshot policy; it is not the
-  current Compose setting. Reconcile and document the policy before rollout.
+- [x] **Recovery-copy retention decision.** Legacy recovery copies stay removed.
+  Hourly `site-*` snapshots use a 30-day window and a minimum of seven verified
+  copies (`SITE_BACKUP_KEEP` and `SITE_BACKUP_KEEP_DAYS` in Compose).
+  Pre-migration snapshots stay separate: the newest file of each of the last
+  three revisions. Applying that Compose file is the host rollout. This tree
+  does not prove the running host has been updated and does not prove an
+  off-host destination.
 
 ## Traceability to the 80-point review
 

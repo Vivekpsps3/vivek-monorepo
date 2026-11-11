@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -79,6 +80,16 @@ def test_migration_rejects_nonempty_unknown_tables(tmp_path):
     assert not (tmp_path / "combined.db").exists()
 
 
+def _age_hourly_snapshot(path: Path, days: int) -> Path:
+    stamp = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y%m%dT%H%M%S")
+    target = path.with_name(f"site-{stamp}-aaaaaaaa.db")
+    manifest = path.with_suffix(".json")
+    path.rename(target)
+    if manifest.exists():
+        manifest.rename(target.with_suffix(".json"))
+    return target
+
+
 def test_latest_backup_replaces_previous_only_after_verification(tmp_path, monkeypatch):
     database = tmp_path / "site.db"
     migrate(database)
@@ -88,19 +99,21 @@ def test_latest_backup_replaces_previous_only_after_verification(tmp_path, monke
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     directory = tmp_path / "backups"
-    first = tool.backup(database, directory)
-    second = tool.backup(database, directory)
-    assert not first.exists()
-    assert not first.with_suffix(".json").exists()
+    first = tool.backup(database, directory, keep=1, keep_days=30)
+    aged = _age_hourly_snapshot(first, 31)
+    second = tool.backup(database, directory, keep=1, keep_days=30)
+    assert not aged.exists()
+    assert not aged.with_suffix(".json").exists()
     assert second.with_suffix(".json").is_file()
     assert tool.verify(second)["schema"] == 1
     monkeypatch.setattr(
         tool, "verify", lambda _: (_ for _ in ()).throw(RuntimeError("verification failed"))
     )
     with pytest.raises(RuntimeError, match="verification failed"):
-        tool.backup(database, directory)
+        tool.backup(database, directory, keep=1, keep_days=30)
     assert list(directory.glob("*.db")) == [second]
     assert second.with_suffix(".json").is_file()
+    assert list(directory.glob("*.json")) == [second.with_suffix(".json")]
 
 
 def _load_backup_tool():
@@ -117,7 +130,7 @@ def test_premigrate_backups_stay_when_hourly_retention_deletes_site_snapshots(tm
     migrate(database)
     tool = _load_backup_tool()
     directory = tmp_path / "backups"
-    hourly = tool.backup(database, directory, keep=1)
+    hourly = tool.backup(database, directory, keep=1, keep_days=30)
     premigrate = [
         tool.backup(database, directory, kind="premigrate", revision=revision)
         for revision in ("rev_a", "rev_b", "rev_c", "rev_d")
@@ -130,9 +143,10 @@ def test_premigrate_backups_stay_when_hourly_retention_deletes_site_snapshots(tm
     manifest = json.loads(premigrate[-1].with_suffix(".json").read_text())
     assert manifest["kind"] == "premigrate"
     assert manifest["revision"] == "rev_d"
-    replacement = tool.backup(database, directory, keep=1)
+    aged = _age_hourly_snapshot(hourly, 31)
+    replacement = tool.backup(database, directory, keep=1, keep_days=30)
     assert replacement.is_file()
-    assert not hourly.exists()
+    assert not aged.exists()
     assert len(list(directory.glob("premigrate-*.db"))) == 3
 
 

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Private, atomic online SQLite backups with integrity checks and bounded retention."""
+"""Private, atomic online SQLite backups with integrity checks and retention.
+
+Hourly snapshots stay for SITE_BACKUP_KEEP_DAYS (default 30) and at least
+SITE_BACKUP_KEEP verified copies (default 7). Pre-migration snapshots keep the
+newest file of each of the last three revisions and are pruned separately.
+"""
 
 import argparse
 import fcntl
@@ -14,13 +19,19 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-# Hourly snapshots use the site- prefix and SITE_BACKUP_KEEP (usually 1).
-# Pre-migration snapshots use premigrate-<rev>- and are never pruned by that glob.
-# Retention keeps the newest file of each of the last PREMIGRATE_KEEP revisions.
+# Hourly site-* snapshots use an age window plus a minimum count.
+# SITE_BACKUP_KEEP and SITE_BACKUP_KEEP_DAYS override the defaults.
+# Pre-migration snapshots use premigrate-<rev>- and are never pruned by the hourly rule.
+HOURLY_MINIMUM = 7
+HOURLY_KEEP_DAYS = 30
 PREMIGRATE_KEEP = 3
 _HOURLY_GLOB = "site-????????T??????-????????.db"
 _PREMIGRATE_NAME = re.compile(r"^premigrate-[A-Za-z0-9_.-]+-\d{8}T\d{6}-[0-9a-f]{8}\.db$")
 _SNAPSHOT_STAMP = re.compile(r"-(\d{8}T\d{6})-([0-9a-f]{8})\.db$")
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def verify(path):
@@ -38,13 +49,26 @@ def verify(path):
     return {"schema": version[0], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def backup(source, directory, keep=1, *, kind="hourly", revision=None):
+def _hourly_policy(keep: int | None, keep_days: int | None) -> tuple[int, int]:
+    if keep is None:
+        keep = int(os.environ.get("SITE_BACKUP_KEEP", str(HOURLY_MINIMUM)))
+    if keep_days is None:
+        keep_days = int(os.environ.get("SITE_BACKUP_KEEP_DAYS", str(HOURLY_KEEP_DAYS)))
+    if keep < 1:
+        raise ValueError("At least one verified backup must be retained")
+    if keep_days < 0:
+        raise ValueError("Retention age cannot be negative")
+    return keep, keep_days
+
+
+def backup(source, directory, keep=None, *, kind="hourly", revision=None, keep_days=None):
     if kind == "hourly":
-        if keep < 1:
-            raise ValueError("At least one verified backup must be retained")
+        keep, keep_days = _hourly_policy(keep, keep_days)
         name_prefix = "site"
     elif kind == "premigrate":
-        keep = max(int(keep), PREMIGRATE_KEEP)
+        # Hourly minimum and age do not apply. An explicit keep can only raise the floor.
+        keep = PREMIGRATE_KEEP if keep is None else max(int(keep), PREMIGRATE_KEEP)
+        keep_days = None
         token = re.sub(r"[^A-Za-z0-9_.-]", "_", revision or "none") or "none"
         name_prefix = f"premigrate-{token}"
     else:
@@ -55,7 +79,13 @@ def backup(source, directory, keep=1, *, kind="hourly", revision=None):
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
         return _backup_locked(
-            source, directory, keep, name_prefix=name_prefix, kind=kind, revision=revision
+            source,
+            directory,
+            keep,
+            name_prefix=name_prefix,
+            kind=kind,
+            revision=revision,
+            keep_days=keep_days,
         )
     finally:
         os.close(descriptor)
@@ -71,6 +101,13 @@ def _snapshot_sort_key(path: Path) -> tuple[str, str]:
     if match:
         return (match.group(1), match.group(2))
     return ("", f"{path.stat().st_mtime_ns:020d}")
+
+
+def _stamp(path: Path) -> datetime | None:
+    match = _SNAPSHOT_STAMP.search(path.name)
+    if not match:
+        return None
+    return datetime.strptime(match.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
 
 
 def _premigrate_revision(path: Path) -> str:
@@ -90,21 +127,61 @@ def _snapshot_paths(directory: Path, kind: str) -> list[Path]:
     return sorted(matches, key=_snapshot_sort_key, reverse=True)
 
 
-def _prune_targets(snapshots: list[Path], keep: int, kind: str) -> list[Path]:
-    """Return snapshots to delete. Premigrate keeps the newest file per revision."""
-    if kind != "premigrate":
-        return snapshots[keep:]
-    seen: set[str] = set()
-    keep_paths: set[Path] = set()
-    for path in snapshots:
-        revision = _premigrate_revision(path)
-        if revision in seen:
-            continue
-        if len(seen) >= keep:
-            continue
-        seen.add(revision)
-        keep_paths.add(path)
-    return [path for path in snapshots if path not in keep_paths]
+def _manifest_matches(path: Path) -> bool:
+    """A copy counts as verified only when its manifest matches the bytes on disk."""
+    manifest = path.with_suffix(".json")
+    if not manifest.is_file():
+        return False
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict) or payload.get("restore_checked") is not True:
+        return False
+    digest = payload.get("sha256")
+    if not isinstance(digest, str):
+        return False
+    return hashlib.sha256(path.read_bytes()).hexdigest() == digest
+
+
+def _prune_targets(
+    snapshots: list[Path],
+    keep: int,
+    kind: str,
+    *,
+    keep_days: int | None,
+    now: datetime,
+) -> list[Path]:
+    """Return snapshots to delete.
+
+    Hourly retention keeps the union of the age window and the minimum count.
+    Only checksum-matched manifests fill that minimum, and unmatched files are
+    left in place so a bad copy cannot evict a good one. Premigrate retention
+    keeps the newest file of each of the newest revisions and ignores the
+    hourly window.
+    """
+    if kind == "premigrate":
+        seen: set[str] = set()
+        keep_paths: set[Path] = set()
+        for path in snapshots:
+            revision = _premigrate_revision(path)
+            if revision in seen or len(seen) >= keep:
+                continue
+            seen.add(revision)
+            keep_paths.add(path)
+        return [path for path in snapshots if path not in keep_paths]
+
+    if keep_days is None:
+        raise ValueError("Hourly retention requires an age window")
+    verified = [path for path in snapshots if _manifest_matches(path)]
+    kept: set[Path] = set()
+    window = timedelta(days=keep_days)
+    for index, path in enumerate(verified):
+        stamp = _stamp(path)
+        within_age = stamp is not None and now - stamp <= window
+        if index < keep or within_age:
+            kept.add(path)
+    return [path for path in verified if path not in kept]
 
 
 def _fresh_stamp(directory: Path, kind: str) -> str:
@@ -114,7 +191,7 @@ def _fresh_stamp(directory: Path, kind: str) -> str:
     creation order. Advance one second past the newest filename so the file
     just written is the one retention keeps.
     """
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    stamp = _utcnow().strftime("%Y%m%dT%H%M%S")
     existing = _snapshot_paths(directory, kind)
     if not existing:
         return stamp
@@ -127,7 +204,21 @@ def _fresh_stamp(directory: Path, kind: str) -> str:
     return advanced.strftime("%Y%m%dT%H%M%S")
 
 
-def _backup_locked(source, directory, keep, *, name_prefix, kind, revision):
+def _publish(candidate: Path, final: Path, payload: dict[str, object]) -> None:
+    """Link the database and its manifest, or leave neither in the destination."""
+    temporary_manifest = candidate.with_suffix(".json")
+    temporary_manifest.write_text(json.dumps(payload), encoding="utf-8")
+    os.chmod(candidate, 0o600)
+    os.chmod(temporary_manifest, 0o600)
+    os.link(candidate, final)
+    try:
+        os.link(temporary_manifest, final.with_suffix(".json"))
+    except Exception:
+        final.unlink(missing_ok=True)
+        raise
+
+
+def _backup_locked(source, directory, keep, *, name_prefix, kind, revision, keep_days):
     if not source.is_file():
         raise RuntimeError("Source database missing; refusing to report backup success")
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -151,26 +242,22 @@ def _backup_locked(source, directory, keep, *, name_prefix, kind, revision):
         with sqlite3.connect(candidate) as src, sqlite3.connect(restored) as dst:
             src.backup(dst)
         verify(restored)
-        os.chmod(candidate, 0o600)
         final = directory / name
-        os.link(candidate, final)
-        manifest = final.with_suffix(".json")
-        with manifest.open("x") as file:
-            os.chmod(manifest, 0o600)
-            payload = {
-                **result,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "restore_checked": True,
-                "kind": kind,
-            }
-            if kind == "premigrate":
-                payload["revision"] = revision or "none"
-            json.dump(payload, file)
+        payload: dict[str, object] = {
+            "schema": result["schema"],
+            "sha256": result["sha256"],
+            "created_at": _utcnow().isoformat(),
+            "restore_checked": True,
+            "kind": kind,
+        }
+        if kind == "premigrate":
+            payload["revision"] = revision or "none"
+        _publish(candidate, final, payload)
     # Publish and restore-check the replacement before deleting any older snapshot of this kind.
     snapshots = _snapshot_paths(directory, kind)
-    for old in _prune_targets(snapshots, keep, kind):
-        old.unlink()
+    for old in _prune_targets(snapshots, keep, kind, keep_days=keep_days, now=_utcnow()):
         old.with_suffix(".json").unlink(missing_ok=True)
+        old.unlink(missing_ok=True)
     print(json.dumps({"backup": str(final), "restore_checked": True, **result}))
     return final
 
@@ -180,12 +267,13 @@ def main():
     parser.add_argument("--source", type=Path)
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--verify", type=Path)
-    parser.add_argument("--keep", type=int, default=int(os.environ.get("SITE_BACKUP_KEEP", "1")))
+    parser.add_argument("--keep", type=int, default=None)
+    parser.add_argument("--keep-days", type=int, default=None)
     args = parser.parse_args()
     if args.verify:
         print(json.dumps(verify(args.verify)))
     elif args.source and args.directory:
-        backup(args.source, args.directory, args.keep)
+        backup(args.source, args.directory, args.keep, keep_days=args.keep_days)
     else:
         parser.error("Provide --verify, or --source and --directory")
 
