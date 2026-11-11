@@ -52,8 +52,8 @@ Profile 404 is not this leaf. UX-01 (#259) replaced the explicit `GET /settings/
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet. The pull request will use `Closes #211` only.
-- Roadmap #134 append-only status-note URL: not posted yet.
-- Merged/activation status (actual evidence, not assumption): not pushed and not merged. Local gates above passed on this diff.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/348 (`Closes #211` only)
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6808867199
+- Merged/activation status (actual evidence, not assumption): PR #348 is open on `agent/ver-03`. Not squash-merged and not deployed. Local gates above passed.
 - Remaining external prerequisites or approved scope decisions: the optional UTC±2 clamp is rejected. Local today from the trusted clock and the resolved zone is the contract. UX-01 keeps Profile 404. UX-03 keeps the Hub pointer/keyboard strip. VER-04 keeps the coverage script, Makefile, package.json, and workflow. Parents #199 and #81 stay open.
-- Next actor: push `HEAD:agent/ver-03`, open the pull request, append the #134 note, watch Backend, Frontend, Unified Site Release, and Playwright, then squash-merge. Record the squash SHA on #211 and #134.
+- Next actor: watch Backend, Frontend, Unified Site Release, and Playwright until green, then squash-merge. Record the squash SHA on #211 and #134.
