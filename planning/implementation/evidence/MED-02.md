@@ -2,7 +2,7 @@
 
 - Leaf issue and parent(s): [#236](https://github.com/Vivekpsps3/vivek-monorepo/issues/236); parent [#85](https://github.com/Vivekpsps3/vivek-monorepo/issues/85) stays open
 - Agent/context, branch/worktree: Cursor Grok, `agent/med-02`, `/tmp/vivek-med-02`
-- Base main SHA, current tested SHA: base `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`. Application files were tested on that base before this evidence file was added. `origin/main` later moved to `1b4f35a` (FIN-01, finance-only); that commit was not in the local Media run.
+- Base main SHA, current tested SHA: base `3954d1f27aa8ad0766eac9a7e9667f68d3c76571`. Application files were tested on that base. Implementation commit `318ea4906e3713269da86d74c52404089e39b265`. `origin/main` later moved to `1b4f35a` (FIN-01, finance-only); that commit was not in the local Media run.
 - Fresh-main/prerequisite/active-PR checks: MED-01 is on this base (saved reads do not repair). Open PR at claim time was #322 (`agent/fin-01`), which does not use `media-detail-form`. No other open PR claimed the detail form. Claim: https://github.com/Vivekpsps3/vivek-monorepo/issues/236#issuecomment-6788682891
 
 ## Acceptance
@@ -52,8 +52,8 @@ Four-worker runs on this machine also passed every MED-02 test. One of those run
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): not opened yet.
-- Roadmap #134 append-only status-note URL: not posted yet. The issue body was not edited.
-- Merged/activation status (actual evidence, not assumption): not merged, not deployed.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/332 (`Closes #236`). Parent #85 is referenced and not closed.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6789418912. The issue body was not edited.
+- Merged/activation status (actual evidence, not assumption): not merged, not deployed. CI was not finished when this note was written.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. Parent #85 stays open.
-- Next actor: open the PR with `Closes #236`, then watch CI.
+- Next actor: watch CI, then squash-merge when Backend, Frontend, Unified Site Release, and Playwright are green.
