@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from "@angular/core";
+import { Component, DestroyRef, HostListener, inject, signal } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import {
@@ -341,6 +341,8 @@ export class LibraryComponent {
   get tagOptionsList(): string[] {
     return tagOptions(this.availableTags(), this.tags);
   }
+  /** True after Back until the next pointer or key gesture. A late select update in that gap is discarded. */
+  private backPending = false;
   readonly expanded = signal<number | null>(null);
   readonly children = signal<MediaCard[]>([]);
   readonly childrenError = signal("");
@@ -357,6 +359,8 @@ export class LibraryComponent {
       ) {
         clearTimeout(this.filterTimer);
         this.filterTimer = undefined;
+        this.backPending = true;
+        this.restoreFilters(event.url);
       }
       if (
         event instanceof NavigationStart &&
@@ -436,9 +440,34 @@ export class LibraryComponent {
       onSameUrlNavigation: "reload",
     });
   }
+  @HostListener("document:pointerdown")
+  @HostListener("document:keydown")
+  allowFilterEdits(): void {
+    this.backPending = false;
+  }
+
   applySoon(): void {
+    // Back can win the race against the select's model update. That update is not a new edit.
+    if (this.backPending) {
+      this.restoreFilters(`${window.location.pathname}${window.location.search}`);
+      return;
+    }
     clearTimeout(this.filterTimer);
     this.filterTimer = setTimeout(() => this.applyNow(), 250);
+  }
+
+  private restoreFilters(url: string): void {
+    const search = new URL(url, window.location.origin).searchParams;
+    const filters = readFilters({
+      get: (key: string) => search.get(key),
+      getAll: (key: string) => search.getAll(key),
+    });
+    this.q = filters.q;
+    this.kind = filters.kind;
+    this.status = filters.status;
+    this.sort = filters.sort;
+    this.favorite = filters.favorite;
+    this.tags = filters.tags;
   }
   searchSoon(): void {
     this.applySoon();

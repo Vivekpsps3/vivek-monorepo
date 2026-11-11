@@ -36,6 +36,8 @@ export {
 } from './format';
 export type { Cents, FormatMoneyOptions, MoneySign, MoneyStyle } from './format';
 export { downloadCsv } from './export';
+export { mayPublish, openBoundedWork } from './bounded-work';
+export type { BoundedStep, BoundedWork } from './bounded-work';
 export {
   DEFAULT_PBKDF2_ITERATIONS,
   decodeBase64,
