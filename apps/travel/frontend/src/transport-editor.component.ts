@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   Input,
   OnInit,
   inject,
@@ -26,6 +27,7 @@ import {
   useSchedule,
 } from "./flight-model.mjs";
 import { travelError } from "./travel.models";
+import { fieldErrors } from "./validate.mjs";
 import {
   UiButtonComponent,
   UiCardComponent,
@@ -42,13 +44,13 @@ import {
     UiFieldComponent,
     UiFieldControlDirective,
   ],
-  template: `<form class="travel-form" #form="ngForm" (ngSubmit)="save()">
+  template: `<form class="travel-form" novalidate (ngSubmit)="save()" (input)="live()" (change)="live()">
     <h2>{{ initial ? "Edit transport" : "Add transport" }}</h2>
     <p class="muted">
       Choose a mode. Schedule and booking details are optional.
     </p>
     <div class="form-row">
-      <ui-field label="Mode" [required]="true"
+      <ui-field label="Mode" [required]="true" [error]="field('mode')"
         ><select
           uiFieldControl
           required
@@ -227,11 +229,7 @@ import {
       <p class="local-error" role="alert">{{ saveError }}</p>
     }
     <div class="button-row">
-      <ui-button
-        variant="primary"
-        type="submit"
-        [disabled]="saving || !form.valid"
-      >
+      <ui-button variant="primary" type="submit" [disabled]="saving">
         {{ saving ? "Saving…" : "Save transport" }}</ui-button
       ><ui-button variant="ghost" type="button" (click)="cancelled.emit()">
         Cancel
@@ -252,6 +250,9 @@ export class TransportEditorComponent implements OnInit {
   readonly cancelled = output<void>();
   private readonly http = inject(HttpClient);
   private readonly destroy = inject(DestroyRef);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  readonly fields = signal<Record<string, string>>({});
+  private explained = false;
   private readonly changes = new Subject<void>();
   private pending?: Subscription;
   values: Record<string, unknown> = {
@@ -284,6 +285,15 @@ export class TransportEditorComponent implements OnInit {
       0,
       10,
     );
+  }
+  field(name: string): string {
+    return this.fields()[name] || "";
+  }
+  live(): void {
+    if (this.explained) this.fields.set(this.modeErrors());
+  }
+  private modeErrors(): Record<string, string> {
+    return fieldErrors("transport", { mode: this.values["mode"] });
   }
   lock(name: string): void {
     if (!this.overrides.includes(name)) this.overrides.push(name);
@@ -362,7 +372,20 @@ export class TransportEditorComponent implements OnInit {
       : "Time unavailable";
   }
   save(): void {
-    if (this.saving || !this.values["mode"]) return;
+    if (this.saving) return;
+    const errors = this.modeErrors();
+    this.fields.set(errors);
+    this.explained = true;
+    const first = Object.keys(errors)[0];
+    if (first) {
+      setTimeout(() => {
+        const node = this.host.nativeElement.querySelector(
+          `[name="${CSS.escape(first)}"]`,
+        );
+        if (node instanceof HTMLElement) node.focus();
+      });
+      return;
+    }
     const values = Object.fromEntries(
       Object.entries(this.values)
         .filter(

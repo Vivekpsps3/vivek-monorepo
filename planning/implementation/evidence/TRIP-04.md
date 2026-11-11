@@ -1,0 +1,61 @@
+# TRIP-04 — implementation evidence
+
+- Leaf issue and parent(s): [#228](https://github.com/Vivekpsps3/vivek-monorepo/issues/228); parent [#84](https://github.com/Vivekpsps3/vivek-monorepo/issues/84) stays open
+- Agent/context, branch/worktree: Cursor Grok, `agent/trip-04`, `/tmp/vivek-trip-04`
+- Base main SHA, current tested SHA: base `85212152bda3ce6cab5cbfcc9c787b564214fc69`. The gates below ran on the product and test tree in the commit that introduces this file. The commit SHA is filled in the handoff after `git rev-parse HEAD`.
+- Fresh-main/prerequisite/active-PR checks: the branch was created from that base, which is origin/main at claim time. Before commit, open PRs were #348 (VER-03, Town coverage), #350 (CON-03, vault ownership), and #351 (PTO-05, `pto.spec.js` and PTO accrual). None of those diffs edit the trip forms, `validate.mjs`, or the trip end-to-end specs this leaf changes. `pto.spec.js` was not edited and was not executed.
+
+## Acceptance
+
+| Row | Current proof/test | Result | Artifact or command |
+| --- | --- | --- | --- |
+| FORM1 | Empty new trip: submit focuses Departure date with the linked pick-days sentence and sends no POST; filling departure clears that error; the next submit focuses Return date with no POST; filling the return focuses Destination city with "Name every destination." and no POST; leaving and opening `/travel/trips/new` again shows no `aria-invalid` and an empty departure. Edit trip, activity, destination, and cost: submit focuses the first invalid field, the correction clears live, the next submit focuses the next invalid field, no PATCH is sent, and reopen has no `aria-invalid`. Note, reminder, new activity, and place search follow the same submit, live clear, and reopen reset. | PASS | `apps/travel/e2e/forms.spec.js` FORM1 (3 tests). Place-search whitespace is also linked in `map-recovery.spec.js`. |
+| FORM2 | Transport opens with mode `""`, flight fields hidden, and Save enabled. `requestSubmit` on a `noValidate` form links "Choose a way to travel." and sends no POST. A synthetic `rocket` mode still cannot save. Choosing `drive` clears the error, hides flight fields, and posts one body with `mode: "drive"` and `depart_place` null. Reopen has no `aria-invalid`. Parking omitted posts one `/parking` body with `place_name` null. The saved trip has mode `drive` and one parking row with no place name. | PASS | `apps/travel/e2e/forms.spec.js` FORM2 |
+| FORM3 | A note POST fails once with 502 `Save unavailable`. The dialog stays, the alert shows that sentence, and the textarea still says "Keep this note". The retry posts the same body and the note appears. Skip link at 390px: focused box is at least 44px and inside the viewport, `:focus-visible` outline is present, `href` is `#workspace-content`, and that target (`tabindex="-1"`) takes focus. Day chips have min-height 44px, a border, and a focus-visible outline. Save trip and the departure field meet the 44px and focus-visible checks. A screenshot is written from `SCREENSHOT_DIR` or the test output path, using the first `SHOT_WIDTHS` value (default 390), and the file is larger than 100 bytes. | PASS | `apps/travel/e2e/forms.spec.js` FORM3. Failed-save drafts also stay covered by `optional-forms.spec.js` and `native.spec.js`. The full screenshot matrix stays in `screenshots.spec.js`. |
+| #128 ledger | noValidate and requestSubmit: FORM2 and FORM1 `requestSubmit`. Transport default and invalid mode, optional parking: FORM2. Chip and choice styling: FORM3 day-strip min-height and border, plus the mode combobox; `parkingChipParts` remains the node test in `behavior.test.mjs`. Skip-link geometry, focus-visible, and 44px mobile controls: FORM3. Screenshot path: FORM3 plus `screenshots.spec.js`. Failed save retry: FORM3 note 502. PTO decimal-cache from #128 is TRIP-05 and was not run. | PASS | commands in Verification |
+
+`<base href="/">` resolves the skip link's hash against the origin, so pressing Enter leaves the trip route. This leaf does not edit the shell. The retained proof is the link box, the focus-visible outline, the href target, and that `#workspace-content` can take focus on the trip page.
+
+## Deletion and compatibility
+
+| Candidate | Previous consumers | Surviving owner | Removed / moved / retained | Proof |
+| --- | --- | --- | --- | --- |
+| Disabled-until-valid Save (`#form` / `form.valid`, and the new-trip `end < start` disable) | new-trip, transport editor, trip dialogs | Save stays enabled except while `saving()` or `finding()`; submit calls `explain()` | disabled-until-valid branches deleted | FORM1 Save trip is enabled on an empty form; `native.spec.js`, `screenshots.spec.js`, and `blockers.spec.js` expect Save enabled |
+| `formError` transport `depart_place` requirement ("Name where this ride leaves from.") | unused helper branch; the mounted transport form did not require a departure place | `fieldErrors("transport")` requires a known mode only | requirement deleted | FORM2 posts `depart_place: null` |
+| `formError` parking `place_name` requirement ("Name this parking.") | unused helper branch; parking place name was not required on the server | parking has no required field | requirement deleted | FORM2 posts `place_name: null` and asserts the sentence is absent |
+| New-trip page sentence "Return date must be on or after departure." | `NewTripComponent.range` wrote `error` immediately and disabled Save | submit-time field error uses the server sentence "The return date has to be on or after the day you leave." The composer still refuses the inverted span, so the status line stays "Now pick the day you come back." | page alert for that case deleted | `trip-stories.spec.js` focuses the return field, asserts the server sentence, and records zero POSTs |
+
+- Candidate class and protected counterexamples: disabled Save and the first-error-only helper that required a transport departure place and a parking name. HTTP failures still use the existing `role="alert"` (`error` / `placeError` / `saveError`). Unsaved-change prompts still use `confirm.ask`. Typed trip delete still uses `confirmAction`. `ConfirmService.confirmAction({ title, message, confirmLabel, cancelLabel, busyLabel, phrase, errorMessage, run })` is unchanged. `packages/ui/src/confirm.service.ts` has no diff. PTO files, `leave.py`, `leave_math.py`, travel `models.py`, travel `schemas.py`, and alembic were not edited.
+- Comparison base SHA and full replacement closure: `85212152bda3ce6cab5cbfcc9c787b564214fc69`. Closure is `new-trip.component.ts`, `transport-editor.component.ts`, `trip.component.ts`, `trip.component.html`, `validate.mjs`, `validate.d.mts`, `forms.spec.js`, the assertion updates in `blockers.spec.js`, `map-recovery.spec.js`, `native.spec.js`, `screenshots.spec.js`, and `trip-stories.spec.js`, and this evidence file.
+- Production added/deleted/moved; comments/blank-only churn separately: `git diff --numstat` against the base, plus the new declaration. `new-trip.component.ts` +63/-12, `transport-editor.component.ts` +31/-8, `trip.component.html` +29/-69, `trip.component.ts` +98/-11, `validate.mjs` +117/-41, `validate.d.mts` +7. Production added 345, deleted 141. No comment-only file.
+- Independent equivalent implementations before/after: one. `fieldErrors` is the map; `formError` returns the first entry `{ name, message }` or null so `behavior.test.mjs` keeps its contract. Each mounted form uses that map through `explain` / `live` / `reset`. There is no second confirmation API and no generic schema form.
+- State/cache owners and public entry points before/after: field errors live on the component `fields` signal and clear when the editor closes, the route changes, or a new trip page opens. Failed HTTP saves still leave the draft in the same model. New-trip retry still sends the same `client_request_id`. Travel amounts stay Travel amounts; currency totals were not moved.
+- Remaining old symbol/path search, including config and discovery: "Name this parking." remains only as a negative assertion in `forms.spec.js`. "Name where this ride leaves from." is gone. `form.valid` is gone under `apps/travel/frontend`. `depart_place` remains an optional transport field. `confirm.ask` remains for discard and date-span prompts.
+- Follow-up change: trip and new-trip submit handlers, the transport editor save, and `validate.mjs`. The spec tsconfig has `allowJs` off, so `validate.d.mts` declares the module the components import.
+- Tests/docs/generated changes separately: new `forms.spec.js` is 390 lines. Tracked e2e numstat is +26/-12 across blockers, map-recovery, native, screenshots, and trip-stories. No docs edited. `apps/karma.conf.js` was set to port 9992 only while Karma ran and matches HEAD again. No generated bundle committed.
+- Net production delta and specific reviewed safety/compatibility exception if positive: +204. The extra lines are the one submit lifecycle: collect every current problem, link it with the existing `ui-field` error, focus the first invalid control, clear a corrected field on input, and reset on reopen. That replaces Save buttons that stayed disabled until the native form was valid. A failed summary does not hide the forms; the date-order status line still explains an inverted new-trip span, and the field error is what blocks the POST.
+- No behavior/data/meaningful assertion silently removed: empty Save is now enabled, so the old `toBeDisabled` checks in native, screenshots, and blockers are `toBeEnabled` and the save still happens after the missing city is filled. The immediate new-trip date alert is now the linked field error with zero POSTs. Map recovery expects the place-name sentence on the linked field, then still expects the timeout, busy, and no-match alerts to stay distinct. `formError("stay", { city: "Lisbon" })` stays null and `formError("plan", { title: "" })` still returns "Name this plan."
+
+## Verification
+
+Commands ran from `/tmp/vivek-trip-04`. `PYTHON` was `/home/vivek/Deployments/vivek-monorepo/.venv/bin/python` (symlink only; nothing was installed into it). `CHROME_BIN` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` were `/home/vivek/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. Karma used port 9992 inside `config.set` and that edit was reverted before commit. `pto.spec.js` was not run: the leaf instruction excludes it because another worktree owns PTO. Local execution only.
+
+| Command | Result |
+| --- | --- |
+| `make test-fast` | PASS. Doc paths, planning validation (94 packets), blame revisions, shared boundaries, finance UX, 98 unittests, e2e discovery, and 15 node script tests. |
+| `make lint-web` | PASS. eslint baselines unchanged: finance 469, site 9, packages 1, world-engine 0. |
+| `make typecheck-web` | PASS after `validate.d.mts`. The first spec-project run failed with TS7016 on `./validate.mjs` because `apps/web/tsconfig.spec.json` does not set `allowJs`. |
+| `npm run test:web -- --watch=false --browsers=ChromeHeadlessCI` | PASS. 712 SUCCESS. Statements 83.25% (5537/6651), branches 70.21% (2124/3025), functions 82.81% (1108/1338), lines 86.92% (4794/5515). |
+| `node --test apps/travel/backend/static/tests/*.test.mjs` | PASS. 63 passed, 0 failed. |
+| `make build-frontends` | PASS. Output `dist/web`. Release manifest written. |
+| `npx playwright test --config apps/travel/e2e/playwright.config.js` on every `apps/travel/e2e/*.spec.js` except `pto.spec.js` | PASS. 150 passed. An earlier run of the same selector had 148 passed and 2 failed: map recovery at 390 and 1280 looked for the place-name sentence in `role=alert`. That sentence now lives on the linked field. The spec was updated and this rerun passed. `pto.spec.js` was not part of the selector. |
+
+## Handoff
+
+- PR URL (leaf closure keyword only):
+- Roadmap #134 append-only status-note URL:
+- Merged/activation status (actual evidence, not assumption): not merged. Not deployed.
+- Remaining external prerequisites or approved scope decisions: none for this leaf. `confirmAction` was not given a second signature. Parent #84 stays open. PTO decimal-cache from #128 is TRIP-05.
+- Next actor: this agent, to open the pull request, comment on #134, watch CI, and squash-merge #228.
+
+No unstated decision from the previous context is necessary to continue.

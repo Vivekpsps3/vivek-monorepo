@@ -32,7 +32,7 @@ for (const width of widths) for (const theme of themes) {
     await page.getByText('Add destination', { exact: true }).first().click();
     await page.getByLabel('Change city on date').fill('2026-10-27');
     await page.getByRole('button', { name: 'Add destination', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Save trip', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save trip', exact: true })).toBeEnabled();
     await shot('newtrip-unnamed-city');
     await page.getByLabel('Next destination city').fill('Osaka');
     await page.getByText('Time off', { exact: true }).click();

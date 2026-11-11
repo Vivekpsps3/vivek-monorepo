@@ -10,7 +10,7 @@ test('split trip saves two named destinations, one title, and per-date PTO',asyn
  await page.getByLabel('Destination city',{exact:false}).fill('Kyoto');
  await page.getByText('Add destination',{exact:true}).first().click();await page.getByLabel('Change city on date').fill('2026-10-27');
  await page.getByRole('button',{name:'Add destination',exact:true}).click();
- await expect(page.getByRole('button',{name:'Save trip',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Save trip',exact:true})).toBeEnabled();
  await page.getByLabel('Next destination city').fill('Osaka');
  await expect(page.getByText('Trip: Kyoto and Osaka',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Save trip',exact:true}).click();await expect(page.getByRole('heading',{name:'Kyoto and Osaka',exact:true})).toBeVisible();
