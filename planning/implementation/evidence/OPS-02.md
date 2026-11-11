@@ -49,8 +49,8 @@
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened after this commit with `Closes #273`. Parent #125 is referenced and stays open.
-- Roadmap #134 append-only status-note URL: added after the pull request exists.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/330 (`Closes #273`). Parent #125 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6789153765
 - Merged/activation status: not merged. Not deployed. This change does not prove an off-host destination or an alert path. A running host keeps its previous environment until this Compose file is the one it was started from.
 - Remaining external prerequisites or approved scope decisions: off-host encrypted backup, a measured replacement-host drill, and an external notification destination stay on #125. They are not done here.
 - Next actor: review and CI, then squash-merge of this leaf only.
