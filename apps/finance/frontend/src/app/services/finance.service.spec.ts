@@ -537,6 +537,28 @@ describe('FinanceService', () => {
     service.loadDashboard().subscribe(result => seen.push(result[2]));
     expect(seen).toEqual([]);
   });
+
+  it('reads the trip-spend ledger for the unlocked session and drops it after lock or a session change', async () => {
+    const rows = [{ id: 1, date: '2026-01-02', type: 'expense', category: 'Food', amount: 5, trip_id: 7 }];
+    (encStore as unknown as { sessionToken: number }).sessionToken = 3;
+    encStore.getTransactions.and.resolveTo(rows as never);
+    await expectAsync(service.readTripSpendLedger()).toBeResolvedTo(rows as never);
+
+    let release!: (value: typeof rows) => void;
+    encStore.getTransactions.and.returnValue(new Promise(resolve => { release = resolve; }) as never);
+    const pending = service.readTripSpendLedger();
+    wipeDek();
+    release(rows);
+    expect(await pending).toBeNull();
+
+    holdDek({} as CryptoKey);
+    (encStore as unknown as { sessionToken: number }).sessionToken = 3;
+    encStore.getTransactions.and.callFake((async () => {
+      (encStore as unknown as { sessionToken: number }).sessionToken = 4;
+      return rows;
+    }) as never);
+    expect(await service.readTripSpendLedger()).toBeNull();
+  });
 });
 
 describe('FinanceService with EncryptedStoreService', () => {
