@@ -65,6 +65,16 @@ as not-run; it is not evidence of executing those browser journeys. PLACE-01 own
 the rendered baseline and concrete art studies, and later leaves own the actual
 feature gates. A source-based design critique is not independent user research.
 
+## CI setup repair during publication
+
+PR #319's first backend run failed before the boundary checks could execute:
+the TypeScript resolver could not import `typescript` because backend Node setup
+explicitly disabled dependency installation. The publication follow-up enables
+the existing setup action's default locked `npm ci`; no check or gate is removed.
+A fresh local `npm ci`, workflow YAML/install-order validation and another complete
+`make test-fast` pass verify the repair locally. The next CI run verifies it on
+the clean runner. Application source remains unchanged.
+
 ## Resume
 
 For this owner-selected workstream run

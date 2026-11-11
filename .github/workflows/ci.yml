@@ -63,10 +63,10 @@ jobs:
       - run: ./scripts/coverage-gate.sh server
       - run: ./scripts/coverage-gate.sh travel
       - run: ./scripts/coverage-gate.sh media
+      # Fast boundary checks use the TypeScript resolver from root devDependencies.
       - uses: ./.github/actions/setup-node
         with:
           cache: false
-          install: false
       - run: node --test apps/travel/backend/static/tests/*.test.mjs
       - run: node --test apps/media/backend/static/tests/*.test.mjs apps/finance/frontend/src/auth-ux.test.mjs
       - run: make test-fast
