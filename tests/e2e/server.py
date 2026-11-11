@@ -345,12 +345,17 @@ def main():
     import uvicorn
 
     with tempfile.TemporaryDirectory(prefix="suite-browser-") as directory:
-        application = fixture_app(Path(directory), args.suite)
         # Bind in the owning process. Port 0 lets concurrent workers and local
         # runs ask the OS for a free port without a reserve/release race.
+        # Challenge issue and verify accept only CORS_ORIGINS. That port is not
+        # one of the documented defaults, so the browser origin has to be configured
+        # before the app reads it. A developer shell must not replace this value.
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", args.port))
-            print(f"E2E_SERVER_URL=http://127.0.0.1:{listener.getsockname()[1]}", flush=True)
+            origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
+            os.environ["CORS_ORIGINS"] = origin
+            print(f"E2E_SERVER_URL={origin}", flush=True)
+            application = fixture_app(Path(directory), args.suite)
             server = uvicorn.Server(uvicorn.Config(application, log_level="warning"))
             server.run(sockets=[listener])
 
