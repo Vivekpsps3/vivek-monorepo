@@ -93,7 +93,7 @@ test('manual artist, album and song can be added and edited independently', asyn
   await page.getByRole('link', { name: 'Manual song', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Manual song', exact: true })).toBeVisible();
   await page.getByRole('combobox', { name: 'State', exact: true }).selectOption('completed');
-  await page.getByLabel('Rating').fill('0');
+  await page.getByRole('radio', { name: '0 out of 10', exact: true }).click();
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
   expect((await savedItem(request, artist.id)).status).toBe('following');
