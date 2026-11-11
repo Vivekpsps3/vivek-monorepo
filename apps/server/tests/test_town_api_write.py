@@ -1,9 +1,9 @@
 """Town write API: habits, check-ins, errors, CSRF, and owner scope."""
 
-import importlib
 import logging
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
+from typing import NamedTuple
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +13,7 @@ from apps.server.auth import Principal
 from apps.server.identity.session import get_current_user
 from apps.server.tests.test_composition import _app, _user
 from apps.server.tests.test_town_api_read import CLOCK, _open
+from apps.server.town import writes as town_writes
 from apps.server.town.clock import get_town_clock
 from apps.server.town.models import Habit, HabitCadence, HabitCheckin, TownBase
 from apps.server.town.schemas import CheckinResult
@@ -707,68 +708,175 @@ def test_la_evening_checkin_matches_get_can_check_yesterday(api):
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "gap: writes has no UTC date ±2 clamp for the check-in today; "
-        "spec §4.3 anchors the window on local today, and PR #52's security "
-        "review listed a UTC±2 day bound as optional"
+class _LocalDay(NamedTuple):
+    clock: datetime
+    zone: str | None
+    local_today: date
+    resolved_zone: str
+
+
+# The optional UTC±2 clamp is not the contract. Each row is a trusted clock
+# plus the zone the client sent. local_today is the golden calendar day.
+_LOCAL_DAYS = (
+    _LocalDay(
+        datetime(2026, 10, 29, 12, 0, tzinfo=UTC),
+        "America/Los_Angeles",
+        date(2026, 10, 29),
+        "America/Los_Angeles",
+    ),
+    _LocalDay(
+        datetime(2026, 10, 29, 12, 0, tzinfo=UTC),
+        "Pacific/Kiritimati",
+        date(2026, 10, 30),
+        "Pacific/Kiritimati",
+    ),
+    _LocalDay(
+        datetime(2026, 10, 30, 0, 30),
+        "America/Los_Angeles",
+        date(2026, 10, 29),
+        "America/Los_Angeles",
+    ),
+    _LocalDay(
+        datetime(2026, 10, 29, 12, 0, tzinfo=UTC),
+        None,
+        date(2026, 10, 29),
+        "UTC",
+    ),
+    _LocalDay(
+        datetime(2026, 10, 29, 12, 0, tzinfo=UTC),
+        "Not/AZone",
+        date(2026, 10, 29),
+        "UTC",
     ),
 )
-def test_server_day_clamps_to_the_utc_date_plus_or_minus_two():
-    # gap: _server_day is not on main yet; resolved at runtime so the
-    # strict xfail fails loudly (AttributeError) until the clamp exists.
-    _server_day = importlib.import_module("apps.server.town.writes")._server_day
-
-    now = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
-    assert _server_day(now, date(2026, 10, 29)) == date(2026, 10, 29)
-    assert _server_day(now, date(2026, 10, 30)) == date(2026, 10, 30)
-    assert _server_day(now, date(2026, 10, 28)) == date(2026, 10, 28)
-    assert _server_day(now, date(2026, 11, 5)) == date(2026, 10, 31)
-    assert _server_day(now, date(2026, 10, 1)) == date(2026, 10, 27)
-    naive = datetime(2026, 10, 29, 12, 0)
-    assert _server_day(naive, date(2026, 11, 5)) == date(2026, 10, 31)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "gap: a today more than two days from UTC still moves both windows; "
-        "spec §4.3 anchors them on local today, and PR #52's security review "
-        "listed a UTC±2 day bound as optional"
-    ),
+@pytest.mark.parametrize(
+    "case",
+    _LOCAL_DAYS,
+    ids=("la-noon", "kiritimati", "naive-clock-is-utc", "absent-zone", "unknown-zone"),
 )
-def test_checkin_window_clamps_today_to_utc_plus_or_minus_two(api, monkeypatch):
-    """A today more than two days from UTC cannot move either window further."""
+def test_checkin_window_follows_trusted_local_today(api, case: _LocalDay):
+    """Check-ins use the injected clock and the resolved zone's local today.
+
+    writes has no _server_day helper. A day the retired UTC±2 clamp would
+    have rewritten (2026-10-01, 2026-10-27, 2026-11-01, 2026-11-05) is accepted
+    only when it is yesterday, today, or tomorrow in this local date.
+    Pacific/Kiritimati accepts 2026-10-31 at the same instant Los Angeles
+    rejects it. An absent or unknown zone stays on UTC. A naive clock is UTC.
+    The host date 2026-11-11 is outside every one of these windows.
+    """
     client, database, application = api
-    habit_id = _plant(database, "Clamp", 0, 7, date(2026, 10, 1))
-    moment = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
-    _set_clock(application, moment)
-    monkeypatch.setattr(
-        "apps.server.town.router.today_in_zone", lambda zone, now: date(2026, 11, 5)
+    assert not hasattr(town_writes, "_server_day")
+    _set_clock(application, case.clock)
+    habit_id = _plant(database, "Local", 0, 7, date(2026, 10, 1))
+    params = {} if case.zone is None else {"tz": case.zone}
+    town = client.get("/api/town", params=params).json()["town"]
+    assert town["today"] == case.local_today.isoformat()
+    assert town["tz"] == case.resolved_zone
+    out = "You can only check in for today or yesterday."
+    locked = "Only today's check-in can be undone."
+    window = (
+        case.local_today - timedelta(days=1),
+        case.local_today,
+        case.local_today + timedelta(days=1),
     )
-    assert _check(client, habit_id, "2026-10-30").status_code == 201
-    assert _check(client, habit_id, "2026-11-01").status_code == 201
-    _err(
-        _check(client, habit_id, "2026-10-29"),
-        422,
-        "day_out_of_window",
-        "You can only check in for today or yesterday.",
+    rejected = {
+        case.local_today - timedelta(days=2),
+        case.local_today + timedelta(days=2),
+        date(2026, 10, 1),
+        date(2026, 10, 27),
+        date(2026, 11, 1),
+        date(2026, 11, 5),
+        date(2026, 11, 11),
+    } - set(window)
+
+    def check(day: date):
+        return client.post(
+            f"/api/town/habits/{habit_id}/checkins",
+            params=params,
+            json={"day": day.isoformat()},
+        )
+
+    def undo(day: date):
+        return client.delete(
+            f"/api/town/habits/{habit_id}/checkins/{day.isoformat()}",
+            params=params,
+        )
+
+    for day in sorted(rejected):
+        response = check(day)
+        assert response.status_code == 422, day
+        _err(response, 422, "day_out_of_window", out)
+    for day in window:
+        made = check(day)
+        assert made.status_code == 201, day
+        assert made.json()["checked"] is True and made.json()["day"] == day.isoformat()
+    kept = undo(window[0])
+    assert kept.status_code == 409, window[0]
+    _err(kept, 409, "checkin_locked", locked)
+    for day in (window[2], window[1]):
+        undone = undo(day)
+        assert undone.status_code == 200, day
+        assert undone.json()["checked"] is False and undone.json()["day"] == day.isoformat()
+    db = database.sessionmaker()
+    count = db.scalar(
+        select(func.count()).select_from(HabitCheckin).where(HabitCheckin.habit_id == habit_id)
     )
-    _err(
-        _check(client, habit_id, "2026-11-02"),
-        422,
-        "day_out_of_window",
-        "You can only check in for today or yesterday.",
+    kept_day = db.scalar(select(HabitCheckin.day).where(HabitCheckin.habit_id == habit_id))
+    db.close()
+    assert count == 1 and kept_day == window[0]
+
+
+def test_foreign_owner_cannot_use_a_locally_valid_checkin_day(api):
+    """A second user cannot check in or undo the owner's local today."""
+    client, database, application = api
+    _set_clock(application, datetime(2026, 10, 29, 12, 0, tzinfo=UTC))
+    habit_id = _plant(database, "Owned", 0, 7, date(2026, 10, 1))
+    made = _check(client, habit_id, "2026-10-29")
+    assert made.status_code == 201 and made.json()["checked"] is True
+    missing = "That habit doesn't exist."
+    _pin(application, 2)
+    for day in ("2026-10-28", "2026-10-29", "2026-10-30"):
+        _err(_check(client, habit_id, day), 404, "habit_not_found", missing)
+        _err(_undo(client, habit_id, day), 404, "habit_not_found", missing)
+    _pin(application, 1)
+    town = client.get("/api/town", params={"tz": TZ}).json()
+    assert town["town"]["today"] == "2026-10-29"
+    assert town["habits"][0]["name"] == "Owned" and town["habits"][0]["checked_today"] is True
+    db = database.sessionmaker()
+    count = db.scalar(
+        select(func.count())
+        .select_from(HabitCheckin)
+        .where(HabitCheckin.habit_id == habit_id, HabitCheckin.user_id == 1)
     )
-    undone = _undo(client, habit_id, "2026-11-01")
-    assert undone.status_code == 200 and undone.json()["checked"] is False
-    _err(
-        _undo(client, habit_id, "2026-10-30"),
-        409,
-        "checkin_locked",
-        "Only today's check-in can be undone.",
+    foreign = db.scalar(
+        select(func.count()).select_from(HabitCheckin).where(HabitCheckin.user_id == 2)
     )
+    db.close()
+    assert count == 1 and foreign == 0
+
+
+def test_checkin_conflict_without_a_visible_row_is_not_success(api, monkeypatch):
+    """The insert race reports success only when the row is actually there."""
+    client, database, application = api
+    _set_clock(application, datetime(2026, 10, 29, 12, 0, tzinfo=UTC))
+    habit_id = _plant(database, "Race", 0, 7, date(2026, 10, 1))
+    made = _check(client, habit_id, "2026-10-29")
+    assert made.status_code == 201
+    monkeypatch.setattr("apps.server.town.writes.existing_checkin", lambda *_a, **_k: None)
+    failed = _check(client, habit_id, "2026-10-29")
+    assert failed.status_code == 500
+    body = failed.json()
+    assert body["detail"] == "Internal server error"
+    assert set(body) == {"detail", "request_id"}
+    assert "checked" not in body
+    db = database.sessionmaker()
+    count = db.scalar(
+        select(func.count()).select_from(HabitCheckin).where(HabitCheckin.habit_id == habit_id)
+    )
+    db.close()
+    assert count == 1
 
 
 def test_habit_id_outside_sqlite_integer_is_unknown(api):

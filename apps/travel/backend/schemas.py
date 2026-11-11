@@ -656,6 +656,9 @@ class LeavePolicyIn(BaseModel):
     cap_hours: bool | str | int | float | None = None
     year_start: bool | str | int | float | None = None
     carry_forward: bool | str | int | float | None = None
+    accrual_mode: bool | str | int | float | None = None
+    accrual_anchor: bool | str | int | float | None = None
+    accrual_version: bool | str | int | float | None = None
 
 
 class SickRemovalIn(BaseModel):

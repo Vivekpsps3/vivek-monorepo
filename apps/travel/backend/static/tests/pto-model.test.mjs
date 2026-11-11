@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ACCRUAL_COPY,
+  ANCHOR_COPY,
   CAP_COPY,
   HPD_COPY,
   NAME_COPY,
@@ -154,4 +155,30 @@ test("edited hours round on quarter ties and untouched stored text does not", ()
   assert.equal(blurHoursPerDay("7,125", "7.125").error, "");
   assert.deepEqual(fieldErrorMap({ field_errors: { accrual_hours: ACCRUAL_COPY } }), { accrual_hours: ACCRUAL_COPY });
   assert.equal(fieldErrorMap({ message: "no" }), null);
+});
+
+test("a schedule needs an explicit anchor and daily does not send one", () => {
+  const draft = {
+    start_balance_hours: "8",
+    balance_as_of: "2026-01-01",
+    accrual_hours: "8",
+    accrual_cadence: "monthly",
+    cap_hours: "",
+    year_month: "01",
+    year_day: "01",
+    carry_forward: true,
+    accrual_mode: "scheduled",
+    accrual_anchor: "",
+    accrual_version: 0,
+  };
+  assert.equal(policyErrors(draft, null, TODAY).accrual_anchor, ANCHOR_COPY);
+  const dated = { ...draft, accrual_anchor: "2024-02-29" };
+  assert.equal(policyErrors(dated, null, TODAY).accrual_anchor, undefined);
+  const body = policyBody(dated, null, new Set());
+  assert.equal(body.accrual_mode, "scheduled");
+  assert.equal(body.accrual_anchor, "2024-02-29");
+  assert.equal(body.accrual_version, 0);
+  const daily = policyBody({ ...dated, accrual_mode: "daily" }, null, new Set());
+  assert.equal(daily.accrual_mode, "daily");
+  assert.equal(daily.accrual_anchor, null);
 });

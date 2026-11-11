@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   HostListener,
   inject,
   signal,
@@ -34,6 +35,7 @@ import {
 import { showDay, showRange } from "./display";
 import { TransportEditorComponent } from "./transport-editor.component";
 import { Trip, travelError } from "./travel.models";
+import { dateOrderError, requiredText } from "./validate.mjs";
 @Component({
   standalone: true,
   imports: [
@@ -54,9 +56,15 @@ import { Trip, travelError } from "./travel.models";
       title="Plan a trip"
     />
     <ui-card
-      ><form class="travel-form" (ngSubmit)="save()" #form="ngForm">
+      ><form
+      class="travel-form"
+      novalidate
+      (ngSubmit)="save()"
+      (input)="live()"
+      (change)="live()"
+    >
         <div class="form-row">
-          <ui-field label="Departure date" [required]="true"
+          <ui-field label="Departure date" [required]="true" [error]="field('start')"
             ><input
               uiFieldControl
               required
@@ -64,7 +72,7 @@ import { Trip, travelError } from "./travel.models";
               name="start"
               [(ngModel)]="start"
               (change)="range()" /></ui-field
-          ><ui-field label="Return date" [required]="true"
+          ><ui-field label="Return date" [required]="true" [error]="field('end')"
             ><input
               uiFieldControl
               required
@@ -83,11 +91,13 @@ import { Trip, travelError } from "./travel.models";
                 index === 0 ? 'Destination city' : 'Next destination city'
               "
               [required]="true"
+              [error]="field('city-' + index)"
             >
               <input
                 uiFieldControl
                 [id]="'city-' + index"
                 [name]="'city-' + index"
+                [attr.name]="'city-' + index"
                 required
                 maxlength="200"
                 [ngModel]="model().cities[segment.key] || ''"
@@ -237,9 +247,7 @@ import { Trip, travelError } from "./travel.models";
           <ui-button
             variant="primary"
             type="submit"
-            [disabled]="
-              saving() || !form.valid || (!!start && !!end && end < start)
-            "
+            [disabled]="saving()"
           >
             {{ saving() ? "Saving trip…" : "Save trip" }}</ui-button
           ><a routerLink="/travel">Cancel</a>
@@ -271,7 +279,10 @@ export class NewTripComponent {
   private readonly router = inject(Router);
   private readonly destroy = inject(DestroyRef);
   private readonly confirm = inject(ConfirmService);
+  private readonly host = inject(ElementRef<HTMLElement>);
   readonly model = signal(blankRange());
+  readonly fields = signal<Record<string, string>>({});
+  private explained = false;
   readonly parts = () => segments(this.model());
   readonly name = () => defaultTripName(this.model());
   readonly summary = summaryText;
@@ -298,6 +309,49 @@ export class NewTripComponent {
   transportOpen = false;
   readonly error = signal("");
   readonly saving = signal(false);
+  field(name: string): string {
+    return this.fields()[name] || "";
+  }
+  live(): void {
+    if (this.explained) this.fields.set(this.composerErrors());
+  }
+  private composerErrors(): Record<string, string> {
+    const errors: Record<string, string> = {};
+    const missing = "Pick the day you leave and the day you come back.";
+    if (!this.start) errors["start"] = missing;
+    if (!this.end) errors["end"] = missing;
+    const order = dateOrderError(
+      this.start,
+      this.end,
+      "The return date has to be on or after the day you leave.",
+    );
+    if (order) errors["end"] = order;
+    this.parts().forEach((segment, index) => {
+      const message = requiredText(
+        this.model().cities[segment.key],
+        "Name every destination.",
+      );
+      if (message) errors["city-" + index] = message;
+    });
+    return errors;
+  }
+  private focusNamed(name: string): void {
+    setTimeout(() => {
+      const node = this.host.nativeElement.querySelector(
+        `[name="${CSS.escape(name)}"]`,
+      );
+      if (node instanceof HTMLElement) node.focus();
+    });
+  }
+  private explain(): boolean {
+    const errors = this.composerErrors();
+    this.fields.set(errors);
+    this.explained = true;
+    const first = Object.keys(errors)[0];
+    if (!first) return false;
+    this.focusNamed(first);
+    return true;
+  }
   private saved = false;
   private attemptKey = "";
   private attemptBody = "";
@@ -323,7 +377,7 @@ export class NewTripComponent {
   }
   async range(): Promise<void> {
     if (this.start && this.end && this.end < this.start) {
-      this.error.set("Return date must be on or after departure.");
+      this.live();
       return;
     }
     let next = guardSpan(this.model(), this.start, this.end);
@@ -350,7 +404,7 @@ export class NewTripComponent {
     for (const day of this.dates())
       if (this.charges[day] === undefined)
         this.charges[day] = this.weekday(day);
-    this.error.set("");
+    this.live();
   }
   city(key: string, value: string): void {
     this.model.update((m) => ({ ...m, cities: { ...m.cities, [key]: value } }));
@@ -407,10 +461,7 @@ export class NewTripComponent {
   }
   save(): void {
     if (this.saving()) return;
-    if (this.start && this.end && this.end < this.start) {
-      this.error.set("Return date must be on or after departure.");
-      return;
-    }
+    if (this.explain()) return;
     const state = saveState(this.model());
     if (!state.ok) {
       this.error.set(state.helper);

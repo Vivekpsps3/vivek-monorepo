@@ -28,10 +28,13 @@ from apps.travel.backend.services.leave_buckets import (
 from apps.travel.backend.services.leave_math import (
     Bucket,
     bucket_from_row,
+    confirmed_accrual_version,
     fmt_hours,
     policy_year,
     quantize_hours,
+    schedule_changed,
     segments,
+    stored_accrual_version,
     validate_hours_per_day,
     validate_policy_body,
     walk_bucket,
@@ -46,6 +49,7 @@ _MISSING = "That leave bucket is not here."
 _SICK_REVISION = "sick_policy_revision"
 _SICK_CONFLICT = "Sick policy changed. Nothing was removed."
 _SICK_ABSENT = "Sick policy is not set up."
+_ACCRUAL_CONFLICT = "Accrual schedule changed. Nothing was saved."
 
 
 def _known(bucket: str) -> None:
@@ -155,6 +159,9 @@ def _reset_sick_setup(row: LeavePolicy, today: date) -> None:
     row.cap_hours = None
     row.year_start = "01-01"
     row.carry_forward = True
+    row.accrual_mode = "daily"
+    row.accrual_anchor = None
+    row.accrual_version = 0
 
 
 def _bucket_from_clean(bucket: str, clean: dict) -> Bucket:
@@ -169,6 +176,8 @@ def _bucket_from_clean(bucket: str, clean: dict) -> Bucket:
         cap_hours=None if cap is None else Fraction(cap),
         year_start=clean["year_start"],
         carry_forward=bool(clean["carry_forward"]),
+        accrual_mode=clean["accrual_mode"],
+        accrual_anchor=clean["accrual_anchor"],
     )
 
 
@@ -191,6 +200,9 @@ def bucket_state(db: Session, user_id: int, bucket: str, usages, today: date, hp
         "cap_hours": row.cap_hours,
         "year_start": row.year_start,
         "carry_forward": bool(row.carry_forward),
+        "accrual_mode": row.accrual_mode,
+        "accrual_anchor": row.accrual_anchor,
+        "accrual_version": int(row.accrual_version or 0),
         "balance_today_hours": fmt_hours(balance),
         "balance_today_days": fmt_days(_days(balance, hpd)),
         "at_cap": cap is not None and balance >= cap,
@@ -309,6 +321,10 @@ def save_policy(
     if errors:
         _fail(errors)
     assert clean is not None
+    changed = schedule_changed(row, clean)
+    current = stored_accrual_version(row)
+    if changed and confirmed_accrual_version(body.accrual_version) != current:
+        raise APIError(409, "accrual_version_conflict", _ACCRUAL_CONFLICT)
     if row is None:
         row = LeavePolicy(user_id=principal.id, bucket=bucket, balance_as_of=clean["balance_as_of"])
         db.add(row)
@@ -320,6 +336,10 @@ def save_policy(
     row.cap_hours = None if clean["cap_hours"] is None else store_hours(clean["cap_hours"])
     row.year_start = clean["year_start"]
     row.carry_forward = clean["carry_forward"]
+    row.accrual_mode = clean["accrual_mode"]
+    row.accrual_anchor = clean["accrual_anchor"]
+    if changed:
+        row.accrual_version = current + 1
     db.flush()
     if bucket == "sick":
         _bump_sick_revision(db, principal.id)

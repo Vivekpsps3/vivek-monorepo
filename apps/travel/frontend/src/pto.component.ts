@@ -29,6 +29,7 @@ import { showRange } from "./display";
 import { PtoChartComponent } from "./pto-chart.component";
 import { CHART_ERROR } from "./pto-chart.mjs";
 import {
+  ACCRUAL_MODES,
   CADENCES,
   CAP_BLURB,
   DISMISS_FAILED,
@@ -109,6 +110,9 @@ interface PolicyDraft {
   year_month: string;
   year_day: string;
   carry_forward: boolean;
+  accrual_mode: string;
+  accrual_anchor: string;
+  accrual_version: number;
 }
 type Busy = "" | "policy" | "entry" | "remove";
 
@@ -409,6 +413,44 @@ type Busy = "" | "policy" | "entry" | "remove";
                     @if (fieldErrors()["accrual_cadence"]; as cadenceError) {
                       <p id="cadence-error" class="field-error">{{ cadenceError }}</p>
                     }
+                    <div
+                      class="segments"
+                      role="radiogroup"
+                      aria-label="Accrual schedule"
+                      [attr.aria-invalid]="fieldErrors()['accrual_mode'] ? 'true' : null"
+                      [attr.aria-describedby]="fieldErrors()['accrual_mode'] ? 'mode-error' : null"
+                    >
+                      @for (choice of accrualModes; track choice.value) {
+                        <label class="segment">
+                          <input
+                            type="radio"
+                            name="accrual-mode"
+                            [value]="choice.value"
+                            [(ngModel)]="drafts[name].accrual_mode"
+                            (change)="blurField(name, 'accrual_mode')"
+                          />
+                          <span>{{ choice.label }}</span>
+                        </label>
+                      }
+                    </div>
+                    @if (fieldErrors()["accrual_mode"]; as modeError) {
+                      <p id="mode-error" class="field-error">{{ modeError }}</p>
+                    }
+                    @if (drafts[name].accrual_mode === "scheduled") {
+                      <ui-field
+                        label="First posting date"
+                        [required]="true"
+                        [error]="fieldErrors()['accrual_anchor']"
+                      >
+                        <input
+                          uiFieldControl
+                          type="date"
+                          name="anchor"
+                          [(ngModel)]="drafts[name].accrual_anchor"
+                          (blur)="blurField(name, 'accrual_anchor')"
+                        />
+                      </ui-field>
+                    }
                     <ui-field
                       label="Cap"
                       [error]="fieldErrors()['cap_hours']"
@@ -567,6 +609,7 @@ export class PtoComponent {
   readonly sickUnset = SICK_UNSET;
   readonly capBlurb = CAP_BLURB;
   readonly cadences = CADENCES;
+  readonly accrualModes = ACCRUAL_MODES;
   readonly months = MONTHS;
   readonly bothBuckets: BucketName[] = ["pto", "sick"];
   readonly entryChoices = [
@@ -762,7 +805,14 @@ export class PtoComponent {
       else delete next[field];
       return next;
     });
-    if (field === "start_balance_hours" || field === "balance_as_of") this.loadCorrectionImpact(name);
+    if (
+      field === "start_balance_hours" ||
+      field === "balance_as_of" ||
+      field === "accrual_mode" ||
+      field === "accrual_anchor"
+    ) {
+      this.loadCorrectionImpact(name);
+    }
   }
 
   savePolicy(name: BucketName): void {
@@ -778,7 +828,21 @@ export class PtoComponent {
     }
     const body = policyBody(this.drafts[name], this.stored[name], this.edited[name]);
     this.policyAttempt = { bucket: name, body, draft: JSON.stringify(this.drafts[name]) };
-    this.sendPolicy();
+    if (this.scheduleChanged(name) && this.configured(name)) {
+      const shown = this.correctionPreview();
+      if (!shown) return;
+      void this.confirm.confirmAction({
+        title: "Change accrual schedule",
+        message: `${shown} The starting balance and recorded leave stay.`,
+        confirmLabel: "Save schedule",
+        cancelLabel: "Keep current accrual",
+        busyLabel: "Saving…",
+        errorMessage: "Couldn't save the accrual schedule. Nothing was changed.",
+        run: () => this.sendPolicy(),
+      });
+      return;
+    }
+    void this.sendPolicy().catch(() => undefined);
   }
 
   cancel(name: BucketName): void {
@@ -938,28 +1002,35 @@ export class PtoComponent {
       });
   }
 
-  private sendPolicy(): void {
+  private sendPolicy(): Promise<void> {
     const attempt = this.policyAttempt;
-    if (!attempt || this.busy() || !this.ownsSession) return;
+    if (!attempt || this.busy() || !this.ownsSession) return Promise.reject(new Error("busy"));
     this.loading?.unsubscribe();
     this.busy.set("policy");
     this.message.set("");
-    this.http
-      .put<PtoBoard>("/travel/api/pto/policies/" + attempt.bucket, attempt.body, { context: silentErrorToast() })
-      .pipe(takeUntilDestroyed(this.destroy))
-      .subscribe({
-        next: (board) => {
-          this.adopt(board, attempt.bucket, attempt.draft);
-          this.busy.set("");
-          this.toast.success(POLICY_SAVED[attempt.bucket]);
-          this.message.set(this.dirty ? "Your other edits still need saving." : "");
-          this.editing.set(this.configured("pto") ? null : "pto");
-          this.fieldErrors.set({});
-          this.loadSeries();
-          setTimeout(() => this.restoreFocus(attempt.bucket));
-        },
-        error: (error: HttpErrorResponse) => this.failPolicy(error),
-      });
+    return new Promise((resolve, reject) => {
+      this.http
+        .put<PtoBoard>("/travel/api/pto/policies/" + attempt.bucket, attempt.body, {
+          context: silentErrorToast(),
+        })
+        .subscribe({
+          next: (board) => {
+            this.adopt(board, attempt.bucket, attempt.draft);
+            this.busy.set("");
+            this.toast.success(POLICY_SAVED[attempt.bucket]);
+            this.message.set(this.dirty ? "Your other edits still need saving." : "");
+            this.editing.set(this.configured("pto") ? null : "pto");
+            this.fieldErrors.set({});
+            this.loadSeries();
+            setTimeout(() => this.restoreFocus(attempt.bucket));
+            resolve();
+          },
+          error: (error: HttpErrorResponse) => {
+            this.failPolicy(error);
+            reject(error);
+          },
+        });
+    });
   }
 
   private sendEntry(): void {
@@ -1004,7 +1075,12 @@ export class PtoComponent {
       return;
     }
     const bucket = this.policyAttempt?.bucket || "pto";
-    this.toast.error(POLICY_FAILED[bucket], { label: "Retry", run: () => this.sendPolicy() });
+    this.toast.error(POLICY_FAILED[bucket], {
+      label: "Retry",
+      run: () => {
+        void this.sendPolicy().catch(() => undefined);
+      },
+    });
   }
 
   private adopt(board: PtoBoard, bucket?: BucketName, submittedDraft?: string): void {
@@ -1074,16 +1150,22 @@ export class PtoComponent {
     const saved = this.savedDrafts[name];
     const datedChanged =
       draft.start_balance_hours !== saved.start_balance_hours || draft.balance_as_of !== saved.balance_as_of;
-    if (!datedChanged || !this.configured(name)) {
+    if ((!datedChanged && !this.scheduleChanged(name)) || !this.configured(name)) {
       this.clearCorrection();
       return;
     }
     const errors = policyErrors(draft, this.stored[name], localTodayIso());
-    if (errors["start_balance_hours"] || errors["balance_as_of"]) {
+    if (
+      errors["start_balance_hours"] ||
+      errors["balance_as_of"] ||
+      errors["accrual_mode"] ||
+      errors["accrual_anchor"]
+    ) {
       this.clearCorrection();
       return;
     }
     const epoch = ++this.correctionEpoch;
+    this.correctionPreview.set("");
     const body = policyBody(draft, this.stored[name], this.edited[name]);
     this.http
       .post<{ balance_today_hours: string; entries_rewritten: boolean }>(
@@ -1110,6 +1192,13 @@ export class PtoComponent {
   private clearCorrection(): void {
     this.correctionEpoch += 1;
     this.correctionPreview.set("");
+  }
+
+  private scheduleChanged(name: BucketName): boolean {
+    const draft = this.drafts[name];
+    const saved = this.savedDrafts[name];
+    if ((draft.accrual_mode || "daily") !== (saved.accrual_mode || "daily")) return true;
+    return draft.accrual_mode === "scheduled" && (draft.accrual_anchor || "") !== (saved.accrual_anchor || "");
   }
 
   private policyDirty(): boolean {
@@ -1178,6 +1267,8 @@ export class PtoComponent {
       balance_as_of: "asof",
       accrual_hours: "accrual",
       accrual_cadence: "cadence",
+      accrual_mode: "accrual-mode",
+      accrual_anchor: "anchor",
       cap_hours: "cap",
       year_start: "year-month",
       carry_forward: "carry-forward",
@@ -1206,6 +1297,9 @@ function blankDraft(today: string): PolicyDraft {
     year_month: "01",
     year_day: "01",
     carry_forward: true,
+    accrual_mode: "daily",
+    accrual_anchor: "",
+    accrual_version: 0,
   };
 }
 
@@ -1221,6 +1315,11 @@ function fromBucket(row: BucketState | null, today: string): PolicyDraft {
     year_month: year_month || "01",
     year_day: year_day || "01",
     carry_forward: row.carry_forward !== false,
+    accrual_mode: row.accrual_mode === "scheduled" ? "scheduled" : "daily",
+    accrual_anchor: row.accrual_anchor || "",
+    accrual_version: Number.isInteger(row.accrual_version) && (row.accrual_version ?? 0) >= 0
+      ? row.accrual_version ?? 0
+      : 0,
   };
 }
 
@@ -1233,6 +1332,8 @@ function storedOf(row: BucketState | null): Record<string, string> | null {
     accrual_cadence: row.accrual_cadence || "",
     cap_hours: row.cap_hours || "",
     year_start: row.year_start || "",
+    accrual_mode: row.accrual_mode === "scheduled" ? "scheduled" : "daily",
+    accrual_anchor: row.accrual_anchor || "",
   };
 }
 

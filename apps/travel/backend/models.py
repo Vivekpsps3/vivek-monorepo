@@ -298,6 +298,16 @@ class LeavePolicy(Base):
     carry_forward: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("1")
     )
+    # daily spreads the amount across the cadence. scheduled posts it on accrual_anchor.
+    accrual_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="daily", server_default="daily"
+    )
+    # First posting date. Required for scheduled mode and empty for daily mode.
+    accrual_anchor: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Bumps only when the mode or anchor changes, so a stale confirm cannot apply.
+    accrual_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
 
 
 class TripPtoDay(Base):

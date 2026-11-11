@@ -2,6 +2,7 @@ import { restoreBody } from "./restore-model.mjs";
 import {
   Component,
   DestroyRef,
+  ElementRef,
   HostListener,
   computed,
   inject,
@@ -45,6 +46,7 @@ import {
   projectItinerary,
   type ItineraryEntry,
 } from "./calendar-model.mjs";
+import { fieldErrors } from "./validate.mjs";
 @Component({
   standalone: true,
   imports: [
@@ -208,6 +210,9 @@ export class TripComponent {
   });
   readonly error = signal("");
   readonly saving = signal(false);
+  readonly fields = signal<Record<string, string>>({});
+  private explained = false;
+  private readonly host = inject(ElementRef<HTMLElement>);
   readonly message = signal("");
   readonly places = signal<TravelPlace[]>([]);
   readonly placeError = signal("");
@@ -431,6 +436,7 @@ export class TripComponent {
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((p) => {
       this.id = Number(p.get("id"));
       this.editor = "";
+      this.resetFields();
       this.saving.set(false);
       this.selectedDay = "";
       this.rovingDay = "";
@@ -512,7 +518,76 @@ export class TripComponent {
     ) {
       if (this.editor === "location") this.placeSearchChanged();
       this.editor = "";
+      this.resetFields();
     }
+  }
+  field(name: string): string {
+    return this.fields()[name] || "";
+  }
+  live(): void {
+    if (this.explained) this.fields.set(this.problems());
+  }
+  private resetFields(): void {
+    this.fields.set({});
+    this.explained = false;
+  }
+  private problems(): Record<string, string> {
+    const named = (raw: Record<string, string>, aliases: Record<string, string> = {}) => {
+      const errors: Record<string, string> = {};
+      for (const [name, message] of Object.entries(raw)) {
+        if (message) errors[aliases[name] || name] = message;
+      }
+      return errors;
+    };
+    if (this.editor === "trip") {
+      return named(
+        fieldErrors("trip", {
+          title: this.meta.title,
+          start_date: this.meta.start_date,
+          end_date: this.meta.end_date,
+        }),
+        { start_date: "start", end_date: "end" },
+      );
+    }
+    if (this.editor === "activity") {
+      return named(
+        fieldErrors("plan", { title: this.plan.title, on_date: this.plan.on_date }),
+        { on_date: "date" },
+      );
+    }
+    if (this.editor === "destination") {
+      return named(
+        fieldErrors("stay", {
+          city: this.stay.city,
+          arrive_on: this.stay.arrive_on,
+          leave_on: this.stay.leave_on,
+        }),
+        { arrive_on: "arrive", leave_on: "leave" },
+      );
+    }
+    if (this.editor === "note") return fieldErrors("note", { body: this.note.body });
+    if (this.editor === "reminder") return fieldErrors("reminder", { title: this.reminder.title });
+    if (this.editor === "budget") {
+      return fieldErrors("budget", {
+        label: this.budget.label,
+        amount: this.budget.amount,
+        currency: this.budget.currency,
+      });
+    }
+    if (this.editor === "location") return fieldErrors("location", { query: this.placeQuery });
+    return {};
+  }
+  private explain(): boolean {
+    const errors = this.problems();
+    this.fields.set(errors);
+    this.explained = true;
+    const first = Object.keys(errors)[0];
+    if (!first) return false;
+    setTimeout(() => {
+      const node = this.host.nativeElement.querySelector(`[name="${CSS.escape(first)}"]`);
+      if (node instanceof HTMLElement) node.focus();
+    });
+    return true;
   }
   open(
     kind: string,
@@ -524,6 +599,7 @@ export class TripComponent {
       | Trip["budget"]["manual"][number],
   ): void {
     this.error.set("");
+    this.resetFields();
     this.editingId = item?.id || null;
     this.editor = kind;
     if (kind === "parking")
@@ -611,7 +687,10 @@ export class TripComponent {
         next: () => {
           if (!this.ownsSession || this.id !== tripId) return;
           this.saving.set(false);
-          if (close) this.editor = "";
+          if (close) {
+            this.editor = "";
+            this.resetFields();
+          }
           if ("pto_dates" in body) this.ptoSaved = ptoSnapshot;
           this.message.set("Saved.");
           this.load();
@@ -635,6 +714,7 @@ export class TripComponent {
     );
   }
   savePlan(): void {
+    if (this.explain()) return;
     this.mutate(
       this.editingId ? "/plans/" + this.editingId : this.path() + "/plans",
       this.plan,
@@ -642,6 +722,7 @@ export class TripComponent {
     );
   }
   saveStay(): void {
+    if (this.explain()) return;
     this.mutate(
       this.editingId ? "/stays/" + this.editingId : this.path() + "/stays",
       this.stay,
@@ -649,6 +730,7 @@ export class TripComponent {
     );
   }
   async saveMeta(): Promise<void> {
+    if (this.saving() || this.explain()) return;
     const trip = this.data()!;
     const outside =
       trip.stays.filter(
@@ -820,6 +902,7 @@ export class TripComponent {
     this.placeSearchChanged();
     this.placeStay = stay;
     this.placeQuery = stay.city;
+    this.resetFields();
     this.editor = "location";
   }
   placeSearchChanged(): void {
@@ -831,19 +914,13 @@ export class TripComponent {
   }
   findPlaces(): void {
     const query = this.placeQuery.trim();
-    if (
-      !this.placeStay ||
-      this.editor !== "location" ||
-      this.finding() ||
-      this.saving()
-    )
-      return;
-    const stayId = this.placeStay.id;
-    this.placeSearchChanged();
-    if (query.length < 2 || query.length > 200) {
-      this.placeError.set("Enter a place name between 2 and 200 characters.");
+    if (!this.placeStay || this.editor !== "location" || this.finding() || this.saving()) return;
+    if (this.explain()) {
+      this.placeSearchChanged();
       return;
     }
+    const stayId = this.placeStay.id;
+    this.placeSearchChanged();
     this.finding.set(true);
     this.placeRequest = this.http
       .get<{
@@ -892,6 +969,7 @@ export class TripComponent {
     this.mutate(this.endpoint("/reminders"), { title }, "post", false, onFail);
   }
   saveParking(): void {
+    if (this.explain()) return;
     this.mutate(
       this.editingId ? "/parking/" + this.editingId : this.path() + "/parking",
       this.parking,
@@ -899,6 +977,7 @@ export class TripComponent {
     );
   }
   saveBudget(): void {
+    if (this.explain()) return;
     this.mutate(
       this.editingId
         ? "/budget-lines/" + this.editingId
@@ -906,6 +985,14 @@ export class TripComponent {
       this.budget,
       this.editingId ? "patch" : "post",
     );
+  }
+  saveNote(): void {
+    if (this.explain()) return;
+    this.mutate(this.endpoint("/notes"), this.note);
+  }
+  saveReminder(): void {
+    if (this.explain()) return;
+    this.mutate(this.endpoint("/reminders"), this.reminder);
   }
   endpoint(suffix: string): string {
     return this.path() + suffix;

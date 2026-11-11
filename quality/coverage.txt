@@ -1,9 +1,11 @@
-# Measured statement coverage and the fail-under floor.
-# The floor sits about 1 percentage point below the measured total.
-# coverage-gate.sh fails when a suite drops under its floor.
-# A gain prints a notice and does not fail. Re-pin with: make coverage-pin
+# Statement-mode coverage pin. Python measures statements (pyproject branch = false).
+# Denominator: the suite tree passed to coverage-gate.sh. Finance also includes
+# relocated identity sources. Tests and Alembic are omitted. Not whole-repo coverage.
+# measured: historical total from the last pin. It is not the current run.
+# floor: current fail-under. The gate fails under this number. Do not lower it.
+# A higher run prints a notice and does not rewrite this file. Re-pin: make coverage-pin
 # suite  measured  floor
-# server's floor is 61.53 (the re-pin). It is not one point under the measured total.
+# server's floor is 61.53. It is not one point under the pinned measurement.
 finance 84.37 83.28
 travel 81.41 80.41
 media 71.60 70.60

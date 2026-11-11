@@ -99,9 +99,11 @@ Prettier is not a project formatter. Travel and Media templates and CSS were for
 
 ## Coverage
 
-`scripts/coverage-gate.sh` runs pytest with `pytest-cov` at `precision = 2`, so `--cov-fail-under` decides on the displayed total. Four pytest-xdist workers distribute whole files (`--dist=loadfile`), preserving module fixture ownership. Their coverage is combined before the same floor is checked. Set `PYTEST_WORKERS=0` for in-process debugging. Performance gates still run separately, serially and without coverage. Tests and Alembic are omitted. `quality/coverage.txt` stores the measured total and a floor about 1 percentage point below it. The gate fails when coverage drops under the floor. A gain does not fail; the job prints a `::notice::` with a suggested floor, and `make coverage-pin` rewrites the file from a fresh measurement. Each CI job appends the table to the GitHub step summary. The summary step exits cleanly when a job failed before writing `coverage/`.
+`scripts/coverage-gate.sh` runs pytest with `pytest-cov` at `precision = 2`, so `--cov-fail-under` decides on the displayed total. Four pytest-xdist workers distribute whole files (`--dist=loadfile`), preserving module fixture ownership. Their coverage is combined before the same floor is checked. Set `PYTEST_WORKERS=0` for in-process debugging. Performance gates still run separately, serially and without coverage. Each CI job appends that run's table to the GitHub step summary. The summary step exits cleanly when a job failed before writing `coverage/`.
 
-The recorded measurements in `quality/coverage.txt` are the baseline from the last pin, not a claim about the latest run. Current per-run totals are emitted by the gates and attached to CI. The fail-under floors are:
+Python currently measures statements. `[tool.coverage.run]` sets `branch = false`, so the gate TOTAL is a statement percentage, not branch coverage. The source denominator is the suite tree passed to the gate (`apps/finance/backend`, `apps/travel/backend`, `apps/media/backend`, or `apps/server`). Finance also includes the relocated identity modules. Tests and Alembic paths are omitted. That denominator is not the whole repository.
+
+`quality/coverage.txt` keeps two different numbers. `measured` is the historical total from the last `make coverage-pin`. `floor` is the current fail-under. The gate fails when a run drops under the floor. A higher run does not fail and does not rewrite the pin; it prints a `::notice::` with a suggested floor. The pin is not a claim about the latest run. Current per-run totals are the gate output and the CI summary. The current floors are:
 
 | Suite | Floor |
 | --- | ---: |
@@ -110,9 +112,9 @@ The recorded measurements in `quality/coverage.txt` are the baseline from the la
 | Media | 70.60% |
 | Server | 61.53% |
 
-The merged refactor's measurements and command results are preserved in [its final verification](../planning/suite-experience-remediation/evidence/final-verification.md). Server composition, database ownership, identity and request-commit behavior now have explicit tests; coverage still includes untested lines rather than omitting modules to inflate the result.
+The merged refactor's measurements and command results are preserved in [its final verification](../planning/suite-experience-remediation/evidence/final-verification.md). Those figures are historical. Server composition, database ownership, identity and request-commit behavior now have explicit tests; coverage still includes untested lines rather than omitting modules to inflate the result.
 
-Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json`. `scripts/karma-coverage-summary.mjs` appends totals to the GitHub step summary. Karma instruments only the files loaded by the selected specs, so its totals are not whole-app coverage. `apps/karma.conf.js` owns these unchanged thresholds:
+Karma uses Chrome Headless with `--no-sandbox` and writes `coverage-summary.json` for the files the selected specs load. That loaded-source set is Karma's denominator. It is not whole-app coverage. The summary reports statements, branches, functions, and lines for that loaded set only. `scripts/karma-coverage-summary.mjs` appends those run totals to the GitHub step summary. They are that run's measurement, not a historical pin and not full-app proof. A run with `SUITE_KARMA_COVERAGE=0` does not satisfy the floors. `apps/karma.conf.js` owns these current floors, which stay unchanged:
 
 | App | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |

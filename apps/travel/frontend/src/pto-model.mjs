@@ -13,6 +13,8 @@ export const CAP_COPY =
   "Cap has to be more than 0 and up to 8784 hours, or blank.";
 export const YEAR_COPY = "Pick a valid date.";
 export const CARRY_COPY = "Choose whether unused hours carry into the next policy year.";
+export const MODE_COPY = "Pick daily accrual or a posting schedule.";
+export const ANCHOR_COPY = "Pick the first posting date.";
 export const HPD_COPY =
   "Hours in a workday has to be more than 0 and up to 24, with at most 2 decimals.";
 export const NAME_COPY = "Name this time off.";
@@ -43,6 +45,11 @@ export const CADENCES = [
   { value: "yearly", label: "Yr", period: "year" },
 ];
 
+export const ACCRUAL_MODES = [
+  { value: "daily", label: "Each day" },
+  { value: "scheduled", label: "On a schedule" },
+];
+
 export const MONTHS = [
   ["01", "Jan"],
   ["02", "Feb"],
@@ -64,6 +71,8 @@ const FIELD_ORDER = [
   "balance_as_of",
   "accrual_hours",
   "accrual_cadence",
+  "accrual_mode",
+  "accrual_anchor",
   "cap_hours",
   "year_start",
   "carry_forward",
@@ -255,6 +264,13 @@ export function yearStartText(month, day) {
   return `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function anchorOk(text) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || text < "2000-01-01" || text > "2100-12-31") return false;
+  const [year, month, day] = text.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 /**
  * Client hard limits. `stored` values pass untouched. `edited` is ignored:
  * equality with the stored text is what grandfathers a value.
@@ -287,6 +303,16 @@ export function policyErrors(draft, stored, today) {
   const cadence = draft.accrual_cadence;
   if (!CADENCES.some((item) => item.value === cadence) && cadence !== kept.accrual_cadence) {
     errors.accrual_cadence = CADENCE_COPY;
+  }
+  const mode = draft.accrual_mode == null || draft.accrual_mode === "" ? "daily" : draft.accrual_mode;
+  if (mode !== "daily" && mode !== "scheduled" && mode !== kept.accrual_mode) {
+    errors.accrual_mode = MODE_COPY;
+  }
+  if (mode === "scheduled") {
+    const anchor = String(draft.accrual_anchor || "");
+    const keptAnchor = String(kept.accrual_anchor || "");
+    const unchanged = anchor !== "" && anchor === keptAnchor;
+    if (!unchanged && !anchorOk(anchor)) errors.accrual_anchor = ANCHOR_COPY;
   }
   const capRaw = draft.cap_hours;
   if (!(capRaw == null || String(capRaw).trim() === "")) {
@@ -400,6 +426,9 @@ export function policyBody(draft, stored, edited) {
     cap_hours: cap === "" ? null : cap,
     year_start: yearStartText(draft.year_month, draft.year_day),
     carry_forward: draft.carry_forward !== false,
+    accrual_mode: draft.accrual_mode === "scheduled" ? "scheduled" : "daily",
+    accrual_anchor: draft.accrual_mode === "scheduled" ? String(draft.accrual_anchor || "") : null,
+    accrual_version: Number.isInteger(draft.accrual_version) && draft.accrual_version >= 0 ? draft.accrual_version : 0,
   };
 }
 
