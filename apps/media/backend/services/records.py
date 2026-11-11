@@ -1955,11 +1955,7 @@ def _public_catalog(
     artwork: str | None,
 ) -> CatalogItem:
     """A public album row so a saved song can name its release. Not a membership."""
-    row = (
-        db.query(CatalogItem)
-        .filter(CatalogItem.source == source, CatalogItem.source_id == source_id)
-        .one_or_none()
-    )
+    row = _catalog_by_source(db, source, source_id)
     if row is not None:
         if row.kind != kind:
             fail("That provider id is already a different type.")
