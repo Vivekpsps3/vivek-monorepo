@@ -4,13 +4,24 @@
     "outDir": "../../dist/out-tsc/web",
     "types": [
       "node"
-    ]
+    ],
+    "allowJs": true,
+    "checkJs": false
   },
-  "files": [
-    "src/main.ts",
-    "src/main.server.ts"
-  ],
   "include": [
-    "src/**/*.d.ts"
+    "src/**/*.ts",
+    "src/**/*.mjs",
+    "src/**/*.d.mts",
+    "../travel/frontend/src/**/*.ts",
+    "../travel/frontend/src/**/*.mjs",
+    "../travel/frontend/src/**/*.d.mts",
+    "../media/frontend/src/**/*.ts",
+    "../media/frontend/src/**/*.mjs",
+    "../media/frontend/src/**/*.d.mts"
+  ],
+  "exclude": [
+    "src/**/*.spec.ts",
+    "../travel/frontend/src/**/*.spec.ts",
+    "../media/frontend/src/**/*.spec.ts"
   ]
 }

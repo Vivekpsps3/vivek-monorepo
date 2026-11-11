@@ -2,13 +2,29 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
     "types": [
-      "jasmine"
+      "jasmine",
+      "node"
     ]
   },
   "include": [
     "browser/src/**/*.ts",
     "auth/src/**/*.ts",
-    "ui/src/**/*.ts"
+    "auth/src/**/*.mjs",
+    "auth/src/**/*.d.mts",
+    "ui/src/**/*.ts",
+    "ui/pixels/**/*.ts",
+    "browser/runtime/**/*.mjs",
+    "browser/runtime/**/*.d.mts",
+    "../scripts/**/*.mjs",
+    "../eslint.config.js",
+    "../apps/karma.conf.js",
+    "../apps/web/proxy.conf.cjs"
+  ],
+  "exclude": [
+    "browser/runtime/**/*.test.mjs",
+    "../scripts/**/*.test.mjs"
   ]
 }

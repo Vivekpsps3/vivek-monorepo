@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import sys
 import tempfile
 import unittest
 from collections import Counter
@@ -198,6 +199,20 @@ class RatchetTests(unittest.TestCase):
             code = self.ratchet.main(["quality_ratchet.py", "list"])
         self.assertEqual(code, 0)
         self.assertEqual(stdout.getvalue().splitlines(), sorted(self.ratchet.TOOLS))
+
+
+def _load_inventory_tests():
+    path = Path(__file__).resolve().parent / "test_source_inventory.py"
+    spec = importlib.util.spec_from_file_location("test_source_inventory", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+InventoryTests = _load_inventory_tests().InventoryTests
 
 
 if __name__ == "__main__":

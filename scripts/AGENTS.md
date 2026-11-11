@@ -8,6 +8,7 @@ Quality checks must reject the counterexample and accept supported behavior. Pre
 coverage/lint floors, migration history checks and actual test discovery. Do not
 replace behavior evidence with a source substring that merely resembles it.
 Keep policy in its existing gate; reuse a small check instead of creating a registry.
+`scripts/source_inventory.py` fails when a shipped file under `apps/`, `packages/`, or `scripts/` has no ESLint, typecheck, ruff, or mypy owner. Vendor directories, generated `.d.ts`, tests, and applied Alembic revisions stay excluded by those reasons.
 
 Operations and migration commands must use disposable synthetic fixtures for local
 verification. Preserve backup retention/recovery and transaction invariants. Hourly
