@@ -736,7 +736,7 @@ describe('HubComponent', () => {
     expect(auth.logout).not.toHaveBeenCalled();
   });
 
-  it('shows the year strip after Town without a birthday or a tab stop on a cell', async () => {
+  it('shows the year strip after Town with one roving date control', async () => {
     const day = hubStripWindow(todayIsoDate()).start;
     await render(pixelsBody(
       [{ date: day, town: 1 }],
@@ -761,23 +761,61 @@ describe('HubComponent', () => {
     const links = [...card.querySelectorAll('a')];
     expect(links.map(link => link.textContent?.trim())).toEqual(['Open Pixels']);
     expect(links[0]?.getAttribute('href')).toBe('/pixels');
-    expect(card.querySelectorAll('button').length).toBe(0);
     const cells = [...card.querySelectorAll('.pixel')] as HTMLElement[];
     expect(cells.length).toBe(91);
+    expect(card.querySelectorAll('[role="gridcell"]').length).toBe(91);
+    expect(card.querySelectorAll('.pixel[aria-hidden="true"]').length).toBe(0);
+    expect(card.querySelectorAll('[role="gridcell"][tabindex="0"]').length).toBe(1);
+    expect(card.querySelectorAll('[role="gridcell"][tabindex="-1"]').length).toBe(90);
     for (const cell of cells) {
       expect(cell.tagName).toBe('DIV');
-      expect(cell.getAttribute('aria-hidden')).toBe('true');
-      expect(cell.getAttribute('tabindex')).toBeNull();
-      expect(cell.tabIndex).toBeLessThan(0);
+      expect(cell.getAttribute('aria-hidden')).toBeNull();
+      expect(cell.getAttribute('aria-label')).toContain(cell.dataset['date']?.slice(0, 4));
+      const tab = cell.getAttribute('tabindex');
+      expect(tab === '0' || tab === '-1').toBeTrue();
     }
-    expect(card.querySelectorAll('a, button, input, select, textarea, [tabindex="0"]').length).toBe(1);
+    expect(card.querySelector('[role="gridcell"][tabindex="0"]')?.getAttribute('data-date')).toBe(todayIsoDate());
     expect(card.querySelector(`[data-date="${day}"]`)?.classList.contains('l1')).toBeTrue();
+    const pastName = card.querySelector(`[data-date="${day}"]`)?.getAttribute('aria-label') ?? '';
+    expect(pastName).not.toContain('future');
 
     const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     fixture.componentInstance.openPixelDay({ date: '2026-12-01', level: 0, future: true, today: false, planned: false });
-    expect(navigate).not.toHaveBeenCalled();
-    (card.querySelector(`[data-date="${day}"]`) as HTMLElement).click();
+    expect(navigate).toHaveBeenCalledWith(['/pixels'], { queryParams: { year: '2026', day: '2026-12-01' } });
+    navigate.calls.reset();
+
+    const past = card.querySelector(`[data-date="${day}"]`) as HTMLElement;
+    past.click();
     expect(navigate).toHaveBeenCalledWith(['/pixels'], { queryParams: { year: day.slice(0, 4), day } });
+    expect(past.getAttribute('aria-label')).toBe(pastName);
+    navigate.calls.reset();
+
+    const todayCell = card.querySelector('[role="gridcell"][tabindex="0"]') as HTMLElement;
+    todayCell.focus();
+    todayCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    fixture.detectChanges();
+    const keyed = document.activeElement as HTMLElement;
+    expect(keyed.dataset['date']).not.toBe(todayIsoDate());
+    expect(keyed.getAttribute('tabindex')).toBe('0');
+    expect(card.querySelectorAll('[role="gridcell"][tabindex="0"]').length).toBe(1);
+    const keyedName = keyed.getAttribute('aria-label');
+    keyed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(navigate).toHaveBeenCalledWith(['/pixels'], {
+      queryParams: { year: keyed.dataset['date']?.slice(0, 4), day: keyed.dataset['date'] },
+    });
+    expect(keyed.getAttribute('aria-label')).toBe(keyedName);
+
+    const future = card.querySelector('.pixel.future') as HTMLElement | null;
+    if (future) {
+      navigate.calls.reset();
+      const futureName = future.getAttribute('aria-label');
+      expect(futureName).toContain('future');
+      future.click();
+      expect(navigate).toHaveBeenCalledWith(['/pixels'], {
+        queryParams: { year: future.dataset['date']?.slice(0, 4), day: future.dataset['date'] },
+      });
+      expect(future.getAttribute('aria-label')).toBe(futureName);
+    }
   });
 
   it('drops finance colours when the vault lock clears kept days', async () => {

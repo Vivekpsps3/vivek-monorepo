@@ -10,7 +10,7 @@ test.describe('Hub year in pixels', () => {
     await page.clock.setFixedTime(new Date('2026-10-29T19:00:00Z'));
   });
 
-  test('birthday stays off the request and the card, cells are not focusable, and a click opens the day', async ({ page }) => {
+  test('birthday stays off the card, and pointer and keyboard open the same past and future dates', async ({ page }) => {
     const pixelUrls: string[] = [];
     const birthdayUrls: string[] = [];
     page.on('request', req => {
@@ -44,20 +44,80 @@ test.describe('Hub year in pixels', () => {
     }
     expect(birthdayUrls).toEqual([]);
 
-    await expect(card.locator('.pixel[tabindex], .pixel a, .pixel button')).toHaveCount(0);
-    const tabIndexes = await cells.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).tabIndex));
-    expect(tabIndexes.every(index => index < 0)).toBe(true);
+    await expect(card.locator('.pixel[aria-hidden="true"]')).toHaveCount(0);
+    await expect(card.locator('[role="gridcell"]')).toHaveCount(91);
+    await expect(card.locator('[role="gridcell"][tabindex="0"]')).toHaveCount(1);
+    await expect(card.locator('[role="gridcell"][tabindex="-1"]')).toHaveCount(90);
+    await expect(card.locator('[role="gridcell"][tabindex="0"]')).toHaveAttribute('data-date', '2026-10-29');
+
     await card.getByRole('link', { name: 'Open Pixels' }).focus();
     await page.keyboard.press('Tab');
-    expect(await page.evaluate(() => document.activeElement?.classList.contains('pixel') === true)).toBe(false);
+    await expect(card.locator('[role="gridcell"][tabindex="0"]')).toBeFocused();
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('role') === 'gridcell')).toBe(false);
 
-    await card.locator('.pixel[data-date="2026-08-15"]').click();
-    await page.waitForURL(/\/pixels/);
-    const opened = new URL(page.url());
-    expect(opened.pathname).toBe('/pixels');
-    expect(opened.searchParams.get('year')).toBe('2026');
-    expect(opened.searchParams.get('day')).toBe('2026-08-15');
+    const past = card.locator('[data-date="2026-10-22"]');
+    const pastName = await past.getAttribute('aria-label');
+    expect(pastName).toContain('2026');
+    expect(pastName).not.toContain('future');
+    await past.click();
+    await expect(page).toHaveURL(/\/pixels/);
+    expect(page.url()).toContain('year=2026');
+    expect(page.url()).toContain('day=2026-10-22');
+
+    await page.goto('/hub');
+    const pastCard = page.getByRole('region', { name: 'Year in Pixels' });
+    await expect(pastCard.locator('[data-date="2026-10-22"]')).toHaveAttribute('aria-label', pastName ?? '');
+    await pastCard.locator('[role="gridcell"][tabindex="0"]').focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(pastCard.locator('[data-date="2026-10-22"]')).toBeFocused();
+    await expect(pastCard.locator('[role="gridcell"][tabindex="0"]')).toHaveCount(1);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/pixels\?year=2026&day=2026-10-22/);
+
+    await page.goto('/hub');
+    const futureCard = page.getByRole('region', { name: 'Year in Pixels' });
+    const future = futureCard.locator('[data-date="2026-10-30"]');
+    const futureName = await future.getAttribute('aria-label');
+    expect(futureName).toContain('future');
+    expect(futureName).toContain('2026');
+    await future.click();
+    await expect(page).toHaveURL(/\/pixels\?year=2026&day=2026-10-30/);
+
+    await page.goto('/hub');
+    const futureAgain = page.getByRole('region', { name: 'Year in Pixels' });
+    await expect(futureAgain.locator('[data-date="2026-10-30"]')).toHaveAttribute('aria-label', futureName ?? '');
+    await futureAgain.locator('[role="gridcell"][tabindex="0"]').focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(futureAgain.locator('[data-date="2026-10-30"]')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/pixels\?year=2026&day=2026-10-30/);
     expect(pixelUrls.every(raw => !new URL(raw).searchParams.has('profile'))).toBe(true);
     expect(birthdayUrls).toEqual([]);
   });
+
+  for (const width of [390, 1280]) {
+    for (const theme of ['light', 'dark'] as const) {
+      test(`13-week strip stays within 180px at ${width} ${theme}`, async ({ page }, info) => {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
+        await page.addInitScript(value => localStorage.setItem('suite-theme', value), theme);
+        await page.goto('/hub');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        const card = page.getByRole('region', { name: 'Year in Pixels' });
+        const strip = card.locator('.pixel-strip');
+        await expect(card.getByRole('link', { name: 'Open Pixels' })).toHaveAttribute('href', '/pixels');
+        await expect(strip.locator('.pixel')).toHaveCount(91);
+        await expect(card).toContainText(/\d+ active days in the last 13 weeks/);
+        await expect(card).toContainText(/Longest run: \d+ days/);
+        const box = await strip.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.height).toBeLessThanOrEqual(180);
+        expect(box!.height).toBeGreaterThan(40);
+        expect(box!.width).toBeLessThanOrEqual(width);
+        const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+        expect(fits).toBe(true);
+        await info.attach(`hub-strip-${width}-${theme}`, { body: await strip.screenshot(), contentType: 'image/png' });
+      });
+    }
+  }
 });
