@@ -48,7 +48,7 @@ Local execution in `/tmp/vivek-med-02`. CI, merge, and deployment were not run f
 | `npm run build && node scripts/write-release-manifest.mjs` | PASS. |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE=$CHROME_BIN npx playwright test --config apps/media/e2e/playwright.config.ts --workers=1` | PASS. 81 passed (3.1m), including `tags.spec.ts`. |
 
-Four-worker runs on this machine also passed every MED-02 test. One of those runs failed only `library-filters.spec.ts` "Back drops a pending filter", and an overloaded run added unrelated timeouts. The same library failure reproduced after stashing this leaf and rebuilding unmodified `3954d1f`. It also failed one of three isolated reruns. It is not a tag-editor regression. The sequential 81-pass run above is the local gate result.
+Four-worker runs on this machine also passed every MED-02 test. One of those runs failed only `library-filters.spec.ts` "Back drops a pending filter", and an overloaded run added unrelated timeouts. The same library failure reproduced after stashing this leaf and rebuilding unmodified `3954d1f`. CI Playwright then failed on that same assertion: with the clock paused, Back had already cleared `kind` from the URL while the type control still showed the pending value. The spec now runs already-due clock work (`runFor(0)`) before reading the control. The pending 250ms filter is still required not to send another request. Five isolated reruns and the library-filters file passed after that. The sequential 81-pass run above is the tag-editor gate; it predates this clock flush.
 
 ## Handoff
 
