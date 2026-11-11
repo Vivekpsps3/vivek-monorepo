@@ -48,9 +48,9 @@
 
 ## Handoff
 
-- PR URL (leaf closure keyword only): opened from `agent/ops-03` with `Closes #274` after the checks above. Parent #125 is referenced and stays open.
-- Roadmap #134 append-only status-note URL: appended after the PR exists. The issue body was not edited.
-- Merged/activation status: not merged at the time these commands ran. Not deployed. No real off-host destination, alert recipient, or production activation was configured or claimed. Dry-run and the fake file destination are synthetic. OPS-06 remains the activation evidence.
+- PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/339 (`Closes #274`). Parent #125 is referenced and stays open.
+- Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6804597582. The issue body was not edited.
+- Merged/activation status: not merged when this note was written. Not deployed. No real off-host destination, alert recipient, or production activation was configured or claimed. Dry-run and the fake file destination are synthetic. OPS-06 remains the activation evidence.
 - Remaining external prerequisites or approved scope decisions: an owner-supplied destination directory, a separate 32-byte mode-0600 recovery key, a mount that this Compose file does not add, and a real transfer plus disposable restore under OPS-06. No alert recipient is configured.
 - Next actor: CI on the PR, then squash-merge of this leaf only.
 
