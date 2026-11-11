@@ -110,6 +110,8 @@ The wrapping KDF is PBKDF2-HMAC-SHA256. New wraps use at least 600,000 iteration
 
 Lookup, challenge, verify, signup, and bootstrap are rate limited per IP inside the one server process. Lookup has no per-account limit. Challenge and verify share a per-(account, IP) budget, and failed verifies have a separate higher per-account cap. Once that cap is reached, only further failures are rejected. A valid signature is never counted or blocked. A signed-in wrap update is not counted against those budgets. The client address is the peer uvicorn accepted after `FORWARDED_ALLOW_IPS`; the application does not read `X-Forwarded-For`. Passwordless sign-in uses the enrolled username. An email is not accepted.
 
+Challenge issue, verify, and username change bind the signed message to one configured origin and to the purpose (`login` or `username_change`). Allowed origins are `CORS_ORIGINS`. When that variable is unset, they are the documented development clients `http://127.0.0.1:4200` and `http://localhost:4200`, plus the same-site local server `http://127.0.0.1:8000` and `http://localhost:8000`. A present `Origin` must match one of those values. When the header is absent, the request URL's scheme and host are used only if that origin is in the same set. This check does not read `Forwarded`, `X-Forwarded-Host`, or `X-Forwarded-Proto`. A missing, malformed, or other origin receives the same 401 as a bad proof and does not create a session or rename the account. Spending a challenge is still one atomic `consumed_at` update, so a second caller changes no user or session.
+
 ## Recovery rules
 
 - There is no password reset. Admins cannot reset a vault passphrase, generate a signing key, or alter encrypted vault material.
