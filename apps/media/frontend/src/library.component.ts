@@ -343,6 +343,7 @@ export class LibraryComponent {
   }
   /** True after Back until the trailing timer. A late select write in that gap is discarded. */
   private backPending = false;
+  private detachBackGuard: () => void = () => undefined;
   readonly expanded = signal<number | null>(null);
   readonly children = signal<MediaCard[]>([]);
   readonly childrenError = signal("");
@@ -351,6 +352,7 @@ export class LibraryComponent {
     this.destroy.onDestroy(() => {
       this.active = false;
       clearTimeout(this.filterTimer);
+      this.detachBackGuard();
     });
     this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
       if (
@@ -359,9 +361,8 @@ export class LibraryComponent {
       ) {
         clearTimeout(this.filterTimer);
         this.filterTimer = undefined;
-        this.backPending = true;
+        this.armBackGuard();
         this.restoreFilters(event.url);
-        this.reassertFilters(8);
       }
       if (
         event instanceof NavigationStart &&
@@ -459,16 +460,28 @@ export class LibraryComponent {
     this.filterTimer = setTimeout(() => this.applyNow(), 250);
   }
 
-  /** Re-apply the URL after Back so a late select write cannot stick. */
-  private reassertFilters(left: number): void {
-    this.restoreFilters(`${window.location.pathname}${window.location.search}`);
-    if (left > 0) {
-      queueMicrotask(() => this.reassertFilters(left - 1));
-      return;
-    }
-    // After the queued select write. A paused test clock holds this until time moves.
+  /** Ignore a late filter-select event until the next timer turn. */
+  private armBackGuard(): void {
+    this.detachBackGuard();
+    this.backPending = true;
+    const onEvent = (event: Event): void => {
+      if (!this.backPending) return;
+      const target = event.target;
+      if (!(target instanceof HTMLSelectElement) || !target.closest("#library-filters")) return;
+      event.stopImmediatePropagation();
+      this.restoreFilters(`${window.location.pathname}${window.location.search}`);
+      target.value = this.kind;
+    };
+    document.addEventListener("input", onEvent, true);
+    document.addEventListener("change", onEvent, true);
+    this.detachBackGuard = () => {
+      document.removeEventListener("input", onEvent, true);
+      document.removeEventListener("change", onEvent, true);
+      this.detachBackGuard = () => undefined;
+    };
     setTimeout(() => {
       this.backPending = false;
+      this.detachBackGuard();
     }, 0);
   }
 
@@ -484,6 +497,8 @@ export class LibraryComponent {
     this.sort = filters.sort;
     this.favorite = filters.favorite;
     this.tags = filters.tags;
+    const select = document.getElementById("library-filters")?.querySelector("select");
+    if (select instanceof HTMLSelectElement) select.value = filters.kind;
   }
   searchSoon(): void {
     this.applySoon();
