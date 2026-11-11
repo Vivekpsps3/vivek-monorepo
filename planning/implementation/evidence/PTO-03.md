@@ -33,7 +33,7 @@ Hours stay in the time-off section. A €80 trip cost stays on the trip card. Th
 
 ## Verification
 
-Local execution only at the time this section was written. CI, merge, and deployment had not run.
+Local gates below ran on the implementation tree. CI on `7f02f3a` passed Backend, Frontend, and Unified Site Release. Playwright failed in `apps/media/e2e/library-filters.spec.ts` (“Back drops a pending filter instead of applying it later”): after Back the type control stayed `book` because the paused clock had not run the router’s zero-delay turn. That assertion was not weakened. The repair is the `page.clock.runFor(0)` already on main (`0c6e6bf`, #332), brought in by merging `origin/main`. Travel Home assertions are unchanged.
 
 | Command | Result |
 | --- | --- |
@@ -52,9 +52,9 @@ Local execution only at the time this section was written. CI, merge, and deploy
 
 - PR URL (leaf closure keyword only): https://github.com/Vivekpsps3/vivek-monorepo/pull/329 (`Closes #232`).
 - Roadmap #134 append-only status-note URL: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6789041102
-- Merged/activation status (actual evidence, not assumption): pull request open. Not merged. Not deployed. Local verification passed. CI had not finished.
+- Merged/activation status (actual evidence, not assumption): pull request open. Not merged. Not deployed. Local verification passed. Playwright on `7f02f3a` failed on the media pending-filter spec; `origin/main` is merged so that spec flushes the paused clock before the same value assertion.
 - Remaining external prerequisites or approved scope decisions: none for this leaf. #110 stays open for the rest of its scope.
-- Next actor: watch CI on #329, then squash-merge.
+- Next actor: wait for green CI on #329, then squash-merge.
 
 Issue / parent / local packet: PTO-03 / #232 / #110 / `planning/implementation/issues/PTO-03.md`.
 
@@ -64,11 +64,11 @@ Owned files and conflict groups: `travel-home`, `travel-summary`. FIN-01 (#322) 
 
 Completed acceptance rows with direct evidence: HOMEH1 and HOMEH2 PASS, as in the table above.
 
-Unfinished/failed rows and exact next action: open the PR and wait for CI.
+Unfinished/failed rows and exact next action: HOMEH1 and HOMEH2 stay passing. Wait for CI after the main merge, then squash-merge.
 
 Deletion ledger and current consumer migration: Home is the only consumer of the PTO-only day card. It now reads the PTO board’s bucket balances and the existing next-trip projection.
 
-Commands run, results, tested SHA; required checks still pending: see Verification. CI has not run.
+Commands run, results, tested SHA; required checks still pending: see Verification. `7f02f3a` Playwright failed on the media filter spec; this merge of main is the repair under test.
 
 PR and roadmap note URLs; actual merge/deployment/activation state: https://github.com/Vivekpsps3/vivek-monorepo/pull/329 is open, not merged, not deployed. Roadmap note: https://github.com/Vivekpsps3/vivek-monorepo/issues/134#issuecomment-6789041102. The roadmap body was not edited.
 
